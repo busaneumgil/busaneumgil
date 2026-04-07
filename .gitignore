@@ -4,3 +4,5 @@
 build/
 out/
 HELP.md
+.env
+.env.*

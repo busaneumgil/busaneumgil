@@ -1,0 +1,23 @@
+# =============================
+# make 진입점
+# =============================
+#
+# bash가 PATH에 있으면 그대로 쓰고,
+# Windows에서는 Git 설치 경로에서 bash.exe를 찾아 쓴다.
+BASH ?= bash
+JIRA_PREFIX ?=
+GIT_EXEC_PATH := $(subst \,/,$(shell git --exec-path))
+
+ifeq ($(OS),Windows_NT)
+BASH := $(patsubst %/mingw64/libexec/git-core,%/bin/bash.exe,$(GIT_EXEC_PATH))
+endif
+
+.PHONY: init test-git-jira
+
+# 로컬 Git 설정과 hook을 한 번에 맞춘다.
+init:
+	@"$(BASH)" scripts/init/init-git-jira.sh "$(JIRA_PREFIX)"
+
+# 자동화 규칙이 안 깨졌는지 빠르게 본다.
+test-git-jira:
+	@"$(BASH)" scripts/test/test-git-jira.sh

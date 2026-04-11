@@ -6,3 +6,4 @@ out/
 HELP.md
 .env
 .env.*
+.claude/

@@ -1,0 +1,22 @@
+{
+  "run_id": "20260414_051137",
+  "processed_at": "2026-04-14T05:11:42.312875",
+  "total_locations": 5,
+  "success_count": 0,
+  "failed_count": 5,
+  "braille_block_detected": 0,
+  "braille_block_not_detected": 0,
+  "detection_rate_pct": 0,
+  "confidence_breakdown": {
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "failed_location_ids": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ]
+}

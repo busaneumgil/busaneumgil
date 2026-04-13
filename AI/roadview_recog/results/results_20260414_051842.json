@@ -1,0 +1,73 @@
+[
+  {
+    "location_id": 1,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:18:50.843373",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      72,
+      144
+    ]
+  },
+  {
+    "location_id": 2,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:19:03.034046",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      108,
+      144,
+      324
+    ]
+  },
+  {
+    "location_id": 3,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:19:12.877124",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      72,
+      216,
+      252
+    ]
+  },
+  {
+    "location_id": 4,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:19:22.396255",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      72,
+      180
+    ]
+  },
+  {
+    "location_id": 5,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:19:35.079582",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      72
+    ]
+  }
+]

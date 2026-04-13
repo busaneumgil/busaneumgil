@@ -1,0 +1,73 @@
+[
+  {
+    "location_id": 1,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:12:49.166876",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      72,
+      108,
+      144
+    ]
+  },
+  {
+    "location_id": 2,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:13:00.554734",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      108,
+      144
+    ]
+  },
+  {
+    "location_id": 3,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:13:15.284587",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      72,
+      108,
+      216,
+      252
+    ]
+  },
+  {
+    "location_id": 4,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:13:24.360105",
+    "braille_block_present": true,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": [
+      72,
+      180,
+      216
+    ]
+  },
+  {
+    "location_id": 5,
+    "image_count": 10,
+    "success": true,
+    "attempts": 1,
+    "processed_at": "2026-04-14T05:13:34.939391",
+    "braille_block_present": false,
+    "confidence": "high",
+    "curb_cut_present": true,
+    "detected_angles": []
+  }
+]

@@ -1,7 +1,31 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+fun quoted(value: String) = "\"$value\""
+
+val appLocalProperties =
+    Properties().apply {
+        val localFile = rootProject.file("app.local.properties")
+        if (localFile.exists()) {
+            localFile.inputStream().use(::load)
+        }
+    }
+
+fun appProperty(name: String, defaultValue: String): String {
+    return providers.gradleProperty(name).orNull
+        ?: appLocalProperties.getProperty(name)
+        ?: defaultValue
+}
+
+val defaultBaseUrl = "https://api.example.com"
+val debugBaseUrl = appProperty("app.debug.baseUrl", defaultBaseUrl)
+val debugMockMode = appProperty("app.debug.mockMode", "false")
+val debugDemoMode = appProperty("app.debug.demoMode", "false")
+val releaseBaseUrl = appProperty("app.release.baseUrl", debugBaseUrl)
 
 android {
     namespace = "com.ssafy.e102.eumgil"
@@ -21,8 +45,17 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "BASE_URL", quoted(debugBaseUrl))
+            buildConfigField("boolean", "IS_MOCK_MODE", debugMockMode)
+            buildConfigField("boolean", "IS_DEMO_MODE", debugDemoMode)
+        }
+
         release {
             isMinifyEnabled = false
+            buildConfigField("String", "BASE_URL", quoted(releaseBaseUrl))
+            buildConfigField("boolean", "IS_MOCK_MODE", "false")
+            buildConfigField("boolean", "IS_DEMO_MODE", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -41,6 +74,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

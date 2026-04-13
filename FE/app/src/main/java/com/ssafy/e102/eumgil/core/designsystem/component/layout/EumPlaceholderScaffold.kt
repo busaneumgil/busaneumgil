@@ -24,6 +24,7 @@ fun EumPlaceholderScaffold(
     description: String,
     featurePath: String,
     actions: List<PlaceholderAction>,
+    environmentItems: List<String> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -49,6 +50,31 @@ fun EumPlaceholderScaffold(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+            }
+        }
+
+        if (environmentItems.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(EumSpacing.medium),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.placeholder_environment_label),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+
+                    environmentItems.forEach { item ->
+                        Text(
+                            text = item,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
             }
         }
 

@@ -14,10 +14,16 @@
     <string name="feature_path_saved_route">feature/savedroute</string>
     <string name="feature_path_my_page">feature/mypage</string>
     <string name="placeholder_feature_path_label">현재 feature 패키지</string>
+    <string name="placeholder_environment_label">현재 앱 설정</string>
     <string name="placeholder_navigation_label">다음 이동</string>
     <string name="action_go_map">지도 화면으로 이동</string>
     <string name="action_go_saved_routes">저장 화면으로 이동</string>
     <string name="action_go_my_page">MY 화면으로 이동</string>
+    <string name="environment_base_url_value">BASE_URL: %1$s</string>
+    <string name="environment_mock_mode_value">MOCK MODE: %1$s</string>
+    <string name="environment_demo_mode_value">DEMO MODE: %1$s</string>
+    <string name="environment_flag_enabled">ON</string>
+    <string name="environment_flag_disabled">OFF</string>
     <string name="a11y_tab_selected">선택됨</string>
     <string name="a11y_tab_unselected">선택되지 않음</string>
 </resources>

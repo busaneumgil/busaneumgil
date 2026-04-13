@@ -1,0 +1,10 @@
+# Copy this file to app.local.properties to override app environment values locally.
+# You can still override any value with -P on the Gradle command line.
+
+# Debug environment
+app.debug.baseUrl=https://api.example.com
+app.debug.mockMode=false
+app.debug.demoMode=false
+
+# Release environment
+app.release.baseUrl=https://api.example.com

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">부산이음길</string>
+    <string name="route_map">지도</string>
+    <string name="route_saved_route">저장</string>
+    <string name="route_my_page">MY</string>
+    <string name="map_screen_title">지도 화면 Placeholder</string>
+    <string name="map_screen_description">feature/map 패키지의 시작 화면입니다. 이후 지도 SDK, 검색 오버레이, 필터 UI가 이 영역에서 확장될 수 있도록 비워 두었습니다.</string>
+    <string name="saved_route_screen_title">저장 경로 화면 Placeholder</string>
+    <string name="saved_route_screen_description">feature/savedroute 패키지의 시작 화면입니다. 북마크와 저장 경로 목록, 최근 경로 진입 지점을 여기에서 확장할 수 있습니다.</string>
+    <string name="my_page_screen_title">MY 화면 Placeholder</string>
+    <string name="my_page_screen_description">feature/mypage 패키지의 시작 화면입니다. 설정, 접근성 옵션, 사용자별 로컬 설정을 이 흐름 아래로 붙일 수 있습니다.</string>
+    <string name="feature_path_map">feature/map</string>
+    <string name="feature_path_saved_route">feature/savedroute</string>
+    <string name="feature_path_my_page">feature/mypage</string>
+    <string name="placeholder_feature_path_label">현재 feature 패키지</string>
+    <string name="placeholder_environment_label">현재 앱 설정</string>
+    <string name="placeholder_navigation_label">다음 이동</string>
+    <string name="action_go_map">지도 화면으로 이동</string>
+    <string name="action_go_saved_routes">저장 화면으로 이동</string>
+    <string name="action_go_my_page">MY 화면으로 이동</string>
+    <string name="environment_base_url_value">BASE_URL: %1$s</string>
+    <string name="environment_mock_mode_value">MOCK MODE: %1$s</string>
+    <string name="environment_demo_mode_value">DEMO MODE: %1$s</string>
+    <string name="environment_flag_enabled">ON</string>
+    <string name="environment_flag_disabled">OFF</string>
+    <string name="a11y_tab_selected">선택됨</string>
+    <string name="a11y_tab_unselected">선택되지 않음</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="model_names">
+        <item>Gemma-ko 2B</item>
+        <item>Gemma-ko 9B</item>
+        <item>KULLM 5.8B</item>
+        <item>Qwen 2.5 7B</item>
+        <item>SOLAR 10.7B</item>
+        <item>Mistral 7B</item>
+    </string-array>
+</resources>

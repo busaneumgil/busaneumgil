@@ -1,25 +1,38 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.ssafy.e102.eumgil.feature.bootstrap.BootstrapScreen
-
-private const val BOOTSTRAP_ROUTE = "bootstrap"
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
 
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route
 
-    NavHost(
-        navController = navController,
-        startDestination = BOOTSTRAP_ROUTE,
-        modifier = modifier,
-    ) {
-        composable(route = BOOTSTRAP_ROUTE) {
-            BootstrapScreen()
+    Scaffold(
+        bottomBar = {
+            EumTopLevelTabBar(
+                destinations = TopLevelDestination.entries,
+                currentRoute = currentRoute,
+                onDestinationSelected = { destination ->
+                    navController.navigateToTopLevel(destination)
+                },
+            )
+        },
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = TopLevelRoute.Map.route,
+            modifier = modifier.padding(innerPadding),
+        ) {
+            mainNavGraph(navController = navController)
         }
     }
 }

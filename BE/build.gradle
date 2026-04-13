@@ -38,10 +38,31 @@ tasks.named('test') {
 
 spotless {
     java {
-        target 'src/*/java/**/*.java'
+        target 'src/main/java/**/*.java', 'src/test/java/**/*.java'
         eclipse().configFile('.rules/naver-formatter.xml')
         removeUnusedImports()
         trimTrailingWhitespace()
         endWithNewline()
+    }
+
+    groovyGradle {
+        target 'build.gradle', 'settings.gradle'
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+checkstyle {
+    toolVersion = '10.12.4'
+    configFile = file("${rootDir}/config/naver-checkstyle-rules.xml")
+    configProperties = [
+            "suppressionFile": file("${rootDir}/config/naver-checkstyle-suppressions.xml").absolutePath
+    ]
+}
+
+tasks.withType(Checkstyle).configureEach {
+    reports {
+        xml.required = true
+        html.required = true
     }
 }

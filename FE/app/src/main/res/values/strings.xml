@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">부산이음길</string>
+    <string name="bootstrap_title">부산이음길</string>
+    <string name="bootstrap_message">Android 앱 기본 구조가 준비되었습니다.</string>
+</resources>

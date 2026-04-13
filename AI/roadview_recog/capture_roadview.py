@@ -36,8 +36,11 @@ async def capture_location(page, index: int):
 
 async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page(viewport={"width": 1280, "height": 800})
+        browser = await p.chromium.launch(headless=False) # GPU 가속 활용
+        page = await browser.new_page(
+            viewport={"width": 1920, "height": 1440},
+            # device_scale_factor=2  # 해상도 2배ㅋ
+        )
 
         await page.goto(HTML_URL)
         await page.wait_for_load_state("networkidle")

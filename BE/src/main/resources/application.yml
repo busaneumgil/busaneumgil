@@ -1,3 +1,8 @@
 spring:
   application:
     name: e102
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+server:
+  port: ${SERVER_PORT:8080}

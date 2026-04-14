@@ -15,23 +15,30 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+    val showTopLevelBar =
+        TopLevelDestination.entries.any { destination ->
+            destination.route.route == currentRoute
+        }
 
     Scaffold(
         bottomBar = {
-            EumTopLevelTabBar(
-                destinations = TopLevelDestination.entries,
-                currentRoute = currentRoute,
-                onDestinationSelected = { destination ->
-                    navController.navigateToTopLevel(destination)
-                },
-            )
+            if (showTopLevelBar) {
+                EumTopLevelTabBar(
+                    destinations = TopLevelDestination.entries,
+                    currentRoute = currentRoute,
+                    onDestinationSelected = { destination ->
+                        navController.navigateToTopLevel(destination)
+                    },
+                )
+            }
         },
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = TopLevelRoute.Map.route,
+            startDestination = OnboardingRoute.DisabilityType.route,
             modifier = modifier.padding(innerPadding),
         ) {
+            onboardingNavGraph(navController = navController)
             mainNavGraph(navController = navController)
         }
     }

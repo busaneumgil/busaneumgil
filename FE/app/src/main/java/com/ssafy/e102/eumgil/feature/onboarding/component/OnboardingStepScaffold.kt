@@ -1,0 +1,172 @@
+package com.ssafy.e102.eumgil.feature.onboarding.component
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+
+data class OnboardingStepAction(
+    val label: String,
+    val highlighted: Boolean = false,
+    val onClick: () -> Unit,
+)
+
+@Composable
+fun OnboardingStepScaffold(
+    currentStep: Int,
+    totalSteps: Int,
+    title: String,
+    description: String,
+    primaryActionLabel: String,
+    primaryActionEnabled: Boolean,
+    onPrimaryActionClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    topAction: OnboardingStepAction? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 10.dp,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+                ) {
+                    Button(
+                        onClick = onPrimaryActionClick,
+                        enabled = primaryActionEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(EumRadius.large),
+                    ) {
+                        Text(text = primaryActionLabel)
+                    }
+                }
+            }
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(innerPadding)
+                .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.large),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OnboardingProgressIndicator(
+                    currentStep = currentStep,
+                    totalSteps = totalSteps,
+                    modifier = Modifier.weight(1f),
+                )
+
+                topAction?.let { action ->
+                    OutlinedButton(
+                        onClick = action.onClick,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(EumRadius.full),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor =
+                                if (action.highlighted) {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                },
+                        ),
+                    ) {
+                        Text(
+                            text = action.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            color =
+                                if (action.highlighted) {
+                                    MaterialTheme.colorScheme.secondary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                        )
+                    }
+                }
+            }
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.displayLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            content()
+        }
+    }
+}
+
+@Composable
+private fun OnboardingProgressIndicator(
+    currentStep: Int,
+    totalSteps: Int,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+    ) {
+        Text(
+            text = stringResource(id = R.string.onboarding_progress_label, currentStep, totalSteps),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        LinearProgressIndicator(
+            progress = currentStep.toFloat() / totalSteps.toFloat(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        )
+    }
+}

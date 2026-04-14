@@ -4,6 +4,33 @@ sealed interface AppRoute {
     val route: String
 }
 
+sealed interface OnboardingRoute : AppRoute {
+    data object DisabilityType : OnboardingRoute {
+        override val route: String = "onboarding/type"
+    }
+
+    data object DisabilityLevel : OnboardingRoute {
+        const val ARG_DISABILITY_TYPE: String = "disabilityType"
+
+        override val route: String = "onboarding/level/{$ARG_DISABILITY_TYPE}"
+
+        fun createRoute(disabilityType: String): String = "onboarding/level/$disabilityType"
+    }
+
+    data object LocationTermsPlaceholder : OnboardingRoute {
+        const val ARG_DISABILITY_TYPE: String = "disabilityType"
+        const val ARG_DISABILITY_LEVEL: String = "disabilityLevel"
+
+        override val route: String =
+            "onboarding/location_terms/{$ARG_DISABILITY_TYPE}/{$ARG_DISABILITY_LEVEL}"
+
+        fun createRoute(
+            disabilityType: String,
+            disabilityLevel: String,
+        ): String = "onboarding/location_terms/$disabilityType/$disabilityLevel"
+    }
+}
+
 sealed interface TopLevelRoute : AppRoute {
     data object Map : TopLevelRoute {
         override val route: String = "map"

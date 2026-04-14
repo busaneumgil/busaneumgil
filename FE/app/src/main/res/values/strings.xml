@@ -1,9 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">부산이음길</string>
+    <string name="action_next_step">다음</string>
+    <string name="action_go_back_previous_step">이전 단계로 돌아가기</string>
     <string name="route_map">지도</string>
     <string name="route_saved_route">저장</string>
     <string name="route_my_page">MY</string>
+    <string name="onboarding_progress_label">%1$d / %2$d 단계</string>
+    <string name="onboarding_type_screen_title">장애 유형을 선택해주세요</string>
+    <string name="onboarding_type_screen_description">선택에 따라 앱 화면과 안내 방식이 달라집니다.</string>
+    <string name="onboarding_type_visual_title">시각장애</string>
+    <string name="onboarding_type_visual_description">큰 글씨와 음성 안내 중심으로 화면을 제공합니다.</string>
+    <string name="onboarding_type_mobility_title">보행약자</string>
+    <string name="onboarding_type_mobility_description">이동 지원 정보와 접근 가능한 경로를 더 강조해 제공합니다.</string>
+    <string name="onboarding_mode_visual_title">시각 지원 중심 모드</string>
+    <string name="onboarding_mode_visual_description">다음 단계부터 큰 글씨와 음성 안내 중심 UI를 먼저 보여줍니다.</string>
+    <string name="onboarding_mode_mobility_title">이동 지원 중심 모드</string>
+    <string name="onboarding_mode_mobility_description">다음 단계부터 이동 편의 정보와 보행 안전 정보를 더 강조합니다.</string>
+    <string name="onboarding_level_screen_title">장애 등급을 선택해주세요</string>
+    <string name="onboarding_level_screen_description">안내 강도와 가독성 수준을 설정합니다.</string>
+    <string name="onboarding_selected_type_label">선택한 장애유형</string>
+    <string name="onboarding_selected_level_label">선택한 장애등급</string>
+    <string name="onboarding_voice_guide_show">음성 안내 보기</string>
+    <string name="onboarding_voice_guide_hide">음성 안내 숨기기</string>
+    <string name="onboarding_voice_guide_title">음성 안내 미리보기</string>
+    <string name="onboarding_voice_guide_description">시각 지원 모드에서는 큰 글씨와 보조 설명이 우선 적용되고, 다음 단계부터 음성 안내 진입 버튼이 함께 제공됩니다.</string>
+    <string name="onboarding_level_severe_title">중증 장애</string>
+    <string name="onboarding_level_severe_visual_description">큰 글씨와 음성 안내, 강조 대비를 가장 강하게 적용합니다.</string>
+    <string name="onboarding_level_severe_mobility_description">경사로, 엘리베이터, 넓은 이동 동선을 가장 먼저 강조합니다.</string>
+    <string name="onboarding_level_mild_title">경증 장애</string>
+    <string name="onboarding_level_mild_visual_description">큰 글씨와 보조 설명을 기본보다 더 자주 제공합니다.</string>
+    <string name="onboarding_level_mild_mobility_description">보행 편의 정보와 우회 가능 경로를 기본보다 더 자주 보여줍니다.</string>
+    <string name="onboarding_level_none_title">해당 없음</string>
+    <string name="onboarding_level_none_visual_description">기본 가독성 중심 안내를 사용합니다.</string>
+    <string name="onboarding_level_none_mobility_description">기본 이동 지원 정보를 중심으로 보여줍니다.</string>
+    <string name="onboarding_terms_placeholder_title">위치정보 이용약관 단계로 이동했습니다</string>
+    <string name="onboarding_terms_placeholder_description">현재 Task 범위에 맞춰 선택값 전달과 다음 단계 이동까지만 연결했습니다.</string>
     <string name="map_screen_title">지도 화면 Placeholder</string>
     <string name="map_screen_description">feature/map 패키지의 시작 화면입니다. 이후 지도 SDK, 검색 오버레이, 필터 UI가 이 영역에서 확장될 수 있도록 비워 두었습니다.</string>
     <string name="saved_route_screen_title">저장 경로 화면 Placeholder</string>
@@ -26,4 +58,6 @@
     <string name="environment_flag_disabled">OFF</string>
     <string name="a11y_tab_selected">선택됨</string>
     <string name="a11y_tab_unselected">선택되지 않음</string>
+    <string name="a11y_option_selected">선택됨</string>
+    <string name="a11y_option_unselected">선택되지 않음</string>
 </resources>

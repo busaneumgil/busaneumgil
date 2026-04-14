@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ fun OnboardingStepScaffold(
     onPrimaryActionClick: () -> Unit,
     modifier: Modifier = Modifier,
     topAction: OnboardingStepAction? = null,
+    secondaryAction: OnboardingStepAction? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Scaffold(
@@ -62,7 +64,20 @@ fun OnboardingStepScaffold(
                         .fillMaxWidth()
                         .navigationBarsPadding()
                         .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    secondaryAction?.let { action ->
+                        TextButton(
+                            onClick = action.onClick,
+                        ) {
+                            Text(
+                                text = action.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
                     Button(
                         onClick = onPrimaryActionClick,
                         enabled = primaryActionEnabled,
@@ -161,7 +176,7 @@ private fun OnboardingProgressIndicator(
             color = MaterialTheme.colorScheme.primary,
         )
         LinearProgressIndicator(
-            progress = currentStep.toFloat() / totalSteps.toFloat(),
+            progress = { currentStep.toFloat() / totalSteps.toFloat() },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp),

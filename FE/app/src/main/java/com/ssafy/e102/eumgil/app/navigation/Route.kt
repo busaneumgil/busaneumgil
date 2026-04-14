@@ -17,7 +17,7 @@ sealed interface OnboardingRoute : AppRoute {
         fun createRoute(disabilityType: String): String = "onboarding/level/$disabilityType"
     }
 
-    data object LocationTermsPlaceholder : OnboardingRoute {
+    data object LocationTerms : OnboardingRoute {
         const val ARG_DISABILITY_TYPE: String = "disabilityType"
         const val ARG_DISABILITY_LEVEL: String = "disabilityLevel"
 

@@ -13,10 +13,47 @@ data class DisabilityLevelUiState(
     val isVoiceGuideExpanded: Boolean = false,
 )
 
-data class LocationTermsPlaceholderUiState(
+data class LocationTermsUiState(
     val disabilityType: DisabilityType,
     val disabilityLevel: DisabilityLevel,
+    val isLocationTermsChecked: Boolean = false,
+    val isPrivacyPolicyChecked: Boolean = false,
+    val hasRestrictionNotice: Boolean = false,
+) {
+    val isAllTermsChecked: Boolean
+        get() = isLocationTermsChecked && isPrivacyPolicyChecked
+
+    val canProceed: Boolean
+        get() = isLocationTermsChecked
+
+    val consentStatus: LocationTermsConsentStatus
+        get() = when {
+            canProceed -> LocationTermsConsentStatus.READY
+            hasRestrictionNotice -> LocationTermsConsentStatus.RESTRICTED
+            else -> LocationTermsConsentStatus.PENDING
+        }
+
+    fun toAgreement(): LocationTermsAgreement =
+        LocationTermsAgreement(
+            disabilityType = disabilityType,
+            disabilityLevel = disabilityLevel,
+            isLocationTermsAgreed = isLocationTermsChecked,
+            isPrivacyPolicyAgreed = isPrivacyPolicyChecked,
+        )
+}
+
+data class LocationTermsAgreement(
+    val disabilityType: DisabilityType,
+    val disabilityLevel: DisabilityLevel,
+    val isLocationTermsAgreed: Boolean,
+    val isPrivacyPolicyAgreed: Boolean,
 )
+
+enum class LocationTermsConsentStatus {
+    PENDING,
+    RESTRICTED,
+    READY,
+}
 
 enum class DisabilityType(
     val routeValue: String,

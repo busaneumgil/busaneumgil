@@ -61,18 +61,62 @@ fun DisabilityLevelRoute(
 }
 
 @Composable
-fun LocationTermsPlaceholderRoute(
+fun LocationTermsRoute(
     disabilityType: DisabilityType,
     disabilityLevel: DisabilityLevel,
-    onNavigateBack: () -> Unit,
+    onConsentCompleted: (LocationTermsAgreement) -> Unit,
+    onConsentDeferred: (LocationTermsAgreement) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LocationTermsPlaceholderScreen(
-        uiState = LocationTermsPlaceholderUiState(
+    var isLocationTermsChecked by rememberSaveable(
+        disabilityType.routeValue,
+        disabilityLevel.routeValue,
+    ) { mutableStateOf(false) }
+    var isPrivacyPolicyChecked by rememberSaveable(
+        disabilityType.routeValue,
+        disabilityLevel.routeValue,
+    ) { mutableStateOf(false) }
+    var hasRestrictionNotice by rememberSaveable(
+        disabilityType.routeValue,
+        disabilityLevel.routeValue,
+    ) { mutableStateOf(false) }
+
+    val uiState =
+        LocationTermsUiState(
             disabilityType = disabilityType,
             disabilityLevel = disabilityLevel,
-        ),
-        onBackClick = onNavigateBack,
+            isLocationTermsChecked = isLocationTermsChecked,
+            isPrivacyPolicyChecked = isPrivacyPolicyChecked,
+            hasRestrictionNotice = hasRestrictionNotice,
+        )
+
+    LocationTermsScreen(
+        uiState = uiState,
+        onAllTermsCheckedChange = { shouldCheckAll ->
+            isLocationTermsChecked = shouldCheckAll
+            isPrivacyPolicyChecked = shouldCheckAll
+            if (shouldCheckAll) {
+                hasRestrictionNotice = false
+            }
+        },
+        onLocationTermsCheckedChange = { isChecked ->
+            isLocationTermsChecked = isChecked
+            if (isChecked) {
+                hasRestrictionNotice = false
+            }
+        },
+        onPrivacyPolicyCheckedChange = { isChecked ->
+            isPrivacyPolicyChecked = isChecked
+        },
+        onPrimaryActionClick = {
+            if (uiState.canProceed) {
+                onConsentCompleted(uiState.toAgreement())
+            }
+        },
+        onSecondaryActionClick = {
+            hasRestrictionNotice = true
+            onConsentDeferred(uiState.toAgreement())
+        },
         modifier = modifier,
     )
 }

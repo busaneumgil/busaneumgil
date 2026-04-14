@@ -1,26 +1,39 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.ssafy.e102.eumgil.core.model.InitSettings
+import com.ssafy.e102.eumgil.data.repository.InitSettingsRepository
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevelRoute
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityType
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
+import kotlinx.coroutines.launch
 
-fun NavGraphBuilder.onboardingNavGraph(navController: NavHostController) {
+fun NavGraphBuilder.onboardingNavGraph(
+    navController: NavHostController,
+    initSettingsRepository: InitSettingsRepository,
+    initialSettings: InitSettings,
+) {
     composable(route = OnboardingRoute.DisabilityType.route) {
+        val coroutineScope = rememberCoroutineScope()
+
         DisabilityTypeRoute(
             onNavigateNext = { disabilityType ->
-                navController.navigate(
-                    OnboardingRoute.DisabilityLevel.createRoute(
-                        disabilityType = disabilityType.routeValue,
-                    ),
-                )
+                coroutineScope.launch {
+                    initSettingsRepository.saveDisabilityType(disabilityType.routeValue)
+                    navController.navigate(
+                        OnboardingRoute.DisabilityLevel.createRoute(
+                            disabilityType = disabilityType.routeValue,
+                        ),
+                    )
+                }
             },
         )
     }
@@ -40,15 +53,19 @@ fun NavGraphBuilder.onboardingNavGraph(navController: NavHostController) {
                 ),
             ) ?: DisabilityType.VISUAL_IMPAIRMENT
 
+        val coroutineScope = rememberCoroutineScope()
         DisabilityLevelRoute(
             disabilityType = disabilityType,
             onNavigateNext = { disabilityLevel ->
-                navController.navigate(
-                    OnboardingRoute.LocationTerms.createRoute(
-                        disabilityType = disabilityType.routeValue,
-                        disabilityLevel = disabilityLevel.routeValue,
-                    ),
-                )
+                coroutineScope.launch {
+                    initSettingsRepository.saveDisabilityLevel(disabilityLevel.routeValue)
+                    navController.navigate(
+                        OnboardingRoute.LocationTerms.createRoute(
+                            disabilityType = disabilityType.routeValue,
+                            disabilityLevel = disabilityLevel.routeValue,
+                        ),
+                    )
+                }
             },
         )
     }
@@ -77,18 +94,41 @@ fun NavGraphBuilder.onboardingNavGraph(navController: NavHostController) {
                 ),
             ) ?: DisabilityLevel.NONE
 
+        val coroutineScope = rememberCoroutineScope()
+        val shouldRestoreAgreement =
+            initialSettings.disabilityType == disabilityType.routeValue &&
+                initialSettings.disabilityLevel == disabilityLevel.routeValue
+
         LocationTermsRoute(
             disabilityType = disabilityType,
             disabilityLevel = disabilityLevel,
-            onConsentCompleted = {
-                navController.navigate(TopLevelRoute.Map.route) {
-                    launchSingleTop = true
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        inclusive = true
+            initialLocationTermsChecked =
+                shouldRestoreAgreement && initialSettings.isLocationTermsAgreed,
+            initialPrivacyPolicyChecked =
+                shouldRestoreAgreement && initialSettings.isPrivacyPolicyAgreed,
+            onConsentCompleted = { agreement ->
+                coroutineScope.launch {
+                    initSettingsRepository.saveLocationTermsAgreement(
+                        isLocationTermsAgreed = agreement.isLocationTermsAgreed,
+                        isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
+                    )
+
+                    navController.navigate(TopLevelRoute.Map.route) {
+                        launchSingleTop = true
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
+                        }
                     }
                 }
             },
-            onConsentDeferred = {},
+            onConsentDeferred = { agreement ->
+                coroutineScope.launch {
+                    initSettingsRepository.saveLocationTermsAgreement(
+                        isLocationTermsAgreed = agreement.isLocationTermsAgreed,
+                        isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
+                    )
+                }
+            },
         )
     }
 }

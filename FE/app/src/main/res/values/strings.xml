@@ -41,13 +41,13 @@
     <string name="onboarding_terms_overview_title">위치 기반 기능 안내</string>
     <string name="onboarding_terms_overview_description">현재 위치 표시, 길안내 시작, 제보 위치 자동 입력을 위해 위치정보 이용약관 동의가 필요합니다. 동의가 완료되면 바로 지도 메인으로 이동합니다.</string>
     <string name="onboarding_terms_document_title">약관 요약 및 전문</string>
-    <string name="onboarding_terms_document_description">MVP 단계에서는 핵심 항목 위주 정적 안내를 제공합니다. 상세 저장 로직은 다음 Task에서 연결됩니다.</string>
+    <string name="onboarding_terms_document_description">핵심 항목 위주 정적 안내를 제공합니다. 동의 여부와 초기 설정값은 기기 로컬 저장소에 보관되어 앱 재실행 시 진입 분기에 사용됩니다.</string>
     <string name="onboarding_terms_section_collection_title">1. 수집 항목</string>
     <string name="onboarding_terms_section_collection_body">앱은 현재 위치 표시와 길안내 제공을 위해 위치 좌표, 접근성 설정, 기기 내 권한 상태를 확인할 수 있습니다.</string>
     <string name="onboarding_terms_section_usage_title">2. 이용 목적</string>
     <string name="onboarding_terms_section_usage_body">수집된 위치정보는 지도 중심 이동, 주변 시설 표시, 경로 시작, 제보 위치 자동 입력 기능에만 사용됩니다.</string>
     <string name="onboarding_terms_section_retention_title">3. 보관 및 처리</string>
-    <string name="onboarding_terms_section_retention_body">현재 Task 범위에서는 실제 저장을 수행하지 않습니다. 이후 DataStore 저장 로직이 연결될 때 동의 여부와 초기 설정값이 함께 관리됩니다.</string>
+    <string name="onboarding_terms_section_retention_body">장애유형, 장애등급, 위치정보 이용약관 동의 여부는 기기 내 로컬 저장소에 보관되며, 온보딩 완료 여부와 시작 화면을 판단하는 데 사용됩니다.</string>
     <string name="onboarding_terms_consent_section_title">동의 항목</string>
     <string name="onboarding_terms_all_agreement_title">전체 동의</string>
     <string name="onboarding_terms_all_agreement_description">필수 위치정보 이용약관과 선택 개인정보 처리방침 확인을 한 번에 체크합니다.</string>
@@ -82,6 +82,7 @@
     <string name="environment_demo_mode_value">DEMO MODE: %1$s</string>
     <string name="environment_flag_enabled">ON</string>
     <string name="environment_flag_disabled">OFF</string>
+    <string name="app_entry_loading">초기 설정을 확인하는 중입니다.</string>
     <string name="a11y_tab_selected">선택됨</string>
     <string name="a11y_tab_unselected">선택되지 않음</string>
     <string name="a11y_option_selected">선택됨</string>

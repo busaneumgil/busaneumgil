@@ -64,6 +64,8 @@ fun DisabilityLevelRoute(
 fun LocationTermsRoute(
     disabilityType: DisabilityType,
     disabilityLevel: DisabilityLevel,
+    initialLocationTermsChecked: Boolean = false,
+    initialPrivacyPolicyChecked: Boolean = false,
     onConsentCompleted: (LocationTermsAgreement) -> Unit,
     onConsentDeferred: (LocationTermsAgreement) -> Unit,
     modifier: Modifier = Modifier,
@@ -71,11 +73,13 @@ fun LocationTermsRoute(
     var isLocationTermsChecked by rememberSaveable(
         disabilityType.routeValue,
         disabilityLevel.routeValue,
-    ) { mutableStateOf(false) }
+        initialLocationTermsChecked,
+    ) { mutableStateOf(initialLocationTermsChecked) }
     var isPrivacyPolicyChecked by rememberSaveable(
         disabilityType.routeValue,
         disabilityLevel.routeValue,
-    ) { mutableStateOf(false) }
+        initialPrivacyPolicyChecked,
+    ) { mutableStateOf(initialPrivacyPolicyChecked) }
     var hasRestrictionNotice by rememberSaveable(
         disabilityType.routeValue,
         disabilityLevel.routeValue,

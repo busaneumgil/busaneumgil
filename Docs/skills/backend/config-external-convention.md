@@ -10,7 +10,8 @@ Spring profile, config class, 외부 API 연동 위치를 맞춘다.
 src/main/resources
 ├─ application.yml
 ├─ application-local.yml
-└─ application-dev.yml
+├─ application-dev.yml
+└─ application-prod.yml
 ```
 
 | 파일 | 역할 |
@@ -18,6 +19,7 @@ src/main/resources
 | application.yml | 공통 설정 |
 | application-local.yml | 로컬 개발용 설정 |
 | application-dev.yml | 개발 서버용 설정 |
+| application-prod.yml | 운영 서버용 설정 |
 
 예시:
 
@@ -51,10 +53,10 @@ external:
 
 ## 외부 API client 위치
 
-외부 API 연동 코드는 `external` 하위에 둔다.
+외부 API 연동 코드는 `global.external` 하위에 둔다.
 
 ```text
-external
+global.external
 ├─ kakao
 ├─ odsay
 ├─ bims

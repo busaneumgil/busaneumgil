@@ -1,59 +1,71 @@
 package com.ssafy.e102.eumgil.feature.map
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.common.model.PlaceholderAction
-import com.ssafy.e102.eumgil.core.config.AppEnvironment
-import com.ssafy.e102.eumgil.core.designsystem.component.layout.EumPlaceholderScaffold
+import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
+import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
+import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
+import com.ssafy.e102.eumgil.feature.map.component.MapViewport
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportUiState
 
-private fun environmentFlagLabel(isEnabled: Boolean): Int =
-    if (isEnabled) {
-        R.string.environment_flag_enabled
-    } else {
-        R.string.environment_flag_disabled
-    }
+@Immutable
+data class MapScreenUiState(
+    val searchTitle: String,
+    val searchHint: String,
+    val searchActionLabel: String,
+    val searchAccessibilityLabel: String,
+    val viewportState: MapViewportUiState,
+)
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun MapScreen(
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
     modifier: Modifier = Modifier,
+    uiState: MapScreenUiState? = null,
+    onSearchEntryClick: () -> Unit = {},
 ) {
-    val environmentItems =
-        if (AppEnvironment.isDebugBuild) {
-            listOf(
-                stringResource(id = R.string.environment_base_url_value, AppEnvironment.baseUrl),
-                stringResource(
-                    id = R.string.environment_mock_mode_value,
-                    stringResource(id = environmentFlagLabel(AppEnvironment.isMockMode)),
-                ),
-                stringResource(
-                    id = R.string.environment_demo_mode_value,
-                    stringResource(id = environmentFlagLabel(AppEnvironment.isDemoMode)),
-                ),
-            )
-        } else {
-            emptyList()
-        }
+    val resolvedUiState = uiState ?: defaultMapScreenUiState()
 
-    EumPlaceholderScaffold(
-        title = stringResource(id = R.string.map_screen_title),
-        description = stringResource(id = R.string.map_screen_description),
-        featurePath = stringResource(id = R.string.feature_path_map),
-        actions = listOf(
-            PlaceholderAction(
-                label = stringResource(id = R.string.action_go_saved_routes),
-                onClick = onNavigateToSavedRoutes,
-                isPrimary = true,
-            ),
-            PlaceholderAction(
-                label = stringResource(id = R.string.action_go_my_page),
-                onClick = onNavigateToMyPage,
-            ),
-        ),
-        environmentItems = environmentItems,
+    MapShellScaffold(
         modifier = modifier,
+        mapContent = {
+            MapViewport(
+                state = resolvedUiState.viewportState,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+        topOverlay = {
+            MapTopSearchBar(
+                title = resolvedUiState.searchTitle,
+                hint = resolvedUiState.searchHint,
+                actionLabel = resolvedUiState.searchActionLabel,
+                accessibilityLabel = resolvedUiState.searchAccessibilityLabel,
+                onClick = onSearchEntryClick,
+            )
+        },
+    )
+}
+
+@Composable
+private fun defaultMapScreenUiState(): MapScreenUiState {
+    return MapScreenUiState(
+        searchTitle = stringResource(id = R.string.map_shell_search_title),
+        searchHint = stringResource(id = R.string.map_shell_search_hint),
+        searchActionLabel = stringResource(id = R.string.map_shell_search_action),
+        searchAccessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
+        viewportState = MapViewportUiState(
+            integrationState = MapIntegrationState.Unbound,
+            regionLabel = stringResource(id = R.string.map_shell_region_label),
+            statusLabel = stringResource(id = R.string.map_shell_status_label),
+            title = stringResource(id = R.string.map_shell_viewport_title),
+            description = stringResource(id = R.string.map_shell_viewport_description),
+            supportingText = stringResource(id = R.string.map_shell_viewport_supporting_text),
+        ),
     )
 }

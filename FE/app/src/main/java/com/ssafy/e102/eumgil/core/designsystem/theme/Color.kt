@@ -10,11 +10,18 @@ private val Ink = Color(0xFF111827)
 private val Slate = Color(0xFF374151)
 private val Muted = Color(0xFFF4F6F8)
 private val Border = Color(0xFFD6DBE1)
+private val Amber = Color(0xFFF2B705)
+private val AmberContainer = Color(0xFFFFF4CC)
+private val Danger = Color(0xFFC53030)
 
 val BusanEumgilLightColorScheme = lightColorScheme(
     primary = DeepBlue,
     onPrimary = White,
     primaryContainer = DeepBluePressed,
+    secondary = Amber,
+    onSecondary = Ink,
+    secondaryContainer = AmberContainer,
+    onSecondaryContainer = Ink,
     background = White,
     onBackground = Ink,
     surface = White,
@@ -22,4 +29,5 @@ val BusanEumgilLightColorScheme = lightColorScheme(
     surfaceVariant = Muted,
     onSurfaceVariant = Slate,
     outline = Border,
+    error = Danger,
 )

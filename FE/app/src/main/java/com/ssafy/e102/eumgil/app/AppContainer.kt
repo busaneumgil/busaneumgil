@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
 import com.ssafy.e102.eumgil.data.repository.DefaultInitSettingsRepository
@@ -14,6 +15,10 @@ class AppContainer(
     context: Context,
 ) {
     private val appContext = context.applicationContext
+
+    val localDatabase: EumgilDatabase by lazy(LazyThreadSafetyMode.NONE) {
+        EumgilDatabase.getInstance(appContext)
+    }
 
     private val initSettingsLocalDataSource =
         InitSettingsLocalDataSource(dataStore = appContext.initSettingsDataStore)

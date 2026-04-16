@@ -31,12 +31,12 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun AppNavHost(modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val appContainer = remember(context) { (context as BusanEumgilApp).appContainer }
-    val initSettingsRepository = remember(appContainer) { appContainer.initSettingsRepository }
+    val settingsRepository = remember(appContainer) { appContainer.settingsRepository }
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
     var initialSettings by remember { mutableStateOf<InitSettings?>(null) }
 
-    LaunchedEffect(initSettingsRepository) {
-        val savedSettings = initSettingsRepository.getInitSettings()
+    LaunchedEffect(settingsRepository) {
+        val savedSettings = settingsRepository.getInitSettings()
         initialSettings = savedSettings
         appStartDestination = resolveAppStartDestination(savedSettings)
     }
@@ -76,7 +76,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         ) {
             onboardingNavGraph(
                 navController = navController,
-                initSettingsRepository = initSettingsRepository,
+                settingsRepository = settingsRepository,
                 initialSettings = restoredSettings,
             )
             mainNavGraph(navController = navController)

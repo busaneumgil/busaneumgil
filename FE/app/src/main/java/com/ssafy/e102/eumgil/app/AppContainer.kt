@@ -1,15 +1,26 @@
 package com.ssafy.e102.eumgil.app
 
 import android.content.Context
+import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
+import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
-import com.ssafy.e102.eumgil.data.repository.DefaultInitSettingsRepository
-import com.ssafy.e102.eumgil.data.repository.InitSettingsRepository
+import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
+import com.ssafy.e102.eumgil.di.RepositoryModule
 
 class AppContainer(
     context: Context,
@@ -23,8 +34,44 @@ class AppContainer(
     private val initSettingsLocalDataSource =
         InitSettingsLocalDataSource(dataStore = appContext.initSettingsDataStore)
 
-    val initSettingsRepository: InitSettingsRepository =
-        DefaultInitSettingsRepository(localDataSource = initSettingsLocalDataSource)
+    private val debugSettingsLocalDataSource =
+        DebugSettingsLocalDataSource(appSettingDao = localDatabase.appSettingDao())
+
+    private val placesLocalDataSource = PlacesLocalDataSource()
+    private val searchLocalDataSource = SearchLocalDataSource()
+
+    private val placesRemoteDataSource = PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+    private val searchRemoteDataSource = SearchRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+
+    private val placesMockDataSource = PlacesMockDataSource()
+    private val searchMockDataSource = SearchMockDataSource()
+
+    private val repositorySourcePolicy: RepositorySourcePolicy =
+        RepositoryModule.provideRepositorySourcePolicy(
+            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
+        )
+
+    val settingsRepository: SettingsRepository =
+        RepositoryModule.provideSettingsRepository(
+            initSettingsLocalDataSource = initSettingsLocalDataSource,
+            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
+        )
+
+    val placesRepository: PlacesRepository =
+        RepositoryModule.providePlacesRepository(
+            remoteDataSource = placesRemoteDataSource,
+            localDataSource = placesLocalDataSource,
+            mockDataSource = placesMockDataSource,
+            sourcePolicy = repositorySourcePolicy,
+        )
+
+    val searchRepository: SearchRepository =
+        RepositoryModule.provideSearchRepository(
+            remoteDataSource = searchRemoteDataSource,
+            localDataSource = searchLocalDataSource,
+            mockDataSource = searchMockDataSource,
+            sourcePolicy = repositorySourcePolicy,
+        )
 
     val locationPermissionManager: LocationPermissionManager =
         AndroidLocationPermissionManager(context = appContext)

@@ -1,0 +1,356 @@
+package com.ssafy.e102.eumgil.feature.map
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
+import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
+import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
+import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+class MapViewModel(
+    private val locationPermissionManager: LocationPermissionManager,
+    private val currentLocationManager: CurrentLocationManager,
+) : ViewModel() {
+    private val mutableUiState = MutableStateFlow(MapUiState())
+    val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
+
+    private val mutableUiEvent = MutableSharedFlow<MapUiEvent>()
+    val uiEvent: SharedFlow<MapUiEvent> = mutableUiEvent.asSharedFlow()
+
+    private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
+    private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
+    private var isRouteStarted = false
+    private var locationLookupState: LocationLookupState = LocationLookupState.Idle
+    private var locationLookupTimeoutJob: Job? = null
+
+    init {
+        observePermissionState()
+        observeLocationUpdates()
+        renderUiState()
+    }
+
+    fun onRouteStarted() {
+        if (isRouteStarted) {
+            locationPermissionManager.refreshPermissionState()
+            return
+        }
+
+        isRouteStarted = true
+        locationPermissionManager.refreshPermissionState()
+        latestPermissionState = locationPermissionManager.permissionState.value
+
+        when (latestPermissionState) {
+            is LocationPermissionState.Granted -> startLocationTracking(forceLookupRestart = false)
+            LocationPermissionState.Denied -> applyDefaultCameraTarget()
+            is LocationPermissionState.Unavailable -> applyDefaultCameraTarget()
+        }
+
+        renderUiState()
+    }
+
+    fun onRouteStopped() {
+        if (!isRouteStarted) return
+
+        isRouteStarted = false
+        stopLocationLookup()
+        currentLocationManager.stopLocationUpdates()
+    }
+
+    fun onAction(action: MapUiAction) {
+        when (action) {
+            MapUiAction.LocationActionClicked -> handleLocationAction()
+            MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch)
+        }
+    }
+
+    override fun onCleared() {
+        stopLocationLookup()
+        currentLocationManager.stopLocationUpdates()
+        super.onCleared()
+    }
+
+    private fun observePermissionState() {
+        viewModelScope.launch {
+            locationPermissionManager.permissionState.collectLatest { permissionState ->
+                latestPermissionState = permissionState
+
+                when (permissionState) {
+                    is LocationPermissionState.Granted -> handleGrantedPermission()
+                    LocationPermissionState.Denied -> handlePermissionBlocked()
+                    is LocationPermissionState.Unavailable -> handlePermissionBlocked()
+                }
+
+                renderUiState()
+            }
+        }
+    }
+
+    private fun observeLocationUpdates() {
+        viewModelScope.launch {
+            currentLocationManager.latestLocation.collectLatest { snapshot ->
+                val hadLocation = latestLocation != null
+                latestLocation = snapshot
+
+                if (snapshot == null) {
+                    if (latestPermissionState is LocationPermissionState.Granted && isRouteStarted) {
+                        startLocationLookup(forceRestart = false)
+                    }
+                    applyDefaultCameraTarget()
+                } else {
+                    stopLocationLookup()
+                    syncCameraToCurrentLocation(
+                        snapshot = snapshot,
+                        incrementRequestId = !hadLocation,
+                    )
+                }
+
+                renderUiState()
+            }
+        }
+    }
+
+    private fun handleGrantedPermission() {
+        if (!isRouteStarted) return
+        startLocationTracking(forceLookupRestart = false)
+    }
+
+    private fun handlePermissionBlocked() {
+        stopLocationLookup()
+        currentLocationManager.stopLocationUpdates()
+        applyDefaultCameraTarget()
+    }
+
+    private fun handleLocationAction() {
+        when (mutableUiState.value.recenterButtonState) {
+            MapRecenterButtonState.REQUEST_PERMISSION ->
+                emitUiEvent(MapUiEvent.RequestLocationPermission)
+
+            MapRecenterButtonState.LOADING -> Unit
+            MapRecenterButtonState.DISABLED -> Unit
+
+            MapRecenterButtonState.RETRY -> retryLocationResolution()
+
+            MapRecenterButtonState.ENABLED -> {
+                val snapshot = latestLocation ?: return retryLocationResolution()
+                syncCameraToCurrentLocation(
+                    snapshot = snapshot,
+                    incrementRequestId = true,
+                )
+                renderUiState()
+            }
+        }
+    }
+
+    private fun retryLocationResolution() {
+        locationPermissionManager.refreshPermissionState()
+        latestPermissionState = locationPermissionManager.permissionState.value
+
+        when (latestPermissionState) {
+            is LocationPermissionState.Granted -> startLocationTracking(forceLookupRestart = true)
+            LocationPermissionState.Denied -> emitUiEvent(MapUiEvent.RequestLocationPermission)
+            is LocationPermissionState.Unavailable -> {
+                applyDefaultCameraTarget()
+                renderUiState()
+            }
+        }
+    }
+
+    private fun startLocationTracking(forceLookupRestart: Boolean) {
+        if (!isRouteStarted) return
+
+        currentLocationManager.startLocationUpdates()
+        currentLocationManager.refreshLatestLocation()
+        latestLocation = currentLocationManager.latestLocation.value
+
+        val snapshot = latestLocation
+        if (snapshot == null) {
+            startLocationLookup(forceRestart = forceLookupRestart)
+            applyDefaultCameraTarget()
+            return
+        }
+
+        stopLocationLookup()
+        syncCameraToCurrentLocation(
+            snapshot = snapshot,
+            incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION,
+        )
+    }
+
+    private fun startLocationLookup(forceRestart: Boolean) {
+        if (!isRouteStarted || latestPermissionState !is LocationPermissionState.Granted || latestLocation != null) {
+            return
+        }
+        if (!forceRestart && locationLookupState == LocationLookupState.Searching) return
+
+        locationLookupTimeoutJob?.cancel()
+        locationLookupState = LocationLookupState.Searching
+        locationLookupTimeoutJob =
+            viewModelScope.launch {
+                delay(LOCATION_LOOKUP_TIMEOUT_MILLIS)
+                if (
+                    isRouteStarted &&
+                    latestPermissionState is LocationPermissionState.Granted &&
+                    latestLocation == null
+                ) {
+                    locationLookupState = LocationLookupState.TimedOut
+                    renderUiState()
+                }
+            }
+    }
+
+    private fun stopLocationLookup() {
+        locationLookupTimeoutJob?.cancel()
+        locationLookupTimeoutJob = null
+        locationLookupState = LocationLookupState.Idle
+    }
+
+    private fun syncCameraToCurrentLocation(
+        snapshot: LocationSnapshot,
+        incrementRequestId: Boolean,
+    ) {
+        val coordinate = snapshot.toMapCoordinate()
+
+        mutableUiState.update { state ->
+            val shouldIncrement =
+                incrementRequestId || state.cameraTarget.source != MapCameraSource.CURRENT_LOCATION
+            val nextRequestId =
+                if (shouldIncrement) {
+                    state.cameraTarget.requestId + 1L
+                } else {
+                    state.cameraTarget.requestId
+                }
+
+            state.copy(
+                cameraTarget =
+                    MapCameraTarget(
+                        center = coordinate,
+                        source = MapCameraSource.CURRENT_LOCATION,
+                        requestId = nextRequestId,
+                    ),
+            )
+        }
+    }
+
+    private fun applyDefaultCameraTarget() {
+        mutableUiState.update { state ->
+            if (
+                state.cameraTarget.source == MapCameraSource.DEFAULT_BUSAN &&
+                state.cameraTarget.center == MapDefaults.BUSAN_CENTER
+            ) {
+                state
+            } else {
+                state.copy(
+                    cameraTarget =
+                        MapCameraTarget(
+                            center = MapDefaults.BUSAN_CENTER,
+                            source = MapCameraSource.DEFAULT_BUSAN,
+                            requestId = state.cameraTarget.requestId + 1L,
+                        ),
+                )
+            }
+        }
+    }
+
+    private fun renderUiState() {
+        val locationStatus =
+            when (val permissionState = latestPermissionState) {
+                is LocationPermissionState.Granted ->
+                    latestLocation?.let { snapshot ->
+                        MapLocationStatus.Ready(
+                            location = snapshot.toMapCoordinate(),
+                            accuracyMeters = snapshot.accuracyMeters,
+                        )
+                    } ?: if (locationLookupState == LocationLookupState.TimedOut) {
+                        MapLocationStatus.Unavailable(
+                            reason = MapLocationUnavailableReason.CURRENT_LOCATION_UNAVAILABLE,
+                        )
+                    } else {
+                        MapLocationStatus.Loading
+                    }
+
+                LocationPermissionState.Denied -> MapLocationStatus.PermissionDenied
+
+                is LocationPermissionState.Unavailable ->
+                    MapLocationStatus.Unavailable(
+                        reason =
+                            when (permissionState.reason) {
+                                com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason.LOCATION_SERVICES_DISABLED ->
+                                    MapLocationUnavailableReason.LOCATION_SERVICES_DISABLED
+
+                                com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason.NO_LOCATION_FEATURE ->
+                                    MapLocationUnavailableReason.NO_LOCATION_FEATURE
+                            },
+                    )
+            }
+
+        val recenterButtonState =
+            when (locationStatus) {
+                MapLocationStatus.PermissionDenied -> MapRecenterButtonState.REQUEST_PERMISSION
+                MapLocationStatus.Loading -> MapRecenterButtonState.LOADING
+                is MapLocationStatus.Ready -> MapRecenterButtonState.ENABLED
+                is MapLocationStatus.Unavailable ->
+                    when (locationStatus.reason) {
+                        MapLocationUnavailableReason.NO_LOCATION_FEATURE -> MapRecenterButtonState.DISABLED
+                        MapLocationUnavailableReason.CURRENT_LOCATION_UNAVAILABLE -> MapRecenterButtonState.RETRY
+                        MapLocationUnavailableReason.LOCATION_SERVICES_DISABLED -> MapRecenterButtonState.RETRY
+                    }
+            }
+
+        mutableUiState.update { state ->
+            state.copy(
+                locationStatus = locationStatus,
+                recenterButtonState = recenterButtonState,
+            )
+        }
+    }
+
+    private fun emitUiEvent(event: MapUiEvent) {
+        viewModelScope.launch {
+            mutableUiEvent.emit(event)
+        }
+    }
+
+    private enum class LocationLookupState {
+        Idle,
+        Searching,
+        TimedOut,
+    }
+
+    companion object {
+        private const val LOCATION_LOOKUP_TIMEOUT_MILLIS = 5_000L
+
+        fun provideFactory(
+            locationPermissionManager: LocationPermissionManager,
+            currentLocationManager: CurrentLocationManager,
+        ): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    if (modelClass.isAssignableFrom(MapViewModel::class.java)) {
+                        return MapViewModel(
+                            locationPermissionManager = locationPermissionManager,
+                            currentLocationManager = currentLocationManager,
+                        ) as T
+                    }
+
+                    error("Unknown ViewModel class: ${modelClass.name}")
+                }
+            }
+    }
+}

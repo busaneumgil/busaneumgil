@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.core.designsystem.component.layout
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,6 +27,7 @@ fun EumPlaceholderScaffold(
     actions: List<PlaceholderAction>,
     environmentItems: List<String> = emptyList(),
     modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -77,6 +79,8 @@ fun EumPlaceholderScaffold(
                 }
             }
         }
+
+        content()
 
         Column(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),

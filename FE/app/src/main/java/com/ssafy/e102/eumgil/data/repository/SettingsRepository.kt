@@ -51,13 +51,14 @@ class DefaultSettingsRepository(
         toRepositoryDebugSettings(debugSettingsLocalDataSource.getForceMockEnabled())
 
     override suspend fun setForceMockEnabled(isEnabled: Boolean) {
-        if (!AppEnvironment.isDebugBuild) return
+        if (!AppEnvironment.isDebugBuild || AppEnvironment.isMockMode) return
         debugSettingsLocalDataSource.setForceMockEnabled(isEnabled)
     }
 
     private fun toRepositoryDebugSettings(isStoredForceMockEnabled: Boolean): RepositoryDebugSettings =
         RepositoryDebugSettings(
             isRuntimeToggleAvailable = AppEnvironment.isDebugBuild,
+            isRuntimeToggleEnabled = AppEnvironment.isDebugBuild && !AppEnvironment.isMockMode,
             isForceMockEnabled =
                 AppEnvironment.isMockMode ||
                     (AppEnvironment.isDebugBuild && isStoredForceMockEnabled),

@@ -12,7 +12,7 @@
 *.gitignore text eol=lf
 *.gitattributes text eol=lf
 *.sh text eol=lf
-
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+/Docs/기획/2026-04-17_기획발표_장표.pptx filter=lfs diff=lfs merge=lfs -text

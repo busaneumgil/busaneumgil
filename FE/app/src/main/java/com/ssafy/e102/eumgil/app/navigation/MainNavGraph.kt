@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
+import com.ssafy.e102.eumgil.feature.search.SearchRoute as SearchScreenRoute
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     composable(route = TopLevelRoute.Map.route) {
@@ -17,6 +18,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToMyPage = {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
+            },
+            onNavigateToSearch = {
+                navController.navigate(SearchRoute.Search.route)
             },
         )
     }
@@ -39,6 +43,14 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToSavedRoutes = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
+            },
+        )
+    }
+
+    composable(route = SearchRoute.Search.route) {
+        SearchScreenRoute(
+            onNavigateBack = {
+                navController.popBackStack()
             },
         )
     }

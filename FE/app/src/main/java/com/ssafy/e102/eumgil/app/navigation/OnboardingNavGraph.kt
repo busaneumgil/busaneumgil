@@ -8,7 +8,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.core.model.InitSettings
-import com.ssafy.e102.eumgil.data.repository.InitSettingsRepository
+import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevelRoute
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityType
@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.onboardingNavGraph(
     navController: NavHostController,
-    initSettingsRepository: InitSettingsRepository,
+    settingsRepository: SettingsRepository,
     initialSettings: InitSettings,
 ) {
     composable(route = OnboardingRoute.DisabilityType.route) {
@@ -27,7 +27,7 @@ fun NavGraphBuilder.onboardingNavGraph(
         DisabilityTypeRoute(
             onNavigateNext = { disabilityType ->
                 coroutineScope.launch {
-                    initSettingsRepository.saveDisabilityType(disabilityType.routeValue)
+                    settingsRepository.saveDisabilityType(disabilityType.routeValue)
                     navController.navigate(
                         OnboardingRoute.DisabilityLevel.createRoute(
                             disabilityType = disabilityType.routeValue,
@@ -58,7 +58,7 @@ fun NavGraphBuilder.onboardingNavGraph(
             disabilityType = disabilityType,
             onNavigateNext = { disabilityLevel ->
                 coroutineScope.launch {
-                    initSettingsRepository.saveDisabilityLevel(disabilityLevel.routeValue)
+                    settingsRepository.saveDisabilityLevel(disabilityLevel.routeValue)
                     navController.navigate(
                         OnboardingRoute.LocationTerms.createRoute(
                             disabilityType = disabilityType.routeValue,
@@ -108,7 +108,7 @@ fun NavGraphBuilder.onboardingNavGraph(
                 shouldRestoreAgreement && initialSettings.isPrivacyPolicyAgreed,
             onConsentCompleted = { agreement ->
                 coroutineScope.launch {
-                    initSettingsRepository.saveLocationTermsAgreement(
+                    settingsRepository.saveLocationTermsAgreement(
                         isLocationTermsAgreed = agreement.isLocationTermsAgreed,
                         isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
                     )
@@ -123,7 +123,7 @@ fun NavGraphBuilder.onboardingNavGraph(
             },
             onConsentDeferred = { agreement ->
                 coroutineScope.launch {
-                    initSettingsRepository.saveLocationTermsAgreement(
+                    settingsRepository.saveLocationTermsAgreement(
                         isLocationTermsAgreed = agreement.isLocationTermsAgreed,
                         isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
                     )

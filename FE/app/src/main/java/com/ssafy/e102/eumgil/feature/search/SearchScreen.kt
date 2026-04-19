@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.search
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
@@ -234,7 +239,12 @@ private fun SearchResultSection(
                     borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
                 )
                 resultState.results.forEach { result ->
-                    SearchResultItem(result = result)
+                    SearchResultItem(
+                        result = result,
+                        onClick = {
+                            onAction(SearchUiAction.SearchResultClicked(result = result))
+                        },
+                    )
                 }
             }
 
@@ -330,9 +340,36 @@ private fun RecentSearchSection(
 @Composable
 private fun SearchResultItem(
     result: SearchResult,
+    onClick: () -> Unit,
 ) {
+    val actionLabel = stringResource(id = R.string.search_screen_result_action_label)
+    val selectableStateDescription = stringResource(id = R.string.search_screen_result_selectable)
+    val accessibilityDescription =
+        if (result.subtitle.isBlank()) {
+            stringResource(
+                id = R.string.search_screen_result_a11y_without_address,
+                result.title,
+            )
+        } else {
+            stringResource(
+                id = R.string.search_screen_result_a11y_with_address,
+                result.title,
+                result.subtitle,
+            )
+        }
+
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = actionLabel,
+                    onClick = onClick,
+                ).semantics(mergeDescendants = true) {
+                    contentDescription = accessibilityDescription
+                    stateDescription = selectableStateDescription
+                },
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),

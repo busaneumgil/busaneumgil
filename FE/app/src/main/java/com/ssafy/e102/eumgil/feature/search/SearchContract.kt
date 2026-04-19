@@ -24,10 +24,16 @@ sealed interface SearchUiAction {
     data class RecentSearchClicked(
         val keyword: String,
     ) : SearchUiAction
+
+    data class SearchResultClicked(
+        val result: SearchResult,
+    ) : SearchUiAction
 }
 
 sealed interface SearchUiEvent {
     data object NavigateBack : SearchUiEvent
+
+    data object NavigateToMap : SearchUiEvent
 }
 
 sealed interface SearchResultUiState {

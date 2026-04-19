@@ -52,6 +52,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToMap = {
+                navController.popBackStack()
+            },
         )
     }
 }

@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -18,6 +21,7 @@ import kotlinx.coroutines.launch
 
 class SearchViewModel(
     private val searchRepository: SearchRepository,
+    private val destinationSelectionRepository: DestinationSelectionRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = mutableUiState.asStateFlow()
@@ -38,7 +42,13 @@ class SearchViewModel(
             SearchUiAction.SearchSubmitted -> submitSearch()
             is SearchUiAction.QueryChanged -> updateQuery(action.query)
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
+            is SearchUiAction.SearchResultClicked -> selectSearchResult(action.result)
         }
+    }
+
+    private fun selectSearchResult(result: SearchResult) {
+        destinationSelectionRepository.updateSelectedDestination(result.toPlaceDestination())
+        emitUiEvent(SearchUiEvent.NavigateToMap)
     }
 
     private fun updateQuery(query: String) {
@@ -173,12 +183,18 @@ class SearchViewModel(
     }
 
     companion object {
-        fun provideFactory(searchRepository: SearchRepository): ViewModelProvider.Factory =
+        fun provideFactory(
+            searchRepository: SearchRepository,
+            destinationSelectionRepository: DestinationSelectionRepository,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     if (modelClass.isAssignableFrom(SearchViewModel::class.java)) {
-                        return SearchViewModel(searchRepository = searchRepository) as T
+                        return SearchViewModel(
+                            searchRepository = searchRepository,
+                            destinationSelectionRepository = destinationSelectionRepository,
+                        ) as T
                     }
 
                     error("Unknown ViewModel class: ${modelClass.name}")

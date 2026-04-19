@@ -7,6 +7,8 @@ import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
@@ -26,6 +28,7 @@ import kotlinx.coroutines.launch
 class MapViewModel(
     private val locationPermissionManager: LocationPermissionManager,
     private val currentLocationManager: CurrentLocationManager,
+    private val destinationSelectionRepository: DestinationSelectionRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
@@ -35,11 +38,23 @@ class MapViewModel(
 
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
+    private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
     private var isRouteStarted = false
     private var locationLookupState: LocationLookupState = LocationLookupState.Idle
     private var locationLookupTimeoutJob: Job? = null
 
     init {
+        mutableUiState.update { state ->
+            state.copy(selectedDestination = selectedDestination)
+        }
+        selectedDestination?.let { destination ->
+            syncCameraToSelectedDestination(
+                destination = destination,
+                incrementRequestId = true,
+            )
+        }
+        observeSelectedDestination()
+        observeSelectionRequests()
         observePermissionState()
         observeLocationUpdates()
         renderUiState()
@@ -57,8 +72,8 @@ class MapViewModel(
 
         when (latestPermissionState) {
             is LocationPermissionState.Granted -> startLocationTracking(forceLookupRestart = false)
-            LocationPermissionState.Denied -> applyDefaultCameraTarget()
-            is LocationPermissionState.Unavailable -> applyDefaultCameraTarget()
+            LocationPermissionState.Denied -> applyFallbackCameraTarget()
+            is LocationPermissionState.Unavailable -> applyFallbackCameraTarget()
         }
 
         renderUiState()
@@ -101,6 +116,40 @@ class MapViewModel(
         }
     }
 
+    private fun observeSelectedDestination() {
+        viewModelScope.launch {
+            destinationSelectionRepository.selectedDestination.collectLatest { destination ->
+                val previousDestination = selectedDestination
+                selectedDestination = destination
+
+                mutableUiState.update { state ->
+                    state.copy(selectedDestination = destination)
+                }
+
+                if (
+                    destination == null &&
+                    previousDestination != null &&
+                    mutableUiState.value.cameraTarget.source == MapCameraSource.SEARCH_RESULT
+                ) {
+                    applyFallbackCameraTarget()
+                    renderUiState()
+                }
+            }
+        }
+    }
+
+    private fun observeSelectionRequests() {
+        viewModelScope.launch {
+            destinationSelectionRepository.selectionRequests.collectLatest { destination ->
+                syncCameraToSelectedDestination(
+                    destination = destination,
+                    incrementRequestId = true,
+                )
+                renderUiState()
+            }
+        }
+    }
+
     private fun observeLocationUpdates() {
         viewModelScope.launch {
             currentLocationManager.latestLocation.collectLatest { snapshot ->
@@ -111,13 +160,17 @@ class MapViewModel(
                     if (latestPermissionState is LocationPermissionState.Granted && isRouteStarted) {
                         startLocationLookup(forceRestart = false)
                     }
-                    applyDefaultCameraTarget()
+                    applyFallbackCameraTarget()
                 } else {
                     stopLocationLookup()
-                    syncCameraToCurrentLocation(
-                        snapshot = snapshot,
-                        incrementRequestId = !hadLocation,
-                    )
+                    if (shouldSyncCameraToCurrentLocation()) {
+                        syncCameraToCurrentLocation(
+                            snapshot = snapshot,
+                            incrementRequestId =
+                                !hadLocation ||
+                                    mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION,
+                        )
+                    }
                 }
 
                 renderUiState()
@@ -133,7 +186,7 @@ class MapViewModel(
     private fun handlePermissionBlocked() {
         stopLocationLookup()
         currentLocationManager.stopLocationUpdates()
-        applyDefaultCameraTarget()
+        applyFallbackCameraTarget()
     }
 
     private fun handleLocationAction() {
@@ -165,7 +218,7 @@ class MapViewModel(
             is LocationPermissionState.Granted -> startLocationTracking(forceLookupRestart = true)
             LocationPermissionState.Denied -> emitUiEvent(MapUiEvent.RequestLocationPermission)
             is LocationPermissionState.Unavailable -> {
-                applyDefaultCameraTarget()
+                applyFallbackCameraTarget()
                 renderUiState()
             }
         }
@@ -181,15 +234,17 @@ class MapViewModel(
         val snapshot = latestLocation
         if (snapshot == null) {
             startLocationLookup(forceRestart = forceLookupRestart)
-            applyDefaultCameraTarget()
+            applyFallbackCameraTarget()
             return
         }
 
         stopLocationLookup()
-        syncCameraToCurrentLocation(
-            snapshot = snapshot,
-            incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION,
-        )
+        if (shouldSyncCameraToCurrentLocation()) {
+            syncCameraToCurrentLocation(
+                snapshot = snapshot,
+                incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION,
+            )
+        }
     }
 
     private fun startLocationLookup(forceRestart: Boolean) {
@@ -220,6 +275,13 @@ class MapViewModel(
         locationLookupState = LocationLookupState.Idle
     }
 
+    private fun shouldSyncCameraToCurrentLocation(): Boolean =
+        when {
+            mutableUiState.value.cameraTarget.source == MapCameraSource.CURRENT_LOCATION -> true
+            selectedDestination != null -> false
+            else -> true
+        }
+
     private fun syncCameraToCurrentLocation(
         snapshot: LocationSnapshot,
         incrementRequestId: Boolean,
@@ -245,6 +307,59 @@ class MapViewModel(
                     ),
             )
         }
+    }
+
+    private fun syncCameraToSelectedDestination(
+        destination: PlaceDestination,
+        incrementRequestId: Boolean,
+    ) {
+        val coordinate =
+            com.ssafy.e102.eumgil.feature.map.model.MapCoordinate(
+                latitude = destination.latitude,
+                longitude = destination.longitude,
+            )
+
+        mutableUiState.update { state ->
+            val shouldIncrement =
+                incrementRequestId || state.cameraTarget.source != MapCameraSource.SEARCH_RESULT
+            val nextRequestId =
+                if (shouldIncrement) {
+                    state.cameraTarget.requestId + 1L
+                } else {
+                    state.cameraTarget.requestId
+                }
+
+            state.copy(
+                cameraTarget =
+                    MapCameraTarget(
+                        center = coordinate,
+                        source = MapCameraSource.SEARCH_RESULT,
+                        requestId = nextRequestId,
+                    ),
+                selectedDestination = destination,
+            )
+        }
+    }
+
+    private fun applyFallbackCameraTarget() {
+        selectedDestination?.let { destination ->
+            syncCameraToSelectedDestination(
+                destination = destination,
+                incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.SEARCH_RESULT,
+            )
+            return
+        }
+
+        val snapshot = latestLocation
+        if (snapshot != null && latestPermissionState is LocationPermissionState.Granted) {
+            syncCameraToCurrentLocation(
+                snapshot = snapshot,
+                incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION,
+            )
+            return
+        }
+
+        applyDefaultCameraTarget()
     }
 
     private fun applyDefaultCameraTarget() {
@@ -314,6 +429,7 @@ class MapViewModel(
 
         mutableUiState.update { state ->
             state.copy(
+                selectedDestination = selectedDestination,
                 locationStatus = locationStatus,
                 recenterButtonState = recenterButtonState,
             )
@@ -338,6 +454,7 @@ class MapViewModel(
         fun provideFactory(
             locationPermissionManager: LocationPermissionManager,
             currentLocationManager: CurrentLocationManager,
+            destinationSelectionRepository: DestinationSelectionRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -346,6 +463,7 @@ class MapViewModel(
                         return MapViewModel(
                             locationPermissionManager = locationPermissionManager,
                             currentLocationManager = currentLocationManager,
+                            destinationSelectionRepository = destinationSelectionRepository,
                         ) as T
                     }
 

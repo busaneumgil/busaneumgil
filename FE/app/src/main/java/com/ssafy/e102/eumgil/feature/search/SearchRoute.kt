@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.collect
 @Composable
 fun SearchRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -27,7 +28,10 @@ fun SearchRoute(
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
         remember(appContainer) {
-            SearchViewModel.provideFactory(searchRepository = appContainer.searchRepository)
+            SearchViewModel.provideFactory(
+                searchRepository = appContainer.searchRepository,
+                destinationSelectionRepository = appContainer.destinationSelectionRepository,
+            )
         }
     val viewModel =
         remember(activity, viewModelFactory) {
@@ -36,10 +40,11 @@ fun SearchRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, onNavigateBack) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 SearchUiEvent.NavigateBack -> onNavigateBack()
+                SearchUiEvent.NavigateToMap -> onNavigateToMap()
             }
         }
     }

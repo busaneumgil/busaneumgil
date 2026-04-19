@@ -18,12 +18,12 @@ class Config:
     # HuggingFace 모델 설정
     HF_MODELS = {
         "gemma-ko-2b": "beomi/gemma-ko-2b",
-        "gemma-ko-9b": "beomi/gemma-ko-9b",
+        # "gemma-ko-9b": "beomi/gemma-ko-9b",
         "kullm-5.8b": "nlpai-lab/kullm-polyglot-5.8b-v2"
     }
 
     # Whisper 설정
-    WHISPER_MODEL = "base"  # tiny, base, small, medium, large
+    WHISPER_MODEL = "large-v3"  # tiny, base, small, medium, large
 
     # 파일 업로드 설정
     UPLOAD_FOLDER = 'uploads'

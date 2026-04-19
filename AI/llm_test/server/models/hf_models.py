@@ -22,7 +22,7 @@ class HuggingFaceModel:
 
         logger.info(f"Model loaded successfully on {self.device}")
 
-    def generate(self, prompt: str, max_length: int = 512) -> str:
+    def generate(self, prompt: str, max_length: int = 30) -> str:
         """HuggingFace 모델로 텍스트 생성"""
         logger.debug(f"Generating on {self.device}")
 

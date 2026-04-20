@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
+import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -13,6 +14,7 @@ import org.junit.Test
 class FacilitySeedRepositoryTest {
     private val repository: FacilitySeedRepository =
         DefaultFacilitySeedRepository(
+            localDataSource = FacilitySeedLocalDataSource(),
             mockDataSource = FacilitySeedMockDataSource(),
         )
 
@@ -50,6 +52,36 @@ class FacilitySeedRepositoryTest {
                     BrailleBlockType.CROSSWALK_APPROACH,
                 ),
                 catalog.brailleBlocks.mapNotNull { seed -> seed.brailleBlockType }.toSet(),
+            )
+        }
+
+    @Test
+    fun `getFacilityBrowseData returns separated markers and reusable detail lookup`() =
+        runBlocking {
+            val browseData = repository.getFacilityBrowseData()
+
+            assertEquals(9, browseData.facilityMarkers.size)
+            assertEquals(4, browseData.brailleBlockMarkers.size)
+            assertEquals(13, browseData.allMarkers.size)
+            assertEquals(13, browseData.detailsById.size)
+            assertEquals(
+                listOf(
+                    FacilityCategory.RESTAURANT,
+                    FacilityCategory.TOURIST_ATTRACTION,
+                    FacilityCategory.TOILET,
+                    FacilityCategory.ELEVATOR,
+                    FacilityCategory.CHARGING_STATION,
+                    FacilityCategory.BRAILLE_BLOCK,
+                ),
+                browseData.availableCategories,
+            )
+            assertEquals(
+                listOf(
+                    BrailleBlockType.GUIDING_LINE,
+                    BrailleBlockType.WARNING_SURFACE,
+                    BrailleBlockType.CROSSWALK_APPROACH,
+                ),
+                browseData.availableBrailleBlockTypes,
             )
         }
 

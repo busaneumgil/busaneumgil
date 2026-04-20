@@ -84,6 +84,16 @@ data class FacilitySeedCatalog(
     }
 }
 
+data class FacilityBrowseData(
+    val facilityMarkers: List<FacilityMarkerSeed> = emptyList(),
+    val brailleBlockMarkers: List<FacilityMarkerSeed> = emptyList(),
+    val detailsById: Map<String, FacilityDetailSeed> = emptyMap(),
+    val availableCategories: List<FacilityCategory> = emptyList(),
+    val availableBrailleBlockTypes: List<BrailleBlockType> = emptyList(),
+) {
+    val allMarkers: List<FacilityMarkerSeed> = facilityMarkers + brailleBlockMarkers
+}
+
 data class FacilityMarkerSeed(
     val facilityId: String,
     val name: String,

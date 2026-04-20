@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
@@ -41,6 +42,7 @@ class AppContainer(
         DebugSettingsLocalDataSource(appSettingDao = localDatabase.appSettingDao())
 
     private val placesLocalDataSource = PlacesLocalDataSource()
+    private val facilitySeedLocalDataSource = FacilitySeedLocalDataSource()
     private val searchLocalDataSource = SearchLocalDataSource()
 
     private val placesRemoteDataSource = PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
@@ -74,6 +76,7 @@ class AppContainer(
 
     val facilitySeedRepository: FacilitySeedRepository =
         RepositoryModule.provideFacilitySeedRepository(
+            localDataSource = facilitySeedLocalDataSource,
             mockDataSource = facilitySeedMockDataSource,
         )
 

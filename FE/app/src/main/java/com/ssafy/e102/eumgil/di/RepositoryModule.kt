@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.di
 
 import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
@@ -56,9 +57,11 @@ object RepositoryModule {
         )
 
     fun provideFacilitySeedRepository(
+        localDataSource: FacilitySeedLocalDataSource,
         mockDataSource: FacilitySeedMockDataSource,
     ): FacilitySeedRepository =
         DefaultFacilitySeedRepository(
+            localDataSource = localDataSource,
             mockDataSource = mockDataSource,
         )
 

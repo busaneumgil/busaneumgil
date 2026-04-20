@@ -21,6 +21,7 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.feature.map.component.MapCategoryFilterBar
 import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
 import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
 import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
@@ -48,6 +49,9 @@ fun MapScreen(
         mapContent = {
             MapViewport(
                 state = viewportState,
+                onMarkerClick = { markerId ->
+                    onAction(MapUiAction.MarkerTapped(markerId))
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -61,6 +65,14 @@ fun MapScreen(
                     actionLabel = searchBarState.actionLabel,
                     accessibilityLabel = searchBarState.accessibilityLabel,
                     onClick = { onAction(MapUiAction.SearchEntryClicked) },
+                )
+
+                MapCategoryFilterBar(
+                    state = uiState.markerFilterState,
+                    onReset = { onAction(MapUiAction.MarkerCategoryFilterReset) },
+                    onCategoryToggle = { category ->
+                        onAction(MapUiAction.MarkerCategoryFilterToggled(category))
+                    },
                 )
 
                 MapLocationStatusCard(
@@ -394,6 +406,9 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
 
     return MapViewportUiState(
         integrationState = MapIntegrationState.Unbound,
+        cameraTarget = cameraTarget,
+        markerOverlayState = uiState.markerOverlayState,
+        selectedMarkerId = uiState.selectedMarkerId,
         regionLabel = regionLabel,
         statusLabel = statusLabel,
         title = title,

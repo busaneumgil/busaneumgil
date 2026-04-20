@@ -16,6 +16,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -50,6 +51,9 @@ class AppContainer(
         RepositoryModule.provideRepositorySourcePolicy(
             debugSettingsLocalDataSource = debugSettingsLocalDataSource,
         )
+
+    val destinationSelectionRepository: DestinationSelectionRepository =
+        RepositoryModule.provideDestinationSelectionRepository()
 
     val settingsRepository: SettingsRepository =
         RepositoryModule.provideSettingsRepository(

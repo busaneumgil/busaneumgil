@@ -44,3 +44,9 @@ sealed interface TopLevelRoute : AppRoute {
         override val route: String = "my_page"
     }
 }
+
+sealed interface SearchRoute : AppRoute {
+    data object Search : SearchRoute {
+        override val route: String = "search"
+    }
+}

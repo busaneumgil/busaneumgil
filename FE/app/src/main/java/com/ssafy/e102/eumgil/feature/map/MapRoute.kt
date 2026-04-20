@@ -36,6 +36,7 @@ fun MapRoute(
             MapViewModel.provideFactory(
                 locationPermissionManager = appContainer.locationPermissionManager,
                 currentLocationManager = appContainer.currentLocationManager,
+                destinationSelectionRepository = appContainer.destinationSelectionRepository,
             )
         }
     val viewModel =

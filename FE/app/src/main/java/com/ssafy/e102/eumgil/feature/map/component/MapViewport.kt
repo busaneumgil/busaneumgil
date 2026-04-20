@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
@@ -199,6 +201,16 @@ private fun MapFallbackSurface(
             modifier = Modifier.fillMaxSize(),
         )
 
+        markerOverlayStatusMessage(markerOverlayState)?.let { message ->
+            MarkerOverlayStatusCard(
+                message = message,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(EumSpacing.medium),
+            )
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -271,12 +283,9 @@ private fun MapMarkerOverlay(
     val projectionBounds =
         markerProjectionBounds(
             cameraTarget = cameraTarget,
-            markers = markerOverlayState.markers,
+            markers = markerOverlayState.visibleMarkers,
         )
-    val visibleMarkers =
-        markerOverlayState.markers.filter { marker ->
-            marker.displayState == MapMarkerDisplayState.VISIBLE
-        }
+    val visibleMarkers = markerOverlayState.visibleMarkers
 
     BoxWithConstraints(modifier = modifier) {
         val horizontalPadding = 24.dp
@@ -328,6 +337,40 @@ private fun MapMarkerOverlay(
         }
     }
 }
+
+@Composable
+private fun MarkerOverlayStatusCard(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(EumRadius.full),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
+        shadowElevation = 4.dp,
+    ) {
+        Text(
+            text = message,
+            modifier =
+                Modifier.padding(
+                    horizontal = EumSpacing.small,
+                    vertical = EumSpacing.xSmall,
+                ),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun markerOverlayStatusMessage(markerOverlayState: MapMarkerOverlayState): String? =
+    when {
+        markerOverlayState.isLoadFailed -> stringResource(id = R.string.map_viewport_marker_status_error)
+        markerOverlayState.isEmptyData -> stringResource(id = R.string.map_viewport_marker_status_empty_data)
+        markerOverlayState.isEmptyResult -> stringResource(id = R.string.map_viewport_marker_status_empty_result)
+        else -> null
+    }
 
 @Composable
 private fun MapCameraFocusIndicator(modifier: Modifier = Modifier) {
@@ -483,17 +526,38 @@ private fun markerProjectionBounds(
     val markerMaxLatitude = markers.maxOf { marker -> marker.coordinate.latitude }
     val markerMinLongitude = markers.minOf { marker -> marker.coordinate.longitude }
     val markerMaxLongitude = markers.maxOf { marker -> marker.coordinate.longitude }
-    val latitudeSpan = (markerMaxLatitude - markerMinLatitude).coerceAtLeast(MIN_LATITUDE_SPAN)
-    val longitudeSpan = (markerMaxLongitude - markerMinLongitude).coerceAtLeast(MIN_LONGITUDE_SPAN)
-    val latitudePadding = latitudeSpan * 0.24
-    val longitudePadding = longitudeSpan * 0.24
+    val latitudeBounds =
+        expandedBounds(
+            minValue = markerMinLatitude,
+            maxValue = markerMaxLatitude,
+            minimumSpan = MIN_LATITUDE_SPAN,
+        )
+    val longitudeBounds =
+        expandedBounds(
+            minValue = markerMinLongitude,
+            maxValue = markerMaxLongitude,
+            minimumSpan = MIN_LONGITUDE_SPAN,
+        )
 
     return MarkerProjectionBounds(
-        minLatitude = markerMinLatitude - latitudePadding,
-        maxLatitude = markerMaxLatitude + latitudePadding,
-        minLongitude = markerMinLongitude - longitudePadding,
-        maxLongitude = markerMaxLongitude + longitudePadding,
+        minLatitude = latitudeBounds.first,
+        maxLatitude = latitudeBounds.second,
+        minLongitude = longitudeBounds.first,
+        maxLongitude = longitudeBounds.second,
     )
+}
+
+private fun expandedBounds(
+    minValue: Double,
+    maxValue: Double,
+    minimumSpan: Double,
+): Pair<Double, Double> {
+    val center = (minValue + maxValue) / 2.0
+    val paddedSpan = (maxValue - minValue) * 1.48
+    val finalSpan = maxOf(paddedSpan, minimumSpan)
+    val halfSpan = finalSpan / 2.0
+
+    return (center - halfSpan) to (center + halfSpan)
 }
 
 private fun markerOverlayJitter(markerId: String): MarkerOffset {

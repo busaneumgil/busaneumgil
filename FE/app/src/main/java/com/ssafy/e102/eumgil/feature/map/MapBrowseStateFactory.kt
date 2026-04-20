@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapBrailleBlockFilterOption
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
 import com.ssafy.e102.eumgil.feature.map.model.MapCategoryFilterOption
@@ -32,7 +33,7 @@ internal object MapBrowseStateFactory {
             }
 
         return MapMarkerOverlayState(
-            isLoading = false,
+            loadStatus = MapMarkerLoadStatus.READY,
             markers = markers,
             visibleMarkerCount = markers.count { marker -> marker.displayState == MapMarkerDisplayState.VISIBLE },
             totalMarkerCount = markers.size,
@@ -47,7 +48,7 @@ internal object MapBrowseStateFactory {
         val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
 
         return MapMarkerFilterUiState(
-            isLoading = false,
+            loadStatus = MapMarkerLoadStatus.READY,
             selection = normalizedSelection,
             categoryOptions =
                 browseData.availableCategories.map { category ->
@@ -90,6 +91,16 @@ internal object MapBrowseStateFactory {
             totalMarkerCount = overlayState.totalMarkerCount,
         )
     }
+
+    fun createErrorMarkerOverlayState(): MapMarkerOverlayState =
+        MapMarkerOverlayState(
+            loadStatus = MapMarkerLoadStatus.ERROR,
+        )
+
+    fun createErrorFilterUiState(): MapMarkerFilterUiState =
+        MapMarkerFilterUiState(
+            loadStatus = MapMarkerLoadStatus.ERROR,
+        )
 
     fun toggleCategory(
         selection: MapFilterSelectionState,

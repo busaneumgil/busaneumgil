@@ -6,7 +6,12 @@ import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
+import com.ssafy.e102.eumgil.core.model.FacilityMarkerSeed
+import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
+import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
@@ -282,6 +287,45 @@ class MapViewModelTest {
 
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
         }
+
+    @Test
+    fun `browse load failure exposes error states`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = FailingFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.markerOverlayState.isLoadFailed)
+            assertTrue(viewModel.uiState.value.markerFilterState.isLoadFailed)
+            assertEquals(0, viewModel.uiState.value.markerOverlayState.totalMarkerCount)
+        }
+
+    @Test
+    fun `empty browse data exposes empty states`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.markerOverlayState.isEmptyData)
+            assertTrue(viewModel.uiState.value.markerFilterState.isEmptyData)
+            assertEquals(0, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertTrue(viewModel.uiState.value.markerFilterState.categoryOptions.isEmpty())
+        }
 }
 
 private fun testDestination(): PlaceDestination =
@@ -339,3 +383,31 @@ private fun testFacilitySeedRepository(): FacilitySeedRepository =
         localDataSource = FacilitySeedLocalDataSource(),
         mockDataSource = FacilitySeedMockDataSource(),
     )
+
+private class EmptyFacilitySeedRepository : FacilitySeedRepository {
+    override suspend fun getSeedCatalog(): FacilitySeedCatalog = FacilitySeedCatalog()
+
+    override suspend fun getFacilityBrowseData(query: FacilitySeedQuery): FacilityBrowseData = FacilityBrowseData()
+
+    override suspend fun getFacilityMarkers(query: FacilitySeedQuery): List<FacilityMarkerSeed> = emptyList()
+
+    override suspend fun getFacilityDetail(facilityId: String): FacilityDetailSeed? = null
+}
+
+private class FailingFacilitySeedRepository : FacilitySeedRepository {
+    override suspend fun getSeedCatalog(): FacilitySeedCatalog {
+        error("browse load failed")
+    }
+
+    override suspend fun getFacilityBrowseData(query: FacilitySeedQuery): FacilityBrowseData {
+        error("browse load failed")
+    }
+
+    override suspend fun getFacilityMarkers(query: FacilitySeedQuery): List<FacilityMarkerSeed> {
+        error("browse load failed")
+    }
+
+    override suspend fun getFacilityDetail(facilityId: String): FacilityDetailSeed? {
+        error("browse load failed")
+    }
+}

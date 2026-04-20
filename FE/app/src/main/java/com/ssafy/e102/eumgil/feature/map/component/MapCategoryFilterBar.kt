@@ -30,22 +30,30 @@ fun MapCategoryFilterBar(
     onCategoryToggle: (FacilityCategory) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (state.isLoading) {
-        Surface(
-            modifier = modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(EumRadius.large),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
-            shadowElevation = 4.dp,
-        ) {
-            Text(
-                text = stringResource(id = R.string.map_filter_summary_loading),
-                modifier = Modifier.padding(EumSpacing.medium),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    when {
+        state.isLoading -> {
+            FilterStatusCard(
+                message = stringResource(id = R.string.map_filter_summary_loading),
+                modifier = modifier,
             )
+            return
         }
-        return
+
+        state.isLoadFailed -> {
+            FilterStatusCard(
+                message = stringResource(id = R.string.map_filter_summary_error),
+                modifier = modifier,
+            )
+            return
+        }
+
+        state.isEmptyData -> {
+            FilterStatusCard(
+                message = stringResource(id = R.string.map_filter_summary_empty_data),
+                modifier = modifier,
+            )
+            return
+        }
     }
 
     Surface(
@@ -106,32 +114,62 @@ fun MapCategoryFilterBar(
 
 @Composable
 private fun selectionSummaryText(state: MapMarkerFilterUiState): String {
-    val selectionLabel =
-        when {
-            state.selection.isShowingAllCategories -> stringResource(id = R.string.map_filter_chip_all)
-            else -> {
-                val selectedLabels =
-                    state.categoryOptions
-                        .filter { option -> option.isSelected }
-                        .map { option -> categoryFilterLabel(option.category) }
-
-                when {
-                    selectedLabels.isEmpty() -> stringResource(id = R.string.map_filter_chip_all)
-                    selectedLabels.size <= 2 -> selectedLabels.joinToString(separator = " · ")
-                    else -> selectedLabels.take(2).joinToString(separator = " · ") + " +${selectedLabels.size - 2}"
-                }
-            }
+    if (state.isEmptyResult) {
+        return buildString {
+            append(selectedCategorySummaryLabel(state = state))
+            append(" / ")
+            append(stringResource(id = R.string.map_filter_summary_empty_result))
         }
+    }
 
     return buildString {
-        append(selectionLabel)
-        append(" · ")
+        append(selectedCategorySummaryLabel(state = state))
+        append(" / ")
         append(
             stringResource(
                 id = R.string.map_filter_summary,
                 state.visibleMarkerCount,
                 state.totalMarkerCount,
             ),
+        )
+    }
+}
+
+@Composable
+private fun selectedCategorySummaryLabel(state: MapMarkerFilterUiState): String =
+    when {
+        state.selection.isShowingAllCategories -> stringResource(id = R.string.map_filter_chip_all)
+        else -> {
+            val selectedLabels =
+                state.categoryOptions
+                    .filter { option -> option.isSelected }
+                    .map { option -> categoryFilterLabel(option.category) }
+
+            when {
+                selectedLabels.isEmpty() -> stringResource(id = R.string.map_filter_chip_all)
+                selectedLabels.size <= 2 -> selectedLabels.joinToString(separator = " / ")
+                else -> selectedLabels.take(2).joinToString(separator = " / ") + " +${selectedLabels.size - 2}"
+            }
+        }
+    }
+
+@Composable
+private fun FilterStatusCard(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
+        shadowElevation = 4.dp,
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(EumSpacing.medium),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

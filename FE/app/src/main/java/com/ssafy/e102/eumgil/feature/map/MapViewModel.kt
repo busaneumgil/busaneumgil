@@ -114,11 +114,24 @@ class MapViewModel(
 
     private fun loadMarkerBrowseState() {
         viewModelScope.launch {
-            val browseData = facilitySeedRepository.getFacilityBrowseData()
-            facilityBrowseData = browseData
-            markerFilterSelectionState =
-                MapBrowseStateFactory.resetSelection()
-            renderMarkerBrowseState()
+            runCatching {
+                facilitySeedRepository.getFacilityBrowseData()
+            }.onSuccess { browseData ->
+                facilityBrowseData = browseData
+                markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+                renderMarkerBrowseState()
+            }.onFailure {
+                facilityBrowseData = null
+                selectedMarkerId = null
+                markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+                mutableUiState.update { state ->
+                    state.copy(
+                        selectedMarkerId = null,
+                        markerOverlayState = MapBrowseStateFactory.createErrorMarkerOverlayState(),
+                        markerFilterState = MapBrowseStateFactory.createErrorFilterUiState(),
+                    )
+                }
+            }
         }
     }
 

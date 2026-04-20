@@ -3,6 +3,12 @@ package com.ssafy.e102.eumgil.feature.map.model
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 
+enum class MapMarkerLoadStatus {
+    LOADING,
+    READY,
+    ERROR,
+}
+
 data class MapMarkerCategoryType(
     val category: FacilityCategory,
     val brailleBlockType: BrailleBlockType? = null,
@@ -28,13 +34,37 @@ data class MapMarkerUiModel(
 )
 
 data class MapMarkerOverlayState(
-    val isLoading: Boolean = true,
+    val loadStatus: MapMarkerLoadStatus = MapMarkerLoadStatus.LOADING,
     val markers: List<MapMarkerUiModel> = emptyList(),
     val visibleMarkerCount: Int = 0,
     val totalMarkerCount: Int = 0,
 ) {
+    val isLoading: Boolean
+        get() = loadStatus == MapMarkerLoadStatus.LOADING
+
+    val isLoadFailed: Boolean
+        get() = loadStatus == MapMarkerLoadStatus.ERROR
+
+    val isReady: Boolean
+        get() = loadStatus == MapMarkerLoadStatus.READY
+
+    val hasMarkers: Boolean
+        get() = totalMarkerCount > 0
+
+    val hasVisibleMarkers: Boolean
+        get() = visibleMarkerCount > 0
+
+    val isEmptyData: Boolean
+        get() = isReady && totalMarkerCount == 0
+
+    val isEmptyResult: Boolean
+        get() = isReady && totalMarkerCount > 0 && visibleMarkerCount == 0
+
     val hiddenMarkerCount: Int
         get() = (totalMarkerCount - visibleMarkerCount).coerceAtLeast(0)
+
+    val visibleMarkers: List<MapMarkerUiModel>
+        get() = markers.filter { marker -> marker.displayState == MapMarkerDisplayState.VISIBLE }
 }
 
 data class MapFilterSelectionState(
@@ -74,13 +104,28 @@ data class MapBrailleBlockFilterOption(
 )
 
 data class MapMarkerFilterUiState(
-    val isLoading: Boolean = true,
+    val loadStatus: MapMarkerLoadStatus = MapMarkerLoadStatus.LOADING,
     val selection: MapFilterSelectionState = MapFilterSelectionState(),
     val categoryOptions: List<MapCategoryFilterOption> = emptyList(),
     val brailleBlockTypeOptions: List<MapBrailleBlockFilterOption> = emptyList(),
     val visibleMarkerCount: Int = 0,
     val totalMarkerCount: Int = 0,
 ) {
+    val isLoading: Boolean
+        get() = loadStatus == MapMarkerLoadStatus.LOADING
+
+    val isLoadFailed: Boolean
+        get() = loadStatus == MapMarkerLoadStatus.ERROR
+
+    val isReady: Boolean
+        get() = loadStatus == MapMarkerLoadStatus.READY
+
     val hasCustomSelection: Boolean
         get() = selection.hasCustomSelection
+
+    val isEmptyData: Boolean
+        get() = isReady && totalMarkerCount == 0
+
+    val isEmptyResult: Boolean
+        get() = isReady && totalMarkerCount > 0 && visibleMarkerCount == 0
 }

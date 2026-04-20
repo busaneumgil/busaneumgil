@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
     val selectedDestination: PlaceDestination? = null,
+    val selectedMarkerId: String? = null,
     val locationStatus: MapLocationStatus = MapLocationStatus.PermissionDenied,
     val recenterButtonState: MapRecenterButtonState = MapRecenterButtonState.REQUEST_PERMISSION,
     val markerOverlayState: MapMarkerOverlayState = MapMarkerOverlayState(),
@@ -20,6 +21,10 @@ sealed interface MapUiAction {
     data object SearchEntryClicked : MapUiAction
 
     data object LocationActionClicked : MapUiAction
+
+    data class MarkerTapped(
+        val markerId: String,
+    ) : MapUiAction
 
     data class MarkerCategoryFilterToggled(
         val category: FacilityCategory,

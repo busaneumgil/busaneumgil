@@ -231,6 +231,57 @@ class MapViewModelTest {
             assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
             assertEquals(13, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
         }
+
+    @Test
+    fun `marker tap toggles selected marker state`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+            assertEquals(markerId, viewModel.uiState.value.selectedMarkerId)
+
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.selectedMarkerId)
+        }
+
+    @Test
+    fun `selected marker is cleared when filter hides it`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val restaurantMarkerId =
+                viewModel.uiState.value.markerOverlayState.markers
+                    .first { marker -> marker.categoryType.category == FacilityCategory.RESTAURANT }
+                    .markerId
+
+            viewModel.onAction(MapUiAction.MarkerTapped(restaurantMarkerId))
+            viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.selectedMarkerId)
+        }
 }
 
 private fun testDestination(): PlaceDestination =

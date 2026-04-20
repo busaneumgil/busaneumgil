@@ -44,6 +44,7 @@ class MapViewModel(
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
+    private var selectedMarkerId: String? = null
     private var facilityBrowseData: FacilityBrowseData? = null
     private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
     private var isRouteStarted = false
@@ -98,6 +99,7 @@ class MapViewModel(
     fun onAction(action: MapUiAction) {
         when (action) {
             MapUiAction.LocationActionClicked -> handleLocationAction()
+            is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch)
@@ -117,6 +119,19 @@ class MapViewModel(
             markerFilterSelectionState =
                 MapBrowseStateFactory.resetSelection()
             renderMarkerBrowseState()
+        }
+    }
+
+    private fun handleMarkerTapped(markerId: String) {
+        selectedMarkerId =
+            if (selectedMarkerId == markerId) {
+                null
+            } else {
+                markerId
+            }
+
+        mutableUiState.update { state ->
+            state.copy(selectedMarkerId = selectedMarkerId)
         }
     }
 
@@ -151,10 +166,18 @@ class MapViewModel(
                 overlayState = overlayState,
             )
 
+        selectedMarkerId =
+            selectedMarkerId?.takeIf { markerId ->
+                overlayState.markers.any { marker ->
+                    marker.markerId == markerId
+                        && marker.displayState == com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState.VISIBLE
+                }
+            }
         markerFilterSelectionState = filterState.selection
 
         mutableUiState.update { state ->
             state.copy(
+                selectedMarkerId = selectedMarkerId,
                 markerOverlayState = overlayState,
                 markerFilterState = filterState,
             )

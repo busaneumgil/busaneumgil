@@ -49,6 +49,9 @@ fun MapScreen(
         mapContent = {
             MapViewport(
                 state = viewportState,
+                onMarkerClick = { markerId ->
+                    onAction(MapUiAction.MarkerTapped(markerId))
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -403,6 +406,9 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
 
     return MapViewportUiState(
         integrationState = MapIntegrationState.Unbound,
+        cameraTarget = cameraTarget,
+        markerOverlayState = uiState.markerOverlayState,
+        selectedMarkerId = uiState.selectedMarkerId,
         regionLabel = regionLabel,
         statusLabel = statusLabel,
         title = title,

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
 import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
 import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
@@ -40,6 +41,7 @@ fun MapScreen(
 ) {
     val viewportState = mapViewportState(uiState = uiState)
     val locationPanelState = mapLocationPanelState(uiState = uiState)
+    val searchBarState = mapSearchBarState(uiState = uiState)
 
     MapShellScaffold(
         modifier = modifier,
@@ -54,10 +56,10 @@ fun MapScreen(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
             ) {
                 MapTopSearchBar(
-                    title = stringResource(id = R.string.map_shell_search_title),
-                    hint = stringResource(id = R.string.map_shell_search_hint),
-                    actionLabel = stringResource(id = R.string.map_shell_search_action),
-                    accessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
+                    title = searchBarState.title,
+                    hint = searchBarState.hint,
+                    actionLabel = searchBarState.actionLabel,
+                    accessibilityLabel = searchBarState.accessibilityLabel,
                     onClick = { onAction(MapUiAction.SearchEntryClicked) },
                 )
 
@@ -69,6 +71,14 @@ fun MapScreen(
         },
     )
 }
+
+@Immutable
+private data class MapSearchBarState(
+    val title: String,
+    val hint: String,
+    val actionLabel: String,
+    val accessibilityLabel: String,
+)
 
 @Immutable
 private data class MapLocationPanelState(
@@ -278,6 +288,41 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
 }
 
 @Composable
+private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
+    val selectedDestination = uiState.selectedDestination
+
+    if (selectedDestination == null) {
+        return MapSearchBarState(
+            title = stringResource(id = R.string.map_shell_search_title),
+            hint = stringResource(id = R.string.map_shell_search_hint),
+            actionLabel = stringResource(id = R.string.map_shell_search_action),
+            accessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
+        )
+    }
+
+    return MapSearchBarState(
+        title = selectedDestination.name,
+        hint =
+            selectedDestination.address
+                ?: stringResource(id = R.string.map_shell_search_hint_selected_fallback),
+        actionLabel = stringResource(id = R.string.map_shell_search_action_selected),
+        accessibilityLabel =
+            if (selectedDestination.address.isNullOrBlank()) {
+                stringResource(
+                    id = R.string.map_shell_search_a11y_label_selected_without_address,
+                    selectedDestination.name,
+                )
+            } else {
+                stringResource(
+                    id = R.string.map_shell_search_a11y_label_selected_with_address,
+                    selectedDestination.name,
+                    selectedDestination.address.orEmpty(),
+                )
+            },
+    )
+}
+
+@Composable
 private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     val cameraTarget = uiState.cameraTarget
     val statusLabel =
@@ -293,43 +338,58 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
                 stringResource(id = R.string.map_viewport_status_unavailable)
         }
     val regionLabel =
-        stringResource(
-            id =
-                if (cameraTarget.source == MapCameraSource.CURRENT_LOCATION) {
-                    R.string.map_viewport_region_current
-                } else {
-                    R.string.map_viewport_region_default
-                },
-        )
+        when (cameraTarget.source) {
+            MapCameraSource.CURRENT_LOCATION ->
+                stringResource(id = R.string.map_viewport_region_current)
+
+            MapCameraSource.SEARCH_RESULT ->
+                stringResource(id = R.string.map_viewport_region_selected)
+
+            MapCameraSource.DEFAULT_BUSAN ->
+                stringResource(id = R.string.map_viewport_region_default)
+        }
     val title =
-        stringResource(
-            id =
-                if (cameraTarget.source == MapCameraSource.CURRENT_LOCATION) {
-                    R.string.map_viewport_title_current
-                } else {
-                    R.string.map_viewport_title_default
-                },
-        )
+        when (cameraTarget.source) {
+            MapCameraSource.CURRENT_LOCATION ->
+                stringResource(id = R.string.map_viewport_title_current)
+
+            MapCameraSource.SEARCH_RESULT ->
+                stringResource(
+                    id = R.string.map_viewport_title_selected,
+                    uiState.selectedDestination?.name
+                        ?: stringResource(id = R.string.map_shell_search_hint_selected_fallback),
+                )
+
+            MapCameraSource.DEFAULT_BUSAN ->
+                stringResource(id = R.string.map_viewport_title_default)
+        }
     val description =
-        stringResource(
-            id =
-                if (cameraTarget.source == MapCameraSource.CURRENT_LOCATION) {
-                    R.string.map_viewport_description_current
-                } else {
-                    R.string.map_viewport_description_default
-                },
-        )
+        when (cameraTarget.source) {
+            MapCameraSource.CURRENT_LOCATION ->
+                stringResource(id = R.string.map_viewport_description_current)
+
+            MapCameraSource.SEARCH_RESULT ->
+                stringResource(id = R.string.map_viewport_description_selected)
+
+            MapCameraSource.DEFAULT_BUSAN ->
+                stringResource(id = R.string.map_viewport_description_default)
+        }
     val supportingText =
-        if (cameraTarget.source == MapCameraSource.CURRENT_LOCATION) {
-            locationSummaryText(
-                location = cameraTarget.center,
-                accuracyMeters = (uiState.locationStatus as? MapLocationStatus.Ready)?.accuracyMeters,
-            )
-        } else {
-            stringResource(
-                id = R.string.map_viewport_supporting_default,
-                coordinateText(MapDefaults.BUSAN_CENTER),
-            )
+        when (cameraTarget.source) {
+            MapCameraSource.CURRENT_LOCATION ->
+                locationSummaryText(
+                    location = cameraTarget.center,
+                    accuracyMeters = (uiState.locationStatus as? MapLocationStatus.Ready)?.accuracyMeters,
+                )
+
+            MapCameraSource.SEARCH_RESULT ->
+                selectedDestinationSummaryText(destination = uiState.selectedDestination)
+
+            MapCameraSource.DEFAULT_BUSAN ->
+                stringResource(
+                    id = R.string.map_viewport_supporting_default,
+                    coordinateText(MapDefaults.BUSAN_CENTER),
+                )
         }
 
     return MapViewportUiState(
@@ -339,6 +399,43 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
         title = title,
         description = description,
         supportingText = supportingText,
+    )
+}
+
+@Composable
+private fun selectedDestinationSummaryText(destination: PlaceDestination?): String {
+    if (destination == null) {
+        return stringResource(
+            id = R.string.map_viewport_supporting_default,
+            coordinateText(MapDefaults.BUSAN_CENTER),
+        )
+    }
+
+    val coordinate =
+        coordinateText(
+            MapCoordinate(
+                latitude = destination.latitude,
+                longitude = destination.longitude,
+            ),
+        )
+
+    val summary =
+        if (destination.address.isNullOrBlank()) {
+            stringResource(
+                id = R.string.map_destination_summary_without_address,
+                coordinate,
+            )
+        } else {
+            stringResource(
+                id = R.string.map_destination_summary_with_address,
+                destination.address.orEmpty(),
+                coordinate,
+            )
+        }
+
+    return stringResource(
+        id = R.string.map_viewport_supporting_selected,
+        summary,
     )
 }
 

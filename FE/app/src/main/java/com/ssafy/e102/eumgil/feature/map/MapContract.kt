@@ -1,10 +1,12 @@
 package com.ssafy.e102.eumgil.feature.map
 
+import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
+    val selectedDestination: PlaceDestination? = null,
     val locationStatus: MapLocationStatus = MapLocationStatus.PermissionDenied,
     val recenterButtonState: MapRecenterButtonState = MapRecenterButtonState.REQUEST_PERMISSION,
 )

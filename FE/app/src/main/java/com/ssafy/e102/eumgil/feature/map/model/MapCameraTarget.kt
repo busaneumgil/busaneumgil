@@ -10,6 +10,7 @@ data class MapCoordinate(
 enum class MapCameraSource {
     DEFAULT_BUSAN,
     CURRENT_LOCATION,
+    SEARCH_RESULT,
 }
 
 data class MapCameraTarget(

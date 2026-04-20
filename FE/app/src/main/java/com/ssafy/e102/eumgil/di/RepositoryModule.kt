@@ -8,9 +8,11 @@ import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultPlacesRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
+import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -18,6 +20,9 @@ import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolic
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
 object RepositoryModule {
+    fun provideDestinationSelectionRepository(): DestinationSelectionRepository =
+        InMemoryDestinationSelectionRepository()
+
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,
         debugSettingsLocalDataSource: DebugSettingsLocalDataSource,

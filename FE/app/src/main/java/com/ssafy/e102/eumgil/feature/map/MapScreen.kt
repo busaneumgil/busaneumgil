@@ -20,8 +20,11 @@ import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.feature.map.component.MapCategoryFilterBar
+import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
+import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
 import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
 import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
 import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
@@ -43,6 +46,7 @@ fun MapScreen(
     val viewportState = mapViewportState(uiState = uiState)
     val locationPanelState = mapLocationPanelState(uiState = uiState)
     val searchBarState = mapSearchBarState(uiState = uiState)
+    val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
 
     MapShellScaffold(
         modifier = modifier,
@@ -81,6 +85,43 @@ fun MapScreen(
                 )
             }
         },
+        bottomOverlay = {
+            FacilityDetailBottomSheetShell(
+                state = facilityDetailSheetUiState.toShellState(),
+                onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
+                modifier = Modifier.fillMaxSize(),
+                detailContent = {
+                    FacilityDetailSlotCard(
+                        title = stringResource(id = R.string.map_facility_detail_info_section_title),
+                        description =
+                            facilityDetailSheetUiState.description
+                                ?: stringResource(id = R.string.map_facility_detail_info_placeholder),
+                    )
+                },
+                actionContent = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.map_facility_detail_action_section_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Button(
+                            onClick = { onAction(MapUiAction.FacilityRouteEntryClicked) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(text = stringResource(id = R.string.map_facility_detail_route_entry_action))
+                        }
+                        Text(
+                            text = stringResource(id = R.string.map_facility_detail_action_supporting),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+            )
+        },
     )
 }
 
@@ -103,6 +144,23 @@ private data class MapLocationPanelState(
     val isPrimaryAction: Boolean,
     val isCriticalState: Boolean,
 )
+
+@Immutable
+private data class MapFacilityDetailSheetUiState(
+    val isVisible: Boolean,
+    val categoryLabel: String,
+    val title: String,
+    val address: String,
+    val description: String?,
+) {
+    fun toShellState(): FacilityDetailBottomSheetShellState =
+        FacilityDetailBottomSheetShellState(
+            isVisible = isVisible,
+            categoryLabel = categoryLabel,
+            title = title,
+            address = address,
+        )
+}
 
 @Composable
 private fun MapLocationStatusCard(
@@ -198,6 +256,36 @@ private fun MapLocationStatusCard(
                     Text(text = state.actionLabel)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FacilityDetailSlotCard(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -332,6 +420,28 @@ private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
                 )
             },
     )
+}
+
+@Composable
+private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityDetailSheetUiState {
+    val detail = uiState.facilityDetailSheetState.detail
+    return if (detail == null) {
+        MapFacilityDetailSheetUiState(
+            isVisible = false,
+            categoryLabel = "",
+            title = "",
+            address = "",
+            description = null,
+        )
+    } else {
+        MapFacilityDetailSheetUiState(
+            isVisible = uiState.facilityDetailSheetState.isVisible,
+            categoryLabel = facilityDetailCategoryLabel(detail.category),
+            title = detail.name,
+            address = detail.address,
+            description = detail.description,
+        )
+    }
 }
 
 @Composable
@@ -486,3 +596,15 @@ private fun coordinateText(location: MapCoordinate): String =
         location.latitude,
         location.longitude,
     )
+
+@Composable
+private fun facilityDetailCategoryLabel(category: FacilityCategory): String =
+    when (category) {
+        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_filter_category_restaurant)
+        FacilityCategory.TOURIST_ATTRACTION -> stringResource(id = R.string.map_filter_category_tourist_attraction)
+        FacilityCategory.TOILET -> stringResource(id = R.string.map_filter_category_toilet)
+        FacilityCategory.ELEVATOR -> stringResource(id = R.string.map_filter_category_elevator)
+        FacilityCategory.CHARGING_STATION -> stringResource(id = R.string.map_filter_category_charging_station)
+        FacilityCategory.BRAILLE_BLOCK -> stringResource(id = R.string.map_filter_category_braille_block)
+        FacilityCategory.OTHER -> stringResource(id = R.string.map_filter_category_other)
+    }

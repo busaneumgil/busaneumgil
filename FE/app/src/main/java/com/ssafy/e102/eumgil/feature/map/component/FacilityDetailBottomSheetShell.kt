@@ -1,0 +1,177 @@
+package com.ssafy.e102.eumgil.feature.map.component
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+
+@Immutable
+data class FacilityDetailBottomSheetShellState(
+    val isVisible: Boolean = false,
+    val categoryLabel: String = "",
+    val title: String = "",
+    val address: String = "",
+)
+
+@Composable
+fun FacilityDetailBottomSheetShell(
+    state: FacilityDetailBottomSheetShellState,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    detailContent: @Composable ColumnScope.() -> Unit,
+    actionContent: @Composable ColumnScope.() -> Unit,
+) {
+    val scrimInteractionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = modifier.fillMaxSize(),
+    ) {
+        AnimatedVisibility(
+            visible = state.isVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.26f))
+                        .clickable(
+                            interactionSource = scrimInteractionSource,
+                            indication = null,
+                            onClick = onDismiss,
+                        ),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.isVisible,
+            enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut(),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium)
+                    .navigationBarsPadding()
+                    .fillMaxWidth(),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(EumRadius.large),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.99f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 12.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(EumSpacing.medium),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .width(44.dp)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(EumRadius.full))
+                                    .background(MaterialTheme.colorScheme.outlineVariant),
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(EumRadius.full),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                            ) {
+                                Text(
+                                    text = state.categoryLabel,
+                                    modifier =
+                                        Modifier.padding(
+                                            horizontal = EumSpacing.small,
+                                            vertical = EumSpacing.xSmall,
+                                        ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                            Text(
+                                text = state.title,
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = state.address,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        TextButton(onClick = onDismiss) {
+                            Text(text = stringResource(id = R.string.map_facility_detail_close))
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                        content = detailContent,
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                        content = actionContent,
+                    )
+                }
+            }
+        }
+    }
+}

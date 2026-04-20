@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.collect
 fun MapRoute(
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
+    onNavigateToFacilityRouteEntry: (String) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -66,9 +67,10 @@ fun MapRoute(
         }
     }
 
-    LaunchedEffect(viewModel, activity, appContainer, onNavigateToSearch) {
+    LaunchedEffect(viewModel, activity, appContainer, onNavigateToFacilityRouteEntry, onNavigateToSearch) {
         viewModel.uiEvent.collect { event ->
             when (event) {
+                is MapUiEvent.NavigateToFacilityRouteEntry -> onNavigateToFacilityRouteEntry(event.facilityId)
                 MapUiEvent.NavigateToSearch -> onNavigateToSearch()
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)

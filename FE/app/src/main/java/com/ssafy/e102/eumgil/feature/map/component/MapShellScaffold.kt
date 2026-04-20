@@ -14,6 +14,7 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun MapShellScaffold(
     mapContent: @Composable BoxScope.() -> Unit,
     topOverlay: @Composable BoxScope.() -> Unit,
+    bottomOverlay: @Composable BoxScope.() -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -34,6 +35,12 @@ fun MapShellScaffold(
                 .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
         ) {
             topOverlay()
+        }
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            bottomOverlay()
         }
     }
 }

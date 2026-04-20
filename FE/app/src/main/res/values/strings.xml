@@ -124,6 +124,16 @@
     <string name="map_location_coordinate_value">위도 %1$.4f, 경도 %2$.4f</string>
     <string name="map_location_accuracy_value">정확도 약 %1$.0fm</string>
     <string name="map_location_summary_with_accuracy">%1$s · %2$s</string>
+    <string name="map_filter_summary_loading">시설 마커와 필터 상태를 준비하는 중입니다.</string>
+    <string name="map_filter_summary">표시 중 %1$d / %2$d</string>
+    <string name="map_filter_chip_all">전체</string>
+    <string name="map_filter_category_restaurant">음식점</string>
+    <string name="map_filter_category_tourist_attraction">관광지</string>
+    <string name="map_filter_category_toilet">화장실</string>
+    <string name="map_filter_category_elevator">엘리베이터</string>
+    <string name="map_filter_category_charging_station">충전소</string>
+    <string name="map_filter_category_braille_block">점자블록</string>
+    <string name="map_filter_category_other">기타</string>
     <string name="saved_route_screen_title">저장 경로 화면 Placeholder</string>
     <string name="saved_route_screen_description">feature/savedroute 패키지의 시작 화면입니다. 북마크와 저장 경로 목록, 최근 경로 진입 지점을 여기에서 확장할 수 있습니다.</string>
     <string name="my_page_screen_title">MY 화면 Placeholder</string>

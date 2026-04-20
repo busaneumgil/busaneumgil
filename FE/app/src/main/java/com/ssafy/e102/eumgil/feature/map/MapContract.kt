@@ -1,20 +1,31 @@
 package com.ssafy.e102.eumgil.feature.map
 
+import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
     val selectedDestination: PlaceDestination? = null,
     val locationStatus: MapLocationStatus = MapLocationStatus.PermissionDenied,
     val recenterButtonState: MapRecenterButtonState = MapRecenterButtonState.REQUEST_PERMISSION,
+    val markerOverlayState: MapMarkerOverlayState = MapMarkerOverlayState(),
+    val markerFilterState: MapMarkerFilterUiState = MapMarkerFilterUiState(),
 )
 
 sealed interface MapUiAction {
     data object SearchEntryClicked : MapUiAction
 
     data object LocationActionClicked : MapUiAction
+
+    data class MarkerCategoryFilterToggled(
+        val category: FacilityCategory,
+    ) : MapUiAction
+
+    data object MarkerCategoryFilterReset : MapUiAction
 }
 
 sealed interface MapUiEvent {

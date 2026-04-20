@@ -7,11 +7,15 @@ import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
+import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
+import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,6 +33,7 @@ class MapViewModel(
     private val locationPermissionManager: LocationPermissionManager,
     private val currentLocationManager: CurrentLocationManager,
     private val destinationSelectionRepository: DestinationSelectionRepository,
+    private val facilitySeedRepository: FacilitySeedRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
@@ -39,6 +44,8 @@ class MapViewModel(
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
+    private var facilityBrowseData: FacilityBrowseData? = null
+    private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
     private var isRouteStarted = false
     private var locationLookupState: LocationLookupState = LocationLookupState.Idle
     private var locationLookupTimeoutJob: Job? = null
@@ -57,6 +64,7 @@ class MapViewModel(
         observeSelectionRequests()
         observePermissionState()
         observeLocationUpdates()
+        loadMarkerBrowseState()
         renderUiState()
     }
 
@@ -90,6 +98,8 @@ class MapViewModel(
     fun onAction(action: MapUiAction) {
         when (action) {
             MapUiAction.LocationActionClicked -> handleLocationAction()
+            MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
+            is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch)
         }
     }
@@ -98,6 +108,57 @@ class MapViewModel(
         stopLocationLookup()
         currentLocationManager.stopLocationUpdates()
         super.onCleared()
+    }
+
+    private fun loadMarkerBrowseState() {
+        viewModelScope.launch {
+            val browseData = facilitySeedRepository.getFacilityBrowseData()
+            facilityBrowseData = browseData
+            markerFilterSelectionState =
+                MapBrowseStateFactory.resetSelection()
+            renderMarkerBrowseState()
+        }
+    }
+
+    private fun resetMarkerCategoryFilter() {
+        if (facilityBrowseData == null) return
+        markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+        renderMarkerBrowseState()
+    }
+
+    private fun toggleMarkerCategoryFilter(category: FacilityCategory) {
+        val browseData = facilityBrowseData ?: return
+        markerFilterSelectionState =
+            MapBrowseStateFactory.toggleCategory(
+                selection = markerFilterSelectionState,
+                browseData = browseData,
+                category = category,
+            )
+        renderMarkerBrowseState()
+    }
+
+    private fun renderMarkerBrowseState() {
+        val browseData = facilityBrowseData ?: return
+        val overlayState =
+            MapBrowseStateFactory.createMarkerOverlayState(
+                browseData = browseData,
+                selection = markerFilterSelectionState,
+            )
+        val filterState =
+            MapBrowseStateFactory.createFilterUiState(
+                browseData = browseData,
+                selection = markerFilterSelectionState,
+                overlayState = overlayState,
+            )
+
+        markerFilterSelectionState = filterState.selection
+
+        mutableUiState.update { state ->
+            state.copy(
+                markerOverlayState = overlayState,
+                markerFilterState = filterState,
+            )
+        }
     }
 
     private fun observePermissionState() {
@@ -455,6 +516,7 @@ class MapViewModel(
             locationPermissionManager: LocationPermissionManager,
             currentLocationManager: CurrentLocationManager,
             destinationSelectionRepository: DestinationSelectionRepository,
+            facilitySeedRepository: FacilitySeedRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -464,6 +526,7 @@ class MapViewModel(
                             locationPermissionManager = locationPermissionManager,
                             currentLocationManager = currentLocationManager,
                             destinationSelectionRepository = destinationSelectionRepository,
+                            facilitySeedRepository = facilitySeedRepository,
                         ) as T
                     }
 

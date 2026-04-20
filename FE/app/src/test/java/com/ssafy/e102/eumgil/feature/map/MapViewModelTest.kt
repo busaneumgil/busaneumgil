@@ -6,15 +6,22 @@ import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
+import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -33,6 +40,7 @@ class MapViewModelTest {
                     locationPermissionManager = permissionManager,
                     currentLocationManager = locationManager,
                     destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
                 )
             val destination = testDestination()
 
@@ -61,6 +69,7 @@ class MapViewModelTest {
                     locationPermissionManager = permissionManager,
                     currentLocationManager = locationManager,
                     destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
                 )
             val destination = testDestination()
 
@@ -101,6 +110,7 @@ class MapViewModelTest {
                     locationPermissionManager = permissionManager,
                     currentLocationManager = locationManager,
                     destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
                 )
             val destination = testDestination()
 
@@ -118,6 +128,60 @@ class MapViewModelTest {
             assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
             assertEquals(destination.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
             assertEquals(destination.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+        }
+
+    @Test
+    fun `browse state initializes with all markers visible and category options ready`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(13, viewModel.uiState.value.markerOverlayState.totalMarkerCount)
+            assertEquals(13, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertEquals(6, viewModel.uiState.value.markerFilterState.categoryOptions.size)
+        }
+
+    @Test
+    fun `toggling category filter hides matching markers without touching other markers`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
+            advanceUntilIdle()
+
+            assertEquals(11, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertEquals(
+                0,
+                viewModel.uiState.value.markerOverlayState.markers.count { marker ->
+                    marker.displayState == MapMarkerDisplayState.VISIBLE &&
+                        marker.categoryType.category == FacilityCategory.TOILET
+                },
+            )
+            assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories.not())
+            assertTrue(
+                viewModel.uiState.value.markerFilterState.categoryOptions
+                    .first { option -> option.category == FacilityCategory.TOILET }
+                    .isSelected
+                    .not(),
+            )
         }
 }
 
@@ -170,3 +234,9 @@ private class FakeCurrentLocationManager(
         mutableLatestLocation.value = snapshot
     }
 }
+
+private fun testFacilitySeedRepository(): FacilitySeedRepository =
+    DefaultFacilitySeedRepository(
+        localDataSource = FacilitySeedLocalDataSource(),
+        mockDataSource = FacilitySeedMockDataSource(),
+    )

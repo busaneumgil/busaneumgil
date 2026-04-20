@@ -2,10 +2,13 @@ package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.FacilityMarkerSeed
+import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
 import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 
 interface FacilitySeedRepository {
+    suspend fun getSeedCatalog(): FacilitySeedCatalog
+
     suspend fun getFacilityMarkers(query: FacilitySeedQuery = FacilitySeedQuery()): List<FacilityMarkerSeed>
 
     suspend fun getFacilityDetail(facilityId: String): FacilityDetailSeed?
@@ -14,6 +17,8 @@ interface FacilitySeedRepository {
 class DefaultFacilitySeedRepository(
     private val mockDataSource: FacilitySeedMockDataSource,
 ) : FacilitySeedRepository {
+    override suspend fun getSeedCatalog(): FacilitySeedCatalog = mockDataSource.getSeedCatalog()
+
     override suspend fun getFacilityMarkers(query: FacilitySeedQuery): List<FacilityMarkerSeed> =
         mockDataSource.getFacilityMarkers(query)
 

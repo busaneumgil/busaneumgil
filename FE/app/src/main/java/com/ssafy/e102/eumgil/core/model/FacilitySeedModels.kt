@@ -59,6 +59,31 @@ data class FacilitySeed(
     }
 }
 
+data class FacilitySeedCatalog(
+    val facilities: List<FacilitySeed> = emptyList(),
+    val brailleBlocks: List<FacilitySeed> = emptyList(),
+) {
+    val allSeeds: List<FacilitySeed> = facilities + brailleBlocks
+
+    init {
+        require(facilities.none { seed -> seed.category == FacilityCategory.BRAILLE_BLOCK }) {
+            "Facility seed list must not contain BRAILLE_BLOCK entries."
+        }
+        require(brailleBlocks.all { seed -> seed.category == FacilityCategory.BRAILLE_BLOCK }) {
+            "Braille block seed list must only contain BRAILLE_BLOCK entries."
+        }
+        val duplicateIds =
+            allSeeds
+                .groupingBy { seed -> seed.facilityId }
+                .eachCount()
+                .filterValues { count -> count > 1 }
+                .keys
+        require(duplicateIds.isEmpty()) {
+            "Facility seed ids must be unique. Duplicates: $duplicateIds"
+        }
+    }
+}
+
 data class FacilityMarkerSeed(
     val facilityId: String,
     val name: String,

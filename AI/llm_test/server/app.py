@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import re
 import time
 from werkzeug.utils import secure_filename
 
@@ -26,6 +27,55 @@ intent_parser = IntentParser()
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
 
+def _build_result(request_id, model_name, message, conversation_state, inference_time, transcribed_text=None):
+    """conversation_state에 따라 LLM 호출 및 결과 딕셔너리 반환"""
+    dark_mode_action = intent_parser.parse_dark_mode_intent(message)
+
+    if conversation_state == "waiting_confirmation":
+        prompt = intent_parser.create_prompt(message, mode="confirm")
+        response_text, llm_time = model_manager.generate(model_name, prompt)
+        confirmed = response_text.strip().startswith("예")
+        next_state = "confirmed" if confirmed else "initial"
+        logger.info(f"[{request_id}] Confirm mode - response: '{response_text}', confirmed: {confirmed}")
+        result = {
+            "response": response_text,
+            "action": dark_mode_action,
+            "departure": None,
+            "destination": None,
+            "next_state": next_state,
+            "confirmed": confirmed,
+            "inference_time": round(inference_time + llm_time, 2),
+            "model_name": model_name,
+            "transcribed_text": transcribed_text
+        }
+    else:  # initial
+        prompt = intent_parser.create_prompt(message, mode="nlu")
+        response_text, llm_time = model_manager.generate(model_name, prompt)
+
+        departure = None
+        destination = None
+        match = re.search(r'(.+?)에서\s*(.+?)까지\s*길을\s*찾을까요', response_text)
+        if match:
+            departure = match.group(1).strip()
+            destination = match.group(2).strip()
+
+        next_state = "waiting_confirmation" if (departure and destination) else "initial"
+        logger.info(f"[{request_id}] NLU mode - departure: {departure}, destination: {destination}, next_state: {next_state}")
+        result = {
+            "response": response_text,
+            "action": dark_mode_action,
+            "departure": departure,
+            "destination": destination,
+            "next_state": next_state,
+            "confirmed": False,
+            "inference_time": round(inference_time + llm_time, 2),
+            "model_name": model_name,
+            "transcribed_text": transcribed_text
+        }
+
+    return result
+
+
 @app.route('/api/chat/android_stt', methods=['POST'])
 def chat_with_android_stt():
     """Android STT 방식"""
@@ -37,39 +87,15 @@ def chat_with_android_stt():
         model_name = data.get('model_name')
         message = data.get('message')
         session_id = data.get('session_id')
+        conversation_state = data.get('conversation_state', 'initial')
 
-        logger.info(f"[{request_id}] Android STT Request")
+        logger.info(f"[{request_id}] Android STT Request - state: {conversation_state}")
         logger.debug(f"[{request_id}] Model: {model_name}, Message: '{message}'")
 
-        # 의도 파싱
-        parse_start = time.time()
-        route_info = intent_parser.parse_route_query(message)
-        dark_mode_action = intent_parser.parse_dark_mode_intent(message)
-        parse_time = time.time() - parse_start
-        logger.debug(f"[{request_id}] Intent parsing: {parse_time:.3f}s")
-
-        # 프롬프트 생성
-        prompt = intent_parser.create_prompt(message)
-
-        # LLM 추론
-        llm_start = time.time()
-        response_text, inference_time = model_manager.generate(model_name, prompt)
-        llm_time = time.time() - llm_start
-        logger.debug(f"[{request_id}] LLM inference: {llm_time:.3f}s")
+        result = _build_result(request_id, model_name, message, conversation_state, 0.0)
 
         total_time = time.time() - start_time
-
-        result = {
-            "response": response_text,
-            "action": dark_mode_action,
-            "departure": route_info['departure'],
-            "destination": route_info['destination'],
-            "inference_time": round(inference_time, 2),
-            "model_name": model_name
-        }
-
         logger.info(f"[{request_id}] Completed in {total_time:.2f}s")
-        logger.info(f"[{request_id}] Response: '{response_text[:100]}...'")
 
         return jsonify(result)
 
@@ -93,8 +119,9 @@ def chat_with_whisper_stt():
 
         audio_file = request.files['audio']
         model_name = request.form.get('model_name')
+        conversation_state = request.form.get('conversation_state', 'initial')
 
-        logger.info(f"[{request_id}] Whisper STT Request")
+        logger.info(f"[{request_id}] Whisper STT Request - state: {conversation_state}")
         logger.debug(f"[{request_id}] Model: {model_name}, File: {audio_file.filename}")
 
         # 파일 저장
@@ -112,39 +139,13 @@ def chat_with_whisper_stt():
         stt_time = time.time() - stt_start
         logger.info(f"[{request_id}] STT: '{transcribed_text}' in {stt_time:.2f}s")
 
-        # 의도 파싱
-        parse_start = time.time()
-        route_info = intent_parser.parse_route_query(transcribed_text)
-        dark_mode_action = intent_parser.parse_dark_mode_intent(transcribed_text)
-        parse_time = time.time() - parse_start
-        logger.debug(f"[{request_id}] Intent parsing: {parse_time:.3f}s")
-
-        # 프롬프트 생성
-        prompt = intent_parser.create_prompt(transcribed_text)
-
-        # LLM 추론
-        llm_start = time.time()
-        response_text, inference_time = model_manager.generate(model_name, prompt)
-        llm_time = time.time() - llm_start
-        logger.debug(f"[{request_id}] LLM inference: {llm_time:.3f}s")
-
         # 파일 삭제
         os.remove(filepath)
 
+        result = _build_result(request_id, model_name, transcribed_text, conversation_state, stt_time, transcribed_text=transcribed_text)
+
         total_time = time.time() - start_time
-
-        result = {
-            "response": response_text,
-            "action": dark_mode_action,
-            "departure": route_info['departure'],
-            "destination": route_info['destination'],
-            "inference_time": round(inference_time + stt_time, 2),
-            "model_name": model_name,
-            "transcribed_text": transcribed_text
-        }
-
         logger.info(f"[{request_id}] Completed in {total_time:.2f}s")
-        logger.info(f"[{request_id}] Breakdown - STT: {stt_time:.2f}s, LLM: {llm_time:.2f}s")
 
         return jsonify(result)
 

@@ -7,5 +7,7 @@ data class LLMResponse(
     val destination: String?,
     val inference_time: Float,
     val model_name: String,
-    val transcribed_text: String? = null
+    val transcribed_text: String? = null,
+    val next_state: String = "initial",
+    val confirmed: Boolean = false
 )

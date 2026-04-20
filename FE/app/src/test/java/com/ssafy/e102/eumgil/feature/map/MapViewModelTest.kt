@@ -16,6 +16,7 @@ import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionReposit
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -25,6 +26,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MapViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
@@ -151,7 +153,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `toggling category filter hides matching markers without touching other markers`() =
+    fun `toggling category filter from all state shows only selected category markers`() =
         runTest {
             val viewModel =
                 MapViewModel(
@@ -167,9 +169,9 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
             advanceUntilIdle()
 
-            assertEquals(11, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertEquals(2, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
             assertEquals(
-                0,
+                2,
                 viewModel.uiState.value.markerOverlayState.markers.count { marker ->
                     marker.displayState == MapMarkerDisplayState.VISIBLE &&
                         marker.categoryType.category == FacilityCategory.TOILET
@@ -179,9 +181,55 @@ class MapViewModelTest {
             assertTrue(
                 viewModel.uiState.value.markerFilterState.categoryOptions
                     .first { option -> option.category == FacilityCategory.TOILET }
-                    .isSelected
-                    .not(),
+                    .isSelected,
             )
+        }
+
+    @Test
+    fun `toggling another category keeps custom multi select state`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
+            viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.ELEVATOR))
+            advanceUntilIdle()
+
+            assertEquals(4, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertEquals(
+                setOf(FacilityCategory.TOILET, FacilityCategory.ELEVATOR),
+                viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
+            )
+        }
+
+    @Test
+    fun `toggling last selected category returns filter state to all`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
+            viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertEquals(13, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
         }
 }
 

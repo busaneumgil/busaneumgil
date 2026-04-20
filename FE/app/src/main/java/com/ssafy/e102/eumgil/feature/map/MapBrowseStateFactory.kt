@@ -97,25 +97,39 @@ internal object MapBrowseStateFactory {
         category: FacilityCategory,
     ): MapFilterSelectionState {
         val availableCategories = browseData.availableCategories.toSet()
+        if (category !in availableCategories) return normalizeSelection(selection = selection, browseData = browseData)
+
         val nextSelection =
             if (selection.isShowingAllCategories) {
                 MapFilterSelectionState(
                     isShowingAllCategories = false,
-                    selectedFacilityCategories = availableCategories - category,
+                    selectedFacilityCategories = setOf(category),
                     selectedBrailleBlockTypes = emptySet(),
                 )
             } else {
-                val updatedCategories = selection.selectedFacilityCategories.toggle(category)
-                MapFilterSelectionState(
-                    isShowingAllCategories = false,
-                    selectedFacilityCategories = updatedCategories,
-                    selectedBrailleBlockTypes =
-                        if (FacilityCategory.BRAILLE_BLOCK in updatedCategories) {
-                            selection.selectedBrailleBlockTypes
-                        } else {
-                            emptySet()
-                        },
-                )
+                if (category in selection.selectedFacilityCategories) {
+                    val updatedCategories = selection.selectedFacilityCategories - category
+                    if (updatedCategories.isEmpty()) {
+                        MapFilterSelectionState()
+                    } else {
+                        MapFilterSelectionState(
+                            isShowingAllCategories = false,
+                            selectedFacilityCategories = updatedCategories,
+                            selectedBrailleBlockTypes =
+                                if (FacilityCategory.BRAILLE_BLOCK in updatedCategories) {
+                                    selection.selectedBrailleBlockTypes
+                                } else {
+                                    emptySet()
+                                },
+                        )
+                    }
+                } else {
+                    MapFilterSelectionState(
+                        isShowingAllCategories = false,
+                        selectedFacilityCategories = selection.selectedFacilityCategories + category,
+                        selectedBrailleBlockTypes = selection.selectedBrailleBlockTypes,
+                    )
+                }
             }
 
         return normalizeSelection(selection = nextSelection, browseData = browseData)
@@ -134,6 +148,10 @@ internal object MapBrowseStateFactory {
         val availableCategories = browseData.availableCategories.toSet()
         val availableBrailleBlockTypes = browseData.availableBrailleBlockTypes.toSet()
         val normalizedCategories = selection.selectedFacilityCategories intersect availableCategories
+        if (normalizedCategories.isEmpty()) {
+            return MapFilterSelectionState()
+        }
+
         val normalizedBrailleBlockTypes =
             if (FacilityCategory.BRAILLE_BLOCK in normalizedCategories) {
                 selection.selectedBrailleBlockTypes intersect availableBrailleBlockTypes
@@ -180,11 +198,4 @@ internal object MapBrowseStateFactory {
                 ),
             displayState = displayState,
         )
-
-    private fun <T> Set<T>.toggle(value: T): Set<T> =
-        if (value in this) {
-            this - value
-        } else {
-            this + value
-        }
 }

@@ -42,6 +42,12 @@ data class MapFilterSelectionState(
     val selectedFacilityCategories: Set<FacilityCategory> = emptySet(),
     val selectedBrailleBlockTypes: Set<BrailleBlockType> = emptySet(),
 ) {
+    val hasCustomSelection: Boolean
+        get() = !isShowingAllCategories
+
+    val selectedCategoryCount: Int
+        get() = if (isShowingAllCategories) 0 else selectedFacilityCategories.size
+
     fun isCategorySelected(category: FacilityCategory): Boolean =
         isShowingAllCategories || category in selectedFacilityCategories
 
@@ -74,4 +80,7 @@ data class MapMarkerFilterUiState(
     val brailleBlockTypeOptions: List<MapBrailleBlockFilterOption> = emptyList(),
     val visibleMarkerCount: Int = 0,
     val totalMarkerCount: Int = 0,
-)
+) {
+    val hasCustomSelection: Boolean
+        get() = selection.hasCustomSelection
+}

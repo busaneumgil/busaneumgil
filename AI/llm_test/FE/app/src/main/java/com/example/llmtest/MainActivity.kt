@@ -8,6 +8,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -28,6 +29,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.util.*
 
+enum class ConversationState {
+    INITIAL,
+    WAITING_CONFIRMATION,
+    CONFIRMED
+}
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -38,6 +45,10 @@ class MainActivity : AppCompatActivity() {
     private val sessionId = UUID.randomUUID().toString()
     private var isAndroidSTTRecording = false
     private var isWhisperSTTRecording = false
+
+    private var currentState = ConversationState.INITIAL
+    private var currentDeparture: String? = null
+    private var currentDestination: String? = null
 
     private val modelMap = mapOf(
         "Gemma-ko 2B" to "gemma-ko-2b",
@@ -138,10 +149,61 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 길찾기 시작 버튼
+        binding.btnStartNavigation.setOnClickListener {
+            Log.d("NAVIGATION", "길찾기 실행: $currentDeparture → $currentDestination")
+            Toast.makeText(this, "길찾기 기능은 아직 구현되지 않았습니다", Toast.LENGTH_SHORT).show()
+            resetConversationState()
+        }
+
         // 다크모드 스위치
         binding.switchDarkMode.setOnCheckedChangeListener { _, isChecked ->
             toggleDarkMode(isChecked)
         }
+    }
+
+    private fun resetConversationState() {
+        currentState = ConversationState.INITIAL
+        currentDeparture = null
+        currentDestination = null
+        binding.btnStartNavigation.visibility = View.GONE
+        binding.layoutConfirm.visibility = View.GONE
+        updateConversationStateUI()
+    }
+
+    private fun updateConversationStateUI() {
+        binding.tvConversationState.text = "상태: ${currentState.name.lowercase()}"
+    }
+
+    private fun handleLLMResponse(response: com.example.llmtest.network.models.LLMResponse) {
+        ttsManager.speak(response.response)
+
+        when (currentState) {
+            ConversationState.INITIAL -> {
+                if (response.departure != null && response.destination != null) {
+                    currentDeparture = response.departure
+                    currentDestination = response.destination
+                    currentState = ConversationState.WAITING_CONFIRMATION
+                    binding.layoutConfirm.visibility = View.VISIBLE
+                    binding.tvDeparture.text = response.departure
+                    binding.tvDestination.text = response.destination
+                } else {
+                    currentState = ConversationState.INITIAL
+                }
+            }
+            ConversationState.WAITING_CONFIRMATION -> {
+                if (response.confirmed) {
+                    currentState = ConversationState.CONFIRMED
+                    binding.btnStartNavigation.visibility = View.VISIBLE
+                    ttsManager.speak("길찾기를 시작합니다")
+                } else {
+                    resetConversationState()
+                    ttsManager.speak("다시 말씀해주세요")
+                }
+            }
+            ConversationState.CONFIRMED -> {}
+        }
+        updateConversationStateUI()
     }
 
     // Android STT 시작
@@ -288,7 +350,8 @@ class MainActivity : AppCompatActivity() {
                 val request = STTRequest(
                     model_name = modelId,
                     message = text,
-                    session_id = sessionId
+                    session_id = sessionId,
+                    conversation_state = currentState.name.lowercase()
                 )
 
                 PerformanceLogger.log(requestId, "Server request sent")
@@ -310,9 +373,8 @@ class MainActivity : AppCompatActivity() {
                     appendResult("📊 총 시간: ${elapsed}ms\n")
 
                     handleAction(response.action)
+                    handleLLMResponse(response)
                 }
-
-                ttsManager.speak(response.response)
 
             } catch (e: Exception) {
                 Log.e(TAG, "LLM request failed", e)
@@ -384,10 +446,11 @@ class MainActivity : AppCompatActivity() {
                 val requestFile = audioFile.asRequestBody("audio/m4a".toMediaTypeOrNull())
                 val audioPart = MultipartBody.Part.createFormData("audio", audioFile.name, requestFile)
                 val modelNameBody = modelId.toRequestBody("text/plain".toMediaTypeOrNull())
+                val conversationStateBody = currentState.name.lowercase().toRequestBody("text/plain".toMediaTypeOrNull())
 
                 PerformanceLogger.log(requestId, "Server request sent")
 
-                val response = RetrofitClient.apiService.chatWithWhisperSTT(audioPart, modelNameBody)
+                val response = RetrofitClient.apiService.chatWithWhisperSTT(audioPart, modelNameBody, conversationStateBody)
 
                 val elapsed = PerformanceLogger.end(requestId)
 
@@ -411,9 +474,8 @@ class MainActivity : AppCompatActivity() {
                     appendResult("📊 총 시간: ${elapsed}ms\n")
 
                     handleAction(response.action)
+                    handleLLMResponse(response)
                 }
-
-                ttsManager.speak(response.response)
 
                 // 임시 파일 삭제
                 if (audioFile.exists()) {

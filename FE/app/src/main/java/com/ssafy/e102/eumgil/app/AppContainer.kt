@@ -8,15 +8,18 @@ import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
+import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -39,12 +42,14 @@ class AppContainer(
         DebugSettingsLocalDataSource(appSettingDao = localDatabase.appSettingDao())
 
     private val placesLocalDataSource = PlacesLocalDataSource()
+    private val facilitySeedLocalDataSource = FacilitySeedLocalDataSource()
     private val searchLocalDataSource = SearchLocalDataSource()
 
     private val placesRemoteDataSource = PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
     private val searchRemoteDataSource = SearchRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
 
     private val placesMockDataSource = PlacesMockDataSource()
+    private val facilitySeedMockDataSource = FacilitySeedMockDataSource()
     private val searchMockDataSource = SearchMockDataSource()
 
     private val repositorySourcePolicy: RepositorySourcePolicy =
@@ -67,6 +72,12 @@ class AppContainer(
             localDataSource = placesLocalDataSource,
             mockDataSource = placesMockDataSource,
             sourcePolicy = repositorySourcePolicy,
+        )
+
+    val facilitySeedRepository: FacilitySeedRepository =
+        RepositoryModule.provideFacilitySeedRepository(
+            localDataSource = facilitySeedLocalDataSource,
+            mockDataSource = facilitySeedMockDataSource,
         )
 
     val searchRepository: SearchRepository =

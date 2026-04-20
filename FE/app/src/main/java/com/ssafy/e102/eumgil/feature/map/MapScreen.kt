@@ -3,6 +3,8 @@ package com.ssafy.e102.eumgil.feature.map
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,11 +22,15 @@ import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.model.AccessibilityTag
+import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
-import com.ssafy.e102.eumgil.feature.map.component.MapCategoryFilterBar
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
+import com.ssafy.e102.eumgil.feature.map.component.MapCategoryFilterBar
 import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
 import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
 import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
@@ -33,6 +39,13 @@ import com.ssafy.e102.eumgil.feature.map.component.MapViewportUiState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
+import kotlin.math.PI
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 @Suppress("UNUSED_PARAMETER")
 @Composable
@@ -91,11 +104,14 @@ fun MapScreen(
                 onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
                 modifier = Modifier.fillMaxSize(),
                 detailContent = {
+                    FacilityDetailAccessibilityTagSection(
+                        title = stringResource(id = R.string.map_facility_detail_accessibility_section_title),
+                        tags = facilityDetailSheetUiState.accessibilityTags,
+                    )
+
                     FacilityDetailSlotCard(
                         title = stringResource(id = R.string.map_facility_detail_info_section_title),
-                        description =
-                            facilityDetailSheetUiState.description
-                                ?: stringResource(id = R.string.map_facility_detail_info_placeholder),
+                        description = facilityDetailSheetUiState.guideMessage,
                     )
                 },
                 actionContent = {
@@ -149,14 +165,17 @@ private data class MapLocationPanelState(
 private data class MapFacilityDetailSheetUiState(
     val isVisible: Boolean,
     val categoryLabel: String,
+    val distanceLabel: String,
     val title: String,
     val address: String,
-    val description: String?,
+    val accessibilityTags: List<String>,
+    val guideMessage: String,
 ) {
     fun toShellState(): FacilityDetailBottomSheetShellState =
         FacilityDetailBottomSheetShellState(
             isVisible = isVisible,
             categoryLabel = categoryLabel,
+            distanceLabel = distanceLabel,
             title = title,
             address = address,
         )
@@ -287,6 +306,71 @@ private fun FacilityDetailSlotCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FacilityDetailAccessibilityTagSection(
+    title: String,
+    tags: List<String>,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            if (tags.isEmpty()) {
+                FacilityDetailTagChip(
+                    label = stringResource(id = R.string.map_facility_detail_accessibility_empty),
+                )
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                ) {
+                    tags.forEach { label ->
+                        FacilityDetailTagChip(label = label)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FacilityDetailTagChip(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(EumRadius.full),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Text(
+            text = label,
+            modifier =
+                Modifier.padding(
+                    horizontal = EumSpacing.small,
+                    vertical = EumSpacing.xSmall,
+                ),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
     }
 }
 
@@ -429,17 +513,21 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
         MapFacilityDetailSheetUiState(
             isVisible = false,
             categoryLabel = "",
+            distanceLabel = "",
             title = "",
             address = "",
-            description = null,
+            accessibilityTags = emptyList(),
+            guideMessage = "",
         )
     } else {
         MapFacilityDetailSheetUiState(
             isVisible = uiState.facilityDetailSheetState.isVisible,
             categoryLabel = facilityDetailCategoryLabel(detail.category),
+            distanceLabel = facilityDetailDistanceBadgeLabel(detail = detail, locationStatus = uiState.locationStatus),
             title = detail.name,
-            address = detail.address,
-            description = detail.description,
+            address = facilityDetailAddressLabel(detail),
+            accessibilityTags = facilityDetailAccessibilityLabels(detail),
+            guideMessage = facilityDetailGuideMessage(detail),
         )
     }
 }
@@ -608,3 +696,160 @@ private fun facilityDetailCategoryLabel(category: FacilityCategory): String =
         FacilityCategory.BRAILLE_BLOCK -> stringResource(id = R.string.map_filter_category_braille_block)
         FacilityCategory.OTHER -> stringResource(id = R.string.map_filter_category_other)
     }
+
+@Composable
+private fun facilityDetailDistanceBadgeLabel(
+    detail: FacilityDetailSeed,
+    locationStatus: MapLocationStatus,
+): String {
+    val distanceMeters = facilityDistanceMeters(detail.coordinate, locationStatus)
+    if (distanceMeters == null) {
+        return stringResource(id = R.string.map_facility_detail_distance_badge_unknown)
+    }
+
+    return stringResource(
+        id = R.string.map_facility_detail_distance_badge,
+        facilityDistanceValueLabel(distanceMeters),
+    )
+}
+
+@Composable
+private fun facilityDistanceValueLabel(distanceMeters: Int): String =
+    if (distanceMeters < 1_000) {
+        stringResource(
+            id = R.string.map_facility_detail_distance_meters,
+            normalizeDistanceMeters(distanceMeters),
+        )
+    } else {
+        stringResource(
+            id = R.string.map_facility_detail_distance_kilometers,
+            distanceMeters / 1_000f,
+        )
+    }
+
+@Composable
+private fun facilityDetailAddressLabel(detail: FacilityDetailSeed): String =
+    detail.address.takeIf { address -> address.isNotBlank() }
+        ?: stringResource(id = R.string.map_facility_detail_address_fallback)
+
+@Composable
+private fun facilityDetailAccessibilityLabels(detail: FacilityDetailSeed): List<String> =
+    buildList {
+        detail.brailleBlockType?.let { brailleBlockType ->
+            add(brailleBlockTypeLabel(brailleBlockType))
+        }
+        addAll(
+            detail.accessibilityTags.map { tag ->
+                accessibilityTagLabel(tag)
+            },
+        )
+    }.distinct()
+
+@Composable
+private fun facilityDetailGuideMessage(detail: FacilityDetailSeed): String =
+    detail.description
+        ?.trim()
+        ?.takeIf { description -> description.isNotEmpty() }
+        ?: defaultFacilityGuideMessage(detail)
+
+@Composable
+private fun defaultFacilityGuideMessage(detail: FacilityDetailSeed): String =
+    when (detail.category) {
+        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_facility_detail_guide_fallback_restaurant)
+        FacilityCategory.TOURIST_ATTRACTION ->
+            stringResource(id = R.string.map_facility_detail_guide_fallback_tourist_attraction)
+
+        FacilityCategory.TOILET -> stringResource(id = R.string.map_facility_detail_guide_fallback_toilet)
+        FacilityCategory.ELEVATOR -> stringResource(id = R.string.map_facility_detail_guide_fallback_elevator)
+        FacilityCategory.CHARGING_STATION ->
+            stringResource(id = R.string.map_facility_detail_guide_fallback_charging_station)
+
+        FacilityCategory.BRAILLE_BLOCK ->
+            when (detail.brailleBlockType) {
+                BrailleBlockType.GUIDING_LINE ->
+                    stringResource(id = R.string.map_facility_detail_guide_fallback_braille_guiding_line)
+
+                BrailleBlockType.WARNING_SURFACE ->
+                    stringResource(id = R.string.map_facility_detail_guide_fallback_braille_warning_surface)
+
+                BrailleBlockType.CROSSWALK_APPROACH ->
+                    stringResource(id = R.string.map_facility_detail_guide_fallback_braille_crosswalk_approach)
+
+                null -> stringResource(id = R.string.map_facility_detail_guide_fallback_braille_generic)
+            }
+
+        FacilityCategory.OTHER -> stringResource(id = R.string.map_facility_detail_guide_fallback_other)
+    }
+
+@Composable
+private fun accessibilityTagLabel(tag: AccessibilityTag): String =
+    when (tag) {
+        AccessibilityTag.RAMP -> stringResource(id = R.string.map_facility_detail_tag_ramp)
+        AccessibilityTag.STEP_FREE_ENTRANCE ->
+            stringResource(id = R.string.map_facility_detail_tag_step_free_entrance)
+
+        AccessibilityTag.AUTO_DOOR -> stringResource(id = R.string.map_facility_detail_tag_auto_door)
+        AccessibilityTag.WIDE_ENTRY -> stringResource(id = R.string.map_facility_detail_tag_wide_entry)
+        AccessibilityTag.ACCESSIBLE_TOILET ->
+            stringResource(id = R.string.map_facility_detail_tag_accessible_toilet)
+
+        AccessibilityTag.ELEVATOR -> stringResource(id = R.string.map_facility_detail_tag_elevator)
+        AccessibilityTag.WHEELCHAIR_TURNING_SPACE ->
+            stringResource(id = R.string.map_facility_detail_tag_wheelchair_turning_space)
+
+        AccessibilityTag.TABLE_SPACING -> stringResource(id = R.string.map_facility_detail_tag_table_spacing)
+        AccessibilityTag.ACCESSIBLE_PARKING ->
+            stringResource(id = R.string.map_facility_detail_tag_accessible_parking)
+
+        AccessibilityTag.LOW_HEIGHT_BUTTON ->
+            stringResource(id = R.string.map_facility_detail_tag_low_height_button)
+
+        AccessibilityTag.REST_AREA -> stringResource(id = R.string.map_facility_detail_tag_rest_area)
+        AccessibilityTag.OPEN_24_HOURS -> stringResource(id = R.string.map_facility_detail_tag_open_24_hours)
+    }
+
+@Composable
+private fun brailleBlockTypeLabel(type: BrailleBlockType): String =
+    when (type) {
+        BrailleBlockType.GUIDING_LINE -> stringResource(id = R.string.map_facility_detail_braille_guiding_line)
+        BrailleBlockType.WARNING_SURFACE -> stringResource(id = R.string.map_facility_detail_braille_warning_surface)
+        BrailleBlockType.CROSSWALK_APPROACH ->
+            stringResource(id = R.string.map_facility_detail_braille_crosswalk_approach)
+    }
+
+private fun facilityDistanceMeters(
+    coordinate: GeoCoordinate,
+    locationStatus: MapLocationStatus,
+): Int? =
+    when (locationStatus) {
+        is MapLocationStatus.Ready -> distanceMetersBetween(from = locationStatus.location, to = coordinate)
+        MapLocationStatus.PermissionDenied -> null
+        MapLocationStatus.Loading -> null
+        is MapLocationStatus.Unavailable -> null
+    }
+
+private fun distanceMetersBetween(
+    from: MapCoordinate,
+    to: GeoCoordinate,
+): Int {
+    val latitudeDeltaRadians = (to.latitude - from.latitude) * DEGREES_TO_RADIANS
+    val longitudeDeltaRadians = (to.longitude - from.longitude) * DEGREES_TO_RADIANS
+    val fromLatitudeRadians = from.latitude * DEGREES_TO_RADIANS
+    val toLatitudeRadians = to.latitude * DEGREES_TO_RADIANS
+
+    val haversine =
+        sin(latitudeDeltaRadians / 2).pow(2) +
+            cos(fromLatitudeRadians) * cos(toLatitudeRadians) * sin(longitudeDeltaRadians / 2).pow(2)
+    val centralAngle = 2 * asin(sqrt(haversine.coerceIn(0.0, 1.0)))
+    return (EARTH_RADIUS_METERS * centralAngle).roundToInt()
+}
+
+private fun normalizeDistanceMeters(distanceMeters: Int): Int =
+    when {
+        distanceMeters < 100 -> distanceMeters
+        distanceMeters < 1_000 -> ((distanceMeters + 5) / 10) * 10
+        else -> distanceMeters
+    }
+
+private const val EARTH_RADIUS_METERS = 6_371_000.0
+private const val DEGREES_TO_RADIANS = PI / 180.0

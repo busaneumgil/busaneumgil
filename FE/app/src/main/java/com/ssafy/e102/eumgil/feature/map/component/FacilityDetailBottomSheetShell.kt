@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,7 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 data class FacilityDetailBottomSheetShellState(
     val isVisible: Boolean = false,
     val categoryLabel: String = "",
+    val distanceLabel: String = "",
     val title: String = "",
     val address: String = "",
 )
@@ -123,20 +125,21 @@ fun FacilityDetailBottomSheetShell(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(EumRadius.full),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
                             ) {
-                                Text(
+                                FacilityDetailHeaderBadge(
                                     text = state.categoryLabel,
-                                    modifier =
-                                        Modifier.padding(
-                                            horizontal = EumSpacing.small,
-                                            vertical = EumSpacing.xSmall,
-                                        ),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
+                                if (state.distanceLabel.isNotBlank()) {
+                                    FacilityDetailHeaderBadge(
+                                        text = state.distanceLabel,
+                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    )
+                                }
                             }
                             Text(
                                 text = state.title,
@@ -149,6 +152,8 @@ fun FacilityDetailBottomSheetShell(
                                 text = state.address,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
 
@@ -173,5 +178,30 @@ fun FacilityDetailBottomSheetShell(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FacilityDetailHeaderBadge(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(EumRadius.full),
+        color = containerColor,
+    ) {
+        Text(
+            text = text,
+            modifier =
+                Modifier.padding(
+                    horizontal = EumSpacing.small,
+                    vertical = EumSpacing.xSmall,
+                ),
+            style = MaterialTheme.typography.labelLarge,
+            color = contentColor,
+        )
     }
 }

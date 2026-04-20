@@ -83,6 +83,45 @@ class FacilitySeedRepositoryTest {
                 ),
                 browseData.availableBrailleBlockTypes,
             )
+            assertNotNull(browseData.detailFor("facility-elevator-haeundae-exit1-1"))
+        }
+
+    @Test
+    fun `getFacilityBrowseData caches browse payload and detail lookup for follow-up consumers`() =
+        runBlocking {
+            val localDataSource = FacilitySeedLocalDataSource()
+            val repository =
+                DefaultFacilitySeedRepository(
+                    localDataSource = localDataSource,
+                    mockDataSource = FacilitySeedMockDataSource(),
+                )
+            val query = FacilitySeedQuery(categories = setOf(FacilityCategory.TOILET))
+
+            val browseData = repository.getFacilityBrowseData(query)
+            val cachedBrowseData = localDataSource.getCachedBrowseData(query)
+            val cachedDetail = localDataSource.getCachedFacilityDetail("facility-toilet-haeundae-station-1")
+
+            assertEquals(browseData, cachedBrowseData)
+            assertEquals(browseData.detailFor("facility-toilet-haeundae-station-1"), cachedDetail)
+            assertEquals(cachedDetail, repository.getFacilityDetail("facility-toilet-haeundae-station-1"))
+        }
+
+    @Test
+    fun `getFacilityBrowseData keeps marker ids aligned with detail ids for downstream selection flow`() =
+        runBlocking {
+            val browseData =
+                repository.getFacilityBrowseData(
+                    FacilitySeedQuery(
+                        categories = setOf(FacilityCategory.TOILET, FacilityCategory.BRAILLE_BLOCK),
+                    ),
+                )
+
+            assertEquals(
+                browseData.allMarkers.map { marker -> marker.facilityId }.toSet(),
+                browseData.detailsById.keys,
+            )
+            assertEquals(2, browseData.facilityMarkers.size)
+            assertEquals(4, browseData.brailleBlockMarkers.size)
         }
 
     @Test

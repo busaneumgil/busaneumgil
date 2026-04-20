@@ -9,8 +9,10 @@ import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 
 interface FacilitySeedRepository {
+    // Raw seed source of truth for follow-up mapping or future source replacement.
     suspend fun getSeedCatalog(): FacilitySeedCatalog
 
+    // Primary browse entry point for 118 marker/filter work and 119 marker-selection handoff.
     suspend fun getFacilityBrowseData(query: FacilitySeedQuery = FacilitySeedQuery()): FacilityBrowseData
 
     suspend fun getFacilityMarkers(query: FacilitySeedQuery = FacilitySeedQuery()): List<FacilityMarkerSeed>

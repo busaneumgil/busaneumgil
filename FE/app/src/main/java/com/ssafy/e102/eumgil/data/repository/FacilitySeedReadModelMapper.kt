@@ -27,11 +27,13 @@ internal object FacilitySeedReadModelMapper {
             brailleBlockMarkers = markerSeeds.filter { marker -> marker.category == FacilityCategory.BRAILLE_BLOCK },
             detailsById = detailSeeds.associateBy(FacilityDetailSeed::facilityId),
             availableCategories =
+                // Keep filter options stable from the full catalog, not from the current query result only.
                 catalog.allSeeds
                     .map(FacilitySeed::category)
                     .distinct()
                     .sortedBy(FacilityCategory::ordinal),
             availableBrailleBlockTypes =
+                // Braille type options remain catalog-wide for the same reason as category chips.
                 catalog.brailleBlocks
                     .mapNotNull(FacilitySeed::brailleBlockType)
                     .distinct()

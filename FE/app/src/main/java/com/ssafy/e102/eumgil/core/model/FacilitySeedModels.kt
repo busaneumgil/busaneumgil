@@ -84,6 +84,10 @@ data class FacilitySeedCatalog(
     }
 }
 
+/**
+ * 118 consumes the separated marker lists and filter options.
+ * 119 reuses detailsById for marker-id to detail handoff without rescanning the seed catalog.
+ */
 data class FacilityBrowseData(
     val facilityMarkers: List<FacilityMarkerSeed> = emptyList(),
     val brailleBlockMarkers: List<FacilityMarkerSeed> = emptyList(),
@@ -92,6 +96,8 @@ data class FacilityBrowseData(
     val availableBrailleBlockTypes: List<BrailleBlockType> = emptyList(),
 ) {
     val allMarkers: List<FacilityMarkerSeed> = facilityMarkers + brailleBlockMarkers
+
+    fun detailFor(facilityId: String): FacilityDetailSeed? = detailsById[facilityId]
 }
 
 data class FacilityMarkerSeed(

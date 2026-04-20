@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 
 object MockFacilitySeedCatalog {
+    // Standalone facility markers used by the map browse flow.
     val facilities: List<FacilitySeed> =
         listOf(
             FacilitySeed(
@@ -138,6 +139,7 @@ object MockFacilitySeedCatalog {
             ),
         )
 
+    // Braille blocks stay in a separate collection so later overlay work can treat them as another layer.
     val brailleBlocks: List<FacilitySeed> =
         listOf(
             FacilitySeed(

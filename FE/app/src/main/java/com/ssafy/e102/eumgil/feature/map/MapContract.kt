@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.map
 
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -15,12 +16,24 @@ data class MapUiState(
     val recenterButtonState: MapRecenterButtonState = MapRecenterButtonState.REQUEST_PERMISSION,
     val markerOverlayState: MapMarkerOverlayState = MapMarkerOverlayState(),
     val markerFilterState: MapMarkerFilterUiState = MapMarkerFilterUiState(),
+    val facilityDetailSheetState: MapFacilityDetailSheetState = MapFacilityDetailSheetState(),
 )
+
+data class MapFacilityDetailSheetState(
+    val detail: FacilityDetailSeed? = null,
+) {
+    val isVisible: Boolean
+        get() = detail != null
+}
 
 sealed interface MapUiAction {
     data object SearchEntryClicked : MapUiAction
 
     data object LocationActionClicked : MapUiAction
+
+    data object FacilityDetailDismissed : MapUiAction
+
+    data object FacilityRouteEntryClicked : MapUiAction
 
     data class MarkerTapped(
         val markerId: String,
@@ -35,6 +48,8 @@ sealed interface MapUiAction {
 
 sealed interface MapUiEvent {
     data object NavigateToSearch : MapUiEvent
+
+    data object NavigateToFacilityRouteEntry : MapUiEvent
 
     data object RequestLocationPermission : MapUiEvent
 }

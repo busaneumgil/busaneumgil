@@ -20,6 +20,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToMyPage = {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
             },
+            onNavigateToFacilityRouteEntry = {
+                navController.navigate(RouteSettingRoute.Setting.route)
+            },
             onNavigateToSearch = {
                 navController.navigate(SearchRoute.Search.route)
             },

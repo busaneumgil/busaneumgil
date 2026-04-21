@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.report
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -168,7 +170,7 @@ private fun ReportTypeSection(
         helperText = reportTypeErrorText(input.error) ?: "도로 공사, 장애물, 점자블록 손상 중 하나를 선택하세요.",
         isError = input.error != null,
     ) {
-        ReportType.entries.forEach { type ->
+        ReportType.values().forEach { type ->
             val selected = input.value == type
             if (selected) {
                 Button(
@@ -235,7 +237,7 @@ private fun ReportLocationSection(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .onFocusChanged { focusState ->
+                    .onFocusChanged { focusState: FocusState ->
                         if (!focusState.isFocused) {
                             onAction(ReportUiAction.LocationBlurred)
                         }
@@ -345,7 +347,7 @@ private fun ReportDescriptionSection(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .onFocusChanged { focusState ->
+                    .onFocusChanged { focusState: FocusState ->
                         if (!focusState.isFocused) {
                             onAction(ReportUiAction.DescriptionBlurred)
                         }
@@ -396,7 +398,7 @@ private fun ReportFormSection(
     title: String,
     helperText: String,
     isError: Boolean,
-    content: @Composable Column.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),

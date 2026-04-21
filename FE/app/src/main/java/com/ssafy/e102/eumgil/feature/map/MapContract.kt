@@ -49,9 +49,7 @@ sealed interface MapUiAction {
 sealed interface MapUiEvent {
     data object NavigateToSearch : MapUiEvent
 
-    data class NavigateToFacilityRouteEntry(
-        val facilityId: String,
-    ) : MapUiEvent
+    data object NavigateToFacilityRouteEntry : MapUiEvent
 
     data object RequestLocationPermission : MapUiEvent
 }

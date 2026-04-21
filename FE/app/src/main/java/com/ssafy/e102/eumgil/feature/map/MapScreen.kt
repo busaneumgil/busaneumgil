@@ -130,7 +130,7 @@ fun MapScreen(
                             Text(text = stringResource(id = R.string.map_facility_detail_route_entry_action))
                         }
                         Text(
-                            text = stringResource(id = R.string.map_facility_detail_action_supporting),
+                            text = stringResource(id = R.string.map_facility_detail_action_supporting_route_setting),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

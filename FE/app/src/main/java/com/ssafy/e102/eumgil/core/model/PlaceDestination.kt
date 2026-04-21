@@ -16,3 +16,12 @@ fun SearchResult.toPlaceDestination(): PlaceDestination =
         latitude = latitude,
         longitude = longitude,
     )
+
+fun FacilityDetailSeed.toPlaceDestination(): PlaceDestination =
+    PlaceDestination(
+        placeId = facilityId,
+        name = name,
+        address = address.takeIf { it.isNotBlank() },
+        latitude = coordinate.latitude,
+        longitude = coordinate.longitude,
+    )

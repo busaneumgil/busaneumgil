@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
@@ -158,8 +159,9 @@ class MapViewModel(
     }
 
     private fun handleFacilityRouteEntryClicked() {
-        val facilityId = selectedFacilityDetail?.facilityId ?: return
-        emitUiEvent(MapUiEvent.NavigateToFacilityRouteEntry(facilityId = facilityId))
+        val destination = selectedFacilityDetail?.toPlaceDestination() ?: return
+        destinationSelectionRepository.updateSelectedDestination(destination)
+        emitUiEvent(MapUiEvent.NavigateToFacilityRouteEntry)
     }
 
     private fun resetMarkerCategoryFilter() {

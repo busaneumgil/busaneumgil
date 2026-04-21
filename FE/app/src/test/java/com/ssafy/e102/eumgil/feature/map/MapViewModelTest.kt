@@ -13,6 +13,7 @@ import com.ssafy.e102.eumgil.core.model.FacilityMarkerSeed
 import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
 import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
@@ -294,14 +295,15 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `route entry action emits selected facility navigation event`() =
+    fun `route entry action stores selected facility destination and emits navigation event`() =
         runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val viewModel =
                 MapViewModel(
                     locationPermissionManager =
                         FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
                     currentLocationManager = FakeCurrentLocationManager(),
-                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
                     facilitySeedRepository = testFacilitySeedRepository(),
                 )
 
@@ -312,15 +314,14 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.MarkerTapped(markerId))
             advanceUntilIdle()
 
+            val selectedDetail = checkNotNull(viewModel.uiState.value.facilityDetailSheetState.detail)
             val eventDeferred = async { viewModel.uiEvent.first() }
 
             viewModel.onAction(MapUiAction.FacilityRouteEntryClicked)
             advanceUntilIdle()
 
-            assertEquals(
-                MapUiEvent.NavigateToFacilityRouteEntry(facilityId = markerId),
-                eventDeferred.await(),
-            )
+            assertEquals(selectedDetail.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
+            assertEquals(MapUiEvent.NavigateToFacilityRouteEntry, eventDeferred.await())
         }
 
     @Test

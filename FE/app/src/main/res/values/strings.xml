@@ -244,4 +244,17 @@
     <string name="search_screen_field_support_empty">빈 입력 상태입니다. 한 글자 이상 입력해 주세요.</string>
     <string name="search_screen_field_support_typing">입력 중 상태입니다. 검색 버튼을 누르면 실제 결과를 조회합니다.</string>
     <string name="search_screen_field_support_result">입력값을 수정한 뒤 다시 검색할 수 있습니다.</string>
+    <string name="map_facility_detail_action_supporting_route_setting">선택한 시설을 목적지로 넘긴 뒤 경로 설정 화면으로 진입합니다. 이후 출발지, 옵션, 미리보기는 다음 작업에서 확장합니다.</string>
+    <string name="route_setting_screen_title">경로 설정 화면 Placeholder</string>
+    <string name="route_setting_screen_description_empty">아직 선택된 목적지가 없습니다. 지도 또는 검색에서 목적지를 고르면 이 화면으로 handoff됩니다.</string>
+    <string name="route_setting_screen_description_with_destination">%1$s 목적지를 받아 경로 설정 진입 흐름에 연결했습니다. SAFE 옵션, 경로 미리보기, 시작 CTA는 다음 작업에서 이어집니다.</string>
+    <string name="route_setting_destination_section_title">현재 목적지</string>
+    <string name="route_setting_destination_empty">선택된 목적지가 없어 기본 상태로 진입했습니다.</string>
+    <string name="route_setting_destination_name_label">시설명</string>
+    <string name="route_setting_destination_address_label">주소</string>
+    <string name="route_setting_destination_address_empty">주소 정보 없음</string>
+    <string name="route_setting_destination_coordinate_label">좌표</string>
+    <string name="route_setting_destination_coordinate_value">%.5f, %.5f</string>
+    <string name="route_setting_destination_field_value">%1$s: %2$s</string>
+    <string name="feature_path_route_setting">feature/route</string>
 </resources>

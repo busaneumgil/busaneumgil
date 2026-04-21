@@ -22,17 +22,19 @@ fun RouteSettingScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val description =
+        if (selectedDestination == null) {
+            stringResource(id = R.string.route_setting_screen_description_empty)
+        } else {
+            stringResource(
+                id = R.string.route_setting_screen_description_with_destination,
+                selectedDestination.name,
+            )
+        }
+
     EumPlaceholderScaffold(
         title = stringResource(id = R.string.route_setting_screen_title),
-        description =
-            if (selectedDestination == null) {
-                stringResource(id = R.string.route_setting_screen_description_empty)
-            } else {
-                stringResource(
-                    id = R.string.route_setting_screen_description_with_destination,
-                    selectedDestination.name,
-                )
-            },
+        description = description,
         featurePath = stringResource(id = R.string.feature_path_route_setting),
         actions =
             listOf(
@@ -75,20 +77,23 @@ private fun RouteSettingDestinationCard(selectedDestination: PlaceDestination?) 
                 label = stringResource(id = R.string.route_setting_destination_name_label),
                 value = selectedDestination.name,
             )
+            val address =
+                selectedDestination.address
+                    ?: stringResource(id = R.string.route_setting_destination_address_empty)
+            val coordinate =
+                stringResource(
+                    id = R.string.route_setting_destination_coordinate_value,
+                    selectedDestination.latitude,
+                    selectedDestination.longitude,
+                )
+
             RouteSettingDestinationField(
                 label = stringResource(id = R.string.route_setting_destination_address_label),
-                value =
-                    selectedDestination.address
-                        ?: stringResource(id = R.string.route_setting_destination_address_empty),
+                value = address,
             )
             RouteSettingDestinationField(
                 label = stringResource(id = R.string.route_setting_destination_coordinate_label),
-                value =
-                    stringResource(
-                        id = R.string.route_setting_destination_coordinate_value,
-                        selectedDestination.latitude,
-                        selectedDestination.longitude,
-                    ),
+                value = coordinate,
             )
         }
     }

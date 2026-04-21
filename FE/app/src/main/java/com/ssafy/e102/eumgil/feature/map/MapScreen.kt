@@ -454,21 +454,19 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                         R.string.map_location_status_unavailable_feature_description
                 }
             val isRetryEnabled = status.reason != MapLocationUnavailableReason.NO_LOCATION_FEATURE
+            val actionLabelRes =
+                if (isRetryEnabled) {
+                    R.string.map_location_action_retry
+                } else {
+                    R.string.map_location_action_disabled
+                }
 
             MapLocationPanelState(
                 badgeLabel = stringResource(id = R.string.map_location_status_unavailable_badge),
                 title = stringResource(id = titleRes),
                 description = stringResource(id = descriptionRes),
                 supportingText = stringResource(id = R.string.map_location_status_unavailable_supporting),
-                actionLabel =
-                    stringResource(
-                        id =
-                            if (isRetryEnabled) {
-                                R.string.map_location_action_retry
-                            } else {
-                                R.string.map_location_action_disabled
-                            },
-                    ),
+                actionLabel = stringResource(id = actionLabelRes),
                 isActionEnabled = isRetryEnabled,
                 isPrimaryAction = false,
                 isCriticalState = true,
@@ -529,7 +527,11 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
         MapFacilityDetailSheetUiState(
             isVisible = uiState.facilityDetailSheetState.isVisible,
             categoryLabel = facilityDetailCategoryLabel(detail.category),
-            distanceLabel = facilityDetailDistanceBadgeLabel(detail = detail, locationStatus = uiState.locationStatus),
+            distanceLabel =
+                facilityDetailDistanceBadgeLabel(
+                    detail = detail,
+                    locationStatus = uiState.locationStatus,
+                ),
             title = detail.name,
             address = facilityDetailAddressLabel(detail),
             accessibilityTags = facilityDetailAccessibilityLabels(detail),

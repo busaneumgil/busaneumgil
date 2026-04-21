@@ -46,6 +46,8 @@ internal object MapBrowseStateFactory {
         overlayState: MapMarkerOverlayState,
     ): MapMarkerFilterUiState {
         val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
+        val allMarkers = browseData.allMarkers
+        val visibleMarkers = overlayState.markers
 
         return MapMarkerFilterUiState(
             loadStatus = MapMarkerLoadStatus.READY,
@@ -55,16 +57,12 @@ internal object MapBrowseStateFactory {
                     MapCategoryFilterOption(
                         category = category,
                         totalMarkerCount =
-                            browseData
-                                .allMarkers
-                                .count { marker -> marker.category == category },
+                            allMarkers.count { marker -> marker.category == category },
                         visibleMarkerCount =
-                            overlayState
-                                .markers
-                                .count { marker ->
-                                    marker.displayState == MapMarkerDisplayState.VISIBLE &&
-                                        marker.categoryType.category == category
-                                },
+                            visibleMarkers.count { marker ->
+                                marker.displayState == MapMarkerDisplayState.VISIBLE &&
+                                    marker.categoryType.category == category
+                            },
                         isSelected = normalizedSelection.isCategorySelected(category),
                     )
                 },
@@ -73,16 +71,14 @@ internal object MapBrowseStateFactory {
                     MapBrailleBlockFilterOption(
                         brailleBlockType = brailleBlockType,
                         totalMarkerCount =
-                            browseData
-                                .brailleBlockMarkers
-                                .count { marker -> marker.brailleBlockType == brailleBlockType },
+                            browseData.brailleBlockMarkers.count { marker ->
+                                marker.brailleBlockType == brailleBlockType
+                            },
                         visibleMarkerCount =
-                            overlayState
-                                .markers
-                                .count { marker ->
-                                    marker.displayState == MapMarkerDisplayState.VISIBLE &&
-                                        marker.categoryType.brailleBlockType == brailleBlockType
-                                },
+                            visibleMarkers.count { marker ->
+                                marker.displayState == MapMarkerDisplayState.VISIBLE &&
+                                    marker.categoryType.brailleBlockType == brailleBlockType
+                            },
                         isSelected =
                             normalizedSelection.isBrailleBlockTypeSelected(brailleBlockType),
                     )
@@ -123,15 +119,17 @@ internal object MapBrowseStateFactory {
                     if (updatedCategories.isEmpty()) {
                         MapFilterSelectionState()
                     } else {
+                        val selectedBrailleBlockTypes =
+                            if (FacilityCategory.BRAILLE_BLOCK in updatedCategories) {
+                                selection.selectedBrailleBlockTypes
+                            } else {
+                                emptySet()
+                            }
+
                         MapFilterSelectionState(
                             isShowingAllCategories = false,
                             selectedFacilityCategories = updatedCategories,
-                            selectedBrailleBlockTypes =
-                                if (FacilityCategory.BRAILLE_BLOCK in updatedCategories) {
-                                    selection.selectedBrailleBlockTypes
-                                } else {
-                                    emptySet()
-                                },
+                            selectedBrailleBlockTypes = selectedBrailleBlockTypes,
                         )
                     }
                 } else {

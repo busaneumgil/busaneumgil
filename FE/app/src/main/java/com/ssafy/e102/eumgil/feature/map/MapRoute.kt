@@ -67,7 +67,13 @@ fun MapRoute(
         }
     }
 
-    LaunchedEffect(viewModel, activity, appContainer, onNavigateToFacilityRouteEntry, onNavigateToSearch) {
+    LaunchedEffect(
+        viewModel,
+        activity,
+        appContainer,
+        onNavigateToFacilityRouteEntry,
+        onNavigateToSearch,
+    ) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 MapUiEvent.NavigateToFacilityRouteEntry -> onNavigateToFacilityRouteEntry()

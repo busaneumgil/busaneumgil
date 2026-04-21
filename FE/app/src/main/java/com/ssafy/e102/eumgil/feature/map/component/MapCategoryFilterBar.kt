@@ -92,18 +92,13 @@ fun MapCategoryFilterBar(
                     items = state.categoryOptions,
                     key = { option -> option.category.name },
                 ) { option ->
+                    val categoryLabel = "${categoryFilterLabel(option.category)} ${option.totalMarkerCount}"
+
                     FilterChip(
                         selected = option.isSelected,
                         onClick = { onCategoryToggle(option.category) },
                         label = {
-                            Text(
-                                text =
-                                    buildString {
-                                        append(categoryFilterLabel(option.category))
-                                        append(' ')
-                                        append(option.totalMarkerCount)
-                                    },
-                            )
+                            Text(text = categoryLabel)
                         },
                     )
                 }

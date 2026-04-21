@@ -32,26 +32,48 @@ data class RouteLocationUiState(
 data class RouteOptionCardUiState(
     val routeOption: RouteOption,
     val title: String,
+    val description: String,
     val distanceMeters: Int,
     val estimatedTimeMinutes: Int,
     val riskLevel: RouteRiskLevel,
+    val summaryLabel: String,
+    val selectionLabel: String,
+    val highlightLabel: String? = null,
+    val metrics: List<RouteOptionCardMetricUiState> = emptyList(),
     val badges: List<RouteOptionBadge> = emptyList(),
-    val isRecommended: Boolean = false,
     val isSelected: Boolean = false,
 )
 
 data class RouteSelectedRouteUiState(
     val routeOption: RouteOption,
+    val optionTitle: String,
     val title: String,
     val distanceMeters: Int,
     val estimatedTimeMinutes: Int,
     val riskLevel: RouteRiskLevel,
     val guidanceMessage: String,
+    val summaryLabel: String,
+    val estimatedTimeLabel: String,
+    val distanceLabel: String,
+    val riskLabel: String,
+    val renderableSegmentLabel: String,
+    val summaryMetrics: List<RouteSummaryMetricUiState> = emptyList(),
     val previewPoints: List<GeoCoordinate> = emptyList(),
     val segmentCount: Int = 0,
     val renderableSegmentCount: Int = 0,
     val fallbackSegmentCount: Int = 0,
+    val previewFallbackNotice: String? = null,
     val badges: List<RouteOptionBadge> = emptyList(),
+)
+
+data class RouteSummaryMetricUiState(
+    val label: String,
+    val value: String,
+)
+
+data class RouteOptionCardMetricUiState(
+    val label: String,
+    val value: String,
 )
 
 enum class RouteOptionBadge {

@@ -253,8 +253,10 @@
     <string name="route_setting_origin_label">출발지</string>
     <string name="route_setting_destination_label">도착지</string>
     <string name="route_setting_option_section_title">경로 옵션</string>
+    <string name="route_setting_option_section_supporting">옵션을 선택하면 아래 경로 요약이 함께 갱신됩니다.</string>
     <string name="route_setting_option_recommended">추천</string>
     <string name="route_setting_summary_section_title">경로 요약</string>
+    <string name="route_setting_summary_section_supporting">아래 카드는 현재 선택된 옵션의 상세 경로 정보를 보여줍니다.</string>
     <string name="route_setting_summary_guidance_label">첫 안내</string>
     <string name="route_setting_summary_loading_title">SAFE fixture 경로를 불러오는 중입니다.</string>
     <string name="route_setting_summary_loading_description">출발지, 도착지, 옵션 카드, 요약, CTA를 한 화면에서 확인할 수 있게 shell을 먼저 구성합니다.</string>

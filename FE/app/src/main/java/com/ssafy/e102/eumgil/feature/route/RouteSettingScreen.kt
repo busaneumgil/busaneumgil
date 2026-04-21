@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -221,6 +223,11 @@ private fun RouteOptionSection(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        Text(
+            text = stringResource(id = R.string.route_setting_option_section_supporting),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         optionCards.forEach { optionCard ->
             RouteOptionCard(
@@ -237,17 +244,25 @@ private fun RouteOptionCard(
     card: RouteOptionCardUiState,
     onClick: () -> Unit,
 ) {
+    val accentColor = optionAccentColor(routeOption = card.routeOption)
     val containerColor =
-        if (card.isSelected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
-        } else {
-            MaterialTheme.colorScheme.surface
+        when {
+            card.isSelected && card.routeOption == com.ssafy.e102.eumgil.core.model.RouteOption.SAFE ->
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.46f)
+
+            card.isSelected ->
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.42f)
+
+            card.routeOption == com.ssafy.e102.eumgil.core.model.RouteOption.SAFE ->
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f)
+
+            else -> MaterialTheme.colorScheme.surface
         }
     val borderColor =
-        if (card.isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)
-        } else {
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+        when {
+            card.isSelected -> accentColor.copy(alpha = 0.52f)
+            card.routeOption == com.ssafy.e102.eumgil.core.model.RouteOption.SAFE -> accentColor.copy(alpha = 0.28f)
+            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
         }
 
     Surface(
@@ -270,31 +285,59 @@ private fun RouteOptionCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
             ) {
-                Text(
-                    text = card.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (card.isRecommended) {
-                    RouteBadgeChip(
-                        label = stringResource(id = R.string.route_setting_option_recommended),
-                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        contentColor = MaterialTheme.colorScheme.primary,
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    RouteOptionSelectionIndicator(
+                        isSelected = card.isSelected,
+                        accentColor = accentColor,
                     )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    ) {
+                        Text(
+                            text = card.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = card.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                RouteOptionStateChip(
+                    label = card.selectionLabel,
+                    isSelected = card.isSelected,
+                    accentColor = accentColor,
+                )
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            ) {
+                card.highlightLabel?.let { highlightLabel ->
+                    RouteBadgeChip(
+                        label = highlightLabel,
+                        containerColor = accentColor.copy(alpha = 0.12f),
+                        contentColor = accentColor,
+                    )
+                }
+                card.metrics.forEach { metric ->
+                    RouteOptionMetricChip(metric = metric)
                 }
             }
 
             Text(
-                text =
-                    stringResource(
-                        id = R.string.route_setting_eta_distance,
-                        card.estimatedTimeMinutes,
-                        distanceText(card.distanceMeters),
-                    ),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
+                text = card.summaryLabel,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
 
@@ -324,6 +367,11 @@ private fun RouteSummarySection(
             text = stringResource(id = R.string.route_setting_summary_section_title),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(id = R.string.route_setting_summary_section_supporting),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         when {
@@ -371,18 +419,18 @@ private fun RouteSummaryCard(
             modifier = Modifier.padding(EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
+            RouteBadgeChip(
+                label = route.optionTitle,
+                containerColor = optionAccentColor(route.routeOption).copy(alpha = 0.12f),
+                contentColor = optionAccentColor(route.routeOption),
+            )
             Text(
                 text = route.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text =
-                    stringResource(
-                        id = R.string.route_setting_eta_distance,
-                        route.estimatedTimeMinutes,
-                        distanceText(route.distanceMeters),
-                    ),
+                text = route.summaryLabel,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -397,6 +445,8 @@ private fun RouteSummaryCard(
                     RouteBadgeChip(label = routeBadgeText(badge))
                 }
             }
+
+            RouteSummaryMetrics(metrics = route.summaryMetrics)
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
@@ -422,6 +472,141 @@ private fun RouteSummaryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun RouteOptionSelectionIndicator(
+    isSelected: Boolean,
+    accentColor: Color,
+) {
+    Surface(
+        modifier = Modifier.padding(top = EumSpacing.xSmall),
+        shape = CircleShape,
+        color = if (isSelected) accentColor.copy(alpha = 0.12f) else Color.Transparent,
+        border = BorderStroke(1.dp, if (isSelected) accentColor else MaterialTheme.colorScheme.outline),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .padding(4.dp)
+                    .size(8.dp)
+                    .background(
+                        color = if (isSelected) accentColor else Color.Transparent,
+                        shape = CircleShape,
+                    ),
+        )
+    }
+}
+
+@Composable
+private fun RouteOptionStateChip(
+    label: String,
+    isSelected: Boolean,
+    accentColor: Color,
+) {
+    RouteBadgeChip(
+        label = label,
+        containerColor =
+            if (isSelected) {
+                accentColor.copy(alpha = 0.12f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            },
+        contentColor =
+            if (isSelected) {
+                accentColor
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+    )
+}
+
+@Composable
+private fun RouteOptionMetricChip(
+    metric: RouteOptionCardMetricUiState,
+) {
+    Surface(
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = metric.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = metric.value,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteSummaryMetrics(
+    metrics: List<RouteSummaryMetricUiState>,
+) {
+    if (metrics.isEmpty()) {
+        return
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        metrics.chunked(2).forEach { rowMetrics ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                rowMetrics.forEach { metric ->
+                    RouteSummaryMetricCard(
+                        metric = metric,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowMetrics.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteSummaryMetricCard(
+    metric: RouteSummaryMetricUiState,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.small),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            Text(
+                text = metric.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = metric.value,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -530,6 +715,14 @@ private fun RoutePreviewPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = previewMutedColor,
             )
+
+            route.previewFallbackNotice?.let { previewFallbackNotice ->
+                Text(
+                    text = previewFallbackNotice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -683,11 +876,10 @@ private fun routeBadgeText(badge: RouteOptionBadge): String =
     }
 
 @Composable
-private fun distanceText(distanceMeters: Int): String =
-    if (distanceMeters < 1_000) {
-        stringResource(id = R.string.route_setting_distance_meters, distanceMeters)
-    } else {
-        stringResource(id = R.string.route_setting_distance_kilometers, distanceMeters / 1_000f)
+private fun optionAccentColor(routeOption: com.ssafy.e102.eumgil.core.model.RouteOption): Color =
+    when (routeOption) {
+        com.ssafy.e102.eumgil.core.model.RouteOption.SAFE -> MaterialTheme.colorScheme.primary
+        com.ssafy.e102.eumgil.core.model.RouteOption.SHORTEST -> MaterialTheme.colorScheme.tertiary
     }
 
 private fun List<GeoCoordinate>.toPreviewOffsets(

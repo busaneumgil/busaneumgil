@@ -7,13 +7,18 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
+import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
+import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
+import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.toRouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -64,7 +69,7 @@ class RouteSettingViewModel(
                 isLoading = true,
                 loadErrorMessage = null,
                 origin = originLocationUiState(),
-                destination = destinationLocationUiState(selectedDestination = selectedDestination),
+                destination = destinationLocationUiState(selectedDestination?.toRouteWaypoint() ?: DEFAULT_DESTINATION),
                 isUsingFallbackDestination = selectedDestination == null,
                 optionCards = emptyList(),
                 selectedRoute = null,
@@ -155,8 +160,8 @@ class RouteSettingViewModel(
         return RouteSettingUiState(
             isLoading = false,
             loadErrorMessage = null,
-            origin = originLocationUiState(),
-            destination = destinationLocationUiState(selectedDestination = selectedDestination),
+            origin = originLocationUiState(searchData.result.origin),
+            destination = destinationLocationUiState(searchData.result.destination),
             isUsingFallbackDestination = selectedDestination == null,
             selectedOption = resolvedOption,
             optionCards =
@@ -171,24 +176,11 @@ class RouteSettingViewModel(
         )
     }
 
-    private fun originLocationUiState(): RouteLocationUiState =
-        RouteLocationUiState(
-            name = DEFAULT_ORIGIN_LABEL,
-            supportingText = DEFAULT_ORIGIN_SUPPORTING_TEXT,
-            coordinate = DEFAULT_ORIGIN.coordinate,
-        )
+    private fun originLocationUiState(origin: RouteWaypoint = DEFAULT_ORIGIN): RouteLocationUiState =
+        origin.toLocationUiState(addressFallback = DEFAULT_ORIGIN_SUPPORTING_TEXT)
 
-    private fun destinationLocationUiState(selectedDestination: PlaceDestination?): RouteLocationUiState {
-        val destination =
-            selectedDestination?.toRouteWaypoint()
-                ?: DEFAULT_DESTINATION
-
-        return RouteLocationUiState(
-            name = destination.name.orEmpty(),
-            supportingText = destination.address,
-            coordinate = destination.coordinate,
-        )
-    }
+    private fun destinationLocationUiState(destination: RouteWaypoint): RouteLocationUiState =
+        destination.toLocationUiState(addressFallback = DEFAULT_DESTINATION_ADDRESS_FALLBACK)
 
     private fun buildQuery(selectedDestination: PlaceDestination?): RouteSearchQuery =
         RouteSearchQuery(
@@ -197,40 +189,72 @@ class RouteSettingViewModel(
         )
 
     private fun RouteCandidate.toOptionCardUiState(isSelected: Boolean): RouteOptionCardUiState =
-        RouteOptionCardUiState(
-            routeOption = routeOption,
-            title = title,
-            distanceMeters = summary.distanceMeters,
-            estimatedTimeMinutes = summary.estimatedTimeMinutes,
-            riskLevel = summary.riskLevel,
-            badges = routeBadges(),
-            isRecommended = routeOption == RouteOption.SAFE,
-            isSelected = isSelected,
-        )
+        routeOption.optionCardPresentation(summary = summary).let { presentation ->
+            RouteOptionCardUiState(
+                routeOption = routeOption,
+                title = presentation.title,
+                description = presentation.description,
+                distanceMeters = summary.distanceMeters,
+                estimatedTimeMinutes = summary.estimatedTimeMinutes,
+                riskLevel = summary.riskLevel,
+                summaryLabel = summary.toSummaryLabel(),
+                selectionLabel = if (isSelected) OPTION_SELECTION_SELECTED else OPTION_SELECTION_AVAILABLE,
+                highlightLabel = presentation.highlightLabel,
+                metrics = presentation.metrics,
+                badges = routeBadges(includeSafePriority = false),
+                isSelected = isSelected,
+            )
+        }
 
     private fun RouteCandidate.toSelectedRouteUiState(): RouteSelectedRouteUiState =
         RouteSelectedRouteUiState(
             routeOption = routeOption,
+            optionTitle = routeOption.toOptionTitle(),
             title = title,
             distanceMeters = summary.distanceMeters,
             estimatedTimeMinutes = summary.estimatedTimeMinutes,
             riskLevel = summary.riskLevel,
-            guidanceMessage = segments.firstOrNull()?.guidanceMessage ?: DEFAULT_GUIDANCE_MESSAGE,
+            guidanceMessage = segments.primaryGuidanceMessage(),
+            summaryLabel = summary.toSummaryLabel(),
+            estimatedTimeLabel = summary.estimatedTimeMinutes.toEstimatedTimeLabel(),
+            distanceLabel = summary.distanceMeters.toDistanceLabel(),
+            riskLabel = summary.riskLevel.toRiskLabel(),
+            renderableSegmentLabel = preview.toRenderableSegmentLabel(),
+            summaryMetrics =
+                listOf(
+                    RouteSummaryMetricUiState(
+                        label = SUMMARY_METRIC_TIME_LABEL,
+                        value = summary.estimatedTimeMinutes.toEstimatedTimeLabel(),
+                    ),
+                    RouteSummaryMetricUiState(
+                        label = SUMMARY_METRIC_DISTANCE_LABEL,
+                        value = summary.distanceMeters.toDistanceLabel(),
+                    ),
+                    RouteSummaryMetricUiState(
+                        label = SUMMARY_METRIC_RISK_LABEL,
+                        value = summary.riskLevel.toRiskLabel(),
+                    ),
+                    RouteSummaryMetricUiState(
+                        label = SUMMARY_METRIC_RENDERABLE_LABEL,
+                        value = preview.toRenderableSegmentLabel(),
+                    ),
+                ),
             previewPoints = previewPolyline.points,
             segmentCount = preview.segmentCount,
             renderableSegmentCount = preview.renderableSegmentCount,
             fallbackSegmentCount = preview.fallbackSegmentCount,
-            badges = routeBadges(),
+            previewFallbackNotice = preview.fallbackNotice(),
+            badges = routeBadges(includeSafePriority = true),
         )
 
-    private fun RouteCandidate.routeBadges(): List<RouteOptionBadge> {
+    private fun RouteCandidate.routeBadges(includeSafePriority: Boolean): List<RouteOptionBadge> {
         val aggregateFlags =
             segments.fold(RouteSegmentSafetyFlags()) { flags, segment ->
                 flags.merge(segment.safetyFlags)
             }
 
         return buildList {
-            if (routeOption == RouteOption.SAFE) {
+            if (includeSafePriority && routeOption == RouteOption.SAFE) {
                 add(RouteOptionBadge.SAFE_PRIORITY)
             }
             if (!aggregateFlags.hasStairs && !aggregateFlags.hasCurbGap) {
@@ -295,6 +319,104 @@ class RouteSettingViewModel(
     }
 }
 
+private fun RouteWaypoint.toLocationUiState(addressFallback: String?): RouteLocationUiState =
+    RouteLocationUiState(
+        name = name.orEmpty(),
+        supportingText = address?.takeIf { value -> value.isNotBlank() } ?: addressFallback,
+        coordinate = coordinate,
+    )
+
+private fun RouteSummary.toSummaryLabel(): String =
+    "${estimatedTimeMinutes.toEstimatedTimeLabel()} · ${distanceMeters.toDistanceLabel()}"
+
+private fun RouteOption.optionCardPresentation(summary: RouteSummary): RouteOptionCardPresentation =
+    when (this) {
+        RouteOption.SAFE ->
+            RouteOptionCardPresentation(
+                title = OPTION_TITLE_SAFE,
+                description = OPTION_DESCRIPTION_SAFE,
+                highlightLabel = OPTION_HIGHLIGHT_RECOMMENDED,
+                metrics =
+                    listOf(
+                        RouteOptionCardMetricUiState(
+                            label = SUMMARY_METRIC_RISK_LABEL,
+                            value = summary.riskLevel.toRiskValueLabel(),
+                        ),
+                        RouteOptionCardMetricUiState(
+                            label = SUMMARY_METRIC_TIME_LABEL,
+                            value = summary.estimatedTimeMinutes.toEstimatedTimeLabel(),
+                        ),
+                    ),
+            )
+
+        RouteOption.SHORTEST ->
+            RouteOptionCardPresentation(
+                title = OPTION_TITLE_SHORTEST,
+                description = OPTION_DESCRIPTION_SHORTEST,
+                highlightLabel = null,
+                metrics =
+                    listOf(
+                        RouteOptionCardMetricUiState(
+                            label = SUMMARY_METRIC_TIME_LABEL,
+                            value = summary.estimatedTimeMinutes.toEstimatedTimeLabel(),
+                        ),
+                        RouteOptionCardMetricUiState(
+                            label = SUMMARY_METRIC_DISTANCE_LABEL,
+                            value = summary.distanceMeters.toDistanceLabel(),
+                        ),
+                    ),
+            )
+    }
+
+private fun RouteOption.toOptionTitle(): String =
+    when (this) {
+        RouteOption.SAFE -> OPTION_TITLE_SAFE
+        RouteOption.SHORTEST -> OPTION_TITLE_SHORTEST
+    }
+
+private fun List<RouteSegment>.primaryGuidanceMessage(): String =
+    firstNotNullOfOrNull { segment ->
+        segment.guidanceMessage.takeIf { guidanceMessage -> guidanceMessage.isNotBlank() }
+    } ?: DEFAULT_GUIDANCE_MESSAGE
+
+private fun Int.toEstimatedTimeLabel(): String =
+    if (this > 0) {
+        "${this}분"
+    } else {
+        SUMMARY_VALUE_PENDING
+    }
+
+private fun Int.toDistanceLabel(): String =
+    when {
+        this <= 0 -> SUMMARY_VALUE_PENDING
+        this < METERS_PER_KILOMETER -> "$this m"
+        else -> String.format(Locale.US, "%.1f km", this / METERS_PER_KILOMETER.toFloat())
+    }
+
+private fun RouteRiskLevel.toRiskLabel(): String =
+    when (this) {
+        RouteRiskLevel.LOW -> RISK_LABEL_LOW
+        RouteRiskLevel.MEDIUM -> RISK_LABEL_MEDIUM
+        RouteRiskLevel.HIGH -> RISK_LABEL_HIGH
+    }
+
+private fun RouteRiskLevel.toRiskValueLabel(): String =
+    when (this) {
+        RouteRiskLevel.LOW -> RISK_VALUE_LOW
+        RouteRiskLevel.MEDIUM -> RISK_VALUE_MEDIUM
+        RouteRiskLevel.HIGH -> RISK_VALUE_HIGH
+    }
+
+private fun RoutePreviewModel.toRenderableSegmentLabel(): String =
+    "${renderableSegmentCount.coerceAtLeast(0)}/${segmentCount.coerceAtLeast(0)}"
+
+private fun RoutePreviewModel.fallbackNotice(): String? =
+    if (fallbackSegmentCount > 0 && renderableSegmentCount == 0) {
+        PREVIEW_FALLBACK_NOTICE
+    } else {
+        null
+    }
+
 private fun RouteSegmentSafetyFlags.merge(other: RouteSegmentSafetyFlags): RouteSegmentSafetyFlags =
     RouteSegmentSafetyFlags(
         hasStairs = hasStairs || other.hasStairs,
@@ -313,6 +435,34 @@ private fun RouteOption.routeSortOrder(): Int =
 
 private const val DEFAULT_ORIGIN_LABEL = "현재 위치"
 private const val DEFAULT_ORIGIN_SUPPORTING_TEXT = "실시간 위치 연동 전까지 데모 좌표를 출발지로 사용합니다."
+private const val DEFAULT_DESTINATION_ADDRESS_FALLBACK = "주소 정보 없음"
 private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "경로 fixture를 불러오지 못했습니다."
 private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동합니다."
+private const val SUMMARY_VALUE_PENDING = "확인 중"
+private const val OPTION_TITLE_SAFE = "SAFE 우선"
+private const val OPTION_DESCRIPTION_SAFE = "안전 요소와 보행 위험을 함께 고려해 우선 제안하는 경로입니다."
+private const val OPTION_TITLE_SHORTEST = "최단 거리"
+private const val OPTION_DESCRIPTION_SHORTEST = "이동 시간을 줄이는 기준으로 빠른 경로를 비교합니다."
+private const val OPTION_HIGHLIGHT_RECOMMENDED = "추천"
+private const val OPTION_SELECTION_SELECTED = "현재 선택됨"
+private const val OPTION_SELECTION_AVAILABLE = "탭하여 선택"
+private const val SUMMARY_METRIC_TIME_LABEL = "예상 시간"
+private const val SUMMARY_METRIC_DISTANCE_LABEL = "예상 거리"
+private const val SUMMARY_METRIC_RISK_LABEL = "위험도"
+private const val SUMMARY_METRIC_RENDERABLE_LABEL = "렌더링 구간"
+private const val RISK_LABEL_LOW = "위험도 낮음"
+private const val RISK_LABEL_MEDIUM = "위험도 보통"
+private const val RISK_LABEL_HIGH = "위험도 높음"
+private const val RISK_VALUE_LOW = "낮음"
+private const val RISK_VALUE_MEDIUM = "보통"
+private const val RISK_VALUE_HIGH = "높음"
+private const val PREVIEW_FALLBACK_NOTICE = "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다."
+private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
+
+private data class RouteOptionCardPresentation(
+    val title: String,
+    val description: String,
+    val highlightLabel: String?,
+    val metrics: List<RouteOptionCardMetricUiState>,
+)

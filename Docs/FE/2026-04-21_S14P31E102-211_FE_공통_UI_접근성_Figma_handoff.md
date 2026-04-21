@@ -111,3 +111,69 @@
 | 오류 전달 | 오류는 시각적 색상 외에 텍스트로 노출된다. submit 실패 시 첫 오류 영역으로 이동할 수 있는 구조를 유지한다. |
 | 터치 대상 | 주요 CTA와 icon action은 손가락 조작 가능한 충분한 영역을 가진다. |
 | mock 문구 | `mock`, `placeholder`, `fixture` 문구는 개발 중 시안에서만 허용하고, 실제 배포 전 사용자 문구로 치환한다. |
+
+## 10. Figma handoff 공통 체크리스트
+
+| 항목 | Figma에서 확인할 내용 | FE 반영 기준 |
+| --- | --- | --- |
+| 화면 상태 | default, loading, empty, error, completed 상태가 필요한 화면에 모두 존재하는지 확인한다. | 상태는 `UiState` 필드 또는 sealed state와 1:1로 연결한다. |
+| 컴포넌트 상태 | enabled, disabled, selected, unselected, pressed/focused 상태를 확인한다. | Material3 기본 상태를 우선 사용하고, 별도 token은 필요한 경우만 추가한다. |
+| spacing | 섹션 간격, 카드 내부 padding, 하단 CTA 여백을 확인한다. | 기존 `EumSpacing` 값을 우선 사용한다. 새 spacing token은 추가하지 않는다. |
+| radius | 카드, chip, bottom area의 radius가 화면별로 과하게 달라지지 않는지 확인한다. | 기존 `EumRadius`를 우선 사용한다. |
+| typography | 화면 제목, 섹션 제목, 본문, helper/error text 위계를 확인한다. | `MaterialTheme.typography`를 우선 사용한다. |
+| color/token | primary, secondary, error, surface, container 색상 사용 목적을 확인한다. | 색상만으로 상태를 전달하지 않는다. |
+| touch target | 주요 버튼, chip, icon button의 터치 영역을 확인한다. | 손가락 조작 가능한 영역을 유지하고 텍스트 줄바꿈을 허용한다. |
+| accessibility label | 아이콘 단독 버튼, 지도 마커, 선택 카드, switch 문구를 확인한다. | string resource 또는 상태 기반 문구로 연결한다. |
+| overflow | 긴 주소, 긴 시설명, 긴 helper/error text가 모바일 폭에서 깨지지 않는지 확인한다. | 줄바꿈 또는 maxLines 정책을 화면별로 명시한다. |
+| placeholder 제거 | `mock`, `placeholder`, `fixture` 문구가 실제 배포 시안에 남아 있지 않은지 확인한다. | 실제 연동 전까지는 개발용 문구로 허용하되 handoff 문서에 교체 대상을 남긴다. |
+
+## 11. 화면별 Figma handoff 항목
+
+| 화면 | 필수 상태 | 필수 컴포넌트 | handoff 확인 포인트 |
+| --- | --- | --- | --- |
+| 지도 메인 | 위치 권한 없음, 위치 확인 중, 위치 준비됨, 위치 사용 불가, 마커 없음, 마커 로드 실패 | 검색 진입, 지도 영역, 현재 위치 상태 카드, 카테고리 필터, 마커 | 지도 SDK 전 fallback 상태와 실제 지도 상태의 UI 차이를 분리한다. |
+| 시설 상세 | 상세 표시, 접근성 정보 없음, 상세 닫힘 | 시설명, 카테고리, 주소, 접근성 태그, 길안내 CTA, 닫기 | 접근성 정보가 없을 때도 빈 영역이 아니라 안내 문구를 표시한다. |
+| 경로 설정 | 로딩, 목적지 없음, 경로 요약 있음, 경로 로드 실패, CTA 비활성 | 출발지/도착지, 옵션 카드, 경로 요약, preview, 하단 CTA | CTA 비활성 사유와 선택 옵션 상태가 동시에 보이게 한다. |
+| 내비게이션 | 준비 중, 안내 중, 재탐색 필요, 완료, 실패 | 상태 카드, 지도/경로 영역, 다음 안내, 남은 거리, 음성 안내 switch, 종료/재탐색 버튼 | 실제 TTS/위치 추적 전까지 mock 상태임을 개발용 문구로만 표시한다. |
+| 제보 작성 | 초기 입력, 입력 중, 필수값 누락, 제출 가능, 제출 중, 제출 완료, 실패 | 유형 선택, 위치, 사진, 설명, helper/error text, 제출 CTA | placeholder가 label을 대체하지 않고, 오류 문구가 색상 외 텍스트로 보이는지 확인한다. |
+
+## 12. Figma 컴포넌트 명명 기준
+
+| 분류 | 권장 이름 | 비고 |
+| --- | --- | --- |
+| 화면 | `Map/Main`, `Map/FacilityDetail`, `Route/Setting`, `Navigation/Guidance`, `Report/Form` | FE package 이름과 맞춘다. |
+| 상태 카드 | `Common/StatusCard` | title, description, severity, action slot을 구분한다. |
+| 하단 CTA | `Common/BottomActionBar` | label, enabled, supportingText 상태를 포함한다. |
+| 선택 chip | `Common/FilterChip` | selected/unselected/focused 상태를 포함한다. |
+| 옵션 카드 | `Route/OptionCard` | route option, risk, metrics, selected 상태를 포함한다. |
+| 입력 섹션 | `Report/FormSection` | title, content, helperText, errorText slot을 구분한다. |
+| 지도 placeholder | `Map/ViewportFallback` | 지도 SDK 전후 차이를 명확히 한다. |
+
+## 13. 구현 보류 및 후속 연결
+
+| 항목 | 현재 상태 | 후속 연결 |
+| --- | --- | --- |
+| 실제 지도 SDK | fallback surface와 mock marker 중심 | 지도 SDK 연결 시 `MapViewport` 내부 렌더링만 교체한다. |
+| 시설 상세 API | seed/mock 상세 중심 | API DTO 연결 시 `MapFacilityDetailSheetState.detail`을 실제 상세 모델로 연결한다. |
+| 경로 탐색 API | fixture route summary 중심 | 실제 route repository 연결 시 `RouteSettingViewModel`의 fixture load 지점을 교체한다. |
+| 내비게이션/TTS | 상태 시안과 mock action 중심 | 실시간 위치, TTS, 경로 이탈 계산은 `NavigationViewModel`에 순차 연결한다. |
+| 제보 draft/outbox | 상태 모델과 validation까지 준비 | `207`에서 `SaveDraftClicked`, `SubmitClicked`, `ReportOutboxState`를 실제 로컬 저장과 연결한다. |
+| 접근성 QA | 문안 기준 정리 완료 | TalkBack 점검은 실제 기기 QA에서 읽기 순서와 중복 낭독을 확인한다. |
+
+## 14. 204~210 연결 확인 결과
+
+| 흐름 | 확인 결과 |
+| --- | --- |
+| 제보 작성 | `ReportScreen(uiState, onAction)` 구조와 유형, 위치, 사진, 설명, 제출 순서가 유지된다. |
+| 제보 validation | helper/error text와 `ReportUiState.isSubmitEnabled` 기준이 문서의 오류 노출 기준과 맞는다. |
+| 지도 메인 | 검색 진입, 위치 상태, 필터, 마커, 시설 상세 흐름이 문서의 지도 overlay 기준과 맞는다. |
+| 시설 상세 | 시설 상세에서 길안내 진입 CTA가 유지되어 경로 설정 handoff와 연결된다. |
+| 경로 설정 | 출발지/도착지, 옵션, route summary, preview, CTA 상태가 handoff 기준에 맞는다. |
+| 내비게이션 | 준비 중, 안내 중, 재탐색, 완료, 실패 상태가 `NavigationScreenState`로 분리되어 있다. |
+
+## 15. 이번 작업의 변경 범위
+
+- 문서 기준 정리에 집중했다.
+- Compose 화면 구조, ViewModel 로직, 상태 모델은 변경하지 않았다.
+- 공통 컴포넌트는 새로 만들지 않았다. 현재 반복 패턴은 feature 내부 private composable로 유지한다.
+- 후속 디자인 handoff에서 필요한 경우에만 `Common/StatusCard`, `Common/BottomActionBar`, `Report/FormSection` 순서로 공통화를 검토한다.

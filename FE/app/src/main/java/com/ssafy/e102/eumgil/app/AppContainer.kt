@@ -11,16 +11,19 @@ import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
@@ -43,6 +46,7 @@ class AppContainer(
 
     private val placesLocalDataSource = PlacesLocalDataSource()
     private val facilitySeedLocalDataSource = FacilitySeedLocalDataSource()
+    private val routeLocalDataSource = RouteLocalDataSource()
     private val searchLocalDataSource = SearchLocalDataSource()
 
     private val placesRemoteDataSource = PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
@@ -50,6 +54,7 @@ class AppContainer(
 
     private val placesMockDataSource = PlacesMockDataSource()
     private val facilitySeedMockDataSource = FacilitySeedMockDataSource()
+    private val routeMockDataSource = RouteMockDataSource()
     private val searchMockDataSource = SearchMockDataSource()
 
     private val repositorySourcePolicy: RepositorySourcePolicy =
@@ -78,6 +83,12 @@ class AppContainer(
         RepositoryModule.provideFacilitySeedRepository(
             localDataSource = facilitySeedLocalDataSource,
             mockDataSource = facilitySeedMockDataSource,
+        )
+
+    val routeRepository: RouteRepository =
+        RepositoryModule.provideRouteRepository(
+            localDataSource = routeLocalDataSource,
+            mockDataSource = routeMockDataSource,
         )
 
     val searchRepository: SearchRepository =

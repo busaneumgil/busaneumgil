@@ -4,9 +4,11 @@ import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
@@ -14,10 +16,12 @@ import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultPlacesRepository
+import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolicy
@@ -61,6 +65,15 @@ object RepositoryModule {
         mockDataSource: FacilitySeedMockDataSource,
     ): FacilitySeedRepository =
         DefaultFacilitySeedRepository(
+            localDataSource = localDataSource,
+            mockDataSource = mockDataSource,
+        )
+
+    fun provideRouteRepository(
+        localDataSource: RouteLocalDataSource,
+        mockDataSource: RouteMockDataSource,
+    ): RouteRepository =
+        DefaultRouteRepository(
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
         )

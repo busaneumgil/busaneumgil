@@ -7,6 +7,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
+import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
@@ -69,6 +70,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onStartNavigation = {
+                navController.navigate(NavigationRoute.Guidance.route)
+            },
         )
     }
 
@@ -80,10 +84,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = RouteSettingRoute.Setting.route) {
-        RouteSettingEntryRoute(
+    composable(route = NavigationRoute.Guidance.route) {
+        NavigationScreenRoute(
             onNavigateBack = {
                 navController.popBackStack()
+            },
+            onNavigateToMap = {
+                navController.navigateToTopLevel(TopLevelDestination.Map)
             },
         )
     }

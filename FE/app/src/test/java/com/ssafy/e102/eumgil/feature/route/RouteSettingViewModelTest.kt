@@ -97,6 +97,9 @@ class RouteSettingViewModelTest {
             )
             assertTrue(uiState.selectedRoute?.previewPoints?.size ?: 0 >= 2)
             assertEquals(null, uiState.selectedRoute?.previewFallbackNotice)
+            assertTrue(uiState.cta.isEnabled)
+            assertEquals("선택한 경로로 안내 시작", uiState.cta.label)
+            assertEquals("201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다.", uiState.cta.supportingText)
             assertTrue(uiState.isStartEnabled)
         }
 
@@ -173,7 +176,27 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.optionCards.isEmpty())
             assertEquals(null, uiState.selectedRoute)
+            assertFalse(uiState.cta.isEnabled)
+            assertEquals("표시할 경로가 준비되면 시작 CTA를 활성화합니다.", uiState.cta.supportingText)
             assertFalse(uiState.isStartEnabled)
+        }
+
+    @Test
+    fun `route load failure exposes disabled CTA and error supporting text`() =
+        runTest {
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = failingRouteRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.cta.isEnabled)
+            assertEquals("경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다.", uiState.cta.supportingText)
+            assertEquals("fixture load failed", uiState.loadErrorMessage)
         }
 
     @Test
@@ -231,6 +254,8 @@ class RouteSettingViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.ctaAcknowledged)
+            assertFalse(viewModel.uiState.value.cta.isEnabled)
+            assertEquals("내비게이션 진행 화면 연결은 다음 스레드에서 마무리합니다.", viewModel.uiState.value.cta.supportingText)
             val event = uiEvent.await()
             assertTrue(event is RouteSettingUiEvent.StartNavigationRequested)
             assertEquals(
@@ -321,4 +346,10 @@ private fun emptyRouteRepository(): RouteRepository =
                         label = "Empty route fixture",
                     ),
             )
+    }
+
+private fun failingRouteRepository(): RouteRepository =
+    object : RouteRepository {
+        override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            error("fixture load failed")
     }

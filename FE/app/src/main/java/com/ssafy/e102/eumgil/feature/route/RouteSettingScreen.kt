@@ -746,31 +746,16 @@ private fun RouteSettingBottomBar(
                 enabled = uiState.isStartEnabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = stringResource(id = R.string.route_setting_cta_label))
+                Text(text = uiState.cta.label)
             }
             Text(
-                text = routeSettingBottomSupportingText(uiState = uiState),
+                text = uiState.cta.supportingText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
-
-@Composable
-private fun routeSettingBottomSupportingText(uiState: RouteSettingUiState): String =
-    when {
-        uiState.ctaAcknowledged ->
-            stringResource(id = R.string.route_setting_cta_acknowledged)
-
-        uiState.loadErrorMessage != null ->
-            stringResource(id = R.string.route_setting_cta_error_supporting)
-
-        uiState.isLoading ->
-            stringResource(id = R.string.route_setting_cta_loading_supporting)
-
-        else -> stringResource(id = R.string.route_setting_cta_supporting)
-    }
 
 @Composable
 private fun RouteRiskChip(

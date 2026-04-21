@@ -17,10 +17,11 @@ data class RouteSettingUiState(
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
     val selectedRoute: RouteSelectedRouteUiState? = null,
     val sourceLabel: String? = null,
+    val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
 ) {
     val isStartEnabled: Boolean
-        get() = !isLoading && loadErrorMessage == null && selectedRoute != null
+        get() = cta.isEnabled
 }
 
 data class RouteLocationUiState(
@@ -69,6 +70,12 @@ data class RouteSelectedRouteUiState(
 data class RouteSummaryMetricUiState(
     val label: String,
     val value: String,
+)
+
+data class RouteSettingCtaUiState(
+    val label: String = "선택한 경로로 안내 시작",
+    val supportingText: String = "fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다.",
+    val isEnabled: Boolean = false,
 )
 
 data class RouteOptionCardMetricUiState(

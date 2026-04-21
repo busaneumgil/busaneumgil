@@ -40,6 +40,7 @@ fun RouteSettingEntryRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     androidx.compose.runtime.LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {
+        // 201 only needs to wire onStartNavigation to the navigation progress route.
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()

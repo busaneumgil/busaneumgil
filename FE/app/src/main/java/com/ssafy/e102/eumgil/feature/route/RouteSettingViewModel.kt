@@ -74,6 +74,7 @@ class RouteSettingViewModel(
                 optionCards = emptyList(),
                 selectedRoute = null,
                 sourceLabel = null,
+                cta = loadingCtaUiState(),
                 ctaAcknowledged = false,
             )
         }
@@ -94,6 +95,7 @@ class RouteSettingViewModel(
                 state.copy(
                     isLoading = false,
                     loadErrorMessage = throwable.message ?: DEFAULT_ROUTE_LOAD_ERROR_MESSAGE,
+                    cta = errorCtaUiState(),
                     ctaAcknowledged = false,
                 )
             }
@@ -117,6 +119,9 @@ class RouteSettingViewModel(
     }
 
     private fun startNavigation() {
+        if (mutableUiState.value.ctaAcknowledged) {
+            return
+        }
         val searchData = latestSearchData ?: return
         val selectedRoute =
             searchData.findRoute(uiState.value.selectedOption)
@@ -124,7 +129,10 @@ class RouteSettingViewModel(
                 ?: return
 
         mutableUiState.update { state ->
-            state.copy(ctaAcknowledged = true)
+            state.copy(
+                cta = buildCtaUiState(selectedRoute = state.selectedRoute, ctaAcknowledged = true),
+                ctaAcknowledged = true,
+            )
         }
 
         emitUiEvent(
@@ -156,6 +164,7 @@ class RouteSettingViewModel(
         val selectedRoute =
             searchData.findRoute(resolvedOption)
                 ?: availableRoutes.firstOrNull()
+        val selectedRouteUiState = selectedRoute?.toSelectedRouteUiState()
 
         return RouteSettingUiState(
             isLoading = false,
@@ -170,8 +179,13 @@ class RouteSettingViewModel(
                         isSelected = route.routeOption == resolvedOption,
                     )
                 },
-            selectedRoute = selectedRoute?.toSelectedRouteUiState(),
+            selectedRoute = selectedRouteUiState,
             sourceLabel = searchData.source.label,
+            cta =
+                buildCtaUiState(
+                    selectedRoute = selectedRouteUiState,
+                    ctaAcknowledged = ctaAcknowledged,
+                ),
             ctaAcknowledged = ctaAcknowledged,
         )
     }
@@ -417,6 +431,47 @@ private fun RoutePreviewModel.fallbackNotice(): String? =
         null
     }
 
+private fun loadingCtaUiState(): RouteSettingCtaUiState =
+    RouteSettingCtaUiState(
+        label = CTA_LABEL_START,
+        supportingText = CTA_SUPPORTING_LOADING,
+        isEnabled = false,
+    )
+
+private fun errorCtaUiState(): RouteSettingCtaUiState =
+    RouteSettingCtaUiState(
+        label = CTA_LABEL_START,
+        supportingText = CTA_SUPPORTING_ERROR,
+        isEnabled = false,
+    )
+
+private fun buildCtaUiState(
+    selectedRoute: RouteSelectedRouteUiState?,
+    ctaAcknowledged: Boolean,
+): RouteSettingCtaUiState =
+    when {
+        ctaAcknowledged ->
+            RouteSettingCtaUiState(
+                label = CTA_LABEL_START,
+                supportingText = CTA_SUPPORTING_ACKNOWLEDGED,
+                isEnabled = false,
+            )
+
+        selectedRoute == null ->
+            RouteSettingCtaUiState(
+                label = CTA_LABEL_START,
+                supportingText = CTA_SUPPORTING_EMPTY,
+                isEnabled = false,
+            )
+
+        else ->
+            RouteSettingCtaUiState(
+                label = CTA_LABEL_START,
+                supportingText = CTA_SUPPORTING_READY,
+                isEnabled = true,
+            )
+    }
+
 private fun RouteSegmentSafetyFlags.merge(other: RouteSegmentSafetyFlags): RouteSegmentSafetyFlags =
     RouteSegmentSafetyFlags(
         hasStairs = hasStairs || other.hasStairs,
@@ -438,6 +493,12 @@ private const val DEFAULT_ORIGIN_SUPPORTING_TEXT = "실시간 위치 연동 전�
 private const val DEFAULT_DESTINATION_ADDRESS_FALLBACK = "주소 정보 없음"
 private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "경로 fixture를 불러오지 못했습니다."
 private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동합니다."
+private const val CTA_LABEL_START = "선택한 경로로 안내 시작"
+private const val CTA_SUPPORTING_READY = "201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다."
+private const val CTA_SUPPORTING_ACKNOWLEDGED = "내비게이션 진행 화면 연결은 다음 스레드에서 마무리합니다."
+private const val CTA_SUPPORTING_ERROR = "경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다."
+private const val CTA_SUPPORTING_LOADING = "fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다."
+private const val CTA_SUPPORTING_EMPTY = "표시할 경로가 준비되면 시작 CTA를 활성화합니다."
 private const val SUMMARY_VALUE_PENDING = "확인 중"
 private const val OPTION_TITLE_SAFE = "SAFE 우선"
 private const val OPTION_DESCRIPTION_SAFE = "안전 요소와 보행 위험을 함께 고려해 우선 제안하는 경로입니다."

@@ -10,11 +10,13 @@ interface RouteGeometryParser {
 data class RouteGeometryParseResult(
     val polyline: RoutePolyline = RoutePolyline(),
     val status: RouteGeometryParseStatus,
+    val parsedPointCount: Int = 0,
 )
 
 enum class RouteGeometryParseStatus {
     SUCCESS,
     EMPTY_INPUT,
+    MALFORMED_GEOMETRY,
     UNSUPPORTED_GEOMETRY,
     INVALID_COORDINATE,
     INSUFFICIENT_POINTS,
@@ -27,15 +29,27 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
             return RouteGeometryParseResult(status = RouteGeometryParseStatus.EMPTY_INPUT)
         }
 
-        val geometryType = normalizedGeometry.substringBefore("(", missingDelimiterValue = "").trim()
+        val openingParenthesisIndex = normalizedGeometry.indexOf('(')
+        val closingParenthesisIndex = normalizedGeometry.lastIndexOf(')')
+        if (
+            openingParenthesisIndex <= 0 ||
+            closingParenthesisIndex <= openingParenthesisIndex ||
+            closingParenthesisIndex != normalizedGeometry.lastIndex
+        ) {
+            return RouteGeometryParseResult(status = RouteGeometryParseStatus.MALFORMED_GEOMETRY)
+        }
+
+        val geometryType = normalizedGeometry.substring(0, openingParenthesisIndex).trim()
+        if (geometryType.isBlank()) {
+            return RouteGeometryParseResult(status = RouteGeometryParseStatus.MALFORMED_GEOMETRY)
+        }
         if (!geometryType.equals(LINESTRING_TYPE, ignoreCase = true)) {
             return RouteGeometryParseResult(status = RouteGeometryParseStatus.UNSUPPORTED_GEOMETRY)
         }
 
         val coordinatePayload =
             normalizedGeometry
-                .substringAfter("(", missingDelimiterValue = "")
-                .substringBeforeLast(")", missingDelimiterValue = "")
+                .substring(openingParenthesisIndex + 1, closingParenthesisIndex)
                 .trim()
 
         if (coordinatePayload.isBlank()) {
@@ -56,6 +70,7 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
         return RouteGeometryParseResult(
             polyline = RoutePolyline(points = coordinates),
             status = RouteGeometryParseStatus.SUCCESS,
+            parsedPointCount = coordinates.size,
         )
     }
 
@@ -65,6 +80,9 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
 
         val longitude = parts[0].toDoubleOrNull() ?: return null
         val latitude = parts[1].toDoubleOrNull() ?: return null
+        if (longitude !in MIN_LONGITUDE..MAX_LONGITUDE || latitude !in MIN_LATITUDE..MAX_LATITUDE) {
+            return null
+        }
 
         return GeoCoordinate(
             latitude = latitude,
@@ -75,6 +93,10 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
     companion object {
         private const val LINESTRING_TYPE: String = "LINESTRING"
         private const val MINIMUM_RENDERABLE_POINT_COUNT: Int = 2
+        private const val MIN_LATITUDE: Double = -90.0
+        private const val MAX_LATITUDE: Double = 90.0
+        private const val MIN_LONGITUDE: Double = -180.0
+        private const val MAX_LONGITUDE: Double = 180.0
         private val COORDINATE_SEPARATOR = Regex("\\s+")
     }
 }

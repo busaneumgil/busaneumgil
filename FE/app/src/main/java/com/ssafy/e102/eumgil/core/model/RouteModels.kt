@@ -71,6 +71,19 @@ data class RoutePolyline(
         get() = points.lastOrNull()
 }
 
+data class RoutePreviewModel(
+    val polyline: RoutePolyline = RoutePolyline(),
+    val segmentCount: Int = 0,
+    val renderableSegmentCount: Int = 0,
+    val fallbackSegmentCount: Int = 0,
+) {
+    val hasRenderableLine: Boolean
+        get() = polyline.isRenderable
+
+    val skippedSegmentCount: Int
+        get() = (segmentCount - renderableSegmentCount).coerceAtLeast(0)
+}
+
 data class RouteSegmentSafetyFlags(
     val hasStairs: Boolean = false,
     val hasCurbGap: Boolean = false,
@@ -87,17 +100,23 @@ data class RouteSegment(
     val safetyFlags: RouteSegmentSafetyFlags = RouteSegmentSafetyFlags(),
     val riskLevel: RouteRiskLevel = RouteRiskLevel.MEDIUM,
     val guidanceMessage: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
-)
+) {
+    val hasRenderablePolyline: Boolean
+        get() = polyline.isRenderable
+}
 
 data class RouteCandidate(
     val routeOption: RouteOption,
     val title: String,
     val summary: RouteSummary,
-    val previewPolyline: RoutePolyline = RoutePolyline(),
+    val preview: RoutePreviewModel = RoutePreviewModel(),
     val segments: List<RouteSegment> = emptyList(),
 ) {
+    val previewPolyline: RoutePolyline
+        get() = preview.polyline
+
     val hasRenderablePreview: Boolean
-        get() = previewPolyline.isRenderable
+        get() = preview.hasRenderableLine
 }
 
 data class RouteSearchResult(

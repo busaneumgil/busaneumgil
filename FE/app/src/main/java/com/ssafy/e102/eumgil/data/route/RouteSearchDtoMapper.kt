@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteDefaults
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
+import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteSearchResult
@@ -41,16 +42,8 @@ private fun RouteDto.toDomain(
     geometryParser: RouteGeometryParser,
 ): RouteCandidate {
     val resolvedOption = RouteOption.fromValue(routeOption) ?: defaultOption
-    val segments =
-        segments
-            .mapIndexed { index, segment ->
-                segment.toDomain(
-                    fallbackSequence = index + 1,
-                    geometryParser = geometryParser,
-                )
-            }.sortedBy(RouteSegment::sequence)
-    val segmentDistanceTotal = segments.sumOf(RouteSegment::distanceMeters)
-    val previewPolyline = segments.toPreviewPolyline()
+    val parsedSegments = segments.toParsedSegments(geometryParser = geometryParser)
+    val segmentDistanceTotal = parsedSegments.segments.sumOf(RouteSegment::distanceMeters)
     val distanceMeters = normalizedDistance(segmentDistanceTotal)
 
     return RouteCandidate(
@@ -60,20 +53,22 @@ private fun RouteDto.toDomain(
             RouteSummary(
                 distanceMeters = distanceMeters,
                 estimatedTimeMinutes = normalizedEstimatedTime(distanceMeters = distanceMeters),
-                riskLevel = RouteRiskLevel.fromValue(riskLevel, fallback = segments.maxRiskLevel()),
+                riskLevel = RouteRiskLevel.fromValue(riskLevel, fallback = parsedSegments.segments.maxRiskLevel()),
             ),
-        previewPolyline = previewPolyline,
-        segments = segments,
+        preview = parsedSegments.preview,
+        segments = parsedSegments.segments,
     )
 }
 
 private fun RouteSegmentDto.toDomain(
     fallbackSequence: Int,
     geometryParser: RouteGeometryParser,
-): RouteSegment =
-    RouteSegment(
+): RouteSegment {
+    val geometryParseResult = geometryParser.parse(geometry)
+
+    return RouteSegment(
         sequence = normalizedSequence(fallbackSequence),
-        polyline = geometryParser.parse(geometry).polyline,
+        polyline = geometryParseResult.polyline,
         distanceMeters = normalizedDistance(),
         safetyFlags =
             RouteSegmentSafetyFlags(
@@ -83,10 +78,11 @@ private fun RouteSegmentDto.toDomain(
                 hasSignal = hasSignal == true,
                 hasAudioSignal = hasAudioSignal == true,
                 hasBrailleBlock = hasBrailleBlock == true,
-            ),
+        ),
         riskLevel = RouteRiskLevel.fromValue(riskLevel),
         guidanceMessage = normalizedGuidanceMessage(),
     )
+}
 
 private fun GeoCoordinate.toPointDto(): RoutePointDto =
     RoutePointDto(
@@ -128,10 +124,37 @@ private fun defaultTitle(routeOption: RouteOption): String =
         RouteOption.SHORTEST -> "Shortest Route"
     }
 
+fun List<RouteSegmentDto>.toRoutePreviewModel(geometryParser: RouteGeometryParser): RoutePreviewModel =
+    toParsedSegments(geometryParser = geometryParser).preview
+
+private fun List<RouteSegmentDto>.toParsedSegments(geometryParser: RouteGeometryParser): ParsedRouteSegments {
+    val parsedSegments =
+        mapIndexed { index, segment ->
+            segment.toDomain(
+                fallbackSequence = index + 1,
+                geometryParser = geometryParser,
+            )
+        }.sortedBy(RouteSegment::sequence)
+
+    val renderableSegmentCount = parsedSegments.count(RouteSegment::hasRenderablePolyline)
+    return ParsedRouteSegments(
+        segments = parsedSegments,
+        preview =
+            RoutePreviewModel(
+                polyline = parsedSegments.toPreviewPolyline(),
+                segmentCount = parsedSegments.size,
+                renderableSegmentCount = renderableSegmentCount,
+                fallbackSegmentCount = parsedSegments.size - renderableSegmentCount,
+            ),
+    )
+}
+
 private fun List<RouteSegment>.toPreviewPolyline(): RoutePolyline {
     val previewPoints = mutableListOf<GeoCoordinate>()
 
     forEach { segment ->
+        if (!segment.hasRenderablePolyline) return@forEach
+
         segment.polyline.points.forEach { point ->
             if (previewPoints.lastOrNull() != point) {
                 previewPoints += point
@@ -161,5 +184,10 @@ private fun Int.toEstimatedMinutes(): Int =
     } else {
         ceil(this / DEFAULT_WALKING_SPEED_METERS_PER_MINUTE).toInt()
     }
+
+private data class ParsedRouteSegments(
+    val segments: List<RouteSegment>,
+    val preview: RoutePreviewModel,
+)
 
 private const val DEFAULT_WALKING_SPEED_METERS_PER_MINUTE: Double = 60.0

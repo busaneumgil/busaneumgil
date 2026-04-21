@@ -34,6 +34,7 @@ class RouteRepositoryTest {
 
             assertEquals(listOf(RouteOption.SAFE, RouteOption.SHORTEST), result.routes.map { route -> route.routeOption })
             assertTrue(result.routes.all { route -> route.previewPolyline.isRenderable })
+            assertTrue(result.routes.all { route -> route.preview.segmentCount > 0 })
             assertEquals(result, cachedResult)
         }
 
@@ -98,6 +99,9 @@ class RouteRepositoryTest {
             assertEquals(RouteDefaults.DEFAULT_GUIDANCE_MESSAGE, firstSegment.guidanceMessage)
             assertTrue(firstSegment.polyline.points.isEmpty())
             assertEquals("Use the marked crosswalk.", secondSegment.guidanceMessage)
+            assertEquals(2, route.preview.segmentCount)
+            assertEquals(1, route.preview.renderableSegmentCount)
+            assertEquals(1, route.preview.fallbackSegmentCount)
             assertTrue(route.previewPolyline.isRenderable)
             assertNotNull(route.previewPolyline.start)
             assertNotNull(route.previewPolyline.end)

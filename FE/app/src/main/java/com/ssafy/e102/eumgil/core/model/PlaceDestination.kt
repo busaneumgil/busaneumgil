@@ -8,6 +8,7 @@ data class PlaceDestination(
     val longitude: Double,
 )
 
+// Search, facility detail, and saved-place handoff all converge on the same minimal destination payload.
 fun SearchResult.toPlaceDestination(): PlaceDestination =
     PlaceDestination(
         placeId = placeId,
@@ -15,4 +16,14 @@ fun SearchResult.toPlaceDestination(): PlaceDestination =
         address = subtitle.takeIf { it.isNotBlank() },
         latitude = latitude,
         longitude = longitude,
+    )
+
+// 119 fixes the facility-detail handoff contract here so 200/214 can reuse it without branching by source.
+fun FacilityDetailSeed.toPlaceDestination(): PlaceDestination =
+    PlaceDestination(
+        placeId = facilityId,
+        name = name,
+        address = address.takeIf { it.isNotBlank() },
+        latitude = coordinate.latitude,
+        longitude = coordinate.longitude,
     )

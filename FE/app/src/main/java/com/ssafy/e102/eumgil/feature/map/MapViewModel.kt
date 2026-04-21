@@ -9,13 +9,16 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,6 +48,7 @@ class MapViewModel(
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
     private var selectedMarkerId: String? = null
+    private var selectedFacilityDetail: FacilityDetailSeed? = null
     private var facilityBrowseData: FacilityBrowseData? = null
     private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
     private var isRouteStarted = false
@@ -98,6 +102,8 @@ class MapViewModel(
 
     fun onAction(action: MapUiAction) {
         when (action) {
+            MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
+            MapUiAction.FacilityRouteEntryClicked -> handleFacilityRouteEntryClicked()
             MapUiAction.LocationActionClicked -> handleLocationAction()
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
@@ -122,11 +128,12 @@ class MapViewModel(
                 renderMarkerBrowseState()
             }.onFailure {
                 facilityBrowseData = null
-                selectedMarkerId = null
+                updateSelectedFacility(markerId = null)
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
                 mutableUiState.update { state ->
                     state.copy(
                         selectedMarkerId = null,
+                        facilityDetailSheetState = currentFacilityDetailSheetState(),
                         markerOverlayState = MapBrowseStateFactory.createErrorMarkerOverlayState(),
                         markerFilterState = MapBrowseStateFactory.createErrorFilterUiState(),
                     )
@@ -136,16 +143,25 @@ class MapViewModel(
     }
 
     private fun handleMarkerTapped(markerId: String) {
-        selectedMarkerId =
-            if (selectedMarkerId == markerId) {
-                null
-            } else {
-                markerId
-            }
-
-        mutableUiState.update { state ->
-            state.copy(selectedMarkerId = selectedMarkerId)
+        if (selectedMarkerId == markerId) {
+            updateSelectedFacility(markerId = null)
+        } else {
+            updateSelectedFacility(markerId = markerId)
         }
+        renderSelectedFacilityState()
+    }
+
+    private fun dismissFacilityDetailSheet() {
+        if (!clearSelectedFacilitySelection()) return
+        renderSelectedFacilityState()
+    }
+
+    private fun handleFacilityRouteEntryClicked() {
+        val destination = selectedFacilityDetail?.toPlaceDestination() ?: return
+        clearSelectedFacilitySelection()
+        renderSelectedFacilityState()
+        destinationSelectionRepository.updateSelectedDestination(destination)
+        emitUiEvent(MapUiEvent.NavigateToFacilityRouteEntry)
     }
 
     private fun resetMarkerCategoryFilter() {
@@ -179,18 +195,24 @@ class MapViewModel(
                 overlayState = overlayState,
             )
 
-        selectedMarkerId =
+        val nextSelectedMarkerId =
             selectedMarkerId?.takeIf { markerId ->
                 overlayState.markers.any { marker ->
                     marker.markerId == markerId
-                        && marker.displayState == com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState.VISIBLE
+                        && marker.displayState == MapMarkerDisplayState.VISIBLE
                 }
             }
+        val nextSelectedFacilityDetail = nextSelectedMarkerId?.let(browseData::detailFor)
+        updateSelectedFacility(
+            markerId = nextSelectedMarkerId,
+            detail = nextSelectedFacilityDetail,
+        )
         markerFilterSelectionState = filterState.selection
 
         mutableUiState.update { state ->
             state.copy(
                 selectedMarkerId = selectedMarkerId,
+                facilityDetailSheetState = currentFacilityDetailSheetState(),
                 markerOverlayState = overlayState,
                 markerFilterState = filterState,
             )
@@ -238,6 +260,10 @@ class MapViewModel(
     private fun observeSelectionRequests() {
         viewModelScope.launch {
             destinationSelectionRepository.selectionRequests.collectLatest { destination ->
+                // Any destination handoff should close stale facility detail state before the map recenters.
+                if (clearSelectedFacilitySelection()) {
+                    renderSelectedFacilityState()
+                }
                 syncCameraToSelectedDestination(
                     destination = destination,
                     incrementRequestId = true,
@@ -532,6 +558,40 @@ class MapViewModel(
             )
         }
     }
+
+    private fun renderSelectedFacilityState() {
+        mutableUiState.update { state ->
+            state.copy(
+                selectedMarkerId = selectedMarkerId,
+                facilityDetailSheetState = currentFacilityDetailSheetState(),
+            )
+        }
+    }
+
+    private fun clearSelectedFacilitySelection(): Boolean {
+        if (selectedMarkerId == null && selectedFacilityDetail == null) return false
+
+        selectedMarkerId = null
+        selectedFacilityDetail = null
+        return true
+    }
+
+    private fun updateSelectedFacility(
+        markerId: String?,
+        detail: FacilityDetailSeed? = markerId?.let { facilityBrowseData?.detailFor(it) },
+    ) {
+        if (markerId != null && detail == null) {
+            selectedMarkerId = null
+            selectedFacilityDetail = null
+            return
+        }
+
+        selectedMarkerId = markerId
+        selectedFacilityDetail = detail
+    }
+
+    private fun currentFacilityDetailSheetState(): MapFacilityDetailSheetState =
+        MapFacilityDetailSheetState(detail = selectedFacilityDetail)
 
     private fun emitUiEvent(event: MapUiEvent) {
         viewModelScope.launch {

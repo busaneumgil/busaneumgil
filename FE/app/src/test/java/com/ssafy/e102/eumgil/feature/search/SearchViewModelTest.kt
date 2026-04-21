@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.search
 
+import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
@@ -7,6 +8,7 @@ import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -15,12 +17,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `search result click stores selected destination and emits map navigation`() =
+    fun `search result click stores selected destination and emits route setting navigation`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val viewModel =
@@ -31,10 +34,11 @@ class SearchViewModelTest {
             val result =
                 SearchResult(
                     placeId = "place-1",
-                    title = "부산시청",
-                    subtitle = "부산 연제구 중앙대로 1001",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
                     latitude = 35.1797,
                     longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
                 )
 
             advanceUntilIdle()
@@ -44,7 +48,7 @@ class SearchViewModelTest {
             advanceUntilIdle()
 
             assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
-            assertEquals(SearchUiEvent.NavigateToMap, uiEvent.await())
+            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
         }
 }
 

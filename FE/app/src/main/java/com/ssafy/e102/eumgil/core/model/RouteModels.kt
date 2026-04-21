@@ -5,6 +5,7 @@ data class RouteWaypoint(
     val placeId: String? = null,
     val address: String? = null,
     val coordinate: GeoCoordinate,
+    val category: PlaceCategory? = null,
 )
 
 data class RouteSearchQuery(
@@ -211,4 +212,5 @@ fun PlaceDestination.toRouteWaypoint(): RouteWaypoint =
                 latitude = latitude,
                 longitude = longitude,
             ),
+        category = category,
     )

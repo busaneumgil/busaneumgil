@@ -48,7 +48,7 @@ class SearchViewModel(
 
     private fun selectSearchResult(result: SearchResult) {
         destinationSelectionRepository.updateSelectedDestination(result.toPlaceDestination())
-        emitUiEvent(SearchUiEvent.NavigateToMap)
+        emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
     }
 
     private fun updateQuery(query: String) {

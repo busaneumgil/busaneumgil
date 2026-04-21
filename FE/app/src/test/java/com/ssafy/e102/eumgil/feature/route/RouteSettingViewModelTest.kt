@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -55,6 +56,8 @@ class RouteSettingViewModelTest {
 
             assertFalse(uiState.isLoading)
             assertEquals(RouteOption.SAFE, uiState.selectedOption)
+            assertEquals("place-1", uiState.destination.placeId)
+            assertEquals(PlaceCategory.RESTAURANT, uiState.destination.category)
             assertEquals("현재 위치", uiState.origin.name)
             assertEquals("카페 온도", uiState.destination.name)
             assertFalse(uiState.isUsingFallbackDestination)
@@ -278,6 +281,7 @@ private fun testDestination(): PlaceDestination =
         address = "부산 부산진구 중앙대로 1001",
         latitude = 35.1797,
         longitude = 129.0750,
+        category = PlaceCategory.RESTAURANT,
     )
 
 private fun partialRouteRepository(): RouteRepository =

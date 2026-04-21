@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.route
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
@@ -25,9 +26,11 @@ data class RouteSettingUiState(
 }
 
 data class RouteLocationUiState(
+    val placeId: String? = null,
     val name: String = "",
     val supportingText: String? = null,
     val coordinate: GeoCoordinate? = null,
+    val category: PlaceCategory? = null,
 )
 
 data class RouteOptionCardUiState(

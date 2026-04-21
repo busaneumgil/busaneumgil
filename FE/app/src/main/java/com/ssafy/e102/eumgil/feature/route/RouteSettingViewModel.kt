@@ -335,9 +335,11 @@ class RouteSettingViewModel(
 
 private fun RouteWaypoint.toLocationUiState(addressFallback: String?): RouteLocationUiState =
     RouteLocationUiState(
+        placeId = placeId,
         name = name.orEmpty(),
         supportingText = address?.takeIf { value -> value.isNotBlank() } ?: addressFallback,
         coordinate = coordinate,
+        category = category,
     )
 
 private fun RouteSummary.toSummaryLabel(): String =

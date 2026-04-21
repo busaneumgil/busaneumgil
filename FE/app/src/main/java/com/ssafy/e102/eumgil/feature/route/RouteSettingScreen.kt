@@ -51,30 +51,21 @@ fun RouteSettingScreen(
     modifier: Modifier = Modifier,
 ) {
     val description =
-        if (selectedDestination == null) {
+        if (uiState.isUsingFallbackDestination) {
             stringResource(id = R.string.route_setting_screen_description_empty)
         } else {
             stringResource(
                 id = R.string.route_setting_screen_description_with_destination,
-                selectedDestination.name,
+                uiState.destination.name,
             )
         }
 
-    EumPlaceholderScaffold(
-        title = stringResource(id = R.string.route_setting_screen_title),
-        description = description,
-        featurePath = stringResource(id = R.string.feature_path_route_setting),
-        actions =
-            listOf(
-                PlaceholderAction(
-                    label = stringResource(id = R.string.action_go_map),
-                    onClick = onNavigateBack,
-                    isPrimary = true,
-                ),
-            ),
+    Scaffold(
         modifier = modifier,
-        content = {
-            RouteSettingDestinationCard(selectedDestination = selectedDestination)
+        topBar = {
+            RouteSettingTopBar(
+                onBackClick = { onAction(RouteSettingUiAction.BackClicked) },
+            )
         },
         bottomBar = {
             RouteSettingBottomBar(
@@ -92,6 +83,11 @@ fun RouteSettingScreen(
                     .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
+            RouteSettingDestinationCard(
+                destination = uiState.destination,
+                description = description,
+                isUsingFallbackDestination = uiState.isUsingFallbackDestination,
+            )
             RouteWaypointSection(uiState = uiState)
             RouteOptionSection(
                 optionCards = uiState.optionCards,
@@ -124,30 +120,102 @@ private fun RouteSettingTopBar(
             TextButton(onClick = onBackClick) {
                 Text(text = stringResource(id = R.string.route_setting_back))
             }
-
-            RouteSettingDestinationField(
-                label = stringResource(id = R.string.route_setting_destination_name_label),
-                value = selectedDestination.name,
-            )
-            val address =
-                selectedDestination.address
-                    ?: stringResource(id = R.string.route_setting_destination_address_empty)
-            val coordinate =
-                stringResource(
-                    id = R.string.route_setting_destination_coordinate_value,
-                    selectedDestination.latitude,
-                    selectedDestination.longitude,
-                )
-
-            RouteSettingDestinationField(
-                label = stringResource(id = R.string.route_setting_destination_address_label),
-                value = address,
-            )
-            RouteSettingDestinationField(
-                label = stringResource(id = R.string.route_setting_destination_coordinate_label),
-                value = coordinate,
+            Text(
+                text = stringResource(id = R.string.route_setting_screen_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
+    }
+}
+
+@Composable
+private fun RouteSettingDestinationCard(
+    destination: RouteLocationUiState,
+    description: String,
+    isUsingFallbackDestination: Boolean,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        shadowElevation = 2.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Text(
+                text = stringResource(id = R.string.route_setting_destination_section_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (destination.name.isBlank()) {
+                Text(
+                    text = stringResource(id = R.string.route_setting_destination_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                RouteSettingDestinationField(
+                    label = stringResource(id = R.string.route_setting_destination_name_label),
+                    value = destination.name,
+                )
+                RouteSettingDestinationField(
+                    label = stringResource(id = R.string.route_setting_destination_address_label),
+                    value =
+                        destination.supportingText
+                            ?: stringResource(id = R.string.route_setting_destination_address_empty),
+                )
+                destination.coordinate?.let { coordinate ->
+                    RouteSettingDestinationField(
+                        label = stringResource(id = R.string.route_setting_destination_coordinate_label),
+                        value =
+                            stringResource(
+                                id = R.string.route_setting_destination_coordinate_value,
+                                coordinate.latitude,
+                                coordinate.longitude,
+                            ),
+                    )
+                }
+            }
+
+            if (isUsingFallbackDestination) {
+                Text(
+                    text = stringResource(id = R.string.route_setting_destination_supporting_fallback),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteSettingDestinationField(
+    label: String,
+    value: String,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

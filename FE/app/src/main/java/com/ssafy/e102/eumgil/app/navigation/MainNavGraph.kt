@@ -57,8 +57,12 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToMap = {
-                navController.popBackStack()
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.route) {
+                    popUpTo(SearchRoute.Search.route) {
+                        inclusive = true
+                    }
+                }
             },
         )
     }
@@ -74,14 +78,6 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
 
     composable(route = ReportRoute.Report.route) {
         ReportScreenRoute(
-            onNavigateBack = {
-                navController.popBackStack()
-            },
-        )
-    }
-
-    composable(route = RouteSettingRoute.Setting.route) {
-        RouteSettingEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
             },

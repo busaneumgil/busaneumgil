@@ -80,6 +80,9 @@ data class RoutePreviewModel(
     val hasRenderableLine: Boolean
         get() = polyline.isRenderable
 
+    val hasFallbackSegments: Boolean
+        get() = fallbackSegmentCount > 0
+
     val skippedSegmentCount: Int
         get() = (segmentCount - renderableSegmentCount).coerceAtLeast(0)
 }
@@ -117,13 +120,82 @@ data class RouteCandidate(
 
     val hasRenderablePreview: Boolean
         get() = preview.hasRenderableLine
+
+    val renderableSegments: List<RouteSegment>
+        get() = segments.filter(RouteSegment::hasRenderablePolyline)
+
+    val hasFallbackSegments: Boolean
+        get() = preview.hasFallbackSegments
 }
 
 data class RouteSearchResult(
     val origin: RouteWaypoint,
     val destination: RouteWaypoint,
     val routes: List<RouteCandidate> = emptyList(),
-)
+) {
+    val primaryRoute: RouteCandidate?
+        get() = routes.firstOrNull()
+
+    val availableOptions: List<RouteOption>
+        get() = routes.map(RouteCandidate::routeOption)
+
+    val renderableRoutes: List<RouteCandidate>
+        get() = routes.filter(RouteCandidate::hasRenderablePreview)
+
+    fun findRoute(routeOption: RouteOption): RouteCandidate? =
+        routes.firstOrNull { route -> route.routeOption == routeOption }
+}
+
+enum class RouteSearchSourceType {
+    MOCK_FIXTURE,
+}
+
+data class RouteSearchSource(
+    val type: RouteSearchSourceType,
+    val label: String,
+    val fixtureId: String? = null,
+    val isFromCache: Boolean = false,
+) {
+    init {
+        require(label.isNotBlank()) { "Route search source label must not be blank." }
+    }
+
+    fun asCached(): RouteSearchSource = copy(isFromCache = true)
+
+    companion object {
+        fun mockFixture(
+            fixtureId: String,
+            label: String,
+            isFromCache: Boolean = false,
+        ): RouteSearchSource =
+            RouteSearchSource(
+                type = RouteSearchSourceType.MOCK_FIXTURE,
+                label = label,
+                fixtureId = fixtureId,
+                isFromCache = isFromCache,
+            )
+    }
+}
+
+data class RouteSearchData(
+    val query: RouteSearchQuery,
+    val result: RouteSearchResult,
+    val source: RouteSearchSource,
+) {
+    val routes: List<RouteCandidate>
+        get() = result.routes
+
+    val primaryRoute: RouteCandidate?
+        get() = result.primaryRoute
+
+    val availableOptions: List<RouteOption>
+        get() = result.availableOptions
+
+    val renderableRoutes: List<RouteCandidate>
+        get() = result.renderableRoutes
+
+    fun findRoute(routeOption: RouteOption): RouteCandidate? = result.findRoute(routeOption)
+}
 
 object RouteDefaults {
     const val DEFAULT_GUIDANCE_MESSAGE: String = "Continue on the suggested route."

@@ -40,6 +40,15 @@ class MockRouteFixturesTest {
     }
 
     @Test
+    fun `resolveSearchRequest exposes fixture metadata together with response payload`() {
+        val payload = MockRouteFixtures.resolveSearchRequest(testRequest())
+
+        assertEquals("busan-cityhall-to-station-demo", payload.fixtureId)
+        assertEquals("Busan City Hall to Busan Station demo route", payload.fixtureName)
+        assertEquals(payload.response, MockRouteFixtures.searchRoutes(payload.request))
+    }
+
+    @Test
     fun `default fixture catalog keeps at least one canned route option for downstream parser consumers`() {
         val fixture = MockRouteFixtures.defaultFixture
 

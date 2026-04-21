@@ -1,22 +1,22 @@
 package com.ssafy.e102.eumgil.data.local.datasource
 
+import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
-import com.ssafy.e102.eumgil.core.model.RouteSearchResult
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 class RouteLocalDataSource {
-    private val searchResultsByQuery = ConcurrentHashMap<String, RouteSearchResult>()
+    private val searchDataByQuery = ConcurrentHashMap<String, RouteSearchData>()
 
-    suspend fun getCachedSearchResult(query: RouteSearchQuery): RouteSearchResult? =
-        searchResultsByQuery[query.cacheKey()]
+    suspend fun getCachedSearchData(query: RouteSearchQuery): RouteSearchData? =
+        searchDataByQuery[query.cacheKey()]
 
-    suspend fun updateCachedSearchResult(
+    suspend fun updateCachedSearchData(
         query: RouteSearchQuery,
-        result: RouteSearchResult,
+        searchData: RouteSearchData,
     ) {
-        searchResultsByQuery[query.cacheKey()] = result
+        searchDataByQuery[query.cacheKey()] = searchData
     }
 
     private fun RouteSearchQuery.cacheKey(): String =

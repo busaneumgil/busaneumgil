@@ -4,10 +4,12 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteDefaults
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteSearchSourceType
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
+import com.ssafy.e102.eumgil.data.mock.fixture.RouteFixtureSearchPayload
 import com.ssafy.e102.eumgil.data.route.RouteDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSegmentDto
@@ -19,7 +21,7 @@ import org.junit.Test
 
 class RouteRepositoryTest {
     @Test
-    fun `searchRoutes returns fixture backed SAFE and SHORTEST routes and caches the result`() =
+    fun `getRouteSearchData returns fixture backed SAFE and SHORTEST routes and caches the result`() =
         runBlocking {
             val localDataSource = RouteLocalDataSource()
             val repository =
@@ -29,13 +31,20 @@ class RouteRepositoryTest {
                 )
             val query = testRouteQuery()
 
-            val result = repository.searchRoutes(query)
-            val cachedResult = localDataSource.getCachedSearchResult(query)
+            val searchData = repository.getRouteSearchData(query)
+            val cachedSearchData = localDataSource.getCachedSearchData(query)
+            val cachedRead = repository.getRouteSearchData(query)
 
-            assertEquals(listOf(RouteOption.SAFE, RouteOption.SHORTEST), result.routes.map { route -> route.routeOption })
-            assertTrue(result.routes.all { route -> route.previewPolyline.isRenderable })
-            assertTrue(result.routes.all { route -> route.preview.segmentCount > 0 })
-            assertEquals(result, cachedResult)
+            assertEquals(RouteSearchSourceType.MOCK_FIXTURE, searchData.source.type)
+            assertEquals("busan-cityhall-to-station-demo", searchData.source.fixtureId)
+            assertEquals("Busan City Hall to Busan Station demo route", searchData.source.label)
+            assertEquals(listOf(RouteOption.SAFE, RouteOption.SHORTEST), searchData.result.availableOptions)
+            assertTrue(searchData.routes.all { route -> route.previewPolyline.isRenderable })
+            assertTrue(searchData.routes.all { route -> route.preview.segmentCount > 0 })
+            assertEquals(searchData, cachedSearchData)
+            assertTrue(searchData.primaryRoute?.hasRenderablePreview == true)
+            assertTrue(cachedRead.source.isFromCache)
+            assertEquals(searchData.result, cachedRead.result)
         }
 
     @Test
@@ -46,37 +55,43 @@ class RouteRepositoryTest {
                     localDataSource = RouteLocalDataSource(),
                     mockDataSource =
                         RouteMockDataSource(
-                            fixtureProvider = {
-                                RouteSearchResponseDto(
-                                    routes =
-                                        listOf(
-                                            RouteDto(
-                                                routeOption = null,
-                                                title = " ",
-                                                distanceMeter = -1,
-                                                estimatedTimeMinute = null,
-                                                riskLevel = "unknown",
-                                                segments =
-                                                    listOf(
-                                                        RouteSegmentDto(
-                                                            sequence = -5,
-                                                            geometry = "POINT(129.0756 35.1796)",
-                                                            distanceMeter = -10,
-                                                            hasStairs = true,
-                                                            riskLevel = null,
-                                                            guidanceMessage = " ",
-                                                        ),
-                                                        RouteSegmentDto(
-                                                            sequence = 2,
-                                                            geometry =
-                                                                "LINESTRING(129.075600 35.179600, 129.076100 35.180000)",
-                                                            distanceMeter = 120,
-                                                            hasCrosswalk = true,
-                                                            riskLevel = "LOW",
-                                                            guidanceMessage = "Use the marked crosswalk.",
-                                                        ),
+                            fixturePayloadProvider = { request ->
+                                RouteFixtureSearchPayload(
+                                    fixtureId = "custom-invalid-dto-fixture",
+                                    fixtureName = "Invalid DTO fixture",
+                                    request = request,
+                                    response =
+                                        RouteSearchResponseDto(
+                                            routes =
+                                                listOf(
+                                                    RouteDto(
+                                                        routeOption = null,
+                                                        title = " ",
+                                                        distanceMeter = -1,
+                                                        estimatedTimeMinute = null,
+                                                        riskLevel = "unknown",
+                                                        segments =
+                                                            listOf(
+                                                                RouteSegmentDto(
+                                                                    sequence = -5,
+                                                                    geometry = "POINT(129.0756 35.1796)",
+                                                                    distanceMeter = -10,
+                                                                    hasStairs = true,
+                                                                    riskLevel = null,
+                                                                    guidanceMessage = " ",
+                                                                ),
+                                                                RouteSegmentDto(
+                                                                    sequence = 2,
+                                                                    geometry =
+                                                                        "LINESTRING(129.075600 35.179600, 129.076100 35.180000)",
+                                                                    distanceMeter = 120,
+                                                                    hasCrosswalk = true,
+                                                                    riskLevel = "LOW",
+                                                                    guidanceMessage = "Use the marked crosswalk.",
+                                                                ),
+                                                            ),
                                                     ),
-                                            ),
+                                                ),
                                         ),
                                 )
                             },
@@ -103,6 +118,9 @@ class RouteRepositoryTest {
             assertEquals(1, route.preview.renderableSegmentCount)
             assertEquals(1, route.preview.fallbackSegmentCount)
             assertTrue(route.previewPolyline.isRenderable)
+            assertEquals(secondSegment, route.renderableSegments.single())
+            assertTrue(route.hasFallbackSegments)
+            assertEquals(route, result.findRoute(RouteOption.SAFE))
             assertNotNull(route.previewPolyline.start)
             assertNotNull(route.previewPolyline.end)
         }

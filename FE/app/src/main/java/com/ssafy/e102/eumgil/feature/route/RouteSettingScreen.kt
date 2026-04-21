@@ -51,13 +51,21 @@ fun RouteSettingScreen(
     modifier: Modifier = Modifier,
 ) {
     val description =
-        if (uiState.isUsingFallbackDestination) {
-            stringResource(id = R.string.route_setting_screen_description_empty)
-        } else {
-            stringResource(
-                id = R.string.route_setting_screen_description_with_destination,
-                uiState.destination.name,
-            )
+        when (uiState.destinationHandoffState) {
+            RouteDestinationHandoffState.DIRECT ->
+                stringResource(
+                    id = R.string.route_setting_screen_description_with_destination,
+                    uiState.destination.name,
+                )
+
+            RouteDestinationHandoffState.EMPTY ->
+                stringResource(id = R.string.route_setting_screen_description_empty)
+
+            RouteDestinationHandoffState.INVALID_COORDINATE ->
+                stringResource(
+                    id = R.string.route_setting_screen_description_invalid_handoff,
+                    uiState.destination.name,
+                )
         }
 
     Scaffold(
@@ -86,7 +94,7 @@ fun RouteSettingScreen(
             RouteSettingDestinationCard(
                 destination = uiState.destination,
                 description = description,
-                isUsingFallbackDestination = uiState.isUsingFallbackDestination,
+                fallbackMessage = uiState.destinationFallbackMessage,
             )
             RouteWaypointSection(uiState = uiState)
             RouteOptionSection(
@@ -133,7 +141,7 @@ private fun RouteSettingTopBar(
 private fun RouteSettingDestinationCard(
     destination: RouteLocationUiState,
     description: String,
-    isUsingFallbackDestination: Boolean,
+    fallbackMessage: String?,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -194,9 +202,9 @@ private fun RouteSettingDestinationCard(
                 }
             }
 
-            if (isUsingFallbackDestination) {
+            fallbackMessage?.takeIf(String::isNotBlank)?.let { message ->
                 Text(
-                    text = stringResource(id = R.string.route_setting_destination_supporting_fallback),
+                    text = message,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -256,9 +264,9 @@ private fun RouteWaypointSection(
                 location = uiState.destination,
                 accentColor = MaterialTheme.colorScheme.error,
             )
-            if (uiState.isUsingFallbackDestination) {
+            uiState.destinationFallbackMessage?.takeIf(String::isNotBlank)?.let { message ->
                 Text(
-                    text = stringResource(id = R.string.route_setting_destination_supporting_fallback),
+                    text = message,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

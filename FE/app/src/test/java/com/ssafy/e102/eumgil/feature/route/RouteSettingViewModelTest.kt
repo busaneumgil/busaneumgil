@@ -122,12 +122,15 @@ class RouteSettingViewModelTest {
             val uiState = viewModel.uiState.value
 
             assertTrue(uiState.isUsingFallbackDestination)
+            assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
+            assertEquals("검색 handoff 전에는 fixture 목적지를 기본 도착지로 유지합니다.", uiState.destinationFallbackMessage)
             assertEquals(null, uiState.destination.metadataLabel)
             assertEquals("부산역", uiState.destination.name)
             assertEquals("부산 동구 중앙대로 206", uiState.destination.supportingText)
             assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
-            assertTrue(uiState.isStartEnabled)
+            assertFalse(uiState.isStartEnabled)
+            assertEquals("검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다.", uiState.cta.supportingText)
         }
 
     @Test
@@ -150,11 +153,39 @@ class RouteSettingViewModelTest {
             val uiState = viewModel.uiState.value
 
             assertFalse(uiState.isUsingFallbackDestination)
+            assertEquals(RouteDestinationHandoffState.DIRECT, uiState.destinationHandoffState)
+            assertEquals(null, uiState.destinationFallbackMessage)
             assertEquals("place-1", uiState.destination.placeId)
             assertEquals(PlaceCategory.RESTAURANT, uiState.destination.category)
             assertEquals("ID place-1 | Category RESTAURANT", uiState.destination.metadataLabel)
             assertEquals("카페 온도", uiState.destination.name)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+        }
+
+    @Test
+    fun `invalid destination coordinates fall back to fixture destination and disable start action`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(invalidDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertTrue(uiState.isUsingFallbackDestination)
+            assertEquals(RouteDestinationHandoffState.INVALID_COORDINATE, uiState.destinationHandoffState)
+            assertEquals("선택한 목적지 좌표를 확인할 수 없어 fixture 목적지로 대체했습니다.", uiState.destinationFallbackMessage)
+            assertEquals("부산역", uiState.destination.name)
+            assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+            assertFalse(uiState.isStartEnabled)
+            assertEquals("목적지 좌표를 다시 확인하면 안내 시작을 활성화합니다.", uiState.cta.supportingText)
         }
 
     @Test
@@ -194,6 +225,32 @@ class RouteSettingViewModelTest {
                 "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다.",
                 selectedRoute.previewFallbackNotice,
             )
+        }
+
+    @Test
+    fun `clearing selected destination returns route setting to fallback shell`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            destinationSelectionRepository.clearSelectedDestination()
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertTrue(uiState.isUsingFallbackDestination)
+            assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
+            assertEquals("부산역", uiState.destination.name)
+            assertEquals(RouteOption.SAFE, uiState.selectedOption)
+            assertFalse(uiState.isStartEnabled)
         }
 
     @Test
@@ -271,6 +328,36 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `same destination reselection reloads route shell and resets option to SAFE`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = CountingRouteRepository()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(RouteOption.SHORTEST))
+            advanceUntilIdle()
+
+            destinationSelectionRepository.updateSelectedDestination(testDestination())
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(2, routeRepository.callCount)
+            assertEquals(RouteOption.SAFE, uiState.selectedOption)
+            assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
+            assertEquals("Safe Route #2", uiState.selectedRoute?.title)
+            assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+        }
+
+    @Test
     fun `start action acknowledges pending handoff and emits navigation request`() =
         runTest {
             val destinationSelectionRepository =
@@ -315,6 +402,16 @@ private fun testDestination(): PlaceDestination =
         latitude = 35.1797,
         longitude = 129.0750,
         category = PlaceCategory.RESTAURANT,
+    )
+
+private fun invalidDestination(): PlaceDestination =
+    PlaceDestination(
+        placeId = "place-invalid",
+        name = "좌표 누락 목적지",
+        address = "알 수 없는 위치",
+        latitude = Double.NaN,
+        longitude = 129.0750,
+        category = PlaceCategory.OTHER,
     )
 
 private fun partialRouteRepository(): RouteRepository =
@@ -390,3 +487,91 @@ private fun failingRouteRepository(): RouteRepository =
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
             error("fixture load failed")
     }
+
+private class CountingRouteRepository : RouteRepository {
+    var callCount: Int = 0
+        private set
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        callCount += 1
+        val countLabel = callCount
+        return RouteSearchData(
+            query = query,
+            result =
+                RouteSearchResult(
+                    origin = query.origin,
+                    destination = query.destination,
+                    routes =
+                        listOf(
+                            RouteCandidate(
+                                routeOption = RouteOption.SAFE,
+                                title = "Safe Route #$countLabel",
+                                summary =
+                                    RouteSummary(
+                                        distanceMeters = 900 + countLabel,
+                                        estimatedTimeMinutes = 15 + countLabel,
+                                        riskLevel = RouteRiskLevel.LOW,
+                                    ),
+                                preview =
+                                    RoutePreviewModel(
+                                        polyline =
+                                            RoutePolyline(
+                                                points =
+                                                    listOf(
+                                                        query.origin.coordinate,
+                                                        query.destination.coordinate,
+                                                    ),
+                                            ),
+                                        segmentCount = 1,
+                                        renderableSegmentCount = 1,
+                                        fallbackSegmentCount = 0,
+                                    ),
+                                segments =
+                                    listOf(
+                                        RouteSegment(
+                                            sequence = 1,
+                                            guidanceMessage = "Safe guidance #$countLabel",
+                                        ),
+                                    ),
+                            ),
+                            RouteCandidate(
+                                routeOption = RouteOption.SHORTEST,
+                                title = "Shortest Route #$countLabel",
+                                summary =
+                                    RouteSummary(
+                                        distanceMeters = 800 + countLabel,
+                                        estimatedTimeMinutes = 13 + countLabel,
+                                        riskLevel = RouteRiskLevel.MEDIUM,
+                                    ),
+                                preview =
+                                    RoutePreviewModel(
+                                        polyline =
+                                            RoutePolyline(
+                                                points =
+                                                    listOf(
+                                                        query.origin.coordinate,
+                                                        query.destination.coordinate,
+                                                    ),
+                                            ),
+                                        segmentCount = 1,
+                                        renderableSegmentCount = 1,
+                                        fallbackSegmentCount = 0,
+                                    ),
+                                segments =
+                                    listOf(
+                                        RouteSegment(
+                                            sequence = 1,
+                                            guidanceMessage = "Shortest guidance #$countLabel",
+                                        ),
+                                    ),
+                            ),
+                        ),
+                ),
+            source =
+                RouteSearchSource.mockFixture(
+                    fixtureId = "counting-fixture-$countLabel",
+                    label = "Counting route fixture #$countLabel",
+                ),
+        )
+    }
+}

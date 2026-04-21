@@ -20,6 +20,13 @@ fun SearchResult.toPlaceDestination(): PlaceDestination =
         category = category,
     )
 
+fun SearchResult.toPlaceDestinationOrNull(): PlaceDestination? =
+    if (hasValidCoordinate(latitude = latitude, longitude = longitude)) {
+        toPlaceDestination()
+    } else {
+        null
+    }
+
 // 119 fixes the facility-detail handoff contract here so 200/214 can reuse it without branching by source.
 fun FacilityDetailSeed.toPlaceDestination(): PlaceDestination =
     PlaceDestination(
@@ -30,6 +37,25 @@ fun FacilityDetailSeed.toPlaceDestination(): PlaceDestination =
         longitude = coordinate.longitude,
         category = category.toPlaceCategory(),
     )
+
+fun PlaceDestination.hasValidCoordinate(): Boolean =
+    hasValidCoordinate(latitude = latitude, longitude = longitude)
+
+fun PlaceDestination.toRouteWaypointOrNull(): RouteWaypoint? =
+    if (hasValidCoordinate()) {
+        toRouteWaypoint()
+    } else {
+        null
+    }
+
+private fun hasValidCoordinate(
+    latitude: Double,
+    longitude: Double,
+): Boolean = latitude.isValidLatitude() && longitude.isValidLongitude()
+
+private fun Double.isValidLatitude(): Boolean = isFinite() && this in -90.0..90.0
+
+private fun Double.isValidLongitude(): Boolean = isFinite() && this in -180.0..180.0
 
 private fun FacilityCategory.toPlaceCategory(): PlaceCategory =
     when (this) {

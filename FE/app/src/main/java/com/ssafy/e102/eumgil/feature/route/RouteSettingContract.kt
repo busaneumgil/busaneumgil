@@ -13,6 +13,8 @@ data class RouteSettingUiState(
     val loadErrorMessage: String? = null,
     val origin: RouteLocationUiState = RouteLocationUiState(),
     val destination: RouteLocationUiState = RouteLocationUiState(),
+    val destinationHandoffState: RouteDestinationHandoffState = RouteDestinationHandoffState.EMPTY,
+    val destinationFallbackMessage: String? = null,
     val isUsingFallbackDestination: Boolean = true,
     val selectedOption: RouteOption = RouteOption.SAFE,
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
@@ -87,6 +89,12 @@ data class RouteOptionCardMetricUiState(
     val label: String,
     val value: String,
 )
+
+enum class RouteDestinationHandoffState {
+    DIRECT,
+    EMPTY,
+    INVALID_COORDINATE,
+}
 
 enum class RouteOptionBadge {
     SAFE_PRIORITY,

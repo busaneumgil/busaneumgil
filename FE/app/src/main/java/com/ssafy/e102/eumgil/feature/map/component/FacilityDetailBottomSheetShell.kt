@@ -55,6 +55,7 @@ fun FacilityDetailBottomSheetShell(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     detailContent: @Composable ColumnScope.() -> Unit,
+    bookmarkContent: (@Composable ColumnScope.() -> Unit)? = null,
     actionContent: @Composable ColumnScope.() -> Unit,
 ) {
     val scrimInteractionSource = remember { MutableInteractionSource() }
@@ -168,6 +169,17 @@ fun FacilityDetailBottomSheetShell(
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         content = detailContent,
                     )
+
+                    bookmarkContent?.let { slotContent ->
+                        // 119 reserves a dedicated bookmark slot so 212 can wire toggle/persistence
+                        // without reshaping the bottom-sheet section order.
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                            content = slotContent,
+                        )
+                    }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 

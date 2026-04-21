@@ -114,6 +114,12 @@ fun MapScreen(
                         description = facilityDetailSheetUiState.guideMessage,
                     )
                 },
+                bookmarkContent = {
+                    FacilityDetailSlotCard(
+                        title = stringResource(id = R.string.map_facility_detail_bookmark_section_title),
+                        description = stringResource(id = R.string.map_facility_detail_bookmark_placeholder),
+                    )
+                },
                 actionContent = {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),

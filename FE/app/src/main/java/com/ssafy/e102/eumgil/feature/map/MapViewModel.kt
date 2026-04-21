@@ -152,14 +152,14 @@ class MapViewModel(
     }
 
     private fun dismissFacilityDetailSheet() {
-        if (selectedMarkerId == null && selectedFacilityDetail == null) return
-
-        updateSelectedFacility(markerId = null)
+        if (!clearSelectedFacilitySelection()) return
         renderSelectedFacilityState()
     }
 
     private fun handleFacilityRouteEntryClicked() {
         val destination = selectedFacilityDetail?.toPlaceDestination() ?: return
+        clearSelectedFacilitySelection()
+        renderSelectedFacilityState()
         destinationSelectionRepository.updateSelectedDestination(destination)
         emitUiEvent(MapUiEvent.NavigateToFacilityRouteEntry)
     }
@@ -260,6 +260,10 @@ class MapViewModel(
     private fun observeSelectionRequests() {
         viewModelScope.launch {
             destinationSelectionRepository.selectionRequests.collectLatest { destination ->
+                // Any destination handoff should close stale facility detail state before the map recenters.
+                if (clearSelectedFacilitySelection()) {
+                    renderSelectedFacilityState()
+                }
                 syncCameraToSelectedDestination(
                     destination = destination,
                     incrementRequestId = true,
@@ -562,6 +566,14 @@ class MapViewModel(
                 facilityDetailSheetState = currentFacilityDetailSheetState(),
             )
         }
+    }
+
+    private fun clearSelectedFacilitySelection(): Boolean {
+        if (selectedMarkerId == null && selectedFacilityDetail == null) return false
+
+        selectedMarkerId = null
+        selectedFacilityDetail = null
+        return true
     }
 
     private fun updateSelectedFacility(

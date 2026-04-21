@@ -321,6 +321,8 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertEquals(selectedDetail.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
+            assertEquals(null, viewModel.uiState.value.selectedMarkerId)
+            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
             assertEquals(MapUiEvent.NavigateToFacilityRouteEntry, eventDeferred.await())
         }
 
@@ -349,6 +351,37 @@ class MapViewModelTest {
 
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
+        }
+
+    @Test
+    fun `external destination selection clears facility detail state before recentering`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+            val destination = testDestination()
+
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+
+            destinationSelectionRepository.updateSelectedDestination(destination)
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.selectedMarkerId)
+            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
+            assertEquals(destination, viewModel.uiState.value.selectedDestination)
+            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
         }
 
     @Test

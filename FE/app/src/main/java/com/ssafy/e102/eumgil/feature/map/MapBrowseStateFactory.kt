@@ -3,16 +3,16 @@ package com.ssafy.e102.eumgil.feature.map
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityMarkerSeed
+import com.ssafy.e102.eumgil.feature.map.model.MapBrailleBlockFilterOption
+import com.ssafy.e102.eumgil.feature.map.model.MapCategoryFilterOption
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
-import com.ssafy.e102.eumgil.feature.map.model.MapBrailleBlockFilterOption
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
-import com.ssafy.e102.eumgil.feature.map.model.MapCategoryFilterOption
 
 internal object MapBrowseStateFactory {
     fun createMarkerOverlayState(
@@ -47,7 +47,28 @@ internal object MapBrowseStateFactory {
     ): MapMarkerFilterUiState {
         val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
         val allMarkers = browseData.allMarkers
-        val visibleMarkers = overlayState.markers
+        val visibleMarkers =
+            overlayState.markers.filter { marker ->
+                marker.displayState == MapMarkerDisplayState.VISIBLE
+            }
+        val totalMarkerCountByCategory =
+            allMarkers
+                .groupingBy { marker -> marker.category }
+                .eachCount()
+        val visibleMarkerCountByCategory =
+            visibleMarkers
+                .groupingBy { marker -> marker.categoryType.category }
+                .eachCount()
+        val totalBrailleBlockCountByType =
+            browseData.brailleBlockMarkers
+                .mapNotNull { marker -> marker.brailleBlockType }
+                .groupingBy { brailleBlockType -> brailleBlockType }
+                .eachCount()
+        val visibleBrailleBlockCountByType =
+            visibleMarkers
+                .mapNotNull { marker -> marker.categoryType.brailleBlockType }
+                .groupingBy { brailleBlockType -> brailleBlockType }
+                .eachCount()
 
         return MapMarkerFilterUiState(
             loadStatus = MapMarkerLoadStatus.READY,
@@ -56,13 +77,8 @@ internal object MapBrowseStateFactory {
                 browseData.availableCategories.map { category ->
                     MapCategoryFilterOption(
                         category = category,
-                        totalMarkerCount =
-                            allMarkers.count { marker -> marker.category == category },
-                        visibleMarkerCount =
-                            visibleMarkers.count { marker ->
-                                marker.displayState == MapMarkerDisplayState.VISIBLE &&
-                                    marker.categoryType.category == category
-                            },
+                        totalMarkerCount = totalMarkerCountByCategory[category] ?: 0,
+                        visibleMarkerCount = visibleMarkerCountByCategory[category] ?: 0,
                         isSelected = normalizedSelection.isCategorySelected(category),
                     )
                 },
@@ -70,15 +86,8 @@ internal object MapBrowseStateFactory {
                 browseData.availableBrailleBlockTypes.map { brailleBlockType ->
                     MapBrailleBlockFilterOption(
                         brailleBlockType = brailleBlockType,
-                        totalMarkerCount =
-                            browseData.brailleBlockMarkers.count { marker ->
-                                marker.brailleBlockType == brailleBlockType
-                            },
-                        visibleMarkerCount =
-                            visibleMarkers.count { marker ->
-                                marker.displayState == MapMarkerDisplayState.VISIBLE &&
-                                    marker.categoryType.brailleBlockType == brailleBlockType
-                            },
+                        totalMarkerCount = totalBrailleBlockCountByType[brailleBlockType] ?: 0,
+                        visibleMarkerCount = visibleBrailleBlockCountByType[brailleBlockType] ?: 0,
                         isSelected =
                             normalizedSelection.isBrailleBlockTypeSelected(brailleBlockType),
                     )

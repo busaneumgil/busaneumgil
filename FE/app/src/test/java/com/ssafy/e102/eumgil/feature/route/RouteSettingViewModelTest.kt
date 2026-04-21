@@ -58,6 +58,7 @@ class RouteSettingViewModelTest {
             assertEquals(RouteOption.SAFE, uiState.selectedOption)
             assertEquals("place-1", uiState.destination.placeId)
             assertEquals(PlaceCategory.RESTAURANT, uiState.destination.category)
+            assertEquals("ID place-1 | Category RESTAURANT", uiState.destination.metadataLabel)
             assertEquals("현재 위치", uiState.origin.name)
             assertEquals("카페 온도", uiState.destination.name)
             assertFalse(uiState.isUsingFallbackDestination)
@@ -98,6 +99,7 @@ class RouteSettingViewModelTest {
                 listOf("예상 시간", "예상 거리", "위험도", "렌더링 구간"),
                 uiState.selectedRoute?.summaryMetrics?.map(RouteSummaryMetricUiState::label),
             )
+            assertEquals(uiState.destination, uiState.selectedRoute?.destination)
             assertTrue(uiState.selectedRoute?.previewPoints?.size ?: 0 >= 2)
             assertEquals(null, uiState.selectedRoute?.previewFallbackNotice)
             assertTrue(uiState.cta.isEnabled)
@@ -120,10 +122,39 @@ class RouteSettingViewModelTest {
             val uiState = viewModel.uiState.value
 
             assertTrue(uiState.isUsingFallbackDestination)
+            assertEquals(null, uiState.destination.metadataLabel)
             assertEquals("부산역", uiState.destination.name)
             assertEquals("부산 동구 중앙대로 206", uiState.destination.supportingText)
             assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
+            assertEquals(uiState.destination, uiState.selectedRoute?.destination)
             assertTrue(uiState.isStartEnabled)
+        }
+
+    @Test
+    fun `selected destination update replaces fallback destination metadata after init`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isUsingFallbackDestination)
+            assertEquals(null, viewModel.uiState.value.destination.metadataLabel)
+
+            destinationSelectionRepository.updateSelectedDestination(testDestination())
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.isUsingFallbackDestination)
+            assertEquals("place-1", uiState.destination.placeId)
+            assertEquals(PlaceCategory.RESTAURANT, uiState.destination.category)
+            assertEquals("ID place-1 | Category RESTAURANT", uiState.destination.metadataLabel)
+            assertEquals("카페 온도", uiState.destination.name)
+            assertEquals(uiState.destination, uiState.selectedRoute?.destination)
         }
 
     @Test
@@ -158,6 +189,7 @@ class RouteSettingViewModelTest {
             assertEquals("위험도 보통", selectedRoute.riskLabel)
             assertEquals("0/2", selectedRoute.renderableSegmentLabel)
             assertEquals("선택한 경로를 따라 이동합니다.", selectedRoute.guidanceMessage)
+            assertEquals(uiState.destination, selectedRoute.destination)
             assertEquals(
                 "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다.",
                 selectedRoute.previewFallbackNotice,
@@ -226,6 +258,7 @@ class RouteSettingViewModelTest {
             assertEquals("최단 거리", uiState.selectedRoute?.optionTitle)
             assertEquals("Shortest Route", uiState.selectedRoute?.title)
             assertEquals(RouteRiskLevel.MEDIUM, uiState.selectedRoute?.riskLevel)
+            assertEquals(uiState.destination, uiState.selectedRoute?.destination)
             assertTrue(uiState.optionCards.single { card -> card.routeOption == RouteOption.SHORTEST }.isSelected)
             assertEquals(
                 "현재 선택됨",

@@ -31,6 +31,7 @@ data class RouteLocationUiState(
     val supportingText: String? = null,
     val coordinate: GeoCoordinate? = null,
     val category: PlaceCategory? = null,
+    val metadataLabel: String? = null,
 )
 
 data class RouteOptionCardUiState(
@@ -50,6 +51,7 @@ data class RouteOptionCardUiState(
 
 data class RouteSelectedRouteUiState(
     val routeOption: RouteOption,
+    val destination: RouteLocationUiState,
     val optionTitle: String,
     val title: String,
     val distanceMeters: Int,

@@ -156,6 +156,13 @@ private fun RouteSettingDestinationCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            destination.metadataLabel?.let { metadataLabel ->
+                Text(
+                    text = metadataLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
 
             if (destination.name.isBlank()) {
                 Text(
@@ -741,6 +748,13 @@ private fun RoutePreviewPanel(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            route.destination.name.takeIf(String::isNotBlank)?.let { destinationName ->
+                Text(
+                    text = destinationName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             if (route.previewPoints.size < 2) {
                 RouteStateCard(

@@ -155,6 +155,7 @@ class RouteSettingViewModel(
         ctaAcknowledged: Boolean,
     ): RouteSettingUiState {
         val availableRoutes = searchData.routes.sortedBy { route -> route.routeOption.routeSortOrder() }
+        val resolvedDestination = destinationLocationUiState(searchData.result.destination)
         val resolvedOption =
             if (searchData.findRoute(requestedOption) != null) {
                 requestedOption
@@ -164,13 +165,13 @@ class RouteSettingViewModel(
         val selectedRoute =
             searchData.findRoute(resolvedOption)
                 ?: availableRoutes.firstOrNull()
-        val selectedRouteUiState = selectedRoute?.toSelectedRouteUiState()
+        val selectedRouteUiState = selectedRoute?.toSelectedRouteUiState(destination = resolvedDestination)
 
         return RouteSettingUiState(
             isLoading = false,
             loadErrorMessage = null,
             origin = originLocationUiState(searchData.result.origin),
-            destination = destinationLocationUiState(searchData.result.destination),
+            destination = resolvedDestination,
             isUsingFallbackDestination = selectedDestination == null,
             selectedOption = resolvedOption,
             optionCards =
@@ -220,9 +221,10 @@ class RouteSettingViewModel(
             )
         }
 
-    private fun RouteCandidate.toSelectedRouteUiState(): RouteSelectedRouteUiState =
+    private fun RouteCandidate.toSelectedRouteUiState(destination: RouteLocationUiState): RouteSelectedRouteUiState =
         RouteSelectedRouteUiState(
             routeOption = routeOption,
+            destination = destination,
             optionTitle = routeOption.toOptionTitle(),
             title = title,
             distanceMeters = summary.distanceMeters,
@@ -340,7 +342,24 @@ private fun RouteWaypoint.toLocationUiState(addressFallback: String?): RouteLoca
         supportingText = address?.takeIf { value -> value.isNotBlank() } ?: addressFallback,
         coordinate = coordinate,
         category = category,
+        metadataLabel = buildLocationMetadataLabel(placeId = placeId, category = category),
     )
+
+private fun buildLocationMetadataLabel(
+    placeId: String?,
+    category: com.ssafy.e102.eumgil.core.model.PlaceCategory?,
+): String? {
+    val metadataParts = buildList {
+        placeId?.takeIf { value -> value.isNotBlank() }?.let { value ->
+            add("ID $value")
+        }
+        category?.let { value ->
+            add("Category ${value.name}")
+        }
+    }
+
+    return metadataParts.takeIf(List<String>::isNotEmpty)?.joinToString(separator = " | ")
+}
 
 private fun RouteSummary.toSummaryLabel(): String =
     "${estimatedTimeMinutes.toEstimatedTimeLabel()} · ${distanceMeters.toDistanceLabel()}"

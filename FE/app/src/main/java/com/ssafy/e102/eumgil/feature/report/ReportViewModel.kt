@@ -48,13 +48,7 @@ class ReportViewModel : ViewModel() {
         mutableUiState.update { state ->
             state.copy(
                 screenState = ReportScreenState.Editing,
-                reportType =
-                    state.reportType.copy(
-                        value = type,
-                        isTouched = true,
-                        isDirty = true,
-                        error = null,
-                    ),
+                reportType = state.reportType.withValue(type),
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -63,31 +57,35 @@ class ReportViewModel : ViewModel() {
     private fun touchReportType() {
         mutableUiState.update { state ->
             state.copy(
-                reportType = state.reportType.copy(isTouched = true),
+                reportType = state.reportType.validated(touched = true),
             )
         }
     }
 
     private fun setCurrentLocationShell() {
+        val shellLocation =
+            ReportLocation(
+                latitude = 35.1796,
+                longitude = 129.0756,
+                address = "부산광역시 부산진구 중앙대로 인근",
+            )
+
         selectLocation(
-            location =
-                ReportLocation(
-                    latitude = 35.1796,
-                    longitude = 129.0756,
-                    address = "부산광역시 부산진구 중앙대로 인근",
-                ),
+            location = shellLocation,
             source = ReportLocationSource.CurrentLocation,
         )
     }
 
     private fun setPickedLocationShell() {
+        val shellLocation =
+            ReportLocation(
+                latitude = 35.1578,
+                longitude = 129.0592,
+                address = "부산광역시 부산진구 서면역 인근",
+            )
+
         selectLocation(
-            location =
-                ReportLocation(
-                    latitude = 35.1578,
-                    longitude = 129.0592,
-                    address = "부산광역시 부산진구 서면역 인근",
-                ),
+            location = shellLocation,
             source = ReportLocationSource.MapPin,
         )
     }
@@ -99,16 +97,7 @@ class ReportViewModel : ViewModel() {
         mutableUiState.update { state ->
             state.copy(
                 screenState = ReportScreenState.Editing,
-                location =
-                    state.location.copy(
-                        value = location,
-                        addressText = location.address.orEmpty(),
-                        source = source,
-                        isTouched = true,
-                        isDirty = true,
-                        isResolvingCurrentLocation = false,
-                        error = null,
-                    ),
+                location = state.location.withValue(location, source),
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -121,18 +110,7 @@ class ReportViewModel : ViewModel() {
                 currentLocation?.copy(address = address.trim().ifEmpty { null })
 
             state.copy(
-                location =
-                    state.location.copy(
-                        value = updatedLocation,
-                        addressText = address,
-                        source =
-                            if (updatedLocation == null) {
-                                state.location.source
-                            } else {
-                                ReportLocationSource.AddressText
-                            },
-                        isDirty = true,
-                    ),
+                location = state.location.withAddress(address, updatedLocation),
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -140,7 +118,7 @@ class ReportViewModel : ViewModel() {
 
     private fun touchLocation() {
         mutableUiState.update { state ->
-            state.copy(location = state.location.copy(isTouched = true))
+            state.copy(location = state.location.validated(touched = true))
         }
     }
 
@@ -157,26 +135,22 @@ class ReportViewModel : ViewModel() {
     private fun selectPhoto(photo: ReportPhoto) {
         mutableUiState.update { state ->
             state.copy(
-                photo =
-                    state.photo.copy(
-                        value = photo,
-                        isTouched = true,
-                        isDirty = true,
-                        error = null,
-                    ),
+                photo = state.photo.withValue(photo),
                 submitState = ReportSubmitState.Idle,
             )
         }
     }
 
     private fun removePhoto() {
+        val clearedPhoto =
+            ReportPhotoInput(
+                isTouched = true,
+                isDirty = true,
+            )
+
         mutableUiState.update { state ->
             state.copy(
-                photo =
-                    ReportPhotoInput(
-                        isTouched = true,
-                        isDirty = true,
-                    ),
+                photo = clearedPhoto,
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -184,7 +158,7 @@ class ReportViewModel : ViewModel() {
 
     private fun touchPhoto() {
         mutableUiState.update { state ->
-            state.copy(photo = state.photo.copy(isTouched = true))
+            state.copy(photo = state.photo.validated(touched = true))
         }
     }
 
@@ -192,17 +166,7 @@ class ReportViewModel : ViewModel() {
         mutableUiState.update { state ->
             state.copy(
                 screenState = ReportScreenState.Editing,
-                description =
-                    state.description.copy(
-                        value = description,
-                        isDirty = true,
-                        error =
-                            if (description.length > ReportFormLimits.DESCRIPTION_MAX_LENGTH) {
-                                ReportDescriptionError.TooLong
-                            } else {
-                                null
-                            },
-                    ),
+                description = state.description.withValue(description),
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -210,20 +174,35 @@ class ReportViewModel : ViewModel() {
 
     private fun touchDescription() {
         mutableUiState.update { state ->
-            state.copy(description = state.description.copy(isTouched = true))
+            state.copy(description = state.description.validated(touched = true))
         }
     }
 
     private fun submitShell() {
-        val currentState = mutableUiState.value
-        if (!currentState.isSubmitEnabled) return
+        val validatedState = mutableUiState.value.validatedForSubmit()
+        if (!validatedState.isSubmitEnabled) {
+            markSubmitValidationFailed(validatedState)
+            return
+        }
 
-        mutableUiState.update { state ->
-            state.copy(
+        markSubmitShellSuccess(validatedState)
+    }
+
+    private fun markSubmitValidationFailed(validatedState: ReportUiState) {
+        mutableUiState.value =
+            validatedState.copy(
+                screenState = ReportScreenState.Editing,
+                submitState = ReportSubmitState.Idle,
+            )
+        emitUiEvent(ReportUiEvent.ScrollToFirstError)
+    }
+
+    private fun markSubmitShellSuccess(validatedState: ReportUiState) {
+        mutableUiState.value =
+            validatedState.copy(
                 screenState = ReportScreenState.Completed,
                 submitState = ReportSubmitState.Success(),
             )
-        }
     }
 
     private fun resetForm() {
@@ -250,3 +229,139 @@ class ReportViewModel : ViewModel() {
             }
     }
 }
+
+private fun ReportTypeInput.withValue(type: ReportType): ReportTypeInput =
+    copy(
+        value = type,
+        isTouched = true,
+        isDirty = true,
+        error = validateReportType(type),
+    )
+
+private fun ReportTypeInput.validated(touched: Boolean = isTouched): ReportTypeInput =
+    copy(
+        isTouched = touched,
+        error = validateReportType(value),
+    )
+
+private fun ReportLocationInput.withValue(
+    location: ReportLocation,
+    source: ReportLocationSource,
+): ReportLocationInput =
+    copy(
+        value = location,
+        addressText = location.address.orEmpty(),
+        source = source,
+        isTouched = true,
+        isDirty = true,
+        isResolvingCurrentLocation = false,
+        error = validateLocation(location, location.address.orEmpty()),
+    )
+
+private fun ReportLocationInput.withAddress(
+    address: String,
+    updatedLocation: ReportLocation?,
+): ReportLocationInput {
+    val nextSource =
+        if (updatedLocation == null) {
+            source
+        } else {
+            ReportLocationSource.AddressText
+        }
+    val shouldValidate =
+        isTouched ||
+            error != null ||
+            address.length > ReportFormLimits.ADDRESS_MAX_LENGTH
+
+    return copy(
+        value = updatedLocation,
+        addressText = address,
+        source = nextSource,
+        isDirty = true,
+        error = if (shouldValidate) validateLocation(updatedLocation, address) else null,
+    )
+}
+
+private fun ReportLocationInput.validated(touched: Boolean = isTouched): ReportLocationInput =
+    copy(
+        isTouched = touched,
+        error = validateLocation(value, addressText),
+    )
+
+private fun ReportPhotoInput.withValue(photo: ReportPhoto): ReportPhotoInput =
+    copy(
+        value = photo,
+        isTouched = true,
+        isDirty = true,
+        error = validatePhoto(photo),
+    )
+
+private fun ReportPhotoInput.validated(touched: Boolean = isTouched): ReportPhotoInput =
+    copy(
+        isTouched = touched,
+        error = validatePhoto(value),
+    )
+
+private fun ReportDescriptionInput.withValue(description: String): ReportDescriptionInput =
+    copy(
+        value = description,
+        isDirty = true,
+        error = validateDescription(description),
+    )
+
+private fun ReportDescriptionInput.validated(
+    touched: Boolean = isTouched,
+): ReportDescriptionInput =
+    copy(
+        isTouched = touched,
+        error = validateDescription(value),
+    )
+
+private fun ReportUiState.validatedForSubmit(): ReportUiState =
+    copy(
+        screenState = ReportScreenState.Editing,
+        reportType = reportType.validated(touched = true),
+        location = location.validated(touched = true),
+        photo = photo.validated(touched = true),
+        description = description.validated(touched = true),
+        submitState = ReportSubmitState.Idle,
+    )
+
+private fun validateReportType(type: ReportType?): ReportTypeError? =
+    if (type == null) ReportTypeError.Required else null
+
+private fun validateLocation(
+    location: ReportLocation?,
+    addressText: String,
+): ReportLocationError? {
+    if (location == null) return ReportLocationError.Required
+    if (!location.hasValidCoordinate()) return ReportLocationError.InvalidCoordinate
+    if (addressText.length > ReportFormLimits.ADDRESS_MAX_LENGTH) {
+        return ReportLocationError.AddressTooLong
+    }
+
+    return null
+}
+
+private fun ReportLocation.hasValidCoordinate(): Boolean =
+    latitude in -90.0..90.0 && longitude in -180.0..180.0
+
+private fun validatePhoto(photo: ReportPhoto?): ReportPhotoError? {
+    if (photo == null) return null
+    if (photo.localUri.isBlank()) return ReportPhotoError.Unreadable
+    if (photo.mimeType != null && !photo.mimeType.startsWith("image/")) {
+        return ReportPhotoError.UnsupportedFormat
+    }
+    if (photo.sizeBytes != null && photo.sizeBytes > ReportFormLimits.PHOTO_MAX_BYTES) {
+        return ReportPhotoError.TooLarge
+    }
+
+    return null
+}
+
+private fun validateDescription(description: String): ReportDescriptionError? =
+    if (description.length > ReportFormLimits.DESCRIPTION_MAX_LENGTH) {
+        ReportDescriptionError.TooLong
+    } else {
+        null
+    }

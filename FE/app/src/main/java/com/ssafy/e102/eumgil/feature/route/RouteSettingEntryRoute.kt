@@ -17,8 +17,7 @@ import kotlinx.coroutines.flow.collect
 @Composable
 fun RouteSettingEntryRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToSearch: () -> Unit = {},
-    onNavigateToNavigation: () -> Unit = {},
+    onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -30,6 +29,7 @@ fun RouteSettingEntryRoute(
     val viewModelFactory =
         remember(appContainer) {
             RouteSettingViewModel.provideFactory(
+                routeRepository = appContainer.routeRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
             )
         }
@@ -40,13 +40,11 @@ fun RouteSettingEntryRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToSearch, onNavigateToNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
-                RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch()
-                RouteSettingUiEvent.NavigateToNavigation -> onNavigateToNavigation()
-                is RouteSettingUiEvent.ShowSnackbar -> Unit
+                is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
             }
         }
     }

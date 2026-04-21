@@ -1,81 +1,104 @@
 package com.ssafy.e102.eumgil.feature.route
 
-import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteSearchSource
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 
 data class RouteSettingUiState(
-    val startPoint: RouteSettingPointUiModel = RouteSettingPointUiModel.CurrentLocation,
-    val destination: PlaceDestination? = null,
-    val selectedOptions: Set<RouteSettingOption> = RouteSettingOption.defaultSelection,
-    val screenState: RouteSettingScreenState = RouteSettingScreenState.Editing,
-    val errorMessage: String? = null,
+    val isLoading: Boolean = true,
+    val loadErrorMessage: String? = null,
+    val origin: RouteLocationUiState = RouteLocationUiState(),
+    val destination: RouteLocationUiState = RouteLocationUiState(),
+    val isUsingFallbackDestination: Boolean = true,
+    val selectedOption: RouteOption = RouteOption.SAFE,
+    val optionCards: List<RouteOptionCardUiState> = emptyList(),
+    val selectedRoute: RouteSelectedRouteUiState? = null,
+    val sourceLabel: String? = null,
+    val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
+    val ctaAcknowledged: Boolean = false,
 ) {
-    val isSearchEnabled: Boolean
-        get() = screenState != RouteSettingScreenState.FindingRoute
-
-    val isRouteFindEnabled: Boolean
-        get() = destination != null && screenState != RouteSettingScreenState.FindingRoute
-
-    val isNavigationStartEnabled: Boolean
-        get() = destination != null && screenState == RouteSettingScreenState.PreviewReady
+    val isStartEnabled: Boolean
+        get() = cta.isEnabled
 }
 
-data class RouteSettingPointUiModel(
+data class RouteLocationUiState(
+    val name: String = "",
+    val supportingText: String? = null,
+    val coordinate: GeoCoordinate? = null,
+)
+
+data class RouteOptionCardUiState(
+    val routeOption: RouteOption,
     val title: String,
     val description: String,
-    val coordinateText: String? = null,
-    val isAvailable: Boolean = true,
-) {
-    companion object {
-        val CurrentLocation: RouteSettingPointUiModel =
-            RouteSettingPointUiModel(
-                title = "현재 위치",
-                description = "실제 위치 연동 전까지 현재 위치 placeholder를 사용합니다.",
-            )
-    }
-}
+    val distanceMeters: Int,
+    val estimatedTimeMinutes: Int,
+    val riskLevel: RouteRiskLevel,
+    val summaryLabel: String,
+    val selectionLabel: String,
+    val highlightLabel: String? = null,
+    val metrics: List<RouteOptionCardMetricUiState> = emptyList(),
+    val badges: List<RouteOptionBadge> = emptyList(),
+    val isSelected: Boolean = false,
+)
 
-enum class RouteSettingOption(
+data class RouteSelectedRouteUiState(
+    val routeOption: RouteOption,
+    val optionTitle: String,
+    val title: String,
+    val distanceMeters: Int,
+    val estimatedTimeMinutes: Int,
+    val riskLevel: RouteRiskLevel,
+    val guidanceMessage: String,
+    val summaryLabel: String,
+    val estimatedTimeLabel: String,
+    val distanceLabel: String,
+    val riskLabel: String,
+    val renderableSegmentLabel: String,
+    val summaryMetrics: List<RouteSummaryMetricUiState> = emptyList(),
+    val previewPoints: List<GeoCoordinate> = emptyList(),
+    val segmentCount: Int = 0,
+    val renderableSegmentCount: Int = 0,
+    val fallbackSegmentCount: Int = 0,
+    val previewFallbackNotice: String? = null,
+    val badges: List<RouteOptionBadge> = emptyList(),
+)
+
+data class RouteSummaryMetricUiState(
     val label: String,
-    val description: String,
-) {
-    ACCESSIBILITY_FIRST(
-        label = "접근성 우선",
-        description = "경사로, 엘리베이터, 보행 안전 정보를 우선 고려합니다.",
-    ),
-    AVOID_STEEP_SLOPE(
-        label = "급경사 회피",
-        description = "경사가 큰 구간을 피하는 경로 시안입니다.",
-    ),
-    USE_ELEVATOR_RAMP(
-        label = "엘리베이터/경사로 고려",
-        description = "수직 이동과 단차 회피 시설을 경로 조건에 포함합니다.",
-    );
+    val value: String,
+)
 
-    companion object {
-        val defaultSelection: Set<RouteSettingOption> =
-            setOf(ACCESSIBILITY_FIRST, AVOID_STEEP_SLOPE, USE_ELEVATOR_RAMP)
-    }
-}
+data class RouteSettingCtaUiState(
+    val label: String = "선택한 경로로 안내 시작",
+    val supportingText: String = "fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다.",
+    val isEnabled: Boolean = false,
+)
 
-enum class RouteSettingScreenState {
-    Editing,
-    FindingRoute,
-    PreviewReady,
-    Failure,
+data class RouteOptionCardMetricUiState(
+    val label: String,
+    val value: String,
+)
+
+enum class RouteOptionBadge {
+    SAFE_PRIORITY,
+    STEP_FREE,
+    AUDIO_SIGNAL,
+    BRAILLE_BLOCK,
+    SIGNAL_CROSSWALK,
+    CURB_GAP,
+    UNSIGNALIZED_CROSSWALK,
 }
 
 sealed interface RouteSettingUiAction {
     data object BackClicked : RouteSettingUiAction
 
-    data object StartPointClicked : RouteSettingUiAction
-
-    data object DestinationClicked : RouteSettingUiAction
-
-    data class RouteOptionToggled(
-        val option: RouteSettingOption,
+    data class RouteOptionSelected(
+        val routeOption: RouteOption,
     ) : RouteSettingUiAction
-
-    data object FindRouteClicked : RouteSettingUiAction
 
     data object StartNavigationClicked : RouteSettingUiAction
 }
@@ -83,11 +106,14 @@ sealed interface RouteSettingUiAction {
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
 
-    data object NavigateToSearch : RouteSettingUiEvent
-
-    data object NavigateToNavigation : RouteSettingUiEvent
-
-    data class ShowSnackbar(
-        val message: String,
+    data class StartNavigationRequested(
+        val request: RouteNavigationRequest,
     ) : RouteSettingUiEvent
 }
+
+data class RouteNavigationRequest(
+    val origin: RouteWaypoint,
+    val destination: RouteWaypoint,
+    val selectedRoute: RouteCandidate,
+    val source: RouteSearchSource,
+)

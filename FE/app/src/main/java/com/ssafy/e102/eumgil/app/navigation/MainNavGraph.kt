@@ -64,24 +64,22 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = ReportRoute.Report.route) {
-        ReportScreenRoute(
-            onNavigateBack = {
-                navController.popBackStack()
-            },
-        )
-    }
-
     composable(route = RouteSettingRoute.Setting.route) {
+        // 200 can hand off by updating DestinationSelectionRepository, then navigating here.
         RouteSettingEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToSearch = {
-                navController.navigate(SearchRoute.Search.route)
-            },
-            onNavigateToNavigation = {
+            onStartNavigation = {
                 navController.navigate(NavigationRoute.Guidance.route)
+            },
+        )
+    }
+
+    composable(route = ReportRoute.Report.route) {
+        ReportScreenRoute(
+            onNavigateBack = {
+                navController.popBackStack()
             },
         )
     }

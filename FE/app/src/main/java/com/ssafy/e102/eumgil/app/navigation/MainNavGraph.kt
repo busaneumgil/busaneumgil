@@ -76,6 +76,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToSearch = {
+                navController.navigate(SearchRoute.Search.route)
+            },
         )
     }
 }

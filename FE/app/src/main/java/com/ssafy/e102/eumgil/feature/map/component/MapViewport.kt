@@ -141,20 +141,20 @@ private fun MapFallbackSurface(
     val outline = MaterialTheme.colorScheme.outline
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
+    val backgroundBrush =
+        Brush.verticalGradient(
+            colors =
+                listOf(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    surfaceTint,
+                ),
+        )
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                brush =
-                    Brush.verticalGradient(
-                        colors =
-                            listOf(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                surfaceTint,
-                            ),
-                    ),
-            ),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(brush = backgroundBrush),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val verticalStep = size.width / 5f
@@ -408,12 +408,12 @@ private fun MapMarkerChip(
         }
 
     Surface(
-            modifier =
-                modifier
-                    .zIndex(if (isSelected) 2f else 1f)
-                    .size(markerSize)
-                    .graphicsLayer {
-                        rotationZ = if (isBrailleBlock) 45f else 0f
+        modifier =
+            modifier
+                .zIndex(if (isSelected) 2f else 1f)
+                .size(markerSize)
+                .graphicsLayer {
+                    rotationZ = if (isBrailleBlock) 45f else 0f
                 }
                 .semantics {
                     contentDescription = marker.name

@@ -79,6 +79,14 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
         )
     }
+
+    composable(route = RouteSettingRoute.Setting.route) {
+        RouteSettingEntryRoute(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+        )
+    }
 }
 
 fun NavController.navigateToTopLevel(destination: TopLevelDestination) {

@@ -50,12 +50,31 @@ fun RouteSettingScreen(
     onAction: (RouteSettingUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        topBar = {
-            RouteSettingTopBar(
-                onBackClick = { onAction(RouteSettingUiAction.BackClicked) },
+    val description =
+        if (selectedDestination == null) {
+            stringResource(id = R.string.route_setting_screen_description_empty)
+        } else {
+            stringResource(
+                id = R.string.route_setting_screen_description_with_destination,
+                selectedDestination.name,
             )
+        }
+
+    EumPlaceholderScaffold(
+        title = stringResource(id = R.string.route_setting_screen_title),
+        description = description,
+        featurePath = stringResource(id = R.string.feature_path_route_setting),
+        actions =
+            listOf(
+                PlaceholderAction(
+                    label = stringResource(id = R.string.action_go_map),
+                    onClick = onNavigateBack,
+                    isPrimary = true,
+                ),
+            ),
+        modifier = modifier,
+        content = {
+            RouteSettingDestinationCard(selectedDestination = selectedDestination)
         },
         bottomBar = {
             RouteSettingBottomBar(
@@ -105,10 +124,28 @@ private fun RouteSettingTopBar(
             TextButton(onClick = onBackClick) {
                 Text(text = stringResource(id = R.string.route_setting_back))
             }
-            Text(
-                text = stringResource(id = R.string.route_setting_screen_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+
+            RouteSettingDestinationField(
+                label = stringResource(id = R.string.route_setting_destination_name_label),
+                value = selectedDestination.name,
+            )
+            val address =
+                selectedDestination.address
+                    ?: stringResource(id = R.string.route_setting_destination_address_empty)
+            val coordinate =
+                stringResource(
+                    id = R.string.route_setting_destination_coordinate_value,
+                    selectedDestination.latitude,
+                    selectedDestination.longitude,
+                )
+
+            RouteSettingDestinationField(
+                label = stringResource(id = R.string.route_setting_destination_address_label),
+                value = address,
+            )
+            RouteSettingDestinationField(
+                label = stringResource(id = R.string.route_setting_destination_coordinate_label),
+                value = coordinate,
             )
         }
     }

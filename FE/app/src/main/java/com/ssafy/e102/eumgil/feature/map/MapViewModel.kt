@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
+import com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason as PermissionUnavailableReason
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
@@ -287,11 +288,13 @@ class MapViewModel(
                 } else {
                     stopLocationLookup()
                     if (shouldSyncCameraToCurrentLocation()) {
+                        val shouldIncrementRequestId =
+                            !hadLocation ||
+                                mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION
+
                         syncCameraToCurrentLocation(
                             snapshot = snapshot,
-                            incrementRequestId =
-                                !hadLocation ||
-                                    mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION,
+                            incrementRequestId = shouldIncrementRequestId,
                         )
                     }
                 }
@@ -524,17 +527,18 @@ class MapViewModel(
 
                 LocationPermissionState.Denied -> MapLocationStatus.PermissionDenied
 
-                is LocationPermissionState.Unavailable ->
-                    MapLocationStatus.Unavailable(
-                        reason =
-                            when (permissionState.reason) {
-                                com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason.LOCATION_SERVICES_DISABLED ->
-                                    MapLocationUnavailableReason.LOCATION_SERVICES_DISABLED
+                is LocationPermissionState.Unavailable -> {
+                    val reason =
+                        when (permissionState.reason) {
+                            PermissionUnavailableReason.LOCATION_SERVICES_DISABLED ->
+                                MapLocationUnavailableReason.LOCATION_SERVICES_DISABLED
 
-                                com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason.NO_LOCATION_FEATURE ->
-                                    MapLocationUnavailableReason.NO_LOCATION_FEATURE
-                            },
-                    )
+                            PermissionUnavailableReason.NO_LOCATION_FEATURE ->
+                                MapLocationUnavailableReason.NO_LOCATION_FEATURE
+                        }
+
+                    MapLocationStatus.Unavailable(reason = reason)
+                }
             }
 
         val recenterButtonState =

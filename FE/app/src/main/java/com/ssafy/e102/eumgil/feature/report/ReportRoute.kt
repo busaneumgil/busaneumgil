@@ -30,17 +30,10 @@ fun ReportRoute(
 
     LaunchedEffect(viewModel, onNavigateBack) {
         viewModel.uiEvent.collect { event ->
-            when (event) {
-                ReportUiEvent.NavigateBack -> onNavigateBack()
-                ReportUiEvent.OpenLocationPicker,
-                ReportUiEvent.OpenPhotoPicker,
-                ReportUiEvent.RequestLocationPermission,
-                ReportUiEvent.ScrollToFirstError,
-                ReportUiEvent.ShowDraftDiscardDialog,
-                is ReportUiEvent.AnnounceForAccessibility,
-                is ReportUiEvent.NavigateToReportComplete,
-                is ReportUiEvent.ShowSnackbar -> Unit
-            }
+            handleReportUiEvent(
+                event = event,
+                onNavigateBack = onNavigateBack,
+            )
         }
     }
 
@@ -49,6 +42,23 @@ fun ReportRoute(
         onAction = viewModel::onAction,
         modifier = modifier,
     )
+}
+
+private fun handleReportUiEvent(
+    event: ReportUiEvent,
+    onNavigateBack: () -> Unit,
+) {
+    when (event) {
+        ReportUiEvent.NavigateBack -> onNavigateBack()
+        ReportUiEvent.OpenLocationPicker,
+        ReportUiEvent.OpenPhotoPicker,
+        ReportUiEvent.RequestLocationPermission,
+        ReportUiEvent.ScrollToFirstError,
+        ReportUiEvent.ShowDraftDiscardDialog,
+        is ReportUiEvent.AnnounceForAccessibility,
+        is ReportUiEvent.NavigateToReportComplete,
+        is ReportUiEvent.ShowSnackbar -> Unit
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

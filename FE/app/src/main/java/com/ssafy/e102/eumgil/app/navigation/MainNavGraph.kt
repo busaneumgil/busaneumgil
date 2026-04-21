@@ -63,6 +63,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
+    composable(route = RouteSettingRoute.Setting.route) {
+        // 200 can hand off by updating DestinationSelectionRepository, then navigating here.
+        RouteSettingEntryRoute(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+        )
+    }
+
     composable(route = ReportRoute.Report.route) {
         ReportScreenRoute(
             onNavigateBack = {

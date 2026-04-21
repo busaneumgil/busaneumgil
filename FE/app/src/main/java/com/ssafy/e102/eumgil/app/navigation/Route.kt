@@ -50,3 +50,9 @@ sealed interface SearchRoute : AppRoute {
         override val route: String = "search"
     }
 }
+
+sealed interface ReportRoute : AppRoute {
+    data object Report : ReportRoute {
+        override val route: String = "report"
+    }
+}

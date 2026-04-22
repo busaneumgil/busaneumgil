@@ -58,8 +58,12 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToMap = {
-                navController.popBackStack()
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.route) {
+                    popUpTo(SearchRoute.Search.route) {
+                        inclusive = true
+                    }
+                }
             },
         )
     }

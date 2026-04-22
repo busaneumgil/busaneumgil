@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
-import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import kotlinx.coroutines.CancellationException
@@ -47,8 +47,22 @@ class SearchViewModel(
     }
 
     private fun selectSearchResult(result: SearchResult) {
-        destinationSelectionRepository.updateSelectedDestination(result.toPlaceDestination())
-        emitUiEvent(SearchUiEvent.NavigateToMap)
+        val destination = result.toPlaceDestinationOrNull()
+        if (destination == null) {
+            mutableUiState.update { state ->
+                state.copy(
+                    resultState =
+                        SearchResultUiState.Error(
+                            query = state.query.trim(),
+                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
+                        ),
+                )
+            }
+            return
+        }
+
+        destinationSelectionRepository.updateSelectedDestination(destination)
+        emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
     }
 
     private fun updateQuery(query: String) {
@@ -183,6 +197,8 @@ class SearchViewModel(
     }
 
     companion object {
+        private const val INVALID_DESTINATION_HANDOFF_MESSAGE = "좌표 정보가 올바르지 않아 경로 설정으로 넘길 수 없습니다."
+
         fun provideFactory(
             searchRepository: SearchRepository,
             destinationSelectionRepository: DestinationSelectionRepository,

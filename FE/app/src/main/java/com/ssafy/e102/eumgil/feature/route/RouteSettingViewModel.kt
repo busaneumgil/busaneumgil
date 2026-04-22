@@ -15,7 +15,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
-import com.ssafy.e102.eumgil.core.model.toRouteWaypoint
+import com.ssafy.e102.eumgil.core.model.toRouteWaypointOrNull
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import java.util.Locale
@@ -39,6 +39,7 @@ class RouteSettingViewModel(
     val uiEvent: SharedFlow<RouteSettingUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var latestSearchData: RouteSearchData? = null
+    private var hasLoadedInitialDestination: Boolean = false
 
     init {
         observeSelectedDestination()
@@ -55,22 +56,53 @@ class RouteSettingViewModel(
     private fun observeSelectedDestination() {
         viewModelScope.launch {
             destinationSelectionRepository.selectedDestination.collectLatest { selectedDestination ->
-                loadRouteShell(selectedDestination = selectedDestination)
+                val shouldLoadFromState = !hasLoadedInitialDestination || selectedDestination == null
+                if (!shouldLoadFromState) {
+                    return@collectLatest
+                }
+
+                hasLoadedInitialDestination = true
+                loadRouteShell(
+                    destinationResolution = resolveDestination(selectedDestination),
+                    resetSelectedOption = true,
+                )
+            }
+        }
+
+        viewModelScope.launch {
+            // This ViewModel is activity-scoped, so same-place reselection needs an explicit request flow.
+            destinationSelectionRepository.selectionRequests.collectLatest { selectedDestination ->
+                hasLoadedInitialDestination = true
+                loadRouteShell(
+                    destinationResolution = resolveDestination(selectedDestination),
+                    resetSelectedOption = true,
+                )
             }
         }
     }
 
-    private suspend fun loadRouteShell(selectedDestination: PlaceDestination?) {
+    private suspend fun loadRouteShell(
+        destinationResolution: RouteDestinationResolution,
+        resetSelectedOption: Boolean,
+    ) {
         latestSearchData = null
-        val selectedOption = mutableUiState.value.selectedOption
+        val selectedOption =
+            if (resetSelectedOption) {
+                DEFAULT_SELECTED_OPTION
+            } else {
+                mutableUiState.value.selectedOption
+            }
 
         mutableUiState.update { state ->
             state.copy(
                 isLoading = true,
                 loadErrorMessage = null,
                 origin = originLocationUiState(),
-                destination = destinationLocationUiState(selectedDestination?.toRouteWaypoint() ?: DEFAULT_DESTINATION),
-                isUsingFallbackDestination = selectedDestination == null,
+                destination = destinationResolution.destinationUiState,
+                destinationHandoffState = destinationResolution.handoffState,
+                destinationFallbackMessage = destinationResolution.fallbackMessage,
+                isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
+                selectedOption = selectedOption,
                 optionCards = emptyList(),
                 selectedRoute = null,
                 sourceLabel = null,
@@ -80,13 +112,13 @@ class RouteSettingViewModel(
         }
 
         runCatching {
-            routeRepository.getRouteSearchData(buildQuery(selectedDestination = selectedDestination))
+            routeRepository.getRouteSearchData(buildQuery(destinationResolution = destinationResolution))
         }.onSuccess { searchData ->
             latestSearchData = searchData
             mutableUiState.value =
                 buildUiState(
                     searchData = searchData,
-                    selectedDestination = selectedDestination,
+                    destinationResolution = destinationResolution,
                     requestedOption = selectedOption,
                     ctaAcknowledged = false,
                 )
@@ -112,7 +144,7 @@ class RouteSettingViewModel(
         mutableUiState.value =
             buildUiState(
                 searchData = searchData,
-                selectedDestination = destinationSelectionRepository.selectedDestination.value,
+                destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
                 requestedOption = routeOption,
                 ctaAcknowledged = mutableUiState.value.ctaAcknowledged,
             )
@@ -120,6 +152,9 @@ class RouteSettingViewModel(
 
     private fun startNavigation() {
         if (mutableUiState.value.ctaAcknowledged) {
+            return
+        }
+        if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
             return
         }
         val searchData = latestSearchData ?: return
@@ -130,7 +165,12 @@ class RouteSettingViewModel(
 
         mutableUiState.update { state ->
             state.copy(
-                cta = buildCtaUiState(selectedRoute = state.selectedRoute, ctaAcknowledged = true),
+                cta =
+                    buildCtaUiState(
+                        selectedRoute = state.selectedRoute,
+                        ctaAcknowledged = true,
+                        destinationHandoffState = state.destinationHandoffState,
+                    ),
                 ctaAcknowledged = true,
             )
         }
@@ -150,11 +190,12 @@ class RouteSettingViewModel(
 
     private fun buildUiState(
         searchData: RouteSearchData,
-        selectedDestination: PlaceDestination?,
+        destinationResolution: RouteDestinationResolution,
         requestedOption: RouteOption,
         ctaAcknowledged: Boolean,
     ): RouteSettingUiState {
         val availableRoutes = searchData.routes.sortedBy { route -> route.routeOption.routeSortOrder() }
+        val resolvedDestination = destinationLocationUiState(searchData.result.destination)
         val resolvedOption =
             if (searchData.findRoute(requestedOption) != null) {
                 requestedOption
@@ -164,14 +205,16 @@ class RouteSettingViewModel(
         val selectedRoute =
             searchData.findRoute(resolvedOption)
                 ?: availableRoutes.firstOrNull()
-        val selectedRouteUiState = selectedRoute?.toSelectedRouteUiState()
+        val selectedRouteUiState = selectedRoute?.toSelectedRouteUiState(destination = resolvedDestination)
 
         return RouteSettingUiState(
             isLoading = false,
             loadErrorMessage = null,
             origin = originLocationUiState(searchData.result.origin),
-            destination = destinationLocationUiState(searchData.result.destination),
-            isUsingFallbackDestination = selectedDestination == null,
+            destination = resolvedDestination,
+            destinationHandoffState = destinationResolution.handoffState,
+            destinationFallbackMessage = destinationResolution.fallbackMessage,
+            isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
             selectedOption = resolvedOption,
             optionCards =
                 availableRoutes.map { route ->
@@ -185,6 +228,7 @@ class RouteSettingViewModel(
                 buildCtaUiState(
                     selectedRoute = selectedRouteUiState,
                     ctaAcknowledged = ctaAcknowledged,
+                    destinationHandoffState = destinationResolution.handoffState,
                 ),
             ctaAcknowledged = ctaAcknowledged,
         )
@@ -196,11 +240,40 @@ class RouteSettingViewModel(
     private fun destinationLocationUiState(destination: RouteWaypoint): RouteLocationUiState =
         destination.toLocationUiState(addressFallback = DEFAULT_DESTINATION_ADDRESS_FALLBACK)
 
-    private fun buildQuery(selectedDestination: PlaceDestination?): RouteSearchQuery =
+    private fun buildQuery(destinationResolution: RouteDestinationResolution): RouteSearchQuery =
         RouteSearchQuery(
             origin = DEFAULT_ORIGIN,
-            destination = selectedDestination?.toRouteWaypoint() ?: DEFAULT_DESTINATION,
+            destination = destinationResolution.routeDestination,
         )
+
+    private fun resolveDestination(selectedDestination: PlaceDestination?): RouteDestinationResolution =
+        when {
+            selectedDestination == null ->
+                RouteDestinationResolution(
+                    routeDestination = DEFAULT_DESTINATION,
+                    destinationUiState = destinationLocationUiState(DEFAULT_DESTINATION),
+                    handoffState = RouteDestinationHandoffState.EMPTY,
+                    fallbackMessage = DESTINATION_FALLBACK_EMPTY_MESSAGE,
+                )
+
+            else -> {
+                val routeDestination = selectedDestination.toRouteWaypointOrNull()
+                if (routeDestination == null) {
+                    RouteDestinationResolution(
+                        routeDestination = DEFAULT_DESTINATION,
+                        destinationUiState = destinationLocationUiState(DEFAULT_DESTINATION),
+                        handoffState = RouteDestinationHandoffState.INVALID_COORDINATE,
+                        fallbackMessage = DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE,
+                    )
+                } else {
+                    RouteDestinationResolution(
+                        routeDestination = routeDestination,
+                        destinationUiState = destinationLocationUiState(routeDestination),
+                        handoffState = RouteDestinationHandoffState.DIRECT,
+                    )
+                }
+            }
+        }
 
     private fun RouteCandidate.toOptionCardUiState(isSelected: Boolean): RouteOptionCardUiState =
         routeOption.optionCardPresentation(summary = summary).let { presentation ->
@@ -220,9 +293,10 @@ class RouteSettingViewModel(
             )
         }
 
-    private fun RouteCandidate.toSelectedRouteUiState(): RouteSelectedRouteUiState =
+    private fun RouteCandidate.toSelectedRouteUiState(destination: RouteLocationUiState): RouteSelectedRouteUiState =
         RouteSelectedRouteUiState(
             routeOption = routeOption,
+            destination = destination,
             optionTitle = routeOption.toOptionTitle(),
             title = title,
             distanceMeters = summary.distanceMeters,
@@ -335,10 +409,29 @@ class RouteSettingViewModel(
 
 private fun RouteWaypoint.toLocationUiState(addressFallback: String?): RouteLocationUiState =
     RouteLocationUiState(
+        placeId = placeId,
         name = name.orEmpty(),
         supportingText = address?.takeIf { value -> value.isNotBlank() } ?: addressFallback,
         coordinate = coordinate,
+        category = category,
+        metadataLabel = buildLocationMetadataLabel(placeId = placeId, category = category),
     )
+
+private fun buildLocationMetadataLabel(
+    placeId: String?,
+    category: com.ssafy.e102.eumgil.core.model.PlaceCategory?,
+): String? {
+    val metadataParts = buildList {
+        placeId?.takeIf { value -> value.isNotBlank() }?.let { value ->
+            add("ID $value")
+        }
+        category?.let { value ->
+            add("Category ${value.name}")
+        }
+    }
+
+    return metadataParts.takeIf(List<String>::isNotEmpty)?.joinToString(separator = " | ")
+}
 
 private fun RouteSummary.toSummaryLabel(): String =
     "${estimatedTimeMinutes.toEstimatedTimeLabel()} · ${distanceMeters.toDistanceLabel()}"
@@ -448,12 +541,27 @@ private fun errorCtaUiState(): RouteSettingCtaUiState =
 private fun buildCtaUiState(
     selectedRoute: RouteSelectedRouteUiState?,
     ctaAcknowledged: Boolean,
+    destinationHandoffState: RouteDestinationHandoffState,
 ): RouteSettingCtaUiState =
     when {
         ctaAcknowledged ->
             RouteSettingCtaUiState(
                 label = CTA_LABEL_START,
                 supportingText = CTA_SUPPORTING_ACKNOWLEDGED,
+                isEnabled = false,
+            )
+
+        destinationHandoffState == RouteDestinationHandoffState.EMPTY ->
+            RouteSettingCtaUiState(
+                label = CTA_LABEL_START,
+                supportingText = CTA_SUPPORTING_WAITING_HANDOFF,
+                isEnabled = false,
+            )
+
+        destinationHandoffState == RouteDestinationHandoffState.INVALID_COORDINATE ->
+            RouteSettingCtaUiState(
+                label = CTA_LABEL_START,
+                supportingText = CTA_SUPPORTING_INVALID_HANDOFF,
                 isEnabled = false,
             )
 
@@ -496,9 +604,13 @@ private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동�
 private const val CTA_LABEL_START = "선택한 경로로 안내 시작"
 private const val CTA_SUPPORTING_READY = "201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다."
 private const val CTA_SUPPORTING_ACKNOWLEDGED = "내비게이션 진행 화면 연결은 다음 스레드에서 마무리합니다."
+private const val CTA_SUPPORTING_WAITING_HANDOFF = "검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다."
+private const val CTA_SUPPORTING_INVALID_HANDOFF = "목적지 좌표를 다시 확인하면 안내 시작을 활성화합니다."
 private const val CTA_SUPPORTING_ERROR = "경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다."
 private const val CTA_SUPPORTING_LOADING = "fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다."
 private const val CTA_SUPPORTING_EMPTY = "표시할 경로가 준비되면 시작 CTA를 활성화합니다."
+private const val DESTINATION_FALLBACK_EMPTY_MESSAGE = "검색 handoff 전에는 fixture 목적지를 기본 도착지로 유지합니다."
+private const val DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE = "선택한 목적지 좌표를 확인할 수 없어 fixture 목적지로 대체했습니다."
 private const val SUMMARY_VALUE_PENDING = "확인 중"
 private const val OPTION_TITLE_SAFE = "SAFE 우선"
 private const val OPTION_DESCRIPTION_SAFE = "안전 요소와 보행 위험을 함께 고려해 우선 제안하는 경로입니다."
@@ -520,6 +632,7 @@ private const val RISK_VALUE_HIGH = "높음"
 private const val PREVIEW_FALLBACK_NOTICE = "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다."
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
+private val DEFAULT_SELECTED_OPTION = RouteOption.SAFE
 
 private data class RouteOptionCardPresentation(
     val title: String,
@@ -527,3 +640,13 @@ private data class RouteOptionCardPresentation(
     val highlightLabel: String?,
     val metrics: List<RouteOptionCardMetricUiState>,
 )
+
+private data class RouteDestinationResolution(
+    val routeDestination: RouteWaypoint,
+    val destinationUiState: RouteLocationUiState,
+    val handoffState: RouteDestinationHandoffState,
+    val fallbackMessage: String? = null,
+) {
+    val isUsingFallbackDestination: Boolean
+        get() = handoffState != RouteDestinationHandoffState.DIRECT
+}

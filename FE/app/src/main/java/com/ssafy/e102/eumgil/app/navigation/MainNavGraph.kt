@@ -1,5 +1,11 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
@@ -8,6 +14,7 @@ import androidx.navigation.compose.composable
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
+import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
@@ -69,12 +76,22 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     }
 
     composable(route = RouteSettingRoute.Setting.route) {
+        val context = LocalContext.current
+        val activity = remember(context) { context.findComponentActivity() }
+        val navigationViewModelFactory = remember { NavigationGuidanceViewModel.provideFactory() }
+        val navigationViewModel =
+            remember(activity, navigationViewModelFactory) {
+                val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }
+                ViewModelProvider(owner, navigationViewModelFactory)[NavigationGuidanceViewModel::class.java]
+            }
+
         // 200 can hand off by updating DestinationSelectionRepository, then navigating here.
         RouteSettingEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onStartNavigation = {
+            onStartNavigation = { request ->
+                navigationViewModel.bindNavigationRequest(request)
                 navController.navigate(NavigationRoute.Guidance.route)
             },
         )
@@ -109,3 +126,10 @@ fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
         }
     }
 }
+
+private tailrec fun Context.findComponentActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity -> this
+        is ContextWrapper -> baseContext.findComponentActivity()
+        else -> null
+    }

@@ -76,6 +76,8 @@ class ReportViewModel(
         val currentState = mutableUiState.value
         if (!currentState.isDraftSavable) return
 
+        val savedSnapshot = currentState.toDraftSnapshot()
+
         mutableUiState.update { state ->
             state.copy(draftSaveState = ReportDraftSaveState.Saving)
         }
@@ -84,19 +86,27 @@ class ReportViewModel(
             runCatching { reportRepository.saveDraft(currentState.toDraftData(latestDraft)) }
                 .onSuccess { draft ->
                     latestDraft = draft
+                    var isCurrentSnapshot = false
                     mutableUiState.update { state ->
+                        isCurrentSnapshot = state.toDraftSnapshot() == savedSnapshot
                         state.copy(
                             draftId = draft.draftId,
                             hasExistingDraft = true,
                             draftSaveState =
-                                ReportDraftSaveState.Saved(
-                                    draftId = draft.draftId,
-                                    savedAtMillis = draft.updatedAtMillis,
-                                ),
+                                if (isCurrentSnapshot) {
+                                    ReportDraftSaveState.Saved(
+                                        draftId = draft.draftId,
+                                        savedAtMillis = draft.updatedAtMillis,
+                                    )
+                                } else {
+                                    ReportDraftSaveState.Idle
+                                },
                         )
                     }
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장했습니다."))
-                    emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보 draft를 임시저장했습니다."))
+                    if (isCurrentSnapshot) {
+                        emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장했습니다."))
+                        emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보 draft를 임시저장했습니다."))
+                    }
                 }.onFailure {
                     mutableUiState.update { state ->
                         state.copy(
@@ -148,6 +158,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 reportType = state.reportType.withValue(type),
+                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -198,6 +209,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 location = state.location.withValue(location, source),
+                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -213,6 +225,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 location = state.location.withAddress(address, updatedLocation),
+                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -240,6 +253,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 photo = state.photo.withValue(photo),
+                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -257,6 +271,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 photo = clearedPhoto,
+                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -274,6 +289,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 description = state.description.withValue(description),
+                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -303,20 +319,35 @@ class ReportViewModel(
         viewModelScope.launch {
             runCatching { reportRepository.saveOutbox(validatedState.toOutboxData()) }
                 .onSuccess { outbox ->
-                    validatedState.draftId?.let { draftId ->
-                        runCatching { reportRepository.deleteDraft(draftId) }
+                    val draftDeleteResult =
+                        validatedState.draftId?.let { draftId ->
+                            runCatching { reportRepository.deleteDraft(draftId) }
+                        }
+                    val isDraftDeleted = draftDeleteResult?.isSuccess ?: true
+                    if (isDraftDeleted) {
+                        latestDraft = null
                     }
-                    latestDraft = null
                     mutableUiState.value =
                         validatedState.copy(
                             screenState = ReportScreenState.Completed,
-                            draftId = null,
-                            hasExistingDraft = false,
-                            draftSaveState = ReportDraftSaveState.Idle,
+                            draftId = if (isDraftDeleted) null else validatedState.draftId,
+                            hasExistingDraft = !isDraftDeleted && validatedState.hasExistingDraft,
+                            draftSaveState =
+                                if (isDraftDeleted) {
+                                    ReportDraftSaveState.Idle
+                                } else {
+                                    ReportDraftSaveState.Failed(
+                                        reason = ReportFailureReason.LocalSaveFailed,
+                                    )
+                                },
                             outboxState = ReportOutboxState.Saved(outboxId = outbox.outboxId),
                             submitState = ReportSubmitState.Success(reportId = null),
                         )
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))
+                    if (isDraftDeleted) {
+                        emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))
+                    } else {
+                        emitUiEvent(ReportUiEvent.ShowSnackbar("제보는 저장됐지만 임시저장 삭제에 실패했습니다."))
+                    }
                     emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
                     emitUiEvent(
                         ReportUiEvent.NavigateToReportComplete(
@@ -385,6 +416,23 @@ private fun ReportTypeInput.withValue(type: ReportType): ReportTypeInput =
         isTouched = true,
         isDirty = true,
         error = validateReportType(type),
+    )
+
+private data class ReportDraftSnapshot(
+    val reportType: ReportType?,
+    val location: ReportLocation?,
+    val addressText: String,
+    val photo: ReportPhoto?,
+    val description: String,
+)
+
+private fun ReportUiState.toDraftSnapshot(): ReportDraftSnapshot =
+    ReportDraftSnapshot(
+        reportType = reportType.value,
+        location = location.value,
+        addressText = location.addressText,
+        photo = photo.value,
+        description = description.value,
     )
 
 private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDraftData {
@@ -459,7 +507,7 @@ private fun ReportDraftData.toUiState(): ReportUiState {
             ReportTypeInput(
                 value = reportType,
                 isDirty = reportType != null,
-                error = validateReportType(reportType),
+                error = null,
             ),
         location =
             ReportLocationInput(

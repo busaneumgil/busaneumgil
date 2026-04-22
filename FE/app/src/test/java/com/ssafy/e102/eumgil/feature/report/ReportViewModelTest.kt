@@ -41,6 +41,25 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `editing while draft save is pending does not mark current input saved`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.DescriptionChanged("처음 입력"))
+            viewModel.onAction(ReportUiAction.SaveDraftClicked)
+            viewModel.onAction(ReportUiAction.DescriptionChanged("수정된 입력"))
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals("처음 입력", repository.savedDraft?.description)
+            assertEquals("수정된 입력", uiState.description.value)
+            assertEquals(ReportDraftSaveState.Idle, uiState.draftSaveState)
+            assertTrue(uiState.hasExistingDraft)
+        }
+
+    @Test
     fun `resume draft restores saved form state without auto filling on init`() =
         runTest {
             val repository =
@@ -77,6 +96,40 @@ class ReportViewModelTest {
             assertEquals("부산역 인근", uiState.location.addressText)
             assertEquals(ReportLocationSource.MapPin, uiState.location.source)
             assertEquals("content://draft/photo.jpg", uiState.photo.value?.localUri)
+        }
+
+    @Test
+    fun `resume partial draft does not expose required error before submit or blur`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = null,
+                            description = "유형 없이 저장된 draft",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertNull(uiState.reportType.value)
+            assertNull(uiState.reportType.error)
+            assertFalse(uiState.isSubmitEnabled)
         }
 
     @Test
@@ -197,6 +250,56 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `valid submit keeps draft state when outbox succeeds but draft delete fails`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = null,
+                            description = "",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                    failDeleteDraft = true,
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals("draft-1", repository.deletedDraftId)
+            assertEquals("draft-1", uiState.draftId)
+            assertTrue(uiState.hasExistingDraft)
+            assertTrue(uiState.screenState is ReportScreenState.Completed)
+            assertTrue(uiState.outboxState is ReportOutboxState.Saved)
+            assertTrue(uiState.draftSaveState is ReportDraftSaveState.Failed)
+        }
+
+    @Test
     fun `outbox failure keeps input and exposes retryable failure state`() =
         runTest {
             val repository = FakeReportRepository(failOutbox = true)
@@ -262,6 +365,7 @@ class ReportViewModelTest {
 private class FakeReportRepository(
     private var latestDraft: ReportDraftData? = null,
     private val failOutbox: Boolean = false,
+    private val failDeleteDraft: Boolean = false,
 ) : ReportRepository {
     var savedDraft: ReportDraftData? = null
         private set
@@ -280,6 +384,9 @@ private class FakeReportRepository(
 
     override suspend fun deleteDraft(draftId: String) {
         deletedDraftId = draftId
+        if (failDeleteDraft) {
+            error("draft delete failed")
+        }
         if (latestDraft?.draftId == draftId) {
             latestDraft = null
         }

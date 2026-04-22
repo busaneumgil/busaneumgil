@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 
@@ -114,6 +115,56 @@ class SavedRouteViewModelTest {
         }
 
     @Test
+    fun `route guide click stores destination and navigates to route setting`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testBookmark())),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            val destination = destinationSelectionRepository.selectedDestination.value
+
+            assertEquals(SavedRouteUiEvent.NavigateToRouteSetting, uiEvent.await())
+            assertEquals("bookmark-place-1", destination?.placeId)
+            assertEquals(PlaceCategory.ELEVATOR, destination?.category)
+        }
+
+    @Test
+    fun `route guide click with invalid coordinate keeps user on saved place screen`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository =
+                        FakeBookmarkRepository(
+                            bookmarks = listOf(testBookmark(latitude = Double.NaN)),
+                        ),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            assertEquals(
+                SavedRouteUiEvent.ShowSnackbar("저장한 장소의 좌표가 올바르지 않습니다."),
+                uiEvent.await(),
+            )
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertEquals("저장한 장소의 좌표가 올바르지 않습니다.", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
     fun `remove failure keeps content and exposes error message`() =
         runTest {
             val viewModel =
@@ -166,12 +217,15 @@ private class FakeBookmarkRepository(
     }
 }
 
-private fun testBookmark(): BookmarkData =
+private fun testBookmark(
+    latitude: Double = 35.1151,
+    longitude: Double = 129.0415,
+): BookmarkData =
     BookmarkData(
         placeId = "bookmark-place-1",
         placeName = "부산역 엘리베이터",
         address = "부산 동구 중앙대로",
-        latitude = 35.1151,
-        longitude = 129.0415,
+        latitude = latitude,
+        longitude = longitude,
         category = "ELEVATOR",
     )

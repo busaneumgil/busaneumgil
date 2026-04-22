@@ -36,9 +36,6 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
-            onNavigateToMyPage = {
-                navController.navigateToTopLevel(TopLevelDestination.MyPage)
-            },
         )
     }
 

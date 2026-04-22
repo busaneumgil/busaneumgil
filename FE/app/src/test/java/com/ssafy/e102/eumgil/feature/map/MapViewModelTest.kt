@@ -26,9 +26,11 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -586,6 +588,8 @@ private class FakeBookmarkRepository(
     private val failSave: Boolean = false,
     private val failDelete: Boolean = false,
 ) : BookmarkRepository {
+    override fun observeBookmarks(): Flow<List<BookmarkData>> = flowOf(emptyList())
+
     override suspend fun isBookmarked(placeId: String): Boolean =
         placeId in bookmarkedPlaceIds
 

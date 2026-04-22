@@ -3,8 +3,12 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 interface BookmarkRepository {
+    fun observeBookmarks(): Flow<List<BookmarkData>>
+
     suspend fun isBookmarked(placeId: String): Boolean
 
     suspend fun saveBookmark(bookmark: BookmarkData)
@@ -25,6 +29,11 @@ class DefaultBookmarkRepository(
     private val bookmarkDao: BookmarkDao,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : BookmarkRepository {
+    override fun observeBookmarks(): Flow<List<BookmarkData>> =
+        bookmarkDao.observeBookmarks().map { bookmarks ->
+            bookmarks.map(BookmarkEntity::toBookmarkData)
+        }
+
     override suspend fun isBookmarked(placeId: String): Boolean =
         bookmarkDao.getBookmark(placeId) != null
 
@@ -51,6 +60,16 @@ class DefaultBookmarkRepository(
         bookmarkDao.deleteBookmark(placeId)
     }
 }
+
+private fun BookmarkEntity.toBookmarkData(): BookmarkData =
+    BookmarkData(
+        placeId = placeId,
+        placeName = placeName,
+        address = address,
+        latitude = latitude,
+        longitude = longitude,
+        category = category,
+    )
 
 fun FacilityDetailSeed.toBookmarkData(): BookmarkData =
     BookmarkData(

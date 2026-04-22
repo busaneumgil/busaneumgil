@@ -51,7 +51,7 @@ class ReportViewModel(
             is ReportUiAction.DescriptionChanged -> updateDescription(action.description)
             ReportUiAction.DescriptionBlurred -> touchDescription()
             ReportUiAction.SubmitClicked,
-            ReportUiAction.RetrySubmitClicked -> submitShell()
+            ReportUiAction.RetrySubmitClicked -> submitReport()
         }
     }
 
@@ -277,14 +277,63 @@ class ReportViewModel(
         }
     }
 
-    private fun submitShell() {
+    private fun submitReport() {
         val validatedState = mutableUiState.value.validatedForSubmit()
         if (!validatedState.isSubmitEnabled) {
             markSubmitValidationFailed(validatedState)
             return
         }
 
-        markSubmitShellSuccess(validatedState)
+        mutableUiState.value =
+            validatedState.copy(
+                screenState = ReportScreenState.Submitting,
+                submitState = ReportSubmitState.Submitting,
+                outboxState = ReportOutboxState.Saving,
+            )
+
+        viewModelScope.launch {
+            runCatching { reportRepository.saveOutbox(validatedState.toOutboxData()) }
+                .onSuccess { outbox ->
+                    validatedState.draftId?.let { draftId ->
+                        runCatching { reportRepository.deleteDraft(draftId) }
+                    }
+                    latestDraft = null
+                    mutableUiState.value =
+                        validatedState.copy(
+                            screenState = ReportScreenState.Completed,
+                            draftId = null,
+                            hasExistingDraft = false,
+                            draftSaveState = ReportDraftSaveState.Idle,
+                            outboxState = ReportOutboxState.Saved(outboxId = outbox.outboxId),
+                            submitState = ReportSubmitState.Success(reportId = null),
+                        )
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))
+                    emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
+                    emitUiEvent(
+                        ReportUiEvent.NavigateToReportComplete(
+                            reportId = null,
+                            outboxId = outbox.outboxId,
+                        ),
+                    )
+                }.onFailure {
+                    mutableUiState.value =
+                        validatedState.copy(
+                            screenState =
+                                ReportScreenState.Failure(
+                                    reason = ReportFailureReason.LocalSaveFailed,
+                                ),
+                            submitState =
+                                ReportSubmitState.Failed(
+                                    reason = ReportFailureReason.LocalSaveFailed,
+                                ),
+                            outboxState =
+                                ReportOutboxState.Failed(
+                                    reason = ReportFailureReason.LocalSaveFailed,
+                                ),
+                        )
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("제보 저장에 실패했습니다. 다시 시도해 주세요."))
+                }
+        }
     }
 
     private fun markSubmitValidationFailed(validatedState: ReportUiState) {
@@ -294,14 +343,6 @@ class ReportViewModel(
                 submitState = ReportSubmitState.Idle,
             )
         emitUiEvent(ReportUiEvent.ScrollToFirstError)
-    }
-
-    private fun markSubmitShellSuccess(validatedState: ReportUiState) {
-        mutableUiState.value =
-            validatedState.copy(
-                screenState = ReportScreenState.Completed,
-                submitState = ReportSubmitState.Success(),
-            )
     }
 
     private fun resetForm() {
@@ -355,6 +396,27 @@ private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDr
         photoMimeType = photoValue?.mimeType,
         photoSizeBytes = photoValue?.sizeBytes,
         createdAtMillis = existingDraft?.createdAtMillis ?: 0L,
+        updatedAtMillis = now,
+    )
+}
+
+private fun ReportUiState.toOutboxData(): ReportOutboxData {
+    val now = System.currentTimeMillis()
+    val reportTypeValue = requireNotNull(reportType.value)
+    val locationValue = requireNotNull(location.value)
+    val photoValue = photo.value
+
+    return ReportOutboxData(
+        outboxId = "",
+        reportCategory = reportTypeValue.apiValue,
+        description = description.trimmedValue,
+        address = locationValue.address ?: location.addressText.trim().ifEmpty { null },
+        latitude = locationValue.latitude,
+        longitude = locationValue.longitude,
+        photoUri = photoValue?.localUri,
+        photoMimeType = photoValue?.mimeType,
+        photoSizeBytes = photoValue?.sizeBytes,
+        createdAtMillis = now,
         updatedAtMillis = now,
     )
 }

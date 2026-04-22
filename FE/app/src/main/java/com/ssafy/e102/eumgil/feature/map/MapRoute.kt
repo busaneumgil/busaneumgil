@@ -39,6 +39,7 @@ fun MapRoute(
                 currentLocationManager = appContainer.currentLocationManager,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 facilitySeedRepository = appContainer.facilitySeedRepository,
+                bookmarkRepository = appContainer.bookmarkRepository,
             )
         }
     val viewModel =
@@ -80,6 +81,7 @@ fun MapRoute(
                 MapUiEvent.NavigateToSearch -> onNavigateToSearch()
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
+                is MapUiEvent.ShowSnackbar -> Unit
             }
         }
     }

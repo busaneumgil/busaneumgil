@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import kotlinx.coroutines.flow.collect
 
 @Composable
@@ -19,8 +20,17 @@ fun ReportRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
     val activity = remember(context) { context.findComponentActivity() }
-    val viewModelFactory = remember { ReportViewModel.provideFactory() }
+    val viewModelFactory =
+        remember(appContainer) {
+            ReportViewModel.provideFactory(
+                reportRepository = appContainer.reportRepository,
+            )
+        }
     val viewModel =
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "ReportRoute requires a ComponentActivity host." }

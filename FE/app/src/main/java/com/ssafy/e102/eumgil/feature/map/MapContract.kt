@@ -21,6 +21,9 @@ data class MapUiState(
 
 data class MapFacilityDetailSheetState(
     val detail: FacilityDetailSeed? = null,
+    val isBookmarked: Boolean = false,
+    val isBookmarkUpdating: Boolean = false,
+    val bookmarkErrorMessage: String? = null,
 ) {
     val isVisible: Boolean
         get() = detail != null
@@ -34,6 +37,8 @@ sealed interface MapUiAction {
     data object FacilityDetailDismissed : MapUiAction
 
     data object FacilityRouteEntryClicked : MapUiAction
+
+    data object FacilityBookmarkClicked : MapUiAction
 
     data class MarkerTapped(
         val markerId: String,
@@ -52,6 +57,10 @@ sealed interface MapUiEvent {
     data object NavigateToFacilityRouteEntry : MapUiEvent
 
     data object RequestLocationPermission : MapUiEvent
+
+    data class ShowSnackbar(
+        val message: String,
+    ) : MapUiEvent
 }
 
 sealed interface MapLocationStatus {

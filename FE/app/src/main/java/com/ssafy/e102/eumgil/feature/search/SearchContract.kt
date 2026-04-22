@@ -33,7 +33,7 @@ sealed interface SearchUiAction {
 sealed interface SearchUiEvent {
     data object NavigateBack : SearchUiEvent
 
-    data object NavigateToMap : SearchUiEvent
+    data object NavigateToRouteSetting : SearchUiEvent
 }
 
 sealed interface SearchResultUiState {

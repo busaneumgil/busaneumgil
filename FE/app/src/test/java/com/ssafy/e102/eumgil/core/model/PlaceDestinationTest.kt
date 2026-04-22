@@ -1,0 +1,49 @@
+package com.ssafy.e102.eumgil.core.model
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class PlaceDestinationTest {
+    @Test
+    fun `search result handoff keeps minimum route destination dataset`() {
+        val result =
+            SearchResult(
+                placeId = "place-1",
+                title = "Busan City Hall Elevator",
+                subtitle = "123 Jungang-daero, Busan",
+                latitude = 35.1796,
+                longitude = 129.0756,
+                category = PlaceCategory.ELEVATOR,
+            )
+
+        val destination = result.toPlaceDestination()
+
+        assertEquals("place-1", destination.placeId)
+        assertEquals("Busan City Hall Elevator", destination.name)
+        assertEquals("123 Jungang-daero, Busan", destination.address)
+        assertEquals(35.1796, destination.latitude, 0.0)
+        assertEquals(129.0756, destination.longitude, 0.0)
+        assertEquals(PlaceCategory.ELEVATOR, destination.category)
+    }
+
+    @Test
+    fun `facility detail handoff maps facility category into shared destination contract`() {
+        val detail =
+            FacilityDetailSeed(
+                facilityId = "facility-1",
+                name = "Accessible Rest Stop",
+                address = "45 Haeundae-ro, Busan",
+                coordinate = GeoCoordinate(latitude = 35.1632, longitude = 129.1636),
+                category = FacilityCategory.TOILET,
+            )
+
+        val destination = detail.toPlaceDestination()
+
+        assertEquals("facility-1", destination.placeId)
+        assertEquals("Accessible Rest Stop", destination.name)
+        assertEquals("45 Haeundae-ro, Busan", destination.address)
+        assertEquals(35.1632, destination.latitude, 0.0)
+        assertEquals(129.1636, destination.longitude, 0.0)
+        assertEquals(PlaceCategory.TOILET, destination.category)
+    }
+}

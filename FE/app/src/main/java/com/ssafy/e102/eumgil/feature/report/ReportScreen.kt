@@ -64,6 +64,7 @@ fun ReportScreen(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
             ReportIntroSection(uiState = uiState)
+            ReportStatePreviewSection(uiState = uiState)
             ReportTypeSection(
                 input = uiState.reportType,
                 onAction = onAction,
@@ -157,6 +158,55 @@ private fun ReportIntroSection(uiState: ReportUiState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun ReportStatePreviewSection(uiState: ReportUiState) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(EumRadius.large),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            Text(
+                text = "상태 시안",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            ReportStateRow(label = "화면", value = reportScreenStateLabel(uiState.screenState))
+            ReportStateRow(label = "임시저장", value = reportDraftStateLabel(uiState))
+            ReportStateRow(label = "outbox", value = reportOutboxStateLabel(uiState.outboxState))
+            ReportStateRow(label = "제출", value = reportSubmitStateLabel(uiState))
+        }
+    }
+}
+
+@Composable
+private fun ReportStateRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -478,3 +528,49 @@ private fun reportDescriptionErrorText(error: ReportDescriptionError?): String? 
         ReportDescriptionError.TooLong -> "설명은 ${ReportFormLimits.DESCRIPTION_MAX_LENGTH}자까지 입력할 수 있습니다."
         null -> null
     }
+
+private fun reportScreenStateLabel(state: ReportScreenState): String =
+    when (state) {
+        ReportScreenState.InitialLoading -> "초기 로딩"
+        ReportScreenState.Editing -> "입력 중"
+        ReportScreenState.Submitting -> "제출 진행 중"
+        ReportScreenState.Completed -> "제출 완료 피드백"
+        is ReportScreenState.Failure -> "실패 후 재시도 가능"
+    }
+
+private fun reportDraftStateLabel(uiState: ReportUiState): String =
+    when (uiState.draftSaveState) {
+        ReportDraftSaveState.Idle ->
+            if (uiState.isDraftSavable) {
+                "저장 가능"
+            } else {
+                "입력 전"
+            }
+        ReportDraftSaveState.Saving -> "저장 중"
+        is ReportDraftSaveState.Saved -> "저장 완료"
+        is ReportDraftSaveState.Failed -> "저장 실패"
+    }
+
+private fun reportOutboxStateLabel(state: ReportOutboxState): String =
+    when (state) {
+        ReportOutboxState.NotSaved -> "저장 전"
+        ReportOutboxState.Saving -> "outbox 저장 중"
+        is ReportOutboxState.Saved -> "outbox 저장 완료"
+        is ReportOutboxState.Failed -> "outbox 저장 실패"
+    }
+
+private fun reportSubmitStateLabel(uiState: ReportUiState): String {
+    val submitStateLabel =
+        when (uiState.submitState) {
+            ReportSubmitState.Idle -> "대기"
+            ReportSubmitState.Submitting -> "제출 중"
+            is ReportSubmitState.Success -> "성공"
+            is ReportSubmitState.Failed -> "실패"
+        }
+
+    return if (uiState.isSubmitEnabled) {
+        "$submitStateLabel / 제출 가능"
+    } else {
+        "$submitStateLabel / 제출 불가"
+    }
+}

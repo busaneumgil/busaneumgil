@@ -62,3 +62,9 @@ sealed interface ReportRoute : AppRoute {
         override val route: String = "report"
     }
 }
+
+sealed interface NavigationRoute : AppRoute {
+    data object Guidance : NavigationRoute {
+        override val route: String = "navigation_guidance"
+    }
+}

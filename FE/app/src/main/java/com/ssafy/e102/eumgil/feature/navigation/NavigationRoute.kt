@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.feature.route
+package com.ssafy.e102.eumgil.feature.navigation
 
 import android.content.Context
 import android.content.ContextWrapper
@@ -11,45 +11,35 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import kotlinx.coroutines.flow.collect
 
 @Composable
-fun RouteSettingEntryRoute(
+fun NavigationRoute(
     onNavigateBack: () -> Unit,
-    onStartNavigation: (RouteNavigationRequest) -> Unit = {},
+    onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val appContainer =
-        remember(context.applicationContext) {
-            (context.applicationContext as BusanEumgilApp).appContainer
-        }
     val activity = remember(context) { context.findComponentActivity() }
-    val viewModelFactory =
-        remember(appContainer) {
-            RouteSettingViewModel.provideFactory(
-                routeRepository = appContainer.routeRepository,
-                destinationSelectionRepository = appContainer.destinationSelectionRepository,
-            )
-        }
+    val viewModelFactory = remember { NavigationViewModel.provideFactory() }
     val viewModel =
         remember(activity, viewModelFactory) {
-            val owner = checkNotNull(activity) { "RouteSettingEntryRoute requires a ComponentActivity host." }
-            ViewModelProvider(owner, viewModelFactory)[RouteSettingViewModel::class.java]
+            val owner = checkNotNull(activity) { "NavigationRoute requires a ComponentActivity host." }
+            ViewModelProvider(owner, viewModelFactory)[NavigationViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                RouteSettingUiEvent.NavigateBack -> onNavigateBack()
-                is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
+                NavigationUiEvent.NavigateBack -> onNavigateBack()
+                NavigationUiEvent.NavigateToMap -> onNavigateToMap()
+                is NavigationUiEvent.ShowSnackbar -> Unit
             }
         }
     }
 
-    RouteSettingScreen(
+    NavigationScreen(
         uiState = uiState,
         onAction = viewModel::onAction,
         modifier = modifier,

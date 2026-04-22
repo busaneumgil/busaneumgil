@@ -3,11 +3,11 @@ package com.ssafy.e102.eumgil.feature.navigation
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -21,11 +21,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.feature.navigation.component.NavigationStepCard
 
 @Composable
 fun NavigationScreen(
@@ -80,7 +80,7 @@ fun NavigationScreen(
                     title = uiState.mapPlaceholderTitle,
                     description = uiState.mapPlaceholderDescription,
                 )
-                NavigationStepShell(uiState = uiState)
+                NavigationStepCard(uiState = uiState.stepCard)
             }
         }
     }
@@ -154,129 +154,6 @@ private fun NavigationMapShell(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun NavigationStepShell(uiState: NavigationUiState) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-    ) {
-        Text(
-            text = stringResource(id = R.string.navigation_step_section_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(EumRadius.large),
-            color = MaterialTheme.colorScheme.surfaceContainerLowest,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(EumSpacing.medium),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(EumRadius.full),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                ) {
-                    Text(
-                        text =
-                            stringResource(
-                                id = R.string.navigation_progress_badge,
-                                uiState.progressText,
-                            ),
-                        modifier =
-                            Modifier.padding(
-                                horizontal = EumSpacing.small,
-                                vertical = EumSpacing.xSmall,
-                            ),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Text(
-                    text = uiState.currentInstruction,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                ) {
-                    NavigationMetricCard(
-                        label = stringResource(id = R.string.navigation_metric_distance),
-                        value = uiState.remainingDistanceText,
-                        modifier = Modifier.weight(1f),
-                    )
-                    NavigationMetricCard(
-                        label = stringResource(id = R.string.navigation_metric_eta),
-                        value = uiState.estimatedTimeText,
-                        modifier = Modifier.weight(1f),
-                    )
-                    NavigationMetricCard(
-                        label = stringResource(id = R.string.navigation_metric_progress),
-                        value = uiState.progressText,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(EumRadius.medium),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(EumSpacing.medium),
-                        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                    ) {
-                        Text(
-                            text = uiState.stepCardPlaceholderTitle,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = uiState.stepCardPlaceholderDescription,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NavigationMetricCard(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.small),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
         }
     }
 }

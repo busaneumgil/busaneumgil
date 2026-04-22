@@ -104,6 +104,9 @@ fun SavedRouteScreen(
                             onPlaceClick = {
                                 onAction(SavedRouteUiAction.PlaceClicked(placeId = place.placeId))
                             },
+                            onRouteGuideClick = {
+                                onAction(SavedRouteUiAction.RouteGuideClicked(placeId = place.placeId))
+                            },
                             onRemoveClick = {
                                 onAction(SavedRouteUiAction.BookmarkRemoveClicked(placeId = place.placeId))
                             },
@@ -266,6 +269,7 @@ private fun SavedRouteInlineMessage(message: String) {
 private fun SavedPlaceListItem(
     place: SavedPlaceUiModel,
     onPlaceClick: () -> Unit,
+    onRouteGuideClick: () -> Unit,
     onRemoveClick: () -> Unit,
 ) {
     val accessibilityDescription =
@@ -281,18 +285,17 @@ private fun SavedPlaceListItem(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(
+        Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(EumSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
             Column(
                 modifier =
                     Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .clickable(
                             role = Role.Button,
                             onClick = onPlaceClick,
@@ -320,8 +323,29 @@ private fun SavedPlaceListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            OutlinedButton(onClick = onRemoveClick) {
-                Text(text = stringResource(id = R.string.saved_route_remove_bookmark))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = onPlaceClick,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(text = stringResource(id = R.string.saved_route_view_on_map))
+                }
+                Button(
+                    onClick = onRouteGuideClick,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(text = stringResource(id = R.string.saved_route_start_route))
+                }
+                OutlinedButton(
+                    onClick = onRemoveClick,
+                    modifier = Modifier.weight(0.8f),
+                ) {
+                    Text(text = stringResource(id = R.string.saved_route_remove_bookmark))
+                }
             }
         }
     }

@@ -43,6 +43,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.route)
+            },
         )
     }
 

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.collect
 @Composable
 fun SavedRouteRoute(
     onNavigateToMap: () -> Unit,
+    onNavigateToRouteSetting: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -39,10 +40,11 @@ fun SavedRouteRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, onNavigateToMap) {
+    LaunchedEffect(viewModel, onNavigateToMap, onNavigateToRouteSetting) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 SavedRouteUiEvent.NavigateToMap -> onNavigateToMap()
+                SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 is SavedRouteUiEvent.ShowSnackbar -> Unit
             }
         }

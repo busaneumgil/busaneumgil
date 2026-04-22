@@ -50,6 +50,7 @@ fun ReportScreen(
             ReportSubmitBar(
                 enabled = uiState.isSubmitEnabled,
                 completed = uiState.screenState == ReportScreenState.Completed,
+                submitting = uiState.submitState is ReportSubmitState.Submitting,
                 onSubmitClick = { onAction(ReportUiAction.SubmitClicked) },
             )
         },
@@ -64,7 +65,10 @@ fun ReportScreen(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
             ReportIntroSection(uiState = uiState)
-            ReportStatePreviewSection(uiState = uiState)
+            ReportStatePreviewSection(
+                uiState = uiState,
+                onAction = onAction,
+            )
             ReportTypeSection(
                 input = uiState.reportType,
                 onAction = onAction,
@@ -126,7 +130,7 @@ private fun ReportIntroSection(uiState: ReportUiState) {
         }
     val description =
         if (isCompleted) {
-            "205 shell 단계에서는 제출 완료 피드백만 표시합니다. 실제 저장과 전송은 207에서 연결합니다."
+            "제보는 로컬 outbox에 저장되었습니다. 이후 전송 상태와 서버 응답은 outbox 흐름에서 이어집니다."
         } else {
             "제보 유형, 위치, 사진, 설명 순서로 입력합니다. 사진과 설명은 선택 사항입니다."
         }
@@ -162,7 +166,16 @@ private fun ReportIntroSection(uiState: ReportUiState) {
 }
 
 @Composable
-private fun ReportStatePreviewSection(uiState: ReportUiState) {
+private fun ReportStatePreviewSection(
+    uiState: ReportUiState,
+    onAction: (ReportUiAction) -> Unit,
+) {
+    val isDraftSaving = uiState.draftSaveState is ReportDraftSaveState.Saving
+    val isSubmitRecoverable = uiState.screenState is ReportScreenState.Failure ||
+        uiState.submitState is ReportSubmitState.Failed ||
+        uiState.outboxState is ReportOutboxState.Failed
+    val hasStateActions = uiState.hasExistingDraft || uiState.isDraftSavable || isSubmitRecoverable
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -183,6 +196,56 @@ private fun ReportStatePreviewSection(uiState: ReportUiState) {
             ReportStateRow(label = "임시저장", value = reportDraftStateLabel(uiState))
             ReportStateRow(label = "outbox", value = reportOutboxStateLabel(uiState.outboxState))
             ReportStateRow(label = "제출", value = reportSubmitStateLabel(uiState))
+            if (hasStateActions) {
+                ReportStateActionButtons(
+                    uiState = uiState,
+                    isDraftSaving = isDraftSaving,
+                    isSubmitRecoverable = isSubmitRecoverable,
+                    onAction = onAction,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportStateActionButtons(
+    uiState: ReportUiState,
+    isDraftSaving: Boolean,
+    isSubmitRecoverable: Boolean,
+    onAction: (ReportUiAction) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+    ) {
+        if (uiState.hasExistingDraft) {
+            OutlinedButton(
+                onClick = { onAction(ReportUiAction.DraftResumeClicked) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "임시저장 불러오기")
+            }
+            OutlinedButton(
+                onClick = { onAction(ReportUiAction.DraftDiscardClicked) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "임시저장 삭제")
+            }
+        }
+        OutlinedButton(
+            onClick = { onAction(ReportUiAction.SaveDraftClicked) },
+            enabled = uiState.isDraftSavable && !isDraftSaving,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = if (isDraftSaving) "임시저장 중" else "임시저장")
+        }
+        if (isSubmitRecoverable) {
+            Button(
+                onClick = { onAction(ReportUiAction.RetrySubmitClicked) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "다시 제출")
+            }
         }
     }
 }
@@ -332,7 +395,7 @@ private fun ReportPhotoSection(
 
     ReportFormSection(
         title = "3. 사진",
-        helperText = reportPhotoErrorText(input.error) ?: "사진은 선택 사항입니다. shell 단계에서는 mock 사진 상태만 확인합니다.",
+        helperText = reportPhotoErrorText(input.error) ?: "사진은 선택 사항입니다. 첨부하면 outbox에 함께 저장됩니다.",
         isError = input.error != null,
     ) {
         Surface(
@@ -419,6 +482,7 @@ private fun ReportDescriptionSection(
 private fun ReportSubmitBar(
     enabled: Boolean,
     completed: Boolean,
+    submitting: Boolean,
     onSubmitClick: () -> Unit,
 ) {
     Surface(
@@ -438,7 +502,7 @@ private fun ReportSubmitBar(
                     .padding(EumSpacing.medium),
             contentPadding = PaddingValues(vertical = EumSpacing.small),
         ) {
-            Text(text = if (completed) "제출 완료" else "제보 제출")
+            Text(text = reportSubmitButtonText(completed = completed, submitting = submitting))
         }
     }
 }
@@ -574,3 +638,13 @@ private fun reportSubmitStateLabel(uiState: ReportUiState): String {
         "$submitStateLabel / 제출 불가"
     }
 }
+
+private fun reportSubmitButtonText(
+    completed: Boolean,
+    submitting: Boolean,
+): String =
+    when {
+        completed -> "제출 완료"
+        submitting -> "제출 중"
+        else -> "제보 제출"
+    }

@@ -8,3 +8,6 @@ HELP.md
 .env.*
 .claude/
 FE/awesome-design-md/
+
+.omx
+.tmp

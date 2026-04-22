@@ -5,21 +5,24 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "reportDraft",
-    indices = [Index(value = ["updatedAt"])],
+    tableName = "reportOutbox",
+    indices = [
+        Index(value = ["status"]),
+        Index(value = ["updatedAt"]),
+    ],
 )
-data class ReportDraftEntity(
+data class ReportOutboxEntity(
     @PrimaryKey
-    val draftId: String,
-    val reportCategory: String? = null,
+    val outboxId: String,
+    val reportCategory: String,
     val description: String = "",
     val address: String? = null,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    val locationSource: String? = null,
+    val latitude: Double,
+    val longitude: Double,
     val photoUri: String? = null,
     val photoMimeType: String? = null,
     val photoSizeBytes: Long? = null,
+    val status: String,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
 )

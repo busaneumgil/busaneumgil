@@ -7,8 +7,29 @@ object EumgilDatabaseMigrations {
     val MIGRATION_1_2: Migration =
         object : Migration(1, 2) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Initial Room schema starts at version 1.
-                // Fill in ALTER TABLE / backfill statements here when version 2 is introduced.
+                database.execSQL("ALTER TABLE reportDraft ADD COLUMN locationSource TEXT")
+                database.execSQL("ALTER TABLE reportDraft ADD COLUMN photoMimeType TEXT")
+                database.execSQL("ALTER TABLE reportDraft ADD COLUMN photoSizeBytes INTEGER")
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS reportOutbox (
+                        outboxId TEXT NOT NULL PRIMARY KEY,
+                        reportCategory TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        address TEXT,
+                        latitude REAL NOT NULL,
+                        longitude REAL NOT NULL,
+                        photoUri TEXT,
+                        photoMimeType TEXT,
+                        photoSizeBytes INTEGER,
+                        status TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_reportOutbox_status ON reportOutbox(status)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_reportOutbox_updatedAt ON reportOutbox(updatedAt)")
             }
         }
 

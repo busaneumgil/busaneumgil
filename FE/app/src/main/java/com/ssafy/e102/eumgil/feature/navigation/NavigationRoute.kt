@@ -34,7 +34,6 @@ fun NavigationRoute(
             when (event) {
                 NavigationUiEvent.NavigateBack -> onNavigateBack()
                 NavigationUiEvent.NavigateToMap -> onNavigateToMap()
-                is NavigationUiEvent.ShowSnackbar -> Unit
             }
         }
     }

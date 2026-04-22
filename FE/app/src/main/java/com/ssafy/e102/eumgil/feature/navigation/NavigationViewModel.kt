@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class NavigationViewModel : ViewModel() {
@@ -22,52 +21,11 @@ class NavigationViewModel : ViewModel() {
     fun onAction(action: NavigationUiAction) {
         when (action) {
             NavigationUiAction.BackClicked -> emitUiEvent(NavigationUiEvent.NavigateBack)
-            NavigationUiAction.EndNavigationClicked -> emitUiEvent(NavigationUiEvent.NavigateToMap)
-            NavigationUiAction.VoiceGuidanceToggled -> toggleVoiceGuidance()
-            NavigationUiAction.RerouteClicked -> setReroutingState()
-            NavigationUiAction.CompleteMockNavigationClicked -> completeMockNavigation()
-            NavigationUiAction.RetryClicked -> retryMockNavigation()
-        }
-    }
-
-    private fun toggleVoiceGuidance() {
-        mutableUiState.update { state ->
-            state.copy(isVoiceGuidanceEnabled = !state.isVoiceGuidanceEnabled)
-        }
-    }
-
-    private fun setReroutingState() {
-        mutableUiState.update { state ->
-            state.copy(
-                screenState = NavigationScreenState.Rerouting,
-                currentInstruction = "경로를 다시 확인하는 중입니다.",
-                isRerouting = true,
-                errorMessage = null,
-            )
-        }
-        emitUiEvent(NavigationUiEvent.ShowSnackbar("재탐색 mock 상태로 전환했습니다."))
-    }
-
-    private fun completeMockNavigation() {
-        mutableUiState.update { state ->
-            state.copy(
-                screenState = NavigationScreenState.Completed,
-                currentInstruction = "목적지에 도착했습니다.",
-                remainingDistanceText = "0m",
-                estimatedTimeText = "완료",
-                currentStepIndex = state.totalStepCount,
-                isRerouting = false,
-                errorMessage = null,
-            )
-        }
-    }
-
-    private fun retryMockNavigation() {
-        mutableUiState.update {
-            NavigationUiState(
-                screenState = NavigationScreenState.Guiding,
-                isVoiceGuidanceEnabled = it.isVoiceGuidanceEnabled,
-            )
+            NavigationUiAction.ExitNavigationClicked -> {
+                if (uiState.value.isExitEnabled) {
+                    emitUiEvent(NavigationUiEvent.NavigateToMap)
+                }
+            }
         }
     }
 

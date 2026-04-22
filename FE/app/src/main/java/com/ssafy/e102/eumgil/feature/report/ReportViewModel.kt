@@ -3,6 +3,9 @@ package com.ssafy.e102.eumgil.feature.report
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.data.repository.ReportDraftData
+import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -12,19 +15,27 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class ReportViewModel : ViewModel() {
+class ReportViewModel(
+    private val reportRepository: ReportRepository,
+) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = mutableUiState.asStateFlow()
 
     private val mutableUiEvent = MutableSharedFlow<ReportUiEvent>()
     val uiEvent: SharedFlow<ReportUiEvent> = mutableUiEvent.asSharedFlow()
 
+    private var latestDraft: ReportDraftData? = null
+
+    init {
+        loadLatestDraft()
+    }
+
     fun onAction(action: ReportUiAction) {
         when (action) {
             ReportUiAction.BackClicked -> emitUiEvent(ReportUiEvent.NavigateBack)
-            ReportUiAction.DraftDiscardClicked -> resetForm()
-            ReportUiAction.DraftResumeClicked,
-            ReportUiAction.SaveDraftClicked -> Unit
+            ReportUiAction.DraftDiscardClicked -> discardDraft()
+            ReportUiAction.DraftResumeClicked -> resumeDraft()
+            ReportUiAction.SaveDraftClicked -> saveDraft()
 
             is ReportUiAction.ReportTypeSelected -> selectReportType(action.type)
             ReportUiAction.ReportTypeBlurred -> touchReportType()
@@ -41,6 +52,94 @@ class ReportViewModel : ViewModel() {
             ReportUiAction.DescriptionBlurred -> touchDescription()
             ReportUiAction.SubmitClicked,
             ReportUiAction.RetrySubmitClicked -> submitShell()
+        }
+    }
+
+    private fun loadLatestDraft() {
+        viewModelScope.launch {
+            runCatching { reportRepository.getLatestDraft() }
+                .onSuccess { draft ->
+                    latestDraft = draft
+                    if (draft != null) {
+                        mutableUiState.update { state ->
+                            state.copy(
+                                draftId = draft.draftId,
+                                hasExistingDraft = true,
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun saveDraft() {
+        val currentState = mutableUiState.value
+        if (!currentState.isDraftSavable) return
+
+        mutableUiState.update { state ->
+            state.copy(draftSaveState = ReportDraftSaveState.Saving)
+        }
+
+        viewModelScope.launch {
+            runCatching { reportRepository.saveDraft(currentState.toDraftData(latestDraft)) }
+                .onSuccess { draft ->
+                    latestDraft = draft
+                    mutableUiState.update { state ->
+                        state.copy(
+                            draftId = draft.draftId,
+                            hasExistingDraft = true,
+                            draftSaveState =
+                                ReportDraftSaveState.Saved(
+                                    draftId = draft.draftId,
+                                    savedAtMillis = draft.updatedAtMillis,
+                                ),
+                        )
+                    }
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장했습니다."))
+                    emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보 draft를 임시저장했습니다."))
+                }.onFailure {
+                    mutableUiState.update { state ->
+                        state.copy(
+                            draftSaveState =
+                                ReportDraftSaveState.Failed(
+                                    reason = ReportFailureReason.LocalSaveFailed,
+                                ),
+                        )
+                    }
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장에 실패했습니다."))
+                }
+        }
+    }
+
+    private fun resumeDraft() {
+        val draft = latestDraft ?: return
+        mutableUiState.value = draft.toUiState()
+    }
+
+    private fun discardDraft() {
+        val draftId = mutableUiState.value.draftId ?: latestDraft?.draftId
+        if (draftId == null) {
+            resetForm()
+            return
+        }
+
+        viewModelScope.launch {
+            runCatching { reportRepository.deleteDraft(draftId) }
+                .onSuccess {
+                    latestDraft = null
+                    resetForm()
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장을 삭제했습니다."))
+                }.onFailure {
+                    mutableUiState.update { state ->
+                        state.copy(
+                            draftSaveState =
+                                ReportDraftSaveState.Failed(
+                                    reason = ReportFailureReason.LocalSaveFailed,
+                                ),
+                        )
+                    }
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장 삭제에 실패했습니다."))
+                }
         }
     }
 
@@ -216,12 +315,12 @@ class ReportViewModel : ViewModel() {
     }
 
     companion object {
-        fun provideFactory(): ViewModelProvider.Factory =
+        fun provideFactory(reportRepository: ReportRepository): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     if (modelClass.isAssignableFrom(ReportViewModel::class.java)) {
-                        return ReportViewModel() as T
+                        return ReportViewModel(reportRepository = reportRepository) as T
                     }
 
                     error("Unknown ViewModel class: ${modelClass.name}")
@@ -237,6 +336,97 @@ private fun ReportTypeInput.withValue(type: ReportType): ReportTypeInput =
         isDirty = true,
         error = validateReportType(type),
     )
+
+private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDraftData {
+    val now = System.currentTimeMillis()
+    val locationValue = location.value
+    val photoValue = photo.value
+    val draftId = draftId ?: existingDraft?.draftId.orEmpty()
+
+    return ReportDraftData(
+        draftId = draftId,
+        reportCategory = reportType.value?.apiValue,
+        description = description.trimmedValue,
+        address = locationValue?.address ?: location.addressText.trim().ifEmpty { null },
+        latitude = locationValue?.latitude,
+        longitude = locationValue?.longitude,
+        locationSource = location.source.name,
+        photoUri = photoValue?.localUri,
+        photoMimeType = photoValue?.mimeType,
+        photoSizeBytes = photoValue?.sizeBytes,
+        createdAtMillis = existingDraft?.createdAtMillis ?: 0L,
+        updatedAtMillis = now,
+    )
+}
+
+private fun ReportDraftData.toUiState(): ReportUiState {
+    val reportType = reportCategory.toReportType()
+    val location =
+        if (latitude != null && longitude != null) {
+            ReportLocation(
+                latitude = latitude,
+                longitude = longitude,
+                address = address,
+            )
+        } else {
+            null
+        }
+    val locationSource = locationSource.toReportLocationSource()
+    val photo =
+        photoUri?.takeIf(String::isNotBlank)?.let { uri ->
+            ReportPhoto(
+                localUri = uri,
+                mimeType = photoMimeType,
+                sizeBytes = photoSizeBytes,
+            )
+        }
+
+    return ReportUiState(
+        draftId = draftId,
+        hasExistingDraft = true,
+        reportType =
+            ReportTypeInput(
+                value = reportType,
+                isDirty = reportType != null,
+                error = validateReportType(reportType),
+            ),
+        location =
+            ReportLocationInput(
+                value = location,
+                addressText = address.orEmpty(),
+                source = locationSource,
+                isDirty = location != null || !address.isNullOrBlank(),
+                error = if (location == null) null else validateLocation(location, address.orEmpty()),
+            ),
+        photo =
+            ReportPhotoInput(
+                value = photo,
+                isDirty = photo != null,
+                error = validatePhoto(photo),
+            ),
+        description =
+            ReportDescriptionInput(
+                value = description,
+                isDirty = description.isNotBlank(),
+                error = validateDescription(description),
+            ),
+        draftSaveState =
+            ReportDraftSaveState.Saved(
+                draftId = draftId,
+                savedAtMillis = updatedAtMillis,
+            ),
+    )
+}
+
+private fun String?.toReportType(): ReportType? =
+    ReportType.values().firstOrNull { type -> type.apiValue == this }
+
+private fun String?.toReportLocationSource(): ReportLocationSource =
+    this
+        ?.let { value ->
+            ReportLocationSource.values().firstOrNull { source -> source.name == value }
+        }
+        ?: ReportLocationSource.Draft
 
 private fun ReportTypeInput.validated(touched: Boolean = isTouched): ReportTypeInput =
     copy(

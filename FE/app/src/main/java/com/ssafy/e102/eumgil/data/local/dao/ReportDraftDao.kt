@@ -17,6 +17,9 @@ interface ReportDraftDao {
     @Query("SELECT * FROM reportDraft WHERE draftId = :draftId LIMIT 1")
     suspend fun getReportDraft(draftId: String): ReportDraftEntity?
 
+    @Query("SELECT * FROM reportDraft ORDER BY updatedAt DESC LIMIT 1")
+    suspend fun getLatestReportDraft(): ReportDraftEntity?
+
     @Upsert
     suspend fun upsertReportDraft(reportDraft: ReportDraftEntity)
 

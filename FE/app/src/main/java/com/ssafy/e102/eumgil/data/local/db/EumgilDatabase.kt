@@ -8,16 +8,19 @@ import com.ssafy.e102.eumgil.data.local.dao.AppSettingDao
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
+import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.entity.AppSettingEntity
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import com.ssafy.e102.eumgil.data.local.entity.FavoriteRouteEntity
 import com.ssafy.e102.eumgil.data.local.entity.ReportDraftEntity
+import com.ssafy.e102.eumgil.data.local.entity.ReportOutboxEntity
 
 @Database(
     entities = [
         BookmarkEntity::class,
         FavoriteRouteEntity::class,
         ReportDraftEntity::class,
+        ReportOutboxEntity::class,
         AppSettingEntity::class,
     ],
     version = EumgilDatabase.DATABASE_VERSION,
@@ -30,11 +33,13 @@ abstract class EumgilDatabase : RoomDatabase() {
 
     abstract fun reportDraftDao(): ReportDraftDao
 
+    abstract fun reportOutboxDao(): ReportOutboxDao
+
     abstract fun appSettingDao(): AppSettingDao
 
     companion object {
         const val DATABASE_NAME = "eumgil.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
 
         @Volatile
         private var instance: EumgilDatabase? = null

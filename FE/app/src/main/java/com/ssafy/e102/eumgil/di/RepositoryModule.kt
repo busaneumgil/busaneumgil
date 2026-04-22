@@ -6,6 +6,8 @@ import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
+import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
+import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
@@ -21,7 +23,9 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.DefaultReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolicy
@@ -89,5 +93,14 @@ object RepositoryModule {
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+        )
+
+    fun provideReportRepository(
+        reportDraftDao: ReportDraftDao,
+        reportOutboxDao: ReportOutboxDao,
+    ): ReportRepository =
+        DefaultReportRepository(
+            reportDraftDao = reportDraftDao,
+            reportOutboxDao = reportOutboxDao,
         )
 }

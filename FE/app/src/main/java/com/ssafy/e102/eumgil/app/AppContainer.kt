@@ -23,6 +23,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -97,6 +98,12 @@ class AppContainer(
             localDataSource = searchLocalDataSource,
             mockDataSource = searchMockDataSource,
             sourcePolicy = repositorySourcePolicy,
+        )
+
+    val reportRepository: ReportRepository =
+        RepositoryModule.provideReportRepository(
+            reportDraftDao = localDatabase.reportDraftDao(),
+            reportOutboxDao = localDatabase.reportOutboxDao(),
         )
 
     val locationPermissionManager: LocationPermissionManager =

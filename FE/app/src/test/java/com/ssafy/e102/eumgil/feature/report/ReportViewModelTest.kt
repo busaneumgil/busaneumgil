@@ -226,6 +226,37 @@ class ReportViewModelTest {
             assertTrue(uiState.submitState is ReportSubmitState.Failed)
             assertTrue(uiState.outboxState is ReportOutboxState.Failed)
         }
+
+    @Test
+    fun `editing after outbox failure clears retry failure state`() =
+        runTest {
+            val repository = FakeReportRepository(failOutbox = true)
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.DescriptionChanged("장애물"))
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DescriptionChanged("장애물 위치 변경"))
+            val uiState = viewModel.uiState.value
+
+            assertTrue(uiState.screenState is ReportScreenState.Editing)
+            assertEquals(ReportSubmitState.Idle, uiState.submitState)
+            assertEquals(ReportOutboxState.NotSaved, uiState.outboxState)
+            assertTrue(uiState.isSubmitEnabled)
+        }
 }
 
 private class FakeReportRepository(

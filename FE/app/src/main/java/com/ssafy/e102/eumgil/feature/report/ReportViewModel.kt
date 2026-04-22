@@ -148,6 +148,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 reportType = state.reportType.withValue(type),
+                outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -197,6 +198,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 location = state.location.withValue(location, source),
+                outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -209,7 +211,9 @@ class ReportViewModel(
                 currentLocation?.copy(address = address.trim().ifEmpty { null })
 
             state.copy(
+                screenState = ReportScreenState.Editing,
                 location = state.location.withAddress(address, updatedLocation),
+                outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -234,7 +238,9 @@ class ReportViewModel(
     private fun selectPhoto(photo: ReportPhoto) {
         mutableUiState.update { state ->
             state.copy(
+                screenState = ReportScreenState.Editing,
                 photo = state.photo.withValue(photo),
+                outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -249,7 +255,9 @@ class ReportViewModel(
 
         mutableUiState.update { state ->
             state.copy(
+                screenState = ReportScreenState.Editing,
                 photo = clearedPhoto,
+                outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
         }
@@ -266,6 +274,7 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 description = state.description.withValue(description),
+                outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
         }

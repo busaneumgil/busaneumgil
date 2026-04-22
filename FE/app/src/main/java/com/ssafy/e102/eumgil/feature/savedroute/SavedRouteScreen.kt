@@ -97,7 +97,7 @@ fun SavedRouteScreen(
                     }
                     items(
                         items = uiState.places,
-                        key = SavedPlaceUiModel::placeId,
+                        key = { place -> place.placeId },
                     ) { place ->
                         SavedPlaceListItem(
                             place = place,

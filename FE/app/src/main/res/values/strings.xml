@@ -298,6 +298,16 @@
     <string name="route_setting_destination_field_value">%1$s: %2$s</string>
     <string name="route_setting_destination_supporting_fallback">유효한 목적지 handoff 전에는 fixture 목적지를 임시 도착지로 유지합니다.</string>
     <string name="feature_path_route_setting">feature/route</string>
+    <string name="navigation_screen_title">안내 진행</string>
+    <string name="navigation_back">뒤로가기</string>
+    <string name="navigation_shell_title">내비게이션 진행 기본 구조</string>
+    <string name="navigation_shell_description">SCR-010 MVP 기준으로 상단, 본문, 하단 CTA 배치를 먼저 고정했습니다.</string>
+    <string name="navigation_map_section_title">실시간 지도</string>
+    <string name="navigation_step_section_title">현재 안내</string>
+    <string name="navigation_progress_badge">단계 %1$s</string>
+    <string name="navigation_metric_distance">남은 거리</string>
+    <string name="navigation_metric_eta">예상 시간</string>
+    <string name="navigation_metric_progress">진행 단계</string>
     <string name="map_facility_detail_bookmark_section_title">북마크</string>
     <string name="map_facility_detail_bookmark_unsaved_description">자주 확인할 시설이면 북마크에 저장할 수 있습니다.</string>
     <string name="map_facility_detail_bookmark_saved_description">북마크에 저장된 시설입니다.</string>

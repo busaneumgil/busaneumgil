@@ -16,6 +16,8 @@ import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -51,6 +54,7 @@ class MapViewModelTest {
                     currentLocationManager = locationManager,
                     destinationSelectionRepository = destinationSelectionRepository,
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
             val destination = testDestination()
 
@@ -80,6 +84,7 @@ class MapViewModelTest {
                     currentLocationManager = locationManager,
                     destinationSelectionRepository = destinationSelectionRepository,
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
             val destination = testDestination()
 
@@ -121,6 +126,7 @@ class MapViewModelTest {
                     currentLocationManager = locationManager,
                     destinationSelectionRepository = destinationSelectionRepository,
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
             val destination = testDestination()
 
@@ -150,6 +156,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -170,6 +177,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -203,6 +211,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -228,6 +237,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -250,6 +260,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -268,6 +279,96 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `marker tap loads existing bookmark state`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                )
+
+            advanceUntilIdle()
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+            bookmarkRepository.bookmarkedPlaceIds += markerId
+
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isBookmarked)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isBookmarkUpdating)
+        }
+
+    @Test
+    fun `bookmark toggle saves and removes selected facility bookmark`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                )
+
+            advanceUntilIdle()
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.FacilityBookmarkClicked)
+            advanceUntilIdle()
+
+            assertTrue(markerId in bookmarkRepository.bookmarkedPlaceIds)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isBookmarked)
+
+            viewModel.onAction(MapUiAction.FacilityBookmarkClicked)
+            advanceUntilIdle()
+
+            assertFalse(markerId in bookmarkRepository.bookmarkedPlaceIds)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isBookmarked)
+        }
+
+    @Test
+    fun `bookmark toggle failure rolls back selected facility state`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository(failSave = true)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                )
+
+            advanceUntilIdle()
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.FacilityBookmarkClicked)
+            advanceUntilIdle()
+
+            val sheetState = viewModel.uiState.value.facilityDetailSheetState
+
+            assertFalse(markerId in bookmarkRepository.bookmarkedPlaceIds)
+            assertFalse(sheetState.isBookmarked)
+            assertFalse(sheetState.isBookmarkUpdating)
+            assertEquals("북마크 저장에 실패했습니다. 다시 시도해 주세요.", sheetState.bookmarkErrorMessage)
+        }
+
+    @Test
     fun `facility detail dismiss action clears selected marker state`() =
         runTest {
             val viewModel =
@@ -277,6 +378,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -305,6 +407,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = destinationSelectionRepository,
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -336,6 +439,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -364,6 +468,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = destinationSelectionRepository,
                     facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -394,6 +499,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = FailingFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -413,6 +519,7 @@ class MapViewModelTest {
                     currentLocationManager = FakeCurrentLocationManager(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                     facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                 )
 
             advanceUntilIdle()
@@ -471,6 +578,25 @@ private class FakeCurrentLocationManager(
 
     fun updateLocation(snapshot: LocationSnapshot?) {
         mutableLatestLocation.value = snapshot
+    }
+}
+
+private class FakeBookmarkRepository(
+    val bookmarkedPlaceIds: MutableSet<String> = mutableSetOf(),
+    private val failSave: Boolean = false,
+    private val failDelete: Boolean = false,
+) : BookmarkRepository {
+    override suspend fun isBookmarked(placeId: String): Boolean =
+        placeId in bookmarkedPlaceIds
+
+    override suspend fun saveBookmark(bookmark: BookmarkData) {
+        if (failSave) error("bookmark save failed")
+        bookmarkedPlaceIds += bookmark.placeId
+    }
+
+    override suspend fun deleteBookmark(placeId: String) {
+        if (failDelete) error("bookmark delete failed")
+        bookmarkedPlaceIds -= placeId
     }
 }
 

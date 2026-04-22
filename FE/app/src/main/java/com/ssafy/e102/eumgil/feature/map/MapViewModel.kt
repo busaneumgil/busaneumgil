@@ -13,8 +13,10 @@ import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.toBookmarkData
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
@@ -38,6 +40,7 @@ class MapViewModel(
     private val currentLocationManager: CurrentLocationManager,
     private val destinationSelectionRepository: DestinationSelectionRepository,
     private val facilitySeedRepository: FacilitySeedRepository,
+    private val bookmarkRepository: BookmarkRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
@@ -50,6 +53,7 @@ class MapViewModel(
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
     private var selectedMarkerId: String? = null
     private var selectedFacilityDetail: FacilityDetailSeed? = null
+    private var selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
     private var facilityBrowseData: FacilityBrowseData? = null
     private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
     private var isRouteStarted = false
@@ -103,6 +107,7 @@ class MapViewModel(
 
     fun onAction(action: MapUiAction) {
         when (action) {
+            MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
             MapUiAction.FacilityRouteEntryClicked -> handleFacilityRouteEntryClicked()
             MapUiAction.LocationActionClicked -> handleLocationAction()
@@ -577,6 +582,7 @@ class MapViewModel(
 
         selectedMarkerId = null
         selectedFacilityDetail = null
+        selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
         return true
     }
 
@@ -587,15 +593,109 @@ class MapViewModel(
         if (markerId != null && detail == null) {
             selectedMarkerId = null
             selectedFacilityDetail = null
+            selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
             return
         }
 
+        val previousFacilityId = selectedFacilityDetail?.facilityId
         selectedMarkerId = markerId
         selectedFacilityDetail = detail
+        if (detail == null) {
+            selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
+        } else if (previousFacilityId != detail.facilityId) {
+            selectedFacilityBookmarkState =
+                SelectedFacilityBookmarkState(
+                    facilityId = detail.facilityId,
+                    isUpdating = true,
+                )
+            loadSelectedFacilityBookmarkState(detail)
+        }
     }
 
     private fun currentFacilityDetailSheetState(): MapFacilityDetailSheetState =
-        MapFacilityDetailSheetState(detail = selectedFacilityDetail)
+        MapFacilityDetailSheetState(
+            detail = selectedFacilityDetail,
+            isBookmarked = selectedFacilityBookmarkState.isBookmarked,
+            isBookmarkUpdating = selectedFacilityBookmarkState.isUpdating,
+            bookmarkErrorMessage = selectedFacilityBookmarkState.errorMessage,
+        )
+
+    private fun loadSelectedFacilityBookmarkState(detail: FacilityDetailSeed) {
+        viewModelScope.launch {
+            runCatching { bookmarkRepository.isBookmarked(detail.facilityId) }
+                .onSuccess { isBookmarked ->
+                    if (selectedFacilityDetail?.facilityId != detail.facilityId) return@onSuccess
+                    selectedFacilityBookmarkState =
+                        SelectedFacilityBookmarkState(
+                            facilityId = detail.facilityId,
+                            isBookmarked = isBookmarked,
+                        )
+                    renderSelectedFacilityState()
+                }
+                .onFailure {
+                    if (selectedFacilityDetail?.facilityId != detail.facilityId) return@onFailure
+                    selectedFacilityBookmarkState =
+                        SelectedFacilityBookmarkState(
+                            facilityId = detail.facilityId,
+                            errorMessage = BOOKMARK_LOAD_ERROR_MESSAGE,
+                        )
+                    renderSelectedFacilityState()
+                }
+        }
+    }
+
+    private fun toggleSelectedFacilityBookmark() {
+        val detail = selectedFacilityDetail ?: return
+        val currentBookmarkState = selectedFacilityBookmarkState
+        if (currentBookmarkState.isUpdating) return
+
+        val nextBookmarked = !currentBookmarkState.isBookmarked
+        selectedFacilityBookmarkState =
+            currentBookmarkState.copy(
+                isBookmarked = nextBookmarked,
+                isUpdating = true,
+                errorMessage = null,
+            )
+        renderSelectedFacilityState()
+
+        viewModelScope.launch {
+            runCatching {
+                if (nextBookmarked) {
+                    bookmarkRepository.saveBookmark(detail.toBookmarkData())
+                } else {
+                    bookmarkRepository.deleteBookmark(detail.facilityId)
+                }
+            }.onSuccess {
+                if (selectedFacilityDetail?.facilityId != detail.facilityId) return@onSuccess
+                selectedFacilityBookmarkState =
+                    selectedFacilityBookmarkState.copy(
+                        isBookmarked = nextBookmarked,
+                        isUpdating = false,
+                        errorMessage = null,
+                    )
+                renderSelectedFacilityState()
+                emitUiEvent(
+                    MapUiEvent.ShowSnackbar(
+                        if (nextBookmarked) {
+                            BOOKMARK_SAVE_SUCCESS_MESSAGE
+                        } else {
+                            BOOKMARK_DELETE_SUCCESS_MESSAGE
+                        },
+                    ),
+                )
+            }
+            .onFailure {
+                if (selectedFacilityDetail?.facilityId != detail.facilityId) return@onFailure
+                selectedFacilityBookmarkState =
+                    currentBookmarkState.copy(
+                        isUpdating = false,
+                        errorMessage = BOOKMARK_SAVE_FAILURE_MESSAGE,
+                    )
+                renderSelectedFacilityState()
+                emitUiEvent(MapUiEvent.ShowSnackbar(BOOKMARK_SAVE_FAILURE_MESSAGE))
+            }
+        }
+    }
 
     private fun emitUiEvent(event: MapUiEvent) {
         viewModelScope.launch {
@@ -611,12 +711,17 @@ class MapViewModel(
 
     companion object {
         private const val LOCATION_LOOKUP_TIMEOUT_MILLIS = 5_000L
+        private const val BOOKMARK_LOAD_ERROR_MESSAGE = "북마크 상태를 확인하지 못했습니다."
+        private const val BOOKMARK_SAVE_SUCCESS_MESSAGE = "북마크에 저장했습니다."
+        private const val BOOKMARK_DELETE_SUCCESS_MESSAGE = "북마크를 해제했습니다."
+        private const val BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크 저장에 실패했습니다. 다시 시도해 주세요."
 
         fun provideFactory(
             locationPermissionManager: LocationPermissionManager,
             currentLocationManager: CurrentLocationManager,
             destinationSelectionRepository: DestinationSelectionRepository,
             facilitySeedRepository: FacilitySeedRepository,
+            bookmarkRepository: BookmarkRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -627,6 +732,7 @@ class MapViewModel(
                             currentLocationManager = currentLocationManager,
                             destinationSelectionRepository = destinationSelectionRepository,
                             facilitySeedRepository = facilitySeedRepository,
+                            bookmarkRepository = bookmarkRepository,
                         ) as T
                     }
 
@@ -635,3 +741,10 @@ class MapViewModel(
             }
     }
 }
+
+private data class SelectedFacilityBookmarkState(
+    val facilityId: String? = null,
+    val isBookmarked: Boolean = false,
+    val isUpdating: Boolean = false,
+    val errorMessage: String? = null,
+)

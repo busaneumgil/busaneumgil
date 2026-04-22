@@ -20,6 +20,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
@@ -65,6 +66,11 @@ class AppContainer(
 
     val destinationSelectionRepository: DestinationSelectionRepository =
         RepositoryModule.provideDestinationSelectionRepository()
+
+    val bookmarkRepository: BookmarkRepository =
+        RepositoryModule.provideBookmarkRepository(
+            bookmarkDao = localDatabase.bookmarkDao(),
+        )
 
     val settingsRepository: SettingsRepository =
         RepositoryModule.provideSettingsRepository(

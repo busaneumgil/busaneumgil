@@ -115,9 +115,9 @@ fun MapScreen(
                     )
                 },
                 bookmarkContent = {
-                    FacilityDetailSlotCard(
-                        title = stringResource(id = R.string.map_facility_detail_bookmark_section_title),
-                        description = stringResource(id = R.string.map_facility_detail_bookmark_placeholder),
+                    FacilityDetailBookmarkSection(
+                        state = facilityDetailSheetUiState,
+                        onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
                     )
                 },
                 actionContent = {
@@ -176,6 +176,11 @@ private data class MapFacilityDetailSheetUiState(
     val address: String,
     val accessibilityTags: List<String>,
     val guideMessage: String,
+    val isBookmarked: Boolean,
+    val isBookmarkUpdating: Boolean,
+    val bookmarkMessage: String,
+    val bookmarkActionLabel: String,
+    val isBookmarkError: Boolean,
 ) {
     fun toShellState(): FacilityDetailBottomSheetShellState =
         FacilityDetailBottomSheetShellState(
@@ -311,6 +316,48 @@ private fun FacilityDetailSlotCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun FacilityDetailBookmarkSection(
+    state: MapFacilityDetailSheetUiState,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Text(
+                text = stringResource(id = R.string.map_facility_detail_bookmark_section_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = state.bookmarkMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color =
+                    if (state.isBookmarkError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+            OutlinedButton(
+                onClick = onToggle,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.isBookmarkUpdating.not(),
+            ) {
+                Text(text = state.bookmarkActionLabel)
+            }
         }
     }
 }
@@ -522,8 +569,14 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             address = "",
             accessibilityTags = emptyList(),
             guideMessage = "",
+            isBookmarked = false,
+            isBookmarkUpdating = false,
+            bookmarkMessage = "",
+            bookmarkActionLabel = "",
+            isBookmarkError = false,
         )
     } else {
+        val bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage
         MapFacilityDetailSheetUiState(
             isVisible = uiState.facilityDetailSheetState.isVisible,
             categoryLabel = facilityDetailCategoryLabel(detail.category),
@@ -536,6 +589,26 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             address = facilityDetailAddressLabel(detail),
             accessibilityTags = facilityDetailAccessibilityLabels(detail),
             guideMessage = facilityDetailGuideMessage(detail),
+            isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
+            isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
+            bookmarkMessage =
+                bookmarkErrorMessage
+                    ?: if (uiState.facilityDetailSheetState.isBookmarked) {
+                        stringResource(id = R.string.map_facility_detail_bookmark_saved_description)
+                    } else {
+                        stringResource(id = R.string.map_facility_detail_bookmark_unsaved_description)
+                    },
+            bookmarkActionLabel =
+                when {
+                    uiState.facilityDetailSheetState.isBookmarkUpdating ->
+                        stringResource(id = R.string.map_facility_detail_bookmark_action_updating)
+
+                    uiState.facilityDetailSheetState.isBookmarked ->
+                        stringResource(id = R.string.map_facility_detail_bookmark_action_remove)
+
+                    else -> stringResource(id = R.string.map_facility_detail_bookmark_action_add)
+                },
+            isBookmarkError = bookmarkErrorMessage != null,
         )
     }
 }

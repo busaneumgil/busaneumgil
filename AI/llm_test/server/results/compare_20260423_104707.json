@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-04-23T10:47:07.755106",
+  "stt_start_ms": 1776908813664,
+  "input": "부산역에서 초량역까지",
+  "results": [
+    {
+      "provider": "qwen_ollama",
+      "raw_text": "{\n  \"intent\": \"navigation\",\n  \"departure\": \"부산역\",\n  \"destination\": \"초량역\",\n  \"phone_target\": null,\n  \"confirmation_message\": \"부산역에서 초량역으로 가는 길을 찾을까요?\"\n}",
+      "departure": "부산역",
+      "destination": "초량역",
+      "intent": "navigation",
+      "llm_latency_ms": 8841.507911682129,
+      "total_latency_ms": 14091,
+      "input_tokens": 353,
+      "output_tokens": 58,
+      "cost_credit": 0.0,
+      "success": true,
+      "error": null,
+      "confirmation_message": "부산역에서 초량역으로 가는 길을 찾을까요?"
+    }
+  ],
+  "summary": {
+    "fastest_total": "qwen_ollama",
+    "cheapest": "qwen_ollama",
+    "success_count": 1
+  }
+}

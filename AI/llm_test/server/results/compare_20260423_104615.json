@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-04-23T10:46:15.743681",
+  "stt_start_ms": 1776908760590,
+  "input": "일반역에서 초량역까지",
+  "results": [
+    {
+      "provider": "gpt",
+      "raw_text": "{\n  \"intent\": \"navigation\",\n  \"departure\": \"일반역\",\n  \"destination\": \"초량역\",\n  \"phone_target\": null,\n  \"confirmation_message\": \"일반역에서 초량역으로 가는 길을 찾을까요?\"\n}",
+      "departure": "일반역",
+      "destination": "초량역",
+      "intent": "navigation",
+      "llm_latency_ms": 7316.323280334473,
+      "total_latency_ms": 15152,
+      "input_tokens": 307,
+      "output_tokens": 834,
+      "cost_credit": 0.0034895,
+      "success": true,
+      "error": null,
+      "confirmation_message": "일반역에서 초량역으로 가는 길을 찾을까요?"
+    }
+  ],
+  "summary": {
+    "fastest_total": "gpt",
+    "cheapest": "gpt",
+    "success_count": 1
+  }
+}

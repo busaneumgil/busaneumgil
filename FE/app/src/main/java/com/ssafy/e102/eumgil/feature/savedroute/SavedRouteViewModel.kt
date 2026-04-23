@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.savedroute
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.model.hasValidCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
@@ -41,8 +42,10 @@ class SavedRouteViewModel(
         when (action) {
             SavedRouteUiAction.ExploreMapClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToMap)
             is SavedRouteUiAction.BookmarkRemoveClicked -> removeBookmark(action.placeId)
-            is SavedRouteUiAction.PlaceClicked -> selectPlace(action.placeId)
+            is SavedRouteUiAction.PlaceClicked -> handoffPlace(action.placeId, SavedRouteUiEvent.NavigateToMap)
             SavedRouteUiAction.RetryClicked -> observeBookmarks()
+            is SavedRouteUiAction.RouteGuideClicked ->
+                handoffPlace(action.placeId, SavedRouteUiEvent.NavigateToRouteSetting)
         }
     }
 
@@ -104,10 +107,22 @@ class SavedRouteViewModel(
         }
     }
 
-    private fun selectPlace(placeId: String) {
+    private fun handoffPlace(
+        placeId: String,
+        event: SavedRouteUiEvent,
+    ) {
         val place = latestPlaces.firstOrNull { savedPlace -> savedPlace.placeId == placeId } ?: return
-        destinationSelectionRepository.updateSelectedDestination(place.toPlaceDestination())
-        emitUiEvent(SavedRouteUiEvent.NavigateToMap)
+        val destination = place.toPlaceDestination()
+        if (!destination.hasValidCoordinate()) {
+            mutableUiState.update { state ->
+                state.copy(errorMessage = INVALID_PLACE_COORDINATE_MESSAGE)
+            }
+            emitUiEvent(SavedRouteUiEvent.ShowSnackbar(INVALID_PLACE_COORDINATE_MESSAGE))
+            return
+        }
+
+        destinationSelectionRepository.updateSelectedDestination(destination)
+        emitUiEvent(event)
     }
 
     private fun emitUiEvent(event: SavedRouteUiEvent) {
@@ -120,6 +135,7 @@ class SavedRouteViewModel(
         private const val BOOKMARK_LOAD_FAILURE_MESSAGE = "저장한 장소를 불러오지 못했습니다."
         private const val BOOKMARK_REMOVE_SUCCESS_MESSAGE = "저장한 장소에서 삭제했습니다."
         private const val BOOKMARK_REMOVE_FAILURE_MESSAGE = "저장한 장소 삭제에 실패했습니다. 다시 시도해 주세요."
+        private const val INVALID_PLACE_COORDINATE_MESSAGE = "저장한 장소의 좌표가 올바르지 않습니다."
 
         fun provideFactory(
             bookmarkRepository: BookmarkRepository,

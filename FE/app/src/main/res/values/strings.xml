@@ -190,6 +190,8 @@
     <string name="saved_route_explore_map">지도에서 장소 찾기</string>
     <string name="saved_route_retry">다시 시도</string>
     <string name="saved_route_address_empty">주소 정보 없음</string>
+    <string name="saved_route_view_on_map">지도 보기</string>
+    <string name="saved_route_start_route">길안내</string>
     <string name="saved_route_remove_bookmark">삭제</string>
     <string name="saved_route_place_a11y_description">%1$s, %2$s. 지도에서 확인하려면 선택하세요.</string>
     <string name="my_page_screen_title">MY 화면 Placeholder</string>

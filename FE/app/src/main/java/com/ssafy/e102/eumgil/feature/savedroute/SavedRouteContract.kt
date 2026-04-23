@@ -31,6 +31,10 @@ sealed interface SavedRouteUiAction {
         val placeId: String,
     ) : SavedRouteUiAction
 
+    data class RouteGuideClicked(
+        val placeId: String,
+    ) : SavedRouteUiAction
+
     data class BookmarkRemoveClicked(
         val placeId: String,
     ) : SavedRouteUiAction
@@ -38,6 +42,8 @@ sealed interface SavedRouteUiAction {
 
 sealed interface SavedRouteUiEvent {
     data object NavigateToMap : SavedRouteUiEvent
+
+    data object NavigateToRouteSetting : SavedRouteUiEvent
 
     data class ShowSnackbar(
         val message: String,

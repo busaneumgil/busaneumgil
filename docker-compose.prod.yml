@@ -1,0 +1,21 @@
+name: s14p31e102-prod
+
+# Production compose skeleton.
+# Only place EC2-hosted runtime services here.
+#
+# Expected candidates:
+# - backend (Spring Boot)
+# - graphhopper-runtime
+# - jenkins
+# - portainer
+# - plg/grafana/loki/prometheus
+#
+# Do NOT place managed AWS resources here:
+# - RDS
+# - ElastiCache
+# - S3
+#
+# Use with:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+
+services: {}

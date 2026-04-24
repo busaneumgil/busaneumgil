@@ -8,6 +8,7 @@ HELP.md
 .env.*
 !.env.example
 .claude/
+.gstack/
 FE/awesome-design-md/
 
 .omx

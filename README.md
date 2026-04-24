@@ -146,10 +146,13 @@ S14P31E102/
 - `S2 = green(prod standby) + PLG`
 - `RDS = PostgreSQL managed service`
 - `ElastiCache = 필요 시 운영`
-- 운영 접속은 `SSM Session Manager` 기준
+- EC2 shell 접속은 `SSH`를 기본으로 사용하되, 관리자 고정 IP에서만 허용
+- `RDS`, `ElastiCache` 같은 private managed resource 접근은 `SSM Session Manager` 포트 포워딩 기준
+- `SSM Session Manager`는 SSH 장애 시 복구 채널로도 유지
 - 1차 알람은 AWS 관리 평면 기준으로 운영
 - 보조 모니터링은 `PLG`를 사용
-- 현재 구조에서는 `nginx`를 기본 구성 요소로 채택하지 않음
+- 서비스 API와 필요한 관리자 UI는 `ALB`의 `80/443` host-based routing으로 접근한다.
+- EC2에서 외부에 직접 여는 포트는 `22`만 두며, 관리자 고정 IP에서만 허용한다.
 
 ### 서버 역할
 
@@ -158,17 +161,21 @@ S14P31E102/
   - `dev` 상시 실행
   - `Jenkins` 상시 실행
   - `GraphHopper runtime` 실행
+  - `Portainer` 관리 UI 실행 가능
 - `S2`
   - `green` 배포 검증 및 standby 노드
-  - `PLG` 운영 보조 조회
+  - `PLG` 운영 보조 조회 (`Grafana` 포함)
   - 필요 시 `green` 승격 시 `PLG` 중지 가능
 
 ### 운영 원칙
 
 - 현재 운영은 **2대 기반 현실형 운영안**이다.
-- 자동 failover보다 **수동 전환 가능한 구조**를 우선한다.
+- Blue/Green은 `ALB` target group과 health check를 기준으로 전환한다.
 - prod와 dev의 역할 경계는 문서와 설정에서 명확해야 한다.
 - GraphHopper의 무거운 build/import 작업은 prod 서버에서 직접 돌리지 않는다.
+- Jenkins, Grafana, Portainer 같은 관리자 UI는 원 포트를 공개하지 않고 `ALB`의 `443` host routing으로만 접근한다.
+- 관리자 UI 라우팅은 ALB listener rule의 source IP 조건, WAF, 또는 인증 연동으로 관리자 접근만 허용한다.
+- 관리자 UI의 웹 접근은 초기 편의 운영안이며, 운영 안정화 후에는 VPN 또는 SSM 터널 기반 접근으로 축소할 수 있다.
 
 ### 현재 저장소 상태
 

@@ -120,8 +120,11 @@ Jenkins 운영에 필요한 설정 파일을 둔다.
 - `S1`은 `blue(prod) + dev/Jenkins` 역할을 가진다.
 - `S2`는 `green(prod standby) + PLG` 역할을 가진다.
 - `RDS`, `ElastiCache`는 관리형 서비스로 운영한다.
-- 운영 접속은 `SSM Session Manager` 기준으로 잡는다.
-- Reverse proxy로 `nginx`를 기본 채택하지 않는다.
+- EC2 shell 접속은 `SSH`를 기본으로 하며, `22`는 관리자 고정 IP만 허용한다.
+- `RDS`, `ElastiCache` 같은 private resource 접근은 `SSM Session Manager` port forwarding 기준으로 잡는다.
+- `SSM Session Manager`는 SSH 장애 시 복구 채널로도 유지한다.
+- 서비스 API와 필요한 관리자 UI는 `ALB`의 `80/443` host-based routing으로 접근한다.
+- EC2에서 외부에 직접 여는 포트는 `22`만 두며, 관리자 고정 IP만 허용한다.
 - `monitoring/`은 현재 `PLG` 운영 자산 중심으로 정리한다.
 
 ## 정렬 완료 기준

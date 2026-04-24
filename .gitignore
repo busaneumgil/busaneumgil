@@ -6,5 +6,10 @@ out/
 HELP.md
 .env
 .env.*
+!.env.example
 .claude/
+.gstack/
 FE/awesome-design-md/
+
+.omx
+.tmp

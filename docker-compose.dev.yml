@@ -1,0 +1,79 @@
+name: s14p31e102-dev
+
+services:
+  postgres:
+    extends:
+      file: docker-compose.shared.yml
+      service: postgres
+
+  redis:
+    extends:
+      file: docker-compose.shared.yml
+      service: redis
+
+  minio:
+    extends:
+      file: docker-compose.shared.yml
+      service: minio
+
+  minio-init:
+    extends:
+      file: docker-compose.shared.yml
+      service: minio-init
+
+  graphhopper:
+    build:
+      context: .
+      dockerfile: INF/graphhopper/Dockerfile
+    restart: unless-stopped
+    environment:
+      GRAPHHOPPER_DATA_FILE: ${GRAPHHOPPER_DATA_FILE:-/data/raw/busan.osm.pbf}
+      GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
+    ports:
+      - "${GRAPHHOPPER_PORT:-8989}:8989"
+      - "${GRAPHHOPPER_ADMIN_PORT:-8990}:8990"
+    volumes:
+      - ${GRAPHHOPPER_DATA_DIR:-/opt/e102/graphhopper/raw}:/data/raw:ro
+      - graphhopper-dev-data:/graphhopper/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8990/healthcheck >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 3m
+
+  backend:
+    build:
+      context: ./BE
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      graphhopper:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/e102}
+      DB_USERNAME: ${DB_USERNAME:-e102}
+      DB_PASSWORD: ${DB_PASSWORD:-e102}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_BUCKET: ${S3_BUCKET:-e102-dev}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-e102}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-e102-e102}
+      S3_REGION: ${S3_REGION:-ap-northeast-2}
+      GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BASE_URL:-http://graphhopper:8989}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+
+volumes:
+  postgres-shared-data:
+  redis-shared-data:
+  minio-shared-data:
+  graphhopper-dev-data:

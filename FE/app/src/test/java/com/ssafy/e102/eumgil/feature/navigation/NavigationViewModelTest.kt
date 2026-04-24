@@ -3,6 +3,8 @@ package com.ssafy.e102.eumgil.feature.navigation
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RoutePolyline
+import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
@@ -36,6 +38,11 @@ class NavigationViewModelTest {
             val viewModel = NavigationViewModel()
 
             assertEquals(NavigationScreenState.Loading, viewModel.uiState.value.screenState)
+            assertFalse(viewModel.uiState.value.mapOverlay.isDisplayable)
+            assertTrue(viewModel.uiState.value.mapOverlay.shouldUsePlaceholder)
+            assertNull(viewModel.uiState.value.mapOverlay.currentLocation)
+            assertTrue(viewModel.uiState.value.mapOverlay.selectedRoutePolyline.isEmpty())
+            assertTrue(viewModel.uiState.value.mapOverlay.routeSegments.isEmpty())
             assertEquals("다음 안내", viewModel.uiState.value.stepCard.sectionLabel)
             assertEquals("준비 중", viewModel.uiState.value.stepCard.statusLabel)
             assertEquals("경로 확인", viewModel.uiState.value.stepCard.emphasisLabel)
@@ -118,6 +125,45 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `binding navigation request maps route handoff into map overlay state`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+
+            val mapOverlay = viewModel.uiState.value.mapOverlay
+            assertTrue(mapOverlay.isDisplayable)
+            assertFalse(mapOverlay.shouldUsePlaceholder)
+            assertEquals(GeoCoordinate(latitude = 35.1796, longitude = 129.0756), mapOverlay.currentLocation?.coordinate)
+            assertEquals(mapOverlay.origin, mapOverlay.currentLocation)
+            assertEquals(GeoCoordinate(latitude = 35.1796, longitude = 129.0756), mapOverlay.origin?.coordinate)
+            assertEquals(GeoCoordinate(latitude = 35.1151, longitude = 129.0414), mapOverlay.destination?.coordinate)
+            assertEquals(3, mapOverlay.selectedRoutePolyline.size)
+            assertEquals(2, mapOverlay.routeSegments.size)
+            assertTrue(mapOverlay.routeSegments.all(NavigationMapSegmentUiState::isRenderable))
+            assertEquals(1, mapOverlay.routeSegments.first().sequence)
+            assertEquals(2, mapOverlay.routeSegments.first().polyline.size)
+        }
+
+    @Test
+    fun `binding request without preview polyline keeps map placeholder fallback`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+
+            viewModel.bindNavigationRequest(noPolylineNavigationRequest())
+            advanceUntilIdle()
+
+            val mapOverlay = viewModel.uiState.value.mapOverlay
+            assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
+            assertFalse(mapOverlay.isDisplayable)
+            assertTrue(mapOverlay.shouldUsePlaceholder)
+            assertTrue(mapOverlay.selectedRoutePolyline.isEmpty())
+            assertEquals(2, mapOverlay.routeSegments.size)
+            assertFalse(mapOverlay.routeSegments.first().isRenderable)
+        }
+
+    @Test
     fun `binding summary only request exposes empty fallback guidance`() =
         runTest {
             val viewModel = NavigationViewModel()
@@ -126,6 +172,10 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(NavigationScreenState.Empty, viewModel.uiState.value.screenState)
+            assertFalse(viewModel.uiState.value.mapOverlay.isDisplayable)
+            assertTrue(viewModel.uiState.value.mapOverlay.shouldUsePlaceholder)
+            assertTrue(viewModel.uiState.value.mapOverlay.selectedRoutePolyline.isEmpty())
+            assertTrue(viewModel.uiState.value.mapOverlay.routeSegments.isEmpty())
             assertEquals("840m", viewModel.uiState.value.stepCard.distanceLabel)
             assertEquals("현재 안내 메시지를 준비하지 못했습니다", viewModel.uiState.value.stepCard.instruction)
             assertEquals("부산역 방향으로 거리와 예상 시간 요약만 먼저 표시합니다.", viewModel.uiState.value.stepCard.supportingText)
@@ -346,15 +396,45 @@ private fun testNavigationRequest(): RouteNavigationRequest =
                         estimatedTimeMinutes = 16,
                         riskLevel = RouteRiskLevel.LOW,
                     ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
+                                        GeoCoordinate(latitude = 35.1700, longitude = 129.0650),
+                                        GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
+                                    ),
+                            ),
+                        segmentCount = 2,
+                        renderableSegmentCount = 2,
+                    ),
                 segments =
                     listOf(
                         RouteSegment(
                             sequence = 1,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
+                                            GeoCoordinate(latitude = 35.1700, longitude = 129.0650),
+                                        ),
+                                ),
                             distanceMeters = 350,
                             guidanceMessage = "350m 앞에서 좌회전 후 횡단보도를 건너세요",
                         ),
                         RouteSegment(
                             sequence = 2,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.1700, longitude = 129.0650),
+                                            GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
+                                        ),
+                                ),
                             distanceMeters = 630,
                             guidanceMessage = "목적지까지 직진하세요",
                         ),
@@ -366,6 +446,20 @@ private fun testNavigationRequest(): RouteNavigationRequest =
                 label = "Navigation test fixture",
             ),
     )
+
+private fun noPolylineNavigationRequest(): RouteNavigationRequest =
+    testNavigationRequest().let { request ->
+        request.copy(
+            selectedRoute =
+                request.selectedRoute.copy(
+                    preview = RoutePreviewModel(),
+                    segments =
+                        request.selectedRoute.segments.map { segment ->
+                            segment.copy(polyline = RoutePolyline())
+                        },
+                ),
+        )
+    }
 
 private fun summaryOnlyNavigationRequest(): RouteNavigationRequest =
     RouteNavigationRequest(

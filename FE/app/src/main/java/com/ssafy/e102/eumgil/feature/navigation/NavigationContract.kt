@@ -1,9 +1,13 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+
 data class NavigationUiState(
     val screenState: NavigationScreenState = NavigationScreenState.Loading,
     val mapPlaceholderTitle: String = "실시간 지도 뷰",
     val mapPlaceholderDescription: String = "현재 위치와 경로 안내를 준비 중입니다.",
+    val mapOverlay: NavigationMapOverlayUiState = NavigationMapOverlayUiState(),
     val stepCard: NavigationStepCardUiState = navigationLoadingStepCardUiState(),
     val exitCta: NavigationCtaUiState = navigationLoadingCtaUiState(),
     val tts: NavigationTtsUiState = NavigationTtsUiState(),
@@ -16,6 +20,34 @@ enum class NavigationScreenState {
     Loading,
     Ready,
     Empty,
+}
+
+data class NavigationMapOverlayUiState(
+    val isDisplayable: Boolean = false,
+    val currentLocation: NavigationMapPointUiState? = null,
+    val origin: NavigationMapPointUiState? = null,
+    val destination: NavigationMapPointUiState? = null,
+    val selectedRoutePolyline: List<GeoCoordinate> = emptyList(),
+    val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
+) {
+    val shouldUsePlaceholder: Boolean
+        get() = !isDisplayable
+}
+
+data class NavigationMapPointUiState(
+    val label: String,
+    val coordinate: GeoCoordinate,
+)
+
+data class NavigationMapSegmentUiState(
+    val sequence: Int,
+    val polyline: List<GeoCoordinate>,
+    val distanceMeters: Int,
+    val riskLevel: RouteRiskLevel,
+    val guidanceMessage: String,
+) {
+    val isRenderable: Boolean
+        get() = polyline.size >= 2
 }
 
 data class NavigationStepCardUiState(

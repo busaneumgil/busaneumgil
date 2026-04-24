@@ -22,26 +22,58 @@ class NavigationViewModel : ViewModel() {
     private val mutableUiEvent = MutableSharedFlow<NavigationUiEvent>()
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
+    private var initialBriefingRequested = false
+
     fun bindNavigationRequest(request: RouteNavigationRequest) {
         val screenState = request.toScreenState()
+        val stepCard = request.toStepCardUiState(screenState)
+        val briefingText = stepCard.toNavigationBriefingText()
+        initialBriefingRequested = false
         mutableUiState.update { state ->
             state.copy(
                 screenState = screenState,
                 mapPlaceholderDescription = request.toMapPlaceholderDescription(screenState),
-                stepCard = request.toStepCardUiState(screenState),
+                stepCard = stepCard,
                 exitCta = screenState.toExitCtaUiState(),
+                tts =
+                    state.tts.copy(
+                        briefingText = briefingText,
+                        fallbackMessage = state.tts.toFallbackMessage(),
+                    ),
             )
         }
     }
 
     fun onAction(action: NavigationUiAction) {
         when (action) {
-            NavigationUiAction.BackClicked -> emitUiEvent(NavigationUiEvent.NavigateBack)
+            NavigationUiAction.NavigationEntered -> requestInitialBriefingIfNeeded()
+            NavigationUiAction.BackClicked -> {
+                emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateBack)
+            }
             NavigationUiAction.ExitNavigationClicked -> {
                 if (uiState.value.isExitEnabled) {
-                    emitUiEvent(NavigationUiEvent.NavigateToMap)
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap)
                 }
             }
+            is NavigationUiAction.VoiceGuidanceToggled -> onVoiceGuidanceToggled(action.enabled)
+            NavigationUiAction.BriefingReplayClicked -> requestBriefing()
+            NavigationUiAction.StopBriefingClicked -> emitUiEvent(NavigationUiEvent.StopBriefing)
+        }
+    }
+
+    fun updateTextToSpeechState(
+        isEnabled: Boolean,
+        canSpeak: Boolean,
+        status: NavigationTtsStatus,
+    ) {
+        mutableUiState.update { state ->
+            val nextTts =
+                state.tts.copy(
+                    isEnabled = isEnabled,
+                    canSpeak = canSpeak,
+                    status = status,
+                )
+            state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
         }
     }
 
@@ -49,6 +81,48 @@ class NavigationViewModel : ViewModel() {
         viewModelScope.launch {
             mutableUiEvent.emit(event)
         }
+    }
+
+    private fun emitUiEvents(vararg events: NavigationUiEvent) {
+        viewModelScope.launch {
+            events.forEach { event -> mutableUiEvent.emit(event) }
+        }
+    }
+
+    private fun requestInitialBriefingIfNeeded() {
+        if (initialBriefingRequested) return
+        initialBriefingRequested = true
+        requestBriefing()
+    }
+
+    private fun onVoiceGuidanceToggled(enabled: Boolean) {
+        mutableUiState.update { state ->
+            val nextTts = state.tts.copy(isEnabled = enabled)
+            state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
+        }
+
+        if (enabled) {
+            val tts = uiState.value.tts
+            if (tts.canRequestBriefing) {
+                emitUiEvents(
+                    NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true),
+                    NavigationUiEvent.SpeakBriefing(tts.briefingText),
+                )
+            } else {
+                emitUiEvent(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true))
+            }
+        } else {
+            emitUiEvents(
+                NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = false),
+                NavigationUiEvent.StopBriefing,
+            )
+        }
+    }
+
+    private fun requestBriefing() {
+        val tts = uiState.value.tts
+        if (!tts.canRequestBriefing) return
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(tts.briefingText))
     }
 
     companion object {
@@ -82,6 +156,20 @@ private fun RouteNavigationRequest.toStepCardUiState(screenState: NavigationScre
         NavigationScreenState.Loading -> NavigationStepCardUiState()
         NavigationScreenState.Ready -> toReadyStepCardUiState()
         NavigationScreenState.Empty -> toEmptyStepCardUiState()
+    }
+
+private fun NavigationStepCardUiState.toNavigationBriefingText(): String =
+    listOf(
+        supportingText,
+        "$distanceLabel 후 $instruction",
+    ).joinToString(separator = " ")
+
+private fun NavigationTtsUiState.toFallbackMessage(): String =
+    when {
+        !isEnabled -> NAVIGATION_TTS_DISABLED_MESSAGE
+        status == NavigationTtsStatus.Unavailable -> NAVIGATION_TTS_UNAVAILABLE_MESSAGE
+        status == NavigationTtsStatus.Initializing -> NAVIGATION_TTS_PREPARING_MESSAGE
+        else -> ""
     }
 
 private fun RouteNavigationRequest.toReadyStepCardUiState(): NavigationStepCardUiState {

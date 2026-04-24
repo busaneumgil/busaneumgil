@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -11,7 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
+import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 @Composable
 fun NavigationRoute(
@@ -20,7 +25,12 @@ fun NavigationRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
     val activity = remember(context) { context.findComponentActivity() }
+    val textToSpeechController =
+        remember(appContext) {
+            AndroidTextToSpeechController(context = appContext)
+        }
     val viewModelFactory = remember { NavigationViewModel.provideFactory() }
     val viewModel =
         remember(activity, viewModelFactory) {
@@ -28,13 +38,36 @@ fun NavigationRoute(
             ViewModelProvider(owner, viewModelFactory)[NavigationViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val textToSpeechState by textToSpeechController.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(textToSpeechState) {
+        viewModel.updateTextToSpeechState(
+            isEnabled = textToSpeechState.enabled,
+            canSpeak = textToSpeechState.canSpeak,
+            status = textToSpeechState.availability.toNavigationTtsStatus(),
+        )
+    }
 
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap) {
-        viewModel.uiEvent.collect { event ->
-            when (event) {
-                NavigationUiEvent.NavigateBack -> onNavigateBack()
-                NavigationUiEvent.NavigateToMap -> onNavigateToMap()
+        launch(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.uiEvent.collect { event ->
+                when (event) {
+                    NavigationUiEvent.NavigateBack -> onNavigateBack()
+                    NavigationUiEvent.NavigateToMap -> onNavigateToMap()
+                    is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
+                    NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
+                    is NavigationUiEvent.SetVoiceGuidanceEnabled ->
+                        textToSpeechController.setEnabled(event.enabled)
+                }
             }
+        }
+        viewModel.onAction(NavigationUiAction.NavigationEntered)
+    }
+
+    DisposableEffect(textToSpeechController) {
+        onDispose {
+            textToSpeechController.stop()
+            textToSpeechController.shutdown()
         }
     }
 
@@ -44,6 +77,13 @@ fun NavigationRoute(
         modifier = modifier,
     )
 }
+
+private fun TextToSpeechAvailability.toNavigationTtsStatus(): NavigationTtsStatus =
+    when (this) {
+        TextToSpeechAvailability.Initializing -> NavigationTtsStatus.Initializing
+        TextToSpeechAvailability.Ready -> NavigationTtsStatus.Ready
+        TextToSpeechAvailability.Unavailable -> NavigationTtsStatus.Unavailable
+    }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     when (this) {

@@ -8,16 +8,13 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
-import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
-import com.ssafy.e102.eumgil.core.tts.TextToSpeechController
-import com.ssafy.e102.eumgil.core.tts.TextToSpeechState
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -61,12 +58,15 @@ class NavigationViewModelTest {
     fun `back action emits navigate back event`() =
         runTest {
             val viewModel = NavigationViewModel()
-            val eventDeferred = async { viewModel.uiEvent.first() }
+            val eventsDeferred = async { viewModel.uiEvent.take(2).toList() }
 
             viewModel.onAction(NavigationUiAction.BackClicked)
             advanceUntilIdle()
 
-            assertEquals(NavigationUiEvent.NavigateBack, eventDeferred.await())
+            assertEquals(
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateBack),
+                eventsDeferred.await(),
+            )
         }
 
     @Test
@@ -76,12 +76,15 @@ class NavigationViewModelTest {
             viewModel.bindNavigationRequest(testNavigationRequest())
             advanceUntilIdle()
 
-            val eventDeferred = async { viewModel.uiEvent.first() }
+            val eventsDeferred = async { viewModel.uiEvent.take(2).toList() }
 
             viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
             advanceUntilIdle()
 
-            assertEquals(NavigationUiEvent.NavigateToMap, eventDeferred.await())
+            assertEquals(
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap),
+                eventsDeferred.await(),
+            )
         }
 
     @Test
@@ -130,68 +133,84 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `binding navigation request sends first instruction to tts controller`() =
+    fun `binding navigation request prepares briefing text from current step card`() =
         runTest {
-            val textToSpeechController = FakeTextToSpeechController()
-            val viewModel = NavigationViewModel(textToSpeechController = textToSpeechController)
+            val viewModel = NavigationViewModel()
 
             viewModel.bindNavigationRequest(testNavigationRequest())
             advanceUntilIdle()
 
-            assertEquals(viewModel.uiState.value.stepCard.instruction, textToSpeechController.spokenTexts.single())
+            assertEquals(
+                "${viewModel.uiState.value.stepCard.supportingText} " +
+                    "${viewModel.uiState.value.stepCard.distanceLabel} 후 ${viewModel.uiState.value.stepCard.instruction}",
+                viewModel.uiState.value.tts.briefingText,
+            )
         }
 
     @Test
-    fun `back and exit actions stop tts controller`() =
+    fun `navigation entered emits start briefing event`() =
         runTest {
-            val textToSpeechController = FakeTextToSpeechController()
-            val viewModel = NavigationViewModel(textToSpeechController = textToSpeechController)
-            val backEventDeferred = async { viewModel.uiEvent.first() }
-
-            viewModel.onAction(NavigationUiAction.BackClicked)
-            advanceUntilIdle()
-
-            assertEquals(NavigationUiEvent.NavigateBack, backEventDeferred.await())
-            assertEquals(1, textToSpeechController.stopCallCount)
-
+            val viewModel = NavigationViewModel()
             viewModel.bindNavigationRequest(testNavigationRequest())
-            val exitEventDeferred = async { viewModel.uiEvent.first() }
+            val eventDeferred = async { viewModel.uiEvent.first() }
 
-            viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
             advanceUntilIdle()
 
-            assertEquals(NavigationUiEvent.NavigateToMap, exitEventDeferred.await())
-            assertEquals(2, textToSpeechController.stopCallCount)
+            assertEquals(
+                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
+                eventDeferred.await(),
+            )
         }
-}
 
-private class FakeTextToSpeechController : TextToSpeechController {
-    private val mutableState =
-        MutableStateFlow(
-            TextToSpeechState(
-                enabled = true,
-                availability = TextToSpeechAvailability.Ready,
-            ),
-        )
+    @Test
+    fun `voice guidance toggle updates state and emits tts control events`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            val disabledEventsDeferred = async { viewModel.uiEvent.take(2).toList() }
 
-    override val state: StateFlow<TextToSpeechState> = mutableState
-    val spokenTexts = mutableListOf<String>()
-    var stopCallCount = 0
-        private set
+            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = false))
+            advanceUntilIdle()
 
-    override fun setEnabled(enabled: Boolean) {
-        mutableState.value = mutableState.value.copy(enabled = enabled)
-    }
+            assertFalse(viewModel.uiState.value.tts.isEnabled)
+            assertEquals(NAVIGATION_TTS_DISABLED_MESSAGE, viewModel.uiState.value.tts.fallbackMessage)
+            assertEquals(
+                listOf(
+                    NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = false),
+                    NavigationUiEvent.StopBriefing,
+                ),
+                disabledEventsDeferred.await(),
+            )
 
-    override fun speak(text: String) {
-        spokenTexts += text
-    }
+            val enabledEventsDeferred = async { viewModel.uiEvent.take(2).toList() }
 
-    override fun stop() {
-        stopCallCount += 1
-    }
+            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = true))
+            advanceUntilIdle()
 
-    override fun shutdown() = Unit
+            assertEquals(
+                listOf(
+                    NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true),
+                    NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
+                ),
+                enabledEventsDeferred.await(),
+            )
+        }
+
+    @Test
+    fun `tts availability update exposes fallback message`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = false,
+                status = NavigationTtsStatus.Unavailable,
+            )
+
+            assertEquals(NavigationTtsStatus.Unavailable, viewModel.uiState.value.tts.status)
+            assertEquals(NAVIGATION_TTS_UNAVAILABLE_MESSAGE, viewModel.uiState.value.tts.fallbackMessage)
+        }
 }
 
 private fun testNavigationRequest(): RouteNavigationRequest =

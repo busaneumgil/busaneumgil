@@ -5,8 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
-import com.ssafy.e102.eumgil.core.tts.NoOpTextToSpeechController
-import com.ssafy.e102.eumgil.core.tts.TextToSpeechController
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,47 +15,66 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class NavigationViewModel(
-    private val textToSpeechController: TextToSpeechController = NoOpTextToSpeechController,
-) : ViewModel() {
+class NavigationViewModel : ViewModel() {
     private val mutableUiState = MutableStateFlow(NavigationUiState())
     val uiState: StateFlow<NavigationUiState> = mutableUiState.asStateFlow()
 
     private val mutableUiEvent = MutableSharedFlow<NavigationUiEvent>()
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
+    private var initialBriefingRequested = false
+
     fun bindNavigationRequest(request: RouteNavigationRequest) {
         val screenState = request.toScreenState()
         val stepCard = request.toStepCardUiState(screenState)
+        val briefingText = stepCard.toNavigationBriefingText()
+        initialBriefingRequested = false
         mutableUiState.update { state ->
             state.copy(
                 screenState = screenState,
                 mapPlaceholderDescription = request.toMapPlaceholderDescription(screenState),
                 stepCard = stepCard,
                 exitCta = screenState.toExitCtaUiState(),
+                tts =
+                    state.tts.copy(
+                        briefingText = briefingText,
+                        fallbackMessage = state.tts.toFallbackMessage(),
+                    ),
             )
         }
-        textToSpeechController.speak(stepCard.instruction)
     }
 
     fun onAction(action: NavigationUiAction) {
         when (action) {
+            NavigationUiAction.NavigationEntered -> requestInitialBriefingIfNeeded()
             NavigationUiAction.BackClicked -> {
-                textToSpeechController.stop()
-                emitUiEvent(NavigationUiEvent.NavigateBack)
+                emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateBack)
             }
             NavigationUiAction.ExitNavigationClicked -> {
                 if (uiState.value.isExitEnabled) {
-                    textToSpeechController.stop()
-                    emitUiEvent(NavigationUiEvent.NavigateToMap)
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap)
                 }
             }
+            is NavigationUiAction.VoiceGuidanceToggled -> onVoiceGuidanceToggled(action.enabled)
+            NavigationUiAction.BriefingReplayClicked -> requestBriefing()
+            NavigationUiAction.StopBriefingClicked -> emitUiEvent(NavigationUiEvent.StopBriefing)
         }
     }
 
-    override fun onCleared() {
-        textToSpeechController.shutdown()
-        super.onCleared()
+    fun updateTextToSpeechState(
+        isEnabled: Boolean,
+        canSpeak: Boolean,
+        status: NavigationTtsStatus,
+    ) {
+        mutableUiState.update { state ->
+            val nextTts =
+                state.tts.copy(
+                    isEnabled = isEnabled,
+                    canSpeak = canSpeak,
+                    status = status,
+                )
+            state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
+        }
     }
 
     private fun emitUiEvent(event: NavigationUiEvent) {
@@ -66,14 +83,54 @@ class NavigationViewModel(
         }
     }
 
+    private fun emitUiEvents(vararg events: NavigationUiEvent) {
+        viewModelScope.launch {
+            events.forEach { event -> mutableUiEvent.emit(event) }
+        }
+    }
+
+    private fun requestInitialBriefingIfNeeded() {
+        if (initialBriefingRequested) return
+        initialBriefingRequested = true
+        requestBriefing()
+    }
+
+    private fun onVoiceGuidanceToggled(enabled: Boolean) {
+        mutableUiState.update { state ->
+            val nextTts = state.tts.copy(isEnabled = enabled)
+            state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
+        }
+
+        if (enabled) {
+            val tts = uiState.value.tts
+            if (tts.canRequestBriefing) {
+                emitUiEvents(
+                    NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true),
+                    NavigationUiEvent.SpeakBriefing(tts.briefingText),
+                )
+            } else {
+                emitUiEvent(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true))
+            }
+        } else {
+            emitUiEvents(
+                NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = false),
+                NavigationUiEvent.StopBriefing,
+            )
+        }
+    }
+
+    private fun requestBriefing() {
+        val tts = uiState.value.tts
+        if (!tts.canRequestBriefing) return
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(tts.briefingText))
+    }
+
     companion object {
-        fun provideFactory(
-            textToSpeechController: TextToSpeechController = NoOpTextToSpeechController,
-        ): ViewModelProvider.Factory =
+        fun provideFactory(): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    NavigationViewModel(textToSpeechController = textToSpeechController) as T
+                    NavigationViewModel() as T
             }
     }
 }
@@ -99,6 +156,20 @@ private fun RouteNavigationRequest.toStepCardUiState(screenState: NavigationScre
         NavigationScreenState.Loading -> NavigationStepCardUiState()
         NavigationScreenState.Ready -> toReadyStepCardUiState()
         NavigationScreenState.Empty -> toEmptyStepCardUiState()
+    }
+
+private fun NavigationStepCardUiState.toNavigationBriefingText(): String =
+    listOf(
+        supportingText,
+        "$distanceLabel 후 $instruction",
+    ).joinToString(separator = " ")
+
+private fun NavigationTtsUiState.toFallbackMessage(): String =
+    when {
+        !isEnabled -> NAVIGATION_TTS_DISABLED_MESSAGE
+        status == NavigationTtsStatus.Unavailable -> NAVIGATION_TTS_UNAVAILABLE_MESSAGE
+        status == NavigationTtsStatus.Initializing -> NAVIGATION_TTS_PREPARING_MESSAGE
+        else -> ""
     }
 
 private fun RouteNavigationRequest.toReadyStepCardUiState(): NavigationStepCardUiState {

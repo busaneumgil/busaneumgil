@@ -6,6 +6,7 @@ data class NavigationUiState(
     val mapPlaceholderDescription: String = "현재 위치와 경로 안내를 준비 중입니다.",
     val stepCard: NavigationStepCardUiState = navigationLoadingStepCardUiState(),
     val exitCta: NavigationCtaUiState = navigationLoadingCtaUiState(),
+    val tts: NavigationTtsUiState = NavigationTtsUiState(),
 ) {
     val isExitEnabled: Boolean
         get() = exitCta.isEnabled
@@ -53,17 +54,58 @@ data class NavigationCtaUiState(
 )
 
 sealed interface NavigationUiAction {
+    data object NavigationEntered : NavigationUiAction
+
     data object BackClicked : NavigationUiAction
 
     data object ExitNavigationClicked : NavigationUiAction
+
+    data class VoiceGuidanceToggled(
+        val enabled: Boolean,
+    ) : NavigationUiAction
+
+    data object BriefingReplayClicked : NavigationUiAction
+
+    data object StopBriefingClicked : NavigationUiAction
 }
 
 sealed interface NavigationUiEvent {
     data object NavigateBack : NavigationUiEvent
 
     data object NavigateToMap : NavigationUiEvent
+
+    data class SpeakBriefing(
+        val text: String,
+    ) : NavigationUiEvent
+
+    data object StopBriefing : NavigationUiEvent
+
+    data class SetVoiceGuidanceEnabled(
+        val enabled: Boolean,
+    ) : NavigationUiEvent
 }
 
 private fun navigationLoadingStepCardUiState(): NavigationStepCardUiState = NavigationStepCardUiState()
 
 private fun navigationLoadingCtaUiState(): NavigationCtaUiState = NavigationCtaUiState()
+
+data class NavigationTtsUiState(
+    val isEnabled: Boolean = true,
+    val canSpeak: Boolean = false,
+    val status: NavigationTtsStatus = NavigationTtsStatus.Initializing,
+    val briefingText: String = "",
+    val fallbackMessage: String = NAVIGATION_TTS_PREPARING_MESSAGE,
+) {
+    val canRequestBriefing: Boolean
+        get() = isEnabled && briefingText.isNotBlank()
+}
+
+enum class NavigationTtsStatus {
+    Initializing,
+    Ready,
+    Unavailable,
+}
+
+const val NAVIGATION_TTS_PREPARING_MESSAGE = "음성 안내를 준비하고 있습니다."
+const val NAVIGATION_TTS_DISABLED_MESSAGE = "음성 안내가 꺼져 있어 화면 안내만 표시합니다."
+const val NAVIGATION_TTS_UNAVAILABLE_MESSAGE = "음성 안내를 사용할 수 없어 화면 안내로 진행합니다."

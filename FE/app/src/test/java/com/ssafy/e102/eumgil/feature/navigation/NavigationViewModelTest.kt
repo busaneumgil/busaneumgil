@@ -17,8 +17,11 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -52,6 +55,10 @@ class NavigationViewModelTest {
             assertEquals("안내 준비 중", viewModel.uiState.value.exitCta.label)
             assertEquals("경로 정보가 준비되면 종료 버튼이 활성화됩니다.", viewModel.uiState.value.exitCta.supportingText)
             assertFalse(viewModel.uiState.value.isExitEnabled)
+            assertTrue(viewModel.uiState.value.tts.isEnabled)
+            assertFalse(viewModel.uiState.value.tts.canSpeak)
+            assertEquals(NavigationTtsStatus.Initializing, viewModel.uiState.value.tts.status)
+            assertEquals(NAVIGATION_TTS_PREPARING_MESSAGE, viewModel.uiState.value.tts.fallbackMessage)
         }
 
     @Test
@@ -210,6 +217,109 @@ class NavigationViewModelTest {
 
             assertEquals(NavigationTtsStatus.Unavailable, viewModel.uiState.value.tts.status)
             assertEquals(NAVIGATION_TTS_UNAVAILABLE_MESSAGE, viewModel.uiState.value.tts.fallbackMessage)
+        }
+
+    @Test
+    fun `navigation entered emits initial briefing only once until request is rebound`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            val firstEventDeferred = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            advanceUntilIdle()
+
+            assertEquals(
+                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
+                firstEventDeferred.await(),
+            )
+
+            val duplicateEventDeferred =
+                async {
+                    withTimeoutOrNull(100) {
+                        viewModel.uiEvent.first()
+                    }
+                }
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            advanceUntilIdle()
+
+            assertNull(duplicateEventDeferred.await())
+
+            viewModel.bindNavigationRequest(summaryOnlyNavigationRequest())
+            val reboundEventDeferred = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            advanceUntilIdle()
+
+            assertEquals(
+                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
+                reboundEventDeferred.await(),
+            )
+        }
+
+    @Test
+    fun `briefing replay and stop actions emit tts events`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            val replayEventDeferred = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.BriefingReplayClicked)
+            advanceUntilIdle()
+
+            assertEquals(
+                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
+                replayEventDeferred.await(),
+            )
+
+            val stopEventDeferred = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.StopBriefingClicked)
+            advanceUntilIdle()
+
+            assertEquals(NavigationUiEvent.StopBriefing, stopEventDeferred.await())
+        }
+
+    @Test
+    fun `briefing replay is ignored when tts is unavailable`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = false,
+                status = NavigationTtsStatus.Unavailable,
+            )
+            val eventDeferred =
+                async {
+                    withTimeoutOrNull(100) {
+                        viewModel.uiEvent.first()
+                    }
+                }
+
+            viewModel.onAction(NavigationUiAction.BriefingReplayClicked)
+            advanceUntilIdle()
+
+            assertNull(eventDeferred.await())
+        }
+
+    @Test
+    fun `tts ready update clears fallback and allows briefing request`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+            viewModel.bindNavigationRequest(testNavigationRequest())
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+
+            assertTrue(viewModel.uiState.value.tts.canSpeak)
+            assertEquals(NavigationTtsStatus.Ready, viewModel.uiState.value.tts.status)
+            assertEquals("", viewModel.uiState.value.tts.fallbackMessage)
+            assertTrue(viewModel.uiState.value.tts.canRequestBriefing)
         }
 }
 

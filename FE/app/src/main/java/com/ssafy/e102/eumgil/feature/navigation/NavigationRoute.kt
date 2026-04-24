@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collect
@@ -25,12 +25,12 @@ fun NavigationRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val appContainer =
-        remember(context) {
-            (context.applicationContext as BusanEumgilApp).appContainer
-        }
+    val appContext = context.applicationContext
     val activity = remember(context) { context.findComponentActivity() }
-    val textToSpeechController = appContainer.textToSpeechController
+    val textToSpeechController =
+        remember(appContext) {
+            AndroidTextToSpeechController(context = appContext)
+        }
     val viewModelFactory = remember { NavigationViewModel.provideFactory() }
     val viewModel =
         remember(activity, viewModelFactory) {
@@ -67,6 +67,7 @@ fun NavigationRoute(
     DisposableEffect(textToSpeechController) {
         onDispose {
             textToSpeechController.stop()
+            textToSpeechController.shutdown()
         }
     }
 

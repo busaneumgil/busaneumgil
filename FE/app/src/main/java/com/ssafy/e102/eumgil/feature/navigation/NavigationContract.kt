@@ -97,7 +97,7 @@ data class NavigationTtsUiState(
     val fallbackMessage: String = NAVIGATION_TTS_PREPARING_MESSAGE,
 ) {
     val canRequestBriefing: Boolean
-        get() = isEnabled && briefingText.isNotBlank()
+        get() = isEnabled && status != NavigationTtsStatus.Unavailable && briefingText.isNotBlank()
 }
 
 enum class NavigationTtsStatus {

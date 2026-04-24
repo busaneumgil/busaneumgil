@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,14 +14,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -284,6 +291,10 @@ private fun NavigationBottomBar(
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
             )
+            NavigationVoiceGuidanceControls(
+                uiState = uiState.tts,
+                onAction = onAction,
+            )
             Button(
                 onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
                 enabled = uiState.isExitEnabled,
@@ -296,6 +307,88 @@ private fun NavigationBottomBar(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun NavigationVoiceGuidanceControls(
+    uiState: NavigationTtsUiState,
+    onAction: (NavigationUiAction) -> Unit,
+) {
+    val voiceStateLabel = if (uiState.isEnabled) "켜짐" else "꺼짐"
+    val statusText =
+        when {
+            !uiState.isEnabled -> NAVIGATION_TTS_DISABLED_MESSAGE
+            uiState.status == NavigationTtsStatus.Unavailable -> NAVIGATION_TTS_UNAVAILABLE_MESSAGE
+            uiState.status == NavigationTtsStatus.Ready -> "음성 안내를 사용할 수 있습니다."
+            else -> NAVIGATION_TTS_PREPARING_MESSAGE
+        }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = uiState.isEnabled,
+                        role = Role.Switch,
+                        onValueChange = { enabled ->
+                            onAction(NavigationUiAction.VoiceGuidanceToggled(enabled))
+                        },
+                    )
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "음성 안내"
+                        stateDescription = voiceStateLabel
+                    },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(end = EumSpacing.small),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+            ) {
+                Text(
+                    text = "음성 안내",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = uiState.isEnabled,
+                onCheckedChange = null,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            OutlinedButton(
+                onClick = { onAction(NavigationUiAction.BriefingReplayClicked) },
+                enabled = uiState.canRequestBriefing,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(text = "다시 듣기")
+            }
+            TextButton(
+                onClick = { onAction(NavigationUiAction.StopBriefingClicked) },
+                enabled = uiState.isEnabled,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(text = "음성 중지")
+            }
         }
     }
 }

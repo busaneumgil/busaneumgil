@@ -11,6 +11,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -77,8 +78,17 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
 
     composable(route = RouteSettingRoute.Setting.route) {
         val context = LocalContext.current
+        val appContainer =
+            remember(context) {
+                (context.applicationContext as BusanEumgilApp).appContainer
+            }
         val activity = remember(context) { context.findComponentActivity() }
-        val navigationViewModelFactory = remember { NavigationGuidanceViewModel.provideFactory() }
+        val navigationViewModelFactory =
+            remember(appContainer.textToSpeechController) {
+                NavigationGuidanceViewModel.provideFactory(
+                    textToSpeechController = appContainer.textToSpeechController,
+                )
+            }
         val navigationViewModel =
             remember(activity, navigationViewModelFactory) {
                 val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }

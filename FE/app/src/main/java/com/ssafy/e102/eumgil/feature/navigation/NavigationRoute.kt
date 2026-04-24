@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import kotlinx.coroutines.flow.collect
 
 @Composable
@@ -20,8 +21,17 @@ fun NavigationRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val appContainer =
+        remember(context) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
     val activity = remember(context) { context.findComponentActivity() }
-    val viewModelFactory = remember { NavigationViewModel.provideFactory() }
+    val viewModelFactory =
+        remember(appContainer.textToSpeechController) {
+            NavigationViewModel.provideFactory(
+                textToSpeechController = appContainer.textToSpeechController,
+            )
+        }
     val viewModel =
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "NavigationRoute requires a ComponentActivity host." }

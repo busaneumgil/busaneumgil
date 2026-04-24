@@ -8,10 +8,15 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
+import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
+import com.ssafy.e102.eumgil.core.tts.TextToSpeechController
+import com.ssafy.e102.eumgil.core.tts.TextToSpeechState
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -123,6 +128,70 @@ class NavigationViewModelTest {
             assertEquals("내비게이션 종료", viewModel.uiState.value.exitCta.label)
             assertEquals("안내를 종료하고 지도로 돌아갑니다.", viewModel.uiState.value.exitCta.supportingText)
         }
+
+    @Test
+    fun `binding navigation request sends first instruction to tts controller`() =
+        runTest {
+            val textToSpeechController = FakeTextToSpeechController()
+            val viewModel = NavigationViewModel(textToSpeechController = textToSpeechController)
+
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+
+            assertEquals(viewModel.uiState.value.stepCard.instruction, textToSpeechController.spokenTexts.single())
+        }
+
+    @Test
+    fun `back and exit actions stop tts controller`() =
+        runTest {
+            val textToSpeechController = FakeTextToSpeechController()
+            val viewModel = NavigationViewModel(textToSpeechController = textToSpeechController)
+            val backEventDeferred = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.BackClicked)
+            advanceUntilIdle()
+
+            assertEquals(NavigationUiEvent.NavigateBack, backEventDeferred.await())
+            assertEquals(1, textToSpeechController.stopCallCount)
+
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            val exitEventDeferred = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            advanceUntilIdle()
+
+            assertEquals(NavigationUiEvent.NavigateToMap, exitEventDeferred.await())
+            assertEquals(2, textToSpeechController.stopCallCount)
+        }
+}
+
+private class FakeTextToSpeechController : TextToSpeechController {
+    private val mutableState =
+        MutableStateFlow(
+            TextToSpeechState(
+                enabled = true,
+                availability = TextToSpeechAvailability.Ready,
+            ),
+        )
+
+    override val state: StateFlow<TextToSpeechState> = mutableState
+    val spokenTexts = mutableListOf<String>()
+    var stopCallCount = 0
+        private set
+
+    override fun setEnabled(enabled: Boolean) {
+        mutableState.value = mutableState.value.copy(enabled = enabled)
+    }
+
+    override fun speak(text: String) {
+        spokenTexts += text
+    }
+
+    override fun stop() {
+        stopCallCount += 1
+    }
+
+    override fun shutdown() = Unit
 }
 
 private fun testNavigationRequest(): RouteNavigationRequest =

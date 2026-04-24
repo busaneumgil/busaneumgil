@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.tts.NoOpTextToSpeechController
+import com.ssafy.e102.eumgil.core.tts.TextToSpeechController
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +17,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class NavigationViewModel : ViewModel() {
+class NavigationViewModel(
+    private val textToSpeechController: TextToSpeechController = NoOpTextToSpeechController,
+) : ViewModel() {
     private val mutableUiState = MutableStateFlow(NavigationUiState())
     val uiState: StateFlow<NavigationUiState> = mutableUiState.asStateFlow()
 
@@ -24,25 +28,36 @@ class NavigationViewModel : ViewModel() {
 
     fun bindNavigationRequest(request: RouteNavigationRequest) {
         val screenState = request.toScreenState()
+        val stepCard = request.toStepCardUiState(screenState)
         mutableUiState.update { state ->
             state.copy(
                 screenState = screenState,
                 mapPlaceholderDescription = request.toMapPlaceholderDescription(screenState),
-                stepCard = request.toStepCardUiState(screenState),
+                stepCard = stepCard,
                 exitCta = screenState.toExitCtaUiState(),
             )
         }
+        textToSpeechController.speak(stepCard.instruction)
     }
 
     fun onAction(action: NavigationUiAction) {
         when (action) {
-            NavigationUiAction.BackClicked -> emitUiEvent(NavigationUiEvent.NavigateBack)
+            NavigationUiAction.BackClicked -> {
+                textToSpeechController.stop()
+                emitUiEvent(NavigationUiEvent.NavigateBack)
+            }
             NavigationUiAction.ExitNavigationClicked -> {
                 if (uiState.value.isExitEnabled) {
+                    textToSpeechController.stop()
                     emitUiEvent(NavigationUiEvent.NavigateToMap)
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        textToSpeechController.shutdown()
+        super.onCleared()
     }
 
     private fun emitUiEvent(event: NavigationUiEvent) {
@@ -52,11 +67,13 @@ class NavigationViewModel : ViewModel() {
     }
 
     companion object {
-        fun provideFactory(): ViewModelProvider.Factory =
+        fun provideFactory(
+            textToSpeechController: TextToSpeechController = NoOpTextToSpeechController,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    NavigationViewModel() as T
+                    NavigationViewModel(textToSpeechController = textToSpeechController) as T
             }
     }
 }

@@ -34,8 +34,8 @@ services:
     image: minio/minio:latest
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-e102}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-e102-e102}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-e102}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-e102-e102}
     command: ["server", "/data", "--console-address", ":9001"]
     ports:
       - "${MINIO_API_PORT:-9000}:9000"
@@ -48,16 +48,16 @@ services:
     depends_on:
       - minio
     environment:
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-e102}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-e102-e102}
-      S3_BUCKET: ${S3_BUCKET:-e102-dev}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-e102}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-e102-e102}
+      MINIO_BUCKET: ${MINIO_BUCKET:-e102-dev}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        until mc alias set local http://minio:9000 "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY"; do
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
           sleep 2
         done
-        mc mb --ignore-existing "local/$$S3_BUCKET"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
     restart: "no"
 
 volumes:

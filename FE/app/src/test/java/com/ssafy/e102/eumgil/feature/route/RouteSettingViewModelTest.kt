@@ -102,6 +102,12 @@ class RouteSettingViewModelTest {
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
             assertTrue(uiState.selectedRoute?.previewPoints?.size ?: 0 >= 2)
             assertEquals(null, uiState.selectedRoute?.previewFallbackNotice)
+            assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertEquals(RouteOption.SAFE, uiState.routePreviewMap.routeOption)
+            assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
+            assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
+            assertEquals(uiState.selectedRoute?.previewPoints, uiState.routePreviewMap.polyline)
+            assertTrue(uiState.routePreviewMap.isDisplayable)
             assertTrue(uiState.cta.isEnabled)
             assertEquals("선택한 경로로 안내 시작", uiState.cta.label)
             assertEquals("201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다.", uiState.cta.supportingText)
@@ -129,6 +135,8 @@ class RouteSettingViewModelTest {
             assertEquals("부산 동구 중앙대로 206", uiState.destination.supportingText)
             assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+            assertEquals(RoutePreviewMapStatus.NO_DESTINATION, uiState.routePreviewMap.status)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.isStartEnabled)
             assertEquals("검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다.", uiState.cta.supportingText)
         }
@@ -225,6 +233,12 @@ class RouteSettingViewModelTest {
                 "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다.",
                 selectedRoute.previewFallbackNotice,
             )
+            assertEquals(RoutePreviewMapStatus.POLYLINE_UNAVAILABLE, uiState.routePreviewMap.status)
+            assertEquals(RouteOption.SAFE, uiState.routePreviewMap.routeOption)
+            assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
+            assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
+            assertTrue(uiState.routePreviewMap.polyline.isEmpty())
+            assertFalse(uiState.routePreviewMap.isDisplayable)
         }
 
     @Test
@@ -289,6 +303,8 @@ class RouteSettingViewModelTest {
             assertFalse(uiState.cta.isEnabled)
             assertEquals("경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다.", uiState.cta.supportingText)
             assertEquals("fixture load failed", uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
         }
 
     @Test
@@ -312,6 +328,9 @@ class RouteSettingViewModelTest {
 
             assertEquals(RouteOption.SHORTEST, uiState.selectedOption)
             assertEquals(RouteOption.SHORTEST, uiState.selectedRoute?.routeOption)
+            assertEquals(RouteOption.SHORTEST, uiState.routePreviewMap.routeOption)
+            assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertTrue(uiState.routePreviewMap.isDisplayable)
             assertEquals("최단 거리", uiState.selectedRoute?.optionTitle)
             assertEquals("Shortest Route", uiState.selectedRoute?.title)
             assertEquals(RouteRiskLevel.MEDIUM, uiState.selectedRoute?.riskLevel)

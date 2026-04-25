@@ -38,7 +38,7 @@ class RouteSettingViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `init loads SAFE route by default with selected destination summary`() =
+    fun `init loads SAFE route by default with preview map state`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -107,6 +107,7 @@ class RouteSettingViewModelTest {
             assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
             assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
             assertEquals(uiState.selectedRoute?.previewPoints, uiState.routePreviewMap.polyline)
+            assertEquals(null, uiState.routePreviewMap.fallbackMessage)
             assertTrue(uiState.routePreviewMap.isDisplayable)
             assertTrue(uiState.cta.isEnabled)
             assertEquals("선택한 경로로 안내 시작", uiState.cta.label)
@@ -136,6 +137,7 @@ class RouteSettingViewModelTest {
             assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
             assertEquals(RoutePreviewMapStatus.NO_DESTINATION, uiState.routePreviewMap.status)
+            assertEquals("Destination is required before showing a route preview map.", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.isStartEnabled)
             assertEquals("검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다.", uiState.cta.supportingText)
@@ -192,6 +194,9 @@ class RouteSettingViewModelTest {
             assertEquals("선택한 목적지 좌표를 확인할 수 없어 fixture 목적지로 대체했습니다.", uiState.destinationFallbackMessage)
             assertEquals("부산역", uiState.destination.name)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+            assertEquals(RoutePreviewMapStatus.INVALID_DESTINATION, uiState.routePreviewMap.status)
+            assertEquals("Destination coordinate is invalid.", uiState.routePreviewMap.fallbackMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.isStartEnabled)
             assertEquals("목적지 좌표를 다시 확인하면 안내 시작을 활성화합니다.", uiState.cta.supportingText)
         }
@@ -238,6 +243,7 @@ class RouteSettingViewModelTest {
             assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
             assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
             assertTrue(uiState.routePreviewMap.polyline.isEmpty())
+            assertEquals("Selected route preview polyline needs at least two points.", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
         }
 
@@ -268,12 +274,16 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `empty route result keeps summary empty and disables start action`() =
+    fun `empty route result keeps preview map no route fallback and disables start action`() =
         runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
             val viewModel =
                 RouteSettingViewModel(
                     routeRepository = emptyRouteRepository(),
-                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
                 )
 
             advanceUntilIdle()
@@ -282,6 +292,12 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.optionCards.isEmpty())
             assertEquals(null, uiState.selectedRoute)
+            assertEquals(RouteDestinationHandoffState.DIRECT, uiState.destinationHandoffState)
+            assertEquals(RoutePreviewMapStatus.NO_ROUTE, uiState.routePreviewMap.status)
+            assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
+            assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
+            assertEquals("No selected route is available for the preview map.", uiState.routePreviewMap.fallbackMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.cta.isEnabled)
             assertEquals("표시할 경로가 준비되면 시작 CTA를 활성화합니다.", uiState.cta.supportingText)
             assertFalse(uiState.isStartEnabled)
@@ -304,11 +320,12 @@ class RouteSettingViewModelTest {
             assertEquals("경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다.", uiState.cta.supportingText)
             assertEquals("fixture load failed", uiState.loadErrorMessage)
             assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals("fixture load failed", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
         }
 
     @Test
-    fun `route option selection swaps summary to shortest route`() =
+    fun `route option selection swaps summary and preview map to shortest route`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -330,6 +347,9 @@ class RouteSettingViewModelTest {
             assertEquals(RouteOption.SHORTEST, uiState.selectedRoute?.routeOption)
             assertEquals(RouteOption.SHORTEST, uiState.routePreviewMap.routeOption)
             assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertEquals(uiState.selectedRoute?.previewPoints, uiState.routePreviewMap.polyline)
+            assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
+            assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
             assertTrue(uiState.routePreviewMap.isDisplayable)
             assertEquals("최단 거리", uiState.selectedRoute?.optionTitle)
             assertEquals("Shortest Route", uiState.selectedRoute?.title)

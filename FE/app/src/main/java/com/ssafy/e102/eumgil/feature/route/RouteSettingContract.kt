@@ -19,6 +19,7 @@ data class RouteSettingUiState(
     val selectedOption: RouteOption = RouteOption.SAFE,
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
     val selectedRoute: RouteSelectedRouteUiState? = null,
+    val routePreviewMap: RoutePreviewMapUiState = RoutePreviewMapUiState(),
     val sourceLabel: String? = null,
     val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
@@ -35,6 +36,22 @@ data class RouteLocationUiState(
     val category: PlaceCategory? = null,
     val metadataLabel: String? = null,
 )
+
+data class RoutePreviewMapUiState(
+    val status: RoutePreviewMapStatus = RoutePreviewMapStatus.LOADING,
+    val routeOption: RouteOption? = null,
+    val originCoordinate: GeoCoordinate? = null,
+    val destinationCoordinate: GeoCoordinate? = null,
+    val polyline: List<GeoCoordinate> = emptyList(),
+    val fallbackMessage: String? = null,
+) {
+    val isDisplayable: Boolean
+        get() =
+            status == RoutePreviewMapStatus.READY &&
+                originCoordinate != null &&
+                destinationCoordinate != null &&
+                polyline.size >= 2
+}
 
 data class RouteOptionCardUiState(
     val routeOption: RouteOption,
@@ -94,6 +111,16 @@ enum class RouteDestinationHandoffState {
     DIRECT,
     EMPTY,
     INVALID_COORDINATE,
+}
+
+enum class RoutePreviewMapStatus {
+    LOADING,
+    READY,
+    NO_DESTINATION,
+    INVALID_DESTINATION,
+    NO_ROUTE,
+    POLYLINE_UNAVAILABLE,
+    ERROR,
 }
 
 enum class RouteOptionBadge {

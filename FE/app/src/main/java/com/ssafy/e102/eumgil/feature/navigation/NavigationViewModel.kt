@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,7 @@ class NavigationViewModel : ViewModel() {
             state.copy(
                 screenState = screenState,
                 mapPlaceholderDescription = request.toMapPlaceholderDescription(screenState),
+                mapOverlay = request.toMapOverlayUiState(),
                 stepCard = stepCard,
                 exitCta = screenState.toExitCtaUiState(),
                 tts =
@@ -150,6 +152,37 @@ private fun RouteNavigationRequest.toMapPlaceholderDescription(screenState: Navi
         NavigationScreenState.Empty -> "$destinationName 방향 거리 요약을 먼저 표시하고 있습니다."
     }
 }
+
+private fun RouteNavigationRequest.toMapOverlayUiState(): NavigationMapOverlayUiState {
+    val selectedRoutePolyline = selectedRoute.previewPolyline.points
+    val routeSegments =
+        selectedRoute.segments.map { segment ->
+            NavigationMapSegmentUiState(
+                sequence = segment.sequence,
+                polyline = segment.polyline.points,
+                distanceMeters = segment.distanceMeters,
+                riskLevel = segment.riskLevel,
+                guidanceMessage = segment.guidanceMessage,
+            )
+        }
+    val originPoint = origin.toNavigationMapPointUiState(fallbackLabel = "Origin")
+    val destinationPoint = destination.toNavigationMapPointUiState(fallbackLabel = "Destination")
+
+    return NavigationMapOverlayUiState(
+        isDisplayable = selectedRoute.previewPolyline.isRenderable,
+        currentLocation = originPoint,
+        origin = originPoint,
+        destination = destinationPoint,
+        selectedRoutePolyline = selectedRoutePolyline,
+        routeSegments = routeSegments,
+    )
+}
+
+private fun RouteWaypoint.toNavigationMapPointUiState(fallbackLabel: String): NavigationMapPointUiState =
+    NavigationMapPointUiState(
+        label = name.orEmpty().ifBlank { fallbackLabel },
+        coordinate = coordinate,
+    )
 
 private fun RouteNavigationRequest.toStepCardUiState(screenState: NavigationScreenState): NavigationStepCardUiState =
     when (screenState) {

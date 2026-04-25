@@ -105,6 +105,11 @@ class RouteSettingViewModel(
                 selectedOption = selectedOption,
                 optionCards = emptyList(),
                 selectedRoute = null,
+                routePreviewMap =
+                    loadingRoutePreviewMapUiState(
+                        originCoordinate = DEFAULT_ORIGIN.coordinate,
+                        destinationResolution = destinationResolution,
+                    ),
                 sourceLabel = null,
                 cta = loadingCtaUiState(),
                 ctaAcknowledged = false,
@@ -127,6 +132,12 @@ class RouteSettingViewModel(
                 state.copy(
                     isLoading = false,
                     loadErrorMessage = throwable.message ?: DEFAULT_ROUTE_LOAD_ERROR_MESSAGE,
+                    routePreviewMap =
+                        errorRoutePreviewMapUiState(
+                            originCoordinate = DEFAULT_ORIGIN.coordinate,
+                            destinationResolution = destinationResolution,
+                            message = throwable.message ?: DEFAULT_ROUTE_LOAD_ERROR_MESSAGE,
+                        ),
                     cta = errorCtaUiState(),
                     ctaAcknowledged = false,
                 )
@@ -206,6 +217,12 @@ class RouteSettingViewModel(
             searchData.findRoute(resolvedOption)
                 ?: availableRoutes.firstOrNull()
         val selectedRouteUiState = selectedRoute?.toSelectedRouteUiState(destination = resolvedDestination)
+        val routePreviewMapUiState =
+            selectedRoute.toRoutePreviewMapUiState(
+                originCoordinate = searchData.result.origin.coordinate,
+                destinationCoordinate = searchData.result.destination.coordinate,
+                destinationHandoffState = destinationResolution.handoffState,
+            )
 
         return RouteSettingUiState(
             isLoading = false,
@@ -223,6 +240,7 @@ class RouteSettingViewModel(
                     )
                 },
             selectedRoute = selectedRouteUiState,
+            routePreviewMap = routePreviewMapUiState,
             sourceLabel = searchData.source.label,
             cta =
                 buildCtaUiState(
@@ -416,6 +434,76 @@ private fun RouteWaypoint.toLocationUiState(addressFallback: String?): RouteLoca
         category = category,
         metadataLabel = buildLocationMetadataLabel(placeId = placeId, category = category),
     )
+
+private fun loadingRoutePreviewMapUiState(
+    originCoordinate: GeoCoordinate,
+    destinationResolution: RouteDestinationResolution,
+): RoutePreviewMapUiState =
+    RoutePreviewMapUiState(
+        status = RoutePreviewMapStatus.LOADING,
+        originCoordinate = originCoordinate,
+        destinationCoordinate = destinationResolution.routeDestination.coordinate,
+        fallbackMessage = ROUTE_PREVIEW_MAP_LOADING_MESSAGE,
+    )
+
+private fun errorRoutePreviewMapUiState(
+    originCoordinate: GeoCoordinate,
+    destinationResolution: RouteDestinationResolution,
+    message: String,
+): RoutePreviewMapUiState =
+    RoutePreviewMapUiState(
+        status = RoutePreviewMapStatus.ERROR,
+        originCoordinate = originCoordinate,
+        destinationCoordinate = destinationResolution.routeDestination.coordinate,
+        fallbackMessage = message,
+    )
+
+private fun RouteCandidate?.toRoutePreviewMapUiState(
+    originCoordinate: GeoCoordinate,
+    destinationCoordinate: GeoCoordinate,
+    destinationHandoffState: RouteDestinationHandoffState,
+): RoutePreviewMapUiState =
+    when {
+        destinationHandoffState == RouteDestinationHandoffState.EMPTY ->
+            RoutePreviewMapUiState(
+                status = RoutePreviewMapStatus.NO_DESTINATION,
+                originCoordinate = originCoordinate,
+                fallbackMessage = ROUTE_PREVIEW_MAP_NO_DESTINATION_MESSAGE,
+            )
+
+        destinationHandoffState == RouteDestinationHandoffState.INVALID_COORDINATE ->
+            RoutePreviewMapUiState(
+                status = RoutePreviewMapStatus.INVALID_DESTINATION,
+                originCoordinate = originCoordinate,
+                fallbackMessage = ROUTE_PREVIEW_MAP_INVALID_DESTINATION_MESSAGE,
+            )
+
+        this == null ->
+            RoutePreviewMapUiState(
+                status = RoutePreviewMapStatus.NO_ROUTE,
+                originCoordinate = originCoordinate,
+                destinationCoordinate = destinationCoordinate,
+                fallbackMessage = ROUTE_PREVIEW_MAP_NO_ROUTE_MESSAGE,
+            )
+
+        !previewPolyline.isRenderable ->
+            RoutePreviewMapUiState(
+                status = RoutePreviewMapStatus.POLYLINE_UNAVAILABLE,
+                routeOption = routeOption,
+                originCoordinate = originCoordinate,
+                destinationCoordinate = destinationCoordinate,
+                fallbackMessage = ROUTE_PREVIEW_MAP_POLYLINE_UNAVAILABLE_MESSAGE,
+            )
+
+        else ->
+            RoutePreviewMapUiState(
+                status = RoutePreviewMapStatus.READY,
+                routeOption = routeOption,
+                originCoordinate = originCoordinate,
+                destinationCoordinate = destinationCoordinate,
+                polyline = previewPolyline.points,
+            )
+    }
 
 private fun buildLocationMetadataLabel(
     placeId: String?,
@@ -630,6 +718,11 @@ private const val RISK_VALUE_LOW = "낮음"
 private const val RISK_VALUE_MEDIUM = "보통"
 private const val RISK_VALUE_HIGH = "높음"
 private const val PREVIEW_FALLBACK_NOTICE = "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다."
+private const val ROUTE_PREVIEW_MAP_LOADING_MESSAGE = "Route preview map is loading."
+private const val ROUTE_PREVIEW_MAP_NO_DESTINATION_MESSAGE = "Destination is required before showing a route preview map."
+private const val ROUTE_PREVIEW_MAP_INVALID_DESTINATION_MESSAGE = "Destination coordinate is invalid."
+private const val ROUTE_PREVIEW_MAP_NO_ROUTE_MESSAGE = "No selected route is available for the preview map."
+private const val ROUTE_PREVIEW_MAP_POLYLINE_UNAVAILABLE_MESSAGE = "Selected route preview polyline needs at least two points."
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
 private val DEFAULT_SELECTED_OPTION = RouteOption.SAFE

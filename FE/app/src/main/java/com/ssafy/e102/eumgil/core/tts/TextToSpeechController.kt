@@ -1,7 +1,7 @@
 package com.ssafy.e102.eumgil.core.tts
 
 import android.content.Context
-import android.speech.TextToSpeech
+import android.speech.tts.TextToSpeech
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,11 +95,11 @@ class AndroidTextToSpeechController(
 
     private fun handleInitResult(status: Int) {
         val initialized = status == TextToSpeech.SUCCESS
-        val languageSupported =
-            initialized &&
-                runCatching { engine?.setLanguage(locale) }
-                    .getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
-                    .isSupportedLanguageResult()
+        val languageResult =
+            runCatching { engine?.setLanguage(locale) }
+                .getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
+                ?: TextToSpeech.LANG_NOT_SUPPORTED
+        val languageSupported = initialized && languageResult.isSupportedLanguageResult()
 
         if (!languageSupported) {
             markUnavailable()

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -30,13 +32,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -517,7 +527,12 @@ private fun RouteSummarySection(
                     description = stringResource(id = R.string.route_setting_summary_empty_description),
                 )
 
-            else -> RouteSummaryCard(route = uiState.selectedRoute, sourceLabel = uiState.sourceLabel)
+            else ->
+                RouteSummaryCard(
+                    route = uiState.selectedRoute,
+                    previewMap = uiState.routePreviewMap,
+                    sourceLabel = uiState.sourceLabel,
+                )
         }
     }
 }
@@ -526,6 +541,7 @@ private fun RouteSummarySection(
 @Composable
 private fun RouteSummaryCard(
     route: RouteSelectedRouteUiState,
+    previewMap: RoutePreviewMapUiState,
     sourceLabel: String?,
 ) {
     Surface(
@@ -583,7 +599,7 @@ private fun RouteSummaryCard(
                 )
             }
 
-            RoutePreviewPanel(route = route)
+            RoutePreviewPanel(route = route, previewMap = previewMap)
 
             sourceLabel?.takeIf(String::isNotBlank)?.let { label ->
                 Text(
@@ -734,8 +750,9 @@ private fun RouteSummaryMetricCard(
 @Composable
 private fun RoutePreviewPanel(
     route: RouteSelectedRouteUiState,
+    previewMap: RoutePreviewMapUiState,
 ) {
-    val previewLineColor = MaterialTheme.colorScheme.primary
+    val previewLineColor = optionAccentColor(route.routeOption)
     val previewMutedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
     val previewBackground = MaterialTheme.colorScheme.surfaceContainerLowest
     val previewStartColor = MaterialTheme.colorScheme.secondary
@@ -764,63 +781,20 @@ private fun RoutePreviewPanel(
                 )
             }
 
-            if (route.previewPoints.size < 2) {
-                RouteStateCard(
-                    title = stringResource(id = R.string.route_setting_preview_placeholder_title),
-                    description = stringResource(id = R.string.route_setting_preview_placeholder_description),
-                    modifier = Modifier.fillMaxWidth(),
+            if (previewMap.isDisplayable) {
+                RoutePreviewMapViewport(
+                    route = route,
+                    previewMap = previewMap,
+                    routeColor = previewLineColor,
+                    originColor = previewStartColor,
+                    destinationColor = previewEndColor,
                 )
             } else {
-                Canvas(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(164.dp),
-                ) {
-                    val mappedPoints =
-                        route.previewPoints.toPreviewOffsets(
-                            width = size.width,
-                            height = size.height,
-                            padding = size.minDimension * 0.14f,
-                        )
-                    val path =
-                        Path().apply {
-                            moveTo(mappedPoints.first().x, mappedPoints.first().y)
-                            mappedPoints.drop(1).forEach { point ->
-                                lineTo(point.x, point.y)
-                            }
-                        }
-
-                    drawPath(
-                        path = path,
-                        color = previewLineColor,
-                        style =
-                            Stroke(
-                                width = 8f,
-                                cap = StrokeCap.Round,
-                            ),
-                    )
-                    drawCircle(
-                        color = previewStartColor,
-                        radius = 14f,
-                        center = mappedPoints.first(),
-                    )
-                    drawCircle(
-                        color = previewEndColor,
-                        radius = 14f,
-                        center = mappedPoints.last(),
-                    )
-                    drawCircle(
-                        color = previewBackground,
-                        radius = 6f,
-                        center = mappedPoints.first(),
-                    )
-                    drawCircle(
-                        color = previewBackground,
-                        radius = 6f,
-                        center = mappedPoints.last(),
-                    )
-                }
+                RouteStateCard(
+                    title = routePreviewFallbackTitle(previewMap.status),
+                    description = routePreviewFallbackDescription(previewMap),
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             Text(
@@ -853,6 +827,252 @@ private fun RoutePreviewPanel(
         }
     }
 }
+
+@Composable
+private fun RoutePreviewMapViewport(
+    route: RouteSelectedRouteUiState,
+    previewMap: RoutePreviewMapUiState,
+    routeColor: Color,
+    originColor: Color,
+    destinationColor: Color,
+) {
+    val surfaceTint = MaterialTheme.colorScheme.surface
+    val outline = MaterialTheme.colorScheme.outline
+    val projectionBounds = routePreviewProjectionBounds(previewMap)
+    val destinationLabel =
+        route.destination.name.takeIf(String::isNotBlank)
+            ?: stringResource(id = R.string.route_setting_destination_label)
+    val accessibilityLabel =
+        stringResource(
+            id = R.string.route_setting_preview_map_a11y,
+            route.optionTitle,
+            destinationLabel,
+            previewMap.polyline.size,
+        )
+    val backgroundBrush =
+        Brush.verticalGradient(
+            colors =
+                listOf(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    surfaceTint,
+                ),
+        )
+
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(RoutePreviewMapHeight)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = accessibilityLabel
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(backgroundBrush),
+        ) {
+            val horizontalPadding = 28.dp
+            val verticalPadding = 24.dp
+            val markerAreaWidth = (maxWidth - (horizontalPadding * 2)).coerceAtLeast(0.dp)
+            val markerAreaHeight = (maxHeight - (verticalPadding * 2)).coerceAtLeast(0.dp)
+
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawRoutePreviewMapGrid(outline = outline)
+
+                val routePath =
+                    previewMap.polyline.toRoutePreviewPath(
+                        bounds = projectionBounds,
+                        canvasSize = size,
+                    )
+                drawPath(
+                    path = routePath,
+                    color = routeColor.copy(alpha = 0.28f),
+                    style =
+                        Stroke(
+                            width = 12.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+                drawPath(
+                    path = routePath,
+                    color = routeColor,
+                    style =
+                        Stroke(
+                            width = 5.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+
+                previewMap.originCoordinate?.let { coordinate ->
+                    drawCircle(
+                        color = originColor.copy(alpha = 0.18f),
+                        radius = 18.dp.toPx(),
+                        center = projectionBounds.project(coordinate).toCanvasOffset(size),
+                    )
+                }
+                previewMap.destinationCoordinate?.let { coordinate ->
+                    drawCircle(
+                        color = destinationColor.copy(alpha = 0.14f),
+                        radius = 20.dp.toPx(),
+                        center = projectionBounds.project(coordinate).toCanvasOffset(size),
+                    )
+                }
+            }
+
+            previewMap.originCoordinate?.let { coordinate ->
+                RoutePreviewMapMarker(
+                    label = stringResource(id = R.string.route_setting_preview_marker_origin),
+                    containerColor = originColor,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .offsetWithinRoutePreviewMap(
+                                point = projectionBounds.project(coordinate),
+                                areaWidth = markerAreaWidth,
+                                areaHeight = markerAreaHeight,
+                                horizontalPadding = horizontalPadding,
+                                verticalPadding = verticalPadding,
+                                elementSize = RoutePreviewMarkerSize,
+                            ),
+                )
+            }
+
+            previewMap.destinationCoordinate?.let { coordinate ->
+                RoutePreviewMapMarker(
+                    label = stringResource(id = R.string.route_setting_preview_marker_destination),
+                    containerColor = destinationColor,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .offsetWithinRoutePreviewMap(
+                                point = projectionBounds.project(coordinate),
+                                areaWidth = markerAreaWidth,
+                                areaHeight = markerAreaHeight,
+                                horizontalPadding = horizontalPadding,
+                                verticalPadding = verticalPadding,
+                                elementSize = RoutePreviewMarkerSize,
+                            ),
+                )
+            }
+
+            RoutePreviewMapLegend(
+                route = route,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(EumSpacing.small),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RoutePreviewMapMarker(
+    label: String,
+    containerColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.size(RoutePreviewMarkerSize),
+        shape = CircleShape,
+        color = containerColor,
+        shadowElevation = 6.dp,
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RoutePreviewMapLegend(
+    route: RouteSelectedRouteUiState,
+    modifier: Modifier = Modifier,
+) {
+    val destinationLabel =
+        route.destination.name.takeIf(String::isNotBlank)
+            ?: stringResource(id = R.string.route_setting_destination_label)
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
+        shadowElevation = 4.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.small),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+        ) {
+            Text(
+                text = stringResource(id = R.string.route_setting_preview_legend_title),
+                style = MaterialTheme.typography.labelLarge,
+                color = optionAccentColor(route.routeOption),
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.route_setting_preview_legend_origin,
+                        route.optionTitle,
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.route_setting_preview_legend_destination,
+                        destinationLabel,
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun routePreviewFallbackTitle(status: RoutePreviewMapStatus): String =
+    when (status) {
+        RoutePreviewMapStatus.LOADING -> stringResource(id = R.string.route_setting_preview_loading_title)
+        RoutePreviewMapStatus.NO_DESTINATION -> stringResource(id = R.string.route_setting_preview_no_destination_title)
+        RoutePreviewMapStatus.INVALID_DESTINATION -> stringResource(id = R.string.route_setting_preview_invalid_destination_title)
+        RoutePreviewMapStatus.NO_ROUTE -> stringResource(id = R.string.route_setting_preview_no_route_title)
+        RoutePreviewMapStatus.POLYLINE_UNAVAILABLE -> stringResource(id = R.string.route_setting_preview_placeholder_title)
+        RoutePreviewMapStatus.ERROR -> stringResource(id = R.string.route_setting_preview_error_title)
+        RoutePreviewMapStatus.READY -> stringResource(id = R.string.route_setting_preview_title)
+    }
+
+@Composable
+private fun routePreviewFallbackDescription(previewMap: RoutePreviewMapUiState): String =
+    when (previewMap.status) {
+        RoutePreviewMapStatus.LOADING -> stringResource(id = R.string.route_setting_preview_loading_description)
+        RoutePreviewMapStatus.NO_DESTINATION -> stringResource(id = R.string.route_setting_preview_no_destination_description)
+        RoutePreviewMapStatus.INVALID_DESTINATION -> stringResource(id = R.string.route_setting_preview_invalid_destination_description)
+        RoutePreviewMapStatus.NO_ROUTE -> stringResource(id = R.string.route_setting_preview_no_route_description)
+        RoutePreviewMapStatus.POLYLINE_UNAVAILABLE ->
+            previewMap.fallbackMessage ?: stringResource(id = R.string.route_setting_preview_placeholder_description)
+        RoutePreviewMapStatus.ERROR ->
+            previewMap.fallbackMessage ?: stringResource(id = R.string.route_setting_preview_error_description)
+        RoutePreviewMapStatus.READY -> stringResource(id = R.string.route_setting_preview_placeholder_description)
+    }
 
 @Composable
 private fun RouteSettingBottomBar(
@@ -994,26 +1214,142 @@ private fun optionAccentColor(routeOption: com.ssafy.e102.eumgil.core.model.Rout
         com.ssafy.e102.eumgil.core.model.RouteOption.SHORTEST -> MaterialTheme.colorScheme.tertiary
     }
 
-private fun List<GeoCoordinate>.toPreviewOffsets(
-    width: Float,
-    height: Float,
-    padding: Float,
-): List<Offset> {
-    val minLongitude = minOf(GeoCoordinate::longitude)
-    val maxLongitude = maxOf(GeoCoordinate::longitude)
-    val minLatitude = minOf(GeoCoordinate::latitude)
-    val maxLatitude = maxOf(GeoCoordinate::latitude)
-    val longitudeRange = (maxLongitude - minLongitude).takeIf { it > 0.0 } ?: 0.001
-    val latitudeRange = (maxLatitude - minLatitude).takeIf { it > 0.0 } ?: 0.001
-    val usableWidth = (width - (padding * 2f)).coerceAtLeast(1f)
-    val usableHeight = (height - (padding * 2f)).coerceAtLeast(1f)
+private fun DrawScope.drawRoutePreviewMapGrid(outline: Color) {
+    val verticalStep = size.width / 5f
+    val horizontalStep = size.height / 6f
+    val strokeWidth = 1.dp.toPx()
 
-    return map { coordinate ->
-        val normalizedX = ((coordinate.longitude - minLongitude) / longitudeRange).toFloat()
-        val normalizedY = ((coordinate.latitude - minLatitude) / latitudeRange).toFloat()
-        Offset(
-            x = padding + (normalizedX * usableWidth),
-            y = height - padding - (normalizedY * usableHeight),
+    for (index in 0..5) {
+        val x = index * verticalStep
+        drawLine(
+            color = outline.copy(alpha = 0.18f),
+            start = Offset(x, 0f),
+            end = Offset(x - (size.height * 0.16f), size.height),
+            strokeWidth = strokeWidth,
+        )
+    }
+
+    for (index in 0..6) {
+        val y = index * horizontalStep
+        drawLine(
+            color = outline.copy(alpha = 0.12f),
+            start = Offset(0f, y),
+            end = Offset(size.width, y + (size.width * 0.08f)),
+            strokeWidth = strokeWidth,
         )
     }
 }
+
+private fun List<GeoCoordinate>.toRoutePreviewPath(
+    bounds: RoutePreviewProjectionBounds,
+    canvasSize: Size,
+): Path =
+    Path().also { path ->
+        forEachIndexed { index, coordinate ->
+            val offset = bounds.project(coordinate).toCanvasOffset(canvasSize)
+            if (index == 0) {
+                path.moveTo(offset.x, offset.y)
+            } else {
+                path.lineTo(offset.x, offset.y)
+            }
+        }
+    }
+
+private fun RoutePreviewProjectionPoint.toCanvasOffset(size: Size): Offset =
+    Offset(
+        x = size.width * xRatio,
+        y = size.height * yRatio,
+    )
+
+private fun Modifier.offsetWithinRoutePreviewMap(
+    point: RoutePreviewProjectionPoint,
+    areaWidth: Dp,
+    areaHeight: Dp,
+    horizontalPadding: Dp,
+    verticalPadding: Dp,
+    elementSize: Dp,
+): Modifier =
+    offset(
+        x = horizontalPadding + (areaWidth * point.xRatio) - (elementSize / 2),
+        y = verticalPadding + (areaHeight * point.yRatio) - (elementSize / 2),
+    )
+
+private fun routePreviewProjectionBounds(previewMap: RoutePreviewMapUiState): RoutePreviewProjectionBounds {
+    val coordinates =
+        buildList {
+            addAll(previewMap.polyline)
+            previewMap.originCoordinate?.let(::add)
+            previewMap.destinationCoordinate?.let(::add)
+        }
+
+    val latitudeBounds =
+        expandedRoutePreviewBounds(
+            minValue = coordinates.minOf { coordinate -> coordinate.latitude },
+            maxValue = coordinates.maxOf { coordinate -> coordinate.latitude },
+            minimumSpan = MIN_ROUTE_PREVIEW_LATITUDE_SPAN,
+        )
+    val longitudeBounds =
+        expandedRoutePreviewBounds(
+            minValue = coordinates.minOf { coordinate -> coordinate.longitude },
+            maxValue = coordinates.maxOf { coordinate -> coordinate.longitude },
+            minimumSpan = MIN_ROUTE_PREVIEW_LONGITUDE_SPAN,
+        )
+
+    return RoutePreviewProjectionBounds(
+        minLatitude = latitudeBounds.first,
+        maxLatitude = latitudeBounds.second,
+        minLongitude = longitudeBounds.first,
+        maxLongitude = longitudeBounds.second,
+    )
+}
+
+private fun expandedRoutePreviewBounds(
+    minValue: Double,
+    maxValue: Double,
+    minimumSpan: Double,
+): Pair<Double, Double> {
+    val center = (minValue + maxValue) / 2.0
+    val paddedSpan = (maxValue - minValue) * 1.42
+    val finalSpan = maxOf(paddedSpan, minimumSpan)
+    val halfSpan = finalSpan / 2.0
+
+    return (center - halfSpan) to (center + halfSpan)
+}
+
+private data class RoutePreviewProjectionBounds(
+    val minLatitude: Double,
+    val maxLatitude: Double,
+    val minLongitude: Double,
+    val maxLongitude: Double,
+) {
+    private val latitudeSpan: Double
+        get() = (maxLatitude - minLatitude).coerceAtLeast(MIN_ROUTE_PREVIEW_LATITUDE_SPAN)
+
+    private val longitudeSpan: Double
+        get() = (maxLongitude - minLongitude).coerceAtLeast(MIN_ROUTE_PREVIEW_LONGITUDE_SPAN)
+
+    fun project(coordinate: GeoCoordinate): RoutePreviewProjectionPoint {
+        val longitudeRatio =
+            ((coordinate.longitude - minLongitude) / longitudeSpan)
+                .toFloat()
+                .coerceIn(0.08f, 0.92f)
+        val latitudeRatio =
+            (1f - ((coordinate.latitude - minLatitude) / latitudeSpan).toFloat())
+                .coerceIn(0.10f, 0.90f)
+
+        return RoutePreviewProjectionPoint(
+            xRatio = longitudeRatio,
+            yRatio = latitudeRatio,
+        )
+    }
+}
+
+private data class RoutePreviewProjectionPoint(
+    val xRatio: Float,
+    val yRatio: Float,
+)
+
+private val RoutePreviewMapHeight = 220.dp
+private val RoutePreviewMarkerSize = 38.dp
+private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035
+private const val MIN_ROUTE_PREVIEW_LONGITUDE_SPAN = 0.0045

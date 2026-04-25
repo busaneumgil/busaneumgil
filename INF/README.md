@@ -13,7 +13,7 @@
 - `.env.local`, `.env.dev`, `.env.prod` 같은 환경 변수 파일도 루트에 둔다.
 - `scripts/`는 `make`에서 호출하는 자동화 스크립트 폴더로 사용한다.
 - `INF/`는 실행 스크립트가 아니라 운영 설정 자산을 관리한다.
-- 모니터링은 우선 `PLG` 중심으로 관리한다.
+- 모니터링은 우선 `S2`의 `Grafana/PLG` 중심으로 관리한다.
 - AWS 1차 알람 체계와 상세 운영 설명은 `Docs/인프라`에서 관리한다.
 
 ## 실행 원칙
@@ -71,13 +71,15 @@ Jenkins 운영에 필요한 설정 파일을 둔다.
 
 현재 기준:
 
-- 보조 모니터링은 `PLG`를 사용한다.
-- `green`이 실제 prod를 받기 시작하면 `PLG`는 중지 가능해야 한다.
-- `PLG`는 운영 보조 조회 용도이며, 핵심 장애 알람 체계를 대체하지 않는다.
+- 보조 모니터링은 `S2`의 `Grafana/PLG`를 사용한다.
+- `Portainer`, `SonarQube`도 `S2` 운영도구 stack으로 둔다.
+- `green`이 실제 prod를 받기 시작하면 운영도구는 중지 가능해야 한다.
+- `Grafana/PLG`는 운영 보조 조회 용도이며, 핵심 장애 알람 체계를 대체하지 않는다.
 
 예시:
 
-- `PLG` 관련 설정 파일
+- `Grafana/PLG` 관련 설정 파일
+- `Portainer`, `SonarQube` 관련 설정 파일
 - 대시보드/알람용 보조 설정
 
 운영 가이드와 상세 설명 문서는 `Docs/인프라`에서 관리한다.
@@ -118,14 +120,14 @@ Jenkins 운영에 필요한 설정 파일을 둔다.
 
 - 운영 기준은 EC2 2대 구조다.
 - `S1`은 `blue(prod) + dev/Jenkins` 역할을 가진다.
-- `S2`는 `green(prod standby) + PLG` 역할을 가진다.
+- `S2`는 `green(prod standby) + Grafana/Portainer/SonarQube/PLG` 역할을 가진다.
 - `RDS`, `ElastiCache`는 관리형 서비스로 운영한다.
 - EC2 shell 접속은 `SSH`를 기본으로 하며, `22`는 관리자 고정 IP만 허용한다.
 - `RDS`, `ElastiCache` 같은 private resource 접근은 `SSM Session Manager` port forwarding 기준으로 잡는다.
 - `SSM Session Manager`는 SSH 장애 시 복구 채널로도 유지한다.
 - 서비스 API와 필요한 관리자 UI는 `ALB`의 `80/443` host-based routing으로 접근한다.
 - EC2에서 외부에 직접 여는 포트는 `22`만 두며, 관리자 고정 IP만 허용한다.
-- `monitoring/`은 현재 `PLG` 운영 자산 중심으로 정리한다.
+- `monitoring/`은 현재 `S2` 운영도구 자산 중심으로 정리한다.
 
 ## 정렬 완료 기준
 

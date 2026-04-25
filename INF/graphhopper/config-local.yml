@@ -4,12 +4,16 @@ graphhopper:
 
   profiles:
     - name: foot
+      custom_model_files: [foot.json]
 
   profiles_ch: []
   profiles_lm: []
 
+  graph.encoded_values: |
+    foot_access, foot_average_speed, foot_priority, foot_road_access, hike_rating, country, road_class, mtb_rating
   prepare.min_network_size: 2
   prepare.subnetworks.threads: 1
+  import.osm.ignored_highways: []
   routing.non_ch.max_waypoint_distance: 1000000
   graph.dataaccess.default_type: RAM_STORE
 

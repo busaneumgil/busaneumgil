@@ -14,6 +14,7 @@ BE_DEV_DB_LOCAL_PORT="${BE_DEV_DB_LOCAL_PORT:-15432}"
 BE_DEV_REDIS_LOCAL_PORT="${BE_DEV_REDIS_LOCAL_PORT:-16379}"
 BE_DEV_MINIO_LOCAL_PORT="${BE_DEV_MINIO_LOCAL_PORT:-19000}"
 BE_DEV_GRAPHHOPPER_LOCAL_PORT="${BE_DEV_GRAPHHOPPER_LOCAL_PORT:-18989}"
+BE_DEV_GRAPHHOPPER_REMOTE_PORT="${BE_DEV_GRAPHHOPPER_REMOTE_PORT:-8998}"
 
 server_port() {
   if [ -f "$ENV_FILE" ]; then
@@ -78,28 +79,32 @@ ensure_dev_tunnel() {
     exit 1
   fi
 
-  local needs_tunnel=false
-  for port in "$BE_DEV_DB_LOCAL_PORT" "$BE_DEV_REDIS_LOCAL_PORT" "$BE_DEV_MINIO_LOCAL_PORT" "$BE_DEV_GRAPHHOPPER_LOCAL_PORT"; do
-    if ! port_open "$port"; then
-      needs_tunnel=true
-    fi
-  done
+  local ssh_args=()
+  if ! port_open "$BE_DEV_DB_LOCAL_PORT"; then
+    ssh_args+=(-L "127.0.0.1:$BE_DEV_DB_LOCAL_PORT:127.0.0.1:5432")
+  fi
+  if ! port_open "$BE_DEV_REDIS_LOCAL_PORT"; then
+    ssh_args+=(-L "127.0.0.1:$BE_DEV_REDIS_LOCAL_PORT:127.0.0.1:6379")
+  fi
+  if ! port_open "$BE_DEV_MINIO_LOCAL_PORT"; then
+    ssh_args+=(-L "127.0.0.1:$BE_DEV_MINIO_LOCAL_PORT:127.0.0.1:9000")
+  fi
+  if ! port_open "$BE_DEV_GRAPHHOPPER_LOCAL_PORT"; then
+    ssh_args+=(-L "127.0.0.1:$BE_DEV_GRAPHHOPPER_LOCAL_PORT:127.0.0.1:$BE_DEV_GRAPHHOPPER_REMOTE_PORT")
+  fi
 
-  if [ "$needs_tunnel" = "false" ]; then
+  if [ "${#ssh_args[@]}" -eq 0 ]; then
     echo "dev tunnel already reachable on local ports: $BE_DEV_DB_LOCAL_PORT, $BE_DEV_REDIS_LOCAL_PORT, $BE_DEV_MINIO_LOCAL_PORT, $BE_DEV_GRAPHHOPPER_LOCAL_PORT"
     return
   fi
 
-  echo "opening dev tunnel: local $BE_DEV_DB_LOCAL_PORT->5432, $BE_DEV_REDIS_LOCAL_PORT->6379, $BE_DEV_MINIO_LOCAL_PORT->9000, $BE_DEV_GRAPHHOPPER_LOCAL_PORT->8989"
+  echo "opening dev tunnel: local $BE_DEV_DB_LOCAL_PORT->5432, $BE_DEV_REDIS_LOCAL_PORT->6379, $BE_DEV_MINIO_LOCAL_PORT->9000, $BE_DEV_GRAPHHOPPER_LOCAL_PORT->$BE_DEV_GRAPHHOPPER_REMOTE_PORT"
   ssh -fN \
     -i "$BE_DEV_SSH_KEY" \
     -o ExitOnForwardFailure=yes \
     -o ServerAliveInterval=30 \
     -o ServerAliveCountMax=3 \
-    -L "127.0.0.1:$BE_DEV_DB_LOCAL_PORT:127.0.0.1:5432" \
-    -L "127.0.0.1:$BE_DEV_REDIS_LOCAL_PORT:127.0.0.1:6379" \
-    -L "127.0.0.1:$BE_DEV_MINIO_LOCAL_PORT:127.0.0.1:9000" \
-    -L "127.0.0.1:$BE_DEV_GRAPHHOPPER_LOCAL_PORT:127.0.0.1:8989" \
+    "${ssh_args[@]}" \
     "$BE_DEV_SSH_HOST"
 
   sleep 1

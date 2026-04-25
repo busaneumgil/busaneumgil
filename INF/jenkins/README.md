@@ -34,12 +34,12 @@ PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는�
 1. GitLab `develop` checkout
 2. Jenkins credential의 `.env.dev`, S1 override compose 복사
 3. `docker compose config --quiet`
-4. `PostGIS`, `Redis`, `MinIO` 기동
+4. `PostGIS`, `Redis`, `MinIO`, `GraphHopper` 기동
 5. backend image build 및 컨테이너 재생성
 6. `/v3/api-docs` smoke test
 7. compose 상태 출력
 
-GraphHopper는 PostgreSQL LineString 기반 런타임 전환 전까지 dev 배포 잡에서 제외한다.
+GraphHopper는 S1 dev stack에 포함한다. 현재 dev runtime은 GraphHopper graph-cache serve 구조로 운영하고, PostgreSQL LineString 원천 데이터 기반 graph-cache build job은 `S14P31E102-94`에서 별도 진행한다.
 
 ## Credentials
 

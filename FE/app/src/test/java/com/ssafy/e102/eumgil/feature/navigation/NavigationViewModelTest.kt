@@ -102,6 +102,23 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `exit action is ignored while navigation request is not ready`() =
+        runTest {
+            val viewModel = NavigationViewModel()
+            val eventDeferred =
+                async {
+                    withTimeoutOrNull(100) {
+                        viewModel.uiEvent.first()
+                    }
+                }
+
+            viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            advanceUntilIdle()
+
+            assertNull(eventDeferred.await())
+        }
+
+    @Test
     fun `binding navigation request maps route handoff into step card summary`() =
         runTest {
             val viewModel = NavigationViewModel()

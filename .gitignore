@@ -8,6 +8,13 @@ HELP.md
 .env.*
 !.env.example
 .claude/
+.agents/
+.codex/
+.ai/LOCAL/
+.ai/.agents/
+.ai/.claude/
+.ai/.codex/
+.ai/.claude/settings.local.json
 .gstack/
 FE/awesome-design-md/
 

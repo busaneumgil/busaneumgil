@@ -12,7 +12,7 @@ request or event -> classification -> doc and skill loading -> planning -> imple
 
 The following steps run without manual intervention when hooks are wired:
 
-- **Dangerous command guard**: `.ai/scripts/hook-pre-bash.sh` intercepts every Bash tool call via Claude Code `PreToolUse` hook (`.ai/.claude/settings.json`) and blocks destructive commands before execution.
+- **Dangerous command guard**: `.ai/scripts/hook-pre-bash.sh` intercepts every Bash tool call via Claude Code `PreToolUse` hook (`.claude/settings.json`, generated from `.ai/.claude/settings.json`) and blocks destructive commands before execution.
 - **TDD guard**: `.ai/scripts/hook-pre-edit.sh` intercepts every Edit/Write tool call via Claude Code `PreToolUse` hook and blocks production edits when no related test changes exist. `.ai/scripts/hook-post-edit.sh` remains as a post-edit audit.
 - **Codex session preflight**: `.ai/.codex/hooks.json` wires a minimal `SessionStart` command that runs `.ai/scripts/codex-preflight.sh` to surface guard commands, progress state, repeated-failure warnings, and Claude review routing. It is advisory, not a replacement for tool-level blocking.
 - **Code validation**: `.ai/scripts/verify.sh` runs `.ai/scripts/check-code-validation.sh` so shell syntax, structured adapter files, conflict markers, and changed code syntax are checked before the repository is considered ready.
@@ -32,10 +32,10 @@ The following steps run without manual intervention when hooks are wired:
 
 - Static canonical assets: `.ai/PROJECT.md`, `.ai/ARCHITECTURE.md`, `.ai/WORKFLOW.md`, `.ai/GUARDS.md`, runbooks, skills
 - Structured mutable assets: `.ai/LOCAL/PLANS/progress.json`, `.ai/LOCAL/EVALS/metrics.json`, `.ai/LOCAL/EVALS/retry-log.jsonl`
-- Hook-automated enforcement: dangerous command guard, TDD guard (wired in `.ai/.claude/settings.json`)
+- Hook-automated enforcement: dangerous command guard, TDD guard (wired in root `.claude/settings.json`, generated from `.ai/.claude/settings.json`)
 - Hook-automated reminders: Codex `SessionStart` guard reminder (wired in `.ai/.codex/hooks.json`)
 - Verify-time enforcement: structure, adapter sync, local-only file policy, and code validation
-- Generated outputs: `.ai/.claude/skills/`, `.ai/.agents/skills/`, `.ai/.claude/settings.json`, `.ai/.agents/README.md`, `.ai/.codex/config.toml`, `.ai/.codex/hooks.json`, `.ai/.codex/README.md`
+- Generated outputs: `.ai/.claude/skills/`, `.ai/.agents/skills/`, `.ai/.claude/settings.json`, ignored root `.claude/`, ignored root `.agents/`, `.ai/.agents/README.md`, `.ai/.codex/config.toml`, `.ai/.codex/hooks.json`, `.ai/.codex/README.md`
 
 ## Self-reinforcing loop
 

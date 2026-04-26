@@ -13,6 +13,7 @@
 - `.ai/.claude/skills/` is the Claude adapter layer generated from canonical skills.
 - `.ai/.agents/skills/` is the Codex adapter layer generated from canonical skills.
 - `.ai/.codex/` holds generated repo-local Codex configuration placeholders.
+- Root `.claude/skills` and `.claude/settings.json` are ignored Claude discovery/runtime shims that point at `.ai/.claude/`.
 - Root `.agents/skills` is an ignored Codex discovery shim that points at `.ai/.agents/skills`.
 
 ## Design intent
@@ -45,7 +46,7 @@ The operating philosophy is: when an agent repeats a mistake, strengthen the sys
 7. Shared learning updates go into `.ai/MEMORY/`, `.ai/SKILLS/`, `.ai/EVALS/`, or `.ai/DECISIONS/`.
 8. `.ai/scripts/sync-adapters.sh` copies canonical skills and runtime adapter templates into `.ai/.claude/`, `.ai/.agents/`, and `.ai/.codex/`.
 9. `.ai/scripts/install-root-entrypoints.sh` can install root `AGENTS.md`, `CLAUDE.md`, and an optional `README.md` pointer for hosts that require root discovery.
-10. Claude uses `.ai/.claude/skills/`, root `CLAUDE.md`, and generated `.ai/.claude/settings.json`.
+10. Claude uses root `CLAUDE.md` plus the ignored root `.claude/skills` and `.claude/settings.json` shims, which are generated from `.ai/.claude/`.
 11. Codex uses root `AGENTS.md` and the ignored root `.agents/skills` discovery shim, which is generated from `.ai/.agents/skills`.
 12. `.ai/scripts/dashboard.sh` turns progress, metrics, and harness state into a visible status summary.
 
@@ -54,6 +55,7 @@ The operating philosophy is: when an agent repeats a mistake, strengthen the sys
 - Canonical policy belongs in `.ai/`.
 - Root entrypoint files are installable host-discovery shims over canonical docs.
 - Generated adapters are rebuildable runtime views, not design sources.
+- Root `.claude/` is local generated discovery/runtime state for Claude and must stay ignored.
 - Root `.agents/` is local generated discovery state for Codex and must stay ignored.
 - Local-only host files such as `.ai/.claude/settings.local.json` and all `.ai/LOCAL/` runtime state may exist for a developer, but they must stay ignored and untracked.
 - Verification should fail on tracked policy drift, invalid structure, unsynced adapters, or code validation failures. It should not fail merely because an ignored local host file exists.

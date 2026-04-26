@@ -14,6 +14,8 @@
 
 Codex에서 `/plan`, `/start` 같은 스킬 명령이 보이지 않으면 `sync-adapters.sh` 실행 후 Codex 세션을 새로 시작합니다. Codex는 루트 `.agents/skills`를 발견 경로로 사용하며, 이 폴더는 `.ai/.agents/skills`를 가리키는 ignored shim입니다.
 
+Claude에서 같은 스킬 명령이나 훅 설정이 보이지 않으면 `sync-adapters.sh` 실행 후 Claude 세션을 새로 시작합니다. Claude는 루트 `.claude/skills`와 `.claude/settings.json`을 사용하며, 이 경로는 `.ai/.claude`를 가리키는 ignored shim입니다.
+
 ## 개발 중 핵심 흐름
 
 | 상황 | 사용할 명령 | 목적 |

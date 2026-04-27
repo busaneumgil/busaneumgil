@@ -7,12 +7,14 @@ import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
+import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
+import com.ssafy.e102.eumgil.data.local.datastore.authSessionDataStore
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
@@ -20,6 +22,8 @@ import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
@@ -42,6 +46,9 @@ class AppContainer(
 
     private val initSettingsLocalDataSource =
         InitSettingsLocalDataSource(dataStore = appContext.initSettingsDataStore)
+
+    private val authSessionLocalDataSource =
+        AuthSessionLocalDataSource(dataStore = appContext.authSessionDataStore)
 
     private val debugSettingsLocalDataSource =
         DebugSettingsLocalDataSource(appSettingDao = localDatabase.appSettingDao())
@@ -66,6 +73,16 @@ class AppContainer(
 
     val destinationSelectionRepository: DestinationSelectionRepository =
         RepositoryModule.provideDestinationSelectionRepository()
+
+    val authSessionRepository: AuthSessionRepository =
+        RepositoryModule.provideAuthSessionRepository(
+            authSessionLocalDataSource = authSessionLocalDataSource,
+        )
+
+    val authLoginRepository: AuthLoginRepository =
+        RepositoryModule.provideAuthLoginRepository(
+            authSessionRepository = authSessionRepository,
+        )
 
     val bookmarkRepository: BookmarkRepository =
         RepositoryModule.provideBookmarkRepository(

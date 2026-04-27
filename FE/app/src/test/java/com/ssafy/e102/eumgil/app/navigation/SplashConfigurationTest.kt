@@ -30,6 +30,10 @@ class SplashConfigurationTest {
             resourcePaths.any { path -> path.endsWith("drawable-nodpi/splash_illustration.png") },
         )
         assertTrue(
+            "Missing transparent platform splash icon resource.",
+            File("src/main/res/drawable/splash_transparent_icon.xml").exists(),
+        )
+        assertTrue(
             "Invalid Android resource names: ${invalidResourceFiles.joinToString { it.name }}",
             invalidResourceFiles.isEmpty(),
         )
@@ -64,13 +68,13 @@ class SplashConfigurationTest {
     }
 
     @Test
-    fun `splash theme uses app logo then restores app theme`() {
+    fun `splash theme hides platform icon then restores app theme`() {
         val themeStyle = loadStyle(name = "Theme.BusanEumgil.Splash")
         val themeItems = themeStyle.items
 
         assertEquals("Theme.SplashScreen", themeStyle.parent)
         assertEquals("@color/splash_background", themeItems["windowSplashScreenBackground"])
-        assertEquals("@drawable/app_logo", themeItems["windowSplashScreenAnimatedIcon"])
+        assertEquals("@drawable/splash_transparent_icon", themeItems["windowSplashScreenAnimatedIcon"])
         assertEquals("@style/Theme.BusanEumgil", themeItems["postSplashScreenTheme"])
     }
 

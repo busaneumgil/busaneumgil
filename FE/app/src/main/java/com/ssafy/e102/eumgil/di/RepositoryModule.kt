@@ -60,11 +60,11 @@ object RepositoryModule {
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,
-        debugSettingsLocalDataSource: DebugSettingsLocalDataSource,
+        debugSettingsLocalDataSourceProvider: () -> DebugSettingsLocalDataSource,
     ): SettingsRepository =
         DefaultSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
-            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
+            debugSettingsLocalDataSourceProvider = debugSettingsLocalDataSourceProvider,
         )
 
     fun provideRepositorySourcePolicy(

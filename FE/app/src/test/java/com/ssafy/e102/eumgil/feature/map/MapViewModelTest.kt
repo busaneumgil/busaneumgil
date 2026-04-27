@@ -170,6 +170,38 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `category filter options prioritize accessibility facilities`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val categoryOrder =
+                viewModel.uiState.value.markerFilterState.categoryOptions
+                    .map { option -> option.category }
+
+            assertEquals(
+                listOf(
+                    FacilityCategory.TOILET,
+                    FacilityCategory.ELEVATOR,
+                    FacilityCategory.CHARGING_STATION,
+                    FacilityCategory.BRAILLE_BLOCK,
+                    FacilityCategory.TOURIST_ATTRACTION,
+                    FacilityCategory.RESTAURANT,
+                ),
+                categoryOrder,
+            )
+        }
+
+    @Test
     fun `toggling category filter from all state shows only selected category markers`() =
         runTest {
             val viewModel =

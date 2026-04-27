@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -91,12 +92,14 @@ fun MapScreen(
                         onAction(MapUiAction.MarkerCategoryFilterToggled(category))
                     },
                 )
-
-                MapLocationStatusCard(
-                    state = locationPanelState,
-                    onActionClick = { onAction(MapUiAction.LocationActionClicked) },
-                )
             }
+        },
+        controlOverlay = {
+            MapLocationStatusCard(
+                state = locationPanelState,
+                onActionClick = { onAction(MapUiAction.LocationActionClicked) },
+                modifier = Modifier.widthIn(min = 220.dp, max = 252.dp),
+            )
         },
         bottomOverlay = {
             FacilityDetailBottomSheetShell(
@@ -196,6 +199,7 @@ private data class MapFacilityDetailSheetUiState(
 private fun MapLocationStatusCard(
     state: MapLocationPanelState,
     onActionClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val containerColor =
         when {
@@ -223,7 +227,7 @@ private fun MapLocationStatusCard(
         }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         shape = RoundedCornerShape(EumRadius.large),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),

@@ -42,16 +42,16 @@ fun MapTopSearchBar(
                 onClickLabel = accessibilityLabel,
                 onClick = onClick,
             ),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         shape = RoundedCornerShape(EumRadius.large),
         shadowElevation = 6.dp,
         tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 72.dp)
+                .heightIn(min = 64.dp)
                 .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,

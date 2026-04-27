@@ -74,14 +74,16 @@ internal object MapBrowseStateFactory {
             loadStatus = MapMarkerLoadStatus.READY,
             selection = normalizedSelection,
             categoryOptions =
-                browseData.availableCategories.map { category ->
-                    MapCategoryFilterOption(
-                        category = category,
-                        totalMarkerCount = totalMarkerCountByCategory[category] ?: 0,
-                        visibleMarkerCount = visibleMarkerCountByCategory[category] ?: 0,
-                        isSelected = normalizedSelection.isCategorySelected(category),
-                    )
-                },
+                browseData.availableCategories
+                    .sortedWith(compareBy(::categoryFilterPriority, FacilityCategory::ordinal))
+                    .map { category ->
+                        MapCategoryFilterOption(
+                            category = category,
+                            totalMarkerCount = totalMarkerCountByCategory[category] ?: 0,
+                            visibleMarkerCount = visibleMarkerCountByCategory[category] ?: 0,
+                            isSelected = normalizedSelection.isCategorySelected(category),
+                        )
+                    },
             brailleBlockTypeOptions =
                 browseData.availableBrailleBlockTypes.map { brailleBlockType ->
                     MapBrailleBlockFilterOption(
@@ -216,4 +218,15 @@ internal object MapBrowseStateFactory {
                 ),
             displayState = displayState,
         )
+
+    private fun categoryFilterPriority(category: FacilityCategory): Int =
+        when (category) {
+            FacilityCategory.TOILET -> 0
+            FacilityCategory.ELEVATOR -> 1
+            FacilityCategory.CHARGING_STATION -> 2
+            FacilityCategory.BRAILLE_BLOCK -> 3
+            FacilityCategory.TOURIST_ATTRACTION -> 4
+            FacilityCategory.RESTAURANT -> 5
+            FacilityCategory.OTHER -> 6
+        }
 }

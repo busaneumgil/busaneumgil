@@ -23,15 +23,15 @@ import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -45,8 +45,8 @@ class MapViewModel(
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
 
-    private val mutableUiEvent = MutableSharedFlow<MapUiEvent>()
-    val uiEvent: SharedFlow<MapUiEvent> = mutableUiEvent.asSharedFlow()
+    private val mutableUiEvent = Channel<MapUiEvent>(capacity = Channel.BUFFERED)
+    val uiEvent: Flow<MapUiEvent> = mutableUiEvent.receiveAsFlow()
 
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
@@ -121,6 +121,7 @@ class MapViewModel(
     override fun onCleared() {
         stopLocationLookup()
         currentLocationManager.stopLocationUpdates()
+        mutableUiEvent.close()
         super.onCleared()
     }
 
@@ -698,9 +699,7 @@ class MapViewModel(
     }
 
     private fun emitUiEvent(event: MapUiEvent) {
-        viewModelScope.launch {
-            mutableUiEvent.emit(event)
-        }
+        mutableUiEvent.trySend(event)
     }
 
     private enum class LocationLookupState {

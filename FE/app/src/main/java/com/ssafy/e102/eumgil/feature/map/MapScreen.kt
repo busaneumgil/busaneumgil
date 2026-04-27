@@ -1,15 +1,21 @@
 package com.ssafy.e102.eumgil.feature.map
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -17,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
@@ -91,12 +98,14 @@ fun MapScreen(
                         onAction(MapUiAction.MarkerCategoryFilterToggled(category))
                     },
                 )
-
-                MapLocationStatusCard(
-                    state = locationPanelState,
-                    onActionClick = { onAction(MapUiAction.LocationActionClicked) },
-                )
             }
+        },
+        controlOverlay = {
+            MapLocationStatusCard(
+                state = locationPanelState,
+                onActionClick = { onAction(MapUiAction.LocationActionClicked) },
+                modifier = Modifier.widthIn(min = 220.dp, max = 252.dp),
+            )
         },
         bottomOverlay = {
             FacilityDetailBottomSheetShell(
@@ -133,7 +142,10 @@ fun MapScreen(
                             onClick = { onAction(MapUiAction.FacilityRouteEntryClicked) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(text = stringResource(id = R.string.map_facility_detail_route_entry_action))
+                            IconTextButtonContent(
+                                iconRes = R.drawable.ic_direction_destination,
+                                label = stringResource(id = R.string.map_facility_detail_route_entry_action),
+                            )
                         }
                         Text(
                             text = stringResource(id = R.string.map_facility_detail_action_supporting_route_setting),
@@ -161,6 +173,7 @@ private data class MapLocationPanelState(
     val title: String,
     val description: String,
     val supportingText: String,
+    @DrawableRes val actionIconRes: Int,
     val actionLabel: String,
     val isActionEnabled: Boolean,
     val isPrimaryAction: Boolean,
@@ -196,6 +209,7 @@ private data class MapFacilityDetailSheetUiState(
 private fun MapLocationStatusCard(
     state: MapLocationPanelState,
     onActionClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val containerColor =
         when {
@@ -223,7 +237,7 @@ private fun MapLocationStatusCard(
         }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         shape = RoundedCornerShape(EumRadius.large),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),
@@ -275,7 +289,10 @@ private fun MapLocationStatusCard(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = state.isActionEnabled,
                 ) {
-                    Text(text = state.actionLabel)
+                    IconTextButtonContent(
+                        iconRes = state.actionIconRes,
+                        label = state.actionLabel,
+                    )
                 }
             } else {
                 OutlinedButton(
@@ -283,11 +300,28 @@ private fun MapLocationStatusCard(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = state.isActionEnabled,
                 ) {
-                    Text(text = state.actionLabel)
+                    IconTextButtonContent(
+                        iconRes = state.actionIconRes,
+                        label = state.actionLabel,
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun IconTextButtonContent(
+    @DrawableRes iconRes: Int,
+    label: String,
+) {
+    Icon(
+        painter = painterResource(id = iconRes),
+        contentDescription = null,
+        modifier = Modifier.size(18.dp),
+    )
+    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+    Text(text = label)
 }
 
 @Composable
@@ -356,7 +390,15 @@ private fun FacilityDetailBookmarkSection(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.isBookmarkUpdating.not(),
             ) {
-                Text(text = state.bookmarkActionLabel)
+                IconTextButtonContent(
+                    iconRes =
+                        if (state.isBookmarkUpdating) {
+                            R.drawable.ic_status_processing
+                        } else {
+                            R.drawable.ic_action_favorite
+                        },
+                    label = state.bookmarkActionLabel,
+                )
             }
         }
     }
@@ -436,6 +478,7 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                 title = stringResource(id = R.string.map_location_status_permission_title),
                 description = stringResource(id = R.string.map_location_status_permission_description),
                 supportingText = stringResource(id = R.string.map_location_status_permission_supporting),
+                actionIconRes = R.drawable.ic_permission_location,
                 actionLabel = stringResource(id = R.string.map_location_action_request_permission),
                 isActionEnabled = true,
                 isPrimaryAction = false,
@@ -448,6 +491,7 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                 title = stringResource(id = R.string.map_location_status_loading_title),
                 description = stringResource(id = R.string.map_location_status_loading_description),
                 supportingText = stringResource(id = R.string.map_location_status_loading_supporting),
+                actionIconRes = R.drawable.ic_status_hourglass,
                 actionLabel = stringResource(id = R.string.map_location_action_loading),
                 isActionEnabled = false,
                 isPrimaryAction = false,
@@ -470,6 +514,7 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                         id = R.string.map_location_status_ready_supporting,
                         locationSummary,
                     ),
+                actionIconRes = R.drawable.ic_status_refresh,
                 actionLabel = stringResource(id = R.string.map_location_action_recenter),
                 isActionEnabled = true,
                 isPrimaryAction = true,
@@ -513,6 +558,12 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                 title = stringResource(id = titleRes),
                 description = stringResource(id = descriptionRes),
                 supportingText = stringResource(id = R.string.map_location_status_unavailable_supporting),
+                actionIconRes =
+                    if (isRetryEnabled) {
+                        R.drawable.ic_status_refresh
+                    } else {
+                        R.drawable.ic_status_cancel
+                    },
                 actionLabel = stringResource(id = actionLabelRes),
                 isActionEnabled = isRetryEnabled,
                 isPrimaryAction = false,

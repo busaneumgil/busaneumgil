@@ -1,20 +1,26 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
@@ -67,12 +73,27 @@ fun MapCategoryFilterBar(
             modifier = Modifier.padding(vertical = EumSpacing.small),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = selectionSummaryText(state = state),
+            Row(
                 modifier = Modifier.padding(horizontal = EumSpacing.medium),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.map_filter_section_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = selectionSummaryText(state = state),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
 
             LazyRow(
                 contentPadding = PaddingValues(horizontal = EumSpacing.medium),
@@ -82,6 +103,9 @@ fun MapCategoryFilterBar(
                     FilterChip(
                         selected = state.selection.isShowingAllCategories,
                         onClick = onReset,
+                        leadingIcon = {
+                            FilterChipIcon(iconRes = R.drawable.ic_nav_facility)
+                        },
                         label = {
                             Text(text = stringResource(id = R.string.map_filter_chip_all))
                         },
@@ -97,6 +121,9 @@ fun MapCategoryFilterBar(
                     FilterChip(
                         selected = option.isSelected,
                         onClick = { onCategoryToggle(option.category) },
+                        leadingIcon = {
+                            FilterChipIcon(iconRes = categoryFilterIcon(option.category))
+                        },
                         label = {
                             Text(text = categoryLabel)
                         },
@@ -170,6 +197,17 @@ private fun FilterStatusCard(
 }
 
 @Composable
+private fun FilterChipIcon(
+    @DrawableRes iconRes: Int,
+) {
+    Icon(
+        painter = painterResource(id = iconRes),
+        contentDescription = null,
+        modifier = Modifier.size(18.dp),
+    )
+}
+
+@Composable
 private fun categoryFilterLabel(category: FacilityCategory): String =
     when (category) {
         FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_filter_category_restaurant)
@@ -179,4 +217,16 @@ private fun categoryFilterLabel(category: FacilityCategory): String =
         FacilityCategory.CHARGING_STATION -> stringResource(id = R.string.map_filter_category_charging_station)
         FacilityCategory.BRAILLE_BLOCK -> stringResource(id = R.string.map_filter_category_braille_block)
         FacilityCategory.OTHER -> stringResource(id = R.string.map_filter_category_other)
+    }
+
+@DrawableRes
+private fun categoryFilterIcon(category: FacilityCategory): Int =
+    when (category) {
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        FacilityCategory.TOILET -> R.drawable.ic_place_restroom
+        FacilityCategory.ELEVATOR -> R.drawable.ic_route_elevator
+        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
+        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
     }

@@ -85,6 +85,41 @@ class AuthViewModelTest {
         }
 
     @Test
+    fun `retry after failure starts a new provider loading flow`() =
+        runTest {
+            val repository = ControllableAuthLoginRepository()
+            val viewModel = AuthViewModel(authLoginRepository = repository)
+
+            viewModel.onAction(AuthUiAction.SocialLoginClicked(AuthLoginProviderUiKeys.KAKAO))
+            runCurrent()
+            repository.fail(IllegalStateException("임시 로그인 처리에 실패했습니다."))
+            runCurrent()
+            viewModel.onAction(AuthUiAction.SocialLoginClicked(AuthLoginProviderUiKeys.NAVER))
+            runCurrent()
+
+            assertEquals(2, repository.loginCallCount)
+            assertEquals(AuthLoginProviderUiKeys.NAVER, repository.latestRequest?.providerKey)
+            assertEquals(
+                AuthLoginStatus.Loading(providerKey = AuthLoginProviderUiKeys.NAVER),
+                viewModel.uiState.value.loginStatus,
+            )
+        }
+
+    @Test
+    fun `default UI state exposes only supported auth ui providers`() {
+        val providerKeys = AuthUiState().providers.map { provider -> provider.key }
+
+        assertEquals(
+            listOf(
+                AuthLoginProviderUiKeys.GOOGLE,
+                AuthLoginProviderUiKeys.NAVER,
+                AuthLoginProviderUiKeys.KAKAO,
+            ),
+            providerKeys,
+        )
+    }
+
+    @Test
     fun `unknown provider key exposes default error without repository call`() =
         runTest {
             val repository = ControllableAuthLoginRepository()

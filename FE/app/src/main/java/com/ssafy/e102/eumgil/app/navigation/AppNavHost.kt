@@ -33,7 +33,11 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     var initialSettings by remember { mutableStateOf<InitSettings?>(null) }
 
     LaunchedEffect(authSessionRepository, settingsRepository) {
-        val authGateState = authSessionRepository.getAuthGateState()
+        var authGateState = authSessionRepository.getAuthGateState()
+        if (authGateState.hasSession && !authGateState.isProfileCompleted) {
+            authSessionRepository.markProfileCompleted()
+            authGateState = authSessionRepository.getAuthGateState()
+        }
         val savedSettings = settingsRepository.getInitSettings()
         initialSettings = savedSettings
         appStartDestination =

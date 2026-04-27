@@ -10,11 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 @Composable
-fun LoginRoute(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize())
-}
-
-@Composable
 fun ProfileSetupRoute(
     onProfileSetupCompleted: () -> Unit,
     modifier: Modifier = Modifier,

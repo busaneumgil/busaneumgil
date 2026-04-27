@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import com.ssafy.e102.eumgil.core.model.AuthSessionSnapshot
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -11,10 +12,7 @@ class AppStartDestinationTest {
     fun `unauthenticated session starts at login route`() {
         val destination =
             resolveAppStartDestination(
-                authSessionSnapshot = AuthSessionSnapshot(
-                    isAuthenticated = false,
-                    isProfileCompleted = false,
-                ),
+                authGateState = AuthGateState(),
                 initSettings = completedInitSettings,
             )
 
@@ -26,8 +24,8 @@ class AppStartDestinationTest {
     fun `authenticated profile incomplete session starts at AUTH-002 route`() {
         val destination =
             resolveAppStartDestination(
-                authSessionSnapshot = AuthSessionSnapshot(
-                    isAuthenticated = true,
+                authGateState = AuthGateState(
+                    authSession = AuthSession(accessToken = "test-token"),
                     isProfileCompleted = false,
                 ),
                 initSettings = completedInitSettings,
@@ -41,7 +39,10 @@ class AppStartDestinationTest {
     fun `profile complete session keeps existing onboarding gate`() {
         val destination =
             resolveAppStartDestination(
-                authSessionSnapshot = AuthSessionSnapshot.LocalMockReady,
+                authGateState = AuthGateState(
+                    authSession = AuthSession(accessToken = "test-token"),
+                    isProfileCompleted = true,
+                ),
                 initSettings = InitSettings(),
             )
 

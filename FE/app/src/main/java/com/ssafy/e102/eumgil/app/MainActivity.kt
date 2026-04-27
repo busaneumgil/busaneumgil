@@ -13,8 +13,11 @@ import com.ssafy.e102.eumgil.app.navigation.AppNavHost
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilTheme
 
 class MainActivity : ComponentActivity() {
+    private var keepSplashOnScreen = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -24,7 +27,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    AppNavHost()
+                    AppNavHost(
+                        onAppReady = { isReady ->
+                            keepSplashOnScreen = !isReady
+                        },
+                    )
                 }
             }
         }

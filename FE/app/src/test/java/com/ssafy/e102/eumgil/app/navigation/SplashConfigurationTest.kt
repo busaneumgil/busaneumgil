@@ -78,9 +78,14 @@ class SplashConfigurationTest {
     fun `main activity installs platform splash screen before content`() {
         val mainActivity = File("src/main/java/com/ssafy/e102/eumgil/app/MainActivity.kt").readText()
         val installCallIndex = mainActivity.indexOf("installSplashScreen()")
+        val keepConditionIndex = mainActivity.indexOf("setKeepOnScreenCondition")
         val setContentIndex = mainActivity.indexOf("setContent")
 
         assertTrue("MainActivity must call installSplashScreen().", installCallIndex >= 0)
+        assertTrue(
+            "MainActivity must keep the splash screen visible until the app start route is resolved.",
+            keepConditionIndex in installCallIndex until setContentIndex,
+        )
         assertTrue(
             "Splash screen must be installed before Compose content is set.",
             installCallIndex in 0 until setContentIndex,
@@ -88,16 +93,34 @@ class SplashConfigurationTest {
     }
 
     @Test
-    fun `app entry loading state displays full screen splash illustration`() {
+    fun `main activity wires app readiness to splash dismissal`() {
+        val mainActivity = File("src/main/java/com/ssafy/e102/eumgil/app/MainActivity.kt").readText()
+
+        assertTrue(
+            "AppNavHost must report when the start destination is ready.",
+            mainActivity.contains("onAppReady = { isReady ->"),
+        )
+        assertTrue(
+            "Splash screen must dismiss only after the app is ready to render a destination.",
+            mainActivity.contains("keepSplashOnScreen = !isReady"),
+        )
+    }
+
+    @Test
+    fun `app nav host reports readiness instead of rendering an intermediate loading screen`() {
         val appNavHost = File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt").readText()
 
         assertTrue(
-            "App entry loading state must display the splash illustration.",
-            appNavHost.contains("R.drawable.splash_illustration"),
+            "AppNavHost must expose readiness callbacks for the system splash screen.",
+            appNavHost.contains("onAppReady: (Boolean) -> Unit = {}"),
         )
         assertTrue(
-            "Splash illustration must fill the screen without preserving empty bars.",
-            appNavHost.contains("ContentScale.Crop"),
+            "AppNavHost must notify the activity when startup resolution finishes.",
+            appNavHost.contains("onAppReady(appStartDestination != null && initialSettings != null)"),
+        )
+        assertTrue(
+            "Intermediate loading artwork should not render once startup is delegated to the platform splash screen.",
+            !appNavHost.contains("AppEntryLoadingScreen"),
         )
     }
 

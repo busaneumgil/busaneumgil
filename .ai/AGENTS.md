@@ -9,6 +9,7 @@ Use this repository as a disciplined AI harness template for real software deliv
 - `.ai/` is the canonical source of truth.
 - `.ai/ADAPTERS/` is the canonical source for generated runtime adapter files.
 - `.ai/scripts/` is the canonical source for harness commands.
+- Use `.ai/LANES.md` to keep FE and BE work separated. Prefer `/fe-*` for frontend-only work and `/be-*` for backend-only work.
 - Do not edit `.ai/.claude/skills/` or `.ai/.agents/skills/` by hand unless you are debugging the sync process.
 - Do not commit `.ai/.claude/settings.local.json` or anything under `.ai/LOCAL/`.
 - For Codex implementation sessions, treat root `AGENTS.md` and `.ai/.agents/skills/` as the primary enforcement surface after installing the root entrypoints.
@@ -22,6 +23,8 @@ Use this repository as a disciplined AI harness template for real software deliv
 ## Repository usage expectations
 
 - Start new work by reading `.ai/PROJECT.md`, `.ai/ARCHITECTURE.md`, and `.ai/WORKFLOW.md`.
+- For lane-specific work, read `.ai/LANES.md` and use the matching `/fe-*` or `/be-*` skill.
+- Before choosing project source documents, follow `.ai/DOCS.md` and respect active local stale-document exclusions from `.ai/scripts/docs-context.sh status`.
 - If the repository only copied `.ai/`, run `.ai/scripts/install-root-entrypoints.sh` before implementation work so Codex can discover root instructions.
 - Use the sprint loop: Think -> Plan -> Build -> Review -> Test -> Ship -> Reflect.
 - Planning outputs should be durable enough that build and QA can consume them without re-interpreting the original request.

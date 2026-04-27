@@ -19,12 +19,13 @@ Convert a completed sprint or release into actionable process improvements.
 - Sprint artifact
 - Review, QA, release, and incident outcomes
 - Scorecard and failure-pattern notes
+- Source-document conflicts, stale-doc assumptions, and docs updates from the sprint
 
 ## procedure
 
 1. Summarize the intended work versus what actually shipped.
-2. Identify the best decisions, biggest misses, and recurring sources of friction.
-3. Propose concrete updates to memory, evals, runbooks, ADRs, or skills.
+2. Identify the best decisions, biggest misses, recurring friction, and source-of-truth problems.
+3. Propose concrete updates to memory, evals, runbooks, ADRs, docs, or skills.
 4. Record the 회고 summary in `.ai/LOCAL/PLANS/current-sprint.md` or archive it into the relevant durable files.
 
 ## outputs

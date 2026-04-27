@@ -19,16 +19,19 @@ Convert a loose product request into a reusable framing artifact that planning s
 
 - The raw request, idea, or opportunity
 - `.ai/PROJECT.md`
+- `.ai/DOCS.md`
 - `.ai/WORKFLOW.md`
+- Relevant product, PRD, planning, screen-spec, and interview documents selected from `.ai/DOCS.md`
 - Current backlog or sprint context from `.ai/LOCAL/PLANS/`
 
 ## procedure
 
-1. Restate the request in plain language and separate problem, user, and proposed solution.
-2. Challenge ambiguity until the target user, pain, trigger moment, and narrowest useful wedge are explicit.
-3. Identify what is out of scope for this sprint.
-4. Update `.ai/LOCAL/PLANS/current-sprint.md` with a durable problem framing section.
-5. Move any deferred work into `.ai/PLANS/backlog.md` if it matters later.
+1. Load `.ai/DOCS.md` and read the relevant planning, PRD, screen-spec, and interview documents before restating the request.
+2. Restate the request in plain language and separate problem, user, and proposed solution.
+3. Challenge ambiguity until the target user, pain, trigger moment, and narrowest useful wedge are explicit.
+4. Identify what is out of scope for this sprint and tie scope decisions back to the source documents.
+5. Update `.ai/LOCAL/PLANS/current-sprint.md` with a durable problem framing section and source document links.
+6. Move any deferred work into `.ai/PLANS/backlog.md` if it matters later.
 
 ## outputs
 

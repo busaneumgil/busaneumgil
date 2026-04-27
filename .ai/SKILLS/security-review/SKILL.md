@@ -18,14 +18,17 @@ Make security and trust boundary review a normal stage artifact instead of a lat
 
 - Current change and plan
 - `.ai/ARCHITECTURE.md`
+- `.ai/DOCS.md` and relevant API, ERD, infra, external integration, auth, or config docs
 - Incident history if relevant
 
 ## procedure
 
-1. Identify the trust boundaries and sensitive assets involved.
-2. Review auth, authorization, secret handling, logging, and data movement risks.
-3. Record findings and mitigations in `.ai/LOCAL/PLANS/current-sprint.md`.
-4. Update runbooks or memory if the review changes operational practice.
+1. Load `.ai/DOCS.md` and the source documents that define user data, external integrations, infrastructure, auth, and API contracts.
+2. Identify the trust boundaries and sensitive assets involved.
+3. Review auth, authorization, secret handling, logging, and data movement risks.
+4. Check whether the implementation contradicts API, ERD, infra, or config/external integration docs.
+5. Record findings, mitigations, stale-doc assumptions, and accepted risks in `.ai/LOCAL/PLANS/current-sprint.md`.
+6. Update runbooks or memory if the review changes operational practice.
 
 ## outputs
 

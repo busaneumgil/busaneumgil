@@ -12,9 +12,12 @@ if [[ ! -f "$TARGET" ]]; then
 fi
 
 required_sections=(
+  "## Source Documents"
+  "## Work Lane"
   "## Problem List"
   "## Architecture And Data Flow"
   "## Execution Units"
+  "## Cross-Lane Handoff"
   "## Test And Validation Matrix"
   "## Risk Register"
   "## Review Handoff"

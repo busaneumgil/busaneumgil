@@ -18,17 +18,19 @@ Make a code area easier to maintain without changing product behavior.
 
 - Target module or boundary
 - `.ai/ARCHITECTURE.md`
+- `.ai/DOCS.md` and relevant FE, BE, API, ERD, infra, or convention docs
 - Relevant tests and current failure patterns
 
 ## procedure
 
-1. State what pain the refactor is addressing.
-2. Identify the safe behavioral boundary that must not change.
-3. Before mutating shell state, run `.ai/scripts/check-dangerous-command.sh "<command>"`. Before editing implementation files, run `.ai/scripts/check-tdd-guard.sh --mode pre <candidate paths>`.
-4. Refactor incrementally with tests guarding expected behavior.
-5. If the same refactor path fails repeatedly, run `.ai/scripts/record-retry.sh <signature>` and `.ai/scripts/check-circuit-breaker.sh <signature>` before retrying again.
-6. Update architecture notes if the resulting boundaries become clearer or different.
-7. Record notable patterns in `.ai/MEMORY/conventions.md` if reusable.
+1. Load `.ai/DOCS.md`, then identify the behavior, contracts, and conventions that must be preserved.
+2. State what pain the refactor is addressing.
+3. Identify the safe behavioral boundary that must not change.
+4. Before mutating shell state, run `.ai/scripts/check-dangerous-command.sh "<command>"`. Before editing implementation files, run `.ai/scripts/check-tdd-guard.sh --mode pre <candidate paths>`.
+5. Refactor incrementally with tests guarding expected behavior.
+6. If the same refactor path fails repeatedly, run `.ai/scripts/record-retry.sh <signature>` and `.ai/scripts/check-circuit-breaker.sh <signature>` before retrying again.
+7. Update architecture notes if the resulting boundaries become clearer or different.
+8. Record document conflicts, stale assumptions, or reusable patterns in `.ai/LOCAL/PLANS/current-sprint.md` or `.ai/MEMORY/conventions.md`.
 
 ## outputs
 

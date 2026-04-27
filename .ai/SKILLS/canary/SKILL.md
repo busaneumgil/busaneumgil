@@ -17,14 +17,16 @@ Catch release issues early before they become a wider incident.
 ## inputs
 
 - Release context
+- `.ai/DOCS.md`, infra docs, release runbook, and source docs for user-critical paths
 - Monitoring or log access if available
 - Rollback criteria from the runbook
 
 ## procedure
 
-1. Identify the fastest indicators of release health.
-2. Check the highest-risk paths first.
-3. Record observed health, anomalies, and rollback triggers in the sprint artifact or incident log.
+1. Load `.ai/DOCS.md`, infra docs, release runbook, and source docs for the released paths.
+2. Identify the fastest indicators of release health.
+3. Check the highest-risk paths first.
+4. Record observed health, anomalies, doc/config mismatches, and rollback triggers in the sprint artifact or incident log.
 
 ## outputs
 

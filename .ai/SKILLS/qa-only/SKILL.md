@@ -17,15 +17,17 @@ Provide an independent QA report without mixing testing and implementation in th
 ## inputs
 
 - Current change and release candidate context
+- `.ai/DOCS.md` and the source documents that define the user flow or contract
 - `.ai/EVALS/smoke-checklist.md`
 - Relevant review notes
 
 ## procedure
 
-1. Select the highest-value flows for the release.
-2. Execute them and collect evidence.
-3. Report bugs, inconsistencies, and risk areas in `.ai/LOCAL/PLANS/current-sprint.md`.
-4. Update score or readiness notes if the report changes release confidence.
+1. Load `.ai/DOCS.md` and the relevant FE, API, product, ERD, or infra docs.
+2. Select the highest-value flows for the release based on the docs, plan, and actual changed code.
+3. Execute them and collect evidence.
+4. Report bugs, inconsistencies, stale-doc assumptions, and risk areas in `.ai/LOCAL/PLANS/current-sprint.md`.
+5. Update score or readiness notes if the report changes release confidence.
 
 ## outputs
 

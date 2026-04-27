@@ -18,14 +18,16 @@ Prevent last-mile deployment surprises.
 
 - `.ai/RUNBOOKS/release.md`
 - `.ai/RUNBOOKS/rollback.md`
+- `.ai/DOCS.md`, `Docs/인프라/`, and current deployment configuration
 - Current sprint artifact
 
 ## procedure
 
-1. Verify the target environment, dependencies, and access assumptions.
-2. Check whether rollout, migration, or flag dependencies are explicit.
-3. Confirm rollback steps are current.
-4. Record the deploy check status in `.ai/LOCAL/PLANS/current-sprint.md`.
+1. Load `.ai/DOCS.md`, infra docs, release/rollback runbooks, and actual deployment configuration.
+2. Verify the target environment, dependencies, and access assumptions.
+3. Check whether rollout, migration, or flag dependencies are explicit.
+4. Confirm rollback steps are current.
+5. Record deploy status, infra-doc conflicts, and accepted operational assumptions in `.ai/LOCAL/PLANS/current-sprint.md`.
 
 ## outputs
 

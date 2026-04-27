@@ -8,6 +8,14 @@ Use this when `plan-eng-review` or `plan` needs a build-ready artifact instead o
 - ERD:
 - Blueprint:
 - Existing implementation plan:
+- Excluded stale docs:
+
+## Work Lane
+
+- Lane: FE | BE | Cross-functional
+- Scope boundary:
+- Explicit non-goals:
+- Cross-lane dependency summary:
 
 ## Problem List
 
@@ -34,6 +42,13 @@ For each unit record:
 5. Review focus
 6. QA or validation path
 7. Done criteria
+
+## Cross-Lane Handoff
+
+- FE -> BE requests:
+- BE -> FE requests:
+- Contract questions:
+- Owner or next action:
 
 ## Test And Validation Matrix
 

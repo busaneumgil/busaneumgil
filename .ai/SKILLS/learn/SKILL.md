@@ -21,6 +21,7 @@ Make the repository smarter over time by capturing what repeats.
 - 회고 notes or failure context
 - Circuit breaker output: signature and count from `.ai/scripts/dashboard.sh` or `.ai/scripts/check-circuit-breaker.sh`
 - Incident, debugging, and scorecard context
+- `.ai/DOCS.md` and any stale or conflicting source documents involved
 - Existing memory and evaluation files
 
 ## procedure
@@ -31,6 +32,7 @@ Make the repository smarter over time by capturing what repeats.
    - Repeated procedure or workflow → `.ai/SKILLS/` (new or updated skill)
    - Repeated quality gap or completion ambiguity → `.ai/EVALS/failure-patterns.md` or `.ai/WORKFLOW.md`
    - Architecture-level decision → `.ai/DECISIONS/` as an ADR
+   - Repeated stale-document or source-of-truth mismatch → `.ai/DOCS.md`, the relevant `Docs/` file, or `.ai/DECISIONS/`
 3. Update the chosen artifact with concise, reusable guidance.
 4. If the workflow itself should change, note the required skill or runbook update.
 

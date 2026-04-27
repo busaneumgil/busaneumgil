@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>부산이음길 온보딩 화면 모아보기</title>
+<style>
+  :root {
+    /* ===== Color / Primary ===== */
+    --color-primary-600: #2563EB;
+    --color-primary-200: #DBEAFE;
+
+    /* ===== Color / Semantic ===== */
+    --color-success: #16A34A;
+    --color-disabled: #CBD5E1;
+
+    /* ===== Color / Neutral ===== */
+    --color-gray-900: #111827;
+    --color-gray-700: #374151;
+    --color-gray-500: #6B7280;
+    --color-gray-300: #D1D5DB;
+    --color-gray-100: #F3F4F6;
+    --color-white: #FFFFFF;
+
+    /* ===== Spacing ===== */
+    --spacing-1: 4px;
+    --spacing-2: 8px;
+    --spacing-3: 12px;
+    --spacing-4: 16px;
+    --spacing-5: 20px;
+    --spacing-6: 24px;
+    --spacing-8: 32px;
+    --spacing-12: 48px;
+
+    /* ===== Radius ===== */
+    --radius-s: 8px;
+    --radius-m: 12px;
+    --radius-l: 16px;
+    --radius-xl: 24px;
+    --radius-pill: 999px;
+
+    /* ===== Elevation ===== */
+    --shadow-elevation-1: 0px 1px 2px rgba(0, 0, 0, 0.06);
+
+    /* ===== Typography ===== */
+    --font-family-base: "Pretendard Variable", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+  }
+
+  body {
+    margin: 0;
+    padding: 40px;
+    background-color: #E5E7EB;
+    font-family: var(--font-family-base);
+    display: flex;
+    gap: 24px;
+    overflow-x: auto;
+    align-items: center;
+  }
+
+  /* 모바일 디바이스 껍데기 */
+  .device {
+    width: 320px;
+    height: 640px;
+    background: var(--color-white);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 8px solid var(--color-gray-100);
+    position: relative;
+  }
+
+  /* 상단 상태바 (모의) */
+  .status-bar {
+    height: 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-gray-900);
+  }
+
+  .content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-5);
+    overflow-y: auto;
+  }
+
+  /* 타이포그래피 클래스 */
+  .text-h2 { font-size: 22px; font-weight: 600; line-height: 30px; color: var(--color-gray-900); }
+  .text-h3 { font-size: 18px; font-weight: 600; line-height: 26px; color: var(--color-gray-900); }
+  .text-body-1 { font-size: 16px; font-weight: 400; line-height: 24px; color: var(--color-gray-700); }
+  .text-body-2 { font-size: 14px; font-weight: 400; line-height: 20px; color: var(--color-gray-700); }
+  .text-caption { font-size: 12px; font-weight: 400; line-height: 18px; color: var(--color-gray-500); }
+  .text-center { text-align: center; }
+  .text-primary { color: var(--color-primary-600) !important; }
+
+  /* 공통 여백 유틸 */
+  .mb-2 { margin-bottom: var(--spacing-2); }
+  .mb-4 { margin-bottom: var(--spacing-4); }
+  .mb-6 { margin-bottom: var(--spacing-6); }
+  .mb-8 { margin-bottom: var(--spacing-8); }
+  .mt-auto { margin-top: auto; }
+
+  /* 버튼 시스템 */
+  .btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: var(--spacing-12);
+    border-radius: var(--radius-m);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+  }
+  .btn-primary {
+    background-color: var(--color-primary-600);
+    color: var(--color-white);
+  }
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--color-gray-500);
+    height: 40px;
+    font-size: 14px;
+  }
+
+  /* 카드 (사용자 유형 선택 등) */
+  .card {
+    border: 1px solid var(--color-gray-300);
+    border-radius: var(--radius-m);
+    padding: var(--spacing-4);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+    background: var(--color-white);
+    margin-bottom: var(--spacing-3);
+  }
+  .card.active {
+    border-color: var(--color-primary-600);
+    background-color: var(--color-primary-200);
+  }
+  .card.active .text-h3, .card.active .text-caption, .card.active .icon-box {
+    color: var(--color-primary-600);
+  }
+  .icon-box {
+    width: 40px;
+    height: 40px;
+    background: var(--color-gray-100);
+    border-radius: var(--radius-pill);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: var(--color-primary-600);
+  }
+  .card.active .icon-box {
+    background: var(--color-white);
+  }
+  .card-content {
+    flex: 1;
+  }
+  
+  /* 리스트 아이템 (권한, 기능 소개) */
+  .list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-3);
+    margin-bottom: var(--spacing-5);
+  }
+  .list-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--color-primary-600);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+
+  /* 프로그레스 바 */
+  .progress-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: var(--spacing-6);
+  }
+  .progress-dot {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-gray-100);
+  }
+  .progress-dot.active {
+    background: var(--color-primary-600);
+  }
+
+  /* 01 스플래시 특화 */
+  .splash-logo {
+    margin: auto;
+    text-align: center;
+    color: var(--color-primary-600);
+  }
+  .splash-img {
+    height: 120px;
+    background: var(--color-primary-200);
+    border-radius: var(--radius-m);
+    margin-top: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary-600);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="device">
+    <div class="status-bar"><span>9:41</span><span>LTE 🔋</span></div>
+    <div class="content-area" style="padding-bottom: var(--spacing-5);">
+      <div class="splash-logo">
+        <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;">부산이음길</div>
+        <div class="text-body-2 mb-8">Busan EumGil</div>
+        <div class="text-body-1" style="color: var(--color-gray-900); font-weight: 600;">부산 이동약자를 위한<br>무장애 길찾기 서비스</div>
+      </div>
+      <div class="splash-img">광안대교 일러스트 영역</div>
+      <div class="mt-auto">
+        <button class="btn btn-primary">시작하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="device">
+    <div class="status-bar"><span>9:41</span><span>LTE 🔋</span></div>
+    <div class="content-area">
+      <div class="text-h2 mb-8 mt-4">본인에게 해당하는<br>사용자 유형을 선택해주세요.</div>
+      
+      <div class="card">
+        <div class="icon-box">🦯</div>
+        <div class="card-content">
+          <div class="text-h3 mb-1">시각장애</div>
+          <div class="text-caption">음성 안내와<br>점자블록 정보를 제공해요.</div>
+        </div>
+        <div class="text-caption">›</div>
+      </div>
+      
+      <div class="card">
+        <div class="icon-box">♿</div>
+        <div class="card-content">
+          <div class="text-h3 mb-1">보행약자</div>
+          <div class="text-caption">경사로, 엘리베이터 등<br>무장애 경로를 제공해요.</div>
+        </div>
+        <div class="text-caption">›</div>
+      </div>
+
+      <div class="mt-auto text-center text-caption" style="margin-bottom: 8px;">이 선택은 언제든 변경할 수 있어요.</div>
+    </div>
+  </div>
+
+  <div class="device">
+    <div class="status-bar"><span>9:41</span><span>LTE 🔋</span></div>
+    <div class="content-area">
+      <div class="text-h2 mb-8 mt-4">보행약자의 세부 유형을<br>선택해주세요.</div>
+      
+      <div class="card active">
+        <div class="icon-box">♿</div>
+        <div class="card-content">
+          <div class="text-h3 mb-1 text-primary">휠체어 (전동)</div>
+          <div class="text-caption text-primary">전동 휠체어를 이용해요.</div>
+        </div>
+        <div class="text-caption text-primary">›</div>
+      </div>
+      
+      <div class="card">
+        <div class="icon-box">♿</div>
+        <div class="card-content">
+          <div class="text-h3 mb-1">휠체어 (수동)</div>
+          <div class="text-caption">수동 휠체어를 이용해요.</div>
+        </div>
+        <div class="text-caption">›</div>
+      </div>
+
+      <div class="card">
+        <div class="icon-box">🚶</div>
+        <div class="card-content">
+          <div class="text-h3 mb-1">보행약자</div>
+          <div class="text-caption">보행 보조기구를 사용하거나<br>보행이 불편해요.</div>
+        </div>
+        <div class="text-caption">›</div>
+      </div>
+
+      <div class="mt-auto text-center text-caption" style="margin-bottom: 8px;">이 선택은 언제든 변경할 수 있어요.</div>
+    </div>
+  </div>
+
+  <div class="device">
+    <div class="status-bar"><span>9:41</span><span>LTE 🔋</span></div>
+    <div class="content-area">
+      <div class="text-h2 mb-8 mt-4">더 정확한 안내를 위해<br>권한이 필요해요.</div>
+      
+      <div class="list-item">
+        <div class="list-icon">📍</div>
+        <div>
+          <div class="text-body-1 mb-1" style="font-weight: 600;">위치 권한 <span class="text-primary">(필수)</span></div>
+          <div class="text-caption">현재 위치 기반 경로 안내를 위해<br>사용합니다.</div>
+        </div>
+      </div>
+
+      <div class="list-item">
+        <div class="list-icon">🎤</div>
+        <div>
+          <div class="text-body-1 mb-1" style="font-weight: 600;">마이크 권한 <span class="text-primary">(필수)</span></div>
+          <div class="text-caption">음성 안내 및 음성 검색을 위해<br>사용합니다.</div>
+        </div>
+      </div>
+
+      <div class="list-item">
+        <div class="list-icon">🔔</div>
+        <div>
+          <div class="text-body-1 mb-1" style="font-weight: 600;">알림 권한 <span style="color:var(--color-gray-500)">(선택)</span></div>
+          <div class="text-caption">공사, 장애물 등 실시간 정보를<br>알려드려요.</div>
+        </div>
+      </div>
+
+      <div class="mt-auto">
+        <div class="text-center text-caption mb-4">설정은 언제든 변경할 수 있어요.</div>
+        <button class="btn btn-primary mb-2">동의하고 계속하기</button>
+        <button class="btn btn-ghost">나중에 할게요</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="device">
+    <div class="status-bar"><span>9:41</span><span>LTE 🔋</span></div>
+    <div class="content-area">
+      <div class="progress-bar mt-4">
+        <div class="progress-dot active"></div>
+        <div class="progress-dot active"></div>
+        <div class="progress-dot active"></div>
+        <div class="progress-dot"></div>
+        <div class="progress-dot"></div>
+        <div class="progress-dot"></div>
+      </div>
+      
+      <div class="text-h2 mb-8">서비스 이용을 위한<br>약관에 동의해주세요.</div>
+      
+      <div class="card mb-4" style="border: none; background: var(--color-gray-100); border-radius: 8px;">
+        <div class="card-content">
+          <div class="text-body-1" style="font-weight: 600; display:flex; justify-content:space-between;">
+            <span>📄 이용약관 (필수)</span>
+            <span class="text-caption">›</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-caption mb-8">
+        부산이음길 서비스 이용약관에 동의해주세요. 서비스를 이용하시기 위해 필수 동의가 필요합니다.
+      </div>
+
+      <div class="mt-auto">
+        <label style="display:flex; align-items:center; gap:8px; margin-bottom: 24px; cursor: pointer;">
+          <input type="checkbox" style="width:20px; height:20px; accent-color: var(--color-primary-600);">
+          <span class="text-body-1">위 약관에 동의합니다.</span>
+        </label>
+        <button class="btn btn-primary">다음</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="device">
+    <div class="status-bar"><span>9:41</span><span>LTE 🔋</span></div>
+    <div class="content-area">
+      <div class="text-h2 mb-8 mt-4">부산이음길은<br>이동약자의 안전하고<br>독립적인 이동을 지원합니다.</div>
+      
+      <div class="list-item">
+        <div class="list-icon" style="background:var(--color-primary-200); border-radius:50%; width:40px; height:40px;">♿</div>
+        <div style="margin-top:2px;">
+          <div class="text-body-1 mb-1" style="font-weight: 600;">무장애 경로 안내</div>
+          <div class="text-caption">경사, 계단, 단차 피해<br>편안한 길을 안내해 드려요.</div>
+        </div>
+      </div>
+
+      <div class="list-item">
+        <div class="list-icon" style="background:var(--color-primary-200); border-radius:50%; width:40px; height:40px;">🔊</div>
+        <div style="margin-top:2px;">
+          <div class="text-body-1 mb-1" style="font-weight: 600;">음성 안내 (TTS)</div>
+          <div class="text-caption">시각장애인을 위한<br>음성 길안내를 제공해요.</div>
+        </div>
+      </div>
+
+      <div class="list-item">
+        <div class="list-icon" style="background:var(--color-primary-200); border-radius:50%; width:40px; height:40px;">💬</div>
+        <div style="margin-top:2px;">
+          <div class="text-body-1 mb-1" style="font-weight: 600;">시민 제보로 정보 갱신</div>
+          <div class="text-caption">현장 장애물 정보를 제보하면<br>실시간으로 반영돼요.</div>
+        </div>
+      </div>
+
+      <div class="mt-auto text-center">
+        <div style="display:inline-flex; gap:6px; margin-bottom: 24px;">
+          <div style="width:6px; height:6px; border-radius:50%; background:var(--color-primary-600);"></div>
+          <div style="width:6px; height:6px; border-radius:50%; background:var(--color-gray-300);"></div>
+          <div style="width:6px; height:6px; border-radius:50%; background:var(--color-gray-300);"></div>
+          <div style="width:6px; height:6px; border-radius:50%; background:var(--color-gray-300);"></div>
+        </div>
+        <button class="btn btn-primary">다음</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

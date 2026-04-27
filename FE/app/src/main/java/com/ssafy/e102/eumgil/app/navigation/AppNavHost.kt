@@ -1,22 +1,19 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -25,7 +22,6 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
 import com.ssafy.e102.eumgil.core.model.InitSettings
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
@@ -86,18 +82,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 
 @Composable
 private fun AppEntryLoadingScreen(modifier: Modifier = Modifier) {
-    Box(
+    Image(
+        painter = painterResource(id = R.drawable.splash_illustration),
+        contentDescription = stringResource(id = R.string.app_name),
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(EumSpacing.xLarge))
-            Text(
-                text = stringResource(id = R.string.app_entry_loading),
-                modifier = Modifier.padding(top = EumSpacing.medium),
-            )
-        }
-    }
+        contentScale = ContentScale.Crop,
+    )
 }

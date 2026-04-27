@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import com.ssafy.e102.eumgil.R
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
@@ -37,6 +38,21 @@ class TopLevelDestinationTest {
         assertEquals("북마크", stringValues["route_saved_route"])
         assertEquals("제보", stringValues["route_report"])
         assertEquals("마이페이지", stringValues["route_my_page"])
+    }
+
+    @Test
+    fun `top level tabs expose matching vector icons`() {
+        val actualIcons = TopLevelDestination.entries.map { destination -> destination.iconRes }
+
+        assertEquals(
+            listOf(
+                R.drawable.ic_nav_home,
+                R.drawable.ic_action_favorite,
+                R.drawable.ic_nav_report,
+                R.drawable.ic_nav_mypage,
+            ),
+            actualIcons,
+        )
     }
 
     private fun loadStringValues(): Map<String, String> {

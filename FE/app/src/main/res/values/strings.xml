@@ -5,9 +5,10 @@
     <string name="action_go_back_previous_step">이전 단계로 돌아가기</string>
     <string name="action_agree_and_start">동의하고 시작하기</string>
     <string name="action_defer_terms">나중에 하기</string>
-    <string name="route_map">지도</string>
-    <string name="route_saved_route">저장</string>
-    <string name="route_my_page">MY</string>
+    <string name="route_map">홈</string>
+    <string name="route_saved_route">북마크</string>
+    <string name="route_report">제보</string>
+    <string name="route_my_page">마이페이지</string>
     <string name="onboarding_progress_label">%1$d / %2$d 단계</string>
     <string name="onboarding_type_screen_title">장애 유형을 선택해주세요</string>
     <string name="onboarding_type_screen_description">선택에 따라 앱 화면과 안내 방식이 달라집니다.</string>

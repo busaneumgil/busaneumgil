@@ -4,7 +4,7 @@ import androidx.annotation.StringRes
 import com.ssafy.e102.eumgil.R
 
 sealed class TopLevelDestination(
-    val route: TopLevelRoute,
+    val route: AppRoute,
     @StringRes val labelRes: Int,
 ) {
     data object Map : TopLevelDestination(
@@ -17,6 +17,11 @@ sealed class TopLevelDestination(
         labelRes = R.string.route_saved_route,
     )
 
+    data object Report : TopLevelDestination(
+        route = ReportRoute.Report,
+        labelRes = R.string.route_report,
+    )
+
     data object MyPage : TopLevelDestination(
         route = TopLevelRoute.MyPage,
         labelRes = R.string.route_my_page,
@@ -26,6 +31,7 @@ sealed class TopLevelDestination(
         val entries: List<TopLevelDestination> = listOf(
             Map,
             SavedRoute,
+            Report,
             MyPage,
         )
     }

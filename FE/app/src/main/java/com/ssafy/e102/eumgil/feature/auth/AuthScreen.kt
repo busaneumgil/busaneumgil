@@ -4,19 +4,20 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,17 +33,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.error
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
 @Composable
@@ -74,18 +73,6 @@ fun LoginScreen(
             contentScale = ContentScale.Crop,
         )
 
-        Image(
-            painter = painterResource(id = R.drawable.auth_login_skyline),
-            contentDescription = null,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(260.dp)
-                    .alpha(0.92f),
-            contentScale = ContentScale.FillWidth,
-        )
-
         Column(
             modifier =
                 Modifier
@@ -97,9 +84,25 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(EumSpacing.xLarge))
             LoginHero()
             Spacer(modifier = Modifier.weight(1f))
+            Image(
+                painter = painterResource(id = R.drawable.auth_login_skyline),
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1.6f)
+                        .alpha(0.92f),
+                alignment = Alignment.BottomCenter,
+                contentScale = ContentScale.FillWidth,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
             SocialLoginPanel(
                 uiState = uiState,
                 onAction = onAction,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                    .navigationBarsPadding()
             )
         }
     }
@@ -120,29 +123,41 @@ private fun LoginHero(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        verticalArrangement = Arrangement.Top,
     ) {
         Image(
             painter = painterResource(id = R.drawable.app_logo),
             contentDescription = null,
-            modifier = Modifier.size(132.dp),
+            modifier =
+                Modifier
+                    .width(164.dp)
+                    .height(92.dp),
             contentScale = ContentScale.Fit,
         )
         Text(
             text = stringResource(id = R.string.auth_login_service_name),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
+            style =
+                MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = 36.sp,
+                    lineHeight = 44.sp,
+                ),
+            color = EumPrimary600,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = stringResource(id = R.string.auth_login_service_english_name),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 20.sp,
+                    lineHeight = 28.sp,
+                ),
+            color = EumPrimary600,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier = Modifier.height(EumSpacing.small))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = stringResource(id = R.string.auth_login_service_tagline),
             style = MaterialTheme.typography.titleLarge,
@@ -159,90 +174,21 @@ private fun SocialLoginPanel(
     onAction: (AuthUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        tonalElevation = 2.dp,
-        shadowElevation = 8.dp,
-        border =
-            BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f),
-            ),
+        verticalArrangement = Arrangement.spacedBy(17.dp),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Text(
-                text = stringResource(id = R.string.auth_login_social_section_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
+        uiState.providers.forEach { provider ->
+            SocialLoginButton(
+                provider = provider,
+                isAnyLoading = uiState.isLoading,
+                isSelectedLoading = uiState.loadingProviderKey == provider.key,
+                onClick = {
+                    onAction(AuthUiAction.SocialLoginClicked(providerKey = provider.key))
+                },
             )
-            LoginStatusText(uiState = uiState)
-            uiState.providers.forEach { provider ->
-                SocialLoginButton(
-                    provider = provider,
-                    isAnyLoading = uiState.isLoading,
-                    isSelectedLoading = uiState.loadingProviderKey == provider.key,
-                    onClick = {
-                        onAction(AuthUiAction.SocialLoginClicked(providerKey = provider.key))
-                    },
-                )
-            }
         }
     }
-}
-
-@Composable
-private fun LoginStatusText(
-    uiState: AuthUiState,
-    modifier: Modifier = Modifier,
-) {
-    val selectedProviderName =
-        uiState.providers
-            .firstOrNull { provider -> provider.key == uiState.loadingProviderKey }
-            ?.let { provider ->
-                stringResource(id = provider.providerNameRes)
-            }
-    val errorMessage = uiState.errorMessage
-    val statusText =
-        when {
-            errorMessage != null -> errorMessage
-            selectedProviderName != null ->
-                stringResource(
-                    id = R.string.auth_login_status_loading,
-                    selectedProviderName,
-                )
-            else -> stringResource(id = R.string.auth_login_status_idle)
-        }
-
-    val statusModifier =
-        if (uiState.errorMessage != null) {
-            modifier.semantics {
-                liveRegion = LiveRegionMode.Polite
-                error(statusText)
-            }
-        } else {
-            modifier
-        }
-
-    Text(
-        text = statusText,
-        modifier = statusModifier,
-        style = MaterialTheme.typography.bodyMedium,
-        color =
-            if (uiState.errorMessage != null) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-    )
 }
 
 @Composable
@@ -268,18 +214,6 @@ private fun SocialLoginButton(
         }
     val containerColor = provider.containerColor()
     val contentColor = provider.contentColor()
-    val disabledContainerColor =
-        if (isSelectedLoading) {
-            containerColor
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        }
-    val disabledContentColor =
-        if (isSelectedLoading) {
-            contentColor
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-        }
 
     Button(
         onClick = onClick,
@@ -287,86 +221,55 @@ private fun SocialLoginButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = SocialLoginButtonHeight)
+                .height(52.dp)
                 .semantics {
                     stateDescription = buttonState
                 },
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = MaterialTheme.shapes.large,
         colors =
             ButtonDefaults.buttonColors(
                 containerColor = containerColor,
                 contentColor = contentColor,
-                disabledContainerColor = disabledContainerColor,
-                disabledContentColor = disabledContentColor,
+                disabledContainerColor = containerColor.copy(alpha = 0.6f),
+                disabledContentColor = contentColor.copy(alpha = 0.6f),
             ),
         border = provider.buttonBorder(isSelectedLoading = isSelectedLoading),
-        contentPadding = ButtonDefaults.ContentPadding,
+        contentPadding = PaddingValues(0.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            SocialProviderMark(
-                provider = provider,
-                isDisabled = isAnyLoading && !isSelectedLoading,
-            )
-            Text(
-                text = label,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-            )
-            if (isSelectedLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = contentColor,
-                    trackColor = contentColor.copy(alpha = 0.24f),
-                )
-            } else {
-                Spacer(modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun SocialProviderMark(
-    provider: AuthLoginProviderUiModel,
-    isDisabled: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val containerColor =
-        if (isDisabled) {
-            MaterialTheme.colorScheme.surface
-        } else {
-            provider.markContainerColor()
-        }
-    val contentColor =
-        if (isDisabled) {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-        } else {
-            provider.markContentColor()
-        }
-
-    Surface(
-        modifier =
-            modifier
-                .size(36.dp)
-                .clearAndSetSemantics { },
-        shape = CircleShape,
-        color = containerColor,
-        border = provider.markBorder(isDisabled = isDisabled),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = provider.mark,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+        if (isSelectedLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
                 color = contentColor,
             )
+        } else {
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(id = provider.iconRes()),
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .padding(start = 20.dp)
+                            .size(20.dp)
+                            .align(Alignment.CenterStart),
+                    contentScale = ContentScale.Fit,
+                )
+
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 17.sp),
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -385,35 +288,22 @@ private fun AuthLoginProviderUiModel.contentColor(): Color =
         else -> Color(0xFF111827)
     }
 
-private fun AuthLoginProviderUiModel.markContainerColor(): Color =
-    when (key) {
-        AuthLoginProviderUiKeys.KAKAO -> Color(0xFF2D1600)
-        else -> Color.White
-    }
-
-private fun AuthLoginProviderUiModel.markContentColor(): Color =
-    when (key) {
-        AuthLoginProviderUiKeys.GOOGLE -> GoogleBlue
-        AuthLoginProviderUiKeys.NAVER -> NaverGreen
-        AuthLoginProviderUiKeys.KAKAO -> KakaoYellow
-        else -> Color(0xFF111827)
-    }
-
 private fun AuthLoginProviderUiModel.buttonBorder(isSelectedLoading: Boolean): BorderStroke? =
     when (key) {
         AuthLoginProviderUiKeys.GOOGLE ->
             BorderStroke(
-                width = if (isSelectedLoading) 2.dp else 1.dp,
+                width = 1.dp,
                 color = if (isSelectedLoading) GoogleBlue else Color(0xFFD1D5DB),
             )
         else -> null
     }
 
-private fun AuthLoginProviderUiModel.markBorder(isDisabled: Boolean): BorderStroke? =
-    when {
-        isDisabled -> BorderStroke(width = 1.dp, color = Color(0xFFD1D5DB))
-        key == AuthLoginProviderUiKeys.GOOGLE -> BorderStroke(width = 1.dp, color = Color(0xFFD1D5DB))
-        else -> null
+private fun AuthLoginProviderUiModel.iconRes(): Int =
+    when (key) {
+        AuthLoginProviderUiKeys.GOOGLE -> R.drawable.ic_logo_google
+        AuthLoginProviderUiKeys.NAVER -> R.drawable.ic_logo_naver
+        AuthLoginProviderUiKeys.KAKAO -> R.drawable.ic_logo_kakao
+        else -> R.drawable.ic_logo_google
     }
 
 @Composable
@@ -458,4 +348,3 @@ private val SkyBlue = Color(0xFFEAF6FF)
 private val GoogleBlue = Color(0xFF4285F4)
 private val NaverGreen = Color(0xFF03C75A)
 private val KakaoYellow = Color(0xFFFFE500)
-private val SocialLoginButtonHeight = 56.dp

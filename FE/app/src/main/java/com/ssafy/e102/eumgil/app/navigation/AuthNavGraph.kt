@@ -39,6 +39,26 @@ fun NavGraphBuilder.authNavGraph(
     }
 
     composable(route = AuthRoute.ProfileSetup.route) {
-        ProfileSetupRoute()
+        val coroutineScope = rememberCoroutineScope()
+
+        ProfileSetupRoute(
+            onProfileSetupCompleted = {
+                coroutineScope.launch {
+                    authSessionRepository.markProfileCompleted()
+                    val nextDestination =
+                        resolveAppStartDestination(
+                            authGateState = authSessionRepository.getAuthGateState(),
+                            initSettings = settingsRepository.getInitSettings(),
+                        )
+
+                    navController.navigate(nextDestination.route) {
+                        launchSingleTop = true
+                        popUpTo(AuthRoute.ProfileSetup.route) {
+                            inclusive = true
+                        }
+                    }
+                }
+            },
+        )
     }
 }

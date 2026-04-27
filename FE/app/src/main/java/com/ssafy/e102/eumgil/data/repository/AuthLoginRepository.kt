@@ -19,11 +19,11 @@ class LocalOnlyAuthLoginRepository(
         require(request.providerKey.isNotBlank()) { "로그인 방식을 다시 선택해주세요." }
 
         delay(handoffDelayMillis)
-        // TODO(S14P31E102-313): Replace this local-only session handoff with BE social login
-        // after provider and token policy are confirmed.
+        // Social login is not wired yet, so any supported provider click advances the
+        // user through the app's next gate with a local mock session.
         authSessionRepository.saveAuthSession(
             authSession = AuthSession(accessToken = LOCAL_ONLY_AUTH_SESSION_MARKER),
-            isProfileCompleted = false,
+            isProfileCompleted = true,
         )
     }
 

@@ -18,8 +18,13 @@ interface SettingsRepository : InitSettingsRepository {
 
 class DefaultSettingsRepository(
     private val initSettingsLocalDataSource: InitSettingsLocalDataSource,
-    private val debugSettingsLocalDataSource: DebugSettingsLocalDataSource,
+    debugSettingsLocalDataSourceProvider: () -> DebugSettingsLocalDataSource,
 ) : SettingsRepository {
+    private val debugSettingsLocalDataSource by lazy(
+        LazyThreadSafetyMode.NONE,
+        debugSettingsLocalDataSourceProvider,
+    )
+
     override fun observeInitSettings(): Flow<InitSettings> = initSettingsLocalDataSource.observeInitSettings()
 
     override suspend fun getInitSettings(): InitSettings = initSettingsLocalDataSource.getInitSettings()

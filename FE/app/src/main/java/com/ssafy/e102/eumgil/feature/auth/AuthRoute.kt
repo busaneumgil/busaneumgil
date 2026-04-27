@@ -50,11 +50,6 @@ fun LoginRoute(
     )
 }
 
-@Composable
-fun ProfileSetupRoute(modifier: Modifier = Modifier) {
-    ProfileSetupScreen(modifier = modifier)
-}
-
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     when (this) {
         is ComponentActivity -> this

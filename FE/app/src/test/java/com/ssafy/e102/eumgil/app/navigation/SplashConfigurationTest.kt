@@ -79,6 +79,15 @@ class SplashConfigurationTest {
     }
 
     @Test
+    fun `app theme keeps splash illustration behind startup rendering`() {
+        val themeStyle = loadStyle(name = "Theme.BusanEumgil")
+        val themeItems = themeStyle.items
+
+        assertEquals("android:Theme.Material.Light.NoActionBar", themeStyle.parent)
+        assertEquals("@drawable/splash_illustration", themeItems["android:windowBackground"])
+    }
+
+    @Test
     fun `main activity installs platform splash screen before content`() {
         val mainActivity = File("src/main/java/com/ssafy/e102/eumgil/app/MainActivity.kt").readText()
         val installCallIndex = mainActivity.indexOf("installSplashScreen()")
@@ -92,16 +101,40 @@ class SplashConfigurationTest {
     }
 
     @Test
-    fun `app entry loading state displays full screen splash illustration`() {
+    fun `app nav host keeps splash illustration visible while startup route resolves`() {
         val appNavHost = File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt").readText()
-
         assertTrue(
-            "App entry loading state must display the splash illustration.",
-            appNavHost.contains("R.drawable.splash_illustration"),
+            "AppNavHost should keep rendering the splash illustration while the startup route is loading.",
+            appNavHost.contains("AppEntryLoadingScreen(modifier = modifier)"),
         )
         assertTrue(
-            "Splash illustration must fill the screen without preserving empty bars.",
-            appNavHost.contains("ContentScale.Crop"),
+            "Splash illustration should stay backed by the dedicated drawable resource.",
+            appNavHost.contains("R.drawable.splash_illustration"),
+        )
+    }
+
+    @Test
+    fun `app container defers database backed startup dependencies until needed`() {
+        val appContainer = File("src/main/java/com/ssafy/e102/eumgil/app/AppContainer.kt").readText()
+        val settingsRepository = File("src/main/java/com/ssafy/e102/eumgil/data/repository/SettingsRepository.kt").readText()
+
+        assertTrue(
+            "AppContainer should lazily initialize debug settings to avoid opening Room before the first frame.",
+            appContainer.contains("private val debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE)"),
+        )
+        assertTrue(
+            "Bookmark repository should stay lazy until the feature is opened.",
+            appContainer.contains("val bookmarkRepository: BookmarkRepository by lazy(LazyThreadSafetyMode.NONE)"),
+        )
+        assertTrue(
+            "Report repository should stay lazy until reporting flows are used.",
+            appContainer.contains("val reportRepository: ReportRepository by lazy(LazyThreadSafetyMode.NONE)"),
+        )
+        assertTrue(
+            "Settings repository should defer debug datasource access until runtime debug settings are requested.",
+            settingsRepository.contains(
+                "debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE,",
+            ),
         )
     }
 

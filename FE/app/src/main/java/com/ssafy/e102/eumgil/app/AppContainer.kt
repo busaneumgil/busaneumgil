@@ -6,7 +6,6 @@ import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
-import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
@@ -16,6 +15,7 @@ import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datastore.authSessionDataStore
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
+import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
@@ -44,94 +44,114 @@ class AppContainer(
         EumgilDatabase.getInstance(appContext)
     }
 
-    private val initSettingsLocalDataSource =
+    private val initSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
         InitSettingsLocalDataSource(dataStore = appContext.initSettingsDataStore)
+    }
 
-    private val authSessionLocalDataSource =
+    private val authSessionLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
         AuthSessionLocalDataSource(dataStore = appContext.authSessionDataStore)
+    }
 
-    private val debugSettingsLocalDataSource =
+    private val debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
         DebugSettingsLocalDataSource(appSettingDao = localDatabase.appSettingDao())
+    }
 
-    private val placesLocalDataSource = PlacesLocalDataSource()
-    private val facilitySeedLocalDataSource = FacilitySeedLocalDataSource()
-    private val routeLocalDataSource = RouteLocalDataSource()
-    private val searchLocalDataSource = SearchLocalDataSource()
+    private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesLocalDataSource() }
+    private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
+    private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
+    private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchLocalDataSource() }
 
-    private val placesRemoteDataSource = PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
-    private val searchRemoteDataSource = SearchRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+    private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+    }
+    private val searchRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        SearchRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+    }
 
-    private val placesMockDataSource = PlacesMockDataSource()
-    private val facilitySeedMockDataSource = FacilitySeedMockDataSource()
-    private val routeMockDataSource = RouteMockDataSource()
-    private val searchMockDataSource = SearchMockDataSource()
+    private val placesMockDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesMockDataSource() }
+    private val facilitySeedMockDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedMockDataSource() }
+    private val routeMockDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteMockDataSource() }
+    private val searchMockDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchMockDataSource() }
 
-    private val repositorySourcePolicy: RepositorySourcePolicy =
+    private val repositorySourcePolicy: RepositorySourcePolicy by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideRepositorySourcePolicy(
             debugSettingsLocalDataSource = debugSettingsLocalDataSource,
         )
+    }
 
-    val destinationSelectionRepository: DestinationSelectionRepository =
+    val destinationSelectionRepository: DestinationSelectionRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideDestinationSelectionRepository()
+    }
 
-    val authSessionRepository: AuthSessionRepository =
+    val authSessionRepository: AuthSessionRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideAuthSessionRepository(
             authSessionLocalDataSource = authSessionLocalDataSource,
         )
+    }
 
-    val authLoginRepository: AuthLoginRepository =
+    val authLoginRepository: AuthLoginRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideAuthLoginRepository(
             authSessionRepository = authSessionRepository,
         )
+    }
 
-    val bookmarkRepository: BookmarkRepository =
+    val bookmarkRepository: BookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideBookmarkRepository(
             bookmarkDao = localDatabase.bookmarkDao(),
         )
+    }
 
-    val settingsRepository: SettingsRepository =
+    val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
-            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
+            debugSettingsLocalDataSourceProvider = { debugSettingsLocalDataSource },
         )
+    }
 
-    val placesRepository: PlacesRepository =
+    val placesRepository: PlacesRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.providePlacesRepository(
             remoteDataSource = placesRemoteDataSource,
             localDataSource = placesLocalDataSource,
             mockDataSource = placesMockDataSource,
             sourcePolicy = repositorySourcePolicy,
         )
+    }
 
-    val facilitySeedRepository: FacilitySeedRepository =
+    val facilitySeedRepository: FacilitySeedRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideFacilitySeedRepository(
             localDataSource = facilitySeedLocalDataSource,
             mockDataSource = facilitySeedMockDataSource,
         )
+    }
 
-    val routeRepository: RouteRepository =
+    val routeRepository: RouteRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideRouteRepository(
             localDataSource = routeLocalDataSource,
             mockDataSource = routeMockDataSource,
         )
+    }
 
-    val searchRepository: SearchRepository =
+    val searchRepository: SearchRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideSearchRepository(
             remoteDataSource = searchRemoteDataSource,
             localDataSource = searchLocalDataSource,
             mockDataSource = searchMockDataSource,
             sourcePolicy = repositorySourcePolicy,
         )
+    }
 
-    val reportRepository: ReportRepository =
+    val reportRepository: ReportRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideReportRepository(
             reportDraftDao = localDatabase.reportDraftDao(),
             reportOutboxDao = localDatabase.reportOutboxDao(),
         )
+    }
 
-    val locationPermissionManager: LocationPermissionManager =
+    val locationPermissionManager: LocationPermissionManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidLocationPermissionManager(context = appContext)
+    }
 
-    val currentLocationManager: CurrentLocationManager =
+    val currentLocationManager: CurrentLocationManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidCurrentLocationManager(context = appContext)
+    }
 }

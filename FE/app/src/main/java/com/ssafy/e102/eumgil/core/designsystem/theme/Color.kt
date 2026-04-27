@@ -3,6 +3,8 @@ package com.ssafy.e102.eumgil.core.designsystem.theme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
+val EumPrimary600 = Color(0xFF2563EB)
+
 private val DeepBlue = Color(0xFF0F4C81)
 private val DeepBluePressed = Color(0xFF0B3A63)
 private val White = Color(0xFFFFFFFF)

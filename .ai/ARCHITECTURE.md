@@ -9,6 +9,7 @@
 - `.ai/README.md`, `.ai/AGENTS.md`, and `.ai/CLAUDE.md` are the canonical host-facing documentation layer.
 - `.ai/LOCAL/PLANS/progress.json` is the local structured progress layer.
 - `.ai/LOCAL/EVALS/metrics.json` plus retry logs are the local measurable state layer.
+- `.ai/LOCAL/DOCS/context-exclusions.json` is the local stale-document exclusion layer.
 - `.ai/GUARDS.md` and `.ai/AUTOMATION.md` define harness control behavior.
 - `.ai/.claude/skills/` is the Claude adapter layer generated from canonical skills.
 - `.ai/.agents/skills/` is the Codex adapter layer generated from canonical skills.
@@ -41,14 +42,15 @@ The operating philosophy is: when an agent repeats a mistake, strengthen the sys
 2. The orchestrator chooses the relevant stage and loads the matching skill.
 3. Humans or agents update canonical docs and canonical skills under `.ai/`.
 4. Planning and implementation update local narrative plan artifacts plus `.ai/LOCAL/PLANS/progress.json`.
-5. Guards and validation scripts under `.ai/scripts/` check command risk, TDD discipline, plan readiness, code syntax, and adapter sync before work is treated as ready.
-6. Evaluation and release update `.ai/LOCAL/EVALS/metrics.json` and related logs.
-7. Shared learning updates go into `.ai/MEMORY/`, `.ai/SKILLS/`, `.ai/EVALS/`, or `.ai/DECISIONS/`.
-8. `.ai/scripts/sync-adapters.sh` copies canonical skills and runtime adapter templates into `.ai/.claude/`, `.ai/.agents/`, and `.ai/.codex/`.
-9. `.ai/scripts/install-root-entrypoints.sh` can install root `AGENTS.md`, `CLAUDE.md`, and an optional `README.md` pointer for hosts that require root discovery.
-10. Claude uses root `CLAUDE.md` plus the ignored root `.claude/skills` and `.claude/settings.json` shims, which are generated from `.ai/.claude/`.
-11. Codex uses root `AGENTS.md` and the ignored root `.agents/skills` discovery shim, which is generated from `.ai/.agents/skills`.
-12. `.ai/scripts/dashboard.sh` turns progress, metrics, and harness state into a visible status summary.
+5. Document selection checks `.ai/DOCS.md` plus local stale-document exclusions before source documents are used as contracts.
+6. Guards and validation scripts under `.ai/scripts/` check command risk, TDD discipline, plan readiness, code syntax, and adapter sync before work is treated as ready.
+7. Evaluation and release update `.ai/LOCAL/EVALS/metrics.json` and related logs.
+8. Shared learning updates go into `.ai/MEMORY/`, `.ai/SKILLS/`, `.ai/EVALS/`, or `.ai/DECISIONS/`.
+9. `.ai/scripts/sync-adapters.sh` copies canonical skills and runtime adapter templates into `.ai/.claude/`, `.ai/.agents/`, and `.ai/.codex/`.
+10. `.ai/scripts/install-root-entrypoints.sh` can install root `AGENTS.md`, `CLAUDE.md`, and an optional `README.md` pointer for hosts that require root discovery.
+11. Claude uses root `CLAUDE.md` plus the ignored root `.claude/skills` and `.claude/settings.json` shims, which are generated from `.ai/.claude/`.
+12. Codex uses root `AGENTS.md` and the ignored root `.agents/skills` discovery shim, which is generated from `.ai/.agents/skills`.
+13. `.ai/scripts/dashboard.sh` turns progress, metrics, and harness state into a visible status summary.
 
 ## Trust boundaries
 
@@ -58,6 +60,7 @@ The operating philosophy is: when an agent repeats a mistake, strengthen the sys
 - Root `.claude/` is local generated discovery/runtime state for Claude and must stay ignored.
 - Root `.agents/` is local generated discovery state for Codex and must stay ignored.
 - Local-only host files such as `.ai/.claude/settings.local.json` and all `.ai/LOCAL/` runtime state may exist for a developer, but they must stay ignored and untracked.
+- Stale-document exclusions are local runtime state. They can suppress a document for one working context, but they do not change the shared project source of truth until the document itself is updated.
 - Verification should fail on tracked policy drift, invalid structure, unsynced adapters, or code validation failures. It should not fail merely because an ignored local host file exists.
 
 ## Change policy

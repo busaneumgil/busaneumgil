@@ -19,15 +19,20 @@ Prevent product plans from collapsing into generic UI or missing important user 
 
 - `.ai/LOCAL/PLANS/current-sprint.md`
 - `.ai/PROJECT.md`
+- `.ai/DOCS.md`
+- Relevant screen specs, PRD, feature spec, and interview documents selected from `.ai/DOCS.md`
+- For FE work: `FE/docs/2026-04-22_부산이음길_FE_화면_인벤토리_및_라우트_맵.md`, FE design convention, FE component guide, FE accessibility label guide, and current `FE/app` screen code
 - Any design constraints already captured in memory or ADRs
 
 ## procedure
 
-1. Review the user flow and identify primary, empty, loading, error, and success states.
-2. Check the information hierarchy and whether the interface expresses a clear product opinion.
-3. Reject generic UI patterns that do not reinforce the wedge or user goal.
-4. Add design review notes and required states to `.ai/LOCAL/PLANS/current-sprint.md`.
-5. Capture reusable design principles in `.ai/MEMORY/conventions.md` if they should persist.
+1. Load `.ai/DOCS.md` and read the relevant screen specs, PRD, feature spec, interview notes, and FE docs.
+2. For FE work, compare the requested screen with the FE route map and current screen code so the plan does not invent non-existent routes or components.
+3. Review the user flow and identify primary, empty, loading, error, permission-denied, offline/fallback, and success states.
+4. Check the information hierarchy and whether the interface expresses the accessibility-first product goal.
+5. Reject generic UI patterns that do not reinforce the 부산이음길 target users or documented accessibility needs.
+6. Add design review notes and required states to `.ai/LOCAL/PLANS/current-sprint.md`.
+7. Capture reusable design principles in `.ai/MEMORY/conventions.md` if they should persist.
 
 ## outputs
 

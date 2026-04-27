@@ -18,17 +18,21 @@ Prevent teams from guessing their way through ambiguous failures.
 ## inputs
 
 - Symptom, report, logs, or reproduction hints
+- `.ai/DOCS.md` and relevant `Docs/` or `FE/docs` source documents for the affected area
 - Relevant debugging memory and incidents
 - Architecture notes for the affected area
 
 ## procedure
 
-1. State the observed symptom and strongest evidence.
-2. Trace the likely path through code, state, or systems.
-3. Generate ranked hypotheses and eliminate them with evidence.
-4. If repeated failed fixes already exist for the same signature, run `.ai/scripts/check-circuit-breaker.sh <signature>` before proposing another brute-force attempt.
-5. Record the investigation trail in `.ai/MEMORY/debugging.md` if it is reusable.
-6. Recommend the next fix or test action only after the cause is credible.
+1. Load `.ai/DOCS.md`, then choose the relevant source documents for the failing area.
+2. State whether the symptom looks like a code defect, stale documentation, contract mismatch, environment issue, or unknown.
+3. State the observed symptom and strongest evidence.
+4. Trace the likely path through code, state, documents, or systems.
+5. Generate ranked hypotheses and eliminate them with evidence.
+6. If repeated failed fixes already exist for the same signature, run `.ai/scripts/check-circuit-breaker.sh <signature>` before proposing another brute-force attempt.
+7. Record document conflicts or stale assumptions in `.ai/LOCAL/PLANS/current-sprint.md` when they affect the fix.
+8. Record the investigation trail in `.ai/MEMORY/debugging.md` if it is reusable.
+9. Recommend the next fix or test action only after the cause is credible.
 
 ## outputs
 

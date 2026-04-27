@@ -17,15 +17,17 @@ Measure whether the change introduced unacceptable performance regressions or su
 ## inputs
 
 - Target flow or endpoint
+- `.ai/DOCS.md` and any docs that define performance-sensitive paths, infra, or API expectations
 - Existing performance expectations if they exist
 - Relevant build or QA notes
 
 ## procedure
 
-1. Define what should be measured and why it matters.
-2. Capture a baseline if one exists or note that none exists.
-3. Measure the changed path and compare results.
-4. Record significant regressions or gains in `.ai/LOCAL/PLANS/current-sprint.md` and `.ai/EVALS/scorecard.md`.
+1. Load `.ai/DOCS.md` and relevant infra, API, product, or FE flow docs.
+2. Define what should be measured and why it matters.
+3. Capture a baseline if one exists or note that none exists.
+4. Measure the changed path and compare results.
+5. Record significant regressions, gains, missing baselines, or stale performance assumptions in `.ai/LOCAL/PLANS/current-sprint.md` and `.ai/EVALS/scorecard.md`.
 
 ## outputs
 

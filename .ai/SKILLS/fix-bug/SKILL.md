@@ -17,18 +17,22 @@ Resolve defects without treating the first apparent symptom as the root cause.
 ## inputs
 
 - Bug report or observed failure
+- `.ai/DOCS.md`
+- Relevant API, ERD, convention, screen, infra, or runbook docs selected from `.ai/DOCS.md`
 - Relevant sprint, debugging memory, and incident context
 - Existing tests and logs
 
 ## procedure
 
-1. Reproduce the bug or define the strongest available reproduction path.
-2. Confirm the root cause instead of patching the nearest symptom.
-3. Before mutating shell state, run `.ai/scripts/check-dangerous-command.sh "<command>"`. Before editing implementation files, run `.ai/scripts/check-tdd-guard.sh --mode pre <candidate paths>`.
-4. Apply the smallest safe fix that addresses the actual failure.
-5. Add regression coverage.
-6. If the same fix path fails repeatedly, run `.ai/scripts/record-retry.sh <signature>` and `.ai/scripts/check-circuit-breaker.sh <signature>` before retrying again.
-7. If the bug exposed a reusable lesson, update `.ai/MEMORY/debugging.md` or `.ai/MEMORY/incidents.md`.
+1. Load `.ai/DOCS.md` and read the source docs relevant to the failing behavior.
+2. Reproduce the bug or define the strongest available reproduction path.
+3. Confirm whether the failure violates code behavior, `Docs/` contract, or both.
+4. Confirm the root cause instead of patching the nearest symptom.
+5. Before mutating shell state, run `.ai/scripts/check-dangerous-command.sh "<command>"`. Before editing implementation files, run `.ai/scripts/check-tdd-guard.sh --mode pre <candidate paths>`.
+6. Apply the smallest safe fix that addresses the actual failure.
+7. Add regression coverage.
+8. If the same fix path fails repeatedly, run `.ai/scripts/record-retry.sh <signature>` and `.ai/scripts/check-circuit-breaker.sh <signature>` before retrying again.
+9. If the bug exposed a reusable lesson, update `.ai/MEMORY/debugging.md` or `.ai/MEMORY/incidents.md`.
 
 ## outputs
 

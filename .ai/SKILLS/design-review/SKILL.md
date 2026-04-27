@@ -18,13 +18,15 @@ Audit the live or implemented interface after build, not just the plan.
 
 - Implemented interface or screenshots
 - `plan-design-review` notes in the sprint artifact
+- `.ai/DOCS.md`, `FE/docs` route/design/component/accessibility docs, and relevant mockups
 - `.ai/MEMORY/conventions.md` if visual principles exist
 
 ## procedure
 
-1. Compare the delivered experience with the planned states and hierarchy.
-2. Look for generic UI, weak emphasis, missing states, and copy friction.
-3. Record design debt, quality risks, and recommended improvements in `.ai/LOCAL/PLANS/current-sprint.md`.
+1. Load `.ai/DOCS.md`, the FE screen inventory/route map, design convention, component guide, accessibility label guide, and relevant mockups.
+2. Compare the delivered experience with the planned states, route expectations, hierarchy, and current FE code.
+3. Look for generic UI, weak emphasis, missing states, accessibility label gaps, and copy friction.
+4. Record design debt, quality risks, source-document conflicts, and recommended improvements in `.ai/LOCAL/PLANS/current-sprint.md`.
 
 ## outputs
 

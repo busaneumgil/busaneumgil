@@ -17,13 +17,15 @@ Keep documentation aligned with shipped behavior and operational expectations.
 ## inputs
 
 - Release-ready change summary
+- `.ai/DOCS.md` and the source documents touched by the shipped behavior
 - Relevant runbooks, README, and sprint artifact
 
 ## procedure
 
-1. Identify which docs became stale because of the change.
-2. Update the relevant runbooks, README sections, or memory entries.
-3. Record what was updated in `.ai/LOCAL/PLANS/current-sprint.md`.
+1. Load `.ai/DOCS.md` and identify the source documents that should tell the truth about the shipped behavior.
+2. Identify which docs became stale because of the change.
+3. Update the relevant `Docs/`, `FE/docs`, runbooks, README sections, or memory entries.
+4. Record what was updated, what remains stale, and any owner needed in `.ai/LOCAL/PLANS/current-sprint.md`.
 
 ## outputs
 

@@ -18,16 +18,18 @@ Pressure-test the plan from a product and scope perspective before code starts.
 ## inputs
 
 - Current sprint framing from `.ai/LOCAL/PLANS/current-sprint.md`
+- `.ai/DOCS.md` and relevant PRD, planning, feature, screen, interview, and FE docs
 - Relevant roadmap and backlog context
 - `.ai/PROJECT.md`
 
 ## procedure
 
-1. Read the current framing and identify the proposed wedge.
-2. Ask whether the wedge is strong enough to matter for the target user.
-3. Challenge scope with three lenses: stronger wedge, simpler first version, and dangerous distractions.
-4. Record the recommended scope position in `.ai/LOCAL/PLANS/current-sprint.md`.
-5. Push deferred but relevant work into `.ai/PLANS/backlog.md` or `.ai/PLANS/roadmap.md`.
+1. Load `.ai/DOCS.md` and the product source documents for the requested scope.
+2. Read the current framing and identify the proposed wedge.
+3. Ask whether the wedge is strong enough to matter for the target user.
+4. Challenge scope with three lenses: stronger wedge, simpler first version, and dangerous distractions.
+5. Record source-document conflicts, stale assumptions, and the recommended scope position in `.ai/LOCAL/PLANS/current-sprint.md`.
+6. Push deferred but relevant work into `.ai/PLANS/backlog.md` or `.ai/PLANS/roadmap.md`.
 
 ## outputs
 

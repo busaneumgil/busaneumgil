@@ -18,6 +18,8 @@ Turn product intent or an existing implementation plan into an execution-ready a
 ## inputs
 
 - Existing project documents such as PRD, ERD, blueprint, and prior implementation notes
+- `.ai/DOCS.md`
+- Relevant `Docs/API/`, `Docs/ARD/`, `Docs/PoC/`, `Docs/인프라/`, `Docs/컨벤션/`, and `Docs/skills/backend/` documents
 - `.ai/LOCAL/PLANS/current-sprint.md`
 - `.ai/PLANS/implementation-plan-template.md`
 - `.ai/ARCHITECTURE.md`
@@ -26,14 +28,16 @@ Turn product intent or an existing implementation plan into an execution-ready a
 
 ## procedure
 
-1. Read the existing plan and supporting docs, then identify what is still vague, oversized, internally inconsistent, or missing.
-2. Map the proposed flow: trigger, data movement, state changes, storage boundaries, external dependencies, and trust boundaries.
-3. Break the work into small execution units with explicit dependencies, changed surfaces, build steps, review focus, QA path, and measurable done criteria.
-4. Convert missing tests and validation into an explicit test and validation matrix instead of leaving them as loose suggestions.
-5. Convert every risk into one of three buckets: mitigated now, execution task, or true open question that requires outside confirmation.
-6. Update `.ai/LOCAL/PLANS/current-sprint.md` or a linked plan artifact under `.ai/LOCAL/PLANS/` using the implementation plan template so build, review, and QA can consume it directly.
-7. Update `.ai/ARCHITECTURE.md` or draft an ADR when the system shape, source of truth, or trust boundary changed materially.
-8. Run `.ai/scripts/check-plan-readiness.sh` on the updated plan artifact and iterate until it passes or until a repeated blocked failure must be escalated through the circuit breaker path.
+1. Load `.ai/DOCS.md`, then read the relevant API, ERD, PoC, infra, backend convention, and planning docs.
+2. Read the existing plan and supporting docs, then identify what is still vague, oversized, internally inconsistent, or missing.
+3. Map the proposed flow: trigger, data movement, state changes, storage boundaries, external dependencies, and trust boundaries.
+4. Cross-check API paths, request/response fields, error codes, tables, entities, and package rules against `Docs/`.
+5. Break the work into small execution units with explicit dependencies, changed surfaces, build steps, review focus, QA path, and measurable done criteria.
+6. Convert missing tests and validation into an explicit test and validation matrix instead of leaving them as loose suggestions.
+7. Convert every risk into one of three buckets: mitigated now, execution task, or true open question that requires outside confirmation.
+8. Update `.ai/LOCAL/PLANS/current-sprint.md` or a linked plan artifact under `.ai/LOCAL/PLANS/` using the implementation plan template so build, review, and QA can consume it directly.
+9. Update `.ai/ARCHITECTURE.md` or draft an ADR when the system shape, source of truth, or trust boundary changed materially.
+10. Run `.ai/scripts/check-plan-readiness.sh` on the updated plan artifact and iterate until it passes or until a repeated blocked failure must be escalated through the circuit breaker path.
 
 ## outputs
 

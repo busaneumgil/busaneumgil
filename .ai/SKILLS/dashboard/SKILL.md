@@ -19,13 +19,15 @@ Make local plan progress visible from the checklist in `.ai/LOCAL/PLANS/current-
 
 - `.ai/LOCAL/PLANS/current-sprint.md`
 - `.ai/LOCAL/EVALS/metrics.json`
+- Optional lane: `FE` or `BE`
 
 ## procedure
 
 1. Read checklist items from `.ai/LOCAL/PLANS/current-sprint.md`.
-2. If the plan file or checklist is missing, tell the user to run `/plan`.
-3. Summarize completed, waiting, in-progress, and blocked items in Korean.
-4. Recommend the next skill command based on the checklist state.
+2. If the command is `/fe-dashboard`, run `.ai/scripts/dashboard.sh --lane FE`. If the command is `/be-dashboard`, run `.ai/scripts/dashboard.sh --lane BE`. Otherwise run `.ai/scripts/dashboard.sh`.
+3. If the plan file or checklist is missing, tell the user to run the matching `/fe-plan`, `/be-plan`, or `/plan`.
+4. Summarize completed, waiting, in-progress, and blocked items in Korean.
+5. Recommend the next skill command using the same lane prefix when one was provided.
 
 ## outputs
 

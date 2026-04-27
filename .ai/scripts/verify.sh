@@ -13,6 +13,8 @@ required_files=(
   ".ai/AGENTS.md"
   ".ai/CLAUDE.md"
   ".ai/PROJECT.md"
+  ".ai/DOCS.md"
+  ".ai/LANES.md"
   ".ai/ARCHITECTURE.md"
   ".ai/WORKFLOW.md"
   ".ai/ADAPTERS/README.md"
@@ -54,6 +56,8 @@ required_files=(
   ".ai/scripts/check-circuit-breaker.sh"
   ".ai/scripts/check-code-validation.sh"
   ".ai/scripts/check-plan-readiness.sh"
+  ".ai/scripts/docs-context.sh"
+  ".ai/scripts/docs-source-report.sh"
   ".ai/scripts/codex-hook-session-start.sh"
   ".ai/scripts/codex-preflight.sh"
   ".ai/scripts/codex-review-brief.sh"
@@ -103,6 +107,12 @@ required_skills=(
   "dashboard"
 )
 
+lane_required_skills=()
+for skill in "${required_skills[@]}"; do
+  lane_required_skills+=("fe-$skill" "be-$skill")
+done
+required_skills+=("${lane_required_skills[@]}")
+
 required_sections=(
   "## purpose"
   "## when to use"
@@ -132,6 +142,8 @@ required_executables=(
   ".ai/scripts/check-circuit-breaker.sh"
   ".ai/scripts/check-code-validation.sh"
   ".ai/scripts/check-plan-readiness.sh"
+  ".ai/scripts/docs-context.sh"
+  ".ai/scripts/docs-source-report.sh"
   ".ai/scripts/codex-hook-session-start.sh"
   ".ai/scripts/codex-preflight.sh"
   ".ai/scripts/codex-review-brief.sh"

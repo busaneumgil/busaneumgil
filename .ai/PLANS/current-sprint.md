@@ -11,6 +11,13 @@ Adopt the template into a real repository while preserving the end-to-end loop.
 - Quality and readiness metrics: `.ai/LOCAL/EVALS/metrics.json`
 - Reusable planning template: `.ai/PLANS/implementation-plan-template.md`
 
+## Work Lane
+
+- Lane: Cross-functional
+- Scope boundary: harness adoption work that affects Codex, Claude, scripts, and shared `.ai/` artifacts
+- Explicit non-goals: product FE/BE feature implementation
+- Cross-lane dependency summary: none
+
 ## Problem List
 
 - The template still contains project-agnostic placeholders that a real repository must close.
@@ -79,6 +86,13 @@ Adopt the template into a real repository while preserving the end-to-end loop.
 - Review focus: strong validation without blocking normal local permissions files
 - QA path: `.ai/scripts/check-code-validation.sh`, `.ai/scripts/verify.sh`
 - Done criteria: new code validation runs from verify, and ignored `.ai/.ai/.claude/settings.local.json` no longer breaks verification
+
+## Cross-Lane Handoff
+
+- FE -> BE requests: none
+- BE -> FE requests: none
+- Contract questions: none
+- Owner or next action: none
 
 ## Test And Validation Matrix
 

@@ -5,6 +5,8 @@ Use this repository as a structured AI harness, not as a loose prompt sandbox.
 ## Canonical sources
 
 - Read `.ai/PROJECT.md`, `.ai/ARCHITECTURE.md`, and `.ai/WORKFLOW.md` before major changes.
+- Read `.ai/LANES.md` for lane-specific work and prefer `/fe-*` or `/be-*` skills instead of ambiguous unprefixed commands.
+- Read `.ai/DOCS.md` before choosing project source documents and respect active local stale-document exclusions from `.ai/scripts/docs-context.sh status`.
 - Treat `.ai/` as canonical.
 - Treat `.ai/.claude/skills/` and root `.claude/skills` as generated adapter output.
 - Treat `.ai/.claude/settings.json` and root `.claude/settings.json` as generated from `.ai/ADAPTERS/claude/settings.json`.
@@ -16,6 +18,7 @@ Use this repository as a structured AI harness, not as a loose prompt sandbox.
 - Claude-compatible skills live under root `.claude/skills`, which is an ignored shim over `.ai/.claude/skills`.
 - Update `.ai/SKILLS/` first, then run `.ai/scripts/sync-adapters.sh`.
 - Prefer the stage-appropriate skill instead of improvising a new workflow mid-task.
+- Prefer FE/BE-prefixed skills when the request belongs to one side of the monorepo.
 - Use the `dashboard` skill or `.ai/scripts/dashboard.sh` for visible status.
 
 ## Workflow discipline

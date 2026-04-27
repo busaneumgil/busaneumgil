@@ -98,6 +98,9 @@ MVP 필수 범위:
 - `Docs/ARD/ERD_v3.md`
 - `Docs/PoC/2026-04-21_부산_경사도_추출_정제_OSM_연계_통합_PoC.md`
 - `Docs/인프라/2026-04-20_AWS_인프라_설계안.md`
+- `Docs/컨벤션/2026-04-09_Git_Jira_컨벤션.md`
+- `Docs/컨벤션/2026-04-14_API_응답_코드_컨벤션.md`
+- `Docs/skills/backend/backend-convention.md`
 
 ## Shared AI Harness Boundary
 
@@ -106,5 +109,6 @@ This file is shared team context. Keep project facts and team-wide assumptions h
 - Personal task notes and local sprint progress belong under `.ai/LOCAL/`.
 - Detailed harness structure belongs in `.ai/ARCHITECTURE.md`.
 - Team workflow rules belong in `.ai/WORKFLOW.md`.
+- Stage-specific Docs loading rules belong in `.ai/DOCS.md`.
 - Setup, release, rollback, and operational commands belong in `.ai/RUNBOOKS/`.
 - Repeated debugging lessons and conventions belong in `.ai/MEMORY/` or `.ai/EVALS/`.

@@ -18,17 +18,21 @@ Validate that the implemented change works in the way a user experiences it, not
 ## inputs
 
 - Current change and plan context
+- `.ai/DOCS.md`
+- Relevant PRD, feature spec, screen spec, API contract, ERD, and infra docs selected from `.ai/DOCS.md`
 - Any test and validation matrix produced by planning
 - `.ai/EVALS/smoke-checklist.md`
 - Review findings and open risks
 
 ## procedure
 
-1. Start from the plan artifact's test and validation matrix instead of inventing QA scope from scratch.
-2. Execute the flows and note failures, confusing states, and hidden operational risks.
-3. Produce a bug and risk report in `.ai/LOCAL/PLANS/current-sprint.md`.
-4. Update `.ai/EVALS/scorecard.md` if the test outcome changes release readiness.
-5. Feed repeatable gaps into `.ai/EVALS/failure-patterns.md` or memory files.
+1. Load `.ai/DOCS.md` and read the user flow, acceptance, API, data, FE, and runtime assumptions relevant to the change.
+2. For FE changes, validate against FE screen inventory, route map, design convention, accessibility labels, and available mockups.
+3. Start from the plan artifact's test and validation matrix instead of inventing QA scope from scratch.
+4. Execute the flows and note failures, confusing states, API contract mismatches, data issues, stale-document assumptions, and hidden operational risks.
+5. Produce a bug and risk report in `.ai/LOCAL/PLANS/current-sprint.md`.
+6. Update `.ai/EVALS/scorecard.md` if the test outcome changes release readiness.
+7. Feed repeatable gaps into `.ai/EVALS/failure-patterns.md` or memory files.
 
 ## outputs
 

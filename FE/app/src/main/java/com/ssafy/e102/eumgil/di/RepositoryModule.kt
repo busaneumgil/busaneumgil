@@ -15,6 +15,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
@@ -25,6 +26,7 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.LocalMockAuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
@@ -35,6 +37,9 @@ import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolic
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
 object RepositoryModule {
+    fun provideAuthSessionRepository(): AuthSessionRepository =
+        LocalMockAuthSessionRepository()
+
     fun provideDestinationSelectionRepository(): DestinationSelectionRepository =
         InMemoryDestinationSelectionRepository()
 

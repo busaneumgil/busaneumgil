@@ -1,6 +1,5 @@
 package com.ssafy.e102.eumgil.feature.auth
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -48,8 +47,8 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
 @Composable
 fun LoginScreen(
-    uiState: LoginUiState = LoginUiState(),
-    onProviderClick: (SocialLoginProvider) -> Unit = {},
+    uiState: AuthUiState = AuthUiState(),
+    onAction: (AuthUiAction) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -100,7 +99,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.weight(1f))
             SocialLoginPanel(
                 uiState = uiState,
-                onProviderClick = onProviderClick,
+                onAction = onAction,
             )
         }
     }
@@ -114,45 +113,6 @@ fun ProfileSetupScreen(modifier: Modifier = Modifier) {
         description = "지도 홈으로 이동하기 전에 필수 프로필을 완료해 주세요.",
         modifier = modifier,
     )
-}
-
-data class LoginUiState(
-    val selectedProvider: SocialLoginProvider? = null,
-    val errorMessage: String? = null,
-) {
-    val isLoading: Boolean = selectedProvider != null
-}
-
-enum class SocialLoginProvider(
-    val routeValue: String,
-    @StringRes val providerNameRes: Int,
-    @StringRes val actionLabelRes: Int,
-    val mark: String,
-) {
-    GOOGLE(
-        routeValue = "google",
-        providerNameRes = R.string.auth_login_provider_google,
-        actionLabelRes = R.string.auth_login_action_google,
-        mark = "G",
-    ),
-    NAVER(
-        routeValue = "naver",
-        providerNameRes = R.string.auth_login_provider_naver,
-        actionLabelRes = R.string.auth_login_action_naver,
-        mark = "N",
-    ),
-    KAKAO(
-        routeValue = "kakao",
-        providerNameRes = R.string.auth_login_provider_kakao,
-        actionLabelRes = R.string.auth_login_action_kakao,
-        mark = "K",
-    ),
-    ;
-
-    companion object {
-        fun fromRouteValue(routeValue: String?): SocialLoginProvider? =
-            entries.firstOrNull { provider -> provider.routeValue == routeValue }
-    }
 }
 
 @Composable
@@ -195,8 +155,8 @@ private fun LoginHero(modifier: Modifier = Modifier) {
 
 @Composable
 private fun SocialLoginPanel(
-    uiState: LoginUiState,
-    onProviderClick: (SocialLoginProvider) -> Unit,
+    uiState: AuthUiState,
+    onAction: (AuthUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -225,12 +185,14 @@ private fun SocialLoginPanel(
                 fontWeight = FontWeight.SemiBold,
             )
             LoginStatusText(uiState = uiState)
-            SocialLoginProvider.entries.forEach { provider ->
+            uiState.providers.forEach { provider ->
                 SocialLoginButton(
                     provider = provider,
                     isAnyLoading = uiState.isLoading,
-                    isSelectedLoading = uiState.selectedProvider == provider,
-                    onClick = { onProviderClick(provider) },
+                    isSelectedLoading = uiState.loadingProviderKey == provider.key,
+                    onClick = {
+                        onAction(AuthUiAction.SocialLoginClicked(providerKey = provider.key))
+                    },
                 )
             }
         }
@@ -239,16 +201,19 @@ private fun SocialLoginPanel(
 
 @Composable
 private fun LoginStatusText(
-    uiState: LoginUiState,
+    uiState: AuthUiState,
     modifier: Modifier = Modifier,
 ) {
     val selectedProviderName =
-        uiState.selectedProvider?.let { provider ->
-            stringResource(id = provider.providerNameRes)
-        }
+        uiState.providers
+            .firstOrNull { provider -> provider.key == uiState.loadingProviderKey }
+            ?.let { provider ->
+                stringResource(id = provider.providerNameRes)
+            }
+    val errorMessage = uiState.errorMessage
     val statusText =
         when {
-            uiState.errorMessage != null -> uiState.errorMessage
+            errorMessage != null -> errorMessage
             selectedProviderName != null ->
                 stringResource(
                     id = R.string.auth_login_status_loading,
@@ -282,7 +247,7 @@ private fun LoginStatusText(
 
 @Composable
 private fun SocialLoginButton(
-    provider: SocialLoginProvider,
+    provider: AuthLoginProviderUiModel,
     isAnyLoading: Boolean,
     isSelectedLoading: Boolean,
     onClick: () -> Unit,
@@ -369,7 +334,7 @@ private fun SocialLoginButton(
 
 @Composable
 private fun SocialProviderMark(
-    provider: SocialLoginProvider,
+    provider: AuthLoginProviderUiModel,
     isDisabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -406,50 +371,48 @@ private fun SocialProviderMark(
     }
 }
 
-private fun SocialLoginProvider.containerColor(): Color =
-    when (this) {
-        SocialLoginProvider.GOOGLE -> Color.White
-        SocialLoginProvider.NAVER -> NaverGreen
-        SocialLoginProvider.KAKAO -> KakaoYellow
+private fun AuthLoginProviderUiModel.containerColor(): Color =
+    when (key) {
+        AuthLoginProviderUiKeys.GOOGLE -> Color.White
+        AuthLoginProviderUiKeys.NAVER -> NaverGreen
+        AuthLoginProviderUiKeys.KAKAO -> KakaoYellow
+        else -> Color.White
     }
 
-private fun SocialLoginProvider.contentColor(): Color =
-    when (this) {
-        SocialLoginProvider.GOOGLE -> Color(0xFF111827)
-        SocialLoginProvider.NAVER -> Color.White
-        SocialLoginProvider.KAKAO -> Color(0xFF111827)
+private fun AuthLoginProviderUiModel.contentColor(): Color =
+    when (key) {
+        AuthLoginProviderUiKeys.NAVER -> Color.White
+        else -> Color(0xFF111827)
     }
 
-private fun SocialLoginProvider.markContainerColor(): Color =
-    when (this) {
-        SocialLoginProvider.GOOGLE -> Color.White
-        SocialLoginProvider.NAVER -> Color.White
-        SocialLoginProvider.KAKAO -> Color(0xFF2D1600)
+private fun AuthLoginProviderUiModel.markContainerColor(): Color =
+    when (key) {
+        AuthLoginProviderUiKeys.KAKAO -> Color(0xFF2D1600)
+        else -> Color.White
     }
 
-private fun SocialLoginProvider.markContentColor(): Color =
-    when (this) {
-        SocialLoginProvider.GOOGLE -> GoogleBlue
-        SocialLoginProvider.NAVER -> NaverGreen
-        SocialLoginProvider.KAKAO -> KakaoYellow
+private fun AuthLoginProviderUiModel.markContentColor(): Color =
+    when (key) {
+        AuthLoginProviderUiKeys.GOOGLE -> GoogleBlue
+        AuthLoginProviderUiKeys.NAVER -> NaverGreen
+        AuthLoginProviderUiKeys.KAKAO -> KakaoYellow
+        else -> Color(0xFF111827)
     }
 
-private fun SocialLoginProvider.buttonBorder(isSelectedLoading: Boolean): BorderStroke? =
-    when (this) {
-        SocialLoginProvider.GOOGLE ->
+private fun AuthLoginProviderUiModel.buttonBorder(isSelectedLoading: Boolean): BorderStroke? =
+    when (key) {
+        AuthLoginProviderUiKeys.GOOGLE ->
             BorderStroke(
                 width = if (isSelectedLoading) 2.dp else 1.dp,
                 color = if (isSelectedLoading) GoogleBlue else Color(0xFFD1D5DB),
             )
-        SocialLoginProvider.NAVER,
-        SocialLoginProvider.KAKAO,
-        -> null
+        else -> null
     }
 
-private fun SocialLoginProvider.markBorder(isDisabled: Boolean): BorderStroke? =
+private fun AuthLoginProviderUiModel.markBorder(isDisabled: Boolean): BorderStroke? =
     when {
         isDisabled -> BorderStroke(width = 1.dp, color = Color(0xFFD1D5DB))
-        this == SocialLoginProvider.GOOGLE -> BorderStroke(width = 1.dp, color = Color(0xFFD1D5DB))
+        key == AuthLoginProviderUiKeys.GOOGLE -> BorderStroke(width = 1.dp, color = Color(0xFFD1D5DB))
         else -> null
     }
 

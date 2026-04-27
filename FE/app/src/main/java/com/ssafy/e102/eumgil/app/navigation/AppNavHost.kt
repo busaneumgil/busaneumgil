@@ -76,7 +76,11 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             startDestination = startDestination.route,
             modifier = modifier.padding(innerPadding),
         ) {
-            authNavGraph(navController = navController)
+            authNavGraph(
+                navController = navController,
+                authSessionRepository = authSessionRepository,
+                settingsRepository = settingsRepository,
+            )
             onboardingNavGraph(
                 navController = navController,
                 settingsRepository = settingsRepository,

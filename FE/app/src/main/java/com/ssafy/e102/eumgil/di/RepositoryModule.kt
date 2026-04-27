@@ -16,6 +16,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultAuthSessionRepository
@@ -28,6 +29,7 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
@@ -45,6 +47,11 @@ object RepositoryModule {
         authSessionLocalDataSource: AuthSessionLocalDataSource,
     ): AuthSessionRepository =
         DefaultAuthSessionRepository(authSessionLocalDataSource = authSessionLocalDataSource)
+
+    fun provideAuthLoginRepository(
+        authSessionRepository: AuthSessionRepository,
+    ): AuthLoginRepository =
+        LocalOnlyAuthLoginRepository(authSessionRepository = authSessionRepository)
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,

@@ -22,6 +22,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
@@ -76,6 +77,11 @@ class AppContainer(
     val authSessionRepository: AuthSessionRepository =
         RepositoryModule.provideAuthSessionRepository(
             authSessionLocalDataSource = authSessionLocalDataSource,
+        )
+
+    val authLoginRepository: AuthLoginRepository =
+        RepositoryModule.provideAuthLoginRepository(
+            authSessionRepository = authSessionRepository,
         )
 
     val bookmarkRepository: BookmarkRepository =

@@ -11,16 +11,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -60,9 +64,12 @@ fun FacilityDetailBottomSheetShell(
 ) {
     val scrimInteractionSource = remember { MutableInteractionSource() }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
+        val sheetScrollState = rememberScrollState()
+        val sheetMaxHeight = maxHeight * 0.78f
+
         AnimatedVisibility(
             visible = state.isVisible,
             enter = fadeIn(),
@@ -94,13 +101,17 @@ fun FacilityDetailBottomSheetShell(
                     .fillMaxWidth(),
         ) {
             Surface(
+                modifier = Modifier.heightIn(max = sheetMaxHeight),
                 shape = RoundedCornerShape(EumRadius.large),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.99f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 shadowElevation = 12.dp,
             ) {
                 Column(
-                    modifier = Modifier.padding(EumSpacing.medium),
+                    modifier =
+                        Modifier
+                            .verticalScroll(sheetScrollState)
+                            .padding(EumSpacing.medium),
                     verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                 ) {
                     Box(

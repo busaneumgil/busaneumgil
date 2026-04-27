@@ -25,7 +25,6 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -452,15 +452,19 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             val selectedDetail = checkNotNull(viewModel.uiState.value.facilityDetailSheetState.detail)
-            val eventDeferred = async { viewModel.uiEvent.first() }
 
             viewModel.onAction(MapUiAction.FacilityRouteEntryClicked)
             advanceUntilIdle()
 
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
             assertEquals(selectedDetail.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
-            assertEquals(MapUiEvent.NavigateToFacilityRouteEntry, eventDeferred.await())
+            assertEquals(MapUiEvent.NavigateToFacilityRouteEntry, event)
         }
 
     @Test

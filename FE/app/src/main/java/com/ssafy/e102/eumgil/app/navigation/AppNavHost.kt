@@ -32,14 +32,15 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
     var initialSettings by remember { mutableStateOf<InitSettings?>(null) }
 
-    LaunchedEffect(settingsRepository, authSessionRepository) {
-        val authSessionSnapshot = authSessionRepository.getAuthSessionSnapshot()
+    LaunchedEffect(authSessionRepository, settingsRepository) {
+        val authGateState = authSessionRepository.getAuthGateState()
         val savedSettings = settingsRepository.getInitSettings()
         initialSettings = savedSettings
-        appStartDestination = resolveAppStartDestination(
-            authSessionSnapshot = authSessionSnapshot,
-            initSettings = savedSettings,
-        )
+        appStartDestination =
+            resolveAppStartDestination(
+                authGateState = authGateState,
+                initSettings = savedSettings,
+            )
     }
 
     if (appStartDestination == null || initialSettings == null) {

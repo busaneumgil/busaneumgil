@@ -1,7 +1,6 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
@@ -17,7 +16,26 @@ fun NavGraphBuilder.authNavGraph(
     settingsRepository: SettingsRepository,
 ) {
     composable(route = AuthRoute.Login.route) {
-        LoginRoute()
+        val coroutineScope = rememberCoroutineScope()
+
+        LoginRoute(
+            onLoginCompleted = {
+                coroutineScope.launch {
+                    val nextDestination =
+                        resolveAppStartDestination(
+                            authGateState = authSessionRepository.getAuthGateState(),
+                            initSettings = settingsRepository.getInitSettings(),
+                        )
+
+                    navController.navigate(nextDestination.route) {
+                        launchSingleTop = true
+                        popUpTo(AuthRoute.Login.route) {
+                            inclusive = true
+                        }
+                    }
+                }
+            },
+        )
     }
 
     composable(route = AuthRoute.ProfileSetup.route) {
@@ -29,13 +47,13 @@ fun NavGraphBuilder.authNavGraph(
                     authSessionRepository.markProfileCompleted()
                     val nextDestination =
                         resolveAppStartDestination(
-                            authSessionSnapshot = authSessionRepository.getAuthSessionSnapshot(),
+                            authGateState = authSessionRepository.getAuthGateState(),
                             initSettings = settingsRepository.getInitSettings(),
                         )
 
                     navController.navigate(nextDestination.route) {
                         launchSingleTop = true
-                        popUpTo(navController.graph.findStartDestination().id) {
+                        popUpTo(AuthRoute.ProfileSetup.route) {
                             inclusive = true
                         }
                     }

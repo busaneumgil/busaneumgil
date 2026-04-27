@@ -1,6 +1,6 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import com.ssafy.e102.eumgil.core.model.AuthSessionSnapshot
+import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityType
@@ -44,16 +44,12 @@ sealed interface AppStartDestination {
 }
 
 fun resolveAppStartDestination(
-    authSessionSnapshot: AuthSessionSnapshot,
+    authGateState: AuthGateState,
     initSettings: InitSettings,
-): AppStartDestination =
-    when {
-        !authSessionSnapshot.isAuthenticated -> AppStartDestination.Login
-        !authSessionSnapshot.isProfileCompleted -> AppStartDestination.ProfileSetup
-        else -> resolveOnboardingStartDestination(initSettings)
-    }
+): AppStartDestination {
+    if (!authGateState.hasSession) return AppStartDestination.Login
+    if (!authGateState.isProfileCompleted) return AppStartDestination.ProfileSetup
 
-fun resolveAppStartDestination(initSettings: InitSettings): AppStartDestination {
     return resolveOnboardingStartDestination(initSettings)
 }
 

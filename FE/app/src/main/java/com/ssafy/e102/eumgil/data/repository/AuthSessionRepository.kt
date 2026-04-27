@@ -1,28 +1,49 @@
 package com.ssafy.e102.eumgil.data.repository
 
-import com.ssafy.e102.eumgil.core.model.AuthSessionSnapshot
-import com.ssafy.e102.eumgil.core.model.AuthSessionSource
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
+import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
+import kotlinx.coroutines.flow.Flow
 
 interface AuthSessionRepository {
-    suspend fun getAuthSessionSnapshot(): AuthSessionSnapshot
+    fun observeAuthGateState(): Flow<AuthGateState>
+
+    suspend fun getAuthGateState(): AuthGateState
+
+    suspend fun saveAuthSession(
+        authSession: AuthSession,
+        isProfileCompleted: Boolean,
+    )
 
     suspend fun markProfileCompleted()
+
+    suspend fun clearAuthSession()
 }
 
-class LocalMockAuthSessionRepository(
-    initialSnapshot: AuthSessionSnapshot = AuthSessionSnapshot.LocalMockReady,
+class DefaultAuthSessionRepository(
+    private val authSessionLocalDataSource: AuthSessionLocalDataSource,
 ) : AuthSessionRepository {
-    private var snapshot: AuthSessionSnapshot =
-        initialSnapshot.copy(source = AuthSessionSource.LOCAL_MOCK)
+    override fun observeAuthGateState(): Flow<AuthGateState> =
+        authSessionLocalDataSource.observeAuthGateState()
 
-    override suspend fun getAuthSessionSnapshot(): AuthSessionSnapshot = snapshot
+    override suspend fun getAuthGateState(): AuthGateState =
+        authSessionLocalDataSource.getAuthGateState()
+
+    override suspend fun saveAuthSession(
+        authSession: AuthSession,
+        isProfileCompleted: Boolean,
+    ) {
+        authSessionLocalDataSource.saveAuthSession(
+            authSession = authSession,
+            isProfileCompleted = isProfileCompleted,
+        )
+    }
 
     override suspend fun markProfileCompleted() {
-        snapshot =
-            snapshot.copy(
-                isAuthenticated = true,
-                isProfileCompleted = true,
-                source = AuthSessionSource.LOCAL_MOCK,
-            )
+        authSessionLocalDataSource.markProfileCompleted()
+    }
+
+    override suspend fun clearAuthSession() {
+        authSessionLocalDataSource.clearAuthSession()
     }
 }

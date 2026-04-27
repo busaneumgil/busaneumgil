@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.di
 
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
+import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
@@ -15,7 +16,9 @@ import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.DefaultAuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultPlacesRepository
@@ -37,6 +40,11 @@ import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 object RepositoryModule {
     fun provideDestinationSelectionRepository(): DestinationSelectionRepository =
         InMemoryDestinationSelectionRepository()
+
+    fun provideAuthSessionRepository(
+        authSessionLocalDataSource: AuthSessionLocalDataSource,
+    ): AuthSessionRepository =
+        DefaultAuthSessionRepository(authSessionLocalDataSource = authSessionLocalDataSource)
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,

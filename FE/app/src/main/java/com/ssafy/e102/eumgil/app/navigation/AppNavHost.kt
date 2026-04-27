@@ -28,13 +28,19 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val appContainer = remember(context) { (context as BusanEumgilApp).appContainer }
     val settingsRepository = remember(appContainer) { appContainer.settingsRepository }
+    val authSessionRepository = remember(appContainer) { appContainer.authSessionRepository }
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
     var initialSettings by remember { mutableStateOf<InitSettings?>(null) }
 
-    LaunchedEffect(settingsRepository) {
+    LaunchedEffect(authSessionRepository, settingsRepository) {
+        val authGateState = authSessionRepository.getAuthGateState()
         val savedSettings = settingsRepository.getInitSettings()
         initialSettings = savedSettings
-        appStartDestination = resolveAppStartDestination(savedSettings)
+        appStartDestination =
+            resolveAppStartDestination(
+                authGateState = authGateState,
+                initSettings = savedSettings,
+            )
     }
 
     if (appStartDestination == null || initialSettings == null) {
@@ -70,6 +76,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             startDestination = startDestination.route,
             modifier = modifier.padding(innerPadding),
         ) {
+            authNavGraph()
             onboardingNavGraph(
                 navController = navController,
                 settingsRepository = settingsRepository,

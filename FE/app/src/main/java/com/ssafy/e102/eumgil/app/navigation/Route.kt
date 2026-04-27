@@ -4,6 +4,16 @@ sealed interface AppRoute {
     val route: String
 }
 
+sealed interface AuthRoute : AppRoute {
+    data object Login : AuthRoute {
+        override val route: String = "auth/login"
+    }
+
+    data object ProfileSetup : AuthRoute {
+        override val route: String = "auth/profile_setup"
+    }
+}
+
 sealed interface OnboardingRoute : AppRoute {
     data object DisabilityType : OnboardingRoute {
         override val route: String = "onboarding/type"

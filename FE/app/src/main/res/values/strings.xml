@@ -363,4 +363,15 @@
     <string name="map_facility_detail_bookmark_action_add">북마크 추가</string>
     <string name="map_facility_detail_bookmark_action_remove">북마크 해제</string>
     <string name="map_facility_detail_bookmark_action_updating">북마크 저장 중</string>
+
+    <!-- feature/terms TermsGuideScreen (Figma node 328:486) -->
+    <string name="terms_guide_header_title">약관 안내</string>
+    <string name="terms_guide_card_label">약관 동의</string>
+    <string name="terms_guide_card_a11y">약관 동의 카드. 두 번 탭하면 동의합니다.</string>
+    <string name="terms_guide_hint">두 번 탭하면 동의합니다</string>
+    <string name="terms_guide_more_button">자세히 보기</string>
+    <string name="terms_guide_nav_home">홈</string>
+    <string name="terms_guide_nav_bookmark">북마크</string>
+    <string name="terms_guide_nav_category">카테고리</string>
+    <string name="terms_guide_nav_my">마이</string>
 </resources>

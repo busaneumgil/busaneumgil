@@ -7,10 +7,6 @@ class Config:
     PORT = 5000
     DEBUG = True
 
-    # 파일 업로드 설정
-    UPLOAD_FOLDER = 'uploads'
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
-
     # 기본 모델 설정
     DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini")
 

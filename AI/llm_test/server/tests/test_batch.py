@@ -17,7 +17,7 @@ PROVIDERS = {
     "gpt_mini": GPTMiniProvider(),
 }
 
-RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "test_results")
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), "test_results")
 
 TEST_INPUTS = [
     "해운대까지 가줘",

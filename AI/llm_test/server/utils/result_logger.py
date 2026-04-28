@@ -6,10 +6,13 @@ from typing import List
 from providers.base_provider import LLMResponse
 
 
+_RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "tests", "results")
+
+
 def save_result(input_text: str, stt_start_ms: int, results: List[LLMResponse]):
-    os.makedirs("results", exist_ok=True)
+    os.makedirs(_RESULTS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"results/compare_{timestamp}.json"
+    filename = os.path.join(_RESULTS_DIR, f"compare_{timestamp}.json")
 
     data = {
         "timestamp": datetime.now().isoformat(),

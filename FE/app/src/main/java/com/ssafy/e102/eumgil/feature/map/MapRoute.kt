@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.map
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -84,6 +85,16 @@ fun MapRoute(
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is MapUiEvent.ShowSnackbar -> Unit
             }
+        }
+    }
+
+    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible) {
+        viewModel.onAction(MapUiAction.FacilityDetailDismissed)
+    }
+
+    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible.not()) {
+        if (activity?.moveTaskToBack(true) == false) {
+            activity.finish()
         }
     }
 

@@ -6,30 +6,26 @@ from providers.utils import SYSTEM_PROMPT, parse_json_response, is_success
 from utils.cost_calculator import calculate_cost
 
 
-class GeminiProvider(BaseProvider):
-    BASE_URL = (
-        "https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com"
-        "/v1beta/models/gemini-2.5-flash:generateContent"
-    )
+class GPTMiniProvider(BaseProvider):
+    BASE_URL = "https://gms.ssafy.io/gmsapi/api.openai.com/v1/chat/completions"
 
     def __init__(self):
         self.gms_key = os.getenv("GMS_KEY")
 
     @property
     def provider_name(self):
-        return "gemini"
+        return "gpt_mini"
 
     def call(self, user_input: str) -> LLMResponse:
         headers = {
             "Content-Type": "application/json",
-            "x-goog-api-key": self.gms_key
+            "Authorization": f"Bearer {self.gms_key}"
         }
         body = {
-            "system_instruction": {
-                "parts": [{"text": SYSTEM_PROMPT}]
-            },
-            "contents": [
-                {"parts": [{"text": user_input}]}
+            "model": "gpt-5-mini",
+            "messages": [
+                {"role": "developer", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_input}
             ]
         }
         start = time.time()
@@ -40,15 +36,15 @@ class GeminiProvider(BaseProvider):
             data = resp.json()
             latency_ms = (time.time() - start) * 1000
 
-            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-            input_tokens = data["usageMetadata"]["promptTokenCount"]
-            output_tokens = data["usageMetadata"]["candidatesTokenCount"]
-            cost = calculate_cost("gemini", input_tokens, output_tokens)
+            raw_text = data["choices"][0]["message"]["content"]
+            input_tokens = data["usage"]["prompt_tokens"]
+            output_tokens = data["usage"]["completion_tokens"]
+            cost = calculate_cost("gpt_mini", input_tokens, output_tokens)
             parsed = parse_json_response(raw_text)
 
             intent = parsed.get("intent", "unknown")
             return LLMResponse(
-                provider="gemini", raw_text=raw_text,
+                provider="gpt_mini", raw_text=raw_text,
                 intent=intent,
                 place_name=parsed.get("place_name"),
                 departure=parsed.get("departure"),
@@ -63,7 +59,7 @@ class GeminiProvider(BaseProvider):
             )
         except Exception as e:
             return LLMResponse(
-                provider="gemini", raw_text="",
+                provider="gpt_mini", raw_text="",
                 intent="unknown", place_name=None, departure=None,
                 destination=None, facility_type=None, confirmation_message=None,
                 llm_latency_ms=0, total_latency_ms=0,

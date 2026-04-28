@@ -75,3 +75,9 @@ A change is not done until all of the following are true:
 3. Add or update the canonical skill under `.ai/SKILLS/`.
 4. Sync adapters.
 5. Verify the repository.
+
+## Frontend document enforcement
+
+- For frontend work, treat `FE/docs/2026-04-22_부산이음길_FE_디자인_컨벤션.md` as a required source document, not an optional style reference.
+- If FE route structure, current implementation code, mockups, and design convention disagree, separate `current implementation fact` from `target visual contract` instead of silently promoting the code as the answer.
+- A frontend task is not done if route flow is correct but the design convention's tokens, CTA hierarchy, tab shell, state surfaces, or component composition rules are still violated.

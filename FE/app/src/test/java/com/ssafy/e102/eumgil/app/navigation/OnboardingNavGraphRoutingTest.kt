@@ -1,15 +1,26 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
+import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class OnboardingNavGraphRoutingTest {
     @Test
-    fun `low vision primary user type moves to terms guide route`() {
+    fun `low vision primary user type moves to terms guide first step`() {
+        // 시각장애 흐름은 약관 안내 5단계 walkthrough의 첫 단계(agree)에서 시작.
         assertEquals(
-            OnboardingRoute.TermsGuide.route,
+            OnboardingRoute.TermsGuide.createRoute(TermsGuideStep.AGREE.routeValue),
             resolvePrimaryUserTypeNextRoute(PrimaryUserType.LOW_VISION),
+        )
+    }
+
+    @Test
+    fun `terms guide default route equals first step route`() {
+        // createRoute()의 기본값(DEFAULT_STEP=agree)이 TermsGuideStep.AGREE.routeValue와 일치.
+        assertEquals(
+            OnboardingRoute.TermsGuide.createRoute(TermsGuideStep.AGREE.routeValue),
+            OnboardingRoute.TermsGuide.createRoute(),
         )
     }
 

@@ -10,40 +10,49 @@ import androidx.compose.ui.Modifier
 /**
  * Route wrapper for [TermsGuideScreen].
  *
- * Holds the current step and the agreed flag in saveable state so configuration
- * changes (rotation, process recreation) keep the user in the same step. Caller
- * passes [onAgreed] / [onRequestDetails] / [onTabSelected] handlers; this layer
- * does not navigate by itself, matching the convention in feature/onboarding
- * (see DisabilityTypeRoute, LocationTermsRoute).
+ * Holds the active [TermsGuideStep] in saveable state so configuration changes
+ * (rotation, process recreation) keep the user on the same step. Caller passes
+ * the entry step and handlers; this layer drives the local advance flow:
+ *
+ *  - On double-tap of the main card while not on the last step → advance to next step
+ *    locally, no NavController push required.
+ *  - On double-tap while on the last step → invoke [onCompleted].
+ *  - On "자세히 보기" → invoke [onRequestDetails] with the current step so the
+ *    caller can route to the detailed terms screen for that topic.
+ *
+ * If the consumer wants each step to be a distinct backstack entry instead of an
+ * in-place advance (e.g. to honor the "각 화면이 분기 시작점" requirement), they
+ * can navigate to `OnboardingRoute.TermsGuide.createRoute(step.routeValue)` for
+ * the next step inside [onCompleted] / a custom advance handler — the route is
+ * already keyed by step.
  */
 @Composable
 fun TermsGuideRoute(
-    onAgreed: () -> Unit,
-    onRequestDetails: () -> Unit,
+    initialStep: TermsGuideStep,
+    onCompleted: () -> Unit,
+    onRequestDetails: (TermsGuideStep) -> Unit,
     onTabSelected: (TermsBottomTab) -> Unit,
     modifier: Modifier = Modifier,
-    initialStep: Int = 1,
-    totalSteps: Int = 5,
 ) {
-    var currentStep by rememberSaveable(initialStep) { mutableStateOf(initialStep) }
-    var isAgreed by rememberSaveable(initialStep) { mutableStateOf(false) }
+    var stepRouteValue by rememberSaveable(initialStep.routeValue) {
+        mutableStateOf(initialStep.routeValue)
+    }
     var selectedTab by rememberSaveable { mutableStateOf(TermsBottomTab.HOME) }
 
-    val uiState = TermsGuideUiState(
-        currentStep = currentStep,
-        totalSteps = totalSteps,
-        isAgreed = isAgreed,
-    )
+    val currentStep = TermsGuideStep.fromRouteValue(stepRouteValue) ?: initialStep
+    val uiState = TermsGuideUiState(step = currentStep)
 
     TermsGuideScreen(
         uiState = uiState,
-        onAgree = {
-            if (!isAgreed) {
-                isAgreed = true
-                onAgreed()
+        onAdvance = {
+            val next = currentStep.next()
+            if (next == null) {
+                onCompleted()
+            } else {
+                stepRouteValue = next.routeValue
             }
         },
-        onMoreDetails = onRequestDetails,
+        onMoreDetails = { onRequestDetails(currentStep) },
         onTabSelected = { tab ->
             selectedTab = tab
             onTabSelected(tab)

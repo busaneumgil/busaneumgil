@@ -4,7 +4,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
@@ -14,6 +16,7 @@ import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideRoute
+import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
 import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.onboardingNavGraph(
@@ -104,16 +107,31 @@ fun NavGraphBuilder.onboardingNavGraph(
         )
     }
 
-    composable(route = OnboardingRoute.TermsGuide.route) {
+    composable(
+        route = OnboardingRoute.TermsGuide.route,
+        arguments = listOf(
+            navArgument(OnboardingRoute.TermsGuide.ARG_STEP) {
+                type = NavType.StringType
+                defaultValue = OnboardingRoute.TermsGuide.DEFAULT_STEP
+            },
+        ),
+    ) { backStackEntry ->
         val coroutineScope = rememberCoroutineScope()
 
+        val initialStep =
+            TermsGuideStep.fromRouteValue(
+                backStackEntry.arguments?.getString(OnboardingRoute.TermsGuide.ARG_STEP),
+            ) ?: TermsGuideStep.AGREE
+
         TermsGuideRoute(
-            onAgreed = {
+            initialStep = initialStep,
+            onCompleted = {
+                // 5단계(처리방침)까지 통과 = 위치/개인정보 항목 모두 확인 완료.
                 coroutineScope.launch {
                     settingsRepository.saveLowVisionFollowUpCompleted(isCompleted = true)
                     settingsRepository.saveLocationTermsAgreement(
                         isLocationTermsAgreed = true,
-                        isPrivacyPolicyAgreed = false,
+                        isPrivacyPolicyAgreed = true,
                     )
 
                     navController.navigate(TopLevelRoute.Map.route) {
@@ -124,7 +142,9 @@ fun NavGraphBuilder.onboardingNavGraph(
                     }
                 }
             },
-            onRequestDetails = {
+            onRequestDetails = { _ ->
+                // 모든 단계의 "자세히 보기"는 기존 정식 약관 화면을 재사용한다.
+                // 항목별 상세 화면이 별도로 생기면 step 분기로 라우팅을 갈라주면 됨.
                 navController.navigate(OnboardingRoute.Terms.route)
             },
             onTabSelected = { /* Selection only highlights; tab routing is owned by AppNavHost. */ },
@@ -134,6 +154,7 @@ fun NavGraphBuilder.onboardingNavGraph(
 
 internal fun resolvePrimaryUserTypeNextRoute(primaryUserType: PrimaryUserType): String =
     when (primaryUserType) {
-        PrimaryUserType.LOW_VISION -> OnboardingRoute.TermsGuide.route
+        // 시각장애 흐름은 약관 안내 5단계의 1번(agree)부터 시작.
+        PrimaryUserType.LOW_VISION -> OnboardingRoute.TermsGuide.createRoute()
         PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.MobilityTypeSecondary.route
     }

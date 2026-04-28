@@ -39,6 +39,14 @@ sealed interface OnboardingRoute : AppRoute {
             disabilityLevel: String,
         ): String = "onboarding/location_terms/$disabilityType/$disabilityLevel"
     }
+
+    /**
+     * High-contrast terms walkthrough screen (Figma node 328:486).
+     * Used in the visual-impairment voice-guide flow.
+     */
+    data object TermsGuide : OnboardingRoute {
+        override val route: String = "onboarding/terms_guide"
+    }
 }
 
 sealed interface TopLevelRoute : AppRoute {

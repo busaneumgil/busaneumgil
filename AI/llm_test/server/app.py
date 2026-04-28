@@ -93,6 +93,63 @@ def compare_all():
     })
 
 
+@app.route('/api/voice/analyze', methods=['POST'])
+def voice_analyze():
+    """백엔드 연동용 단일 엔드포인트 - STT 텍스트 의미 추론"""
+    body = request.get_json()
+
+    text = body.get("text", "").strip()
+    if not text:
+        return jsonify({
+            "success": False,
+            "intent": "unknown",
+            "confirmation_message": "다시 말씀해 주세요",
+            "error": "text 필드가 비어 있습니다",
+            "model": body.get("model", Config.DEFAULT_MODEL),
+            "latency_ms": 0
+        }), 400
+
+    model_key = body.get("model", Config.DEFAULT_MODEL)
+    provider = comparator.providers.get(model_key)
+    if not provider:
+        return jsonify({
+            "success": False,
+            "intent": "unknown",
+            "confirmation_message": "다시 말씀해 주세요",
+            "error": f"지원하지 않는 모델입니다: {model_key}",
+            "model": model_key,
+            "latency_ms": 0
+        }), 400
+
+    start_ms = int(time.time() * 1000)
+    try:
+        result = provider.call(text)
+        latency_ms = int(time.time() * 1000) - start_ms
+        data = asdict(result)
+        return jsonify({
+            "success": result.success,
+            "intent": data.get("intent"),
+            "departure": data.get("departure"),
+            "destination": data.get("destination"),
+            "place_name": data.get("place_name"),
+            "facility_type": data.get("facility_type"),
+            "confirmation_message": data.get("confirmation_message"),
+            "model": model_key,
+            "latency_ms": latency_ms
+        })
+    except Exception as e:
+        latency_ms = int(time.time() * 1000) - start_ms
+        logger.error(f"voice_analyze 오류: {e}")
+        return jsonify({
+            "success": False,
+            "intent": "unknown",
+            "confirmation_message": "다시 말씀해 주세요",
+            "error": str(e),
+            "model": model_key,
+            "latency_ms": latency_ms
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "healthy", "providers": list(comparator.providers.keys())})

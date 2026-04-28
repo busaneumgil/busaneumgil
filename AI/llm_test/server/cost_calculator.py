@@ -5,6 +5,7 @@ PRICING = {
     "gemini":      {"input": 0.001,  "output": 0.004},
     "claude":      {"input": 0.008,  "output": 0.04},
     "gpt":         {"input": 0.0005, "output": 0.004},
+    "gpt_mini":    {"input": 0.0025, "output": 0.02},
 }
 
 

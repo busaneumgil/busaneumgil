@@ -8,53 +8,60 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 @Composable
-fun DisabilityTypeRoute(
-    onNavigateNext: (DisabilityType) -> Unit,
+fun PrimaryUserTypeRoute(
+    initialSelectedType: PrimaryUserType? = null,
+    onNavigateNext: (PrimaryUserType) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selectedTypeRoute by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedTypeRoute by rememberSaveable(initialSelectedType?.routeValue) {
+        mutableStateOf(initialSelectedType?.routeValue)
+    }
 
-    DisabilityTypeScreen(
-        uiState = DisabilityTypeUiState(
-            selectedType = DisabilityType.fromRouteValue(selectedTypeRoute),
-        ),
-        onTypeSelected = { disabilityType ->
-            selectedTypeRoute = disabilityType.routeValue
+    PrimaryUserTypeScreen(
+        uiState = PrimaryUserTypeUiState(selectedType = PrimaryUserType.fromRouteValue(selectedTypeRoute)),
+        onTypeSelected = { primaryUserType ->
+            selectedTypeRoute = primaryUserType.routeValue
         },
         onNextClick = {
-            DisabilityType.fromRouteValue(selectedTypeRoute)?.let(onNavigateNext)
+            PrimaryUserType.fromRouteValue(selectedTypeRoute)?.let(onNavigateNext)
         },
         modifier = modifier,
     )
 }
 
 @Composable
-fun DisabilityLevelRoute(
-    disabilityType: DisabilityType,
-    onNavigateNext: (DisabilityLevel) -> Unit,
+fun LowVisionFollowUpRoute(
+    onNavigateNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selectedLevelRoute by rememberSaveable(disabilityType.routeValue) { mutableStateOf<String?>(null) }
-    var isVoiceGuideExpanded by rememberSaveable(disabilityType.routeValue) {
-        mutableStateOf(disabilityType.supportsVoiceGuide)
+    LowVisionFollowUpScreen(
+        onNextClick = onNavigateNext,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun MobilityTypeSecondaryRoute(
+    initialSelectedSubtype: MobilitySubtype? = null,
+    onNavigateBack: () -> Unit,
+    onNavigateNext: (MobilitySubtype) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var selectedMobilitySubtypeRoute by rememberSaveable(initialSelectedSubtype?.routeValue) {
+        mutableStateOf(initialSelectedSubtype?.routeValue)
     }
 
-    DisabilityLevelScreen(
-        uiState = DisabilityLevelUiState(
-            disabilityType = disabilityType,
-            selectedLevel = DisabilityLevel.fromRouteValue(selectedLevelRoute),
-            isVoiceGuideExpanded = isVoiceGuideExpanded,
-        ),
-        onLevelSelected = { disabilityLevel ->
-            selectedLevelRoute = disabilityLevel.routeValue
+    MobilitySubtypeScreen(
+        uiState =
+            MobilitySubtypeUiState(
+                selectedMobilitySubtype = MobilitySubtype.fromRouteValue(selectedMobilitySubtypeRoute),
+            ),
+        onSubtypeSelected = { mobilitySubtype ->
+            selectedMobilitySubtypeRoute = mobilitySubtype.routeValue
         },
-        onToggleVoiceGuide = {
-            if (disabilityType.supportsVoiceGuide) {
-                isVoiceGuideExpanded = !isVoiceGuideExpanded
-            }
-        },
+        onNavigateBack = onNavigateBack,
         onNextClick = {
-            DisabilityLevel.fromRouteValue(selectedLevelRoute)?.let(onNavigateNext)
+            MobilitySubtype.fromRouteValue(selectedMobilitySubtypeRoute)?.let(onNavigateNext)
         },
         modifier = modifier,
     )
@@ -62,33 +69,22 @@ fun DisabilityLevelRoute(
 
 @Composable
 fun LocationTermsRoute(
-    disabilityType: DisabilityType,
-    disabilityLevel: DisabilityLevel,
     initialLocationTermsChecked: Boolean = false,
     initialPrivacyPolicyChecked: Boolean = false,
     onConsentCompleted: (LocationTermsAgreement) -> Unit,
     onConsentDeferred: (LocationTermsAgreement) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var isLocationTermsChecked by rememberSaveable(
-        disabilityType.routeValue,
-        disabilityLevel.routeValue,
-        initialLocationTermsChecked,
-    ) { mutableStateOf(initialLocationTermsChecked) }
-    var isPrivacyPolicyChecked by rememberSaveable(
-        disabilityType.routeValue,
-        disabilityLevel.routeValue,
-        initialPrivacyPolicyChecked,
-    ) { mutableStateOf(initialPrivacyPolicyChecked) }
-    var hasRestrictionNotice by rememberSaveable(
-        disabilityType.routeValue,
-        disabilityLevel.routeValue,
-    ) { mutableStateOf(false) }
+    var isLocationTermsChecked by rememberSaveable(initialLocationTermsChecked) {
+        mutableStateOf(initialLocationTermsChecked)
+    }
+    var isPrivacyPolicyChecked by rememberSaveable(initialPrivacyPolicyChecked) {
+        mutableStateOf(initialPrivacyPolicyChecked)
+    }
+    var hasRestrictionNotice by rememberSaveable { mutableStateOf(false) }
 
     val uiState =
         LocationTermsUiState(
-            disabilityType = disabilityType,
-            disabilityLevel = disabilityLevel,
             isLocationTermsChecked = isLocationTermsChecked,
             isPrivacyPolicyChecked = isPrivacyPolicyChecked,
             hasRestrictionNotice = hasRestrictionNotice,

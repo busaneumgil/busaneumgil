@@ -5,8 +5,7 @@ import static org.junit.Assert.assertEquals;
 import com.ssafy.e102.eumgil.core.model.AuthGateState;
 import com.ssafy.e102.eumgil.core.model.AuthSession;
 import com.ssafy.e102.eumgil.core.model.InitSettings;
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel;
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityType;
+import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType;
 import org.junit.Test;
 
 public class AppStartDestinationTest {
@@ -35,26 +34,39 @@ public class AppStartDestinationTest {
         AppStartDestination destination =
                 AppStartDestinationKt.resolveAppStartDestination(
                         new AuthGateState(authSession(), true),
-                        new InitSettings(null, null, false, false));
+                        new InitSettings(null, null, false, false, false));
 
-        assertEquals(OnboardingRoute.DisabilityType.INSTANCE.getRoute(), destination.getRoute());
+        assertEquals(OnboardingRoute.UserTypePrimary.INSTANCE.getRoute(), destination.getRoute());
     }
 
     @Test
-    public void profileCompletedSessionResumesPartialOnboardingBeforeMap() {
+    public void profileCompletedSessionReturnsToOnb001WhenOnlyPrimaryUserTypeExists() {
         AppStartDestination destination =
                 AppStartDestinationKt.resolveAppStartDestination(
                         new AuthGateState(authSession(), true),
                         new InitSettings(
-                                DisabilityType.VISUAL_IMPAIRMENT.getRouteValue(),
+                                PrimaryUserType.LOW_VISION.getRouteValue(),
                                 null,
+                                false,
                                 false,
                                 false));
 
-        assertEquals(
-                OnboardingRoute.DisabilityLevel.INSTANCE.createRoute(
-                        DisabilityType.VISUAL_IMPAIRMENT.getRouteValue()),
-                destination.getRoute());
+        assertEquals(OnboardingRoute.UserTypePrimary.INSTANCE.getRoute(), destination.getRoute());
+    }
+
+    @Test
+    public void completedLowVisionSessionStartsAtMap() {
+        AppStartDestination destination =
+                AppStartDestinationKt.resolveAppStartDestination(
+                        new AuthGateState(authSession(), true),
+                        new InitSettings(
+                                PrimaryUserType.LOW_VISION.getRouteValue(),
+                                null,
+                                true,
+                                true,
+                                true));
+
+        assertEquals(TopLevelRoute.Map.INSTANCE.getRoute(), destination.getRoute());
     }
 
     @Test
@@ -73,8 +85,9 @@ public class AppStartDestinationTest {
 
     private static InitSettings completedInitSettings() {
         return new InitSettings(
-                DisabilityType.VISUAL_IMPAIRMENT.getRouteValue(),
-                DisabilityLevel.NONE.getRouteValue(),
+                PrimaryUserType.MOBILITY_IMPAIRED.getRouteValue(),
+                "manual_wheelchair",
+                false,
                 true,
                 true);
     }

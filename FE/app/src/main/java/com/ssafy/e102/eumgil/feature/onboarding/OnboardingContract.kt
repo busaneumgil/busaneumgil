@@ -1,21 +1,18 @@
 package com.ssafy.e102.eumgil.feature.onboarding
 
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import com.ssafy.e102.eumgil.R
 
-data class DisabilityTypeUiState(
-    val selectedType: DisabilityType? = null,
+data class PrimaryUserTypeUiState(
+    val selectedType: PrimaryUserType? = null,
 )
 
-data class DisabilityLevelUiState(
-    val disabilityType: DisabilityType,
-    val selectedLevel: DisabilityLevel? = null,
-    val isVoiceGuideExpanded: Boolean = false,
+data class MobilitySubtypeUiState(
+    val selectedMobilitySubtype: MobilitySubtype? = null,
 )
 
 data class LocationTermsUiState(
-    val disabilityType: DisabilityType,
-    val disabilityLevel: DisabilityLevel,
     val isLocationTermsChecked: Boolean = false,
     val isPrivacyPolicyChecked: Boolean = false,
     val hasRestrictionNotice: Boolean = false,
@@ -35,16 +32,12 @@ data class LocationTermsUiState(
 
     fun toAgreement(): LocationTermsAgreement =
         LocationTermsAgreement(
-            disabilityType = disabilityType,
-            disabilityLevel = disabilityLevel,
             isLocationTermsAgreed = isLocationTermsChecked,
             isPrivacyPolicyAgreed = isPrivacyPolicyChecked,
         )
 }
 
 data class LocationTermsAgreement(
-    val disabilityType: DisabilityType,
-    val disabilityLevel: DisabilityLevel,
     val isLocationTermsAgreed: Boolean,
     val isPrivacyPolicyAgreed: Boolean,
 )
@@ -55,74 +48,63 @@ enum class LocationTermsConsentStatus {
     READY,
 }
 
-enum class DisabilityType(
+enum class PrimaryUserType(
     val routeValue: String,
     @StringRes val titleRes: Int,
     @StringRes val descriptionRes: Int,
-    @StringRes val modeTitleRes: Int,
-    @StringRes val modeDescriptionRes: Int,
-    val supportsVoiceGuide: Boolean,
+    @DrawableRes val iconRes: Int,
+    val usesHighContrastCard: Boolean,
 ) {
-    VISUAL_IMPAIRMENT(
-        routeValue = "visual",
-        titleRes = R.string.onboarding_type_visual_title,
-        descriptionRes = R.string.onboarding_type_visual_description,
-        modeTitleRes = R.string.onboarding_mode_visual_title,
-        modeDescriptionRes = R.string.onboarding_mode_visual_description,
-        supportsVoiceGuide = true,
+    LOW_VISION(
+        routeValue = "low_vision",
+        titleRes = R.string.onboarding_primary_user_type_low_vision_title,
+        descriptionRes = R.string.onboarding_primary_user_type_low_vision_description,
+        iconRes = R.drawable.ic_user_visual_impairment,
+        usesHighContrastCard = true,
     ),
-    MOBILITY_ASSISTANCE(
-        routeValue = "mobility",
-        titleRes = R.string.onboarding_type_mobility_title,
-        descriptionRes = R.string.onboarding_type_mobility_description,
-        modeTitleRes = R.string.onboarding_mode_mobility_title,
-        modeDescriptionRes = R.string.onboarding_mode_mobility_description,
-        supportsVoiceGuide = false,
+    MOBILITY_IMPAIRED(
+        routeValue = "mobility_impaired",
+        titleRes = R.string.onboarding_primary_user_type_mobility_title,
+        descriptionRes = R.string.onboarding_primary_user_type_mobility_description,
+        iconRes = R.drawable.ic_user_wheelchair,
+        usesHighContrastCard = false,
     ),
     ;
 
     companion object {
-        fun fromRouteValue(routeValue: String?): DisabilityType? =
+        fun fromRouteValue(routeValue: String?): PrimaryUserType? =
             entries.firstOrNull { it.routeValue == routeValue }
     }
 }
 
-enum class DisabilityLevel(
+enum class MobilitySubtype(
     val routeValue: String,
     @StringRes val titleRes: Int,
-    @StringRes val visualDescriptionRes: Int,
-    @StringRes val mobilityDescriptionRes: Int,
+    @StringRes val descriptionRes: Int,
+    @DrawableRes val iconRes: Int,
 ) {
-    SEVERE(
-        routeValue = "severe",
-        titleRes = R.string.onboarding_level_severe_title,
-        visualDescriptionRes = R.string.onboarding_level_severe_visual_description,
-        mobilityDescriptionRes = R.string.onboarding_level_severe_mobility_description,
+    ELECTRIC_WHEELCHAIR(
+        routeValue = "electric_wheelchair",
+        titleRes = R.string.onboarding_mobility_subtype_electric_title,
+        descriptionRes = R.string.onboarding_mobility_subtype_electric_description,
+        iconRes = R.drawable.ic_user_wheelchair,
     ),
-    MILD(
-        routeValue = "mild",
-        titleRes = R.string.onboarding_level_mild_title,
-        visualDescriptionRes = R.string.onboarding_level_mild_visual_description,
-        mobilityDescriptionRes = R.string.onboarding_level_mild_mobility_description,
+    MANUAL_WHEELCHAIR(
+        routeValue = "manual_wheelchair",
+        titleRes = R.string.onboarding_mobility_subtype_manual_title,
+        descriptionRes = R.string.onboarding_mobility_subtype_manual_description,
+        iconRes = R.drawable.ic_user_wheelchair,
     ),
-    NONE(
-        routeValue = "none",
-        titleRes = R.string.onboarding_level_none_title,
-        visualDescriptionRes = R.string.onboarding_level_none_visual_description,
-        mobilityDescriptionRes = R.string.onboarding_level_none_mobility_description,
+    OTHER(
+        routeValue = "other_mobility_impaired",
+        titleRes = R.string.onboarding_mobility_subtype_other_title,
+        descriptionRes = R.string.onboarding_mobility_subtype_other_description,
+        iconRes = R.drawable.ic_user_check,
     ),
     ;
 
-    @StringRes
-    fun descriptionRes(disabilityType: DisabilityType): Int =
-        if (disabilityType.supportsVoiceGuide) {
-            visualDescriptionRes
-        } else {
-            mobilityDescriptionRes
-        }
-
     companion object {
-        fun fromRouteValue(routeValue: String?): DisabilityLevel? =
+        fun fromRouteValue(routeValue: String?): MobilitySubtype? =
             entries.firstOrNull { it.routeValue == routeValue }
     }
 }

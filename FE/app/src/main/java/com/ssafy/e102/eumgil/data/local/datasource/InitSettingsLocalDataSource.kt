@@ -25,8 +25,12 @@ class InitSettingsLocalDataSource(
                 }
             }.map { preferences ->
                 InitSettings(
-                    disabilityType = preferences[InitSettingsPreferences.disabilityType],
-                    disabilityLevel = preferences[InitSettingsPreferences.disabilityLevel],
+                    selectedPrimaryUserType =
+                        preferences[InitSettingsPreferences.selectedPrimaryUserType],
+                    selectedMobilitySubtype =
+                        preferences[InitSettingsPreferences.selectedMobilitySubtype],
+                    isLowVisionFollowUpCompleted =
+                        preferences[InitSettingsPreferences.isLowVisionFollowUpCompleted] ?: false,
                     isLocationTermsAgreed =
                         preferences[InitSettingsPreferences.isLocationTermsAgreed] ?: false,
                     isPrivacyPolicyAgreed =
@@ -36,22 +40,29 @@ class InitSettingsLocalDataSource(
 
     suspend fun getInitSettings(): InitSettings = observeInitSettings().first()
 
-    suspend fun saveDisabilityType(disabilityType: String) {
+    suspend fun savePrimaryUserType(selectedPrimaryUserType: String) {
         dataStore.edit { preferences ->
-            val currentType = preferences[InitSettingsPreferences.disabilityType]
+            val currentType = preferences[InitSettingsPreferences.selectedPrimaryUserType]
 
-            preferences[InitSettingsPreferences.disabilityType] = disabilityType
-            if (currentType != disabilityType) {
-                preferences.remove(InitSettingsPreferences.disabilityLevel)
+            preferences[InitSettingsPreferences.selectedPrimaryUserType] = selectedPrimaryUserType
+            if (currentType != selectedPrimaryUserType) {
+                preferences.remove(InitSettingsPreferences.selectedMobilitySubtype)
+                preferences.remove(InitSettingsPreferences.isLowVisionFollowUpCompleted)
                 preferences.remove(InitSettingsPreferences.isLocationTermsAgreed)
                 preferences.remove(InitSettingsPreferences.isPrivacyPolicyAgreed)
             }
         }
     }
 
-    suspend fun saveDisabilityLevel(disabilityLevel: String) {
+    suspend fun saveMobilitySubtype(selectedMobilitySubtype: String) {
         dataStore.edit { preferences ->
-            preferences[InitSettingsPreferences.disabilityLevel] = disabilityLevel
+            preferences[InitSettingsPreferences.selectedMobilitySubtype] = selectedMobilitySubtype
+        }
+    }
+
+    suspend fun saveLowVisionFollowUpCompleted(isCompleted: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[InitSettingsPreferences.isLowVisionFollowUpCompleted] = isCompleted
         }
     }
 

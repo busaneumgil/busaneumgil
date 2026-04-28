@@ -4,9 +4,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
-import com.ssafy.e102.eumgil.data.local.datastore.AuthSessionPreferences
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -25,18 +26,18 @@ class AuthSessionLocalDataSource(
                     throw exception
                 }
             }.map { preferences ->
-                val accessToken = preferences[AuthSessionPreferences.accessToken]
+                val accessToken = preferences[AuthSessionPreferenceKeys.accessToken]
                 AuthGateState(
                     authSession =
                         accessToken?.let {
                             AuthSession(
                                 accessToken = it,
-                                refreshToken = preferences[AuthSessionPreferences.refreshToken],
+                                refreshToken = preferences[AuthSessionPreferenceKeys.refreshToken],
                             )
                         },
                     isProfileCompleted =
                         accessToken != null &&
-                            (preferences[AuthSessionPreferences.isProfileCompleted] ?: false),
+                            (preferences[AuthSessionPreferenceKeys.isProfileCompleted] ?: false),
                 )
             }
 
@@ -47,27 +48,33 @@ class AuthSessionLocalDataSource(
         isProfileCompleted: Boolean,
     ) {
         dataStore.edit { preferences ->
-            preferences[AuthSessionPreferences.accessToken] = authSession.accessToken
+            preferences[AuthSessionPreferenceKeys.accessToken] = authSession.accessToken
             authSession.refreshToken?.let { refreshToken ->
-                preferences[AuthSessionPreferences.refreshToken] = refreshToken
-            } ?: preferences.remove(AuthSessionPreferences.refreshToken)
-            preferences[AuthSessionPreferences.isProfileCompleted] = isProfileCompleted
+                preferences[AuthSessionPreferenceKeys.refreshToken] = refreshToken
+            } ?: preferences.remove(AuthSessionPreferenceKeys.refreshToken)
+            preferences[AuthSessionPreferenceKeys.isProfileCompleted] = isProfileCompleted
         }
     }
 
     suspend fun markProfileCompleted() {
         dataStore.edit { preferences ->
-            if (preferences[AuthSessionPreferences.accessToken] != null) {
-                preferences[AuthSessionPreferences.isProfileCompleted] = true
+            if (preferences[AuthSessionPreferenceKeys.accessToken] != null) {
+                preferences[AuthSessionPreferenceKeys.isProfileCompleted] = true
             }
         }
     }
 
     suspend fun clearAuthSession() {
         dataStore.edit { preferences ->
-            preferences.remove(AuthSessionPreferences.accessToken)
-            preferences.remove(AuthSessionPreferences.refreshToken)
-            preferences.remove(AuthSessionPreferences.isProfileCompleted)
+            preferences.remove(AuthSessionPreferenceKeys.accessToken)
+            preferences.remove(AuthSessionPreferenceKeys.refreshToken)
+            preferences.remove(AuthSessionPreferenceKeys.isProfileCompleted)
         }
     }
+}
+
+private object AuthSessionPreferenceKeys {
+    val accessToken = stringPreferencesKey("access_token")
+    val refreshToken = stringPreferencesKey("refresh_token")
+    val isProfileCompleted = booleanPreferencesKey("profile_completed")
 }

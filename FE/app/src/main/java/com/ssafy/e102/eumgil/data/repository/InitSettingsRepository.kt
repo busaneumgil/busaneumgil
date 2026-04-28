@@ -8,9 +8,11 @@ interface InitSettingsRepository {
 
     suspend fun getInitSettings(): InitSettings
 
-    suspend fun saveDisabilityType(disabilityType: String)
+    suspend fun savePrimaryUserType(selectedPrimaryUserType: String)
 
-    suspend fun saveDisabilityLevel(disabilityLevel: String)
+    suspend fun saveMobilitySubtype(selectedMobilitySubtype: String)
+
+    suspend fun saveLowVisionFollowUpCompleted(isCompleted: Boolean)
 
     suspend fun saveLocationTermsAgreement(
         isLocationTermsAgreed: Boolean,

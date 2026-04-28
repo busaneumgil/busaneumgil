@@ -24,7 +24,7 @@ CORS(app)
 
 logger.info("Initializing services...")
 comparator = LLMComparator()
-logger.info("LLMComparator ready (qwen_ollama / gemini / claude / gpt)")
+logger.info("LLMComparator ready (gemini / claude / gpt / gpt_mini)")
 
 
 @app.route('/api/chat/llm', methods=['POST'])
@@ -32,7 +32,7 @@ def chat_llm():
     """단일 모델 호출 - Android 메인 사용"""
     body = request.get_json()
     text = body.get("text", "")
-    model_key = body.get("model", "qwen_ollama")
+    model_key = body.get("model", Config.DEFAULT_MODEL)
     stt_start_ms = body.get("stt_start_ms", int(time.time() * 1000))
 
     provider = comparator.providers.get(model_key)
@@ -158,6 +158,6 @@ def health_check():
 if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info("LLM Voice Test Server Starting...")
-    logger.info("Providers: qwen_ollama / gemini / claude / gpt")
+    logger.info("Providers: gemini / claude / gpt / gpt_mini")
     logger.info("=" * 60)
     app.run(host=Config.HOST, port=Config.PORT, debug=Config.DEBUG)

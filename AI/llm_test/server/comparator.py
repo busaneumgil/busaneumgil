@@ -6,18 +6,16 @@ from providers.base_provider import LLMResponse
 
 class LLMComparator:
     def __init__(self):
-        from providers.ollama_provider import OllamaProvider
         from providers.gemini_provider import GeminiProvider
         from providers.claude_provider import ClaudeProvider
         from providers.gpt_provider import GPTProvider
         from providers.gpt_mini_provider import GPTMiniProvider
 
         self.providers = {
-            "qwen_ollama": OllamaProvider(),
-            "gemini":      GeminiProvider(),
-            "claude":      ClaudeProvider(),
-            "gpt":         GPTProvider(),
-            "gpt_mini":    GPTMiniProvider(),
+            "gemini":   GeminiProvider(),
+            "claude":   ClaudeProvider(),
+            "gpt":      GPTProvider(),
+            "gpt_mini": GPTMiniProvider(),
         }
 
     def compare_stream(self, user_input: str, stt_start_ms: int) -> Iterator[LLMResponse]:

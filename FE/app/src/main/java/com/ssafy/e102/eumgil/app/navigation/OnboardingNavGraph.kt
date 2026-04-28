@@ -14,6 +14,7 @@ import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevelRoute
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityType
 import com.ssafy.e102.eumgil.feature.onboarding.DisabilityTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
+import com.ssafy.e102.eumgil.feature.terms.TermsGuideRoute
 import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.onboardingNavGraph(
@@ -129,6 +130,37 @@ fun NavGraphBuilder.onboardingNavGraph(
                     )
                 }
             },
+        )
+    }
+
+    composable(route = OnboardingRoute.TermsGuide.route) {
+        TermsGuideRoute(
+            onAgreed = {
+                navController.navigate(TopLevelRoute.Map.route) {
+                    launchSingleTop = true
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        inclusive = true
+                    }
+                }
+            },
+            onRequestDetails = {
+                // Detailed terms reuse the existing LocationTerms screen with the
+                // current onboarding selections; if those are missing, fall back to
+                // a sensible default so the screen can still load.
+                navController.navigate(
+                    OnboardingRoute.LocationTerms.createRoute(
+                        disabilityType =
+                            initialSettings.disabilityType
+                                ?: com.ssafy.e102.eumgil.feature.onboarding.DisabilityType
+                                    .VISUAL_IMPAIRMENT.routeValue,
+                        disabilityLevel =
+                            initialSettings.disabilityLevel
+                                ?: com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel
+                                    .NONE.routeValue,
+                    ),
+                )
+            },
+            onTabSelected = { /* Selection only highlights; tab routing is owned by AppNavHost. */ },
         )
     }
 }

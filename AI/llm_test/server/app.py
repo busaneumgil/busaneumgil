@@ -17,10 +17,10 @@ from providers.gemini_provider import GeminiProvider
 from providers.claude_provider import ClaudeProvider
 from providers.gpt_mini_provider import GPTMiniProvider
 from providers.utils import (
-    SYSTEM_PROMPT_MOBILITY,
-    SYSTEM_PROMPT_VISUALLY,
     SYSTEM_PROMPT_CONFIRM,
+    get_system_prompt,
     parse_json_response,
+    is_success,
 )
 
 logger = get_logger(__name__)
@@ -33,11 +33,6 @@ PROVIDERS = {
     "gemini":   GeminiProvider(),
     "claude":   ClaudeProvider(),
     "gpt_mini": GPTMiniProvider(),
-}
-
-MODE_PROMPTS = {
-    "mobility": SYSTEM_PROMPT_MOBILITY,
-    "visually": SYSTEM_PROMPT_VISUALLY,
 }
 
 logger.info("Providers ready: " + ", ".join(PROVIDERS.keys()))
@@ -91,17 +86,15 @@ def voice_analyze():
         }), 400
 
     mode = body.get("mode", "mobility")
-    if mode not in MODE_PROMPTS:
+    if mode not in ("mobility", "visually"):
         return jsonify({
             "success": False,
-            "intent": "unknown",
-            "confirmation_message": "다시 말씀해 주세요",
-            "error": f"지원하지 않는 mode입니다: {mode}. 사용 가능: mobility, visually",
+            "error": "mode는 'mobility' 또는 'visually'만 허용됩니다.",
             "model": model_key,
-            "latency_ms": 0
+            "mode": mode,
         }), 400
 
-    system_prompt = MODE_PROMPTS[mode]
+    system_prompt = get_system_prompt(mode)
 
     start_ms = int(time.time() * 1000)
     try:
@@ -111,12 +104,10 @@ def voice_analyze():
         return jsonify({
             "success": result.success,
             "intent": data.get("intent"),
-            "departure": data.get("departure"),
-            "destination": data.get("destination"),
             "place_name": data.get("place_name"),
-            "facility_type": data.get("facility_type"),
-            "confirmation_message": data.get("confirmation_message"),
+            "confirmation_message": data.get("confirmation_message") if mode == "visually" else None,
             "model": model_key,
+            "mode": mode,
             "latency_ms": latency_ms
         })
     except Exception as e:
@@ -125,9 +116,11 @@ def voice_analyze():
         return jsonify({
             "success": False,
             "intent": "unknown",
-            "confirmation_message": "다시 말씀해 주세요",
+            "place_name": None,
+            "confirmation_message": None,
             "error": str(e),
             "model": model_key,
+            "mode": mode,
             "latency_ms": latency_ms
         }), 500
 
@@ -168,7 +161,7 @@ def voice_confirm():
         confirmed = parsed.get("confirmed", False)
         message = parsed.get("message", "다시 말씀해 주세요")
         return jsonify({
-            "success": True,
+            "success": is_success("", parsed, prompt_type="confirm"),
             "confirmed": confirmed,
             "message": message,
             "model": model_key,
@@ -193,6 +186,10 @@ def health_check():
         "status": "healthy",
         "providers": list(PROVIDERS.keys()),
         "modes": ["mobility", "visually"],
+        "endpoints": [
+            "POST /api/voice/analyze",
+            "POST /api/voice/confirm",
+        ],
     })
 
 

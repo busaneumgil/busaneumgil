@@ -600,7 +600,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `shortcut filter row exposes full filter order and parking shortcut filters markers`() =
+    fun `shortcut filter row hides more chip and parking shortcut filters markers`() =
         runTest {
             val viewModel =
                 MapViewModel(
@@ -619,7 +619,6 @@ class MapViewModelTest {
                     MapShortcutFilterKey.TOILET,
                     MapShortcutFilterKey.ELEVATOR,
                     MapShortcutFilterKey.ACCESSIBLE_PARKING,
-                    MapShortcutFilterKey.MORE,
                     MapShortcutFilterKey.CHARGING_STATION,
                     MapShortcutFilterKey.BRAILLE_BLOCK,
                     MapShortcutFilterKey.TOURIST_ATTRACTION,

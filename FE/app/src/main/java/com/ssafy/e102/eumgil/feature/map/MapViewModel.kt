@@ -860,7 +860,6 @@ class MapViewModel(
                 MapShortcutFilterKey.TOILET,
                 MapShortcutFilterKey.ELEVATOR,
                 MapShortcutFilterKey.ACCESSIBLE_PARKING,
-                MapShortcutFilterKey.MORE,
                 MapShortcutFilterKey.CHARGING_STATION,
                 MapShortcutFilterKey.BRAILLE_BLOCK,
                 MapShortcutFilterKey.TOURIST_ATTRACTION,

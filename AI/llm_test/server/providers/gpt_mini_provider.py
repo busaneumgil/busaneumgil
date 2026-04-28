@@ -2,7 +2,7 @@ import os
 import time
 import requests
 from providers.base_provider import BaseProvider, LLMResponse
-from providers.utils import SYSTEM_PROMPT, parse_json_response
+from providers.utils import SYSTEM_PROMPT, parse_json_response, is_success
 from utils.cost_calculator import calculate_cost
 
 
@@ -42,22 +42,27 @@ class GPTMiniProvider(BaseProvider):
             cost = calculate_cost("gpt_mini", input_tokens, output_tokens)
             parsed = parse_json_response(raw_text)
 
+            intent = parsed.get("intent", "unknown")
             return LLMResponse(
                 provider="gpt_mini", raw_text=raw_text,
+                intent=intent,
+                place_name=parsed.get("place_name"),
                 departure=parsed.get("departure"),
                 destination=parsed.get("destination"),
-                intent=parsed.get("intent", "unknown"),
+                facility_type=parsed.get("facility_type"),
+                confirmation_message=parsed.get("confirmation_message"),
                 llm_latency_ms=latency_ms, total_latency_ms=0,
                 input_tokens=input_tokens, output_tokens=output_tokens,
                 cost_credit=cost,
-                success=bool(parsed.get("departure") or parsed.get("destination")),
+                success=is_success(intent, parsed),
                 error=None,
-                confirmation_message=parsed.get("confirmation_message")
             )
         except Exception as e:
             return LLMResponse(
-                provider="gpt_mini", raw_text="", departure=None, destination=None,
-                intent="unknown", llm_latency_ms=0, total_latency_ms=0,
+                provider="gpt_mini", raw_text="",
+                intent="unknown", place_name=None, departure=None,
+                destination=None, facility_type=None, confirmation_message=None,
+                llm_latency_ms=0, total_latency_ms=0,
                 input_tokens=0, output_tokens=0, cost_credit=0,
-                success=False, error=str(e), confirmation_message=None
+                success=False, error=str(e),
             )

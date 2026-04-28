@@ -15,29 +15,20 @@ sealed interface AuthRoute : AppRoute {
 }
 
 sealed interface OnboardingRoute : AppRoute {
-    data object DisabilityType : OnboardingRoute {
-        override val route: String = "onboarding/type"
+    data object UserTypePrimary : OnboardingRoute {
+        override val route: String = "onboarding/user_type_primary"
     }
 
-    data object DisabilityLevel : OnboardingRoute {
-        const val ARG_DISABILITY_TYPE: String = "disabilityType"
-
-        override val route: String = "onboarding/level/{$ARG_DISABILITY_TYPE}"
-
-        fun createRoute(disabilityType: String): String = "onboarding/level/$disabilityType"
+    data object LowVisionFollowUp : OnboardingRoute {
+        override val route: String = "onboarding/low_vision_followup"
     }
 
-    data object LocationTerms : OnboardingRoute {
-        const val ARG_DISABILITY_TYPE: String = "disabilityType"
-        const val ARG_DISABILITY_LEVEL: String = "disabilityLevel"
+    data object MobilityTypeSecondary : OnboardingRoute {
+        override val route: String = "onboarding/mobility_type_secondary"
+    }
 
-        override val route: String =
-            "onboarding/location_terms/{$ARG_DISABILITY_TYPE}/{$ARG_DISABILITY_LEVEL}"
-
-        fun createRoute(
-            disabilityType: String,
-            disabilityLevel: String,
-        ): String = "onboarding/location_terms/$disabilityType/$disabilityLevel"
+    data object Terms : OnboardingRoute {
+        override val route: String = "onboarding/terms"
     }
 
     /**

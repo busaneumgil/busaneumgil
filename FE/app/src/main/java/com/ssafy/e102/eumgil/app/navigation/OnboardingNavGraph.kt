@@ -4,16 +4,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.composable
-import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevelRoute
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityType
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
+import com.ssafy.e102.eumgil.feature.onboarding.LowVisionFollowUpRoute
+import com.ssafy.e102.eumgil.feature.onboarding.MobilitySubtype
+import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
+import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
+import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideRoute
 import kotlinx.coroutines.launch
 
@@ -22,91 +21,63 @@ fun NavGraphBuilder.onboardingNavGraph(
     settingsRepository: SettingsRepository,
     initialSettings: InitSettings,
 ) {
-    composable(route = OnboardingRoute.DisabilityType.route) {
+    composable(route = OnboardingRoute.UserTypePrimary.route) {
         val coroutineScope = rememberCoroutineScope()
 
-        DisabilityTypeRoute(
-            onNavigateNext = { disabilityType ->
+        PrimaryUserTypeRoute(
+            initialSelectedType =
+                PrimaryUserType.fromRouteValue(initialSettings.selectedPrimaryUserType),
+            onNavigateNext = { primaryUserType ->
                 coroutineScope.launch {
-                    settingsRepository.saveDisabilityType(disabilityType.routeValue)
-                    navController.navigate(
-                        OnboardingRoute.DisabilityLevel.createRoute(
-                            disabilityType = disabilityType.routeValue,
-                        ),
-                    )
+                    settingsRepository.savePrimaryUserType(primaryUserType.routeValue)
+                    navController.navigate(resolvePrimaryUserTypeNextRoute(primaryUserType))
                 }
             },
         )
     }
 
-    composable(
-        route = OnboardingRoute.DisabilityLevel.route,
-        arguments = listOf(
-            navArgument(OnboardingRoute.DisabilityLevel.ARG_DISABILITY_TYPE) {
-                type = NavType.StringType
-            },
-        ),
-    ) { backStackEntry ->
-        val disabilityType =
-            DisabilityType.fromRouteValue(
-                backStackEntry.arguments?.getString(
-                    OnboardingRoute.DisabilityLevel.ARG_DISABILITY_TYPE,
-                ),
-            ) ?: DisabilityType.VISUAL_IMPAIRMENT
-
+    composable(route = OnboardingRoute.LowVisionFollowUp.route) {
         val coroutineScope = rememberCoroutineScope()
-        DisabilityLevelRoute(
-            disabilityType = disabilityType,
-            onNavigateNext = { disabilityLevel ->
+
+        LowVisionFollowUpRoute(
+            onNavigateNext = {
                 coroutineScope.launch {
-                    settingsRepository.saveDisabilityLevel(disabilityLevel.routeValue)
-                    navController.navigate(
-                        OnboardingRoute.LocationTerms.createRoute(
-                            disabilityType = disabilityType.routeValue,
-                            disabilityLevel = disabilityLevel.routeValue,
-                        ),
-                    )
+                    settingsRepository.saveLowVisionFollowUpCompleted(isCompleted = true)
+                    navController.navigate(OnboardingRoute.Terms.route)
                 }
             },
         )
     }
 
-    composable(
-        route = OnboardingRoute.LocationTerms.route,
-        arguments = listOf(
-            navArgument(OnboardingRoute.LocationTerms.ARG_DISABILITY_TYPE) {
-                type = NavType.StringType
-            },
-            navArgument(OnboardingRoute.LocationTerms.ARG_DISABILITY_LEVEL) {
-                type = NavType.StringType
-            },
-        ),
-    ) { backStackEntry ->
-        val disabilityType =
-            DisabilityType.fromRouteValue(
-                backStackEntry.arguments?.getString(
-                    OnboardingRoute.LocationTerms.ARG_DISABILITY_TYPE,
-                ),
-            ) ?: DisabilityType.VISUAL_IMPAIRMENT
-        val disabilityLevel =
-            DisabilityLevel.fromRouteValue(
-                backStackEntry.arguments?.getString(
-                    OnboardingRoute.LocationTerms.ARG_DISABILITY_LEVEL,
-                ),
-            ) ?: DisabilityLevel.NONE
-
+    composable(route = OnboardingRoute.MobilityTypeSecondary.route) {
         val coroutineScope = rememberCoroutineScope()
-        val shouldRestoreAgreement =
-            initialSettings.disabilityType == disabilityType.routeValue &&
-                initialSettings.disabilityLevel == disabilityLevel.routeValue
+
+        MobilityTypeSecondaryRoute(
+            initialSelectedSubtype =
+                MobilitySubtype.fromRouteValue(initialSettings.selectedMobilitySubtype),
+            onNavigateBack = {
+                navController.navigate(OnboardingRoute.UserTypePrimary.route) {
+                    launchSingleTop = true
+                    popUpTo(OnboardingRoute.UserTypePrimary.route) {
+                        inclusive = false
+                    }
+                }
+            },
+            onNavigateNext = { mobilitySubtype ->
+                coroutineScope.launch {
+                    settingsRepository.saveMobilitySubtype(mobilitySubtype.routeValue)
+                    navController.navigate(OnboardingRoute.Terms.route)
+                }
+            },
+        )
+    }
+
+    composable(route = OnboardingRoute.Terms.route) {
+        val coroutineScope = rememberCoroutineScope()
 
         LocationTermsRoute(
-            disabilityType = disabilityType,
-            disabilityLevel = disabilityLevel,
-            initialLocationTermsChecked =
-                shouldRestoreAgreement && initialSettings.isLocationTermsAgreed,
-            initialPrivacyPolicyChecked =
-                shouldRestoreAgreement && initialSettings.isPrivacyPolicyAgreed,
+            initialLocationTermsChecked = initialSettings.isLocationTermsAgreed,
+            initialPrivacyPolicyChecked = initialSettings.isPrivacyPolicyAgreed,
             onConsentCompleted = { agreement ->
                 coroutineScope.launch {
                     settingsRepository.saveLocationTermsAgreement(
@@ -134,33 +105,35 @@ fun NavGraphBuilder.onboardingNavGraph(
     }
 
     composable(route = OnboardingRoute.TermsGuide.route) {
+        val coroutineScope = rememberCoroutineScope()
+
         TermsGuideRoute(
             onAgreed = {
-                navController.navigate(TopLevelRoute.Map.route) {
-                    launchSingleTop = true
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        inclusive = true
+                coroutineScope.launch {
+                    settingsRepository.saveLowVisionFollowUpCompleted(isCompleted = true)
+                    settingsRepository.saveLocationTermsAgreement(
+                        isLocationTermsAgreed = true,
+                        isPrivacyPolicyAgreed = false,
+                    )
+
+                    navController.navigate(TopLevelRoute.Map.route) {
+                        launchSingleTop = true
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
+                        }
                     }
                 }
             },
             onRequestDetails = {
-                // Detailed terms reuse the existing LocationTerms screen with the
-                // current onboarding selections; if those are missing, fall back to
-                // a sensible default so the screen can still load.
-                navController.navigate(
-                    OnboardingRoute.LocationTerms.createRoute(
-                        disabilityType =
-                            initialSettings.disabilityType
-                                ?: com.ssafy.e102.eumgil.feature.onboarding.DisabilityType
-                                    .VISUAL_IMPAIRMENT.routeValue,
-                        disabilityLevel =
-                            initialSettings.disabilityLevel
-                                ?: com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel
-                                    .NONE.routeValue,
-                    ),
-                )
+                navController.navigate(OnboardingRoute.Terms.route)
             },
             onTabSelected = { /* Selection only highlights; tab routing is owned by AppNavHost. */ },
         )
     }
 }
+
+internal fun resolvePrimaryUserTypeNextRoute(primaryUserType: PrimaryUserType): String =
+    when (primaryUserType) {
+        PrimaryUserType.LOW_VISION -> OnboardingRoute.TermsGuide.route
+        PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.MobilityTypeSecondary.route
+    }

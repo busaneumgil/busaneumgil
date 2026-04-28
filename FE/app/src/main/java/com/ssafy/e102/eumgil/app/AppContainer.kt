@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.app
 
 import android.content.Context
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStoreFile
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
@@ -13,7 +15,6 @@ import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
-import com.ssafy.e102.eumgil.data.local.datastore.authSessionDataStore
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
@@ -48,8 +49,14 @@ class AppContainer(
         InitSettingsLocalDataSource(dataStore = appContext.initSettingsDataStore)
     }
 
+    private val authSessionDataStore by lazy(LazyThreadSafetyMode.NONE) {
+        PreferenceDataStoreFactory.create(
+            produceFile = { appContext.preferencesDataStoreFile("auth_session") },
+        )
+    }
+
     private val authSessionLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        AuthSessionLocalDataSource(dataStore = appContext.authSessionDataStore)
+        AuthSessionLocalDataSource(dataStore = authSessionDataStore)
     }
 
     private val debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {

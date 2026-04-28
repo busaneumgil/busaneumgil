@@ -6,8 +6,7 @@ import static org.junit.Assert.assertNotEquals;
 import com.ssafy.e102.eumgil.core.model.AuthGateState;
 import com.ssafy.e102.eumgil.core.model.AuthSession;
 import com.ssafy.e102.eumgil.core.model.InitSettings;
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityLevel;
-import com.ssafy.e102.eumgil.feature.onboarding.DisabilityType;
+import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType;
 import org.junit.Test;
 
 public class AuthGateStartDestinationTest {
@@ -46,8 +45,9 @@ public class AuthGateStartDestinationTest {
 
     private static InitSettings completedInitSettings() {
         return new InitSettings(
-                DisabilityType.VISUAL_IMPAIRMENT.getRouteValue(),
-                DisabilityLevel.NONE.getRouteValue(),
+                PrimaryUserType.MOBILITY_IMPAIRED.getRouteValue(),
+                "manual_wheelchair",
+                false,
                 true,
                 true);
     }

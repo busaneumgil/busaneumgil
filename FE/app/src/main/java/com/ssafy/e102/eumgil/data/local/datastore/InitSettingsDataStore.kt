@@ -14,8 +14,9 @@ val Context.initSettingsDataStore: DataStore<Preferences> by preferencesDataStor
 )
 
 object InitSettingsPreferences {
-    val disabilityType = stringPreferencesKey("disability_type")
-    val disabilityLevel = stringPreferencesKey("disability_level")
+    val selectedPrimaryUserType = stringPreferencesKey("selected_primary_user_type")
+    val selectedMobilitySubtype = stringPreferencesKey("selected_mobility_subtype")
+    val isLowVisionFollowUpCompleted = booleanPreferencesKey("low_vision_follow_up_completed")
     val isLocationTermsAgreed = booleanPreferencesKey("location_terms_agreed")
     val isPrivacyPolicyAgreed = booleanPreferencesKey("privacy_policy_agreed")
 }

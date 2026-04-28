@@ -3,12 +3,9 @@ package com.ssafy.e102.eumgil.feature.onboarding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -16,104 +13,133 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingSelectionCard
+import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingSelectionCardStyle
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingStepAction
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingStepScaffold
 
 @Composable
-fun DisabilityTypeScreen(
-    uiState: DisabilityTypeUiState,
-    onTypeSelected: (DisabilityType) -> Unit,
+fun PrimaryUserTypeScreen(
+    uiState: PrimaryUserTypeUiState,
+    onTypeSelected: (PrimaryUserType) -> Unit,
     onNextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OnboardingStepScaffold(
         currentStep = 1,
-        totalSteps = 3,
-        title = stringResource(id = R.string.onboarding_type_screen_title),
-        description = stringResource(id = R.string.onboarding_type_screen_description),
+        totalSteps = 5,
+        title = stringResource(id = R.string.onboarding_primary_user_type_screen_title),
+        description = "",
         primaryActionLabel = stringResource(id = R.string.action_next_step),
         primaryActionEnabled = uiState.selectedType != null,
         onPrimaryActionClick = onNextClick,
         modifier = modifier,
     ) {
-        DisabilityType.entries.forEach { disabilityType ->
+        PrimaryUserType.entries.forEach { primaryUserType ->
             OnboardingSelectionCard(
-                title = stringResource(id = disabilityType.titleRes),
-                description = stringResource(id = disabilityType.descriptionRes),
-                selected = uiState.selectedType == disabilityType,
-                onClick = { onTypeSelected(disabilityType) },
+                title = stringResource(id = primaryUserType.titleRes),
+                description = stringResource(id = primaryUserType.descriptionRes),
+                selected = uiState.selectedType == primaryUserType,
+                onClick = { onTypeSelected(primaryUserType) },
+                leadingIconRes = primaryUserType.iconRes,
+                style =
+                    if (primaryUserType.usesHighContrastCard) {
+                        OnboardingSelectionCardStyle.HighContrast
+                    } else {
+                        OnboardingSelectionCardStyle.Default
+                    },
             )
         }
 
-        uiState.selectedType?.let { disabilityType ->
-            OnboardingModeCard(
-                title = stringResource(id = disabilityType.modeTitleRes),
-                description = stringResource(id = disabilityType.modeDescriptionRes),
-                highlightVisualMode = disabilityType.supportsVoiceGuide,
-            )
-        }
+        Text(
+            text = stringResource(id = R.string.onboarding_primary_user_type_supporting),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = EumSpacing.xSmall),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
 @Composable
-fun DisabilityLevelScreen(
-    uiState: DisabilityLevelUiState,
-    onLevelSelected: (DisabilityLevel) -> Unit,
-    onToggleVoiceGuide: () -> Unit,
+fun LowVisionFollowUpScreen(
     onNextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OnboardingStepScaffold(
         currentStep = 2,
-        totalSteps = 3,
-        title = stringResource(id = R.string.onboarding_level_screen_title),
-        description = stringResource(id = R.string.onboarding_level_screen_description),
+        totalSteps = 5,
+        title = stringResource(id = R.string.onboarding_low_vision_follow_up_title),
+        description = stringResource(id = R.string.onboarding_low_vision_follow_up_description),
         primaryActionLabel = stringResource(id = R.string.action_next_step),
-        primaryActionEnabled = uiState.selectedLevel != null,
+        primaryActionEnabled = true,
         onPrimaryActionClick = onNextClick,
-        topAction =
-            if (uiState.disabilityType.supportsVoiceGuide) {
-                OnboardingStepAction(
-                    label =
-                        if (uiState.isVoiceGuideExpanded) {
-                            stringResource(id = R.string.onboarding_voice_guide_hide)
-                        } else {
-                            stringResource(id = R.string.onboarding_voice_guide_show)
-                        },
-                    highlighted = uiState.isVoiceGuideExpanded,
-                    onClick = onToggleVoiceGuide,
-                )
-            } else {
-                null
-            },
         modifier = modifier,
     ) {
-        OnboardingSummaryCard(
-            label = stringResource(id = R.string.onboarding_selected_type_label),
-            value = stringResource(id = uiState.disabilityType.titleRes),
-        )
-
-        if (uiState.disabilityType.supportsVoiceGuide && uiState.isVoiceGuideExpanded) {
-            OnboardingModeCard(
-                title = stringResource(id = R.string.onboarding_voice_guide_title),
-                description = stringResource(id = R.string.onboarding_voice_guide_description),
-                highlightVisualMode = true,
-            )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = RoundedCornerShape(EumRadius.large),
+            border = BorderStroke(width = 1.dp, color = MaterialTheme.colorScheme.secondary),
+        ) {
+            Column(
+                modifier = Modifier.padding(EumSpacing.medium),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.onboarding_low_vision_follow_up_card_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Text(
+                    text = stringResource(id = R.string.onboarding_low_vision_follow_up_card_description),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
+    }
+}
 
-        DisabilityLevel.entries.forEach { disabilityLevel ->
+@Composable
+fun MobilitySubtypeScreen(
+    uiState: MobilitySubtypeUiState,
+    onSubtypeSelected: (MobilitySubtype) -> Unit,
+    onNavigateBack: () -> Unit,
+    onNextClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OnboardingStepScaffold(
+        currentStep = 3,
+        totalSteps = 5,
+        title = stringResource(id = R.string.onboarding_mobility_subtype_screen_title),
+        description = stringResource(id = R.string.onboarding_primary_user_type_supporting),
+        primaryActionLabel = stringResource(id = R.string.action_next_step),
+        primaryActionEnabled = uiState.selectedMobilitySubtype != null,
+        onPrimaryActionClick = onNextClick,
+        navigationAction =
+            OnboardingStepAction(
+                label = stringResource(id = R.string.action_go_back_previous_step),
+                onClick = onNavigateBack,
+            ),
+        modifier = modifier,
+    ) {
+        MobilitySubtype.entries.forEach { mobilitySubtype ->
             OnboardingSelectionCard(
-                title = stringResource(id = disabilityLevel.titleRes),
-                description = stringResource(id = disabilityLevel.descriptionRes(uiState.disabilityType)),
-                selected = uiState.selectedLevel == disabilityLevel,
-                onClick = { onLevelSelected(disabilityLevel) },
+                title = stringResource(id = mobilitySubtype.titleRes),
+                description = stringResource(id = mobilitySubtype.descriptionRes),
+                selected = uiState.selectedMobilitySubtype == mobilitySubtype,
+                onClick = { onSubtypeSelected(mobilitySubtype) },
+                leadingIconRes = mobilitySubtype.iconRes,
             )
         }
     }
@@ -130,8 +156,8 @@ fun LocationTermsScreen(
     modifier: Modifier = Modifier,
 ) {
     OnboardingStepScaffold(
-        currentStep = 3,
-        totalSteps = 3,
+        currentStep = 4,
+        totalSteps = 5,
         title = stringResource(id = R.string.onboarding_terms_screen_title),
         description = stringResource(id = R.string.onboarding_terms_screen_description),
         primaryActionLabel = stringResource(id = R.string.action_agree_and_start),
@@ -148,15 +174,6 @@ fun LocationTermsScreen(
             },
         modifier = modifier,
     ) {
-        OnboardingSummaryCard(
-            label = stringResource(id = R.string.onboarding_selected_type_label),
-            value = stringResource(id = uiState.disabilityType.titleRes),
-        )
-        OnboardingSummaryCard(
-            label = stringResource(id = R.string.onboarding_selected_level_label),
-            value = stringResource(id = uiState.disabilityLevel.titleRes),
-        )
-
         LocationTermsStatusCard(consentStatus = uiState.consentStatus)
 
         TermsInfoCard(
@@ -205,82 +222,6 @@ fun LocationTermsScreen(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
-            )
-        }
-    }
-}
-
-@Composable
-private fun OnboardingModeCard(
-    title: String,
-    description: String,
-    highlightVisualMode: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val accentColor =
-        if (highlightVisualMode) {
-            MaterialTheme.colorScheme.secondary
-        } else {
-            MaterialTheme.colorScheme.primary
-        }
-    val containerColor =
-        if (highlightVisualMode) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f)
-        }
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = containerColor,
-        shape = RoundedCornerShape(EumRadius.large),
-        border = BorderStroke(width = 1.dp, color = accentColor.copy(alpha = 0.45f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = accentColor,
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun OnboardingSummaryCard(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.large),
-        border = BorderStroke(width = 1.dp, color = MaterialTheme.colorScheme.outline),
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -462,40 +403,26 @@ private fun ConsentOptionCard(
 
     Surface(
         modifier = modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                onValueChange = onCheckedChange,
-                role = Role.Checkbox,
-            ),
+            .fillMaxWidth(),
         color = containerColor,
         shape = RoundedCornerShape(EumRadius.large),
         border = BorderStroke(width = if (checked) 2.dp else 1.dp, color = borderColor),
+        onClick = { onCheckedChange(!checked) },
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(EumSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
         ) {
-            Checkbox(
-                checked = checked,
-                onCheckedChange = null,
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

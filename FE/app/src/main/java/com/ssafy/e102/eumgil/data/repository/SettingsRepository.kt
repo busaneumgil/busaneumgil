@@ -29,12 +29,16 @@ class DefaultSettingsRepository(
 
     override suspend fun getInitSettings(): InitSettings = initSettingsLocalDataSource.getInitSettings()
 
-    override suspend fun saveDisabilityType(disabilityType: String) {
-        initSettingsLocalDataSource.saveDisabilityType(disabilityType)
+    override suspend fun savePrimaryUserType(selectedPrimaryUserType: String) {
+        initSettingsLocalDataSource.savePrimaryUserType(selectedPrimaryUserType)
     }
 
-    override suspend fun saveDisabilityLevel(disabilityLevel: String) {
-        initSettingsLocalDataSource.saveDisabilityLevel(disabilityLevel)
+    override suspend fun saveMobilitySubtype(selectedMobilitySubtype: String) {
+        initSettingsLocalDataSource.saveMobilitySubtype(selectedMobilitySubtype)
+    }
+
+    override suspend fun saveLowVisionFollowUpCompleted(isCompleted: Boolean) {
+        initSettingsLocalDataSource.saveLowVisionFollowUpCompleted(isCompleted = isCompleted)
     }
 
     override suspend fun saveLocationTermsAgreement(

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -25,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,6 +52,7 @@ fun OnboardingStepScaffold(
     primaryActionEnabled: Boolean,
     onPrimaryActionClick: () -> Unit,
     modifier: Modifier = Modifier,
+    navigationAction: OnboardingStepAction? = null,
     topAction: OnboardingStepAction? = null,
     secondaryAction: OnboardingStepAction? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -100,44 +105,59 @@ fun OnboardingStepScaffold(
                 .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.large),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.large),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OnboardingProgressIndicator(
-                    currentStep = currentStep,
-                    totalSteps = totalSteps,
-                    modifier = Modifier.weight(1f),
-                )
+            if (navigationAction != null || topAction != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    navigationAction?.let { action ->
+                        IconButton(
+                            onClick = action.onClick,
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_action_back),
+                                contentDescription = action.label,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
 
-                topAction?.let { action ->
-                    OutlinedButton(
-                        onClick = action.onClick,
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(EumRadius.full),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor =
-                                if (action.highlighted) {
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surface
-                                },
-                        ),
-                    ) {
-                        Text(
-                            text = action.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            color =
-                                if (action.highlighted) {
-                                    MaterialTheme.colorScheme.secondary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                        )
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    topAction?.let { action ->
+                        OutlinedButton(
+                            onClick = action.onClick,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            shape = RoundedCornerShape(EumRadius.full),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor =
+                                    if (action.highlighted) {
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    },
+                            ),
+                        ) {
+                            Text(
+                                text = action.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color =
+                                    if (action.highlighted) {
+                                        MaterialTheme.colorScheme.secondary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                            )
+                        }
                     }
                 }
             }
+
+            OnboardingProgressIndicator(
+                currentStep = currentStep,
+                totalSteps = totalSteps,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
@@ -148,11 +168,13 @@ fun OnboardingStepScaffold(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (description.isNotBlank()) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             content()

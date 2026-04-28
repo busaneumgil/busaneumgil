@@ -67,7 +67,7 @@ class ReportViewModelTest {
                     latestDraft =
                         ReportDraftData(
                             draftId = "draft-1",
-                            reportCategory = ReportType.OBSTACLE.apiValue,
+                            reportCategory = ReportType.OTHER_OBSTACLE.apiValue,
                             description = "복원할 설명",
                             address = "부산역 인근",
                             latitude = 35.1151,
@@ -91,7 +91,7 @@ class ReportViewModelTest {
 
             val uiState = viewModel.uiState.value
 
-            assertEquals(ReportType.OBSTACLE, uiState.reportType.value)
+            assertEquals(ReportType.OTHER_OBSTACLE, uiState.reportType.value)
             assertEquals("복원할 설명", uiState.description.value)
             assertEquals("부산역 인근", uiState.location.addressText)
             assertEquals(ReportLocationSource.MapPin, uiState.location.source)
@@ -140,7 +140,7 @@ class ReportViewModelTest {
                     latestDraft =
                         ReportDraftData(
                             draftId = "draft-1",
-                            reportCategory = ReportType.ROAD_CONSTRUCTION.apiValue,
+                            reportCategory = ReportType.CONSTRUCTION.apiValue,
                             description = "삭제할 draft",
                             address = null,
                             latitude = null,
@@ -158,7 +158,7 @@ class ReportViewModelTest {
 
             viewModel.onAction(ReportUiAction.DraftResumeClicked)
             advanceUntilIdle()
-            assertEquals(ReportType.ROAD_CONSTRUCTION, viewModel.uiState.value.reportType.value)
+            assertEquals(ReportType.CONSTRUCTION, viewModel.uiState.value.reportType.value)
 
             viewModel.onAction(ReportUiAction.DraftDiscardClicked)
             advanceUntilIdle()
@@ -216,7 +216,7 @@ class ReportViewModelTest {
                     }
                 }
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.TACTILE_BLOCK_DAMAGE))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.TACTILE_BLOCK))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =
@@ -236,7 +236,7 @@ class ReportViewModelTest {
             val uiState = viewModel.uiState.value
             val completeEvent = event.await() as ReportUiEvent.NavigateToReportComplete
 
-            assertEquals(ReportType.TACTILE_BLOCK_DAMAGE.apiValue, savedOutbox.reportCategory)
+            assertEquals(ReportType.TACTILE_BLOCK.apiValue, savedOutbox.reportCategory)
             assertEquals("점자블록 파손", savedOutbox.description)
             assertEquals(35.1796, savedOutbox.latitude, 0.0)
             assertEquals(129.0756, savedOutbox.longitude, 0.0)
@@ -274,7 +274,7 @@ class ReportViewModelTest {
             val viewModel = ReportViewModel(reportRepository = repository)
             advanceUntilIdle()
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OBSTACLE))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =
@@ -305,7 +305,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository(failOutbox = true)
             val viewModel = ReportViewModel(reportRepository = repository)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OBSTACLE))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =
@@ -323,11 +323,146 @@ class ReportViewModelTest {
 
             val uiState = viewModel.uiState.value
 
-            assertEquals(ReportType.OBSTACLE, uiState.reportType.value)
+            assertEquals(ReportType.OTHER_OBSTACLE, uiState.reportType.value)
             assertEquals("장애물", uiState.description.value)
             assertTrue(uiState.screenState is ReportScreenState.Failure)
             assertTrue(uiState.submitState is ReportSubmitState.Failed)
             assertTrue(uiState.outboxState is ReportOutboxState.Failed)
+        }
+
+    @Test
+    fun `selecting report type advances step to LocationConfirm`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS))
+            advanceUntilIdle()
+
+            assertEquals(ReportStep.LocationConfirm, viewModel.uiState.value.currentStep)
+            assertEquals(ReportType.STAIRS, viewModel.uiState.value.reportType.value)
+        }
+
+    @Test
+    fun `next step click on location confirm with valid location advances to detail input`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.SLOPE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.NextStepClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportStep.DetailInput, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    fun `next step click on location confirm without location stays on same step`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.ELEVATOR))
+            viewModel.onAction(ReportUiAction.NextStepClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportStep.LocationConfirm, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    fun `back click on intermediate step moves to previous step without navigating`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.GUIDANCE_BLOCK))
+            assertEquals(ReportStep.LocationConfirm, viewModel.uiState.value.currentStep)
+
+            viewModel.onAction(ReportUiAction.BackClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    fun `back click on type selection emits NavigateBack`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+            val event = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.BackClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportUiEvent.NavigateBack, event.await())
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    fun `successful submit sets current step to Complete`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.FACILITY_DAMAGE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportStep.Complete, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    fun `resume draft with location jumps to DetailInput step`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS.apiValue,
+                            description = "복원할 설명",
+                            address = "부산역 인근",
+                            latitude = 35.1151,
+                            longitude = 129.0414,
+                            locationSource = ReportLocationSource.MapPin.name,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportStep.DetailInput, viewModel.uiState.value.currentStep)
         }
 
     @Test
@@ -336,7 +471,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository(failOutbox = true)
             val viewModel = ReportViewModel(reportRepository = repository)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OBSTACLE))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =

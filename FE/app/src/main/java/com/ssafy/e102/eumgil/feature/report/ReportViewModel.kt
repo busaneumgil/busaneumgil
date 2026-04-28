@@ -32,7 +32,7 @@ class ReportViewModel(
 
     fun onAction(action: ReportUiAction) {
         when (action) {
-            ReportUiAction.BackClicked -> emitUiEvent(ReportUiEvent.NavigateBack)
+            ReportUiAction.BackClicked -> handleBackClicked()
             ReportUiAction.DraftDiscardClicked -> discardDraft()
             ReportUiAction.DraftResumeClicked -> resumeDraft()
             ReportUiAction.SaveDraftClicked -> saveDraft()
@@ -50,8 +50,34 @@ class ReportViewModel(
             ReportUiAction.PhotoBlurred -> touchPhoto()
             is ReportUiAction.DescriptionChanged -> updateDescription(action.description)
             ReportUiAction.DescriptionBlurred -> touchDescription()
+            ReportUiAction.NextStepClicked -> advanceStep()
             ReportUiAction.SubmitClicked,
             ReportUiAction.RetrySubmitClicked -> submitReport()
+        }
+    }
+
+    private fun handleBackClicked() {
+        val currentStep = mutableUiState.value.currentStep
+        val previousStep = currentStep.previousOrNull()
+        if (previousStep == null) {
+            emitUiEvent(ReportUiEvent.NavigateBack)
+        } else {
+            mutableUiState.update { state -> state.copy(currentStep = previousStep) }
+        }
+    }
+
+    private fun advanceStep() {
+        val state = mutableUiState.value
+        val nextStep =
+            when (state.currentStep) {
+                ReportStep.TypeSelection ->
+                    if (state.reportType.value != null) ReportStep.LocationConfirm else null
+                ReportStep.LocationConfirm ->
+                    if (state.isLocationStepConfirmable) ReportStep.DetailInput else null
+                ReportStep.DetailInput, ReportStep.Complete -> null
+            }
+        if (nextStep != null) {
+            mutableUiState.update { it.copy(currentStep = nextStep) }
         }
     }
 
@@ -155,8 +181,15 @@ class ReportViewModel(
 
     private fun selectReportType(type: ReportType) {
         mutableUiState.update { state ->
+            val nextStep =
+                if (state.currentStep == ReportStep.TypeSelection) {
+                    ReportStep.LocationConfirm
+                } else {
+                    state.currentStep
+                }
             state.copy(
                 screenState = ReportScreenState.Editing,
+                currentStep = nextStep,
                 reportType = state.reportType.withValue(type),
                 draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
@@ -330,6 +363,7 @@ class ReportViewModel(
                     mutableUiState.value =
                         validatedState.copy(
                             screenState = ReportScreenState.Completed,
+                            currentStep = ReportStep.Complete,
                             draftId = if (isDraftDeleted) null else validatedState.draftId,
                             hasExistingDraft = !isDraftDeleted && validatedState.hasExistingDraft,
                             draftSaveState =
@@ -409,6 +443,14 @@ class ReportViewModel(
             }
     }
 }
+
+private fun ReportStep.previousOrNull(): ReportStep? =
+    when (this) {
+        ReportStep.TypeSelection -> null
+        ReportStep.LocationConfirm -> ReportStep.TypeSelection
+        ReportStep.DetailInput -> ReportStep.LocationConfirm
+        ReportStep.Complete -> null
+    }
 
 private fun ReportTypeInput.withValue(type: ReportType): ReportTypeInput =
     copy(
@@ -500,7 +542,15 @@ private fun ReportDraftData.toUiState(): ReportUiState {
             )
         }
 
+    val resumedStep =
+        when {
+            location != null -> ReportStep.DetailInput
+            reportType != null -> ReportStep.LocationConfirm
+            else -> ReportStep.TypeSelection
+        }
+
     return ReportUiState(
+        currentStep = resumedStep,
         draftId = draftId,
         hasExistingDraft = true,
         reportType =

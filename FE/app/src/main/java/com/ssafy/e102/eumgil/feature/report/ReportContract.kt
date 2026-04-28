@@ -8,6 +8,7 @@ object ReportFormLimits {
 
 data class ReportUiState(
     val screenState: ReportScreenState = ReportScreenState.Editing,
+    val currentStep: ReportStep = ReportStep.TypeSelection,
     val draftId: String? = null,
     val hasExistingDraft: Boolean = false,
     val reportType: ReportTypeInput = ReportTypeInput(),
@@ -24,6 +25,9 @@ data class ReportUiState(
             photo.value != null ||
             description.value.isNotBlank()
 
+    val isLocationStepConfirmable: Boolean
+        get() = location.value != null && location.error == null
+
     val isSubmitEnabled: Boolean
         get() = screenState == ReportScreenState.Editing &&
             submitState !is ReportSubmitState.Submitting &&
@@ -33,6 +37,13 @@ data class ReportUiState(
             location.error == null &&
             photo.error == null &&
             description.error == null
+}
+
+enum class ReportStep {
+    TypeSelection,
+    LocationConfirm,
+    DetailInput,
+    Complete,
 }
 
 data class ReportTypeInput(
@@ -84,13 +95,18 @@ data class ReportPhoto(
     val sizeBytes: Long? = null,
 )
 
+// apiValue codes are FE candidates pending BE enum confirmation (BE 연동 요청사항 §5.2).
 enum class ReportType(
     val apiValue: String,
 ) {
-    ROAD_CONSTRUCTION("CONSTRUCTION"),
-    OBSTACLE("OBSTACLE"),
-    TACTILE_BLOCK_DAMAGE("DAMAGE"),
-    OTHER("OTHER"),
+    CONSTRUCTION("CONSTRUCTION"),
+    STAIRS("STAIRS"),
+    SLOPE("SLOPE"),
+    ELEVATOR("ELEVATOR"),
+    TACTILE_BLOCK("TACTILE_BLOCK"),
+    GUIDANCE_BLOCK("GUIDANCE_BLOCK"),
+    FACILITY_DAMAGE("FACILITY_DAMAGE"),
+    OTHER_OBSTACLE("OTHER_OBSTACLE"),
 }
 
 enum class ReportLocationSource {
@@ -207,6 +223,8 @@ sealed interface ReportUiAction {
     data object SubmitClicked : ReportUiAction
 
     data object RetrySubmitClicked : ReportUiAction
+
+    data object NextStepClicked : ReportUiAction
 }
 
 sealed interface ReportUiEvent {

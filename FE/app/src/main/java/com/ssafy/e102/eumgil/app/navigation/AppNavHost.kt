@@ -90,6 +90,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 settingsRepository = settingsRepository,
                 initialSettings = restoredSettings,
             )
+            lowVisionNavGraph(navController = navController)
             mainNavGraph(navController = navController)
         }
     }

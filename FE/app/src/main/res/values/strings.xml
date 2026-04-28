@@ -402,4 +402,21 @@
     <string name="terms_guide_nav_bookmark">북마크</string>
     <string name="terms_guide_nav_category">카테고리</string>
     <string name="terms_guide_nav_my">마이</string>
+
+    <!--
+        feature/lowvision — 시각지원 모드 메인 셸
+        Figma file MREqSzkmwhRcXnFS3lzW17, nodes 371:105 (홈) / 371:300 (입력중)
+    -->
+    <string name="low_vision_home_voice_input_label">음성 입력</string>
+    <string name="low_vision_home_current_location_label">현재 위치</string>
+    <string name="low_vision_home_status_title">음성 입력 대기 중</string>
+    <string name="low_vision_home_status_description">마이크를 누르고 말씀해 주세요</string>
+    <string name="low_vision_home_voice_card_a11y">음성 입력 카드. 두 번 탭하면 음성 입력을 시작합니다.</string>
+    <string name="low_vision_home_location_card_a11y">현재 위치 카드. 두 번 탭하면 지도로 이동합니다.</string>
+    <string name="low_vision_voice_input_recording_label">입력중</string>
+    <string name="low_vision_voice_input_screen_a11y">음성 입력 진행 화면. 두 번 탭하면 입력을 종료합니다.</string>
+    <string name="low_vision_nav_home">홈</string>
+    <string name="low_vision_nav_bookmark">북마크</string>
+    <string name="low_vision_nav_category">카테고리</string>
+    <string name="low_vision_nav_my_page">마이페이지</string>
 </resources>

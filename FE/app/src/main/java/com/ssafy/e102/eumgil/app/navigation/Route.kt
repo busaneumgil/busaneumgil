@@ -65,6 +65,24 @@ sealed interface TopLevelRoute : AppRoute {
     }
 }
 
+/**
+ * 시각지원(저시력/시각장애) 모드 풀스크린 셸 화면들의 라우트.
+ *
+ * 약관 walkthrough([OnboardingRoute.TermsGuide]) 이후 진입하는 음성 안내 메인 흐름.
+ * 출처: Figma file MREqSzkmwhRcXnFS3lzW17, nodes 371:105 / 371:300.
+ */
+sealed interface LowVisionRoute : AppRoute {
+    /** 시각지원 모드 메인 홈 (Figma node 371:105). */
+    data object Home : LowVisionRoute {
+        override val route: String = "low_vision/home"
+    }
+
+    /** 시각지원 모드 음성 입력 진행 화면 (Figma node 371:300). */
+    data object VoiceInput : LowVisionRoute {
+        override val route: String = "low_vision/voice_input"
+    }
+}
+
 sealed interface SearchRoute : AppRoute {
     data object Search : SearchRoute {
         override val route: String = "search"

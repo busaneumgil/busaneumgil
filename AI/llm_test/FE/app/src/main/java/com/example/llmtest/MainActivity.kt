@@ -33,10 +33,9 @@ class MainActivity : AppCompatActivity() {
     private var sttStartMs = 0L
 
     private val modelMap = mapOf(
-        "Qwen 2.5 7B (로컬)"      to "qwen_ollama",
-        "Gemini 2.5 Flash Lite"   to "gemini",
-        "Claude 3.5 Haiku"        to "claude",
-        "GPT-5 nano"              to "gpt"
+        "Gemini 2.5 Flash" to "gemini",
+        "Claude Haiku 4.5" to "claude",
+        "GPT-5 mini"       to "gpt_mini"
     )
 
     companion object {
@@ -170,7 +169,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendToLLM(text: String) {
         val selectedModel = binding.spinnerModel.selectedItem.toString()
-        val modelId = modelMap[selectedModel] ?: "qwen_ollama"
+        val modelId = modelMap[selectedModel] ?: "gemini"
 
         showLoading(true)
         lifecycleScope.launch {
@@ -194,10 +193,9 @@ class MainActivity : AppCompatActivity() {
         binding.cardResult.visibility = View.VISIBLE
 
         val providerLabel = mapOf(
-            "qwen_ollama" to "Qwen 2.5 7B (로컬)",
-            "gemini"      to "Gemini 2.5 Flash Lite",
-            "claude"      to "Claude 3.5 Haiku",
-            "gpt"         to "GPT-5 nano"
+            "gemini"   to "Gemini 2.5 Flash",
+            "claude"   to "Claude Haiku 4.5",
+            "gpt_mini" to "GPT-5 mini"
         )[result.provider] ?: result.provider
 
         binding.tvResultProvider.text = if (result.success) "✅ $providerLabel" else "❌ $providerLabel"

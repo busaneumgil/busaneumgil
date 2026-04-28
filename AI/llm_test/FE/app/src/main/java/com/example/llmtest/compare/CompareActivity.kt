@@ -12,44 +12,32 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.example.llmtest.R
 import com.example.llmtest.databinding.ActivityCompareBinding
-import com.example.llmtest.network.models.CompareResult
 import com.example.llmtest.network.RetrofitClient
+import com.example.llmtest.network.models.CompareResult
+import com.example.llmtest.network.models.LLMRequest
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.card.MaterialCardView
-import com.google.gson.Gson
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.sse.EventSource
-import okhttp3.sse.EventSourceListener
-import okhttp3.sse.EventSources
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 
 class CompareActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityCompareBinding
     private lateinit var speechRecognizer: SpeechRecognizer
-    private val gson = Gson()
-    private var eventSource: EventSource? = null
     private var resultCount = 0
     private var isListening = false
 
-    private val sseClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
-
     companion object {
         private const val TAG = "CompareActivity"
-        private val MEDALS = listOf("🥇", "🥈", "🥉", "4️⃣")
+        private val MEDALS = listOf("🥇", "🥈", "🥉")
         private val PROVIDER_LABELS = mapOf(
-            "qwen_ollama" to "Qwen 2.5 7B (Ollama)",
-            "gemini"      to "Gemini 2.5 Flash Lite",
-            "claude"      to "Claude 3.5 Haiku",
-            "gpt"         to "GPT-5 nano"
+            "gemini"   to "Gemini 2.5 Flash",
+            "claude"   to "Claude Haiku 4.5",
+            "gpt_mini" to "GPT-5 mini"
         )
+        private val MODELS = listOf("gemini", "claude", "gpt_mini")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,7 +73,7 @@ class CompareActivity : AppCompatActivity() {
     private fun stopSTT() {
         speechRecognizer.stopListening()
         isListening = false
-        binding.btnStartCompare.text = "🎙️  음성 입력 후 4개 LLM 비교 시작"
+        binding.btnStartCompare.text = "🎙️  음성 입력 후 3개 LLM 비교 시작"
     }
 
     private fun createRecognitionListener() = object : RecognitionListener {
@@ -100,13 +88,13 @@ class CompareActivity : AppCompatActivity() {
         override fun onEndOfSpeech() {
             isListening = false
             runOnUiThread {
-                binding.btnStartCompare.text = "🎙️  음성 입력 후 4개 LLM 비교 시작"
+                binding.btnStartCompare.text = "🎙️  음성 입력 후 3개 LLM 비교 시작"
             }
         }
         override fun onError(error: Int) {
             isListening = false
             runOnUiThread {
-                binding.btnStartCompare.text = "🎙️  음성 입력 후 4개 LLM 비교 시작"
+                binding.btnStartCompare.text = "🎙️  음성 입력 후 3개 LLM 비교 시작"
                 binding.tvCompareStatus.text = "음성 인식 오류 (error=$error)"
             }
         }
@@ -116,65 +104,38 @@ class CompareActivity : AppCompatActivity() {
                 ?.firstOrNull() ?: return
             runOnUiThread {
                 binding.tvRecognizedText.text = "\"$text\""
-                binding.tvCompareStatus.text = "4개 LLM에 동시 전송 중..."
+                binding.tvCompareStatus.text = "3개 LLM에 동시 전송 중..."
                 binding.btnStartCompare.isEnabled = false
             }
-            startCompareStream(text, sttStartMs)
+            startCompareAll(text, sttStartMs)
         }
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    private fun startCompareStream(text: String, sttStartMs: Long) {
-        val baseUrl = RetrofitClient.BASE_URL
-        val url = "$baseUrl/api/compare/stream" +
-                  "?text=${android.net.Uri.encode(text)}&stt_start_ms=$sttStartMs"
-
-        val request = Request.Builder().url(url).build()
-
-        eventSource = EventSources.createFactory(sseClient)
-            .newEventSource(request, object : EventSourceListener() {
-                override fun onOpen(eventSource: EventSource, response: Response) {
-                    Log.d(TAG, "SSE connected")
-                }
-
-                override fun onEvent(
-                    eventSource: EventSource,
-                    id: String?,
-                    type: String?,
-                    data: String
-                ) {
-                    if (data.contains("\"event\":\"done\"")) {
-                        runOnUiThread {
-                            binding.tvCompareStatus.text = "✅ 비교 완료"
-                            binding.btnStartCompare.isEnabled = true
-                        }
-                        return
-                    }
+    private fun startCompareAll(text: String, sttStartMs: Long) {
+        lifecycleScope.launch {
+            val jobs = MODELS.map { modelKey ->
+                async {
                     try {
-                        val result = gson.fromJson(data, CompareResult::class.java)
+                        val result = RetrofitClient.apiService.chatWithLLM(
+                            LLMRequest(text = text, model = modelKey, stt_start_ms = sttStartMs)
+                        )
                         runOnUiThread { addResultCard(result) }
                     } catch (e: Exception) {
-                        Log.e(TAG, "JSON parse error: $data", e)
+                        Log.e(TAG, "Failed for $modelKey", e)
+                        runOnUiThread {
+                            binding.tvCompareStatus.text = "❌ $modelKey 오류: ${e.message}"
+                        }
                     }
                 }
-
-                override fun onFailure(
-                    eventSource: EventSource,
-                    t: Throwable?,
-                    response: Response?
-                ) {
-                    Log.e(TAG, "SSE failure", t)
-                    runOnUiThread {
-                        binding.tvCompareStatus.text = "❌ 연결 오류: ${t?.message ?: response?.code}"
-                        binding.btnStartCompare.isEnabled = true
-                    }
-                }
-
-                override fun onClosed(eventSource: EventSource) {
-                    Log.d(TAG, "SSE closed")
-                }
-            })
+            }
+            jobs.forEach { it.await() }
+            runOnUiThread {
+                binding.tvCompareStatus.text = "✅ 비교 완료"
+                binding.btnStartCompare.isEnabled = true
+            }
+        }
     }
 
     private fun addResultCard(result: CompareResult) {
@@ -246,7 +207,6 @@ class CompareActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        eventSource?.cancel()
         speechRecognizer.destroy()
         super.onDestroy()
     }

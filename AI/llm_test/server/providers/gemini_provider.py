@@ -3,7 +3,7 @@ import time
 import requests
 from providers.base_provider import BaseProvider, LLMResponse
 from providers.utils import SYSTEM_PROMPT, parse_json_response
-from cost_calculator import calculate_cost
+from utils.cost_calculator import calculate_cost
 
 
 class GeminiProvider(BaseProvider):

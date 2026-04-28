@@ -7,7 +7,15 @@ from dataclasses import asdict
 # server/ 루트를 경로에 추가
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from comparator import LLMComparator
+from providers.gemini_provider import GeminiProvider
+from providers.claude_provider import ClaudeProvider
+from providers.gpt_mini_provider import GPTMiniProvider
+
+PROVIDERS = {
+    "gemini":   GeminiProvider(),
+    "claude":   ClaudeProvider(),
+    "gpt_mini": GPTMiniProvider(),
+}
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "test_results")
 
@@ -23,27 +31,31 @@ TEST_INPUTS = [
 def main():
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
-    comparator = LLMComparator()
     run_time = datetime.now()
 
     print("=" * 40)
     print("배치 테스트 시작")
     print("=" * 40)
     print(f"테스트 입력 수: {len(TEST_INPUTS)}개")
-    print(f"테스트 모델: {list(comparator.providers.keys())}")
+    print(f"테스트 모델: {list(PROVIDERS.keys())}")
     print()
 
     results = {}
 
     for idx, text in enumerate(TEST_INPUTS, start=1):
         print(f"[{idx}/{len(TEST_INPUTS)}] 입력: {text}")
-        stt_start_ms = int(time.time() * 1000)
-        model_results = list(comparator.compare_stream(text, stt_start_ms))
-        results[text] = model_results
+        model_results = []
 
-        for r in sorted(model_results, key=lambda x: x.total_latency_ms):
-            status = "✅" if r.success else "❌"
-            print(f"  - {r.provider}: intent={r.intent} | {r.total_latency_ms}ms {status}")
+        for model_key, provider in PROVIDERS.items():
+            start_ms = int(time.time() * 1000)
+            result = provider.call(text)
+            result.total_latency_ms = int(time.time() * 1000) - start_ms
+            model_results.append((model_key, result))
+
+            status = "✅" if result.success else "❌"
+            print(f"  - {model_key}: intent={result.intent} | {result.total_latency_ms}ms {status}")
+
+        results[text] = model_results
         print()
 
     # Markdown 결과 저장
@@ -53,7 +65,7 @@ def main():
     lines = ["# 배치 테스트 결과\n"]
     lines.append(f"- **실행 시각**: {run_time.strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"- **테스트 입력 수**: {len(TEST_INPUTS)}개")
-    lines.append(f"- **테스트 모델**: {', '.join(comparator.providers.keys())}")
+    lines.append(f"- **테스트 모델**: {', '.join(PROVIDERS.keys())}")
     lines.append("")
 
     for text, model_results in results.items():
@@ -61,10 +73,10 @@ def main():
         lines.append(f"## 입력: `{text}`\n")
         lines.append("| 모델 | intent | departure | destination | latency(ms) | 성공 |")
         lines.append("|------|--------|-----------|-------------|-------------|------|")
-        for r in sorted(model_results, key=lambda x: x.total_latency_ms):
+        for model_key, r in sorted(model_results, key=lambda x: x[1].total_latency_ms):
             d = asdict(r)
             lines.append(
-                f"| {r.provider} | {d.get('intent','-')} | {d.get('departure') or '-'} "
+                f"| {model_key} | {d.get('intent', '-')} | {d.get('departure') or '-'} "
                 f"| {d.get('destination') or '-'} | {r.total_latency_ms} | {'✅' if r.success else '❌'} |"
             )
         lines.append("")

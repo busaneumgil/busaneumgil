@@ -5,7 +5,7 @@ from typing import Optional
 
 @dataclass
 class LLMResponse:
-    provider: str               # "gemini" | "claude" | "gpt" | "gpt_mini"
+    provider: str               # "gemini" | "claude" | "gpt_mini"
     raw_text: str               # LLM 원본 응답 텍스트
     departure: Optional[str]    # 추출된 출발지
     destination: Optional[str]  # 추출된 도착지

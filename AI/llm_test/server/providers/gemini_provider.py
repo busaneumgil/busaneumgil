@@ -9,7 +9,7 @@ from cost_calculator import calculate_cost
 class GeminiProvider(BaseProvider):
     BASE_URL = (
         "https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com"
-        "/v1beta/models/gemini-2.5-flash-lite:generateContent"
+        "/v1beta/models/gemini-2.5-flash:generateContent"
     )
 
     def __init__(self):

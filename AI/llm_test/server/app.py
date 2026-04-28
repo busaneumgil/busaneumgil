@@ -24,7 +24,7 @@ CORS(app)
 
 logger.info("Initializing services...")
 comparator = LLMComparator()
-logger.info("LLMComparator ready (gemini / claude / gpt / gpt_mini)")
+logger.info("LLMComparator ready (gemini / claude / gpt_mini)")
 
 
 @app.route('/api/chat/llm', methods=['POST'])
@@ -158,6 +158,6 @@ def health_check():
 if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info("LLM Voice Test Server Starting...")
-    logger.info("Providers: gemini / claude / gpt / gpt_mini")
+    logger.info("Providers: gemini / claude / gpt_mini")
     logger.info("=" * 60)
     app.run(host=Config.HOST, port=Config.PORT, debug=Config.DEBUG)

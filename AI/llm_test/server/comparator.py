@@ -8,13 +8,11 @@ class LLMComparator:
     def __init__(self):
         from providers.gemini_provider import GeminiProvider
         from providers.claude_provider import ClaudeProvider
-        from providers.gpt_provider import GPTProvider
         from providers.gpt_mini_provider import GPTMiniProvider
 
         self.providers = {
             "gemini":   GeminiProvider(),
             "claude":   ClaudeProvider(),
-            "gpt":      GPTProvider(),
             "gpt_mini": GPTMiniProvider(),
         }
 

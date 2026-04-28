@@ -1,10 +1,9 @@
 # GMS 크레딧 단가 (per 1K tokens)
 # 출처: GMS 각 모델 API 문서
 PRICING = {
-    "gemini":      {"input": 0.001,  "output": 0.004},
-    "claude":      {"input": 0.008,  "output": 0.04},
-    "gpt":         {"input": 0.0005, "output": 0.004},
-    "gpt_mini":    {"input": 0.0025, "output": 0.02},
+    "gemini":   {"input": 0.003,  "output": 0.025},   # gemini-2.5-flash
+    "claude":   {"input": 0.01,   "output": 0.05},    # claude-haiku-4-5-20251001
+    "gpt_mini": {"input": 0.0025, "output": 0.02},    # gpt-5-mini
 }
 
 

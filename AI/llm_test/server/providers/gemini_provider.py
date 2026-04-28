@@ -2,7 +2,7 @@ import os
 import time
 import requests
 from providers.base_provider import BaseProvider, LLMResponse
-from providers.utils import SYSTEM_PROMPT, parse_json_response, is_success
+from providers.utils import SYSTEM_PROMPT_MOBILITY, parse_json_response, is_success
 from utils.cost_calculator import calculate_cost
 
 
@@ -19,14 +19,15 @@ class GeminiProvider(BaseProvider):
     def provider_name(self):
         return "gemini"
 
-    def call(self, user_input: str) -> LLMResponse:
+    def call(self, user_input: str, system_prompt: str = "") -> LLMResponse:
+        prompt = system_prompt or SYSTEM_PROMPT_MOBILITY
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": self.gms_key
         }
         body = {
             "system_instruction": {
-                "parts": [{"text": SYSTEM_PROMPT}]
+                "parts": [{"text": prompt}]
             },
             "contents": [
                 {"parts": [{"text": user_input}]}

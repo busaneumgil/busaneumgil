@@ -2,7 +2,7 @@ import os
 import time
 import requests
 from providers.base_provider import BaseProvider, LLMResponse
-from providers.utils import SYSTEM_PROMPT, parse_json_response, is_success
+from providers.utils import SYSTEM_PROMPT_MOBILITY, parse_json_response, is_success
 from utils.cost_calculator import calculate_cost
 
 
@@ -16,7 +16,8 @@ class ClaudeProvider(BaseProvider):
     def provider_name(self):
         return "claude"
 
-    def call(self, user_input: str) -> LLMResponse:
+    def call(self, user_input: str, system_prompt: str = "") -> LLMResponse:
+        prompt = system_prompt or SYSTEM_PROMPT_MOBILITY
         headers = {
             "Content-Type": "application/json",
             "x-api-key": self.gms_key,
@@ -25,7 +26,7 @@ class ClaudeProvider(BaseProvider):
         body = {
             "model": "claude-haiku-4-5-20251001",
             "max_tokens": 1024,
-            "system": SYSTEM_PROMPT,
+            "system": prompt,
             "messages": [
                 {"role": "user", "content": user_input}
             ]

@@ -24,7 +24,7 @@ class LLMResponse:
 
 class BaseProvider(ABC):
     @abstractmethod
-    def call(self, user_input: str) -> LLMResponse:
+    def call(self, user_input: str, system_prompt: str = "") -> LLMResponse:
         pass
 
     @property

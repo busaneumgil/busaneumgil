@@ -41,13 +41,13 @@ class TopLevelDestinationTest {
     }
 
     @Test
-    fun `top level tabs expose matching vector icons`() {
+    fun `top level tabs expose matching icons`() {
         val actualIcons = TopLevelDestination.entries.map { destination -> destination.iconRes }
 
         assertEquals(
             listOf(
                 R.drawable.ic_nav_home,
-                R.drawable.ic_action_favorite,
+                R.drawable.ic_nav_bookmark_outline,
                 R.drawable.ic_nav_report,
                 R.drawable.ic_nav_mypage,
             ),

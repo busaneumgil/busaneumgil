@@ -28,9 +28,7 @@ fun NavGraphBuilder.onboardingNavGraph(
         val coroutineScope = rememberCoroutineScope()
 
         PrimaryUserTypeRoute(
-            initialSelectedType =
-                PrimaryUserType.fromRouteValue(initialSettings.selectedPrimaryUserType),
-            onNavigateNext = { primaryUserType ->
+            onTypeSelected = { primaryUserType ->
                 coroutineScope.launch {
                     settingsRepository.savePrimaryUserType(primaryUserType.routeValue)
                     navController.navigate(resolvePrimaryUserTypeNextRoute(primaryUserType))
@@ -56,16 +54,6 @@ fun NavGraphBuilder.onboardingNavGraph(
         val coroutineScope = rememberCoroutineScope()
 
         MobilityTypeSecondaryRoute(
-            initialSelectedSubtype =
-                MobilitySubtype.fromRouteValue(initialSettings.selectedMobilitySubtype),
-            onNavigateBack = {
-                navController.navigate(OnboardingRoute.UserTypePrimary.route) {
-                    launchSingleTop = true
-                    popUpTo(OnboardingRoute.UserTypePrimary.route) {
-                        inclusive = false
-                    }
-                }
-            },
             onNavigateNext = { mobilitySubtype ->
                 coroutineScope.launch {
                     settingsRepository.saveMobilitySubtype(mobilitySubtype.routeValue)
@@ -94,14 +82,6 @@ fun NavGraphBuilder.onboardingNavGraph(
                             inclusive = true
                         }
                     }
-                }
-            },
-            onConsentDeferred = { agreement ->
-                coroutineScope.launch {
-                    settingsRepository.saveLocationTermsAgreement(
-                        isLocationTermsAgreed = agreement.isLocationTermsAgreed,
-                        isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
-                    )
                 }
             },
         )

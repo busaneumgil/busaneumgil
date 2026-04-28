@@ -42,6 +42,11 @@ data class OnboardingStepAction(
     val onClick: () -> Unit,
 )
 
+enum class OnboardingStepHeaderStyle {
+    DEFAULT,
+    CENTERED_COMPACT,
+}
+
 @Composable
 fun OnboardingStepScaffold(
     currentStep: Int,
@@ -52,6 +57,7 @@ fun OnboardingStepScaffold(
     primaryActionEnabled: Boolean,
     onPrimaryActionClick: () -> Unit,
     modifier: Modifier = Modifier,
+    headerStyle: OnboardingStepHeaderStyle = OnboardingStepHeaderStyle.DEFAULT,
     navigationAction: OnboardingStepAction? = null,
     topAction: OnboardingStepAction? = null,
     secondaryAction: OnboardingStepAction? = null,
@@ -153,26 +159,39 @@ fun OnboardingStepScaffold(
                 }
             }
 
-            OnboardingProgressIndicator(
-                currentStep = currentStep,
-                totalSteps = totalSteps,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            when (headerStyle) {
+                OnboardingStepHeaderStyle.DEFAULT -> {
+                    OnboardingProgressIndicator(
+                        currentStep = currentStep,
+                        totalSteps = totalSteps,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.displayLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                if (description.isNotBlank()) {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.displayLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        if (description.isNotBlank()) {
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                OnboardingStepHeaderStyle.CENTERED_COMPACT -> {
+                    OnboardingProgressHeader(
+                        currentStep = currentStep,
+                        totalSteps = totalSteps,
+                        title = title,
+                        description = description,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }

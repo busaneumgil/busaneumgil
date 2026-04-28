@@ -18,7 +18,7 @@ sealed class TopLevelDestination(
     data object SavedRoute : TopLevelDestination(
         route = TopLevelRoute.SavedRoute,
         labelRes = R.string.route_saved_route,
-        iconRes = R.drawable.ic_action_favorite,
+        iconRes = R.drawable.ic_nav_bookmark_outline,
     )
 
     data object Report : TopLevelDestination(

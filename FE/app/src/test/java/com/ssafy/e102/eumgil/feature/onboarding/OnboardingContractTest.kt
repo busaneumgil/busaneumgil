@@ -29,9 +29,9 @@ class OnboardingContractTest {
         )
         assertEquals(
             listOf(
+                R.drawable.ic_user_electric_wheelchair,
                 R.drawable.ic_user_wheelchair,
-                R.drawable.ic_user_wheelchair,
-                R.drawable.ic_user_check,
+                R.drawable.ic_user_walking_aid,
             ),
             MobilitySubtype.entries.map { it.iconRes },
         )
@@ -48,20 +48,90 @@ class OnboardingContractTest {
         )
         assertEquals(
             listOf(
-                R.drawable.ic_user_visual_impairment,
+                R.drawable.ic_user_low_vision,
                 R.drawable.ic_user_wheelchair,
             ),
             PrimaryUserType.entries.map { it.iconRes },
-        )
-        assertEquals(
-            listOf(true, false),
-            PrimaryUserType.entries.map { it.usesHighContrastCard },
         )
     }
 
     @Test
     fun `mobility subtype lookup returns null for unknown route value`() {
         assertNull(MobilitySubtype.fromRouteValue("legacy_disability_level"))
+    }
+
+    @Test
+    fun `location terms require all four mandatory agreements before proceeding`() {
+        val missingAgeConfirmation =
+            LocationTermsUiState(
+                isServiceTermsChecked = true,
+                isSensitiveInfoTermsChecked = true,
+                isPersonalLocationInfoTermsChecked = true,
+            )
+
+        assertFalse(missingAgeConfirmation.canProceed)
+        assertFalse(missingAgeConfirmation.isAllTermsChecked)
+
+        val requiredTermsCompleted =
+            missingAgeConfirmation.copy(
+                isOverFourteenChecked = true,
+            )
+
+        assertTrue(requiredTermsCompleted.canProceed)
+        assertFalse(requiredTermsCompleted.isAllTermsChecked)
+    }
+
+    @Test
+    fun `location terms all agreement only completes when privacy policy confirmation is included`() {
+        val uiState =
+            LocationTermsUiState(
+                isServiceTermsChecked = true,
+                isSensitiveInfoTermsChecked = true,
+                isPersonalLocationInfoTermsChecked = true,
+                isOverFourteenChecked = true,
+                isPrivacyPolicyChecked = true,
+            )
+
+        assertTrue(uiState.canProceed)
+        assertTrue(uiState.isAllTermsChecked)
+    }
+
+    @Test
+    fun `location terms agreement keeps persisted contract focused on required terms and privacy confirmation`() {
+        val uiState =
+            LocationTermsUiState(
+                isServiceTermsChecked = true,
+                isSensitiveInfoTermsChecked = true,
+                isPersonalLocationInfoTermsChecked = true,
+                isOverFourteenChecked = true,
+                isPrivacyPolicyChecked = false,
+            )
+
+        assertEquals(
+            LocationTermsAgreement(
+                isLocationTermsAgreed = true,
+                isPrivacyPolicyAgreed = false,
+            ),
+            uiState.toAgreement(),
+        )
+    }
+
+    @Test
+    fun `location terms items stay aligned with ONB-004 required order`() {
+        assertEquals(
+            listOf(
+                LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE,
+                LocationTermsItem.SENSITIVE_INFO,
+                LocationTermsItem.PERSONAL_LOCATION_INFO,
+                LocationTermsItem.OVER_FOURTEEN,
+                LocationTermsItem.PRIVACY_POLICY_CONFIRMATION,
+            ),
+            LocationTermsItem.entries,
+        )
+        assertEquals(
+            listOf(true, true, true, true, false),
+            LocationTermsItem.entries.map { it.required },
+        )
     }
 
     @Test

@@ -10,7 +10,8 @@
 - 오래된 통합 문서는 배경과 의도 파악용으로만 사용한다.
 - 스킬 실행 전 또는 문서 선택 전 `./.ai/scripts/docs-source-report.sh`로 현재 문서 후보와 로컬 제외 목록을 확인한다.
 - 사용자가 특정 문서를 아직 최신화되지 않았다고 표시한 경우, 그 문서는 수정되거나 제외가 해제되기 전까지 source of truth로 사용하지 않는다.
-- FE 작업은 `Docs/기획`만 보지 말고 반드시 `FE/docs`와 실제 `FE/app` 라우트/화면 코드를 함께 확인한다.
+- FE 작업은 `Docs/기획`만 보지 말고 반드시 1차 FE 계약 문서와 실제 `FE/app` 라우트/화면 코드를 함께 확인한다.
+- `FE/docs/2026-04-27_로그인_필수_전환_FE_정합성_및_구현_영향.md`, `FE/docs/2026-04-27_온보딩_디자인_화면_구성_분석.md`, `FE/docs/2026-04-27_FE_Docs_문서_정합성_재검토.md`, `FE/docs/sprint_backlog/`는 2차 정리 문서다. 1차 FE 계약 문서, 직접 디자인 산출물, 실제 코드를 요약하거나 실행 맥락을 정리할 뿐 단독 기준이 아니다.
 - BE 작업은 `Docs/API`, `Docs/ARD`, `Docs/skills/backend`, 실제 `BE` 코드를 함께 확인한다.
 - API, 화면, ERD, 코드가 충돌하면 계획 파일에 `문서 충돌` 항목을 만들고, 어떤 기준을 임시 source of truth로 삼았는지 명시한다.
 - 확정이 필요한 충돌은 임의 구현하지 말고 `/plan` 결과의 Open Questions 또는 `.ai/DECISIONS/` ADR 후보로 남긴다.
@@ -35,8 +36,8 @@
 
 | 작업 영역 | 1차 기준 | 2차 기준 | 오래된 문서 사용 방식 |
 |---|---|---|---|
-| FE 화면/라우트 | `FE/docs/2026-04-22_부산이음길_FE_화면_인벤토리_및_라우트_맵.md`, 실제 `FE/app` navigation/screen 코드 | `FE/mockup/`, `Docs/기획/*화면명세서*` | 화면 의도 보강용 |
-| FE UI/디자인 | `FE/docs/2026-04-22_부산이음길_FE_디자인_컨벤션.md`, `FE/docs/2026-04-13_부산이음길_FE_컴포넌트_가이드.md` | Figma handoff, mockup | 시각 방향 참고 |
+| FE 화면/라우트 | `FE/docs/2026-04-22_부산이음길_FE_화면_인벤토리_및_라우트_맵.md`, 실제 `FE/app` navigation/screen 코드 | `FE/docs/2026-04-21_S14P31E102-211_공통_UI_접근성_Figma_handoff.md`, `FE/mockup/`, `Docs/기획/*화면명세서*` | 화면 의도 보강용 |
+| FE UI/디자인 | `FE/docs/2026-04-22_부산이음길_FE_디자인_컨벤션.md`, `FE/docs/2026-04-13_부산이음길_FE_컴포넌트_가이드.md` | `FE/docs/2026-04-21_S14P31E102-211_공통_UI_접근성_Figma_handoff.md`, `FE/mockup/` | 디자인 컨벤션은 1차 시각 계약, 컴포넌트 가이드는 구현 조합 계약 |
 | FE 접근성/라벨 | `FE/docs/2026-04-24_부산이음길_FE_접근성_정보_라벨_가이드.md`, FE 컴포넌트 가이드 | PRD, 인터뷰 결과 | 접근성 의도 참고 |
 | FE 코드 구조 | `FE/docs/2026-04-13_부산이음길_FE_코드_컨벤션.md`, 실제 `FE/app` 구조 | FE 화면 인벤토리 | 배경 참고 |
 | BE API | `Docs/API/2026-04-12_API_전체_목록.md`, 도메인별 API 명세 | API 응답 코드 컨벤션, 실제 BE 코드 | 요구 배경 참고 |
@@ -57,6 +58,7 @@
 - FE 코드 컨벤션: `FE/docs/2026-04-13_부산이음길_FE_코드_컨벤션.md`
 - FE 컴포넌트 가이드: `FE/docs/2026-04-13_부산이음길_FE_컴포넌트_가이드.md`
 - FE 디자인 컨벤션: `FE/docs/2026-04-22_부산이음길_FE_디자인_컨벤션.md`
+- FE 디자인 컨벤션은 선택적인 미감 참고 문서가 아니다. 색상, 타이포, spacing, radius, surface 계층, CTA 위계, 카드/리스트 상태, 하단 탭 shell은 이 문서를 우선 기준으로 본다.
 - FE 접근성 라벨 가이드: `FE/docs/2026-04-24_부산이음길_FE_접근성_정보_라벨_가이드.md`
 - FE 화면 인벤토리/라우트 맵: `FE/docs/2026-04-22_부산이음길_FE_화면_인벤토리_및_라우트_맵.md`
 
@@ -66,7 +68,10 @@
 
 - lane 전용 작업은 `.ai/LANES.md`를 먼저 읽고 `/fe-*` 또는 `/be-*` 명령어의 범위를 따른다.
 - lane 전용 작업에서도 `docs-context.sh status` 또는 `docs-source-report.sh`에 표시된 활성 제외 문서는 기준 문서에서 뺀다.
-- FE 단독 작업은 `FE/docs`와 실제 `FE/app` 코드를 1차 기준으로 삼고, `Docs/기획`은 배경으로만 사용한다.
+- FE 단독 작업은 1차 FE 계약 문서와 실제 `FE/app` 코드를 1차 기준으로 삼고, `Docs/기획`은 배경으로만 사용한다.
+- FE 단독 작업에서 2차 정리 문서는 직접 산출물과 1차 계약 문서를 다시 찾아가기 위한 색인으로만 사용한다.
+- FE 단독 작업에서 디자인 수정, UI 구현, 화면 리팩터링, 디자인 QA는 반드시 `FE 디자인 컨벤션 -> FE 컴포넌트 가이드 -> Figma/mockup -> 실제 FE/app 코드` 순서로 확인한다.
+- 실제 `FE/app` 코드가 최신 디자인 컨벤션과 다르면 코드를 곧바로 정답으로 승격하지 않는다. `현재 구현 사실`과 `목표 시각 계약`을 분리해서 해석한다.
 - BE 단독 작업은 `Docs/API`, `Docs/ARD`, `Docs/skills/backend`, 실제 `BE` 코드를 1차 기준으로 삼는다.
 - 한쪽 작업 중 반대쪽 계약이 필요하면 API 명세, DTO, route, schema처럼 경계에 닿는 문서와 코드만 추가로 읽는다.
 - 오래된 화면명세서, 기능명세서, ERD가 현재 코드와 다르면 계획에 `문서 충돌`을 기록하고, 이번 작업에서 따를 기준을 명시한다.
@@ -108,7 +113,8 @@
 - FE 구현은 `/fe-start`, `/fe-fix-bug`, `/fe-refactor-module`, `/fe-write-test`, `/fe-investigate`를 우선 사용한다.
 - BE 구현은 `/be-start`, `/be-fix-bug`, `/be-refactor-module`, `/be-write-test`, `/be-investigate`를 우선 사용한다.
 - Backend 변경: `Docs/skills/backend/*.md`, `Docs/API/`, `Docs/ARD/ERD_v3.md`
-- Frontend 변경: `FE/docs/`, 실제 `FE/app/src/main/java/...` navigation, screen, ViewModel, contract 코드
+- Frontend 변경: 1차 FE 계약 문서, 실제 `FE/app/src/main/java/...` navigation, screen, ViewModel, contract 코드
+- Frontend 시각 변경: 특히 `FE/docs/2026-04-22_부산이음길_FE_디자인_컨벤션.md`의 토큰, CTA 위계, 카드/리스트 패턴, shell 규칙과 대조
 - API 응답/예외 변경: `Docs/컨벤션/2026-04-14_API_응답_코드_컨벤션.md`, `Docs/skills/backend/api-response-error-convention.md`
 - 장소/경로/공간 데이터 변경: `Docs/API/장소_도메인/`, `Docs/API/보행_네트워크_도메인/`, `Docs/ARD/ERD_v3.md`, `Docs/PoC/`
 - 인프라/배포 변경: `Docs/인프라/`
@@ -125,6 +131,7 @@
 - 데이터 모델: `Docs/ARD/ERD_v3.md`
 - 접근성/사용자 흐름: 화면명세서, MVP 화면명세서, 인터뷰 결과
 - FE 화면 정합성: `FE/docs/2026-04-22_부산이음길_FE_화면_인벤토리_및_라우트_맵.md`, `FE/docs/2026-04-22_부산이음길_FE_디자인_컨벤션.md`, `FE/docs/2026-04-24_부산이음길_FE_접근성_정보_라벨_가이드.md`
+- FE 시각 정합성은 route map의 보조 항목이 아니라 별도 확인 축이다. 화면 구조가 맞아도 디자인 컨벤션의 토큰, 컴포넌트 상태, CTA 위계, tab shell이 어긋나면 미완료로 본다.
 - 백엔드 코드 품질: `Docs/skills/backend/`
 - 인프라/배포 안정성: `Docs/인프라/`
 
@@ -132,10 +139,18 @@
 
 문서가 충돌하면 아래 순서로 판단한다.
 
-1. 실제 코드와 라우트/패키지 구조
-2. 최신 날짜의 도메인별 상세 문서
-3. API/ERD/FE 화면 인벤토리/인프라처럼 구현 계약에 가까운 문서
-4. PRD/기능명세/화면명세처럼 제품 기준 문서
-5. `.ai/PROJECT.md`의 요약
+1. 실제 코드와 라우트/패키지 구조로 확인한 현재 구현 사실
+2. 최신 날짜의 1차 상세 계약 문서
+3. Figma handoff, mockup, 도메인 상세 명세 같은 직접 산출물
+4. 정리/검토/백로그 문서
+5. PRD/기능명세/화면명세처럼 제품 배경 문서
+6. `.ai/PROJECT.md`의 요약
+
+FE 예외 해석:
+
+- 화면 구조와 route 판단은 FE 화면 인벤토리/라우트 맵을 우선한다.
+- 시각 규칙과 UI 위계 판단은 FE 디자인 컨벤션을 우선한다.
+- 접근성 발화와 읽기 순서는 FE 접근성 라벨 가이드를 우선한다.
+- 공통 조합과 구현 패턴은 FE 컴포넌트 가이드를 우선한다.
 
 충돌이 구현에 영향을 주면 임의로 결정하지 말고 `.ai/LOCAL/PLANS/current-sprint.md`의 Open Questions에 남기거나, 필요한 경우 `.ai/DECISIONS/`에 ADR을 작성한다.

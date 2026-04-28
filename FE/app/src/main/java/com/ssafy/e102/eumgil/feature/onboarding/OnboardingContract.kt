@@ -13,15 +13,37 @@ data class MobilitySubtypeUiState(
 )
 
 data class LocationTermsUiState(
-    val isLocationTermsChecked: Boolean = false,
+    val isServiceTermsChecked: Boolean = false,
+    val isSensitiveInfoTermsChecked: Boolean = false,
+    val isPersonalLocationInfoTermsChecked: Boolean = false,
+    val isOverFourteenChecked: Boolean = false,
     val isPrivacyPolicyChecked: Boolean = false,
     val hasRestrictionNotice: Boolean = false,
 ) {
+    val checkedRequiredTermsCount: Int
+        get() =
+            listOf(
+                isServiceTermsChecked,
+                isSensitiveInfoTermsChecked,
+                isPersonalLocationInfoTermsChecked,
+                isOverFourteenChecked,
+            ).count { it }
+
+    val checkedTermsCount: Int
+        get() = checkedRequiredTermsCount + if (isPrivacyPolicyChecked) 1 else 0
+
+    val isRequiredTermsChecked: Boolean
+        get() =
+            isServiceTermsChecked &&
+                isSensitiveInfoTermsChecked &&
+                isPersonalLocationInfoTermsChecked &&
+                isOverFourteenChecked
+
     val isAllTermsChecked: Boolean
-        get() = isLocationTermsChecked && isPrivacyPolicyChecked
+        get() = isRequiredTermsChecked && isPrivacyPolicyChecked
 
     val canProceed: Boolean
-        get() = isLocationTermsChecked
+        get() = isRequiredTermsChecked
 
     val consentStatus: LocationTermsConsentStatus
         get() = when {
@@ -32,9 +54,14 @@ data class LocationTermsUiState(
 
     fun toAgreement(): LocationTermsAgreement =
         LocationTermsAgreement(
-            isLocationTermsAgreed = isLocationTermsChecked,
+            isLocationTermsAgreed = isRequiredTermsChecked,
             isPrivacyPolicyAgreed = isPrivacyPolicyChecked,
         )
+
+    companion object {
+        const val REQUIRED_TERMS_COUNT: Int = 4
+        const val TOTAL_TERMS_COUNT: Int = 5
+    }
 }
 
 data class LocationTermsAgreement(
@@ -48,26 +75,49 @@ enum class LocationTermsConsentStatus {
     READY,
 }
 
+enum class LocationTermsItem(
+    @StringRes val titleRes: Int,
+    val required: Boolean,
+) {
+    SERVICE_AND_LOCATION_BASED_SERVICE(
+        titleRes = R.string.onboarding_terms_service_required_title,
+        required = true,
+    ),
+    SENSITIVE_INFO(
+        titleRes = R.string.onboarding_terms_sensitive_required_title,
+        required = true,
+    ),
+    PERSONAL_LOCATION_INFO(
+        titleRes = R.string.onboarding_terms_personal_location_required_title,
+        required = true,
+    ),
+    OVER_FOURTEEN(
+        titleRes = R.string.onboarding_terms_age_required_title,
+        required = true,
+    ),
+    PRIVACY_POLICY_CONFIRMATION(
+        titleRes = R.string.onboarding_terms_privacy_confirmation_title,
+        required = false,
+    ),
+}
+
 enum class PrimaryUserType(
     val routeValue: String,
     @StringRes val titleRes: Int,
     @StringRes val descriptionRes: Int,
     @DrawableRes val iconRes: Int,
-    val usesHighContrastCard: Boolean,
 ) {
     LOW_VISION(
         routeValue = "low_vision",
         titleRes = R.string.onboarding_primary_user_type_low_vision_title,
         descriptionRes = R.string.onboarding_primary_user_type_low_vision_description,
-        iconRes = R.drawable.ic_user_visual_impairment,
-        usesHighContrastCard = true,
+        iconRes = R.drawable.ic_user_low_vision,
     ),
     MOBILITY_IMPAIRED(
         routeValue = "mobility_impaired",
         titleRes = R.string.onboarding_primary_user_type_mobility_title,
         descriptionRes = R.string.onboarding_primary_user_type_mobility_description,
         iconRes = R.drawable.ic_user_wheelchair,
-        usesHighContrastCard = false,
     ),
     ;
 
@@ -87,7 +137,7 @@ enum class MobilitySubtype(
         routeValue = "electric_wheelchair",
         titleRes = R.string.onboarding_mobility_subtype_electric_title,
         descriptionRes = R.string.onboarding_mobility_subtype_electric_description,
-        iconRes = R.drawable.ic_user_wheelchair,
+        iconRes = R.drawable.ic_user_electric_wheelchair,
     ),
     MANUAL_WHEELCHAIR(
         routeValue = "manual_wheelchair",
@@ -99,7 +149,7 @@ enum class MobilitySubtype(
         routeValue = "other_mobility_impaired",
         titleRes = R.string.onboarding_mobility_subtype_other_title,
         descriptionRes = R.string.onboarding_mobility_subtype_other_description,
-        iconRes = R.drawable.ic_user_check,
+        iconRes = R.drawable.ic_user_walking_aid,
     ),
     ;
 

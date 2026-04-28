@@ -9,22 +9,11 @@ import androidx.compose.ui.Modifier
 
 @Composable
 fun PrimaryUserTypeRoute(
-    initialSelectedType: PrimaryUserType? = null,
-    onNavigateNext: (PrimaryUserType) -> Unit,
+    onTypeSelected: (PrimaryUserType) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selectedTypeRoute by rememberSaveable(initialSelectedType?.routeValue) {
-        mutableStateOf(initialSelectedType?.routeValue)
-    }
-
     PrimaryUserTypeScreen(
-        uiState = PrimaryUserTypeUiState(selectedType = PrimaryUserType.fromRouteValue(selectedTypeRoute)),
-        onTypeSelected = { primaryUserType ->
-            selectedTypeRoute = primaryUserType.routeValue
-        },
-        onNextClick = {
-            PrimaryUserType.fromRouteValue(selectedTypeRoute)?.let(onNavigateNext)
-        },
+        onTypeSelected = onTypeSelected,
         modifier = modifier,
     )
 }
@@ -42,13 +31,11 @@ fun LowVisionFollowUpRoute(
 
 @Composable
 fun MobilityTypeSecondaryRoute(
-    initialSelectedSubtype: MobilitySubtype? = null,
-    onNavigateBack: () -> Unit,
     onNavigateNext: (MobilitySubtype) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selectedMobilitySubtypeRoute by rememberSaveable(initialSelectedSubtype?.routeValue) {
-        mutableStateOf(initialSelectedSubtype?.routeValue)
+    var selectedMobilitySubtypeRoute by rememberSaveable {
+        mutableStateOf<String?>(null)
     }
 
     MobilitySubtypeScreen(
@@ -56,12 +43,9 @@ fun MobilityTypeSecondaryRoute(
             MobilitySubtypeUiState(
                 selectedMobilitySubtype = MobilitySubtype.fromRouteValue(selectedMobilitySubtypeRoute),
             ),
-        onSubtypeSelected = { mobilitySubtype ->
+        onSubtypeClick = { mobilitySubtype ->
             selectedMobilitySubtypeRoute = mobilitySubtype.routeValue
-        },
-        onNavigateBack = onNavigateBack,
-        onNextClick = {
-            MobilitySubtype.fromRouteValue(selectedMobilitySubtypeRoute)?.let(onNavigateNext)
+            onNavigateNext(mobilitySubtype)
         },
         modifier = modifier,
     )
@@ -72,10 +56,18 @@ fun LocationTermsRoute(
     initialLocationTermsChecked: Boolean = false,
     initialPrivacyPolicyChecked: Boolean = false,
     onConsentCompleted: (LocationTermsAgreement) -> Unit,
-    onConsentDeferred: (LocationTermsAgreement) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var isLocationTermsChecked by rememberSaveable(initialLocationTermsChecked) {
+    var isServiceTermsChecked by rememberSaveable(initialLocationTermsChecked) {
+        mutableStateOf(initialLocationTermsChecked)
+    }
+    var isSensitiveInfoTermsChecked by rememberSaveable(initialLocationTermsChecked) {
+        mutableStateOf(initialLocationTermsChecked)
+    }
+    var isPersonalLocationInfoTermsChecked by rememberSaveable(initialLocationTermsChecked) {
+        mutableStateOf(initialLocationTermsChecked)
+    }
+    var isOverFourteenChecked by rememberSaveable(initialLocationTermsChecked) {
         mutableStateOf(initialLocationTermsChecked)
     }
     var isPrivacyPolicyChecked by rememberSaveable(initialPrivacyPolicyChecked) {
@@ -85,7 +77,10 @@ fun LocationTermsRoute(
 
     val uiState =
         LocationTermsUiState(
-            isLocationTermsChecked = isLocationTermsChecked,
+            isServiceTermsChecked = isServiceTermsChecked,
+            isSensitiveInfoTermsChecked = isSensitiveInfoTermsChecked,
+            isPersonalLocationInfoTermsChecked = isPersonalLocationInfoTermsChecked,
+            isOverFourteenChecked = isOverFourteenChecked,
             isPrivacyPolicyChecked = isPrivacyPolicyChecked,
             hasRestrictionNotice = hasRestrictionNotice,
         )
@@ -93,29 +88,37 @@ fun LocationTermsRoute(
     LocationTermsScreen(
         uiState = uiState,
         onAllTermsCheckedChange = { shouldCheckAll ->
-            isLocationTermsChecked = shouldCheckAll
+            isServiceTermsChecked = shouldCheckAll
+            isSensitiveInfoTermsChecked = shouldCheckAll
+            isPersonalLocationInfoTermsChecked = shouldCheckAll
+            isOverFourteenChecked = shouldCheckAll
             isPrivacyPolicyChecked = shouldCheckAll
-            if (shouldCheckAll) {
-                hasRestrictionNotice = false
-            }
+            hasRestrictionNotice = false
         },
-        onLocationTermsCheckedChange = { isChecked ->
-            isLocationTermsChecked = isChecked
-            if (isChecked) {
-                hasRestrictionNotice = false
-            }
+        onServiceTermsCheckedChange = { isChecked ->
+            isServiceTermsChecked = isChecked
+            hasRestrictionNotice = false
+        },
+        onSensitiveInfoTermsCheckedChange = { isChecked ->
+            isSensitiveInfoTermsChecked = isChecked
+            hasRestrictionNotice = false
+        },
+        onPersonalLocationInfoTermsCheckedChange = { isChecked ->
+            isPersonalLocationInfoTermsChecked = isChecked
+            hasRestrictionNotice = false
+        },
+        onOverFourteenCheckedChange = { isChecked ->
+            isOverFourteenChecked = isChecked
+            hasRestrictionNotice = false
         },
         onPrivacyPolicyCheckedChange = { isChecked ->
             isPrivacyPolicyChecked = isChecked
+            hasRestrictionNotice = false
         },
         onPrimaryActionClick = {
             if (uiState.canProceed) {
                 onConsentCompleted(uiState.toAgreement())
             }
-        },
-        onSecondaryActionClick = {
-            hasRestrictionNotice = true
-            onConsentDeferred(uiState.toAgreement())
         },
         modifier = modifier,
     )

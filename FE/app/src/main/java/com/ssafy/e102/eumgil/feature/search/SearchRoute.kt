@@ -31,6 +31,7 @@ fun SearchRoute(
             SearchViewModel.provideFactory(
                 searchRepository = appContainer.searchRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                placesRepository = appContainer.placesRepository,
             )
         }
     val viewModel =

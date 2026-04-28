@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
@@ -58,6 +60,56 @@ class SearchRepositoryTest {
             val results = repository.search(query)
 
             assertEquals(listOf(cachedResult), results)
+        }
+
+    @Test
+    fun `recent destinations keep latest order and dedupe by place`() =
+        runBlocking {
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource = SearchRemoteDataSource(baseUrl = "https://example.com"),
+                    localDataSource = SearchLocalDataSource(),
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy = SearchTestRepositorySourcePolicy(RepositoryReadPlan.localOnly()),
+                )
+
+            repository.saveRecentDestination(
+                RecentDestination(
+                    placeId = "place-1",
+                    name = "Busan City Hall",
+                    address = "1 Jungang-daero, Busan",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                    searchedAtMillis = 1_000L,
+                ),
+            )
+            repository.saveRecentDestination(
+                RecentDestination(
+                    placeId = "place-2",
+                    name = "Busan Station",
+                    address = "2 Jungang-daero, Busan",
+                    latitude = 35.1152,
+                    longitude = 129.0416,
+                    category = PlaceCategory.ELEVATOR,
+                    searchedAtMillis = 2_000L,
+                ),
+            )
+            repository.saveRecentDestination(
+                RecentDestination(
+                    placeId = "place-1",
+                    name = "Busan City Hall",
+                    address = "1 Jungang-daero, Busan",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                    searchedAtMillis = 3_000L,
+                ),
+            )
+
+            val results = repository.getRecentDestinations()
+
+            assertEquals(listOf("place-1", "place-2"), results.map { recentDestination -> recentDestination.placeId })
         }
 }
 

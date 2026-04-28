@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.collect
 fun MapRoute(
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
-    onNavigateToFacilityRouteEntry: () -> Unit = {},
+    onNavigateToRouteSetting: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -40,6 +40,7 @@ fun MapRoute(
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 facilitySeedRepository = appContainer.facilitySeedRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
+                searchRepository = appContainer.searchRepository,
             )
         }
     val viewModel =
@@ -72,12 +73,12 @@ fun MapRoute(
         viewModel,
         activity,
         appContainer,
-        onNavigateToFacilityRouteEntry,
+        onNavigateToRouteSetting,
         onNavigateToSearch,
     ) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                MapUiEvent.NavigateToFacilityRouteEntry -> onNavigateToFacilityRouteEntry()
+                MapUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 MapUiEvent.NavigateToSearch -> onNavigateToSearch()
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)

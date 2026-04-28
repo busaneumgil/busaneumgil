@@ -8,20 +8,26 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason as PermissionUnavailableReason
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.AccessibilityTag
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
+import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
+import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
+import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
@@ -41,6 +47,7 @@ class MapViewModel(
     private val destinationSelectionRepository: DestinationSelectionRepository,
     private val facilitySeedRepository: FacilitySeedRepository,
     private val bookmarkRepository: BookmarkRepository,
+    private val searchRepository: SearchRepository = NoOpSearchRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
@@ -56,6 +63,8 @@ class MapViewModel(
     private var selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
     private var facilityBrowseData: FacilityBrowseData? = null
     private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
+    private var selectedShortcutFilterKey: MapShortcutFilterKey? = null
+    private var recentDestinations: List<RecentDestination> = emptyList()
     private var isRouteStarted = false
     private var locationLookupState: LocationLookupState = LocationLookupState.Idle
     private var locationLookupTimeoutJob: Job? = null
@@ -75,6 +84,7 @@ class MapViewModel(
         observePermissionState()
         observeLocationUpdates()
         loadMarkerBrowseState()
+        refreshRecentDestinations()
         renderUiState()
     }
 
@@ -94,6 +104,7 @@ class MapViewModel(
             is LocationPermissionState.Unavailable -> applyFallbackCameraTarget()
         }
 
+        refreshRecentDestinations()
         renderUiState()
     }
 
@@ -114,6 +125,8 @@ class MapViewModel(
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
+            is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
+            is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
             MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch)
         }
     }
@@ -132,17 +145,20 @@ class MapViewModel(
             }.onSuccess { browseData ->
                 facilityBrowseData = browseData
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+                selectedShortcutFilterKey = null
                 renderMarkerBrowseState()
             }.onFailure {
                 facilityBrowseData = null
                 updateSelectedFacility(markerId = null)
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+                selectedShortcutFilterKey = null
                 mutableUiState.update { state ->
                     state.copy(
                         selectedMarkerId = null,
                         facilityDetailSheetState = currentFacilityDetailSheetState(),
                         markerOverlayState = MapBrowseStateFactory.createErrorMarkerOverlayState(),
                         markerFilterState = MapBrowseStateFactory.createErrorFilterUiState(),
+                        shortcutFilterState = createShortcutFilterState(),
                     )
                 }
             }
@@ -168,12 +184,27 @@ class MapViewModel(
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
         destinationSelectionRepository.updateSelectedDestination(destination)
-        emitUiEvent(MapUiEvent.NavigateToFacilityRouteEntry)
+        emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun handleRecentDestinationRouteClicked(placeId: String) {
+        val destination =
+            recentDestinations
+                .firstOrNull { recentDestination -> recentDestination.placeId == placeId }
+                ?.toPlaceDestination()
+                ?: return
+
+        if (clearSelectedFacilitySelection()) {
+            renderSelectedFacilityState()
+        }
+        destinationSelectionRepository.updateSelectedDestination(destination)
+        emitUiEvent(MapUiEvent.NavigateToRouteSetting)
     }
 
     private fun resetMarkerCategoryFilter() {
         if (facilityBrowseData == null) return
         markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+        selectedShortcutFilterKey = null
         renderMarkerBrowseState()
     }
 
@@ -185,16 +216,49 @@ class MapViewModel(
                 browseData = browseData,
                 category = category,
             )
+        selectedShortcutFilterKey = shortcutFilterKeyForSelection(markerFilterSelectionState)
+        renderMarkerBrowseState()
+    }
+
+    private fun handleShortcutFilterClicked(key: MapShortcutFilterKey) {
+        val browseData = facilityBrowseData ?: return
+        if (key == MapShortcutFilterKey.MORE) return
+
+        if (key == MapShortcutFilterKey.ACCESSIBLE_PARKING) {
+            selectedShortcutFilterKey =
+                if (selectedShortcutFilterKey == key) {
+                    null
+                } else {
+                    key
+                }
+            markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+            renderMarkerBrowseState()
+            return
+        }
+
+        val category = key.toFacilityCategory() ?: return
+        val isSameShortcut = selectedShortcutFilterKey == key
+        selectedShortcutFilterKey = if (isSameShortcut) null else key
+        markerFilterSelectionState =
+            if (isSameShortcut) {
+                MapBrowseStateFactory.resetSelection()
+            } else {
+                MapFilterSelectionState(
+                    isShowingAllCategories = false,
+                    selectedFacilityCategories = setOf(category),
+                )
+            }
         renderMarkerBrowseState()
     }
 
     private fun renderMarkerBrowseState() {
         val browseData = facilityBrowseData ?: return
-        val overlayState =
+        val baseOverlayState =
             MapBrowseStateFactory.createMarkerOverlayState(
                 browseData = browseData,
                 selection = markerFilterSelectionState,
             )
+        val overlayState = applyShortcutFilter(baseOverlayState)
         val filterState =
             MapBrowseStateFactory.createFilterUiState(
                 browseData = browseData,
@@ -222,6 +286,7 @@ class MapViewModel(
                 facilityDetailSheetState = currentFacilityDetailSheetState(),
                 markerOverlayState = overlayState,
                 markerFilterState = filterState,
+                shortcutFilterState = createShortcutFilterState(browseData),
             )
         }
     }
@@ -698,6 +763,87 @@ class MapViewModel(
         }
     }
 
+    private fun refreshRecentDestinations() {
+        viewModelScope.launch {
+            recentDestinations =
+                runCatching {
+                    searchRepository.getRecentDestinations()
+                }.getOrDefault(emptyList())
+            mutableUiState.update { state ->
+                state.copy(
+                    recentDestinations = recentDestinations.take(MAX_MAP_HOME_RECENT_DESTINATIONS),
+                )
+            }
+        }
+    }
+
+    private fun applyShortcutFilter(
+        overlayState: com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState,
+    ): com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState {
+        if (selectedShortcutFilterKey != MapShortcutFilterKey.ACCESSIBLE_PARKING) {
+            return overlayState
+        }
+
+        val markers =
+            overlayState.markers.map { marker ->
+                if (
+                    marker.displayState == MapMarkerDisplayState.VISIBLE &&
+                    AccessibilityTag.ACCESSIBLE_PARKING in marker.accessibilityTags
+                ) {
+                    marker
+                } else {
+                    marker.copy(displayState = MapMarkerDisplayState.HIDDEN_BY_FILTER)
+                }
+            }
+
+        return overlayState.copy(
+            markers = markers,
+            visibleMarkerCount = markers.count { marker -> marker.displayState == MapMarkerDisplayState.VISIBLE },
+        )
+    }
+
+    private fun createShortcutFilterState(
+        browseData: FacilityBrowseData? = facilityBrowseData,
+    ): MapShortcutFilterRowState {
+        val availableCategories = browseData?.availableCategories?.toSet().orEmpty()
+        val hasAccessibleParking =
+            browseData?.allMarkers?.any { marker ->
+                AccessibilityTag.ACCESSIBLE_PARKING in marker.accessibilityTags
+            } == true
+
+        return MapShortcutFilterRowState(
+            chips =
+                SHORTCUT_FILTER_ORDER.map { key ->
+                    MapShortcutFilterChipState(
+                        key = key,
+                        isSelected = selectedShortcutFilterKey == key,
+                        isEnabled =
+                            when (key) {
+                                MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET in availableCategories
+                                MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR in availableCategories
+                                MapShortcutFilterKey.ACCESSIBLE_PARKING -> hasAccessibleParking
+                                MapShortcutFilterKey.MORE -> true
+                                MapShortcutFilterKey.CHARGING_STATION ->
+                                    FacilityCategory.CHARGING_STATION in availableCategories
+
+                                MapShortcutFilterKey.BRAILLE_BLOCK -> FacilityCategory.BRAILLE_BLOCK in availableCategories
+                                MapShortcutFilterKey.TOURIST_ATTRACTION ->
+                                    FacilityCategory.TOURIST_ATTRACTION in availableCategories
+
+                                MapShortcutFilterKey.RESTAURANT -> FacilityCategory.RESTAURANT in availableCategories
+                            },
+                    )
+                },
+        )
+    }
+
+    private fun shortcutFilterKeyForSelection(selection: MapFilterSelectionState): MapShortcutFilterKey? {
+        if (selection.isShowingAllCategories) return null
+        if (selection.selectedBrailleBlockTypes.isNotEmpty()) return null
+        if (selection.selectedFacilityCategories.size != 1) return null
+        return selection.selectedFacilityCategories.single().toShortcutFilterKey()
+    }
+
     private fun emitUiEvent(event: MapUiEvent) {
         mutableUiEvent.trySend(event)
     }
@@ -709,7 +855,19 @@ class MapViewModel(
     }
 
     companion object {
+        private val SHORTCUT_FILTER_ORDER =
+            listOf(
+                MapShortcutFilterKey.TOILET,
+                MapShortcutFilterKey.ELEVATOR,
+                MapShortcutFilterKey.ACCESSIBLE_PARKING,
+                MapShortcutFilterKey.MORE,
+                MapShortcutFilterKey.CHARGING_STATION,
+                MapShortcutFilterKey.BRAILLE_BLOCK,
+                MapShortcutFilterKey.TOURIST_ATTRACTION,
+                MapShortcutFilterKey.RESTAURANT,
+            )
         private const val LOCATION_LOOKUP_TIMEOUT_MILLIS = 5_000L
+        private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 3
         private const val BOOKMARK_LOAD_ERROR_MESSAGE = "북마크 상태를 확인하지 못했습니다."
         private const val BOOKMARK_SAVE_SUCCESS_MESSAGE = "북마크에 저장했습니다."
         private const val BOOKMARK_DELETE_SUCCESS_MESSAGE = "북마크를 해제했습니다."
@@ -721,6 +879,7 @@ class MapViewModel(
             destinationSelectionRepository: DestinationSelectionRepository,
             facilitySeedRepository: FacilitySeedRepository,
             bookmarkRepository: BookmarkRepository,
+            searchRepository: SearchRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -732,6 +891,7 @@ class MapViewModel(
                             destinationSelectionRepository = destinationSelectionRepository,
                             facilitySeedRepository = facilitySeedRepository,
                             bookmarkRepository = bookmarkRepository,
+                            searchRepository = searchRepository,
                         ) as T
                     }
 
@@ -741,9 +901,44 @@ class MapViewModel(
     }
 }
 
+private object NoOpSearchRepository : SearchRepository {
+    override suspend fun search(query: com.ssafy.e102.eumgil.core.model.SearchQuery) = emptyList<com.ssafy.e102.eumgil.core.model.SearchResult>()
+
+    override suspend fun getRecentSearches() = emptyList<com.ssafy.e102.eumgil.core.model.RecentSearch>()
+
+    override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> = emptyList()
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) = Unit
+}
+
 private data class SelectedFacilityBookmarkState(
     val facilityId: String? = null,
     val isBookmarked: Boolean = false,
     val isUpdating: Boolean = false,
     val errorMessage: String? = null,
 )
+
+private fun MapShortcutFilterKey.toFacilityCategory(): FacilityCategory? =
+    when (this) {
+        MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET
+        MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR
+        MapShortcutFilterKey.CHARGING_STATION -> FacilityCategory.CHARGING_STATION
+        MapShortcutFilterKey.BRAILLE_BLOCK -> FacilityCategory.BRAILLE_BLOCK
+        MapShortcutFilterKey.TOURIST_ATTRACTION -> FacilityCategory.TOURIST_ATTRACTION
+        MapShortcutFilterKey.RESTAURANT -> FacilityCategory.RESTAURANT
+        MapShortcutFilterKey.ACCESSIBLE_PARKING -> null
+        MapShortcutFilterKey.MORE -> null
+    }
+
+private fun FacilityCategory.toShortcutFilterKey(): MapShortcutFilterKey? =
+    when (this) {
+        FacilityCategory.TOILET -> MapShortcutFilterKey.TOILET
+        FacilityCategory.ELEVATOR -> MapShortcutFilterKey.ELEVATOR
+        FacilityCategory.CHARGING_STATION -> MapShortcutFilterKey.CHARGING_STATION
+        FacilityCategory.BRAILLE_BLOCK -> MapShortcutFilterKey.BRAILLE_BLOCK
+        FacilityCategory.TOURIST_ATTRACTION -> MapShortcutFilterKey.TOURIST_ATTRACTION
+        FacilityCategory.RESTAURANT -> MapShortcutFilterKey.RESTAURANT
+        FacilityCategory.OTHER -> null
+    }

@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
@@ -16,6 +17,10 @@ interface SearchRepository {
     suspend fun getRecentSearches(): List<RecentSearch>
 
     suspend fun saveRecentSearch(keyword: String)
+
+    suspend fun getRecentDestinations(): List<RecentDestination>
+
+    suspend fun saveRecentDestination(destination: RecentDestination)
 }
 
 class DefaultSearchRepository(
@@ -59,5 +64,11 @@ class DefaultSearchRepository(
 
     override suspend fun saveRecentSearch(keyword: String) {
         localDataSource.saveRecentSearch(keyword)
+    }
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> = localDataSource.getRecentDestinations()
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) {
+        localDataSource.saveRecentDestination(destination)
     }
 }

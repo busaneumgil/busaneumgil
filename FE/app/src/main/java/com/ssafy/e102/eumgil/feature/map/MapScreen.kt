@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -35,14 +34,20 @@ import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
-import com.ssafy.e102.eumgil.feature.map.component.MapCategoryFilterBar
+import com.ssafy.e102.eumgil.feature.map.component.MapFloatingControls
 import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
+import com.ssafy.e102.eumgil.feature.map.component.MapShortcutFilterRow
 import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
 import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
 import com.ssafy.e102.eumgil.feature.map.component.MapViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportUiState
+import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetShell
+import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetState
+import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationRowState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
@@ -64,9 +69,9 @@ fun MapScreen(
     modifier: Modifier = Modifier,
 ) {
     val viewportState = mapViewportState(uiState = uiState)
-    val locationPanelState = mapLocationPanelState(uiState = uiState)
     val searchBarState = mapSearchBarState(uiState = uiState)
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
+    val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
 
     MapShellScaffold(
         modifier = modifier,
@@ -85,76 +90,84 @@ fun MapScreen(
             ) {
                 MapTopSearchBar(
                     title = searchBarState.title,
-                    hint = searchBarState.hint,
-                    actionLabel = searchBarState.actionLabel,
+                    subtitle = searchBarState.subtitle,
                     accessibilityLabel = searchBarState.accessibilityLabel,
                     onClick = { onAction(MapUiAction.SearchEntryClicked) },
                 )
 
-                MapCategoryFilterBar(
-                    state = uiState.markerFilterState,
-                    onReset = { onAction(MapUiAction.MarkerCategoryFilterReset) },
-                    onCategoryToggle = { category ->
-                        onAction(MapUiAction.MarkerCategoryFilterToggled(category))
+                MapShortcutFilterRow(
+                    state = uiState.shortcutFilterState,
+                    onChipClick = { key ->
+                        onAction(MapUiAction.ShortcutFilterClicked(key))
                     },
                 )
             }
         },
         controlOverlay = {
-            MapLocationStatusCard(
-                state = locationPanelState,
-                onActionClick = { onAction(MapUiAction.LocationActionClicked) },
-                modifier = Modifier.widthIn(min = 220.dp, max = 252.dp),
+            MapFloatingControls(
+                recenterButtonState = uiState.recenterButtonState,
+                onRecenterClick = { onAction(MapUiAction.LocationActionClicked) },
             )
         },
         bottomOverlay = {
-            FacilityDetailBottomSheetShell(
-                state = facilityDetailSheetUiState.toShellState(),
-                onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
-                modifier = Modifier.fillMaxSize(),
-                detailContent = {
-                    FacilityDetailAccessibilityTagSection(
-                        title = stringResource(id = R.string.map_facility_detail_accessibility_section_title),
-                        tags = facilityDetailSheetUiState.accessibilityTags,
-                    )
-
-                    FacilityDetailSlotCard(
-                        title = stringResource(id = R.string.map_facility_detail_info_section_title),
-                        description = facilityDetailSheetUiState.guideMessage,
-                    )
-                },
-                bookmarkContent = {
-                    FacilityDetailBookmarkSection(
-                        state = facilityDetailSheetUiState,
-                        onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
-                    )
-                },
-                actionContent = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.map_facility_detail_action_section_title),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
+            if (facilityDetailSheetUiState.isVisible) {
+                FacilityDetailBottomSheetShell(
+                    state = facilityDetailSheetUiState.toShellState(),
+                    onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
+                    modifier = Modifier.fillMaxSize(),
+                    detailContent = {
+                        FacilityDetailAccessibilityTagSection(
+                            title = stringResource(id = R.string.map_facility_detail_accessibility_section_title),
+                            tags = facilityDetailSheetUiState.accessibilityTags,
                         )
-                        Button(
-                            onClick = { onAction(MapUiAction.FacilityRouteEntryClicked) },
-                            modifier = Modifier.fillMaxWidth(),
+
+                        FacilityDetailSlotCard(
+                            title = stringResource(id = R.string.map_facility_detail_info_section_title),
+                            description = facilityDetailSheetUiState.guideMessage,
+                        )
+                    },
+                    bookmarkContent = {
+                        FacilityDetailBookmarkSection(
+                            state = facilityDetailSheetUiState,
+                            onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
+                        )
+                    },
+                    actionContent = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         ) {
-                            IconTextButtonContent(
-                                iconRes = R.drawable.ic_direction_destination,
-                                label = stringResource(id = R.string.map_facility_detail_route_entry_action),
+                            Text(
+                                text = stringResource(id = R.string.map_facility_detail_action_section_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Button(
+                                onClick = { onAction(MapUiAction.FacilityRouteEntryClicked) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                IconTextButtonContent(
+                                    iconRes = R.drawable.ic_direction_destination,
+                                    label = stringResource(id = R.string.map_facility_detail_route_entry_action),
+                                )
+                            }
+                            Text(
+                                text = stringResource(id = R.string.map_facility_detail_action_supporting_route_setting),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Text(
-                            text = stringResource(id = R.string.map_facility_detail_action_supporting_route_setting),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
-            )
+                    },
+                )
+            } else {
+                RecentDestinationBottomSheetShell(
+                    state = recentDestinationSheetState,
+                    onViewAllClick = onNavigateToSavedRoutes,
+                    onRouteClick = { placeId ->
+                        onAction(MapUiAction.RecentDestinationRouteClicked(placeId))
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         },
     )
 }
@@ -162,8 +175,7 @@ fun MapScreen(
 @Immutable
 private data class MapSearchBarState(
     val title: String,
-    val hint: String,
-    val actionLabel: String,
+    val subtitle: String?,
     val accessibilityLabel: String,
 )
 
@@ -202,6 +214,18 @@ private data class MapFacilityDetailSheetUiState(
             distanceLabel = distanceLabel,
             title = title,
             address = address,
+        )
+}
+
+@Immutable
+private data class MapRecentDestinationBottomSheetUiState(
+    val isVisible: Boolean,
+    val items: List<RecentDestinationRowState>,
+) {
+    fun toShellState(): RecentDestinationBottomSheetState =
+        RecentDestinationBottomSheetState(
+            isVisible = isVisible,
+            items = items,
         )
 }
 
@@ -580,18 +604,16 @@ private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
     if (selectedDestination == null) {
         return MapSearchBarState(
             title = stringResource(id = R.string.map_shell_search_title),
-            hint = stringResource(id = R.string.map_shell_search_hint),
-            actionLabel = stringResource(id = R.string.map_shell_search_action),
+            subtitle = null,
             accessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
         )
     }
 
     return MapSearchBarState(
         title = selectedDestination.name,
-        hint =
+        subtitle =
             selectedDestination.address
                 ?: stringResource(id = R.string.map_shell_search_hint_selected_fallback),
-        actionLabel = stringResource(id = R.string.map_shell_search_action_selected),
         accessibilityLabel =
             if (selectedDestination.address.isNullOrBlank()) {
                 stringResource(
@@ -607,6 +629,24 @@ private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
             },
     )
 }
+
+@Composable
+private fun mapRecentDestinationBottomSheetState(uiState: MapUiState): RecentDestinationBottomSheetState =
+    MapRecentDestinationBottomSheetUiState(
+        isVisible = uiState.recentDestinations.isNotEmpty(),
+        items =
+            uiState.recentDestinations.map { destination ->
+                val tagLabels = recentDestinationTagLabels(destination)
+                RecentDestinationRowState(
+                    placeId = destination.placeId,
+                    title = destination.name,
+                    address = destination.address.orEmpty(),
+                    tags = tagLabels.take(3),
+                    overflowTagCount = (tagLabels.size - 3).coerceAtLeast(0),
+                    iconRes = recentDestinationIcon(destination.category),
+                )
+            },
+    ).toShellState()
 
 @Composable
 private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityDetailSheetUiState {
@@ -981,6 +1021,42 @@ private fun normalizeDistanceMeters(distanceMeters: Int): Int =
         distanceMeters < 100 -> distanceMeters
         distanceMeters < 1_000 -> ((distanceMeters + 5) / 10) * 10
         else -> distanceMeters
+    }
+
+private fun recentDestinationTagLabels(destination: RecentDestination): List<String> =
+    destination.accessibilityTagKeys
+        .mapNotNull(::recentDestinationTagLabel)
+        .distinct()
+
+private fun recentDestinationTagLabel(rawKey: String): String? =
+    when (rawKey.trim().lowercase()) {
+        "accessible-toilet" -> "장애인 화장실 있음"
+        "elevator" -> "엘리베이터 있음"
+        "accessible-parking" -> "장애인 주차 가능"
+        "step-free-entrance" -> "단차 없음"
+        "ramp" -> "경사로 있음"
+        "auto-door" -> "출입 가능"
+        "wide-entry" -> "출입 가능"
+        "wheelchair-turning-space" -> "출입 가능"
+        "table-spacing" -> "출입 가능"
+        "rest-area" -> "안내시설 있음"
+        "braille-block" -> "안내시설 있음"
+        "crosswalk" -> "안내시설 있음"
+        "low-height-button" -> "안내시설 있음"
+        else -> null
+    }
+
+@DrawableRes
+private fun recentDestinationIcon(category: PlaceCategory?): Int =
+    when (category) {
+        PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
+        PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        PlaceCategory.TOILET -> R.drawable.ic_place_restroom
+        PlaceCategory.ELEVATOR -> R.drawable.ic_route_elevator
+        PlaceCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
+        PlaceCategory.OTHER -> R.drawable.ic_nav_facility
+        null -> R.drawable.ic_nav_facility
     }
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0

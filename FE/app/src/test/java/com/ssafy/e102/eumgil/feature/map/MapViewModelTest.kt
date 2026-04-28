@@ -6,13 +6,16 @@ import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.AccessibilityTag
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.FacilityMarkerSeed
 import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
 import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
+import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
@@ -21,8 +24,10 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
+import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -464,7 +469,7 @@ class MapViewModelTest {
             assertEquals(selectedDetail.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
-            assertEquals(MapUiEvent.NavigateToFacilityRouteEntry, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
 
     @Test
@@ -525,6 +530,120 @@ class MapViewModelTest {
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
             assertEquals(destination, viewModel.uiState.value.selectedDestination)
             assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
+        }
+
+    @Test
+    fun `recent destinations are limited to three entries`() =
+        runTest {
+            val searchRepository =
+                FakeSearchRepository(
+                    recentDestinations =
+                        listOf(
+                            recentDestination(placeId = "place-4", searchedAtMillis = 4_000L),
+                            recentDestination(placeId = "place-3", searchedAtMillis = 3_000L),
+                            recentDestination(placeId = "place-2", searchedAtMillis = 2_000L),
+                            recentDestination(placeId = "place-1", searchedAtMillis = 1_000L),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    searchRepository = searchRepository,
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("place-4", "place-3", "place-2"),
+                viewModel.uiState.value.recentDestinations.map { recentDestination -> recentDestination.placeId },
+            )
+        }
+
+    @Test
+    fun `recent destination route click stores destination and emits navigation event`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    searchRepository =
+                        FakeSearchRepository(
+                            recentDestinations =
+                                listOf(
+                                    recentDestination(placeId = "recent-place-1", searchedAtMillis = 2_000L),
+                                ),
+                        ),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.RecentDestinationRouteClicked(placeId = "recent-place-1"))
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals("recent-place-1", destinationSelectionRepository.selectedDestination.value?.placeId)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+        }
+
+    @Test
+    fun `shortcut filter row hides more chip and parking shortcut filters markers`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    MapShortcutFilterKey.TOILET,
+                    MapShortcutFilterKey.ELEVATOR,
+                    MapShortcutFilterKey.ACCESSIBLE_PARKING,
+                    MapShortcutFilterKey.CHARGING_STATION,
+                    MapShortcutFilterKey.BRAILLE_BLOCK,
+                    MapShortcutFilterKey.TOURIST_ATTRACTION,
+                    MapShortcutFilterKey.RESTAURANT,
+                ),
+                viewModel.uiState.value.shortcutFilterState.chips.map { chip -> chip.key },
+            )
+
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.ACCESSIBLE_PARKING))
+            advanceUntilIdle()
+
+            val visibleMarkers = viewModel.uiState.value.markerOverlayState.visibleMarkers
+
+            assertTrue(visibleMarkers.isNotEmpty())
+            assertTrue(visibleMarkers.size < viewModel.uiState.value.markerOverlayState.totalMarkerCount)
+            assertTrue(
+                visibleMarkers.all { marker ->
+                    AccessibilityTag.ACCESSIBLE_PARKING in marker.accessibilityTags
+                },
+            )
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.ACCESSIBLE_PARKING }
+                    .isSelected,
+            )
         }
 
     @Test
@@ -640,6 +759,21 @@ private class FakeBookmarkRepository(
     }
 }
 
+private class FakeSearchRepository(
+    private val recentDestinations: List<RecentDestination> = emptyList(),
+) : SearchRepository {
+    override suspend fun search(query: com.ssafy.e102.eumgil.core.model.SearchQuery) =
+        emptyList<com.ssafy.e102.eumgil.core.model.SearchResult>()
+
+    override suspend fun getRecentSearches() = emptyList<com.ssafy.e102.eumgil.core.model.RecentSearch>()
+
+    override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> = recentDestinations
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) = Unit
+}
+
 private fun testFacilitySeedRepository(): FacilitySeedRepository =
     DefaultFacilitySeedRepository(
         localDataSource = FacilitySeedLocalDataSource(),
@@ -673,3 +807,18 @@ private class FailingFacilitySeedRepository : FacilitySeedRepository {
         error("browse load failed")
     }
 }
+
+private fun recentDestination(
+    placeId: String,
+    searchedAtMillis: Long,
+): RecentDestination =
+    RecentDestination(
+        placeId = placeId,
+        name = "Recent Destination $placeId",
+        address = "Busan Address $placeId",
+        latitude = 35.1796,
+        longitude = 129.0756,
+        category = PlaceCategory.RESTAURANT,
+        accessibilityTagKeys = listOf("accessible-parking"),
+        searchedAtMillis = searchedAtMillis,
+    )

@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.map
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +23,7 @@ import kotlinx.coroutines.flow.collect
 fun MapRoute(
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
-    onNavigateToFacilityRouteEntry: () -> Unit = {},
+    onNavigateToRouteSetting: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -40,6 +41,7 @@ fun MapRoute(
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 facilitySeedRepository = appContainer.facilitySeedRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
+                searchRepository = appContainer.searchRepository,
             )
         }
     val viewModel =
@@ -72,17 +74,27 @@ fun MapRoute(
         viewModel,
         activity,
         appContainer,
-        onNavigateToFacilityRouteEntry,
+        onNavigateToRouteSetting,
         onNavigateToSearch,
     ) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                MapUiEvent.NavigateToFacilityRouteEntry -> onNavigateToFacilityRouteEntry()
+                MapUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 MapUiEvent.NavigateToSearch -> onNavigateToSearch()
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is MapUiEvent.ShowSnackbar -> Unit
             }
+        }
+    }
+
+    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible) {
+        viewModel.onAction(MapUiAction.FacilityDetailDismissed)
+    }
+
+    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible.not()) {
+        if (activity?.moveTaskToBack(true) == false) {
+            activity.finish()
         }
     }
 

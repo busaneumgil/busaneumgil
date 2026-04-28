@@ -3,10 +3,12 @@ package com.ssafy.e102.eumgil.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -22,6 +24,7 @@ import kotlinx.coroutines.launch
 class SearchViewModel(
     private val searchRepository: SearchRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
+    private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = mutableUiState.asStateFlow()
@@ -62,7 +65,34 @@ class SearchViewModel(
         }
 
         destinationSelectionRepository.updateSelectedDestination(destination)
+        persistRecentDestination(result = result, destination = destination)
         emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun persistRecentDestination(
+        result: SearchResult,
+        destination: com.ssafy.e102.eumgil.core.model.PlaceDestination,
+    ) {
+        viewModelScope.launch {
+            val accessibilityTagKeys =
+                runCatching {
+                    placesRepository?.getPlaceDetail(result.placeId)?.accessibilityTags.orEmpty()
+                }.getOrDefault(emptyList())
+
+            runCatching {
+                searchRepository.saveRecentDestination(
+                    RecentDestination(
+                        placeId = destination.placeId,
+                        name = destination.name,
+                        address = destination.address,
+                        latitude = destination.latitude,
+                        longitude = destination.longitude,
+                        category = destination.category,
+                        accessibilityTagKeys = accessibilityTagKeys,
+                    ),
+                )
+            }
+        }
     }
 
     private fun updateQuery(query: String) {
@@ -202,6 +232,7 @@ class SearchViewModel(
         fun provideFactory(
             searchRepository: SearchRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
+            placesRepository: PlacesRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -210,6 +241,7 @@ class SearchViewModel(
                         return SearchViewModel(
                             searchRepository = searchRepository,
                             destinationSelectionRepository = destinationSelectionRepository,
+                            placesRepository = placesRepository,
                         ) as T
                     }
 

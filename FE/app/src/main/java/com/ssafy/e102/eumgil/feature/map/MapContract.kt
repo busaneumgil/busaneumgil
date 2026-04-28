@@ -3,10 +3,13 @@ package com.ssafy.e102.eumgil.feature.map
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
+import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
+import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
 
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
@@ -16,6 +19,8 @@ data class MapUiState(
     val recenterButtonState: MapRecenterButtonState = MapRecenterButtonState.REQUEST_PERMISSION,
     val markerOverlayState: MapMarkerOverlayState = MapMarkerOverlayState(),
     val markerFilterState: MapMarkerFilterUiState = MapMarkerFilterUiState(),
+    val shortcutFilterState: MapShortcutFilterRowState = MapShortcutFilterRowState(),
+    val recentDestinations: List<RecentDestination> = emptyList(),
     val facilityDetailSheetState: MapFacilityDetailSheetState = MapFacilityDetailSheetState(),
 )
 
@@ -38,6 +43,14 @@ sealed interface MapUiAction {
 
     data object FacilityRouteEntryClicked : MapUiAction
 
+    data class ShortcutFilterClicked(
+        val key: MapShortcutFilterKey,
+    ) : MapUiAction
+
+    data class RecentDestinationRouteClicked(
+        val placeId: String,
+    ) : MapUiAction
+
     data object FacilityBookmarkClicked : MapUiAction
 
     data class MarkerTapped(
@@ -54,7 +67,7 @@ sealed interface MapUiAction {
 sealed interface MapUiEvent {
     data object NavigateToSearch : MapUiEvent
 
-    data object NavigateToFacilityRouteEntry : MapUiEvent
+    data object NavigateToRouteSetting : MapUiEvent
 
     data object RequestLocationPermission : MapUiEvent
 

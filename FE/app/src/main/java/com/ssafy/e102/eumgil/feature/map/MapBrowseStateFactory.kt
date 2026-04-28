@@ -216,6 +216,7 @@ internal object MapBrowseStateFactory {
                     category = category,
                     brailleBlockType = brailleBlockType,
                 ),
+            accessibilityTags = accessibilityTags,
             displayState = displayState,
         )
 

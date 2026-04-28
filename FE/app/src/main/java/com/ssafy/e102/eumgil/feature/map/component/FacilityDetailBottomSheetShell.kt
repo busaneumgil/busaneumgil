@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -37,7 +35,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -103,34 +100,15 @@ fun FacilityDetailBottomSheetShell(
                     .navigationBarsPadding()
                     .fillMaxWidth(),
         ) {
-            Surface(
-                modifier = Modifier.heightIn(max = sheetMaxHeight),
-                shape = RoundedCornerShape(EumRadius.large),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.99f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                shadowElevation = 12.dp,
+            MapBottomSheetSurface(
+                modifier =
+                    Modifier
+                        .heightIn(max = sheetMaxHeight)
+                        .verticalScroll(sheetScrollState),
             ) {
                 Column(
-                    modifier =
-                        Modifier
-                            .verticalScroll(sheetScrollState)
-                            .padding(EumSpacing.medium),
                     verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .width(44.dp)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(EumRadius.full))
-                                    .background(MaterialTheme.colorScheme.outlineVariant),
-                        )
-                    }
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,

@@ -25,3 +25,24 @@ data class RecentSearch(
     val keyword: String,
     val searchedAtMillis: Long = System.currentTimeMillis(),
 )
+
+data class RecentDestination(
+    val placeId: String,
+    val name: String,
+    val address: String? = null,
+    val latitude: Double,
+    val longitude: Double,
+    val category: PlaceCategory? = null,
+    val accessibilityTagKeys: List<String> = emptyList(),
+    val searchedAtMillis: Long = System.currentTimeMillis(),
+)
+
+fun RecentDestination.toPlaceDestination(): PlaceDestination =
+    PlaceDestination(
+        placeId = placeId,
+        name = name,
+        address = address,
+        latitude = latitude,
+        longitude = longitude,
+        category = category,
+    )

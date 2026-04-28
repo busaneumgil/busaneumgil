@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.terms
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,41 +33,43 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.gestures.detectTapGestures
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.terms.component.TermsAccessibleBottomNav
 import com.ssafy.e102.eumgil.feature.terms.component.TermsPagerIndicator
 
 /**
- * High-contrast "약관 안내" walkthrough screen.
+ * High-contrast "약관 안내" walkthrough screen — generic shell for all 5 steps.
  *
- * Source: Figma file MREqSzkmwhRcXnFS3lzW17 (E102-mockup), node 328:486.
+ * Source: Figma file MREqSzkmwhRcXnFS3lzW17 (E102-mockup), nodes
+ * 328:486 / 328:528 / 328:570 / 328:612 / 328:652.
  *
- * Design rules taken directly from the Figma variables panel:
+ * Per-step content (icon, card label, hint copy, presence of "자세히 보기" button)
+ * comes from [TermsGuideStep]. The screen itself is intentionally pure UI: it does
+ * not own step state, navigation, or persistence — those belong to [TermsGuideRoute].
+ *
+ * Design rules taken from the Figma variables panel:
  *   - color/yellow/50  = #FFCC00  (Supernova)
  *   - color/black/solid = #000000
  *   - color/grey/27    = #444444  (Tundora, inactive dots)
  *   - color/grey/47    = #777777  (Boulder, inactive nav text)
  *   - color/grey/13    = #222222  (Mine Shaft, bottom nav top border)
- *   - radius main-card = 35dp
- *   - radius button    = 12dp
- *   - title font 24/800, card label 40/900 (-1 letter-spacing), hint 18/700,
- *     button 20/900, nav label 10/400.
- *
- * The screen is intentionally self-contained (no MaterialTheme color usage) because
- * BusanEumgil's default theme is light blue; this screen targets the visual-impairment
- * voice-guide mode introduced in feature/onboarding (DisabilityType.supportsVoiceGuide).
+ *   - radius main-card = 35dp, button = 12dp
+ *   - title 24sp/ExtraBold, card 40sp/Black + letter spacing -1sp,
+ *     hint 18sp/Bold, button 20sp/Black, nav label 10sp/Normal.
  */
 @Composable
 fun TermsGuideScreen(
     uiState: TermsGuideUiState,
-    onAgree: () -> Unit,
+    onAdvance: () -> Unit,
     onMoreDetails: () -> Unit,
     onTabSelected: (TermsBottomTab) -> Unit,
     modifier: Modifier = Modifier,
     selectedTab: TermsBottomTab = TermsBottomTab.HOME,
 ) {
-    val agreeContentDescription = stringResource(id = R.string.terms_guide_card_a11y)
+    val step = uiState.step
+    val cardLabel = stringResource(id = step.cardLabelRes)
+    val hintText = stringResource(id = step.hintRes)
+    val cardA11y = stringResource(id = R.string.terms_guide_card_a11y, cardLabel, hintText)
 
     Column(
         modifier = modifier
@@ -96,9 +99,9 @@ fun TermsGuideScreen(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // 2. Main card: yellow surface with document icon and "약관 동의" text.
-        //    Double-tap commits agreement per Figma hint copy and the existing
-        //    onboarding voice-guide pattern.
+        // 2. Main card — yellow surface with step icon + step label.
+        //    Double-tap commits the step (advance or finalize), per Figma hint copy
+        //    and the existing onboarding voice-guide pattern.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -116,14 +119,14 @@ fun TermsGuideScreen(
                         color = Color.White,
                         shape = RoundedCornerShape(35.dp),
                     )
-                    .pointerInput(uiState.isAgreed) {
+                    .pointerInput(step) {
                         detectTapGestures(
-                            onDoubleTap = { onAgree() },
+                            onDoubleTap = { onAdvance() },
                         )
                     }
                     .semantics {
                         role = Role.Button
-                        contentDescription = agreeContentDescription
+                        contentDescription = cardA11y
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -132,13 +135,13 @@ fun TermsGuideScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_terms_document),
+                        painter = painterResource(id = step.iconRes),
                         contentDescription = null,
                         tint = Color.Black,
                         modifier = Modifier.size(90.dp),
                     )
                     Text(
-                        text = stringResource(id = R.string.terms_guide_card_label),
+                        text = cardLabel,
                         color = Color.Black,
                         fontSize = 40.sp,
                         fontWeight = FontWeight.Black,
@@ -150,7 +153,7 @@ fun TermsGuideScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // 3. Bottom content: hint + "자세히 보기" button.
+        // 3. Bottom content — hint always present; "자세히 보기" button conditional.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -158,28 +161,30 @@ fun TermsGuideScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = stringResource(id = R.string.terms_guide_hint),
+                text = hintText,
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 20.dp, bottom = 22.dp),
             )
 
-            Box(
-                modifier = Modifier
-                    .width(288.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFFFCC00))
-                    .clickable { onMoreDetails() }
-                    .padding(top = 20.dp, bottom = 21.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(id = R.string.terms_guide_more_button),
-                    color = Color.Black,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                )
+            if (step.showMoreButton) {
+                Box(
+                    modifier = Modifier
+                        .width(288.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFFCC00))
+                        .clickable { onMoreDetails() }
+                        .padding(top = 20.dp, bottom = 21.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.terms_guide_more_button),
+                        color = Color.Black,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(36.dp))

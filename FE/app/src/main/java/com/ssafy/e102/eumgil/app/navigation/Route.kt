@@ -32,11 +32,22 @@ sealed interface OnboardingRoute : AppRoute {
     }
 
     /**
-     * High-contrast terms walkthrough screen (Figma node 328:486).
-     * Used in the visual-impairment voice-guide flow.
+     * High-contrast 5-step terms walkthrough screen
+     * (Figma file MREqSzkmwhRcXnFS3lzW17, nodes 328:486 / 328:528 / 328:570 /
+     * 328:612 / 328:652 — 약관 동의 / 민감정보 / 위치정보 / 14세 이상 / 처리방침).
+     *
+     * `step` 인자는 deep-link로 특정 단계에서 다시 시작하는 분기를 허용한다
+     * ("각 화면이 분기 시작점"). 기본값은 첫 단계(agree)이며 step 라우트 값은
+     * [com.ssafy.e102.eumgil.feature.terms.TermsGuideStep.routeValue]에서 정의한다.
      */
     data object TermsGuide : OnboardingRoute {
-        override val route: String = "onboarding/terms_guide"
+        const val ARG_STEP: String = "step"
+        const val DEFAULT_STEP: String = "agree"
+
+        override val route: String = "onboarding/terms_guide/{$ARG_STEP}"
+
+        fun createRoute(stepRouteValue: String = DEFAULT_STEP): String =
+            "onboarding/terms_guide/$stepRouteValue"
     }
 }
 
@@ -51,6 +62,24 @@ sealed interface TopLevelRoute : AppRoute {
 
     data object MyPage : TopLevelRoute {
         override val route: String = "my_page"
+    }
+}
+
+/**
+ * 시각지원(저시력/시각장애) 모드 풀스크린 셸 화면들의 라우트.
+ *
+ * 약관 walkthrough([OnboardingRoute.TermsGuide]) 이후 진입하는 음성 안내 메인 흐름.
+ * 출처: Figma file MREqSzkmwhRcXnFS3lzW17, nodes 371:105 / 371:300.
+ */
+sealed interface LowVisionRoute : AppRoute {
+    /** 시각지원 모드 메인 홈 (Figma node 371:105). */
+    data object Home : LowVisionRoute {
+        override val route: String = "low_vision/home"
+    }
+
+    /** 시각지원 모드 음성 입력 진행 화면 (Figma node 371:300). */
+    data object VoiceInput : LowVisionRoute {
+        override val route: String = "low_vision/voice_input"
     }
 }
 

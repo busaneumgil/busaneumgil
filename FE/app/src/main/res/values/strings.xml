@@ -381,14 +381,42 @@
     <string name="map_facility_detail_bookmark_action_remove">북마크 해제</string>
     <string name="map_facility_detail_bookmark_action_updating">북마크 저장 중</string>
 
-    <!-- feature/terms TermsGuideScreen (Figma node 328:486) -->
+    <!--
+        feature/terms TermsGuideScreen — 시각지원 모드 약관 안내 5단계
+        Figma file MREqSzkmwhRcXnFS3lzW17, nodes 328:486 / 328:528 / 328:570 / 328:612 / 328:652
+    -->
     <string name="terms_guide_header_title">약관 안내</string>
-    <string name="terms_guide_card_label">약관 동의</string>
-    <string name="terms_guide_card_a11y">약관 동의 카드. 두 번 탭하면 동의합니다.</string>
-    <string name="terms_guide_hint">두 번 탭하면 동의합니다</string>
     <string name="terms_guide_more_button">자세히 보기</string>
+    <!-- %1$s: 카드 라벨, %2$s: 힌트 문구. 더블탭 안내까지 한 줄에 합쳐 음성 안내 -->
+    <string name="terms_guide_card_a11y">%1$s 카드. %2$s.</string>
+    <string name="terms_guide_hint_agree">두 번 탭하면 동의합니다</string>
+    <string name="terms_guide_hint_confirm">두 번 탭하면 확인합니다</string>
+    <!-- 단계별 카드 라벨 -->
+    <string name="terms_guide_step_agree_card">약관 동의</string>
+    <string name="terms_guide_step_sensitive_card">민감정보</string>
+    <string name="terms_guide_step_location_card">위치정보</string>
+    <string name="terms_guide_step_age_card">14세 이상</string>
+    <string name="terms_guide_step_privacy_card">처리방침</string>
+    <!-- 하단 네비게이션 라벨 -->
     <string name="terms_guide_nav_home">홈</string>
     <string name="terms_guide_nav_bookmark">북마크</string>
     <string name="terms_guide_nav_category">카테고리</string>
     <string name="terms_guide_nav_my">마이</string>
+
+    <!--
+        feature/lowvision — 시각지원 모드 메인 셸
+        Figma file MREqSzkmwhRcXnFS3lzW17, nodes 371:105 (홈) / 371:300 (입력중)
+    -->
+    <string name="low_vision_home_voice_input_label">음성 입력</string>
+    <string name="low_vision_home_current_location_label">현재 위치</string>
+    <string name="low_vision_home_status_title">음성 입력 대기 중</string>
+    <string name="low_vision_home_status_description">마이크를 누르고 말씀해 주세요</string>
+    <string name="low_vision_home_voice_card_a11y">음성 입력 카드. 두 번 탭하면 음성 입력을 시작합니다.</string>
+    <string name="low_vision_home_location_card_a11y">현재 위치 카드. 두 번 탭하면 지도로 이동합니다.</string>
+    <string name="low_vision_voice_input_recording_label">입력중</string>
+    <string name="low_vision_voice_input_screen_a11y">음성 입력 진행 화면. 두 번 탭하면 입력을 종료합니다.</string>
+    <string name="low_vision_nav_home">홈</string>
+    <string name="low_vision_nav_bookmark">북마크</string>
+    <string name="low_vision_nav_category">카테고리</string>
+    <string name="low_vision_nav_my_page">마이페이지</string>
 </resources>

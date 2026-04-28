@@ -66,7 +66,6 @@
 
 ### 대중교통 도메인
 
-- `low_floor_bus_routes`
 - `subway_station_elevators`
 - ODsay 등 외부 대중교통 길찾기 API로 경로 후보 조회
 - 부산광역시_부산버스정보시스템 OpenAPI로 버스 실시간 도착/저상버스 여부 조회
@@ -176,7 +175,7 @@ erDiagram
         VARCHAR walkAccess
         ENUM brailleBlockState
         ENUM audioSignalState
-        ENUM curbRampState
+        ENUM slopeState
         ENUM widthState
         VARCHAR surfaceState
         ENUM stairsState
@@ -218,12 +217,6 @@ erDiagram
         GEOMETRY endPoint
         SMALLINT score
         VARCHAR ratedAt
-    }
-
-    LOW_FLOOR_BUS_ROUTES {
-        VARCHAR routeId PK
-        VARCHAR routeNo
-        BOOLEAN hasLowFloor
     }
 
     SUBWAY_STATION_ELEVATORS {
@@ -543,7 +536,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 보행 폭(미터) | widthMeter | NUMERIC(6,2) | NULL |  |
 | 점자블록 상태 | brailleBlockState | ENUM | NOT NULL | UNKNOWN |
 | 음향신호기 상태 | audioSignalState | ENUM | NOT NULL | UNKNOWN |
-| 경사로 상태 | curbRampState | ENUM | NOT NULL | UNKNOWN |
+| 경사 상태 | slopeState | ENUM | NOT NULL | UNKNOWN |
 | 폭 상태 | widthState | ENUM | NOT NULL | UNKNOWN |
 | 노면 상태 | surfaceState | VARCHAR(30) | NOT NULL | UNKNOWN |
 | 계단 상태 | stairsState | ENUM | NOT NULL | UNKNOWN |
@@ -552,7 +545,8 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ### enum 값
 
-- `brailleBlockState`, `audioSignalState`, `curbRampState`, `stairsState`, `elevatorState`: `YES`, `NO`, `UNKNOWN`
+- `brailleBlockState`, `audioSignalState`, `stairsState`, `elevatorState`: `YES`, `NO`, `UNKNOWN`
+- `slopeState`: `FLAT`, `MODERATE`, `STEEP`, `IMPASSABLE`, `UNKNOWN`
 - `widthState`: `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN`
 - `surfaceState` 후보값: `PAVED`, `GRAVEL`, `UNPAVED`, `BLOCK`, `TACTILE_BLOCK`, `OTHER`, `UNKNOWN`
 - `crossingState`: `TRAFFIC_SIGNALS`, `NO`, `UNKNOWN`
@@ -562,6 +556,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `edgeId`가 downstream(CSV ETL, GraphHopper)에서 사용하는 유일한 surrogate key다.
 - `walkAccess` 기본값은 SHP 소스에서 보행 전용 의미를 확정할 수 없으므로 `UNKNOWN`으로 시작한다.
 - `avgSlopePercent`, `widthMeter`는 CSV ETL(`slope_analysis_staging.csv`) 보강값으로 채워진다.
+- `slopeState`는 경사 난이도 기반 경로 비용 계산에 사용하며, `avgSlopePercent` 또는 경사 관련 보강 데이터에서 파생한다.
 - `surfaceState`는 분류 기준이 확장될 수 있으므로 ENUM 대신 `VARCHAR`로 관리한다.
 - 상세 feature 객체(음향신호기, 횡단보도 등)는 `segment_features`에 저장하고, `road_segments`에는 최종 상태값만 반영한다.
 
@@ -729,33 +724,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 14) low_floor_bus_routes
-
-### 역할
-
-교통약자 사용자의 대중교통 경로 제공 시, 버스 노선이 저상버스를 운행하는지 사전 검증하기 위한 정적 카탈로그다.
-
-### 컬럼 명세
-
-| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
-| --- | --- | --- | --- | --- |
-| 노선 ID (BIMS 기준) | routeId | VARCHAR(20) | NOT NULL |  |
-| 버스 번호 | routeNo | VARCHAR(20) | NOT NULL |  |
-| 저상버스 운행 여부 | hasLowFloor | BOOLEAN | NOT NULL | false |
-
-### 제약
-
-- `routeId` PK
-
-### 비고
-
-- 초기값은 부산시 저상버스 도입 현황 공공데이터로 적재하고 월 1회 이상 갱신한다.
-- BIMS 실시간 도착 API의 `lowplate1`, `lowplate2` 값으로 trip 단위 override 가능하다.
-- 교통약자 대중교통 경로에서 `hasLowFloor == false`이거나 테이블에 없는 노선은 대중교통 후보에서 즉시 탈락한다.
-
----
-
-## 15) subway_station_elevators
+## 14) subway_station_elevators
 
 ### 역할
 

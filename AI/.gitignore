@@ -186,3 +186,13 @@ pyvenv.cfg
 pip-selfcheck.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python,venv
+
+# 테스트 결과
+test_results/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store

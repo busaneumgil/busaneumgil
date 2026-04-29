@@ -10,7 +10,9 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -30,7 +32,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route)
+                navController.navigate(RouteSettingRoute.Setting.createRoute())
             },
             onNavigateToSearch = {
                 navController.navigate(SearchRoute.Search.route)
@@ -44,7 +46,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route)
+                navController.navigate(RouteSettingRoute.Setting.createRoute())
             },
         )
     }
@@ -66,7 +68,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.popBackStack()
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route) {
+                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
                     popUpTo(SearchRoute.Search.route) {
                         inclusive = true
                     }
@@ -75,7 +77,17 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = RouteSettingRoute.Setting.route) {
+    composable(
+        route = RouteSettingRoute.Setting.route,
+        arguments = listOf(
+            navArgument(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) {
+                type = NavType.BoolType
+                defaultValue = false
+            },
+        ),
+    ) { backStackEntry ->
+        val autoStartNavigation =
+            backStackEntry.arguments?.getBoolean(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) ?: false
         val context = LocalContext.current
         val activity = remember(context) { context.findComponentActivity() }
         val navigationViewModelFactory = remember { NavigationGuidanceViewModel.provideFactory() }
@@ -92,8 +104,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onStartNavigation = { request ->
                 navigationViewModel.bindNavigationRequest(request)
-                navController.navigate(NavigationRoute.Guidance.route)
+                navController.navigate(NavigationRoute.Guidance.route) {
+                    if (autoStartNavigation) {
+                        popUpTo(RouteSettingRoute.Setting.route) {
+                            inclusive = true
+                        }
+                    }
+                }
             },
+            autoStartNavigation = autoStartNavigation,
         )
     }
 

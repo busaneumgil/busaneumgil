@@ -114,7 +114,7 @@ fun NavGraphBuilder.onboardingNavGraph(
                         isPrivacyPolicyAgreed = true,
                     )
 
-                    navController.navigate(TopLevelRoute.Map.route) {
+                    navController.navigate(resolveTermsGuideCompletedRoute()) {
                         launchSingleTop = true
                         popUpTo(navController.graph.findStartDestination().id) {
                             inclusive = true
@@ -138,3 +138,5 @@ internal fun resolvePrimaryUserTypeNextRoute(primaryUserType: PrimaryUserType): 
         PrimaryUserType.LOW_VISION -> OnboardingRoute.TermsGuide.createRoute()
         PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.MobilityTypeSecondary.route
     }
+
+internal fun resolveTermsGuideCompletedRoute(): String = LowVisionRoute.Home.route

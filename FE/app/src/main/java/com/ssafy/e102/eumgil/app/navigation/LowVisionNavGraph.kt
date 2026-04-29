@@ -5,6 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
+import com.ssafy.e102.eumgil.feature.search.SearchRoute as SearchScreenRoute
 
 /**
  * 시각지원 모드 풀스크린 셸의 네비게이션 그래프.
@@ -29,11 +30,35 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.VoiceInput.route) {
         LowVisionVoiceInputRoute(
             onRecordingFinished = {
-                if (!navController.popBackStack()) {
-                    navController.navigate(LowVisionRoute.Home.route)
+                navController.navigate(resolveLowVisionRecordingCompletedRoute()) {
+                    launchSingleTop = true
+                    popUpTo(LowVisionRoute.VoiceInput.route) {
+                        inclusive = true
+                    }
                 }
             },
             onTabSelected = { /* 탭 라우팅은 추후 시각지원 모드 전용 4탭 셸이 잡히면 처리. */ },
         )
     }
+
+    composable(route = LowVisionRoute.Search.route) {
+        SearchScreenRoute(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToRouteSetting = {
+                navController.navigate(resolveLowVisionSearchResultRoute()) {
+                    launchSingleTop = true
+                    popUpTo(LowVisionRoute.Search.route) {
+                        inclusive = true
+                    }
+                }
+            },
+        )
+    }
 }
+
+internal fun resolveLowVisionRecordingCompletedRoute(): String = LowVisionRoute.Search.route
+
+internal fun resolveLowVisionSearchResultRoute(): String =
+    RouteSettingRoute.Setting.createRoute(autoStartNavigation = true)

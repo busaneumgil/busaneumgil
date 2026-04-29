@@ -81,6 +81,10 @@ sealed interface LowVisionRoute : AppRoute {
     data object VoiceInput : LowVisionRoute {
         override val route: String = "low_vision/voice_input"
     }
+
+    data object Search : LowVisionRoute {
+        override val route: String = "low_vision/search"
+    }
 }
 
 sealed interface SearchRoute : AppRoute {
@@ -91,7 +95,17 @@ sealed interface SearchRoute : AppRoute {
 
 sealed interface RouteSettingRoute : AppRoute {
     data object Setting : RouteSettingRoute {
-        override val route: String = "route_setting"
+        const val ARG_AUTO_START_NAVIGATION: String = "autoStartNavigation"
+        private const val BASE_ROUTE: String = "route_setting"
+
+        override val route: String = "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}"
+
+        fun createRoute(autoStartNavigation: Boolean = false): String =
+            if (autoStartNavigation) {
+                "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION=true"
+            } else {
+                BASE_ROUTE
+            }
     }
 }
 

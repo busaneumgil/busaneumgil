@@ -67,6 +67,27 @@ class AppStartDestinationRoutingTest {
         assertSame(AppStartDestination.UserTypePrimaryStep, destination)
     }
 
+    @Test
+    fun `completed low vision session starts at low vision home`() {
+        val destination =
+            resolveAppStartDestination(
+                authGateState = AuthGateState(
+                    authSession = AuthSession(accessToken = "test-token"),
+                    isProfileCompleted = true,
+                ),
+                initSettings =
+                    InitSettings(
+                        selectedPrimaryUserType = PrimaryUserType.LOW_VISION.routeValue,
+                        isLowVisionFollowUpCompleted = true,
+                        isLocationTermsAgreed = true,
+                        isPrivacyPolicyAgreed = true,
+                    ),
+            )
+
+        assertSame(AppStartDestination.LowVisionHome, destination)
+        assertEquals(LowVisionRoute.Home.route, destination.route)
+    }
+
     private companion object {
         val completedInitSettings =
             InitSettings(

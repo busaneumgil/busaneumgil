@@ -25,6 +25,14 @@ class OnboardingNavGraphRoutingTest {
     }
 
     @Test
+    fun `terms guide completion moves to low vision home`() {
+        assertEquals(
+            LowVisionRoute.Home.route,
+            resolveTermsGuideCompletedRoute(),
+        )
+    }
+
+    @Test
     fun `mobility impaired primary user type moves to mobility subtype route`() {
         assertEquals(
             OnboardingRoute.MobilityTypeSecondary.route,

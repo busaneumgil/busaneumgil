@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.app.navigation
 
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.InitSettings
+import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 
 sealed interface AppStartDestination {
     val route: String
@@ -21,6 +22,10 @@ sealed interface AppStartDestination {
     data object Map : AppStartDestination {
         override val route: String = TopLevelRoute.Map.route
     }
+
+    data object LowVisionHome : AppStartDestination {
+        override val route: String = LowVisionRoute.Home.route
+    }
 }
 
 fun resolveAppStartDestination(
@@ -31,7 +36,11 @@ fun resolveAppStartDestination(
     if (!authGateState.isProfileCompleted) return AppStartDestination.ProfileSetup
 
     return if (initSettings.isOnboardingCompleted) {
-        AppStartDestination.Map
+        if (initSettings.selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {
+            AppStartDestination.LowVisionHome
+        } else {
+            AppStartDestination.Map
+        }
     } else {
         AppStartDestination.UserTypePrimaryStep
     }

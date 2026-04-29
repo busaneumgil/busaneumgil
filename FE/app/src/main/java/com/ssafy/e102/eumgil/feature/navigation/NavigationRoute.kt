@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 fun NavigationRoute(
     onNavigateBack: () -> Unit,
     onNavigateToMap: () -> Unit,
+    onNavigateToSavedRoute: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -54,12 +55,13 @@ fun NavigationRoute(
         )
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onNavigateToSavedRoute) {
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     NavigationUiEvent.NavigateBack -> onNavigateBack()
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
+                    NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->
@@ -86,6 +88,4 @@ fun NavigationRoute(
 
 private fun TextToSpeechAvailability.toNavigationTtsStatus(): NavigationTtsStatus =
     when (this) {
-        TextToSpeechAvailability.Initializing -> NavigationTtsStatus.Initializing
-        TextToSpeechAvailability.Ready -> NavigationTtsStatus.Ready
-        TextToSpeechAvailability.Unavail
+        TextToSpeechAvailability.Initia

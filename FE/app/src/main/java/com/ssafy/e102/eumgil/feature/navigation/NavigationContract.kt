@@ -92,6 +92,12 @@ sealed interface NavigationUiAction {
 
     data object ExitNavigationClicked : NavigationUiAction
 
+    /** 안내 종료 후 현재 경로를 북마크에 저장하고 저장 목록 화면으로 이동합니다. */
+    data object SaveBookmarkClicked : NavigationUiAction
+
+    /** 안내를 완전히 종료하고 홈(지도) 화면으로 돌아갑니다. */
+    data object NavigationCompleteClicked : NavigationUiAction
+
     data class VoiceGuidanceToggled(
         val enabled: Boolean,
     ) : NavigationUiAction
@@ -105,6 +111,9 @@ sealed interface NavigationUiEvent {
     data object NavigateBack : NavigationUiEvent
 
     data object NavigateToMap : NavigationUiEvent
+
+    /** 북마크 저장 후 저장 목록(SavedRoute) 화면으로 이동합니다. */
+    data object NavigateToSavedRoute : NavigationUiEvent
 
     data class SpeakBriefing(
         val text: String,
@@ -129,15 +138,4 @@ data class NavigationTtsUiState(
     val fallbackMessage: String = NAVIGATION_TTS_PREPARING_MESSAGE,
 ) {
     val canRequestBriefing: Boolean
-        get() = isEnabled && status != NavigationTtsStatus.Unavailable && briefingText.isNotBlank()
-}
-
-enum class NavigationTtsStatus {
-    Initializing,
-    Ready,
-    Unavailable,
-}
-
-const val NAVIGATION_TTS_PREPARING_MESSAGE = "음성 안내를 준비하고 있습니다."
-const val NAVIGATION_TTS_DISABLED_MESSAGE = "음성 안내가 꺼져 있어 화면 안내만 표시합니다."
-const val NAVIGATION_TTS_UNAVAILABLE_MESSAGE = "음성 안내를 사용할 수 없어 화면 안내로 진행합니다."
+        get() = isEnabled && status !=

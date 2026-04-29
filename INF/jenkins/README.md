@@ -4,25 +4,58 @@
 
 ## 현재 구성
 
-- 외부 URL: `https://k14e102.p.ssafy.io/jenkins/`
-- dev API URL: `https://k14e102.p.ssafy.io/api/`
+- 외부 URL: `https://jenkins.busaneumgil.com/`
+- dev API URL: `https://api.dev.busaneumgil.com/`
+- dev AI URL: `https://ai.dev.busaneumgil.com/`
 - 인증: GitLab OAuth
 - 권한: Matrix Authorization
 - dev 배포 잡: `e102-dev-deploy`
 - 대상 브랜치: `develop`
 - 배포 대상: S1 dev Docker Compose stack
 
-## Dev API Proxy
+## 설정 자산
 
-S1의 443 nginx proxy는 Jenkins와 dev backend를 함께 라우팅한다.
+S1 Jenkins의 기준 설정은 `INF/jenkins/s1`에서 관리한다.
 
-- `/jenkins/`: Jenkins UI
-- `/api/`: S1 dev backend
-
-backend 원 포트는 `127.0.0.1:8080`에만 바인딩하고, 외부에는 nginx 443 경로로만 공개한다. `/api/` proxy는 backend의 root path로 전달하므로 API 문서는 아래 주소로 확인한다.
+- `docker-compose.yml`: Jenkins와 S1 nginx proxy compose
+- `Dockerfile`: Jenkins Docker CLI/Compose plugin 포함 이미지
+- `plugins.txt`: Jenkins 필수 plugin 목록
+- `nginx.conf`: Jenkins, dev API, Grafana/PLG, SonarQube, Portainer host-based routing
+GitLab OAuth Application에는 아래 Redirect URI가 등록되어 있어야 한다.
 
 ```text
-https://k14e102.p.ssafy.io/api/v3/api-docs
+https://jenkins.busaneumgil.com/securityRealm/finishLogin
+```
+
+Jenkins OAuth secret은 노션의 운영 env 기준을 확인한 뒤 S1 `/home/ubuntu/e102/jenkins/.env.jenkins`에 반영한다. GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_운영도구_secret_관리_기준.md`를 따른다.
+
+## 2026-04-29 반영 상태
+
+- Jenkins는 `https://jenkins.busaneumgil.com/` 루트 경로로 접근한다.
+- 과거 `/jenkins/` 경로는 루트로 redirect한다.
+- dev backend는 `https://api.dev.busaneumgil.com/`로 접근한다.
+- dev AI는 `https://ai.dev.busaneumgil.com/`로 접근한다.
+- `api.dev.busaneumgil.com`, `ai.dev.busaneumgil.com` 인증서는 S1 host certbot standalone 방식으로 발급했고, S1 Docker nginx proxy에서 `/etc/letsencrypt`를 read-only mount해 사용한다.
+- Docker nginx config는 bind mount이므로 `nginx.conf` 교체 후 `jenkins-proxy` 컨테이너를 recreate해야 한다.
+
+```bash
+cd /home/ubuntu/e102/jenkins
+sudo docker compose up -d --force-recreate --no-deps jenkins-proxy
+sudo docker exec e102-jenkins-proxy nginx -t
+```
+
+## Dev API Proxy
+
+S1의 443 nginx proxy는 Jenkins와 dev backend, dev AI를 함께 라우팅한다.
+
+- `https://jenkins.busaneumgil.com/`: Jenkins UI
+- `https://api.dev.busaneumgil.com/`: S1 dev backend
+- `https://ai.dev.busaneumgil.com/`: S1 dev AI
+
+backend 원 포트는 dev Docker network 내부에서만 직접 접근하고, 외부에는 nginx 443 host-based routing으로만 공개한다. API 문서는 아래 주소로 확인한다.
+
+```text
+https://api.dev.busaneumgil.com/v3/api-docs
 ```
 
 PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는다. DB 접근이 필요하면 SSH tunnel 또는 SSM port forwarding을 사용한다.
@@ -59,7 +92,7 @@ prod 배포를 시작할 때는 서버에 `/home/ubuntu/e102/.env.prod`를 만�
 
 Jenkins job에는 GitLab Push Hook 수신 트리거가 설정되어 있다.
 
-- Jenkins endpoint: `https://k14e102.p.ssafy.io/jenkins/project/e102-dev-deploy`
+- Jenkins endpoint: `https://jenkins.busaneumgil.com/project/e102-dev-deploy`
 - 이벤트: Push events
 - 브랜치 필터: `develop`
 - Secret token: S1 서버 로컬 `/home/ubuntu/e102/.jenkins-webhook-secret`

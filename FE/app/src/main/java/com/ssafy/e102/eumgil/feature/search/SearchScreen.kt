@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -102,6 +103,7 @@ private fun SearchTopBar(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xxSmall),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),

@@ -60,10 +60,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
-    val showTopLevelBar =
-        TopLevelDestination.entries.any { destination ->
-            destination.route.route == currentRoute
-        }
+    val currentTopLevelRoute = currentRoute.toCurrentTopLevelRoute()
+    val showTopLevelBar = currentTopLevelRoute != null
 
     Scaffold(
         contentWindowInsets = AppNavHostContentWindowInsets,
@@ -71,7 +69,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             if (showTopLevelBar) {
                 EumTopLevelTabBar(
                     destinations = TopLevelDestination.entries,
-                    currentRoute = currentRoute,
+                    currentRoute = currentTopLevelRoute,
                     onDestinationSelected = { destination ->
                         navController.navigateToTopLevel(destination)
                     },
@@ -99,6 +97,16 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         }
     }
 }
+
+private fun String?.toCurrentTopLevelRoute(): String? =
+    when {
+        this == TopLevelRoute.Map.route -> TopLevelRoute.Map.route
+        this == TopLevelRoute.SavedRoute.route -> TopLevelRoute.SavedRoute.route
+        this == ReportRoute.Report.route -> ReportRoute.Report.route
+        this == TopLevelRoute.MyPage.route -> TopLevelRoute.MyPage.route
+        this?.startsWith("${TopLevelRoute.MyPage.route}/") == true -> TopLevelRoute.MyPage.route
+        else -> null
+    }
 
 @Composable
 private fun AppEntryLoadingScreen(modifier: Modifier = Modifier) {

@@ -225,6 +225,8 @@ sealed interface ReportUiAction {
     data object RetrySubmitClicked : ReportUiAction
 
     data object NextStepClicked : ReportUiAction
+
+    data object ReportHistoryClicked : ReportUiAction
 }
 
 sealed interface ReportUiEvent {
@@ -252,6 +254,8 @@ sealed interface ReportUiEvent {
         val reportId: Long? = null,
         val outboxId: String? = null,
     ) : ReportUiEvent
+
+    data object NavigateToReportHistory : ReportUiEvent
 }
 
 sealed interface ReportFailureReason {

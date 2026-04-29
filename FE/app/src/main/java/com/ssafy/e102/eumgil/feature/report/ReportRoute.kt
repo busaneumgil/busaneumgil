@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.collect
 @Composable
 fun ReportRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToReportHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -43,6 +44,7 @@ fun ReportRoute(
             handleReportUiEvent(
                 event = event,
                 onNavigateBack = onNavigateBack,
+                onNavigateToReportHistory = onNavigateToReportHistory,
             )
         }
     }
@@ -57,9 +59,11 @@ fun ReportRoute(
 private fun handleReportUiEvent(
     event: ReportUiEvent,
     onNavigateBack: () -> Unit,
+    onNavigateToReportHistory: () -> Unit,
 ) {
     when (event) {
         ReportUiEvent.NavigateBack -> onNavigateBack()
+        ReportUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
         ReportUiEvent.OpenLocationPicker,
         ReportUiEvent.OpenPhotoPicker,
         ReportUiEvent.RequestLocationPermission,

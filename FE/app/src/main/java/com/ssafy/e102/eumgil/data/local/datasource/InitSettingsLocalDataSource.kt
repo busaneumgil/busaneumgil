@@ -48,8 +48,6 @@ class InitSettingsLocalDataSource(
             if (currentType != selectedPrimaryUserType) {
                 preferences.remove(InitSettingsPreferences.selectedMobilitySubtype)
                 preferences.remove(InitSettingsPreferences.isLowVisionFollowUpCompleted)
-                preferences.remove(InitSettingsPreferences.isLocationTermsAgreed)
-                preferences.remove(InitSettingsPreferences.isPrivacyPolicyAgreed)
             }
         }
     }

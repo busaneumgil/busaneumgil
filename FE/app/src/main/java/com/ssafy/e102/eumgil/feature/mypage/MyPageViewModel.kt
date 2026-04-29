@@ -54,7 +54,11 @@ class MyPageViewModel(
             }
             is MyPageUiAction.MainMenuClicked -> {
                 viewModelScope.launch {
-                    uiEventChannel.send(MyPageUiEvent.ShowPreparingMessage)
+                    when (action.menuItem) {
+                        MyPageMenuItem.REPORT_HISTORY -> uiEventChannel.send(MyPageUiEvent.NavigateToReportHistory)
+                        MyPageMenuItem.NOTICE,
+                        MyPageMenuItem.APP_HELP -> uiEventChannel.send(MyPageUiEvent.ShowPreparingMessage)
+                    }
                 }
             }
         }

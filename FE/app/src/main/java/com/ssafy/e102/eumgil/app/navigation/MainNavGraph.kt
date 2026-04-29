@@ -137,8 +137,14 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         val currentLocationManager = remember(context) {
             (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
         }
-        val navigationViewModelFactory = remember(currentLocationManager) {
-            NavigationGuidanceViewModel.provideFactory(currentLocationManager = currentLocationManager)
+        val bookmarkRepository = remember(context) {
+            (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
+        }
+        val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository) {
+            NavigationGuidanceViewModel.provideFactory(
+                currentLocationManager = currentLocationManager,
+                bookmarkRepository = bookmarkRepository,
+            )
         }
         val navigationViewModel =
             remember(activity, navigationViewModelFactory) {
@@ -203,6 +209,14 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToSavedRoute = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
+            },
+            onNavigateToLowVisionVoiceInput = {
+                navController.navigate(resolveNavigationCompletionRoute()) {
+                    launchSingleTop = true
+                    popUpTo(NavigationRoute.Guidance.route) {
+                        inclusive = true
+                    }
+                }
             },
         )
     }

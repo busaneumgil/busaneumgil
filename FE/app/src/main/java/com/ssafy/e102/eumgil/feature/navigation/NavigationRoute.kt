@@ -24,6 +24,7 @@ fun NavigationRoute(
     onNavigateBack: () -> Unit,
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
+    onNavigateToLowVisionVoiceInput: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -36,8 +37,14 @@ fun NavigationRoute(
     val currentLocationManager = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.currentLocationManager
     }
-    val viewModelFactory = remember(currentLocationManager) {
-        NavigationViewModel.provideFactory(currentLocationManager = currentLocationManager)
+    val bookmarkRepository = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.bookmarkRepository
+    }
+    val viewModelFactory = remember(currentLocationManager, bookmarkRepository) {
+        NavigationViewModel.provideFactory(
+            currentLocationManager = currentLocationManager,
+            bookmarkRepository = bookmarkRepository,
+        )
     }
     val viewModel =
         remember(activity, viewModelFactory) {
@@ -55,13 +62,20 @@ fun NavigationRoute(
         )
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onNavigateToSavedRoute) {
+    LaunchedEffect(
+        viewModel,
+        onNavigateBack,
+        onNavigateToMap,
+        onNavigateToSavedRoute,
+        onNavigateToLowVisionVoiceInput,
+    ) {
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     NavigationUiEvent.NavigateBack -> onNavigateBack()
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
+                    NavigationUiEvent.NavigateToLowVisionVoiceInput -> onNavigateToLowVisionVoiceInput()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->

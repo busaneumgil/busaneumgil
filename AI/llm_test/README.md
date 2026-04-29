@@ -40,17 +40,22 @@ llm_test/
 │   │   ├── cost_calculator.py  # GMS 크레딧 비용 계산
 │   │   └── result_logger.py    # API 호출 결과 JSON 저장
 │   │
-│   ├── services/               # 부가 서비스 (현재 미사용)
-│   │   ├── intent_parser.py
-│   │   └── stt_service.py
-│   │
 │   └── tests/
-│       ├── test_batch.py       # 3개 모델 배치 테스트
+│       ├── test_batch.py       # 3개 모델 × 27개 프롬프트 배치 테스트
 │       ├── results/            # /api/chat/llm 호출 결과 JSON
 │       ├── test_audio/         # 테스트용 음성 파일
 │       └── test_results/       # 배치 테스트 Markdown 결과
 │
 └── FE/                         # Android 테스트 앱 (PoC용)
+    └── app/src/main/java/com/example/llmtest/
+        ├── ModeSelectActivity.kt   # 시작 화면 — 보행약자 / 시각장애인 선택
+        ├── WalkActivity.kt         # 보행약자 모드 (단발성 호출)
+        ├── VisuallyActivity.kt     # 시각장애인 모드 (멀티턴 + TTS)
+        └── network/
+            ├── VoiceApiClient.kt       # Retrofit 클라이언트
+            └── models/
+                ├── VoiceAnalyzeRequest.kt
+                └── VoiceAnalyzeResponse.kt
 ```
 
 ---
@@ -80,16 +85,14 @@ cp .env.example .env
 GMS_KEY=your_gms_key_here
 ```
 
-### 2. conda 가상환경 생성 및 패키지 설치
+### 2. 패키지 설치
 
 ```bash
+# conda
 conda env create -f server/environment.yaml
 conda activate llmtest
-```
 
-또는 pip로 직접 설치:
-
-```bash
+# 또는 pip
 pip install -r server/requirements.txt
 ```
 
@@ -114,70 +117,164 @@ python app.py
 ```json
 {
   "status": "healthy",
-  "providers": ["gemini", "claude", "gpt_mini"]
+  "providers": ["gemini", "claude", "gpt_mini"],
+  "modes": ["MOBILITY_IMPAIRED", "LOW_VISION"],
+  "endpoints": ["POST /voice/analyze"]
 }
 ```
 
 ---
 
-### `POST /api/voice/analyze`
+### `POST /voice/analyze`
 
 백엔드 연동용 메인 엔드포인트. STT 텍스트를 받아 LLM으로 의미 추론.
 
 **Request**
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `text` | string | Y | STT 변환 텍스트 |
+| `mode` | string | Y | `MOBILITY_IMPAIRED` \| `LOW_VISION` |
+| `model` | string | N | `gemini` \| `claude` \| `gpt_mini` (기본값: `gemini`) |
+| `history` | array | N | 이전 대화 목록. `LOW_VISION` 전용. 기본값 `[]`. `MOBILITY_IMPAIRED`에서는 무시 |
+
 ```json
 {
-  "text": "해운대까지 가줘",
-  "model": "gemini"
+  "text": "부산역 어디야",
+  "mode": "MOBILITY_IMPAIRED"
 }
 ```
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `text` | string | STT 변환 텍스트 (필수) |
-| `model` | string | 사용할 모델 키 (선택, 기본값: `gemini`) |
+**history 형식** (`LOW_VISION` 멀티턴 시)
 
-**Response — 성공**
+```json
+[
+  { "role": "user",      "content": "부산역 어디야" },
+  { "role": "assistant", "content": "{\"intent\":\"PLACE_SEARCH\",\"placeName\":\"부산역\",\"confirmed\":null,\"confirmationMessage\":\"부산역을 찾으시나요?\"}" }
+]
+```
+
+> `assistant`의 `content`는 이전 응답 JSON을 문자열로 직렬화한 값
+
+---
+
+**Response 필드**
+
+| 필드 | 타입 | Null 가능 | 설명 |
+|------|------|-----------|------|
+| `intent` | string | N | `PLACE_SEARCH` \| `UNKNOWN` |
+| `placeName` | string | Y | 추출된 장소명. `UNKNOWN`이면 `null` |
+| `confirmed` | boolean | Y | `LOW_VISION` 전용. `true`=확인완료 / `false`=부정 또는 판단불가 / `null`=미확인. `MOBILITY_IMPAIRED`는 항상 `null` |
+| `confirmationMessage` | string | Y | `LOW_VISION` 전용 TTS 문구. `MOBILITY_IMPAIRED`는 항상 `null` |
+| `success` | boolean | N | 의도 추출 성공 여부 |
+| `model` | string | N | 사용된 모델 키 |
+| `mode` | string | N | 사용된 mode 값 |
+| `latency_ms` | int | N | LLM 응답 시간 (ms) |
+| `error` | string | Y | 실패 시 에러 메시지 |
+
+---
+
+**보행약자 — PLACE_SEARCH**
 ```json
 {
   "success": true,
-  "intent": "route_search",
-  "place_name": null,
-  "departure": null,
-  "destination": "해운대",
-  "facility_type": null,
-  "confirmation_message": "현재 위치에서 해운대까지 경로를 탐색할게요",
+  "intent": "PLACE_SEARCH",
+  "placeName": "부산역",
+  "confirmed": null,
+  "confirmationMessage": null,
   "model": "gemini",
-  "latency_ms": 1120
+  "mode": "MOBILITY_IMPAIRED",
+  "latency_ms": 1538
 }
 ```
 
-**Response — 실패**
+**시각장애인 1턴 — 장소 추출**
+```json
+{
+  "success": true,
+  "intent": "PLACE_SEARCH",
+  "placeName": "부산역",
+  "confirmed": null,
+  "confirmationMessage": "부산역을 찾으시나요?",
+  "model": "gemini",
+  "mode": "LOW_VISION",
+  "latency_ms": 1859
+}
+```
+
+**시각장애인 2턴 — 긍정 확인**
+```json
+{
+  "success": true,
+  "intent": "PLACE_SEARCH",
+  "placeName": "부산역",
+  "confirmed": true,
+  "confirmationMessage": null,
+  "model": "gemini",
+  "mode": "LOW_VISION",
+  "latency_ms": 963
+}
+```
+
+**시각장애인 — UNKNOWN**
+```json
+{
+  "success": true,
+  "intent": "UNKNOWN",
+  "placeName": null,
+  "confirmed": false,
+  "confirmationMessage": "찾으시는 장소를 다시 말씀해 주세요",
+  "model": "gemini",
+  "mode": "LOW_VISION",
+  "latency_ms": 870
+}
+```
+
+**실패 (400/500)**
 ```json
 {
   "success": false,
-  "intent": "unknown",
-  "confirmation_message": "다시 말씀해 주세요",
+  "intent": "UNKNOWN",
+  "placeName": null,
+  "confirmed": null,
+  "confirmationMessage": null,
   "error": "에러 메시지",
   "model": "gemini",
+  "mode": "MOBILITY_IMPAIRED",
   "latency_ms": 0
 }
 ```
 
 ---
 
-### `POST /api/chat/llm`
+## 서비스 흐름
 
-단일 모델 직접 호출 (PoC·디버깅용). `LLMResponse` 전체 필드(토큰 수, 비용 포함) 반환.
+### 보행약자 (`MOBILITY_IMPAIRED`)
 
-**Request**
-```json
-{
-  "text": "부산역에서 서면까지",
-  "model": "claude",
-  "stt_start_ms": 1714000000000
-}
 ```
+음성 입력 → POST /voice/analyze (mode: MOBILITY_IMPAIRED)
+  → PLACE_SEARCH: placeName 반환 → 백엔드에서 장소 검색 API 호출
+  → UNKNOWN: 검색 없이 종료
+```
+
+- history 무시, 단발성 1회 호출
+- `confirmed`, `confirmationMessage` 항상 `null`
+
+### 시각장애인 (`LOW_VISION`)
+
+```
+[1턴] POST /voice/analyze (mode: LOW_VISION, history: [])
+  → PLACE_SEARCH: confirmationMessage → TTS 재생
+  → UNKNOWN: "찾으시는 장소를 다시 말씀해 주세요" TTS → 재시도
+
+[2턴~] POST /voice/analyze (mode: LOW_VISION, history: 이전 대화 포함)
+  → confirmed: true  → 백엔드에서 장소 검색 API 호출
+  → confirmed: null  → 새 장소 추출 → TTS 재생 → 다음 턴
+  → UNKNOWN          → history 초기화 → TTS 재생 → 재시도
+```
+
+- history는 FE 메모리에서 관리, 서버에 저장하지 않음
+- 앱 세션 종료 또는 UNKNOWN 응답 시 history 초기화
 
 ---
 
@@ -185,16 +282,24 @@ python app.py
 
 | intent | 설명 | 추출 필드 |
 |--------|------|-----------|
-| `place_search` | 특정 장소 이름 검색 (예: "롯데마트 찾아줘") | `place_name` |
-| `route_search` | 출발지→도착지 경로 탐색 (예: "해운대까지 가줘") | `departure`, `destination` |
-| `nearby_search` | 현재 위치 주변 시설 유형 검색 (예: "근처 병원") | `facility_type` |
-| `unknown` | 의도 파악 불가 — 재입력 유도 | — |
+| `PLACE_SEARCH` | 특정 장소 이름 검색 | `placeName` |
+| `UNKNOWN` | 의도 파악 불가 — 재입력 유도 | — |
 
 **성공 조건** (`is_success`):
-- `place_search`: `place_name`이 존재할 때
-- `route_search`: `departure` 또는 `destination` 중 하나 이상 존재할 때
-- `nearby_search`: `facility_type`이 존재할 때
-- `unknown`: 항상 `false`
+- `PLACE_SEARCH`: `placeName`이 존재할 때
+- `UNKNOWN`: 항상 `true` (정상 처리로 간주)
+- `confirmed: true`인 경우: 항상 `true`
+
+---
+
+## 채택 프롬프트 (테스트 결과 기준)
+
+| 모드 | 채택 프롬프트 | 테스트 성공률 |
+|------|-------------|-------------|
+| `MOBILITY_IMPAIRED` | `claude_B` | 전 모델 100% |
+| `LOW_VISION` | `claude_visually_B` | 전 모델 100% |
+
+테스트 일시: 2026-04-28
 
 ---
 

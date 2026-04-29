@@ -14,6 +14,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.feature.map.MapRoute
+import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
@@ -55,7 +56,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     composable(route = TopLevelRoute.MyPage.route) {
         MyPageRoute(
             onNavigateToUserTypePrimary = {
-                navController.navigate(OnboardingRoute.UserTypePrimary.route)
+                navController.navigate(OnboardingRoute.ProfileUserTypePrimary.route)
             },
             onNavigateToLogin = {
                 navController.navigate(AuthRoute.Login.route) {
@@ -64,6 +65,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                         inclusive = true
                     }
                 }
+            },
+            onNavigateToReportHistory = {
+                navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
         )
     }
@@ -141,6 +145,27 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         ReportScreenRoute(
             onNavigateBack = {
                 navController.popBackStack()
+            },
+            onNavigateToReportHistory = {
+                navController.navigate(MyPageSubRoute.ReportHistory.route)
+            },
+        )
+    }
+
+    composable(route = MyPageSubRoute.ReportHistory.route) {
+        MyPageReportHistoryRoute(
+            onNavigateBack = {
+                val didPopToMyPage =
+                    navController.popBackStack(
+                        route = TopLevelRoute.MyPage.route,
+                        inclusive = false,
+                    )
+                if (!didPopToMyPage) {
+                    navController.navigateToTopLevel(TopLevelDestination.MyPage)
+                }
+            },
+            onNavigateToReport = {
+                navController.navigate(ReportRoute.Report.route)
             },
         )
     }

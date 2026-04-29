@@ -161,9 +161,9 @@ private fun ReportBottomBar(
             )
         ReportStep.Complete ->
             ReportPrimaryActionBar(
-                label = "제출 완료",
-                enabled = false,
-                onClick = {},
+                label = "제보 내역 확인하기",
+                enabled = true,
+                onClick = { onAction(ReportUiAction.ReportHistoryClicked) },
             )
     }
 }

@@ -51,6 +51,7 @@ class ReportViewModel(
             is ReportUiAction.DescriptionChanged -> updateDescription(action.description)
             ReportUiAction.DescriptionBlurred -> touchDescription()
             ReportUiAction.NextStepClicked -> advanceStep()
+            ReportUiAction.ReportHistoryClicked -> emitUiEvent(ReportUiEvent.NavigateToReportHistory)
             ReportUiAction.SubmitClicked,
             ReportUiAction.RetrySubmitClicked -> submitReport()
         }

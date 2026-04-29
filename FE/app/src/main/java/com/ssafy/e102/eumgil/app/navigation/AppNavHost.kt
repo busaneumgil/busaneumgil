@@ -54,9 +54,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         AppEntryLoadingScreen(modifier = modifier)
         return
     }
+
     val startDestination = appStartDestination ?: return
     val restoredSettings = initialSettings ?: return
-
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
@@ -98,13 +98,17 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     }
 }
 
-private fun String?.toCurrentTopLevelRoute(): String? =
+internal fun String?.toCurrentTopLevelRoute(): String? =
     when {
         this == TopLevelRoute.Map.route -> TopLevelRoute.Map.route
         this == TopLevelRoute.SavedRoute.route -> TopLevelRoute.SavedRoute.route
         this == ReportRoute.Report.route -> ReportRoute.Report.route
         this == TopLevelRoute.MyPage.route -> TopLevelRoute.MyPage.route
         this?.startsWith("${TopLevelRoute.MyPage.route}/") == true -> TopLevelRoute.MyPage.route
+        this == SearchRoute.Entry.route -> TopLevelRoute.Map.route
+        this?.startsWith("search/") == true -> TopLevelRoute.Map.route
+        this == NavigationRoute.Guidance.route -> TopLevelRoute.Map.route
+        this?.startsWith("route_setting") == true -> TopLevelRoute.Map.route
         else -> null
     }
 

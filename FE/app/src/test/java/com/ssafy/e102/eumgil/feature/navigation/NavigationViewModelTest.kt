@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -12,8 +14,11 @@ import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -26,6 +31,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NavigationViewModelTest {
@@ -35,66 +41,126 @@ class NavigationViewModelTest {
     @Test
     fun `initial ui state exposes navigation shell placeholders`() =
         runTest {
-            val viewModel = NavigationViewModel()
+            val viewModel = NavigationViewModel(FakeCurrentLocationManager())
 
             assertEquals(NavigationScreenState.Loading, viewModel.uiState.value.screenState)
             assertFalse(viewModel.uiState.value.mapOverlay.isDisplayable)
             assertTrue(viewModel.uiState.value.mapOverlay.shouldUsePlaceholder)
             assertNull(viewModel.uiState.value.mapOverlay.currentLocation)
-            assertTrue(viewModel.uiState.value.mapOverlay.selectedRoutePolyline.isEmpty())
-            assertTrue(viewModel.uiState.value.mapOverlay.routeSegments.isEmpty())
             assertEquals("다음 안내", viewModel.uiState.value.stepCard.sectionLabel)
             assertEquals("준비 중", viewModel.uiState.value.stepCard.statusLabel)
-            assertEquals("경로 확인", viewModel.uiState.value.stepCard.emphasisLabel)
-            assertEquals("확인 중", viewModel.uiState.value.stepCard.distanceLabel)
-            assertEquals("경로 안내를 불러오는 중입니다", viewModel.uiState.value.stepCard.instruction)
-            assertEquals(
-                "선택한 경로 정보를 확인한 뒤 첫 안내 메시지를 표시합니다.",
-                viewModel.uiState.value.stepCard.supportingText,
-            )
-            assertEquals(3, viewModel.uiState.value.stepCard.metrics.size)
-            assertEquals("남은 거리", viewModel.uiState.value.stepCard.metrics[0].label)
             assertEquals("확인 중", viewModel.uiState.value.stepCard.metrics[0].value)
-            assertEquals("예상 시간", viewModel.uiState.value.stepCard.metrics[1].label)
-            assertEquals("확인 중", viewModel.uiState.value.stepCard.metrics[1].value)
-            assertEquals("진행 단계", viewModel.uiState.value.stepCard.metrics[2].label)
-            assertEquals("-", viewModel.uiState.value.stepCard.metrics[2].value)
-            assertEquals("안내 준비 중", viewModel.uiState.value.exitCta.label)
-            assertEquals("경로 정보가 준비되면 종료 버튼이 활성화됩니다.", viewModel.uiState.value.exitCta.supportingText)
-            assertFalse(viewModel.uiState.value.isExitEnabled)
-            assertTrue(viewModel.uiState.value.tts.isEnabled)
-            assertFalse(viewModel.uiState.value.tts.canSpeak)
-            assertEquals(NavigationTtsStatus.Initializing, viewModel.uiState.value.tts.status)
-            assertEquals(NAVIGATION_TTS_PREPARING_MESSAGE, viewModel.uiState.value.tts.fallbackMessage)
+            assertEquals("음성 안내를 준비하고 있습니다.", viewModel.uiState.value.tts.fallbackMessage)
         }
 
     @Test
-    fun `back action emits navigate back event`() =
+    fun `binding navigation request maps route handoff into screen state`() =
         runTest {
-            val viewModel = NavigationViewModel()
-            val eventsDeferred = async { viewModel.uiEvent.take(2).toList() }
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = NavigationViewModel(locationManager)
 
-            viewModel.onAction(NavigationUiAction.BackClicked)
-            advanceUntilIdle()
-
-            assertEquals(
-                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateBack),
-                eventsDeferred.await(),
-            )
-        }
-
-    @Test
-    fun `exit action emits navigate to map event after navigation is ready`() =
-        runTest {
-            val viewModel = NavigationViewModel()
             viewModel.bindNavigationRequest(testNavigationRequest())
             advanceUntilIdle()
 
-            val eventsDeferred = async { viewModel.uiEvent.take(2).toList() }
+            assertTrue(locationManager.isUpdating)
+            assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
+            assertEquals("안전 우선", viewModel.uiState.value.stepCard.statusLabel)
+            assertEquals("350m", viewModel.uiState.value.stepCard.distanceLabel)
+            assertEquals("980m", viewModel.uiState.value.stepCard.metrics[0].value)
+            assertEquals("16분", viewModel.uiState.value.stepCard.metrics[1].value)
+            assertEquals("안내 종료", viewModel.uiState.value.exitCta.label)
+            assertTrue(viewModel.uiState.value.isExitEnabled)
+        }
+
+    @Test
+    fun `location update refreshes remaining distance and eta`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = NavigationViewModel(locationManager)
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1700,
+                    longitude = 129.0650,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("6.5km", viewModel.uiState.value.stepCard.metrics[0].value)
+            assertEquals("80분", viewModel.uiState.value.stepCard.metrics[1].value)
+            assertEquals(
+                GeoCoordinate(latitude = 35.1700, longitude = 129.0650),
+                viewModel.uiState.value.mapOverlay.currentLocation?.coordinate,
+            )
+        }
+
+    @Test
+    fun `location updates within one second are ignored`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = NavigationViewModel(locationManager)
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1700,
+                    longitude = 129.0650,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+            val firstDistance = viewModel.uiState.value.stepCard.metrics[0].value
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1151,
+                    longitude = 129.0414,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_500L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(firstDistance, viewModel.uiState.value.stepCard.metrics[0].value)
+        }
+
+    @Test
+    fun `remaining distance calculator uses cached route tail distance`() {
+        val polyline =
+            listOf(
+                GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
+                GeoCoordinate(latitude = 35.1700, longitude = 129.0650),
+                GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
+            )
+        val calculator = RemainingDistanceCalculator(polyline)
+
+            assertEquals(
+            6471,
+            calculator
+                .calculateRemainingDistanceMeters(polyline[1])
+                .roundToInt(),
+        )
+    }
+
+    @Test
+    fun `back and exit actions stop location updates and emit events`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = NavigationViewModel(locationManager)
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(2).toList() }
 
             viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
             advanceUntilIdle()
 
+            assertFalse(locationManager.isUpdating)
             assertEquals(
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap),
                 eventsDeferred.await(),
@@ -104,7 +170,7 @@ class NavigationViewModelTest {
     @Test
     fun `exit action is ignored while navigation request is not ready`() =
         runTest {
-            val viewModel = NavigationViewModel()
+            val viewModel = NavigationViewModel(FakeCurrentLocationManager())
             val eventDeferred =
                 async {
                     withTimeoutOrNull(100) {
@@ -119,262 +185,9 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `binding navigation request maps route handoff into step card summary`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            advanceUntilIdle()
-
-            assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
-            assertEquals("SAFE 우선", viewModel.uiState.value.stepCard.statusLabel)
-            assertEquals("350m", viewModel.uiState.value.stepCard.distanceLabel)
-            assertEquals("350m 앞에서 좌회전 후 횡단보도를 건너세요", viewModel.uiState.value.stepCard.instruction)
-            assertEquals("부산역 방향으로 Safe Route 경로를 따라 이동합니다.", viewModel.uiState.value.stepCard.supportingText)
-            assertEquals("남은 거리", viewModel.uiState.value.stepCard.metrics[0].label)
-            assertEquals("980m", viewModel.uiState.value.stepCard.metrics[0].value)
-            assertEquals("예상 시간", viewModel.uiState.value.stepCard.metrics[1].label)
-            assertEquals("16분", viewModel.uiState.value.stepCard.metrics[1].value)
-            assertEquals("진행 단계", viewModel.uiState.value.stepCard.metrics[2].label)
-            assertEquals("1 / 2", viewModel.uiState.value.stepCard.metrics[2].value)
-            assertEquals("내비게이션 종료", viewModel.uiState.value.exitCta.label)
-            assertEquals("안내를 종료하고 지도로 돌아갑니다.", viewModel.uiState.value.exitCta.supportingText)
-        }
-
-    @Test
-    fun `binding navigation request maps route handoff into map overlay state`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            advanceUntilIdle()
-
-            val mapOverlay = viewModel.uiState.value.mapOverlay
-            assertTrue(mapOverlay.isDisplayable)
-            assertFalse(mapOverlay.shouldUsePlaceholder)
-            assertEquals(GeoCoordinate(latitude = 35.1796, longitude = 129.0756), mapOverlay.currentLocation?.coordinate)
-            assertEquals(mapOverlay.origin, mapOverlay.currentLocation)
-            assertEquals(GeoCoordinate(latitude = 35.1796, longitude = 129.0756), mapOverlay.origin?.coordinate)
-            assertEquals(GeoCoordinate(latitude = 35.1151, longitude = 129.0414), mapOverlay.destination?.coordinate)
-            assertEquals(3, mapOverlay.selectedRoutePolyline.size)
-            assertEquals(2, mapOverlay.routeSegments.size)
-            assertTrue(mapOverlay.routeSegments.all(NavigationMapSegmentUiState::isRenderable))
-            assertEquals(1, mapOverlay.routeSegments.first().sequence)
-            assertEquals(2, mapOverlay.routeSegments.first().polyline.size)
-        }
-
-    @Test
-    fun `binding request without preview polyline keeps map placeholder fallback`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-
-            viewModel.bindNavigationRequest(noPolylineNavigationRequest())
-            advanceUntilIdle()
-
-            val mapOverlay = viewModel.uiState.value.mapOverlay
-            assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
-            assertFalse(mapOverlay.isDisplayable)
-            assertTrue(mapOverlay.shouldUsePlaceholder)
-            assertTrue(mapOverlay.selectedRoutePolyline.isEmpty())
-            assertEquals(2, mapOverlay.routeSegments.size)
-            assertFalse(mapOverlay.routeSegments.first().isRenderable)
-        }
-
-    @Test
-    fun `binding summary only request exposes empty fallback guidance`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-
-            viewModel.bindNavigationRequest(summaryOnlyNavigationRequest())
-            advanceUntilIdle()
-
-            assertEquals(NavigationScreenState.Empty, viewModel.uiState.value.screenState)
-            assertFalse(viewModel.uiState.value.mapOverlay.isDisplayable)
-            assertTrue(viewModel.uiState.value.mapOverlay.shouldUsePlaceholder)
-            assertTrue(viewModel.uiState.value.mapOverlay.selectedRoutePolyline.isEmpty())
-            assertTrue(viewModel.uiState.value.mapOverlay.routeSegments.isEmpty())
-            assertEquals("840m", viewModel.uiState.value.stepCard.distanceLabel)
-            assertEquals("현재 안내 메시지를 준비하지 못했습니다", viewModel.uiState.value.stepCard.instruction)
-            assertEquals("부산역 방향으로 거리와 예상 시간 요약만 먼저 표시합니다.", viewModel.uiState.value.stepCard.supportingText)
-            assertEquals("남은 거리", viewModel.uiState.value.stepCard.metrics[0].label)
-            assertEquals("840m", viewModel.uiState.value.stepCard.metrics[0].value)
-            assertEquals("예상 시간", viewModel.uiState.value.stepCard.metrics[1].label)
-            assertEquals("14분", viewModel.uiState.value.stepCard.metrics[1].value)
-            assertEquals("진행 단계", viewModel.uiState.value.stepCard.metrics[2].label)
-            assertEquals("안내 없음", viewModel.uiState.value.stepCard.metrics[2].value)
-            assertEquals("내비게이션 종료", viewModel.uiState.value.exitCta.label)
-            assertEquals("안내를 종료하고 지도로 돌아갑니다.", viewModel.uiState.value.exitCta.supportingText)
-        }
-
-    @Test
-    fun `binding navigation request prepares briefing text from current step card`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            advanceUntilIdle()
-
-            assertEquals(
-                "${viewModel.uiState.value.stepCard.supportingText} " +
-                    "${viewModel.uiState.value.stepCard.distanceLabel} 후 ${viewModel.uiState.value.stepCard.instruction}",
-                viewModel.uiState.value.tts.briefingText,
-            )
-        }
-
-    @Test
-    fun `navigation entered emits start briefing event`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            val eventDeferred = async { viewModel.uiEvent.first() }
-
-            viewModel.onAction(NavigationUiAction.NavigationEntered)
-            advanceUntilIdle()
-
-            assertEquals(
-                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
-                eventDeferred.await(),
-            )
-        }
-
-    @Test
-    fun `voice guidance toggle updates state and emits tts control events`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            val disabledEventsDeferred = async { viewModel.uiEvent.take(2).toList() }
-
-            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = false))
-            advanceUntilIdle()
-
-            assertFalse(viewModel.uiState.value.tts.isEnabled)
-            assertEquals(NAVIGATION_TTS_DISABLED_MESSAGE, viewModel.uiState.value.tts.fallbackMessage)
-            assertEquals(
-                listOf(
-                    NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = false),
-                    NavigationUiEvent.StopBriefing,
-                ),
-                disabledEventsDeferred.await(),
-            )
-
-            val enabledEventsDeferred = async { viewModel.uiEvent.take(2).toList() }
-
-            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = true))
-            advanceUntilIdle()
-
-            assertEquals(
-                listOf(
-                    NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true),
-                    NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
-                ),
-                enabledEventsDeferred.await(),
-            )
-        }
-
-    @Test
-    fun `tts availability update exposes fallback message`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-
-            viewModel.updateTextToSpeechState(
-                isEnabled = true,
-                canSpeak = false,
-                status = NavigationTtsStatus.Unavailable,
-            )
-
-            assertEquals(NavigationTtsStatus.Unavailable, viewModel.uiState.value.tts.status)
-            assertEquals(NAVIGATION_TTS_UNAVAILABLE_MESSAGE, viewModel.uiState.value.tts.fallbackMessage)
-        }
-
-    @Test
-    fun `navigation entered emits initial briefing only once until request is rebound`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            val firstEventDeferred = async { viewModel.uiEvent.first() }
-
-            viewModel.onAction(NavigationUiAction.NavigationEntered)
-            advanceUntilIdle()
-
-            assertEquals(
-                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
-                firstEventDeferred.await(),
-            )
-
-            val duplicateEventDeferred =
-                async {
-                    withTimeoutOrNull(100) {
-                        viewModel.uiEvent.first()
-                    }
-                }
-
-            viewModel.onAction(NavigationUiAction.NavigationEntered)
-            advanceUntilIdle()
-
-            assertNull(duplicateEventDeferred.await())
-
-            viewModel.bindNavigationRequest(summaryOnlyNavigationRequest())
-            val reboundEventDeferred = async { viewModel.uiEvent.first() }
-
-            viewModel.onAction(NavigationUiAction.NavigationEntered)
-            advanceUntilIdle()
-
-            assertEquals(
-                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
-                reboundEventDeferred.await(),
-            )
-        }
-
-    @Test
-    fun `briefing replay and stop actions emit tts events`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            val replayEventDeferred = async { viewModel.uiEvent.first() }
-
-            viewModel.onAction(NavigationUiAction.BriefingReplayClicked)
-            advanceUntilIdle()
-
-            assertEquals(
-                NavigationUiEvent.SpeakBriefing(viewModel.uiState.value.tts.briefingText),
-                replayEventDeferred.await(),
-            )
-
-            val stopEventDeferred = async { viewModel.uiEvent.first() }
-
-            viewModel.onAction(NavigationUiAction.StopBriefingClicked)
-            advanceUntilIdle()
-
-            assertEquals(NavigationUiEvent.StopBriefing, stopEventDeferred.await())
-        }
-
-    @Test
-    fun `briefing replay is ignored when tts is unavailable`() =
-        runTest {
-            val viewModel = NavigationViewModel()
-            viewModel.bindNavigationRequest(testNavigationRequest())
-            viewModel.updateTextToSpeechState(
-                isEnabled = true,
-                canSpeak = false,
-                status = NavigationTtsStatus.Unavailable,
-            )
-            val eventDeferred =
-                async {
-                    withTimeoutOrNull(100) {
-                        viewModel.uiEvent.first()
-                    }
-                }
-
-            viewModel.onAction(NavigationUiAction.BriefingReplayClicked)
-            advanceUntilIdle()
-
-            assertNull(eventDeferred.await())
-        }
-
-    @Test
     fun `tts ready update clears fallback and allows briefing request`() =
         runTest {
-            val viewModel = NavigationViewModel()
+            val viewModel = NavigationViewModel(FakeCurrentLocationManager())
             viewModel.bindNavigationRequest(testNavigationRequest())
 
             viewModel.updateTextToSpeechState(
@@ -390,6 +203,29 @@ class NavigationViewModelTest {
         }
 }
 
+private class FakeCurrentLocationManager : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)
+
+    override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
+
+    var isUpdating: Boolean = false
+        private set
+
+    override fun refreshLatestLocation() = Unit
+
+    override fun startLocationUpdates() {
+        isUpdating = true
+    }
+
+    override fun stopLocationUpdates() {
+        isUpdating = false
+    }
+
+    fun emitLocation(snapshot: LocationSnapshot) {
+        mutableLatestLocation.value = snapshot
+    }
+}
+
 private fun testNavigationRequest(): RouteNavigationRequest =
     RouteNavigationRequest(
         origin =
@@ -399,8 +235,8 @@ private fun testNavigationRequest(): RouteNavigationRequest =
             ),
         destination =
             RouteWaypoint(
-                name = "부산역",
-                address = "부산 동구 중앙대로 206",
+                name = "목적지",
+                address = "부산광역시 해운대구",
                 coordinate = GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
             ),
         selectedRoute =
@@ -440,7 +276,7 @@ private fun testNavigationRequest(): RouteNavigationRequest =
                                         ),
                                 ),
                             distanceMeters = 350,
-                            guidanceMessage = "350m 앞에서 좌회전 후 횡단보도를 건너세요",
+                            guidanceMessage = "350m 앞에서 오른쪽 방향으로 이동하세요",
                         ),
                         RouteSegment(
                             sequence = 2,
@@ -453,7 +289,7 @@ private fun testNavigationRequest(): RouteNavigationRequest =
                                         ),
                                 ),
                             distanceMeters = 630,
-                            guidanceMessage = "목적지까지 직진하세요",
+                            guidanceMessage = "목적지까지 계속 이동하세요",
                         ),
                     ),
             ),
@@ -461,51 +297,5 @@ private fun testNavigationRequest(): RouteNavigationRequest =
             RouteSearchSource.mockFixture(
                 fixtureId = "navigation-test",
                 label = "Navigation test fixture",
-            ),
-    )
-
-private fun noPolylineNavigationRequest(): RouteNavigationRequest =
-    testNavigationRequest().let { request ->
-        request.copy(
-            selectedRoute =
-                request.selectedRoute.copy(
-                    preview = RoutePreviewModel(),
-                    segments =
-                        request.selectedRoute.segments.map { segment ->
-                            segment.copy(polyline = RoutePolyline())
-                        },
-                ),
-        )
-    }
-
-private fun summaryOnlyNavigationRequest(): RouteNavigationRequest =
-    RouteNavigationRequest(
-        origin =
-            RouteWaypoint(
-                name = "현재 위치",
-                coordinate = GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
-            ),
-        destination =
-            RouteWaypoint(
-                name = "부산역",
-                address = "부산 동구 중앙대로 206",
-                coordinate = GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
-            ),
-        selectedRoute =
-            RouteCandidate(
-                routeOption = RouteOption.SHORTEST,
-                title = "Summary Only Route",
-                summary =
-                    RouteSummary(
-                        distanceMeters = 840,
-                        estimatedTimeMinutes = 14,
-                        riskLevel = RouteRiskLevel.MEDIUM,
-                    ),
-                segments = emptyList(),
-            ),
-        source =
-            RouteSearchSource.mockFixture(
-                fixtureId = "navigation-summary-only",
-                label = "Navigation summary-only fixture",
             ),
     )

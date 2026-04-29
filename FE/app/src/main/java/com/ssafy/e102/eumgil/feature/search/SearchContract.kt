@@ -32,6 +32,10 @@ sealed interface SearchUiAction {
     data class SearchResultClicked(
         val result: SearchResult,
     ) : SearchUiAction
+
+    data class BookmarkToggleClicked(
+        val result: SearchResult,
+    ) : SearchUiAction
 }
 
 sealed interface SearchUiEvent {

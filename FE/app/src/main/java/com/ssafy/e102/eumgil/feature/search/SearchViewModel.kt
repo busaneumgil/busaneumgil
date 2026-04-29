@@ -7,6 +7,8 @@ import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
@@ -23,6 +25,7 @@ import kotlinx.coroutines.launch
 
 class SearchViewModel(
     private val searchRepository: SearchRepository,
+    private val bookmarkRepository: BookmarkRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
     private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
@@ -47,6 +50,7 @@ class SearchViewModel(
             is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
             is SearchUiAction.SearchResultClicked -> selectSearchResult(action.result)
+            is SearchUiAction.BookmarkToggleClicked -> toggleBookmark(action.result)
         }
     }
 
@@ -92,6 +96,52 @@ class SearchViewModel(
                         accessibilityTagKeys = accessibilityTagKeys,
                     ),
                 )
+            }
+        }
+    }
+
+    private fun toggleBookmark(result: SearchResult) {
+        val destination = result.toPlaceDestinationOrNull()
+        if (destination == null) {
+            mutableUiState.update { state ->
+                state.copy(
+                    resultState =
+                        SearchResultUiState.Error(
+                            query = state.query.trim(),
+                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
+                        ),
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                if (bookmarkRepository.isBookmarked(destination.placeId)) {
+                    bookmarkRepository.deleteBookmark(destination.placeId)
+                } else {
+                    bookmarkRepository.saveBookmark(
+                        BookmarkData(
+                            placeId = destination.placeId,
+                            placeName = destination.name,
+                            address = destination.address,
+                            latitude = destination.latitude,
+                            longitude = destination.longitude,
+                            category = destination.category?.name,
+                        ),
+                    )
+                }
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                mutableUiState.update { state ->
+                    state.copy(
+                        resultState =
+                            SearchResultUiState.Error(
+                                query = state.query.trim(),
+                                message = BOOKMARK_TOGGLE_FAILURE_MESSAGE,
+                            ),
+                    )
+                }
             }
         }
     }
@@ -252,9 +302,11 @@ class SearchViewModel(
 
     companion object {
         private const val INVALID_DESTINATION_HANDOFF_MESSAGE = "좌표 정보가 올바르지 않아 경로 설정으로 넘길 수 없습니다."
+        private const val BOOKMARK_TOGGLE_FAILURE_MESSAGE = "북마크 상태를 변경하지 못했습니다. 다시 시도해 주세요."
 
         fun provideFactory(
             searchRepository: SearchRepository,
+            bookmarkRepository: BookmarkRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
             placesRepository: PlacesRepository,
         ): ViewModelProvider.Factory =
@@ -264,6 +316,7 @@ class SearchViewModel(
                     if (modelClass.isAssignableFrom(SearchViewModel::class.java)) {
                         return SearchViewModel(
                             searchRepository = searchRepository,
+                            bookmarkRepository = bookmarkRepository,
                             destinationSelectionRepository = destinationSelectionRepository,
                             placesRepository = placesRepository,
                         ) as T

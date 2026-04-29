@@ -5,8 +5,8 @@ import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 
 data class NavigationUiState(
     val screenState: NavigationScreenState = NavigationScreenState.Loading,
-    val mapPlaceholderTitle: String = "실시간 지도 뷰",
-    val mapPlaceholderDescription: String = "현재 위치와 경로 안내를 준비 중입니다.",
+    val mapPlaceholderTitle: String = "Navigation map",
+    val mapPlaceholderDescription: String = "Preparing route guidance.",
     val mapOverlay: NavigationMapOverlayUiState = NavigationMapOverlayUiState(),
     val stepCard: NavigationStepCardUiState = navigationLoadingStepCardUiState(),
     val exitCta: NavigationCtaUiState = navigationLoadingCtaUiState(),
@@ -55,8 +55,8 @@ data class NavigationStepCardUiState(
     val statusLabel: String = "준비 중",
     val emphasisLabel: String = "경로 확인",
     val distanceLabel: String = "확인 중",
-    val instruction: String = "경로 안내를 불러오는 중입니다",
-    val supportingText: String = "선택한 경로 정보를 확인한 뒤 첫 안내 메시지를 표시합니다.",
+    val instruction: String = "경로 안내를 준비하고 있습니다",
+    val supportingText: String = "현재 위치를 확인한 뒤 안내를 시작합니다.",
     val metrics: List<NavigationStepMetricUiState> =
         listOf(
             NavigationStepMetricUiState(
@@ -92,6 +92,10 @@ sealed interface NavigationUiAction {
 
     data object ExitNavigationClicked : NavigationUiAction
 
+    data object SaveBookmarkClicked : NavigationUiAction
+
+    data object NavigationCompleteClicked : NavigationUiAction
+
     data class VoiceGuidanceToggled(
         val enabled: Boolean,
     ) : NavigationUiAction
@@ -105,6 +109,8 @@ sealed interface NavigationUiEvent {
     data object NavigateBack : NavigationUiEvent
 
     data object NavigateToMap : NavigationUiEvent
+
+    data object NavigateToSavedRoute : NavigationUiEvent
 
     data class SpeakBriefing(
         val text: String,
@@ -129,7 +135,10 @@ data class NavigationTtsUiState(
     val fallbackMessage: String = NAVIGATION_TTS_PREPARING_MESSAGE,
 ) {
     val canRequestBriefing: Boolean
-        get() = isEnabled && status != NavigationTtsStatus.Unavailable && briefingText.isNotBlank()
+        get() = isEnabled &&
+            canSpeak &&
+            status == NavigationTtsStatus.Ready &&
+            briefingText.isNotBlank()
 }
 
 enum class NavigationTtsStatus {
@@ -138,6 +147,6 @@ enum class NavigationTtsStatus {
     Unavailable,
 }
 
-const val NAVIGATION_TTS_PREPARING_MESSAGE = "음성 안내를 준비하고 있습니다."
-const val NAVIGATION_TTS_DISABLED_MESSAGE = "음성 안내가 꺼져 있어 화면 안내만 표시합니다."
-const val NAVIGATION_TTS_UNAVAILABLE_MESSAGE = "음성 안내를 사용할 수 없어 화면 안내로 진행합니다."
+const val NAVIGATION_TTS_PREPARING_MESSAGE: String = "음성 안내를 준비하고 있습니다."
+const val NAVIGATION_TTS_UNAVAILABLE_MESSAGE: String = "이 기기에서는 음성 안내를 사용할 수 없습니다."
+const val NAVIGATION_TTS_DISABLED_MESSAGE: String = "음성 안내가 꺼져 있습니다."

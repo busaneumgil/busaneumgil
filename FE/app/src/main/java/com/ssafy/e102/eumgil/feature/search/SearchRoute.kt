@@ -68,6 +68,7 @@ private fun SearchRouteContent(
         remember(appContainer) {
             SearchViewModel.provideFactory(
                 searchRepository = appContainer.searchRepository,
+                bookmarkRepository = appContainer.bookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 placesRepository = appContainer.placesRepository,
             )

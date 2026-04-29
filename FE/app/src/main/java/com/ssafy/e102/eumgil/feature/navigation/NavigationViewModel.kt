@@ -3,20 +3,32 @@ package com.ssafy.e102.eumgil.feature.navigation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
-class NavigationViewModel : ViewModel() {
+class NavigationViewModel(
+    private val currentLocationManager: CurrentLocationManager,
+) : ViewModel() {
     private val mutableUiState = MutableStateFlow(NavigationUiState())
     val uiState: StateFlow<NavigationUiState> = mutableUiState.asStateFlow()
 
@@ -24,8 +36,17 @@ class NavigationViewModel : ViewModel() {
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var initialBriefingRequested = false
+    private var remainingDistanceCalculator = RemainingDistanceCalculator(emptyList())
+    private var lastProcessedLocationEpochMillis: Long? = null
+
+    init {
+        collectLocationUpdates()
+    }
 
     fun bindNavigationRequest(request: RouteNavigationRequest) {
+        remainingDistanceCalculator = RemainingDistanceCalculator(request.selectedRoute.previewPolyline.points)
+        lastProcessedLocationEpochMillis = null
+
         val screenState = request.toScreenState()
         val stepCard = request.toStepCardUiState(screenState)
         val briefingText = stepCard.toNavigationBriefingText()
@@ -44,16 +65,32 @@ class NavigationViewModel : ViewModel() {
                     ),
             )
         }
+
+        currentLocationManager.startLocationUpdates()
     }
 
     fun onAction(action: NavigationUiAction) {
         when (action) {
             NavigationUiAction.NavigationEntered -> requestInitialBriefingIfNeeded()
             NavigationUiAction.BackClicked -> {
+                currentLocationManager.stopLocationUpdates()
                 emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateBack)
             }
             NavigationUiAction.ExitNavigationClicked -> {
                 if (uiState.value.isExitEnabled) {
+                    currentLocationManager.stopLocationUpdates()
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap)
+                }
+            }
+            NavigationUiAction.SaveBookmarkClicked -> {
+                if (uiState.value.isExitEnabled) {
+                    currentLocationManager.stopLocationUpdates()
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToSavedRoute)
+                }
+            }
+            NavigationUiAction.NavigationCompleteClicked -> {
+                if (uiState.value.isExitEnabled) {
+                    currentLocationManager.stopLocationUpdates()
                     emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap)
                 }
             }
@@ -77,6 +114,69 @@ class NavigationViewModel : ViewModel() {
                 )
             state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
         }
+    }
+
+    override fun onCleared() {
+        currentLocationManager.stopLocationUpdates()
+        super.onCleared()
+    }
+
+    private fun collectLocationUpdates() {
+        viewModelScope.launch {
+            currentLocationManager.latestLocation
+                .filterNotNull()
+                .collect { snapshot ->
+                    onLocationUpdated(snapshot)
+                }
+        }
+    }
+
+    private fun onLocationUpdated(snapshot: LocationSnapshot) {
+        if (!shouldProcessLocation(snapshot)) return
+        if (remainingDistanceCalculator.isEmpty) return
+
+        val current = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
+        val remainingMeters = remainingDistanceCalculator.calculateRemainingDistanceMeters(current)
+        val estimatedMinutes =
+            (remainingMeters / DEFAULT_WALKING_SPEED_METERS_PER_MINUTE)
+                .toInt()
+                .coerceAtLeast(0)
+
+        mutableUiState.update { state ->
+            val updatedMetrics = state.stepCard.metrics.toMutableList()
+            if (updatedMetrics.size >= 2) {
+                updatedMetrics[0] =
+                    updatedMetrics[0].copy(
+                        value = remainingMeters.toInt().toNavigationDistanceLabel(),
+                    )
+                updatedMetrics[1] =
+                    updatedMetrics[1].copy(
+                        value = estimatedMinutes.toNavigationEtaLabel(),
+                    )
+            }
+            state.copy(
+                stepCard = state.stepCard.copy(metrics = updatedMetrics),
+                mapOverlay =
+                    state.mapOverlay.copy(
+                        currentLocation =
+                            state.mapOverlay.currentLocation?.copy(
+                                coordinate = current,
+                            ),
+                    ),
+            )
+        }
+    }
+
+    private fun shouldProcessLocation(snapshot: LocationSnapshot): Boolean {
+        val lastProcessed = lastProcessedLocationEpochMillis
+        if (lastProcessed != null && snapshot.recordedAtEpochMillis >= lastProcessed) {
+            val elapsedMillis = snapshot.recordedAtEpochMillis - lastProcessed
+            if (elapsedMillis < MIN_LOCATION_UPDATE_INTERVAL_MILLIS) {
+                return false
+            }
+        }
+        lastProcessedLocationEpochMillis = snapshot.recordedAtEpochMillis
+        return true
     }
 
     private fun emitUiEvent(event: NavigationUiEvent) {
@@ -128,13 +228,69 @@ class NavigationViewModel : ViewModel() {
     }
 
     companion object {
-        fun provideFactory(): ViewModelProvider.Factory =
+        fun provideFactory(
+            currentLocationManager: CurrentLocationManager,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    NavigationViewModel() as T
+                    NavigationViewModel(
+                        currentLocationManager = currentLocationManager,
+                    ) as T
             }
     }
+}
+
+internal fun calculateRemainingDistanceMeters(
+    current: GeoCoordinate,
+    polyline: List<GeoCoordinate>,
+): Double {
+    return RemainingDistanceCalculator(polyline).calculateRemainingDistanceMeters(current)
+}
+
+internal class RemainingDistanceCalculator(
+    private val polyline: List<GeoCoordinate>,
+) {
+    private val cumulativeDistanceMeters: List<Double> =
+        buildList {
+            var total = 0.0
+            add(total)
+            for (index in 0 until polyline.lastIndex) {
+                total += haversineDistanceMeters(polyline[index], polyline[index + 1])
+                add(total)
+            }
+        }
+
+    val isEmpty: Boolean
+        get() = polyline.isEmpty()
+
+    fun calculateRemainingDistanceMeters(current: GeoCoordinate): Double {
+        if (polyline.isEmpty()) return 0.0
+
+        val nearestIndex =
+            polyline.indices.minByOrNull { index ->
+                haversineDistanceMeters(current, polyline[index])
+            } ?: 0
+
+        val distanceToNearestPoint = haversineDistanceMeters(current, polyline[nearestIndex])
+        val routeTailDistance = cumulativeDistanceMeters.last() - cumulativeDistanceMeters[nearestIndex]
+        return distanceToNearestPoint + routeTailDistance
+    }
+}
+
+private const val EARTH_RADIUS_METERS = 6_371_000.0
+private const val DEFAULT_WALKING_SPEED_METERS_PER_MINUTE = 80.0
+private const val MIN_LOCATION_UPDATE_INTERVAL_MILLIS = 1_000L
+
+internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {
+    val dLat = Math.toRadians(b.latitude - a.latitude)
+    val dLon = Math.toRadians(b.longitude - a.longitude)
+    val sinHalfLat = sin(dLat / 2)
+    val sinHalfLon = sin(dLon / 2)
+    val h =
+        sinHalfLat.pow(2) +
+            cos(Math.toRadians(a.latitude)) * cos(Math.toRadians(b.latitude)) * sinHalfLon.pow(2)
+    return 2 * EARTH_RADIUS_METERS * atan2(sqrt(h), sqrt(1 - h))
 }
 
 private fun RouteNavigationRequest.toScreenState(): NavigationScreenState =
@@ -148,8 +304,8 @@ private fun RouteNavigationRequest.toMapPlaceholderDescription(screenState: Navi
     val destinationName = destination.name.orEmpty().ifBlank { "목적지" }
     return when (screenState) {
         NavigationScreenState.Loading -> "현재 위치와 경로 안내를 준비 중입니다."
-        NavigationScreenState.Ready -> "$destinationName 방향 경로 오버레이가 이 영역에 연결될 예정입니다."
-        NavigationScreenState.Empty -> "$destinationName 방향 거리 요약을 먼저 표시하고 있습니다."
+        NavigationScreenState.Ready -> "$destinationName 방향 경로 안내를 시작합니다."
+        NavigationScreenState.Empty -> "$destinationName 방향 거리 요약을 먼저 표시합니다."
     }
 }
 
@@ -165,8 +321,8 @@ private fun RouteNavigationRequest.toMapOverlayUiState(): NavigationMapOverlayUi
                 guidanceMessage = segment.guidanceMessage,
             )
         }
-    val originPoint = origin.toNavigationMapPointUiState(fallbackLabel = "Origin")
-    val destinationPoint = destination.toNavigationMapPointUiState(fallbackLabel = "Destination")
+    val originPoint = origin.toNavigationMapPointUiState(fallbackLabel = "출발지")
+    val destinationPoint = destination.toNavigationMapPointUiState(fallbackLabel = "목적지")
 
     return NavigationMapOverlayUiState(
         isDisplayable = selectedRoute.previewPolyline.isRenderable,
@@ -215,14 +371,17 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(): NavigationStepCardU
         sectionLabel = "다음 안내",
         statusLabel = selectedRoute.routeOption.toRouteOptionLabel(),
         emphasisLabel = selectedRoute.summary.riskLevel.toRiskLabel(),
-        distanceLabel = primarySegment?.distanceMeters?.toNavigationDistanceLabel() ?: selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
+        distanceLabel =
+            primarySegment?.distanceMeters?.toNavigationDistanceLabel()
+                ?: selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
         instruction =
             primarySegment?.guidanceMessage
                 ?.trim()
                 ?.takeIf { guidanceMessage -> guidanceMessage.isNotEmpty() }
                 ?: "목적지 방향으로 계속 이동하세요",
         supportingText =
-            "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 ${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
+            "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
+                "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
         metrics =
             listOf(
                 NavigationStepMetricUiState(
@@ -278,7 +437,7 @@ private fun NavigationScreenState.toExitCtaUiState(): NavigationCtaUiState =
         NavigationScreenState.Ready,
         NavigationScreenState.Empty ->
             NavigationCtaUiState(
-                label = "내비게이션 종료",
+                label = "안내 종료",
                 supportingText = "안내를 종료하고 지도로 돌아갑니다.",
                 isEnabled = true,
             )
@@ -289,7 +448,7 @@ private fun String.toNavigationRouteTitle(routeOption: RouteOption): String =
 
 private fun RouteOption.toRouteOptionLabel(): String =
     when (this) {
-        RouteOption.SAFE -> "SAFE 우선"
+        RouteOption.SAFE -> "안전 우선"
         RouteOption.SHORTEST -> "최단 거리"
     }
 
@@ -304,7 +463,7 @@ private fun Int.toNavigationDistanceLabel(): String =
     when {
         this <= 0 -> "확인 중"
         this < 1_000 -> "${this}m"
-        else -> String.format(java.util.Locale.US, "%.1fkm", this / 1_000f)
+        else -> String.format(Locale.US, "%.1fkm", this / 1_000f)
     }
 
 private fun Int.toNavigationEtaLabel(): String =

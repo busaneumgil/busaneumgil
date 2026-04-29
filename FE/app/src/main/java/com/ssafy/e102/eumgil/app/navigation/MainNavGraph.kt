@@ -13,6 +13,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
@@ -34,7 +35,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route)
+                navController.navigate(RouteSettingRoute.Setting.createRoute())
             },
             onNavigateToSearch = {
                 navController.navigate(SearchRoute.Entry.route)
@@ -48,7 +49,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route)
+                navController.navigate(RouteSettingRoute.Setting.createRoute())
             },
         )
     }
@@ -81,7 +82,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(SearchRoute.Results.createRoute(query))
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route) {
+                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -110,7 +111,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route) {
+                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -119,24 +120,46 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = RouteSettingRoute.Setting.route) {
+    composable(
+        route = RouteSettingRoute.Setting.route,
+        arguments =
+            listOf(
+                navArgument(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
+    ) { backStackEntry ->
+        val autoStartNavigation =
+            backStackEntry.arguments?.getBoolean(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) ?: false
         val context = LocalContext.current
         val activity = remember(context) { context.findComponentActivity() }
-        val navigationViewModelFactory = remember { NavigationGuidanceViewModel.provideFactory() }
+        val currentLocationManager = remember(context) {
+            (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
+        }
+        val navigationViewModelFactory = remember(currentLocationManager) {
+            NavigationGuidanceViewModel.provideFactory(currentLocationManager = currentLocationManager)
+        }
         val navigationViewModel =
             remember(activity, navigationViewModelFactory) {
                 val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }
                 ViewModelProvider(owner, navigationViewModelFactory)[NavigationGuidanceViewModel::class.java]
             }
 
-        // 200 can hand off by updating DestinationSelectionRepository, then navigating here.
         RouteSettingEntryRoute(
+            autoStartNavigation = autoStartNavigation,
             onNavigateBack = {
                 navController.popBackStack()
             },
             onStartNavigation = { request ->
                 navigationViewModel.bindNavigationRequest(request)
-                navController.navigate(NavigationRoute.Guidance.route)
+                navController.navigate(NavigationRoute.Guidance.route) {
+                    if (autoStartNavigation) {
+                        popUpTo(RouteSettingRoute.Setting.route) {
+                            inclusive = true
+                        }
+                    }
+                }
             },
         )
     }
@@ -177,6 +200,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
+            },
+            onNavigateToSavedRoute = {
+                navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
             },
         )
     }

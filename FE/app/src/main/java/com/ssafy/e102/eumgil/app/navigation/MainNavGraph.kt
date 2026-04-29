@@ -210,7 +210,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToSavedRoute = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
             },
-            onNavigateToLowVisionVoiceInput = {
+            onNavigateToLowVisionHome = {
                 navController.navigate(resolveNavigationCompletionRoute()) {
                     launchSingleTop = true
                     popUpTo(NavigationRoute.Guidance.route) {

@@ -223,7 +223,7 @@ class NavigationViewModelTest {
 
             assertFalse(locationManager.isUpdating)
             assertEquals(
-                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionVoiceInput),
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionHome),
                 eventsDeferred.await(),
             )
         }

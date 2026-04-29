@@ -27,4 +27,12 @@ class LowVisionNavGraphRoutingTest {
             resolveLowVisionSearchPopUpRoute(),
         )
     }
+
+    @Test
+    fun `navigation completion returns to low vision voice input home tab`() {
+        assertEquals(
+            LowVisionRoute.VoiceInput.route,
+            resolveNavigationCompletionRoute(),
+        )
+    }
 }

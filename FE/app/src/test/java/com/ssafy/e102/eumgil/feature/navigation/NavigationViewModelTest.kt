@@ -12,11 +12,14 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -41,7 +44,7 @@ class NavigationViewModelTest {
     @Test
     fun `initial ui state exposes navigation shell placeholders`() =
         runTest {
-            val viewModel = NavigationViewModel(FakeCurrentLocationManager())
+            val viewModel = createViewModel()
 
             assertEquals(NavigationScreenState.Loading, viewModel.uiState.value.screenState)
             assertFalse(viewModel.uiState.value.mapOverlay.isDisplayable)
@@ -57,7 +60,7 @@ class NavigationViewModelTest {
     fun `binding navigation request maps route handoff into screen state`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
-            val viewModel = NavigationViewModel(locationManager)
+            val viewModel = createViewModel(locationManager = locationManager)
 
             viewModel.bindNavigationRequest(testNavigationRequest())
             advanceUntilIdle()
@@ -76,7 +79,7 @@ class NavigationViewModelTest {
     fun `location update refreshes remaining distance and eta`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
-            val viewModel = NavigationViewModel(locationManager)
+            val viewModel = createViewModel(locationManager = locationManager)
             viewModel.bindNavigationRequest(testNavigationRequest())
             advanceUntilIdle()
 
@@ -102,7 +105,7 @@ class NavigationViewModelTest {
     fun `location updates within one second are ignored`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
-            val viewModel = NavigationViewModel(locationManager)
+            val viewModel = createViewModel(locationManager = locationManager)
             viewModel.bindNavigationRequest(testNavigationRequest())
             advanceUntilIdle()
 
@@ -152,7 +155,7 @@ class NavigationViewModelTest {
     fun `back and exit actions stop location updates and emit events`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
-            val viewModel = NavigationViewModel(locationManager)
+            val viewModel = createViewModel(locationManager = locationManager)
             viewModel.bindNavigationRequest(testNavigationRequest())
             advanceUntilIdle()
             val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(2).toList() }
@@ -168,9 +171,67 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `save bookmark action stores destination and opens saved route list`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                NavigationViewModel(
+                    currentLocationManager = locationManager,
+                    bookmarkRepository = bookmarkRepository,
+                )
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(2).toList() }
+
+            viewModel.onAction(NavigationUiAction.SaveBookmarkClicked)
+            advanceUntilIdle()
+
+            assertFalse(locationManager.isUpdating)
+            assertEquals(
+                BookmarkData(
+                    placeId = "destination-place",
+                    placeName = "목적지",
+                    address = "부산광역시 해운대구",
+                    latitude = 35.1151,
+                    longitude = 129.0414,
+                    category = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+            assertEquals(
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToSavedRoute),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
+    fun `complete action returns to low vision voice input home`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel =
+                NavigationViewModel(
+                    currentLocationManager = locationManager,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(2).toList() }
+
+            viewModel.onAction(NavigationUiAction.NavigationCompleteClicked)
+            advanceUntilIdle()
+
+            assertFalse(locationManager.isUpdating)
+            assertEquals(
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionVoiceInput),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
     fun `exit action is ignored while navigation request is not ready`() =
         runTest {
-            val viewModel = NavigationViewModel(FakeCurrentLocationManager())
+            val viewModel = createViewModel()
             val eventDeferred =
                 async {
                     withTimeoutOrNull(100) {
@@ -187,7 +248,7 @@ class NavigationViewModelTest {
     @Test
     fun `tts ready update clears fallback and allows briefing request`() =
         runTest {
-            val viewModel = NavigationViewModel(FakeCurrentLocationManager())
+            val viewModel = createViewModel()
             viewModel.bindNavigationRequest(testNavigationRequest())
 
             viewModel.updateTextToSpeechState(
@@ -200,8 +261,17 @@ class NavigationViewModelTest {
             assertEquals(NavigationTtsStatus.Ready, viewModel.uiState.value.tts.status)
             assertEquals("", viewModel.uiState.value.tts.fallbackMessage)
             assertTrue(viewModel.uiState.value.tts.canRequestBriefing)
-        }
+    }
 }
+
+private fun createViewModel(
+    locationManager: FakeCurrentLocationManager = FakeCurrentLocationManager(),
+    bookmarkRepository: BookmarkRepository = FakeBookmarkRepository(),
+): NavigationViewModel =
+    NavigationViewModel(
+        currentLocationManager = locationManager,
+        bookmarkRepository = bookmarkRepository,
+    )
 
 private class FakeCurrentLocationManager : CurrentLocationManager {
     private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)
@@ -226,6 +296,25 @@ private class FakeCurrentLocationManager : CurrentLocationManager {
     }
 }
 
+private class FakeBookmarkRepository(
+    bookmarks: List<BookmarkData> = emptyList(),
+) : BookmarkRepository {
+    val bookmarks = MutableStateFlow(bookmarks)
+
+    override fun observeBookmarks(): Flow<List<BookmarkData>> = bookmarks
+
+    override suspend fun isBookmarked(placeId: String): Boolean =
+        bookmarks.value.any { bookmark -> bookmark.placeId == placeId }
+
+    override suspend fun saveBookmark(bookmark: BookmarkData) {
+        bookmarks.value = bookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
+    }
+
+    override suspend fun deleteBookmark(placeId: String) {
+        bookmarks.value = bookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
+    }
+}
+
 private fun testNavigationRequest(): RouteNavigationRequest =
     RouteNavigationRequest(
         origin =
@@ -236,6 +325,7 @@ private fun testNavigationRequest(): RouteNavigationRequest =
         destination =
             RouteWaypoint(
                 name = "목적지",
+                placeId = "destination-place",
                 address = "부산광역시 해운대구",
                 coordinate = GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
             ),

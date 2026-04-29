@@ -68,3 +68,5 @@ internal fun resolveLowVisionSearchResultRoute(): String =
     RouteSettingRoute.Setting.createRoute(autoStartNavigation = true)
 
 internal fun resolveLowVisionSearchPopUpRoute(): String = LowVisionRoute.Search.route
+
+internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.VoiceInput.route

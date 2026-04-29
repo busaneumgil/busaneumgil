@@ -125,7 +125,7 @@ private fun shortcutFilterLabel(key: MapShortcutFilterKey): String =
 private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
     when (key) {
         MapShortcutFilterKey.TOILET -> R.drawable.ic_place_restroom
-        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_route_elevator
+        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
         MapShortcutFilterKey.ACCESSIBLE_PARKING -> R.drawable.ic_place_parking
         MapShortcutFilterKey.MORE -> R.drawable.ic_action_more
         MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging

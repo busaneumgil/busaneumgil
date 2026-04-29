@@ -54,11 +54,16 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
 
     composable(route = TopLevelRoute.MyPage.route) {
         MyPageRoute(
-            onNavigateToMap = {
-                navController.navigateToTopLevel(TopLevelDestination.Map)
+            onNavigateToUserTypePrimary = {
+                navController.navigate(OnboardingRoute.UserTypePrimary.route)
             },
-            onNavigateToSavedRoutes = {
-                navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
+            onNavigateToLogin = {
+                navController.navigate(AuthRoute.Login.route) {
+                    launchSingleTop = true
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        inclusive = true
+                    }
+                }
             },
         )
     }

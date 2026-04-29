@@ -45,6 +45,7 @@ import com.ssafy.e102.eumgil.feature.savedroute.SavedPlaceUiModel
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteScreenState
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteUiAction
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteUiState
+import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
 private val LowVisionYellow = Color(0xFFFFD400)
 private val LowVisionDivider = Color(0xFF333333)
@@ -124,7 +125,7 @@ fun LowVisionBookmarkScreen(
             }
         }
 
-        LowVisionBookmarkBottomNav(
+        LowVisionBottomNav(
             selectedTab = LowVisionBottomTab.BOOKMARK,
             onTabSelected = onTabSelected,
         )
@@ -227,90 +228,3 @@ private fun LowVisionBookmarkMessage(message: String) {
         )
     }
 }
-
-@Composable
-private fun LowVisionBookmarkBottomNav(
-    selectedTab: LowVisionBottomTab,
-    onTabSelected: (LowVisionBottomTab) -> Unit,
-) {
-    val items =
-        listOf(
-            LowVisionBottomTab.HOME to LowVisionBookmarkBottomNavItem(
-                iconRes = R.drawable.ic_nav_home_filled,
-                labelRes = R.string.low_vision_nav_home,
-            ),
-            LowVisionBottomTab.BOOKMARK to LowVisionBookmarkBottomNavItem(
-                iconRes = R.drawable.ic_nav_bookmark_outline,
-                labelRes = R.string.low_vision_nav_bookmark,
-            ),
-            LowVisionBottomTab.CATEGORY to LowVisionBookmarkBottomNavItem(
-                iconRes = R.drawable.ic_nav_category_grid,
-                labelRes = R.string.low_vision_nav_category,
-            ),
-            LowVisionBottomTab.MY_PAGE to LowVisionBookmarkBottomNavItem(
-                iconRes = R.drawable.ic_nav_person_outline,
-                labelRes = R.string.low_vision_nav_my_page,
-            ),
-        )
-
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(104.dp)
-                .background(Color.Black)
-                .border(width = 1.dp, color = LowVisionDivider),
-    ) {
-        items.forEach { (tab, item) ->
-            val selected = tab == selectedTab
-            val backgroundColor = if (selected) LowVisionYellow else Color.Black
-            val contentColor = if (selected) Color.Black else Color.White
-            val label = stringResource(id = item.labelRes)
-
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                        .background(backgroundColor)
-                        .border(width = 1.dp, color = LowVisionDivider)
-                        .clickable(onClickLabel = label, role = Role.Tab) { onTabSelected(tab) }
-                        .semantics {
-                            role = Role.Tab
-                            contentDescription = label
-                        }
-                        .padding(vertical = 11.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(38.dp)
-                            .clip(CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(id = item.iconRes),
-                        contentDescription = null,
-                        tint = contentColor,
-                        modifier = Modifier.size(33.dp),
-                    )
-                }
-                Text(
-                    text = label,
-                    color = contentColor,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    lineHeight = 22.sp,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-    }
-}
-
-private data class LowVisionBookmarkBottomNavItem(
-    @DrawableRes val iconRes: Int,
-    @StringRes val labelRes: Int,
-)

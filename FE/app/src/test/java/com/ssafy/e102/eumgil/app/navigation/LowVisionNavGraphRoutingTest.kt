@@ -53,6 +53,41 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `low vision selected tab follows current route`() {
+        assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Home.route))
+        assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.VoiceInput.route))
+        assertEquals(LowVisionBottomTab.BOOKMARK, resolveLowVisionSelectedBottomTab(LowVisionRoute.Bookmark.route))
+        assertEquals(LowVisionBottomTab.CATEGORY, resolveLowVisionSelectedBottomTab(LowVisionRoute.Search.route))
+        assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.MyPage.route))
+        assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.AppInfo.route))
+    }
+
+    @Test
+    fun `low vision bottom tab ignores already selected tab`() {
+        assertEquals(
+            false,
+            shouldNavigateLowVisionBottomTab(
+                currentRoute = LowVisionRoute.Bookmark.route,
+                selectedTab = LowVisionBottomTab.BOOKMARK,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldNavigateLowVisionBottomTab(
+                currentRoute = LowVisionRoute.AppInfo.route,
+                selectedTab = LowVisionBottomTab.MY_PAGE,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldNavigateLowVisionBottomTab(
+                currentRoute = LowVisionRoute.Search.route,
+                selectedTab = LowVisionBottomTab.HOME,
+            ),
+        )
+    }
+
+    @Test
     fun `low vision my page actions resolve to concrete destinations`() {
         assertEquals(
             OnboardingRoute.ProfileUserTypePrimary.route,

@@ -438,6 +438,41 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `report history click after complete resets form for next report`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+            val event =
+                async {
+                    viewModel.uiEvent.first { emittedEvent ->
+                        emittedEvent is ReportUiEvent.NavigateToReportHistory
+                    }
+                }
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.FACILITY_DAMAGE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "éºÂ€?ê³—ë–†ï§£??ë©¸ë ",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.screenState is ReportScreenState.Completed)
+
+            viewModel.onAction(ReportUiAction.ReportHistoryClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportUiEvent.NavigateToReportHistory, event.await())
+            assertEquals(ReportUiState(), viewModel.uiState.value)
+        }
+
+    @Test
     fun `resume draft with location jumps to DetailInput step`() =
         runTest {
             val repository =

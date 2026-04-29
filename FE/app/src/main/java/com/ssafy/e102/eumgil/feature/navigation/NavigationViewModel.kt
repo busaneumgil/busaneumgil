@@ -162,6 +162,18 @@ class NavigationViewModel(
                     emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap)
                 }
             }
+            NavigationUiAction.SaveBookmarkClicked -> {
+                if (uiState.value.isExitEnabled) {
+                    currentLocationManager.stopLocationUpdates()
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToSavedRoute)
+                }
+            }
+            NavigationUiAction.NavigationCompleteClicked -> {
+                if (uiState.value.isExitEnabled) {
+                    currentLocationManager.stopLocationUpdates()
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap)
+                }
+            }
             is NavigationUiAction.VoiceGuidanceToggled -> onVoiceGuidanceToggled(action.enabled)
             NavigationUiAction.BriefingReplayClicked -> requestBriefing()
             NavigationUiAction.StopBriefingClicked -> emitUiEvent(NavigationUiEvent.StopBriefing)
@@ -292,18 +304,4 @@ private fun RouteNavigationRequest.toMapOverlayUiState(): NavigationMapOverlayUi
     val selectedRoutePolyline = selectedRoute.previewPolyline.points
     val routeSegments = selectedRoute.segments.map { segment ->
         NavigationMapSegmentUiState(
-            sequence = segment.sequence,
-            polyline = segment.polyline.points,
-            distanceMeters = segment.distanceMeters,
-            riskLevel = segment.riskLevel,
-            guidanceMessage = segment.guidanceMessage,
-        )
-    }
-    val originPoint = origin.toNavigationMapPointUiState(fallbackLabel = "Origin")
-    val destinationPoint = destination.toNavigationMapPointUiState(fallbackLabel = "Destination")
-
-    return NavigationMapOverlayUiState(
-        isDisplayable = selectedRoute.previewPolyline.isRenderable,
-        currentLocation = originPoint,
-        origin = originPoint,
-        de
+        

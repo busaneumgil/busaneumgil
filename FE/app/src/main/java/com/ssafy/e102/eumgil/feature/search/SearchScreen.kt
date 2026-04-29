@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.search
 
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -25,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -37,6 +42,17 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchResult
+
+internal data class DestinationPromoBannerModel(
+    @DrawableRes val imageRes: Int,
+    @StringRes val contentDescriptionRes: Int,
+)
+
+internal fun searchDestinationPromoBannerModel(): DestinationPromoBannerModel =
+    DestinationPromoBannerModel(
+        imageRes = R.drawable.dest01_accessibility_banner,
+        contentDescriptionRes = R.string.search_screen_promo_banner_content_description,
+    )
 
 @Composable
 fun SearchScreen(
@@ -334,6 +350,30 @@ private fun RecentSearchSection(
                 }
             }
         }
+
+        DestinationPromoBanner()
+    }
+}
+
+@Composable
+private fun DestinationPromoBanner(
+    modifier: Modifier = Modifier,
+) {
+    val model = searchDestinationPromoBannerModel()
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
+        shadowElevation = 2.dp,
+    ) {
+        Image(
+            painter = painterResource(id = model.imageRes),
+            contentDescription = stringResource(id = model.contentDescriptionRes),
+            modifier = Modifier.fillMaxWidth(),
+            contentScale = ContentScale.FillWidth,
+        )
     }
 }
 

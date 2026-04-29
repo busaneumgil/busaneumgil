@@ -302,6 +302,7 @@
     <string name="search_screen_result_selectable">선택 가능</string>
     <string name="search_screen_result_a11y_with_address">%1$s, %2$s</string>
     <string name="search_screen_result_a11y_without_address">%1$s</string>
+    <string name="search_screen_promo_banner_content_description">무장애 경로로 안전하고 편리하게 이동하세요</string>
     <string name="search_screen_field_support_initial">입력 전 상태입니다. 검색어를 입력하면 결과 영역이 바뀝니다.</string>
     <string name="search_screen_field_support_empty">빈 입력 상태입니다. 한 글자 이상 입력해 주세요.</string>
     <string name="search_screen_field_support_typing">입력 중 상태입니다. 검색 버튼을 누르면 실제 결과를 조회합니다.</string>

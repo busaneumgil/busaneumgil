@@ -41,9 +41,9 @@ class OnboardingNavGraphRoutingTest {
     }
 
     @Test
-    fun `profile edit low vision primary user type returns to my page without terms`() {
+    fun `profile edit low vision primary user type opens low vision home without terms`() {
         assertEquals(
-            TopLevelRoute.MyPage.route,
+            LowVisionRoute.Home.route,
             resolvePrimaryUserTypeNextRoute(
                 primaryUserType = PrimaryUserType.LOW_VISION,
                 entryPoint = OnboardingEntryPoint.PROFILE_EDIT,

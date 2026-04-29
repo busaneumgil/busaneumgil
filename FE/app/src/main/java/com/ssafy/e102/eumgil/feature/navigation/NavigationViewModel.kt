@@ -36,14 +36,16 @@ class NavigationViewModel(
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var initialBriefingRequested = false
-    private var routePolyline: List<GeoCoordinate> = emptyList()
+    private var remainingDistanceCalculator = RemainingDistanceCalculator(emptyList())
+    private var lastProcessedLocationEpochMillis: Long? = null
 
     init {
         collectLocationUpdates()
     }
 
     fun bindNavigationRequest(request: RouteNavigationRequest) {
-        routePolyline = request.selectedRoute.previewPolyline.points
+        remainingDistanceCalculator = RemainingDistanceCalculator(request.selectedRoute.previewPolyline.points)
+        lastProcessedLocationEpochMillis = null
 
         val screenState = request.toScreenState()
         val stepCard = request.toStepCardUiState(screenState)
@@ -130,11 +132,11 @@ class NavigationViewModel(
     }
 
     private fun onLocationUpdated(snapshot: LocationSnapshot) {
-        val polyline = routePolyline
-        if (polyline.isEmpty()) return
+        if (!shouldProcessLocation(snapshot)) return
+        if (remainingDistanceCalculator.isEmpty) return
 
         val current = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
-        val remainingMeters = calculateRemainingDistanceMeters(current, polyline)
+        val remainingMeters = remainingDistanceCalculator.calculateRemainingDistanceMeters(current)
         val estimatedMinutes =
             (remainingMeters / DEFAULT_WALKING_SPEED_METERS_PER_MINUTE)
                 .toInt()
@@ -163,6 +165,18 @@ class NavigationViewModel(
                     ),
             )
         }
+    }
+
+    private fun shouldProcessLocation(snapshot: LocationSnapshot): Boolean {
+        val lastProcessed = lastProcessedLocationEpochMillis
+        if (lastProcessed != null && snapshot.recordedAtEpochMillis >= lastProcessed) {
+            val elapsedMillis = snapshot.recordedAtEpochMillis - lastProcessed
+            if (elapsedMillis < MIN_LOCATION_UPDATE_INTERVAL_MILLIS) {
+                return false
+            }
+        }
+        lastProcessedLocationEpochMillis = snapshot.recordedAtEpochMillis
+        return true
     }
 
     private fun emitUiEvent(event: NavigationUiEvent) {
@@ -231,22 +245,42 @@ internal fun calculateRemainingDistanceMeters(
     current: GeoCoordinate,
     polyline: List<GeoCoordinate>,
 ): Double {
-    if (polyline.isEmpty()) return 0.0
+    return RemainingDistanceCalculator(polyline).calculateRemainingDistanceMeters(current)
+}
 
-    val nearestIndex =
-        polyline.indices.minByOrNull { index ->
-            haversineDistanceMeters(current, polyline[index])
-        } ?: 0
+internal class RemainingDistanceCalculator(
+    private val polyline: List<GeoCoordinate>,
+) {
+    private val cumulativeDistanceMeters: List<Double> =
+        buildList {
+            var total = 0.0
+            add(total)
+            for (index in 0 until polyline.lastIndex) {
+                total += haversineDistanceMeters(polyline[index], polyline[index + 1])
+                add(total)
+            }
+        }
 
-    var remaining = haversineDistanceMeters(current, polyline[nearestIndex])
-    for (index in nearestIndex until polyline.lastIndex) {
-        remaining += haversineDistanceMeters(polyline[index], polyline[index + 1])
+    val isEmpty: Boolean
+        get() = polyline.isEmpty()
+
+    fun calculateRemainingDistanceMeters(current: GeoCoordinate): Double {
+        if (polyline.isEmpty()) return 0.0
+
+        val nearestIndex =
+            polyline.indices.minByOrNull { index ->
+                haversineDistanceMeters(current, polyline[index])
+            } ?: 0
+
+        val distanceToNearestPoint = haversineDistanceMeters(current, polyline[nearestIndex])
+        val routeTailDistance = cumulativeDistanceMeters.last() - cumulativeDistanceMeters[nearestIndex]
+        return distanceToNearestPoint + routeTailDistance
     }
-    return remaining
 }
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEFAULT_WALKING_SPEED_METERS_PER_MINUTE = 80.0
+private const val MIN_LOCATION_UPDATE_INTERVAL_MILLIS = 1_000L
 
 internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {
     val dLat = Math.toRadians(b.latitude - a.latitude)

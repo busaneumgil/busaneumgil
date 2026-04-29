@@ -88,4 +88,14 @@ fun NavigationRoute(
 
 private fun TextToSpeechAvailability.toNavigationTtsStatus(): NavigationTtsStatus =
     when (this) {
-        TextToSpeechAvailability.Initia
+        TextToSpeechAvailability.Initializing -> NavigationTtsStatus.Initializing
+        TextToSpeechAvailability.Ready -> NavigationTtsStatus.Ready
+        TextToSpeechAvailability.Unavailable -> NavigationTtsStatus.Unavailable
+    }
+
+private tailrec fun Context.findComponentActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity -> this
+        is ContextWrapper -> baseContext.findComponentActivity()
+        else -> null
+    }

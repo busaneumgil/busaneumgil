@@ -5,8 +5,12 @@ import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.entity.ReportDraftEntity
 import com.ssafy.e102.eumgil.data.local.entity.ReportOutboxEntity
 import java.util.UUID
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 interface ReportRepository {
+    fun observeReportHistory(): Flow<List<ReportOutboxData>>
+
     suspend fun getLatestDraft(): ReportDraftData?
 
     suspend fun saveDraft(draft: ReportDraftData): ReportDraftData
@@ -56,6 +60,11 @@ class DefaultReportRepository(
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : ReportRepository {
+    override fun observeReportHistory(): Flow<List<ReportOutboxData>> =
+        reportOutboxDao.observeReportOutboxItems().map { outboxItems ->
+            outboxItems.map(ReportOutboxEntity::toData)
+        }
+
     override suspend fun getLatestDraft(): ReportDraftData? =
         reportDraftDao.getLatestReportDraft()?.toData()
 
@@ -124,6 +133,22 @@ private fun ReportDraftData.toEntity(): ReportDraftEntity =
         photoSizeBytes = photoSizeBytes,
         createdAt = createdAtMillis,
         updatedAt = updatedAtMillis,
+    )
+
+private fun ReportOutboxEntity.toData(): ReportOutboxData =
+    ReportOutboxData(
+        outboxId = outboxId,
+        reportCategory = reportCategory,
+        description = description,
+        address = address,
+        latitude = latitude,
+        longitude = longitude,
+        photoUri = photoUri,
+        photoMimeType = photoMimeType,
+        photoSizeBytes = photoSizeBytes,
+        status = runCatching { ReportOutboxStatus.valueOf(status) }.getOrDefault(ReportOutboxStatus.Pending),
+        createdAtMillis = createdAt,
+        updatedAtMillis = updatedAt,
     )
 
 private fun ReportOutboxData.toEntity(): ReportOutboxEntity =

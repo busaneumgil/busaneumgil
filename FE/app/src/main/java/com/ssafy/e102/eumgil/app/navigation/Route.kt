@@ -21,12 +21,20 @@ sealed interface OnboardingRoute : AppRoute {
         override val route: String = "onboarding/user_type_primary"
     }
 
+    data object ProfileUserTypePrimary : OnboardingRoute {
+        override val route: String = "onboarding/profile_user_type_primary"
+    }
+
     data object LowVisionFollowUp : OnboardingRoute {
         override val route: String = "onboarding/low_vision_followup"
     }
 
     data object MobilityTypeSecondary : OnboardingRoute {
         override val route: String = "onboarding/mobility_type_secondary"
+    }
+
+    data object ProfileMobilityTypeSecondary : OnboardingRoute {
+        override val route: String = "onboarding/profile_mobility_type_secondary"
     }
 
     data object Terms : OnboardingRoute {
@@ -122,6 +130,12 @@ sealed interface RouteSettingRoute : AppRoute {
 sealed interface ReportRoute : AppRoute {
     data object Report : ReportRoute {
         override val route: String = "report"
+    }
+}
+
+sealed interface MyPageSubRoute : AppRoute {
+    data object ReportHistory : MyPageSubRoute {
+        override val route: String = "my_page/report_history"
     }
 }
 

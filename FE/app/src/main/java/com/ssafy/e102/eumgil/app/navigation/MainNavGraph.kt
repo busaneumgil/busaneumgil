@@ -13,11 +13,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-<<<<<<< HEAD
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
-=======
->>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
 import com.ssafy.e102.eumgil.feature.map.MapRoute
+import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
@@ -59,7 +57,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     composable(route = TopLevelRoute.MyPage.route) {
         MyPageRoute(
             onNavigateToUserTypePrimary = {
-                navController.navigate(OnboardingRoute.UserTypePrimary.route)
+                navController.navigate(OnboardingRoute.ProfileUserTypePrimary.route)
             },
             onNavigateToLogin = {
                 navController.navigate(AuthRoute.Login.route) {
@@ -68,6 +66,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                         inclusive = true
                     }
                 }
+            },
+            onNavigateToReportHistory = {
+                navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
         )
     }
@@ -81,11 +82,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(SearchRoute.Results.createRoute(query))
             },
             onNavigateToRouteSetting = {
-<<<<<<< HEAD
                 navController.navigate(RouteSettingRoute.Setting.createRoute()) {
-                    popUpTo(SearchRoute.Search.route) {
-=======
-                navController.navigate(RouteSettingRoute.Setting.route) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -114,9 +111,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.route) {
+                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
->>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
                         inclusive = true
                     }
                 }
@@ -126,12 +122,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
 
     composable(
         route = RouteSettingRoute.Setting.route,
-        arguments = listOf(
-            navArgument(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) {
-                type = NavType.BoolType
-                defaultValue = false
-            },
-        ),
+        arguments =
+            listOf(
+                navArgument(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
     ) { backStackEntry ->
         val autoStartNavigation =
             backStackEntry.arguments?.getBoolean(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) ?: false
@@ -149,8 +146,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 ViewModelProvider(owner, navigationViewModelFactory)[NavigationGuidanceViewModel::class.java]
             }
 
-        // 200 can hand off by updating DestinationSelectionRepository, then navigating here.
         RouteSettingEntryRoute(
+            autoStartNavigation = autoStartNavigation,
             onNavigateBack = {
                 navController.popBackStack()
             },
@@ -164,4 +161,66 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
-      
+        )
+    }
+
+    composable(route = ReportRoute.Report.route) {
+        ReportScreenRoute(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToReportHistory = {
+                navController.navigate(MyPageSubRoute.ReportHistory.route)
+            },
+        )
+    }
+
+    composable(route = MyPageSubRoute.ReportHistory.route) {
+        MyPageReportHistoryRoute(
+            onNavigateBack = {
+                val didPopToMyPage =
+                    navController.popBackStack(
+                        route = TopLevelRoute.MyPage.route,
+                        inclusive = false,
+                    )
+                if (!didPopToMyPage) {
+                    navController.navigateToTopLevel(TopLevelDestination.MyPage)
+                }
+            },
+            onNavigateToReport = {
+                navController.navigate(ReportRoute.Report.route)
+            },
+        )
+    }
+
+    composable(route = NavigationRoute.Guidance.route) {
+        NavigationScreenRoute(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToMap = {
+                navController.navigateToTopLevel(TopLevelDestination.Map)
+            },
+            onNavigateToSavedRoute = {
+                navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
+            },
+        )
+    }
+}
+
+fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
+    navigate(destination.route.route) {
+        launchSingleTop = true
+        restoreState = true
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+    }
+}
+
+private tailrec fun Context.findComponentActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity -> this
+        is ContextWrapper -> baseContext.findComponentActivity()
+        else -> null
+    }

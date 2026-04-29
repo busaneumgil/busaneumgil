@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,7 +29,6 @@ import kotlin.math.sqrt
 class NavigationViewModel(
     private val currentLocationManager: CurrentLocationManager,
 ) : ViewModel() {
-
     private val mutableUiState = MutableStateFlow(NavigationUiState())
     val uiState: StateFlow<NavigationUiState> = mutableUiState.asStateFlow()
 
@@ -36,92 +36,11 @@ class NavigationViewModel(
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var initialBriefingRequested = false
-
-    /** 경로 폴리라인 전체 (현재 위치 기반 잔여 거리 계산용). */
     private var routePolyline: List<GeoCoordinate> = emptyList()
-
-    /** 도보 평균 속도: 80m/min (≒ 4.8km/h). */
-    private val walkingSpeedMetersPerMinute = 80
 
     init {
         collectLocationUpdates()
     }
-
-    // ── 위치 업데이트 구독 ─────────────────────────────────────────────────────
-
-    private fun collectLocationUpdates() {
-        viewModelScope.launch {
-            currentLocationManager.latestLocation
-                .filterNotNull()
-                .collect { snapshot ->
-                    onLocationUpdated(snapshot)
-                }
-        }
-    }
-
-    /**
-     * 새 GPS 위치가 도착하면:
-     * 1. 폴리라인에서 가장 가까운 지점을 찾아 그 이후의 잔여 거리(m)를 합산.
-     * 2. 잔여 거리를 도보 속도로 나눠 예상 시간(분)을 계산.
-     * 3. UiState의 metrics를 갱신.
-     */
-    private fun onLocationUpdated(snapshot: LocationSnapshot) {
-        val polyline = routePolyline
-        if (polyline.isEmpty()) return
-
-        val current = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
-        val remainingMeters = calculateRemainingDistanceMeters(current, polyline)
-        val estimatedMinutes = (remainingMeters / walkingSpeedMetersPerMinute).toInt().coerceAtLeast(0)
-
-        mutableUiState.update { state ->
-            val updatedMetrics = state.stepCard.metrics.toMutableList()
-            if (updatedMetrics.size >= 2) {
-                updatedMetrics[0] = updatedMetrics[0].copy(
-                    value = remainingMeters.toInt().toNavigationDistanceLabel(),
-                )
-                updatedMetrics[1] = updatedMetrics[1].copy(
-                    value = estimatedMinutes.toNavigationEtaLabel(),
-                )
-            }
-            state.copy(
-                stepCard = state.stepCard.copy(metrics = updatedMetrics),
-                mapOverlay = state.mapOverlay.copy(
-                    currentLocation = state.mapOverlay.currentLocation?.copy(
-                        coordinate = current,
-                    ),
-                ),
-            )
-        }
-    }
-
-    /**
-     * Haversine 공식으로 폴리라인 잔여 거리를 계산합니다.
-     *
-     * 현재 위치에서 가장 가까운 폴리라인 포인트를 찾고,
-     * 그 포인트부터 종점까지의 선분 거리를 합산합니다.
-     *
-     * 참고: Haversine formula — https://www.movable-type.co.uk/scripts/latlong.html
-     */
-    private fun calculateRemainingDistanceMeters(
-        current: GeoCoordinate,
-        polyline: List<GeoCoordinate>,
-    ): Double {
-        if (polyline.isEmpty()) return 0.0
-
-        // 가장 가까운 폴리라인 포인트 인덱스를 찾음
-        val nearestIndex = polyline.indices.minByOrNull { index ->
-            haversineDistanceMeters(current, polyline[index])
-        } ?: 0
-
-        // 현재 위치 → 가장 가까운 포인트 거리 + 이후 선분들의 거리 합
-        var remaining = haversineDistanceMeters(current, polyline[nearestIndex])
-        for (i in nearestIndex until polyline.lastIndex) {
-            remaining += haversineDistanceMeters(polyline[i], polyline[i + 1])
-        }
-        return remaining
-    }
-
-    // ── 공개 메서드 ────────────────────────────────────────────────────────────
 
     fun bindNavigationRequest(request: RouteNavigationRequest) {
         routePolyline = request.selectedRoute.previewPolyline.points
@@ -130,7 +49,6 @@ class NavigationViewModel(
         val stepCard = request.toStepCardUiState(screenState)
         val briefingText = stepCard.toNavigationBriefingText()
         initialBriefingRequested = false
-
         mutableUiState.update { state ->
             state.copy(
                 screenState = screenState,
@@ -138,14 +56,14 @@ class NavigationViewModel(
                 mapOverlay = request.toMapOverlayUiState(),
                 stepCard = stepCard,
                 exitCta = screenState.toExitCtaUiState(),
-                tts = state.tts.copy(
-                    briefingText = briefingText,
-                    fallbackMessage = state.tts.toFallbackMessage(),
-                ),
+                tts =
+                    state.tts.copy(
+                        briefingText = briefingText,
+                        fallbackMessage = state.tts.toFallbackMessage(),
+                    ),
             )
         }
 
-        // 경로 진입 시 위치 추적 시작
         currentLocationManager.startLocationUpdates()
     }
 
@@ -186,21 +104,66 @@ class NavigationViewModel(
         status: NavigationTtsStatus,
     ) {
         mutableUiState.update { state ->
-            val nextTts = state.tts.copy(
-                isEnabled = isEnabled,
-                canSpeak = canSpeak,
-                status = status,
-            )
+            val nextTts =
+                state.tts.copy(
+                    isEnabled = isEnabled,
+                    canSpeak = canSpeak,
+                    status = status,
+                )
             state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
         }
     }
 
     override fun onCleared() {
-        super.onCleared()
         currentLocationManager.stopLocationUpdates()
+        super.onCleared()
     }
 
-    // ── 내부 헬퍼 ──────────────────────────────────────────────────────────────
+    private fun collectLocationUpdates() {
+        viewModelScope.launch {
+            currentLocationManager.latestLocation
+                .filterNotNull()
+                .collect { snapshot ->
+                    onLocationUpdated(snapshot)
+                }
+        }
+    }
+
+    private fun onLocationUpdated(snapshot: LocationSnapshot) {
+        val polyline = routePolyline
+        if (polyline.isEmpty()) return
+
+        val current = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
+        val remainingMeters = calculateRemainingDistanceMeters(current, polyline)
+        val estimatedMinutes =
+            (remainingMeters / DEFAULT_WALKING_SPEED_METERS_PER_MINUTE)
+                .toInt()
+                .coerceAtLeast(0)
+
+        mutableUiState.update { state ->
+            val updatedMetrics = state.stepCard.metrics.toMutableList()
+            if (updatedMetrics.size >= 2) {
+                updatedMetrics[0] =
+                    updatedMetrics[0].copy(
+                        value = remainingMeters.toInt().toNavigationDistanceLabel(),
+                    )
+                updatedMetrics[1] =
+                    updatedMetrics[1].copy(
+                        value = estimatedMinutes.toNavigationEtaLabel(),
+                    )
+            }
+            state.copy(
+                stepCard = state.stepCard.copy(metrics = updatedMetrics),
+                mapOverlay =
+                    state.mapOverlay.copy(
+                        currentLocation =
+                            state.mapOverlay.currentLocation?.copy(
+                                coordinate = current,
+                            ),
+                    ),
+            )
+        }
+    }
 
     private fun emitUiEvent(event: NavigationUiEvent) {
         viewModelScope.launch {
@@ -264,25 +227,37 @@ class NavigationViewModel(
     }
 }
 
-// ── Haversine 공식 ─────────────────────────────────────────────────────────────
-// 출처: https://www.movable-type.co.uk/scripts/latlong.html
+internal fun calculateRemainingDistanceMeters(
+    current: GeoCoordinate,
+    polyline: List<GeoCoordinate>,
+): Double {
+    if (polyline.isEmpty()) return 0.0
+
+    val nearestIndex =
+        polyline.indices.minByOrNull { index ->
+            haversineDistanceMeters(current, polyline[index])
+        } ?: 0
+
+    var remaining = haversineDistanceMeters(current, polyline[nearestIndex])
+    for (index in nearestIndex until polyline.lastIndex) {
+        remaining += haversineDistanceMeters(polyline[index], polyline[index + 1])
+    }
+    return remaining
+}
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
+private const val DEFAULT_WALKING_SPEED_METERS_PER_MINUTE = 80.0
 
-/**
- * 두 GPS 좌표 간의 거리(m)를 Haversine 공식으로 계산합니다.
- */
 internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {
     val dLat = Math.toRadians(b.latitude - a.latitude)
     val dLon = Math.toRadians(b.longitude - a.longitude)
     val sinHalfLat = sin(dLat / 2)
     val sinHalfLon = sin(dLon / 2)
-    val h = sinHalfLat.pow(2) +
-        cos(Math.toRadians(a.latitude)) * cos(Math.toRadians(b.latitude)) * sinHalfLon.pow(2)
+    val h =
+        sinHalfLat.pow(2) +
+            cos(Math.toRadians(a.latitude)) * cos(Math.toRadians(b.latitude)) * sinHalfLon.pow(2)
     return 2 * EARTH_RADIUS_METERS * atan2(sqrt(h), sqrt(1 - h))
 }
-
-// ── RouteNavigationRequest 확장 함수 ──────────────────────────────────────────
 
 private fun RouteNavigationRequest.toScreenState(): NavigationScreenState =
     if (selectedRoute.segments.isEmpty()) {
@@ -295,13 +270,171 @@ private fun RouteNavigationRequest.toMapPlaceholderDescription(screenState: Navi
     val destinationName = destination.name.orEmpty().ifBlank { "목적지" }
     return when (screenState) {
         NavigationScreenState.Loading -> "현재 위치와 경로 안내를 준비 중입니다."
-        NavigationScreenState.Ready -> "$destinationName 방향 경로 오버레이가 이 영역에 연결될 예정입니다."
-        NavigationScreenState.Empty -> "$destinationName 방향 거리 요약을 먼저 표시하고 있습니다."
+        NavigationScreenState.Ready -> "$destinationName 방향 경로 안내를 시작합니다."
+        NavigationScreenState.Empty -> "$destinationName 방향 거리 요약을 먼저 표시합니다."
     }
 }
 
 private fun RouteNavigationRequest.toMapOverlayUiState(): NavigationMapOverlayUiState {
     val selectedRoutePolyline = selectedRoute.previewPolyline.points
-    val routeSegments = selectedRoute.segments.map { segment ->
-        NavigationMapSegmentUiState(
-        
+    val routeSegments =
+        selectedRoute.segments.map { segment ->
+            NavigationMapSegmentUiState(
+                sequence = segment.sequence,
+                polyline = segment.polyline.points,
+                distanceMeters = segment.distanceMeters,
+                riskLevel = segment.riskLevel,
+                guidanceMessage = segment.guidanceMessage,
+            )
+        }
+    val originPoint = origin.toNavigationMapPointUiState(fallbackLabel = "출발지")
+    val destinationPoint = destination.toNavigationMapPointUiState(fallbackLabel = "목적지")
+
+    return NavigationMapOverlayUiState(
+        isDisplayable = selectedRoute.previewPolyline.isRenderable,
+        currentLocation = originPoint,
+        origin = originPoint,
+        destination = destinationPoint,
+        selectedRoutePolyline = selectedRoutePolyline,
+        routeSegments = routeSegments,
+    )
+}
+
+private fun RouteWaypoint.toNavigationMapPointUiState(fallbackLabel: String): NavigationMapPointUiState =
+    NavigationMapPointUiState(
+        label = name.orEmpty().ifBlank { fallbackLabel },
+        coordinate = coordinate,
+    )
+
+private fun RouteNavigationRequest.toStepCardUiState(screenState: NavigationScreenState): NavigationStepCardUiState =
+    when (screenState) {
+        NavigationScreenState.Loading -> NavigationStepCardUiState()
+        NavigationScreenState.Ready -> toReadyStepCardUiState()
+        NavigationScreenState.Empty -> toEmptyStepCardUiState()
+    }
+
+private fun NavigationStepCardUiState.toNavigationBriefingText(): String =
+    listOf(
+        supportingText,
+        "$distanceLabel 후 $instruction",
+    ).joinToString(separator = " ")
+
+private fun NavigationTtsUiState.toFallbackMessage(): String =
+    when {
+        !isEnabled -> NAVIGATION_TTS_DISABLED_MESSAGE
+        status == NavigationTtsStatus.Unavailable -> NAVIGATION_TTS_UNAVAILABLE_MESSAGE
+        status == NavigationTtsStatus.Initializing -> NAVIGATION_TTS_PREPARING_MESSAGE
+        else -> ""
+    }
+
+private fun RouteNavigationRequest.toReadyStepCardUiState(): NavigationStepCardUiState {
+    val primarySegment =
+        selectedRoute.segments.firstOrNull { segment ->
+            segment.guidanceMessage.isNotBlank()
+        } ?: selectedRoute.segments.firstOrNull()
+
+    return NavigationStepCardUiState(
+        sectionLabel = "다음 안내",
+        statusLabel = selectedRoute.routeOption.toRouteOptionLabel(),
+        emphasisLabel = selectedRoute.summary.riskLevel.toRiskLabel(),
+        distanceLabel =
+            primarySegment?.distanceMeters?.toNavigationDistanceLabel()
+                ?: selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
+        instruction =
+            primarySegment?.guidanceMessage
+                ?.trim()
+                ?.takeIf { guidanceMessage -> guidanceMessage.isNotEmpty() }
+                ?: "목적지 방향으로 계속 이동하세요",
+        supportingText =
+            "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
+                "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
+        metrics =
+            listOf(
+                NavigationStepMetricUiState(
+                    label = "남은 거리",
+                    value = selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
+                ),
+                NavigationStepMetricUiState(
+                    label = "예상 시간",
+                    value = selectedRoute.summary.estimatedTimeMinutes.toNavigationEtaLabel(),
+                ),
+                NavigationStepMetricUiState(
+                    label = "진행 단계",
+                    value = "1 / ${selectedRoute.segments.size.coerceAtLeast(1)}",
+                ),
+            ),
+    )
+}
+
+private fun RouteNavigationRequest.toEmptyStepCardUiState(): NavigationStepCardUiState =
+    NavigationStepCardUiState(
+        sectionLabel = "다음 안내",
+        statusLabel = selectedRoute.routeOption.toRouteOptionLabel(),
+        emphasisLabel = selectedRoute.summary.riskLevel.toRiskLabel(),
+        distanceLabel = selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
+        instruction = "현재 안내 메시지를 준비하지 못했습니다",
+        supportingText =
+            "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 거리와 예상 시간 요약만 먼저 표시합니다.",
+        metrics =
+            listOf(
+                NavigationStepMetricUiState(
+                    label = "남은 거리",
+                    value = selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
+                ),
+                NavigationStepMetricUiState(
+                    label = "예상 시간",
+                    value = selectedRoute.summary.estimatedTimeMinutes.toNavigationEtaLabel(),
+                ),
+                NavigationStepMetricUiState(
+                    label = "진행 단계",
+                    value = "안내 없음",
+                ),
+            ),
+    )
+
+private fun NavigationScreenState.toExitCtaUiState(): NavigationCtaUiState =
+    when (this) {
+        NavigationScreenState.Loading ->
+            NavigationCtaUiState(
+                label = "안내 준비 중",
+                supportingText = "경로 정보가 준비되면 종료 버튼이 활성화됩니다.",
+                isEnabled = false,
+            )
+        NavigationScreenState.Ready,
+        NavigationScreenState.Empty ->
+            NavigationCtaUiState(
+                label = "안내 종료",
+                supportingText = "안내를 종료하고 지도로 돌아갑니다.",
+                isEnabled = true,
+            )
+    }
+
+private fun String.toNavigationRouteTitle(routeOption: RouteOption): String =
+    trim().ifBlank { routeOption.toRouteOptionLabel() }
+
+private fun RouteOption.toRouteOptionLabel(): String =
+    when (this) {
+        RouteOption.SAFE -> "안전 우선"
+        RouteOption.SHORTEST -> "최단 거리"
+    }
+
+private fun RouteRiskLevel.toRiskLabel(): String =
+    when (this) {
+        RouteRiskLevel.LOW -> "위험도 낮음"
+        RouteRiskLevel.MEDIUM -> "위험도 보통"
+        RouteRiskLevel.HIGH -> "위험도 높음"
+    }
+
+private fun Int.toNavigationDistanceLabel(): String =
+    when {
+        this <= 0 -> "확인 중"
+        this < 1_000 -> "${this}m"
+        else -> String.format(Locale.US, "%.1fkm", this / 1_000f)
+    }
+
+private fun Int.toNavigationEtaLabel(): String =
+    if (this > 0) {
+        "${this}분"
+    } else {
+        "확인 중"
+    }

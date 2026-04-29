@@ -39,4 +39,26 @@ class OnboardingNavGraphRoutingTest {
             resolvePrimaryUserTypeNextRoute(PrimaryUserType.MOBILITY_IMPAIRED),
         )
     }
+
+    @Test
+    fun `profile edit low vision primary user type returns to my page without terms`() {
+        assertEquals(
+            TopLevelRoute.MyPage.route,
+            resolvePrimaryUserTypeNextRoute(
+                primaryUserType = PrimaryUserType.LOW_VISION,
+                entryPoint = OnboardingEntryPoint.PROFILE_EDIT,
+            ),
+        )
+    }
+
+    @Test
+    fun `profile edit mobility impaired primary user type moves to profile edit subtype route`() {
+        assertEquals(
+            OnboardingRoute.ProfileMobilityTypeSecondary.route,
+            resolvePrimaryUserTypeNextRoute(
+                primaryUserType = PrimaryUserType.MOBILITY_IMPAIRED,
+                entryPoint = OnboardingEntryPoint.PROFILE_EDIT,
+            ),
+        )
+    }
 }

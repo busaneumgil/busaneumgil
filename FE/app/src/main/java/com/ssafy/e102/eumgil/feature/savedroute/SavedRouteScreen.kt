@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,16 +27,6 @@ import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListSubText
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilTheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
-/**
- * 저장 목록(북마크) 화면 — 다크 테마.
- *
- * 상단 제목: "저장 목록"
- * LazyColumn 아이템이 뷰포트 높이의 ~47%를 차지하므로 한 화면에 2개가 보이고,
- * 위아래 스크롤로 추가 장소를 탐색할 수 있습니다.
- *
- * SearchScreen과 동일한 [PlaceListCard] + [PlaceListTabBar] 프레임을 사용합니다.
- * 차이점: 제목 "저장 목록", 북마크 버튼 레이블 "삭제", 탭 바 활성 탭 "bookmark".
- */
 @Composable
 fun SavedRouteScreen(
     uiState: SavedRouteUiState,
@@ -45,27 +34,28 @@ fun SavedRouteScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(PlaceListBg),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PlaceListBg),
     ) {
-        // ── 제목 ──────────────────────────────────────────────────────────────
         Text(
             text = "저장 목록",
             fontSize = 26.sp,
             fontWeight = FontWeight.ExtraBold,
             color = PlaceListAmber,
             textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
         )
 
-        // ── 콘텐츠 영역 ────────────────────────────────────────────────────────
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
         ) {
             when (uiState.screenState) {
                 SavedRouteScreenState.LOADING -> {
@@ -73,18 +63,17 @@ fun SavedRouteScreen(
                         CircularProgressIndicator(color = PlaceListAmber)
                     }
                 }
-
                 SavedRouteScreenState.EMPTY -> {
-                    SavedRouteStateMessage(message = "저장된 장소가 없습니다\n길찾기 후 북마크를 추가해보세요")
+                    SavedRouteStateMessage(
+                        message = "저장된 장소가 없습니다.\n검색 결과에서 장소를 저장해 보세요.",
+                    )
                 }
-
                 SavedRouteScreenState.ERROR -> {
                     SavedRouteStateMessage(
-                        message = uiState.errorMessage ?: "불러오기에 실패했습니다\n잠시 후 다시 시도해주세요",
+                        message = uiState.errorMessage ?: "저장 목록을 불러오지 못했습니다.\n잠시 후 다시 시도해 주세요.",
                         isError = true,
                     )
                 }
-
                 SavedRouteScreenState.CONTENT -> {
                     SavedPlaceList(
                         places = uiState.places,
@@ -98,11 +87,8 @@ fun SavedRouteScreen(
                 }
             }
         }
-
     }
 }
-
-// ── 저장 목록 LazyColumn ──────────────────────────────────────────────────────
 
 @Composable
 private fun SavedPlaceList(
@@ -111,13 +97,13 @@ private fun SavedPlaceList(
     onNavigateClick: (SavedPlaceUiModel) -> Unit,
 ) {
     LazyColumn(
-        contentPadding = PaddingValues(
-            horizontal = EumSpacing.medium,
-            vertical = EumSpacing.medium,
-        ),
+        contentPadding =
+            PaddingValues(
+                horizontal = EumSpacing.medium,
+                vertical = EumSpacing.medium,
+            ),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
-<<<<<<< HEAD
         itemsIndexed(
             items = places,
             key = { _, place -> place.placeId },
@@ -126,29 +112,14 @@ private fun SavedPlaceList(
                 index = index + 1,
                 name = place.name,
                 address = place.address,
-                bookmarkLabel = "삭제",
+                bookmarkLabel = "해제",
                 onBookmarkClick = { onRemoveClick(place) },
                 onNavigateClick = { onNavigateClick(place) },
-                // 한 뷰포트에 2개가 보이도록 각 카드 높이를 전체의 절반으로 고정
                 modifier = Modifier.fillParentMaxHeight(fraction = 0.47f),
             )
         }
-=======
-        Text(
-            text = stringResource(id = R.string.saved_route_screen_title),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
->>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
     }
 }
-
-// ── 빈 / 오류 상태 메시지 ─────────────────────────────────────────────────────
 
 @Composable
 private fun SavedRouteStateMessage(
@@ -170,40 +141,40 @@ private fun SavedRouteStateMessage(
     }
 }
 
-// ── 프리뷰 ────────────────────────────────────────────────────────────────────
-
 @Preview(
     showBackground = true,
     widthDp = 360,
     heightDp = 800,
     backgroundColor = 0xFF1C1C1E,
-    name = "SavedRoute — 목록 있음",
+    name = "SavedRoute content",
 )
 @Composable
 private fun SavedRouteContentPreview() {
     BusanEumgilTheme {
         SavedRouteScreen(
-            uiState = SavedRouteUiState(
-                screenState = SavedRouteScreenState.CONTENT,
-                places = listOf(
-                    SavedPlaceUiModel(
-                        placeId = "1",
-                        name = "해운대역\n공공화장실",
-                        address = "해운대구",
-                        category = "TOILET",
-                        latitude = 35.163,
-                        longitude = 129.163,
-                    ),
-                    SavedPlaceUiModel(
-                        placeId = "2",
-                        name = "해운대구\n보건소",
-                        address = "해운대구",
-                        category = "OTHER",
-                        latitude = 35.160,
-                        longitude = 129.160,
-                    ),
+            uiState =
+                SavedRouteUiState(
+                    screenState = SavedRouteScreenState.CONTENT,
+                    places =
+                        listOf(
+                            SavedPlaceUiModel(
+                                placeId = "1",
+                                name = "해운대역\n공공화장실",
+                                address = "해운대구",
+                                category = "TOILET",
+                                latitude = 35.163,
+                                longitude = 129.163,
+                            ),
+                            SavedPlaceUiModel(
+                                placeId = "2",
+                                name = "해운대구\n보건소",
+                                address = "해운대구",
+                                category = "OTHER",
+                                latitude = 35.160,
+                                longitude = 129.160,
+                            ),
+                        ),
                 ),
-            ),
             onAction = {},
         )
     }
@@ -214,7 +185,7 @@ private fun SavedRouteContentPreview() {
     widthDp = 360,
     heightDp = 800,
     backgroundColor = 0xFF1C1C1E,
-    name = "SavedRoute — 비어 있음",
+    name = "SavedRoute empty",
 )
 @Composable
 private fun SavedRouteEmptyPreview() {
@@ -225,4 +196,3 @@ private fun SavedRouteEmptyPreview() {
         )
     }
 }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      

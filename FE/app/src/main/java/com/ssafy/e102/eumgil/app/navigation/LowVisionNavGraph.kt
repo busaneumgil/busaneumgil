@@ -16,7 +16,7 @@ import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionMyPageRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionSearchRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
-import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionVoiceInputBottomNav
+import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
 fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.Home.route) {
@@ -77,7 +77,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 modifier = Modifier.weight(1f),
             )
 
-            LowVisionVoiceInputBottomNav(
+            LowVisionBottomNav(
                 selectedTab = LowVisionBottomTab.CATEGORY,
                 onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
             )
@@ -136,7 +136,27 @@ internal fun resolveLowVisionBottomTabRoute(tab: LowVisionBottomTab): String =
         LowVisionBottomTab.MY_PAGE -> LowVisionRoute.MyPage.route
     }
 
+internal fun resolveLowVisionSelectedBottomTab(currentRoute: String?): LowVisionBottomTab? =
+    when (currentRoute) {
+        LowVisionRoute.Home.route,
+        LowVisionRoute.VoiceInput.route -> LowVisionBottomTab.HOME
+        LowVisionRoute.Bookmark.route -> LowVisionBottomTab.BOOKMARK
+        LowVisionRoute.Search.route -> LowVisionBottomTab.CATEGORY
+        LowVisionRoute.MyPage.route,
+        LowVisionRoute.AppInfo.route -> LowVisionBottomTab.MY_PAGE
+        else -> null
+    }
+
+internal fun shouldNavigateLowVisionBottomTab(
+    currentRoute: String?,
+    selectedTab: LowVisionBottomTab,
+): Boolean = resolveLowVisionSelectedBottomTab(currentRoute) != selectedTab
+
 private fun NavHostController.navigateToLowVisionBottomTab(tab: LowVisionBottomTab) {
+    if (!shouldNavigateLowVisionBottomTab(currentBackStackEntry?.destination?.route, tab)) {
+        return
+    }
+
     when (tab) {
         LowVisionBottomTab.HOME -> {
             val didPopHome =

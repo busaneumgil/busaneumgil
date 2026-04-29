@@ -1,10 +1,6 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 /**
@@ -19,15 +15,10 @@ fun LowVisionVoiceInputRoute(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selectedTab by rememberSaveable { mutableStateOf(LowVisionBottomTab.HOME) }
-
     LowVisionVoiceInputScreen(
-        uiState = LowVisionVoiceInputUiState(selectedTab = selectedTab),
+        uiState = LowVisionVoiceInputUiState(selectedTab = LowVisionBottomTab.HOME),
         onCancelRecording = onRecordingFinished,
-        onTabSelected = { tab ->
-            selectedTab = tab
-            onTabSelected(tab)
-        },
+        onTabSelected = onTabSelected,
         modifier = modifier,
     )
 }

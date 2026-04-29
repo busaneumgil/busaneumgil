@@ -10,6 +10,10 @@ class LowVisionNavGraphRoutingTest {
             LowVisionRoute.Search.route,
             resolveLowVisionRecordingCompletedRoute(),
         )
+        assertEquals(
+            LowVisionRoute.VoiceInput.route,
+            resolveLowVisionRecordingPopUpRoute(),
+        )
     }
 
     @Test
@@ -17,6 +21,10 @@ class LowVisionNavGraphRoutingTest {
         assertEquals(
             RouteSettingRoute.Setting.createRoute(autoStartNavigation = true),
             resolveLowVisionSearchResultRoute(),
+        )
+        assertEquals(
+            LowVisionRoute.Search.route,
+            resolveLowVisionSearchPopUpRoute(),
         )
     }
 }

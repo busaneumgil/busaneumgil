@@ -33,5 +33,28 @@
             android:exported="false"
             android:screenOrientation="portrait"
             android:parentActivityName=".MainActivity"/>
+
+        <activity
+            android:name=".ModeSelectActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:label="모드 선택">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".WalkActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:parentActivityName=".ModeSelectActivity"/>
+
+        <activity
+            android:name=".VisuallyActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:parentActivityName=".ModeSelectActivity"/>
     </application>
 </manifest>

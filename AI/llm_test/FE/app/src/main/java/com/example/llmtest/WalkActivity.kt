@@ -103,12 +103,12 @@ class WalkActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val response = VoiceApiClient.service.analyze(
-                    VoiceAnalyzeRequest(text = text, model = "gemini", mode = "mobility")
+                    VoiceAnalyzeRequest(text = text, model = "gemini", mode = "MOBILITY_IMPAIRED")
                 )
                 binding.tvStatus.text = "완료"
                 binding.tvResult.text = buildString {
                     appendLine("intent: ${response.intent ?: "-"}")
-                    appendLine("장소명: ${response.place_name ?: "-"}")
+                    appendLine("장소명: ${response.placeName ?: "-"}")
                     append("응답시간: ${response.latency_ms ?: "-"}ms")
                 }
             } catch (e: Exception) {

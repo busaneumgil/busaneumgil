@@ -19,7 +19,6 @@ import androidx.lifecycle.lifecycleScope
 import com.example.llmtest.databinding.ActivityVisuallyBinding
 import com.example.llmtest.network.VoiceApiClient
 import com.example.llmtest.network.models.VoiceAnalyzeRequest
-import com.example.llmtest.network.models.VoiceConfirmRequest
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -30,7 +29,7 @@ class VisuallyActivity : AppCompatActivity() {
     private lateinit var tts: TextToSpeech
 
     private var isListening = false
-    private var isConfirmPhase = false
+    private val conversationHistory = mutableListOf<Map<String, String>>()
     private val resultLog = StringBuilder()
 
     companion object {
@@ -74,8 +73,8 @@ class VisuallyActivity : AppCompatActivity() {
             override fun onDone(utteranceId: String?) {
                 if (utteranceId == UTTERANCE_CONFIRMATION) {
                     runOnUiThread {
-                        binding.tvStatus.text = "확인 응답을 말씀해 주세요"
-                        startListeningForConfirm()
+                        binding.tvStatus.text = "말씀해 주세요"
+                        startListening()
                     }
                 }
             }
@@ -111,7 +110,7 @@ class VisuallyActivity : AppCompatActivity() {
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.getOrNull(0) ?: return
                 binding.tvStatus.text = "분석 중..."
-                if (isConfirmPhase) callConfirmApi(text) else callAnalyzeApi(text)
+                callAnalyzeApi(text)
             }
 
             override fun onBeginningOfSpeech() {}
@@ -123,17 +122,12 @@ class VisuallyActivity : AppCompatActivity() {
     }
 
     private fun resetSession() {
-        isConfirmPhase = false
+        conversationHistory.clear()
         resultLog.clear()
         binding.tvResult.text = ""
     }
 
     private fun startListening() {
-        speechRecognizer.startListening(buildRecognizeIntent())
-    }
-
-    private fun startListeningForConfirm() {
-        isConfirmPhase = true
         speechRecognizer.startListening(buildRecognizeIntent())
     }
 
@@ -146,33 +140,47 @@ class VisuallyActivity : AppCompatActivity() {
     }
 
     private fun callAnalyzeApi(text: String) {
+        val historySnapshot = conversationHistory.toList()
         lifecycleScope.launch {
             try {
                 val response = VoiceApiClient.service.analyze(
-                    VoiceAnalyzeRequest(text = text, model = "gemini", mode = "visually")
+                    VoiceAnalyzeRequest(
+                        text = text,
+                        model = "gemini",
+                        mode = "LOW_VISION",
+                        history = historySnapshot
+                    )
                 )
-                val confirmMsg = response.confirmation_message ?: "다시 말씀해 주세요"
-                resultLog.appendLine("[1단계] intent: ${response.intent} / 장소명: ${response.place_name ?: "-"}")
-                resultLog.appendLine("[TTS] \"$confirmMsg\"")
-                binding.tvResult.text = resultLog.toString().trimEnd()
-                speakOut(confirmMsg, UTTERANCE_CONFIRMATION)
-            } catch (e: Exception) {
-                binding.tvStatus.text = "오류가 발생했습니다. 다시 시도해주세요."
-            }
-        }
-    }
 
-    private fun callConfirmApi(text: String) {
-        lifecycleScope.launch {
-            try {
-                val response = VoiceApiClient.service.confirm(
-                    VoiceConfirmRequest(text = text, model = "gemini")
-                )
-                resultLog.appendLine("[2단계] confirmed: ${response.confirmed}")
-                resultLog.appendLine("[TTS] \"${response.message}\"")
-                binding.tvResult.text = resultLog.toString().trimEnd()
-                binding.tvStatus.text = "완료"
-                speakOut(response.message, "result")
+                // 히스토리에 이번 턴 추가
+                conversationHistory.add(mapOf("role" to "user", "content" to text))
+                // history는 API 응답 형식(camelCase + 대문자 intent) 그대로 저장
+                val assistantContent = buildString {
+                    append("{\"intent\":\"${response.intent}\"")
+                    append(",\"placeName\":${if (response.placeName != null) "\"${response.placeName}\"" else "null"}")
+                    append(",\"confirmed\":${response.confirmed ?: "null"}")
+                    append(",\"confirmationMessage\":${if (response.confirmationMessage != null) "\"${response.confirmationMessage}\"" else "null"}")
+                    append("}")
+                }
+                conversationHistory.add(mapOf("role" to "assistant", "content" to assistantContent))
+
+                if (response.confirmed == true) {
+                    // 확인 완료 → 검색 진행
+                    resultLog.appendLine("[완료] 장소명: ${response.placeName ?: "-"} / confirmed: true")
+                    binding.tvResult.text = resultLog.toString().trimEnd()
+                    binding.tvStatus.text = "완료"
+                    speakOut("${response.placeName}을 검색합니다", "result")
+                } else {
+                    val msg = response.confirmationMessage ?: "찾으시는 장소를 말씀해 주세요"
+                    resultLog.appendLine("[${conversationHistory.size / 2}턴] intent: ${response.intent} / 장소명: ${response.placeName ?: "-"}")
+                    resultLog.appendLine("[TTS] \"$msg\"")
+                    binding.tvResult.text = resultLog.toString().trimEnd()
+                    if (response.intent == "unknown") {
+                        // unknown이면 히스토리 초기화 후 재시도
+                        conversationHistory.clear()
+                    }
+                    speakOut(msg, UTTERANCE_CONFIRMATION)
+                }
             } catch (e: Exception) {
                 binding.tvStatus.text = "오류가 발생했습니다. 다시 시도해주세요."
             }

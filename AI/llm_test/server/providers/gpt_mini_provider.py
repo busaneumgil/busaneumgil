@@ -16,18 +16,22 @@ class GPTMiniProvider(BaseProvider):
     def provider_name(self):
         return "gpt_mini"
 
-    def call(self, user_input: str, system_prompt: str = "") -> LLMResponse:
+    def call(self, user_input: str, system_prompt: str = "", messages: list = None) -> LLMResponse:
         prompt = system_prompt or SYSTEM_PROMPT_MOBILITY
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.gms_key}"
         }
+        if messages:
+            chat_messages = [{"role": "developer", "content": prompt}] + messages
+        else:
+            chat_messages = [
+                {"role": "developer", "content": prompt},
+                {"role": "user", "content": user_input},
+            ]
         body = {
             "model": "gpt-5-mini",
-            "messages": [
-                {"role": "developer", "content": prompt},
-                {"role": "user", "content": user_input}
-            ]
+            "messages": chat_messages,
         }
         start = time.time()
         try:
@@ -51,6 +55,7 @@ class GPTMiniProvider(BaseProvider):
                 departure=parsed.get("departure"),
                 destination=parsed.get("destination"),
                 facility_type=parsed.get("facility_type"),
+                confirmed=parsed.get("confirmed"),
                 confirmation_message=parsed.get("confirmation_message"),
                 llm_latency_ms=latency_ms, total_latency_ms=0,
                 input_tokens=input_tokens, output_tokens=output_tokens,
@@ -62,7 +67,8 @@ class GPTMiniProvider(BaseProvider):
             return LLMResponse(
                 provider="gpt_mini", raw_text="",
                 intent="unknown", place_name=None, departure=None,
-                destination=None, facility_type=None, confirmation_message=None,
+                destination=None, facility_type=None, confirmed=None,
+                confirmation_message=None,
                 llm_latency_ms=0, total_latency_ms=0,
                 input_tokens=0, output_tokens=0, cost_credit=0,
                 success=False, error=str(e),

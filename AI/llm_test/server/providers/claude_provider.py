@@ -16,7 +16,7 @@ class ClaudeProvider(BaseProvider):
     def provider_name(self):
         return "claude"
 
-    def call(self, user_input: str, system_prompt: str = "") -> LLMResponse:
+    def call(self, user_input: str, system_prompt: str = "", messages: list = None) -> LLMResponse:
         prompt = system_prompt or SYSTEM_PROMPT_MOBILITY
         headers = {
             "Content-Type": "application/json",
@@ -27,9 +27,7 @@ class ClaudeProvider(BaseProvider):
             "model": "claude-haiku-4-5-20251001",
             "max_tokens": 1024,
             "system": prompt,
-            "messages": [
-                {"role": "user", "content": user_input}
-            ]
+            "messages": messages if messages else [{"role": "user", "content": user_input}],
         }
         start = time.time()
         try:
@@ -53,6 +51,7 @@ class ClaudeProvider(BaseProvider):
                 departure=parsed.get("departure"),
                 destination=parsed.get("destination"),
                 facility_type=parsed.get("facility_type"),
+                confirmed=parsed.get("confirmed"),
                 confirmation_message=parsed.get("confirmation_message"),
                 llm_latency_ms=latency_ms, total_latency_ms=0,
                 input_tokens=input_tokens, output_tokens=output_tokens,
@@ -64,7 +63,8 @@ class ClaudeProvider(BaseProvider):
             return LLMResponse(
                 provider="claude", raw_text="",
                 intent="unknown", place_name=None, departure=None,
-                destination=None, facility_type=None, confirmation_message=None,
+                destination=None, facility_type=None, confirmed=None,
+                confirmation_message=None,
                 llm_latency_ms=0, total_latency_ms=0,
                 input_tokens=0, output_tokens=0, cost_credit=0,
                 success=False, error=str(e),

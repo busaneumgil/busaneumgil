@@ -6,11 +6,15 @@ import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -39,6 +43,7 @@ class SearchViewModelTest {
             val viewModel =
                 SearchViewModel(
                     searchRepository = FakeSearchRepository(searchResults = listOf(result)),
+                    bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                 )
 
@@ -62,6 +67,7 @@ class SearchViewModelTest {
             val viewModel =
                 SearchViewModel(
                     searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                 )
 
@@ -82,6 +88,7 @@ class SearchViewModelTest {
             val viewModel =
                 SearchViewModel(
                     searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
                 )
             val result =
@@ -111,6 +118,7 @@ class SearchViewModelTest {
             val viewModel =
                 SearchViewModel(
                     searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
                 )
             val invalidResult =
@@ -145,6 +153,7 @@ class SearchViewModelTest {
             val viewModel =
                 SearchViewModel(
                     searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
                 )
             val result =
@@ -176,6 +185,85 @@ class SearchViewModelTest {
                 searchRepository.savedRecentDestinations.single().copy(searchedAtMillis = 0L),
             )
         }
+
+    @Test
+    fun `bookmark toggle saves unbookmarked search result`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "place-1",
+                    placeName = "Busan City Hall",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = "TOURIST_ATTRACTION",
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+        }
+
+    @Test
+    fun `bookmark toggle deletes already bookmarked search result`() =
+        runTest {
+            val bookmarkRepository =
+                FakeBookmarkRepository(
+                    bookmarks =
+                        listOf(
+                            BookmarkData(
+                                placeId = "place-1",
+                                placeName = "Busan City Hall",
+                                address = "123 Jungang-daero, Busan",
+                                latitude = 35.1797,
+                                longitude = 129.0750,
+                                category = "TOURIST_ATTRACTION",
+                            ),
+                        ),
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(emptyList<BookmarkData>(), bookmarkRepository.bookmarks.value)
+        }
 }
 
 private class FakeSearchRepository(
@@ -193,5 +281,24 @@ private class FakeSearchRepository(
 
     override suspend fun saveRecentDestination(destination: RecentDestination) {
         savedRecentDestinations += destination
+    }
+}
+
+private class FakeBookmarkRepository(
+    bookmarks: List<BookmarkData> = emptyList(),
+) : BookmarkRepository {
+    val bookmarks = MutableStateFlow(bookmarks)
+
+    override fun observeBookmarks(): Flow<List<BookmarkData>> = bookmarks
+
+    override suspend fun isBookmarked(placeId: String): Boolean =
+        bookmarks.value.any { bookmark -> bookmark.placeId == placeId }
+
+    override suspend fun saveBookmark(bookmark: BookmarkData) {
+        bookmarks.value = bookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
+    }
+
+    override suspend fun deleteBookmark(placeId: String) {
+        bookmarks.value = bookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
     }
 }

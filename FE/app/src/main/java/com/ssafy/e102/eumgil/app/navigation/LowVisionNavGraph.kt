@@ -5,6 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
+import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 
 /**
  * 시각지원 모드 풀스크린 셸의 네비게이션 그래프.
@@ -29,11 +30,41 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.VoiceInput.route) {
         LowVisionVoiceInputRoute(
             onRecordingFinished = {
-                if (!navController.popBackStack()) {
-                    navController.navigate(LowVisionRoute.Home.route)
+                navController.navigate(resolveLowVisionRecordingCompletedRoute()) {
+                    launchSingleTop = true
+                    popUpTo(resolveLowVisionRecordingPopUpRoute()) {
+                        inclusive = true
+                    }
                 }
             },
             onTabSelected = { /* 탭 라우팅은 추후 시각지원 모드 전용 4탭 셸이 잡히면 처리. */ },
         )
     }
+
+    composable(route = LowVisionRoute.Search.route) {
+        SearchResultsRoute(
+            initialQuery = "",
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToResults = { _ -> },
+            onNavigateToRouteSetting = {
+                navController.navigate(resolveLowVisionSearchResultRoute()) {
+                    launchSingleTop = true
+                    popUpTo(resolveLowVisionSearchPopUpRoute()) {
+                        inclusive = true
+                    }
+                }
+            },
+        )
+    }
 }
+
+internal fun resolveLowVisionRecordingCompletedRoute(): String = LowVisionRoute.Search.route
+
+internal fun resolveLowVisionRecordingPopUpRoute(): String = LowVisionRoute.VoiceInput.route
+
+internal fun resolveLowVisionSearchResultRoute(): String =
+    RouteSettingRoute.Setting.createRoute(autoStartNavigation = true)
+
+internal fun resolveLowVisionSearchPopUpRoute(): String = LowVisionRoute.Search.route

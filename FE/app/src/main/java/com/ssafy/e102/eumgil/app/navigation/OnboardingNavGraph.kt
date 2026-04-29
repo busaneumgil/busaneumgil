@@ -153,7 +153,7 @@ fun NavGraphBuilder.onboardingNavGraph(
                         isPrivacyPolicyAgreed = true,
                     )
 
-                    navController.navigate(TopLevelRoute.Map.route) {
+                    navController.navigate(resolveTermsGuideCompletedRoute()) {
                         launchSingleTop = true
                         popUpTo(navController.graph.findStartDestination().id) {
                             inclusive = true
@@ -193,6 +193,8 @@ internal fun resolvePrimaryUserTypeNextRoute(
                 PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.ProfileMobilityTypeSecondary.route
             }
     }
+
+internal fun resolveTermsGuideCompletedRoute(): String = LowVisionRoute.Home.route
 
 private fun NavHostController.navigateToMyPageAfterProfileEdit() {
     val didPopToMyPage =

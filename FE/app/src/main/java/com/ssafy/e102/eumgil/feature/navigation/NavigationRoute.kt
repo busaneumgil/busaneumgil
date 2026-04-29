@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
 import kotlinx.coroutines.CoroutineStart
@@ -22,6 +23,7 @@ import kotlinx.coroutines.launch
 fun NavigationRoute(
     onNavigateBack: () -> Unit,
     onNavigateToMap: () -> Unit,
+    onNavigateToSavedRoute: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -31,7 +33,12 @@ fun NavigationRoute(
         remember(appContext) {
             AndroidTextToSpeechController(context = appContext)
         }
-    val viewModelFactory = remember { NavigationViewModel.provideFactory() }
+    val currentLocationManager = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.currentLocationManager
+    }
+    val viewModelFactory = remember(currentLocationManager) {
+        NavigationViewModel.provideFactory(currentLocationManager = currentLocationManager)
+    }
     val viewModel =
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "NavigationRoute requires a ComponentActivity host." }
@@ -48,12 +55,13 @@ fun NavigationRoute(
         )
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onNavigateToSavedRoute) {
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     NavigationUiEvent.NavigateBack -> onNavigateBack()
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
+                    NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->

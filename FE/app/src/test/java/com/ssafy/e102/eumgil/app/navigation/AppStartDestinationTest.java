@@ -55,7 +55,7 @@ public class AppStartDestinationTest {
     }
 
     @Test
-    public void completedLowVisionSessionStartsAtMap() {
+    public void completedLowVisionSessionStartsAtLowVisionHome() {
         AppStartDestination destination =
                 AppStartDestinationKt.resolveAppStartDestination(
                         new AuthGateState(authSession(), true),
@@ -66,7 +66,7 @@ public class AppStartDestinationTest {
                                 true,
                                 true));
 
-        assertEquals(TopLevelRoute.Map.INSTANCE.getRoute(), destination.getRoute());
+        assertEquals(LowVisionRoute.Home.INSTANCE.getRoute(), destination.getRoute());
     }
 
     @Test

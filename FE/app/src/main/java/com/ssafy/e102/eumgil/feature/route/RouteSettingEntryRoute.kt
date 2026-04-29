@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.collect
 fun RouteSettingEntryRoute(
     onNavigateBack: () -> Unit,
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
+    autoStartNavigation: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -46,6 +47,12 @@ fun RouteSettingEntryRoute(
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
             }
+        }
+    }
+
+    LaunchedEffect(viewModel, autoStartNavigation, uiState.isStartEnabled, uiState.ctaAcknowledged) {
+        if (autoStartNavigation && uiState.isStartEnabled && !uiState.ctaAcknowledged) {
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
         }
     }
 

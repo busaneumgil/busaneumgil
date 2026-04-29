@@ -13,7 +13,10 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+<<<<<<< HEAD
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+=======
+>>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -21,7 +24,8 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as Navigatio
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
-import com.ssafy.e102.eumgil.feature.search.SearchRoute as SearchScreenRoute
+import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
+import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     composable(route = TopLevelRoute.Map.route) {
@@ -36,7 +40,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(RouteSettingRoute.Setting.createRoute())
             },
             onNavigateToSearch = {
-                navController.navigate(SearchRoute.Search.route)
+                navController.navigate(SearchRoute.Entry.route)
             },
         )
     }
@@ -54,23 +58,65 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
 
     composable(route = TopLevelRoute.MyPage.route) {
         MyPageRoute(
-            onNavigateToMap = {
-                navController.navigateToTopLevel(TopLevelDestination.Map)
+            onNavigateToUserTypePrimary = {
+                navController.navigate(OnboardingRoute.UserTypePrimary.route)
             },
-            onNavigateToSavedRoutes = {
-                navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
+            onNavigateToLogin = {
+                navController.navigate(AuthRoute.Login.route) {
+                    launchSingleTop = true
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        inclusive = true
+                    }
+                }
             },
         )
     }
 
-    composable(route = SearchRoute.Search.route) {
-        SearchScreenRoute(
+    composable(route = SearchRoute.Entry.route) {
+        SearchEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToResults = { query ->
+                navController.navigate(SearchRoute.Results.createRoute(query))
+            },
             onNavigateToRouteSetting = {
+<<<<<<< HEAD
                 navController.navigate(RouteSettingRoute.Setting.createRoute()) {
                     popUpTo(SearchRoute.Search.route) {
+=======
+                navController.navigate(RouteSettingRoute.Setting.route) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
+        )
+    }
+
+    composable(
+        route = SearchRoute.Results.route,
+        arguments =
+            listOf(
+                navArgument(SearchRoute.Results.ARG_QUERY) {
+                    type = NavType.StringType
+                },
+            ),
+    ) { backStackEntry ->
+        SearchResultsRoute(
+            initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToResults = { query ->
+                navController.navigate(SearchRoute.Results.createRoute(query)) {
+                    launchSingleTop = true
+                }
+            },
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.route) {
+                    popUpTo(SearchRoute.Entry.route) {
+>>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
                         inclusive = true
                     }
                 }

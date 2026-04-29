@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
@@ -80,7 +81,7 @@ private fun ShortcutFilterChip(
         onClick = onClick,
         modifier = Modifier.alpha(if (chip.isEnabled) 1f else 0.52f),
         enabled = chip.isEnabled,
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(EumRadius.medium),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),
         shadowElevation = if (selected) 4.dp else 2.dp,
@@ -96,7 +97,7 @@ private fun ShortcutFilterChip(
             Icon(
                 painter = painterResource(id = shortcutFilterIcon(chip.key)),
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(shortcutFilterIconSizeDp(chip.key).dp),
                 tint = contentColor,
             )
             Text(
@@ -125,11 +126,17 @@ private fun shortcutFilterLabel(key: MapShortcutFilterKey): String =
 private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
     when (key) {
         MapShortcutFilterKey.TOILET -> R.drawable.ic_place_restroom
-        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_route_elevator
+        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
         MapShortcutFilterKey.ACCESSIBLE_PARKING -> R.drawable.ic_place_parking
         MapShortcutFilterKey.MORE -> R.drawable.ic_action_more
         MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging
         MapShortcutFilterKey.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         MapShortcutFilterKey.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
         MapShortcutFilterKey.RESTAURANT -> R.drawable.ic_place_restaurant
+    }
+
+internal fun shortcutFilterIconSizeDp(key: MapShortcutFilterKey): Int =
+    when (key) {
+        MapShortcutFilterKey.ELEVATOR -> 18
+        else -> 16
     }

@@ -1,25 +1,23 @@
 package com.ssafy.e102.eumgil.core.designsystem.component.navigation
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -29,7 +27,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.navigation.TopLevelDestination
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 
 @Composable
 fun EumTopLevelTabBar(
@@ -40,6 +38,7 @@ fun EumTopLevelTabBar(
 ) {
     val selectedState = stringResource(id = R.string.a11y_tab_selected)
     val unselectedState = stringResource(id = R.string.a11y_tab_unselected)
+    val layoutSpec = topLevelTabBarLayoutSpec()
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -51,21 +50,12 @@ fun EumTopLevelTabBar(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .selectableGroup()
-                .padding(horizontal = EumSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                .padding(horizontal = layoutSpec.containerHorizontalPaddingDp.dp),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             destinations.forEach { destination ->
                 val selected = destination.route.route == currentRoute
-                val contentColor = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                val indicatorColor = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surface
-                }
+                val contentColor = topLevelTabContentColor(selected = selected)
 
                 Column(
                     modifier = Modifier
@@ -83,29 +73,49 @@ fun EumTopLevelTabBar(
                             }
                         }
                         .testTag("tab_${destination.route.route}")
-                        .padding(vertical = EumSpacing.small),
+                        .padding(vertical = layoutSpec.itemVerticalPaddingDp.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    verticalArrangement = Arrangement.spacedBy(layoutSpec.itemSpacingDp.dp),
                 ) {
-                    Icon(
-                        painter = painterResource(id = destination.iconRes),
+                    Image(
+                        painter = painterResource(id = topLevelTabIconRes(destination, selected)),
                         contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = contentColor,
+                        modifier = Modifier.size(destination.iconSizeDp.dp),
+                        colorFilter = ColorFilter.tint(contentColor),
                     )
                     Text(
                         text = stringResource(id = destination.labelRes),
                         style = MaterialTheme.typography.labelLarge,
                         color = contentColor,
                     )
-                    Box(
-                        modifier = Modifier
-                            .width(28.dp)
-                            .height(2.dp)
-                            .background(color = indicatorColor),
-                    )
                 }
             }
         }
     }
 }
+
+internal data class TopLevelTabBarLayoutSpec(
+    val containerHorizontalPaddingDp: Int,
+    val itemVerticalPaddingDp: Int,
+    val itemSpacingDp: Int,
+)
+
+internal fun topLevelTabBarLayoutSpec(): TopLevelTabBarLayoutSpec =
+    TopLevelTabBarLayoutSpec(
+        containerHorizontalPaddingDp = 12,
+        itemVerticalPaddingDp = 8,
+        itemSpacingDp = 2,
+    )
+
+internal fun topLevelTabIconRes(
+    destination: TopLevelDestination,
+    @Suppress("UNUSED_PARAMETER") selected: Boolean,
+): Int =
+    destination.iconRes
+
+internal fun topLevelTabContentColor(selected: Boolean): Color =
+    if (selected) {
+        EumPrimary600
+    } else {
+        Color(0xFF6B7280)
+    }

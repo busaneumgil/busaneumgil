@@ -12,8 +12,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+<<<<<<< HEAD
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+=======
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+>>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Icon
@@ -173,6 +181,49 @@ private fun NavigationMetricItem(
             color = NavTabInactive,
             textAlign = TextAlign.Center,
         )
+<<<<<<< HEAD
+=======
+    }
+}
+
+@Composable
+private fun NavigationTopBar(onBackClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shadowElevation = 2.dp,
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xxSmall),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            TextButton(onClick = onBackClick) {
+                Text(text = stringResource(id = R.string.navigation_back))
+            }
+            Text(
+                text = stringResource(id = R.string.navigation_screen_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NavigationMapShell(
+    title: String,
+    description: String,
+    mapOverlay: NavigationMapOverlayUiState,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+>>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
         Text(
             text = value,
             fontSize = 56.sp,

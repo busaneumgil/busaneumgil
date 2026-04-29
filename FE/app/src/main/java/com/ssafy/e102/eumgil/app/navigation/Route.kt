@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.net.Uri
+
 sealed interface AppRoute {
     val route: String
 }
@@ -88,8 +90,16 @@ sealed interface LowVisionRoute : AppRoute {
 }
 
 sealed interface SearchRoute : AppRoute {
-    data object Search : SearchRoute {
+    data object Entry : SearchRoute {
         override val route: String = "search"
+    }
+
+    data object Results : SearchRoute {
+        const val ARG_QUERY: String = "query"
+
+        override val route: String = "search/results/{$ARG_QUERY}"
+
+        fun createRoute(query: String): String = "search/results/${Uri.encode(query)}"
     }
 }
 

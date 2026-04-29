@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
@@ -116,6 +117,7 @@ private fun SavedPlaceList(
         ),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
+<<<<<<< HEAD
         itemsIndexed(
             items = places,
             key = { _, place -> place.placeId },
@@ -131,6 +133,18 @@ private fun SavedPlaceList(
                 modifier = Modifier.fillParentMaxHeight(fraction = 0.47f),
             )
         }
+=======
+        Text(
+            text = stringResource(id = R.string.saved_route_screen_title),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+>>>>>>> 59f61941a9ac76389d15a396b877c39b9f389935
     }
 }
 

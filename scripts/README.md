@@ -19,6 +19,8 @@ scripts/
   test/                 # 저장소 규칙과 자동화 검증
   make/
     docker/             # Makefile docker target 구현체
+    ops/                # 운영도구 접속용 Makefile target 구현체
+    terraform/          # Makefile terraform target 구현체
     lib/                # make 스크립트가 공유하는 내부 함수
   docker/
     entrypoints/        # Dockerfile이 이미지 안으로 복사하는 컨테이너 내부 실행 스크립트
@@ -62,6 +64,15 @@ MAKE_DOCKER_SCRIPT_DIR := scripts/make/docker
 local-up:
 	@"$(BASH)" $(MAKE_DOCKER_SCRIPT_DIR)/$@.sh
 ```
+
+Terraform target도 같은 규칙을 따른다.
+예를 들어 `make terraform-prod-plan`은 `scripts/make/terraform/terraform-prod-plan.sh`를 실행한다.
+
+Terraform은 실제 AWS 리소스를 생성/변경할 수 있으므로 Makefile에는 `apply` target을 기본 노출하지 않는다.
+`plan` 결과를 검토하고 승인한 뒤 환경 디렉터리에서 직접 `terraform apply`를 실행한다.
+
+운영도구 중 외부에 직접 공개하지 않는 도구는 `scripts/make/ops/`에 접속 전용 target을 둔다.
+예를 들어 `make portainer-tunnel`은 S1 서버로 SSH 터널을 열고 로컬 `http://localhost:9000`에서 Portainer에 접속하게 한다.
 
 ## 빈 디렉터리
 

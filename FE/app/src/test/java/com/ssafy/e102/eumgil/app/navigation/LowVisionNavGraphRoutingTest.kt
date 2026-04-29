@@ -38,10 +38,33 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `low vision uses dedicated navigation ui only for low vision user type`() {
+        assertEquals(true, shouldUseLowVisionNavigationUi(selectedPrimaryUserType = "low_vision"))
+        assertEquals(false, shouldUseLowVisionNavigationUi(selectedPrimaryUserType = "mobility_impaired"))
+        assertEquals(false, shouldUseLowVisionNavigationUi(selectedPrimaryUserType = null))
+    }
+
+    @Test
     fun `low vision bottom tabs resolve to app destinations`() {
         assertEquals(LowVisionRoute.Home.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.HOME))
-        assertEquals(TopLevelRoute.SavedRoute.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.BOOKMARK))
+        assertEquals(LowVisionRoute.Bookmark.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.BOOKMARK))
         assertEquals(LowVisionRoute.Search.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.CATEGORY))
-        assertEquals(TopLevelRoute.MyPage.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.MY_PAGE))
+        assertEquals(LowVisionRoute.MyPage.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.MY_PAGE))
+    }
+
+    @Test
+    fun `low vision my page actions resolve to concrete destinations`() {
+        assertEquals(
+            OnboardingRoute.ProfileUserTypePrimary.route,
+            resolveLowVisionModeChangeRoute(),
+        )
+        assertEquals(
+            LowVisionRoute.AppInfo.route,
+            resolveLowVisionAppInfoRoute(),
+        )
+        assertEquals(
+            AuthRoute.Login.route,
+            resolveLowVisionLogoutRoute(),
+        )
     }
 }

@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionNavigationScreen
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -25,6 +26,7 @@ fun NavigationRoute(
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
     onNavigateToLowVisionHome: () -> Unit,
+    useLowVisionUi: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -93,11 +95,19 @@ fun NavigationRoute(
         }
     }
 
-    NavigationScreen(
-        uiState = uiState,
-        onAction = viewModel::onAction,
-        modifier = modifier,
-    )
+    if (useLowVisionUi) {
+        LowVisionNavigationScreen(
+            uiState = uiState,
+            onAction = viewModel::onAction,
+            modifier = modifier,
+        )
+    } else {
+        NavigationScreen(
+            uiState = uiState,
+            onAction = viewModel::onAction,
+            modifier = modifier,
+        )
+    }
 }
 
 private fun TextToSpeechAvailability.toNavigationTtsStatus(): NavigationTtsStatus =

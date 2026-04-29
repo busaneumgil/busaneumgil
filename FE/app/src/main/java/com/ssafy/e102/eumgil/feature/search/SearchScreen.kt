@@ -1,469 +1,268 @@
 package com.ssafy.e102.eumgil.feature.search
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
-import com.ssafy.e102.eumgil.R
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.sp
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListAmber
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListBg
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListCard
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListSubText
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListTabBar
+import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilTheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
-import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchResult
 
+/**
+ * 검색 화면 — 다크 테마.
+ *
+ * 상단 제목: "검색 결과"
+ * 검색 입력 필드 → 결과를 카드 목록으로 표시.
+ * LazyColumn 아이템이 뷰포트 높이의 ~47%를 차지하므로 한 화면에 2개가 보이고,
+ * 위아래 스크롤로 추가 장소를 탐색할 수 있습니다.
+ */
 @Composable
 fun SearchScreen(
     uiState: SearchUiState,
     onAction: (SearchUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            SearchTopBar(
-                onBackClick = { onAction(SearchUiAction.BackClicked) },
-            )
-        },
-    ) { innerPadding ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-        ) {
-            SearchQuerySection(
-                uiState = uiState,
-                onAction = onAction,
-            )
-            SearchResultSection(
-                uiState = uiState,
-                onAction = onAction,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SearchTopBar(
-    onBackClick: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xxSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            TextButton(onClick = onBackClick) {
-                Text(text = stringResource(id = R.string.search_screen_back))
-            }
-            Text(
-                text = stringResource(id = R.string.search_screen_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SearchQuerySection(
-    uiState: SearchUiState,
-    onAction: (SearchUiAction) -> Unit,
-) {
-    val supportingText =
-        when (uiState.resultState) {
-            SearchResultUiState.Initial ->
-                stringResource(id = R.string.search_screen_field_support_initial)
-
-            SearchResultUiState.EmptyQuery ->
-                stringResource(id = R.string.search_screen_field_support_empty)
-
-            is SearchResultUiState.Typing ->
-                stringResource(id = R.string.search_screen_field_support_typing)
-
-            else -> stringResource(id = R.string.search_screen_field_support_result)
-        }
-
     Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        modifier = modifier
+            .fillMaxSize()
+            .background(PlaceListBg),
     ) {
+        // ── 제목 ──────────────────────────────────────────────────────────────
+        Text(
+            text = "검색 결과",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = PlaceListAmber,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
+        )
+
+        // ── 검색 입력창 ────────────────────────────────────────────────────────
         OutlinedTextField(
             value = uiState.query,
             onValueChange = { onAction(SearchUiAction.QueryChanged(query = it)) },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(text = stringResource(id = R.string.search_screen_query_label)) },
-            placeholder = { Text(text = stringResource(id = R.string.search_screen_query_placeholder)) },
-            singleLine = true,
-            isError = uiState.resultState is SearchResultUiState.EmptyQuery,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions =
-                KeyboardActions(
-                    onSearch = { onAction(SearchUiAction.SearchSubmitted) },
-                ),
-            supportingText = {
-                Text(text = supportingText)
-            },
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            OutlinedButton(
-                onClick = { onAction(SearchUiAction.ClearQueryClicked) },
-                enabled = uiState.query.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(text = stringResource(id = R.string.search_screen_clear_query))
-            }
-
-            Button(
-                onClick = { onAction(SearchUiAction.SearchSubmitted) },
-                enabled = uiState.query.isNotBlank(),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(text = stringResource(id = R.string.search_screen_submit))
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchResultSection(
-    uiState: SearchUiState,
-    onAction: (SearchUiAction) -> Unit,
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-    ) {
-        Text(
-            text = stringResource(id = R.string.search_screen_result_section_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        when (val resultState = uiState.resultState) {
-            SearchResultUiState.Initial -> {
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_initial_title),
-                    description = stringResource(id = R.string.search_screen_initial_description),
-                )
-                RecentSearchSection(
-                    recentSearches = uiState.recentSearches,
-                    onAction = onAction,
-                )
-            }
-
-            SearchResultUiState.EmptyQuery -> {
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_empty_query_title),
-                    description = stringResource(id = R.string.search_screen_empty_query_description),
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
-                )
-                RecentSearchSection(
-                    recentSearches = uiState.recentSearches,
-                    onAction = onAction,
-                )
-            }
-
-            is SearchResultUiState.Typing -> {
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_typing_title, resultState.query),
-                    description = stringResource(id = R.string.search_screen_typing_description),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
-                )
-                SearchResultShellList(query = resultState.query)
-                RecentSearchSection(
-                    recentSearches = uiState.recentSearches,
-                    onAction = onAction,
-                )
-            }
-
-            is SearchResultUiState.Loading ->
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
-                    description = stringResource(id = R.string.search_screen_loading_description),
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
-                )
-
-            is SearchResultUiState.Success -> {
-                SearchStateCard(
-                    title =
-                        stringResource(
-                            id = R.string.search_screen_success_title,
-                            resultState.query,
-                            resultState.results.size,
-                        ),
-                    description = stringResource(id = R.string.search_screen_success_description),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
-                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
-                )
-                resultState.results.forEach { result ->
-                    SearchResultItem(
-                        result = result,
-                        onClick = {
-                            onAction(SearchUiAction.SearchResultClicked(result = result))
-                        },
-                    )
-                }
-            }
-
-            is SearchResultUiState.Empty -> {
-                SearchStateCard(
-                    title =
-                        stringResource(
-                            id = R.string.search_screen_empty_result_title,
-                            resultState.query,
-                        ),
-                    description = stringResource(id = R.string.search_screen_empty_result_description),
-                )
-                RecentSearchSection(
-                    recentSearches = uiState.recentSearches,
-                    onAction = onAction,
-                )
-            }
-
-            is SearchResultUiState.Error -> {
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_error_title),
-                    description = stringResource(id = R.string.search_screen_error_description),
-                    supportingText = resultState.message,
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
-                )
-                RecentSearchSection(
-                    recentSearches = uiState.recentSearches,
-                    onAction = onAction,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchResultShellList(
-    query: String,
-) {
-    repeat(2) { index ->
-        SearchStateCard(
-            title = stringResource(id = R.string.search_screen_shell_slot_title, index + 1),
-            description =
-                stringResource(
-                    id = R.string.search_screen_shell_item_description,
-                    query,
-                ),
-            supportingText = stringResource(id = R.string.search_screen_shell_item_supporting),
-            containerColor = MaterialTheme.colorScheme.surface,
-            borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
-        )
-    }
-}
-
-@Composable
-private fun RecentSearchSection(
-    recentSearches: List<RecentSearch>,
-    onAction: (SearchUiAction) -> Unit,
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-    ) {
-        Text(
-            text = stringResource(id = R.string.search_screen_recent_section_title),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        if (recentSearches.isEmpty()) {
-            SearchStateCard(
-                title = stringResource(id = R.string.search_screen_recent_section_title),
-                description = stringResource(id = R.string.search_screen_recent_empty),
-            )
-        } else {
-            recentSearches.forEach { recentSearch ->
-                OutlinedButton(
-                    onClick = {
-                        onAction(
-                            SearchUiAction.RecentSearchClicked(
-                                keyword = recentSearch.keyword,
-                            ),
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(text = recentSearch.keyword)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchResultItem(
-    result: SearchResult,
-    onClick: () -> Unit,
-) {
-    val actionLabel = stringResource(id = R.string.search_screen_result_action_label)
-    val selectableStateDescription = stringResource(id = R.string.search_screen_result_selectable)
-    val accessibilityDescription =
-        if (result.subtitle.isBlank()) {
-            stringResource(
-                id = R.string.search_screen_result_a11y_without_address,
-                result.title,
-            )
-        } else {
-            stringResource(
-                id = R.string.search_screen_result_a11y_with_address,
-                result.title,
-                result.subtitle,
-            )
-        }
-
-    Surface(
-        modifier =
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .clickable(
-                    role = Role.Button,
-                    onClickLabel = actionLabel,
-                    onClick = onClick,
-                ).semantics(mergeDescendants = true) {
-                    contentDescription = accessibilityDescription
-                    stateDescription = selectableStateDescription
-                },
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
-        shadowElevation = 2.dp,
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                .padding(horizontal = EumSpacing.medium),
+            placeholder = {
+                Text(
+                    text = "장소를 입력하세요",
+                    color = PlaceListSubText,
+                    fontSize = 16.sp,
+                )
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+            ),
+            shape = RoundedCornerShape(EumRadius.large),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = PlaceListAmber,
+                unfocusedBorderColor = PlaceListAmber.copy(alpha = 0.5f),
+                cursorColor = PlaceListAmber,
+            ),
+        )
+
+        // ── 결과 영역 ──────────────────────────────────────────────────────────
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
         ) {
-            Text(
-                text = result.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = result.subtitle,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text =
-                    stringResource(
-                        id = R.string.search_screen_result_coordinates,
-                        result.latitude,
-                        result.longitude,
-                    ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(id = R.string.search_screen_result_id, result.placeId),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+            when (val state = uiState.resultState) {
+                SearchResultUiState.Initial,
+                SearchResultUiState.EmptyQuery -> SearchEmptyStateMessage(
+                    message = "검색어를 입력하고\n결과를 확인해보세요",
+                )
+
+                is SearchResultUiState.Typing -> SearchEmptyStateMessage(
+                    message = "검색 버튼을 눌러\n결과를 확인하세요",
+                )
+
+                is SearchResultUiState.Loading -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = PlaceListAmber)
+                    }
+                }
+
+                is SearchResultUiState.Success -> {
+                    if (state.results.isEmpty()) {
+                        SearchEmptyStateMessage(message = "'${state.query}'\n검색 결과가 없습니다")
+                    } else {
+                        SearchResultList(
+                            results = state.results,
+                            onBookmarkClick = { result ->
+                                onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+                            },
+                            onNavigateClick = { result ->
+                                onAction(SearchUiAction.SearchResultClicked(result = result))
+                            },
+                        )
+                    }
+                }
+
+                is SearchResultUiState.Empty -> SearchEmptyStateMessage(
+                    message = "'${state.query}'\n검색 결과가 없습니다",
+                )
+
+                is SearchResultUiState.Error -> SearchEmptyStateMessage(
+                    message = "검색 중 오류가 발생했습니다\n다시 시도해주세요",
+                    isError = true,
+                )
+            }
+        }
+
+        // ── 하단 탭 바 ─────────────────────────────────────────────────────────
+        PlaceListTabBar(
+            activeTab = "home",
+            onHomeClick = { onAction(SearchUiAction.BackClicked) },
+            onBookmarkClick = {},
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+// ── 검색 결과 LazyColumn ───────────────────────────────────────────────────────
+
+@Composable
+private fun SearchResultList(
+    results: List<SearchResult>,
+    onBookmarkClick: (SearchResult) -> Unit,
+    onNavigateClick: (SearchResult) -> Unit,
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(
+            horizontal = EumSpacing.medium,
+            vertical = EumSpacing.medium,
+        ),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        itemsIndexed(
+            items = results,
+            key = { _, result -> result.placeId },
+        ) { index, result ->
+            PlaceListCard(
+                index = index + 1,
+                name = result.title,
+                address = result.subtitle.ifBlank { null },
+                bookmarkLabel = "북마크",
+                onBookmarkClick = { onBookmarkClick(result) },
+                onNavigateClick = { onNavigateClick(result) },
+                // 한 뷰포트에 2개가 보이도록 각 카드 높이를 전체의 절반으로 고정
+                modifier = Modifier.fillParentMaxHeight(fraction = 0.47f),
             )
         }
     }
 }
 
-@Composable
-private fun SearchStateCard(
-    title: String,
-    description: String,
-    modifier: Modifier = Modifier,
-    supportingText: String? = null,
-    containerColor: Color = Color.Unspecified,
-    borderColor: Color = Color.Unspecified,
-) {
-    val resolvedContainerColor =
-        if (containerColor == Color.Unspecified) {
-            MaterialTheme.colorScheme.surface
-        } else {
-            containerColor
-        }
-    val resolvedBorderColor =
-        if (borderColor == Color.Unspecified) {
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)
-        } else {
-            borderColor
-        }
+// ── 빈 / 오류 상태 메시지 ─────────────────────────────────────────────────────
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
-        color = resolvedContainerColor,
-        border = BorderStroke(1.dp, resolvedBorderColor),
-        shadowElevation = 2.dp,
+@Composable
+private fun SearchEmptyStateMessage(
+    message: String,
+    isError: Boolean = false,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (!supportingText.isNullOrBlank()) {
-                Text(
-                    text = supportingText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        Text(
+            text = message,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isError) Color(0xFFFF6B6B) else PlaceListSubText,
+            textAlign = TextAlign.Center,
+            lineHeight = 30.sp,
+        )
+    }
+}
+
+// ── 프리뷰 ────────────────────────────────────────────────────────────────────
+
+@Preview(
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 800,
+    backgroundColor = 0xFF1C1C1E,
+    name = "Search — 결과 있음",
+)
+@Composable
+private fun SearchScreenSuccessPreview() {
+    BusanEumgilTheme {
+        SearchScreen(
+            uiState = SearchUiState(
+                query = "해운대",
+                resultState = SearchResultUiState.Success(
+                    query = "해운대",
+                    results = listOf(
+                        SearchResult(
+                            placeId = "1",
+                            title = "해운대역\n공공화장실",
+                            subtitle = "해운대구",
+                            latitude = 35.163,
+                            longitude = 129.163,
+                        ),
+                        SearchResult(
+                            placeId = "2",
+                            title = "해운대구\n보건소",
+                            subtitle = "해운대구",
+                            latitude = 35.160,
+                            longitude = 129.160,
+                        ),
+                    ),
+                ),
+            ),
+            onAction = {},
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 800,
+    backgroundColor = 0xFF1C1C1E,
+    name = "Search — 초기 상태",
+)
+@Composable
+private fun SearchScreenInitialPreview() {
+    BusanEumgilTheme {
+        SearchScreen(
+            uiState = SearchUiState(),
+            onAction = {},
+        )
     }
 }

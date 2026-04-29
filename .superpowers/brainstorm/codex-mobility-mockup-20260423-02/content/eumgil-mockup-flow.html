@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>부산이음길 목업 흐름</title>
+  <style>
+    :root {
+      --primary: #0f4c81;
+      --primary-pressed: #0b3a63;
+      --ink: #111827;
+      --slate: #374151;
+      --muted: #f4f6f8;
+      --border: #d6dbe1;
+      --amber: #f2b705;
+      --amber-soft: #fff4cc;
+      --success: #168a4a;
+      --danger: #c53030;
+      --orange: #e2761b;
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --shadow: 0 18px 40px rgba(15, 76, 129, 0.12);
+      --r-lg: 20px;
+      --r-md: 16px;
+      --r-sm: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .page {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 40px 24px 72px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 32px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border: 1px solid rgba(15, 76, 129, 0.18);
+      background: #eef5fb;
+      color: var(--primary);
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.14;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin: 12px 0 0;
+      max-width: 840px;
+      color: var(--slate);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(3, max-content);
+      gap: 10px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: var(--surface);
+      box-shadow: 0 6px 18px rgba(17, 24, 39, 0.06);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--slate);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--primary);
+    }
+
+    .dot.visual { background: var(--ink); }
+    .dot.mobility { background: var(--success); }
+    .dot.route { background: var(--orange); }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: baseline;
+      margin: 34px 0 18px;
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.25;
+    }
+
+    .section-note {
+      color: var(--slate);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 560px;
+      text-align: right;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(286px, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+
+    .flow-card {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: var(--r-lg);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+    }
+
+    .flow-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(15, 76, 129, 0.55);
+      box-shadow: 0 24px 48px rgba(15, 76, 129, 0.17);
+    }
+
+    .flow-card.selected {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.14), var(--shadow);
+    }
+
+    .flow-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .step-badge {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .mode-label {
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .phone {
+      width: 100%;
+      max-width: 310px;
+      height: 640px;
+      margin: 0 auto;
+      border: 1px solid #cfd5df;
+      border-radius: 28px;
+      background: #fff;
+      overflow: hidden;
+      position: relative;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+    }
+
+    .phone.compact { height: 560px; }
+    .phone.dark { background: #111827; color: #fff; }
+
+    .status {
+      height: 30px;
+      padding: 8px 16px 0;
+      display: flex;
+      justify-content: space-between;
+      color: currentColor;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .bar {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .bar.dark {
+      background: #111827;
+      border-bottom-color: #1f2937;
+      color: #fff;
+    }
+
+    .bar-title {
+      flex: 1;
+      text-align: center;
+      color: var(--primary);
+      font-weight: 900;
+      font-size: 19px;
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-weight: 900;
+      color: var(--primary);
+      background: transparent;
+    }
+
+    .content {
+      padding: 18px;
+      height: calc(100% - 86px);
+      overflow: hidden;
+    }
+
+    .content.scroll {
+      overflow: auto;
+      scrollbar-width: none;
+    }
+
+    .content.scroll::-webkit-scrollbar { display: none; }
+
+    .headline {
+      font-size: 25px;
+      line-height: 1.25;
+      font-weight: 850;
+      margin: 0 0 8px;
+    }
+
+    .copy {
+      color: var(--slate);
+      font-size: 14px;
+      line-height: 1.55;
+      margin: 0;
+    }
+
+    .dark .copy { color: #d1d5db; }
+
+    .choice-stack {
+      display: grid;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .large-choice {
+      min-height: 150px;
+      border: 2px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: #fff;
+    }
+
+    .dark .large-choice {
+      background: #171d28;
+      border-color: #334155;
+    }
+
+    .large-choice.active {
+      border-color: var(--primary);
+      background: #eef5fb;
+    }
+
+    .large-choice.visual {
+      min-height: 184px;
+      background: #0f172a;
+      border-color: #1d4ed8;
+      color: #fff;
+    }
+
+    .choice-icon {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 900;
+      font-size: 24px;
+    }
+
+    .choice-icon.black { background: #fff; color: #111827; }
+    .choice-icon.green { background: var(--success); }
+    .choice-icon.amber { background: var(--amber); color: var(--ink); }
+
+    .choice-title {
+      font-size: 21px;
+      line-height: 1.25;
+      font-weight: 850;
+      margin: 14px 0 4px;
+    }
+
+    .choice-desc {
+      color: var(--slate);
+      font-size: 13px;
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    .visual .choice-desc, .dark .choice-desc { color: #d1d5db; }
+
+    .primary-btn {
+      width: 100%;
+      min-height: 52px;
+      border: 0;
+      border-radius: var(--r-md);
+      background: var(--primary);
+      color: #fff;
+      font-weight: 850;
+      font-size: 16px;
+      display: grid;
+      place-items: center;
+    }
+
+    .primary-btn.green { background: var(--success); }
+    .primary-btn.black { background: #111827; }
+
+    .bottom-fixed {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+    }
+
+    .progress {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 22px;
+    }
+
+    .progress-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .track {
+      height: 8px;
+      background: var(--muted);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      width: 33%;
+      background: var(--primary);
+      border-radius: 999px;
+    }
+
+    .fill.two { width: 66%; }
+    .fill.full { width: 100%; }
+
+    .terms-box {
+      min-height: 300px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 18px;
+      background: #fff;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+    }
+
+    .terms-box h3 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .terms-row {
+      padding: 13px;
+      border-radius: var(--r-sm);
+      background: var(--muted);
+      color: var(--slate);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .checkbox-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 14px;
+      border: 1px solid var(--primary);
+      border-radius: var(--r-md);
+      background: #eef5fb;
+      margin-top: 18px;
+      font-weight: 800;
+    }
+
+    .check {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      font-size: 14px;
+    }
+
+    .voice-card {
+      height: 144px;
+      border-radius: var(--r-lg);
+      background: #111827;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      margin: 12px 0 18px;
+      border: 1px solid #2d3748;
+    }
+
+    .voice-orb {
+      width: 82px;
+      height: 82px;
+      border-radius: 999px;
+      background: #fff;
+      color: #111827;
+      display: grid;
+      place-items: center;
+      font-size: 34px;
+      font-weight: 900;
+      margin: 0 auto 12px;
+    }
+
+    .saved-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .list-row {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: #fff;
+    }
+
+    .row-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: #eef5fb;
+      color: var(--primary);
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+    }
+
+    .row-title {
+      font-weight: 850;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .row-sub {
+      color: var(--slate);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .tabs {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 76px;
+      border-top: 1px solid var(--border);
+      background: #fff;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 8px 10px 10px;
+    }
+
+    .tabs.four { grid-template-columns: repeat(4, 1fr); }
+
+    .tab {
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 4px;
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .tab.active { color: var(--primary); }
+
+    .tab-mark {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      background: currentColor;
+      opacity: 0.22;
+    }
+
+    .category-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .category-tile {
+      min-height: 112px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 14px;
+      background: #fff;
+      display: grid;
+      align-content: space-between;
+    }
+
+    .tile-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: #eef5fb;
+      color: var(--primary);
+      font-weight: 900;
+    }
+
+    .map {
+      position: absolute;
+      inset: 86px 0 76px;
+      background:
+        linear-gradient(35deg, transparent 48%, rgba(15, 76, 129, 0.22) 49%, rgba(15, 76, 129, 0.22) 51%, transparent 52%),
+        linear-gradient(-25deg, transparent 44%, rgba(22, 138, 74, 0.18) 45%, rgba(22, 138, 74, 0.18) 47%, transparent 48%),
+        repeating-linear-gradient(0deg, #eef2f6 0, #eef2f6 42px, #e3e8ef 43px, #e3e8ef 45px),
+        repeating-linear-gradient(90deg, transparent 0, transparent 54px, rgba(207, 213, 223, 0.85) 55px, rgba(207, 213, 223, 0.85) 57px);
+      overflow: hidden;
+    }
+
+    .route-line {
+      position: absolute;
+      left: 84px;
+      top: 150px;
+      width: 154px;
+      height: 184px;
+      border-left: 7px solid #1769e0;
+      border-bottom: 7px solid #1769e0;
+      border-radius: 0 0 0 44px;
+      transform: rotate(-14deg);
+    }
+
+    .pin {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-radius: 50% 50% 50% 4px;
+      background: var(--primary);
+      transform: rotate(-45deg);
+      box-shadow: 0 8px 18px rgba(15, 76, 129, 0.28);
+    }
+
+    .pin::after {
+      content: "";
+      position: absolute;
+      inset: 9px;
+      background: #fff;
+      border-radius: 999px;
+    }
+
+    .pin.one { left: 70px; top: 180px; }
+    .pin.two { right: 62px; top: 280px; background: var(--danger); }
+    .pin.three { right: 92px; top: 170px; background: var(--success); }
+
+    .map-top {
+      position: absolute;
+      z-index: 2;
+      left: 14px;
+      right: 14px;
+      top: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .search-pill {
+      height: 52px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      background: rgba(255, 255, 255, 0.96);
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      box-shadow: 0 8px 20px rgba(17, 24, 39, 0.08);
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .chip {
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 76, 129, 0.24);
+      background: #fff;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 800;
+      box-shadow: 0 5px 12px rgba(17, 24, 39, 0.06);
+    }
+
+    .chip.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .floating-stack {
+      position: absolute;
+      right: 14px;
+      bottom: 92px;
+      display: grid;
+      gap: 10px;
+      z-index: 2;
+    }
+
+    .float-btn {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--primary);
+      font-weight: 900;
+      box-shadow: 0 8px 18px rgba(17, 24, 39, 0.12);
+    }
+
+    .bottom-sheet {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 88px;
+      z-index: 3;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.98);
+      padding: 16px;
+      box-shadow: 0 -8px 24px rgba(17, 24, 39, 0.1);
+    }
+
+    .sheet-grab {
+      width: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: #c9d0dc;
+      margin: 0 auto 12px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .metric {
+      background: var(--muted);
+      border-radius: var(--r-sm);
+      padding: 10px;
+      text-align: center;
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--primary);
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+
+    .metric span {
+      color: var(--slate);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .banner {
+      min-height: 112px;
+      border-radius: var(--r-lg);
+      background: linear-gradient(135deg, rgba(15, 76, 129, 0.98), rgba(22, 138, 74, 0.9));
+      color: #fff;
+      padding: 18px;
+      display: grid;
+      align-content: center;
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .small-tag {
+      display: inline-flex;
+      align-items: center;
+      width: max-content;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #eef5fb;
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .tag-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 7px;
+    }
+
+    .tag {
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: var(--amber-soft);
+      color: #6c4d00;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .confirm-card {
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 18px;
+      background: #fff;
+      margin-top: 20px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .info-line {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 9px 0;
+      border-bottom: 1px solid #edf0f4;
+      color: var(--slate);
+      font-size: 13px;
+      line-height: 1.42;
+    }
+
+    .info-line:last-child { border-bottom: 0; }
+
+    .route-summary {
+      padding: 14px;
+      border: 1px solid rgba(15, 76, 129, 0.26);
+      border-radius: var(--r-lg);
+      background: #eef5fb;
+      margin-bottom: 12px;
+    }
+
+    .warning-card {
+      border: 1px solid rgba(226, 118, 27, 0.4);
+      background: #fff7ed;
+      border-radius: var(--r-md);
+      padding: 13px;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      font-size: 13px;
+      color: #7c3d12;
+      line-height: 1.4;
+      margin-top: 10px;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .report-type {
+      min-height: 88px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 11px;
+      background: #fff;
+      display: grid;
+      align-content: space-between;
+      font-weight: 850;
+      font-size: 13px;
+    }
+
+    .report-type strong {
+      color: var(--orange);
+      font-size: 18px;
+    }
+
+    .flow-caption {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .flow-caption h3 {
+      margin: 0 0 6px;
+      font-size: 17px;
+    }
+
+    .flow-caption p {
+      margin: 0;
+      color: var(--slate);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .indicator {
+      position: sticky;
+      bottom: 14px;
+      z-index: 10;
+      margin: 28px auto 0;
+      width: max-content;
+      max-width: calc(100vw - 36px);
+      padding: 12px 16px;
+      border: 1px solid rgba(15, 76, 129, 0.24);
+      background: rgba(255, 255, 255, 0.96);
+      border-radius: 999px;
+      color: var(--slate);
+      box-shadow: 0 12px 28px rgba(17, 24, 39, 0.12);
+      font-size: 13px;
+      font-weight: 750;
+      text-align: center;
+    }
+
+    .selected-text { color: var(--primary); font-weight: 900; }
+
+    @media (max-width: 860px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .legend {
+        grid-template-columns: 1fr;
+        width: 100%;
+      }
+
+      h1 { font-size: 32px; }
+
+      .section-title {
+        display: block;
+      }
+
+      .section-note {
+        text-align: left;
+        margin-top: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Busan EumGil Mockup Board</div>
+        <h1>부산이음길 신규 화면 흐름 목업</h1>
+        <p class="subtitle">
+          첨부된 스티치/피그마 흐름과 현재 Compose 디자인 토큰을 기준으로, 온보딩부터 시각장애 홈, 보행약자 지도, 목적지 설정, 경로 탐색, 제보까지 한 번에 검토할 수 있는 화면 보드입니다.
+        </p>
+      </div>
+      <div class="legend">
+        <span><i class="dot visual"></i>시각장애 모드</span>
+        <span><i class="dot mobility"></i>보행약자 모드</span>
+        <span><i class="dot route"></i>경로/제보 흐름</span>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>1. 온보딩 / 약관</h2>
+        <p class="section-note">시각장애 사용자는 TalkBack 사용을 전제로 큰 버튼과 명확한 선택 문구를 우선합니다. 약관은 한 페이지에 하나씩 보여 피로도를 낮춥니다.</p>
+      </div>
+      <div class="board cards">
+        <article class="flow-card card" data-choice="onboarding-type" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">01</span>
+            <span class="mode-label">USER TYPE</span>
+          </div>
+          <div class="phone compact dark">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="content">
+              <p class="headline">본인에게 맞는<br />사용자 유형을<br />선택해주세요.</p>
+              <p class="copy">선택에 따라 홈 화면과 길 안내 방식이 달라집니다.</p>
+              <div class="choice-stack">
+                <div class="large-choice visual">
+                  <div>
+                    <div class="choice-icon black">V</div>
+                    <p class="choice-title">시각장애인</p>
+                    <p class="choice-desc">음성 검색, 저장 장소, 큰 터치 영역 중심</p>
+                  </div>
+                  <strong>스크린 리더 모드 시작</strong>
+                </div>
+                <div class="large-choice">
+                  <div>
+                    <div class="choice-icon green">M</div>
+                    <p class="choice-title">보행약자</p>
+                    <p class="choice-desc">지도, 무장애 시설, 경로 탐색 중심</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flow-caption">
+            <h3>상하 2분할 선택</h3>
+            <p>첫 화면은 선택지를 두 개로만 제한하고, 각 버튼이 화면의 주요 면적을 차지하도록 설계했습니다.</p>
+          </div>
+        </article>
+
+        <article class="flow-card card" data-choice="mobility-kind" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">02</span>
+            <span class="mode-label">MOBILITY TYPE</span>
+          </div>
+          <div class="phone compact">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="content">
+              <div class="progress">
+                <div class="progress-row"><span>2 / 4 단계</span><span>보행 유형</span></div>
+                <div class="track"><div class="fill two"></div></div>
+              </div>
+              <p class="headline">이동 방식을<br />선택해주세요.</p>
+              <p class="copy">경사도, 엘리베이터, 단차 안내 우선순위를 맞춥니다.</p>
+              <div class="choice-stack">
+                <div class="large-choice active">
+                  <div class="choice-icon">E</div>
+                  <p class="choice-title">휠체어 (전동)</p>
+                  <p class="choice-desc">충전소와 엘리베이터 정보를 함께 강조</p>
+                </div>
+                <div class="large-choice">
+                  <div class="choice-icon">W</div>
+                  <p class="choice-title">휠체어 (수동)</p>
+                  <p class="choice-desc">경사도 낮은 길, 단차 회피 우선</p>
+                </div>
+                <div class="large-choice">
+                  <div class="choice-icon amber">S</div>
+                  <p class="choice-title">보행약자</p>
+                  <p class="choice-desc">짧은 동선과 휴식 가능 지점 우선</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flow-caption">
+            <h3>보행약자 전용 2차 온보딩</h3>
+            <p>시각장애 흐름에는 노출하지 않고, 보행약자 선택 이후에만 세부 유형을 묻습니다.</p>
+          </div>
+        </article>
+
+        <article class="flow-card card" data-choice="terms-single" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">03</span>
+            <span class="mode-label">TERMS</span>
+          </div>
+          <div class="phone compact">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="content">
+              <div class="progress">
+                <div class="progress-row"><span>3 / 4 단계</span><span>약관 동의</span></div>
+                <div class="track"><div class="fill full"></div></div>
+              </div>
+              <p class="headline">위치정보 이용에<br />동의해주세요.</p>
+              <p class="copy">내 위치를 앱에서 사용해 현재 위치 표시와 길 안내를 제공합니다.</p>
+              <div class="terms-box">
+                <span class="small-tag">필수 약관</span>
+                <h3>위치정보 이용 동의</h3>
+                <div class="terms-row">수집 항목: 현재 위치 좌표, 접근성 설정, 기기 권한 상태</div>
+                <div class="terms-row">이용 목적: 지도 중심 이동, 주변 시설 표시, 길 안내 시작, 제보 위치 입력</div>
+                <div class="terms-row">보관 방식: 기기 로컬 저장소에 설정값만 보관</div>
+              </div>
+              <div class="checkbox-row">
+                <span class="check">✓</span>
+                <span>위 내용을 확인했고 동의합니다.</span>
+              </div>
+            </div>
+            <div class="bottom-fixed"><div class="primary-btn">동의하고 시작하기</div></div>
+          </div>
+          <div class="flow-caption">
+            <h3>한 페이지 한 약관</h3>
+            <p>“데이터 수집”과 “지도 위치 권한”을 같은 화면에 섞지 않고, 진행도 체크바로 남은 단계를 예측하게 합니다.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>2. 시각장애 모드</h2>
+        <p class="section-note">홈은 음성 검색과 저장 장소 리스트만 남겨 탐색 복잡도를 낮추고, 카테고리는 보행약자 필터와 같은 데이터를 큰 버튼 리스트로 재사용합니다.</p>
+      </div>
+      <div class="board cards">
+        <article class="flow-card card" data-choice="visual-home" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">04</span>
+            <span class="mode-label">VISUAL HOME</span>
+          </div>
+          <div class="phone">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="bar">
+              <span class="icon-btn">≡</span>
+              <span class="bar-title">부산이음길</span>
+              <span class="icon-btn">?</span>
+            </div>
+            <div class="content scroll" style="height: calc(100% - 162px);">
+              <p class="headline">어디로<br />안내할까요?</p>
+              <p class="copy">상단 버튼을 누르면 음성 검색이 시작됩니다.</p>
+              <div class="voice-card">
+                <div>
+                  <div class="voice-orb">음</div>
+                  <strong>음성으로 목적지 검색</strong>
+                </div>
+              </div>
+              <h3 style="margin: 0 0 10px; font-size: 17px;">저장된 장소</h3>
+              <div class="saved-list">
+                <div class="list-row">
+                  <span class="row-icon">집</span>
+                  <div><div class="row-title">우리집</div><div class="row-sub">부산진구 중앙대로</div></div>
+                  <strong>›</strong>
+                </div>
+                <div class="list-row">
+                  <span class="row-icon">병</span>
+                  <div><div class="row-title">부산의료원</div><div class="row-sub">엘리베이터 있음</div></div>
+                  <strong>›</strong>
+                </div>
+                <div class="list-row">
+                  <span class="row-icon">역</span>
+                  <div><div class="row-title">부산역</div><div class="row-sub">점자블록 안내 가능</div></div>
+                  <strong>›</strong>
+                </div>
+              </div>
+            </div>
+            <nav class="tabs">
+              <div class="tab"><span class="tab-mark"></span>카테고리</div>
+              <div class="tab active"><span class="tab-mark"></span>홈</div>
+              <div class="tab"><span class="tab-mark"></span>마이</div>
+            </nav>
+          </div>
+          <div class="flow-caption">
+            <h3>음성 검색 상단, 저장 장소 하단</h3>
+            <p>저장 장소 개수는 제한하지 않고 리스트로 확장됩니다. 하단 네브바는 카테고리, 홈, 마이페이지 3개만 둡니다.</p>
+          </div>
+        </article>
+
+        <article class="flow-card card" data-choice="visual-category" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">05</span>
+            <span class="mode-label">CATEGORY</span>
+          </div>
+          <div class="phone">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="bar">
+              <span class="icon-btn">‹</span>
+              <span class="bar-title">카테고리</span>
+              <span class="icon-btn">음</span>
+            </div>
+            <div class="content scroll" style="height: calc(100% - 162px);">
+              <p class="headline">무엇을<br />찾을까요?</p>
+              <p class="copy">선택하면 현재 위치 기준 가까운 장소가 목록으로 표시됩니다.</p>
+              <div class="category-grid">
+                <div class="category-tile">
+                  <span class="tile-icon">화</span>
+                  <strong>장애인<br />화장실</strong>
+                </div>
+                <div class="category-tile">
+                  <span class="tile-icon">엘</span>
+                  <strong>엘리베이터</strong>
+                </div>
+                <div class="category-tile">
+                  <span class="tile-icon">식</span>
+                  <strong>음식점</strong>
+                </div>
+                <div class="category-tile">
+                  <span class="tile-icon">충</span>
+                  <strong>전동휠체어<br />충전소</strong>
+                </div>
+              </div>
+              <h3 style="margin: 20px 0 10px; font-size: 17px;">화장실 주변 결과</h3>
+              <div class="saved-list">
+                <div class="list-row">
+                  <span class="row-icon">1</span>
+                  <div><div class="row-title">부산시청 1층</div><div class="row-sub">230m · 자동문 · 넓은 회전 공간</div></div>
+                  <strong>›</strong>
+                </div>
+                <div class="list-row">
+                  <span class="row-icon">2</span>
+                  <div><div class="row-title">연제구청 별관</div><div class="row-sub">410m · 엘리베이터 연결</div></div>
+                  <strong>›</strong>
+                </div>
+              </div>
+            </div>
+            <nav class="tabs">
+              <div class="tab active"><span class="tab-mark"></span>카테고리</div>
+              <div class="tab"><span class="tab-mark"></span>홈</div>
+              <div class="tab"><span class="tab-mark"></span>마이</div>
+            </nav>
+          </div>
+          <div class="flow-caption">
+            <h3>보행약자 필터의 리스트형 변환</h3>
+            <p>같은 시설 카테고리를 지도 칩이 아니라 큰 버튼과 주변 장소 목록으로 보여줍니다.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>3. 보행약자 지도 / 검색 / 경로</h2>
+        <p class="section-note">지도 중심 홈에 검색, 음성, 길찾기 진입을 상단에 모으고, 필터와 현재 위치 버튼을 오른쪽 액션으로 유지합니다.</p>
+      </div>
+      <div class="board cards">
+        <article class="flow-card card" data-choice="mobility-map" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">06</span>
+            <span class="mode-label">MAP HOME</span>
+          </div>
+          <div class="phone">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="map">
+              <div class="route-line"></div>
+              <span class="pin one"></span>
+              <span class="pin two"></span>
+              <span class="pin three"></span>
+              <div class="map-top">
+                <div class="search-pill">
+                  <strong>⌕</strong>
+                  <span style="color: var(--slate); font-weight: 750;">검색 / 음성 / 길찾기</span>
+                  <strong style="color: var(--primary);">음</strong>
+                </div>
+                <div class="filter-row">
+                  <span class="chip active">전체</span>
+                  <span class="chip">화장실</span>
+                  <span class="chip">엘리베이터</span>
+                  <span class="chip">충전소</span>
+                </div>
+              </div>
+              <div class="floating-stack">
+                <span class="float-btn">현</span>
+                <span class="float-btn">층</span>
+                <span class="float-btn">＋</span>
+              </div>
+              <div class="bottom-sheet">
+                <div class="sheet-grab"></div>
+                <span class="small-tag">내 위치 주변</span>
+                <h3 style="margin: 8px 0 4px;">접근 가능한 시설 12곳</h3>
+                <p class="copy">현재 위치를 실시간으로 따라가며 진행 방향을 표시합니다.</p>
+              </div>
+            </div>
+            <nav class="tabs four">
+              <div class="tab active"><span class="tab-mark"></span>홈</div>
+              <div class="tab"><span class="tab-mark"></span>북마크</div>
+              <div class="tab"><span class="tab-mark"></span>제보</div>
+              <div class="tab"><span class="tab-mark"></span>마이</div>
+            </nav>
+          </div>
+          <div class="flow-caption">
+            <h3>지도 홈의 기본 구조</h3>
+            <p>오른쪽에는 현재 위치, 레이어, 확대 액션을 배치합니다. 하단 네브바는 홈, 북마크, 제보, 마이페이지입니다.</p>
+          </div>
+        </article>
+
+        <article class="flow-card card" data-choice="destination-search" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">07</span>
+            <span class="mode-label">DESTINATION</span>
+          </div>
+          <div class="phone">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="bar">
+              <span class="icon-btn">‹</span>
+              <span class="bar-title">목적지 설정</span>
+              <span class="icon-btn">음</span>
+            </div>
+            <div class="content scroll">
+              <p class="headline">어디로<br />가시나요?</p>
+              <div class="search-pill" style="margin: 16px 0; box-shadow: none;">
+                <strong>⌕</strong>
+                <span style="color: var(--slate);">장소를 검색하거나 말해주세요</span>
+                <strong style="color: var(--primary);">마</strong>
+              </div>
+              <div class="banner">
+                <span class="small-tag" style="background: rgba(255,255,255,.18); color: #fff;">이동 가이드</span>
+                <strong>장벽 없는 부산</strong>
+                <span>무장애 보행로와 함께 도시를 탐색하세요.</span>
+              </div>
+              <h3 style="font-size: 17px; margin: 0 0 10px;">최근 방문지</h3>
+              <div class="saved-list">
+                <div class="list-row">
+                  <span class="row-icon">시</span>
+                  <div><div class="row-title">부산시청</div><div class="row-sub">1.2km · 무장애 접근 가능</div></div>
+                  <strong>›</strong>
+                </div>
+                <div class="list-row">
+                  <span class="row-icon">역</span>
+                  <div><div class="row-title">부산역</div><div class="row-sub">엘리베이터 홀 A</div></div>
+                  <strong>›</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flow-caption">
+            <h3>추천 검색어 삭제</h3>
+            <p>검색창, 최근 방문지, 배너만 남겨 화면을 단순화했습니다.</p>
+          </div>
+        </article>
+
+        <article class="flow-card card" data-choice="search-result-confirm" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">08</span>
+            <span class="mode-label">RESULT</span>
+          </div>
+          <div class="phone">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="bar">
+              <span class="icon-btn">‹</span>
+              <span class="bar-title">검색 결과</span>
+              <span class="icon-btn">×</span>
+            </div>
+            <div class="content scroll">
+              <div class="search-pill" style="box-shadow: none; margin-bottom: 14px;">
+                <strong>⌕</strong>
+                <span style="font-weight: 800;">부산시청</span>
+                <strong style="color: #94a3b8;">×</strong>
+              </div>
+              <div class="saved-list">
+                <div class="list-row" style="grid-template-columns: 42px 1fr;">
+                  <span class="row-icon">청</span>
+                  <div>
+                    <div class="row-title">부산시청</div>
+                    <div class="row-sub">연제구 중앙대로 1001 · 1.2km</div>
+                    <div class="tag-row">
+                      <span class="tag">무장애 접근 가능</span>
+                      <span class="tag">엘리베이터</span>
+                      <span class="tag">경사로</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="list-row" style="grid-template-columns: 42px 1fr;">
+                  <span class="row-icon">역</span>
+                  <div>
+                    <div class="row-title">부산시청역 1호선</div>
+                    <div class="row-sub">지하철역 · 1.1km</div>
+                    <div class="tag-row">
+                      <span class="tag">엘리베이터 3</span>
+                      <span class="tag">점자블록</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="confirm-card">
+                <span class="small-tag">목적지 확인</span>
+                <h3 style="margin: 0;">부산시청</h3>
+                <div class="info-line"><strong>접</strong><span>주출입구 자동문, 경사로 연결</span></div>
+                <div class="info-line"><strong>승</strong><span>엘리베이터 있음</span></div>
+                <div class="info-line"><strong>화</strong><span>장애인 화장실 1층, 3층</span></div>
+                <div class="primary-btn">이곳으로 경로 탐색 시작</div>
+              </div>
+            </div>
+          </div>
+          <div class="flow-caption">
+            <h3>결과와 무장애 태그 결합</h3>
+            <p>목적지 확인 단계에서 접근성 정보를 요약해 다음 경로 탐색의 기대치를 미리 제공합니다.</p>
+          </div>
+        </article>
+
+        <article class="flow-card card" data-choice="route-result" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">09</span>
+            <span class="mode-label">ROUTE</span>
+          </div>
+          <div class="phone">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="bar">
+              <span class="icon-btn">‹</span>
+              <span class="bar-title">경로 탐색 결과</span>
+              <span class="icon-btn">⋯</span>
+            </div>
+            <div class="content scroll">
+              <div class="route-summary">
+                <div class="info-line"><strong style="color: var(--success);">출</strong><span>현재 위치</span></div>
+                <div class="info-line"><strong style="color: var(--danger);">도</strong><span>부산시청</span></div>
+              </div>
+              <div style="height: 210px; border-radius: var(--r-lg); position: relative; overflow: hidden; background: repeating-linear-gradient(0deg, #eef2f6 0, #eef2f6 34px, #e3e8ef 35px, #e3e8ef 37px), repeating-linear-gradient(90deg, transparent 0, transparent 46px, rgba(207,213,223,.9) 47px, rgba(207,213,223,.9) 49px);">
+                <div class="route-line" style="left: 92px; top: 28px;"></div>
+                <span class="pin one" style="left: 76px; top: 56px;"></span>
+                <span class="pin two" style="right: 42px; top: 140px;"></span>
+              </div>
+              <div class="metrics">
+                <div class="metric"><strong>25분</strong><span>예상 시간</span></div>
+                <div class="metric"><strong>1.2km</strong><span>거리</span></div>
+                <div class="metric"><strong>2.1%</strong><span>경사도</span></div>
+              </div>
+              <div class="warning-card">
+                <strong>!</strong>
+                <span>공사 구간 1곳과 단차 주의 구간 1곳이 있습니다.</span>
+              </div>
+              <div class="primary-btn" style="margin-top: 14px;">이 경로로 안내 시작</div>
+            </div>
+          </div>
+          <div class="flow-caption">
+            <h3>출발지, 도착지, 경로 지도</h3>
+            <p>준호님 피그마 흐름처럼 요약 카드와 지도, 위험 구간 안내를 한 화면에서 확인합니다.</p>
+          </div>
+        </article>
+
+        <article class="flow-card card" data-choice="route-first-use" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">10</span>
+            <span class="mode-label">FIRST ROUTE</span>
+          </div>
+          <div class="phone compact">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="content">
+              <div class="progress">
+                <div class="progress-row"><span>첫 경로 탐색</span><span>1 / 1</span></div>
+                <div class="track"><div class="fill full"></div></div>
+              </div>
+              <p class="headline">경로 선택 기준을<br />알려주세요.</p>
+              <p class="copy">첫 이용자에게만 보여주고, 이후에는 마이페이지에서 수정할 수 있습니다.</p>
+              <div class="choice-stack">
+                <div class="large-choice active">
+                  <div class="choice-icon green">안</div>
+                  <p class="choice-title">안전 우선</p>
+                  <p class="choice-desc">경사도와 단차를 가장 엄격하게 피합니다.</p>
+                </div>
+                <div class="large-choice">
+                  <div class="choice-icon">승</div>
+                  <p class="choice-title">엘리베이터 우선</p>
+                  <p class="choice-desc">환승과 건물 진입에서 승강 설비를 우선합니다.</p>
+                </div>
+                <div class="large-choice">
+                  <div class="choice-icon amber">빠</div>
+                  <p class="choice-title">빠른 경로</p>
+                  <p class="choice-desc">위험도가 낮은 범위 안에서 시간을 줄입니다.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bottom-fixed"><div class="primary-btn green">경로 탐색 결과 보기</div></div>
+          </div>
+          <div class="flow-caption">
+            <h3>첫 이용자 경로 온보딩</h3>
+            <p>경로 선택 정보를 별도 설정으로 저장하고, 마이페이지에서 변경 가능하다는 문구를 제공합니다.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>4. 보행약자 제보하기</h2>
+        <p class="section-note">기존 장애물 제보 흐름을 유지하되, 지도 홈에서 빠르게 진입하고 유형 선택, 위치 확인, 상세 입력, 제출 완료의 단계감을 살립니다.</p>
+      </div>
+      <div class="board cards">
+        <article class="flow-card card" data-choice="report-flow" onclick="toggleSelect(this)">
+          <div class="flow-meta">
+            <span class="step-badge">11</span>
+            <span class="mode-label">REPORT</span>
+          </div>
+          <div class="phone">
+            <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+            <div class="bar">
+              <span class="icon-btn">‹</span>
+              <span class="bar-title">장애물 제보</span>
+              <span class="icon-btn">?</span>
+            </div>
+            <div class="content scroll">
+              <p class="headline">불편한 상황을<br />제보해주세요.</p>
+              <p class="copy">더 안전한 길 안내를 만들 수 있어요.</p>
+              <div class="primary-btn" style="margin: 16px 0;">＋ 장애물 제보하기</div>
+              <h3 style="font-size: 17px; margin: 0;">장애 유형 선택</h3>
+              <div class="report-grid">
+                <div class="report-type"><strong>!</strong>공사/통제</div>
+                <div class="report-type"><strong>턱</strong>계단/단차</div>
+                <div class="report-type"><strong>경</strong>경사 문제</div>
+                <div class="report-type"><strong>엘</strong>엘리베이터 고장</div>
+                <div class="report-type"><strong>블</strong>점자블록 문제</div>
+                <div class="report-type"><strong>기</strong>기타 장애물</div>
+              </div>
+              <div class="confirm-card">
+                <span class="small-tag">위치 확인</span>
+                <h3 style="margin: 0;">부산 연제구 중앙대로 1001</h3>
+                <div style="height: 100px; border-radius: var(--r-md); background: repeating-linear-gradient(45deg, #eef2f6 0, #eef2f6 16px, #e3e8ef 17px, #e3e8ef 19px); display: grid; place-items: center; color: var(--primary); font-weight: 900;">지도에서 위치 조정</div>
+              </div>
+              <div class="confirm-card">
+                <span class="small-tag">상세 정보</span>
+                <div class="terms-row">횡단보도 앞 보도 공사로 통행이 어렵습니다.</div>
+                <div class="terms-row">사진 2장 첨부</div>
+                <div class="primary-btn">제보 제출하기</div>
+              </div>
+            </div>
+            <nav class="tabs four">
+              <div class="tab"><span class="tab-mark"></span>홈</div>
+              <div class="tab"><span class="tab-mark"></span>북마크</div>
+              <div class="tab active"><span class="tab-mark"></span>제보</div>
+              <div class="tab"><span class="tab-mark"></span>마이</div>
+            </nav>
+          </div>
+          <div class="flow-caption">
+            <h3>준호님 제보 흐름 반영</h3>
+            <p>유형 선택과 위치 확인을 명확히 분리하고, 사진/설명은 제출 직전 카드로 묶었습니다.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="indicator" id="indicator-text">화면 카드를 클릭해 마음에 드는 방향을 표시한 뒤, 터미널에 피드백을 남겨주세요.</div>
+  </main>
+</body>
+</html>

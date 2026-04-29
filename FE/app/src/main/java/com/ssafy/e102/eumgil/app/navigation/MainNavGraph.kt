@@ -13,6 +13,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -90,7 +91,12 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments?.getBoolean(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) ?: false
         val context = LocalContext.current
         val activity = remember(context) { context.findComponentActivity() }
-        val navigationViewModelFactory = remember { NavigationGuidanceViewModel.provideFactory() }
+        val currentLocationManager = remember(context) {
+            (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
+        }
+        val navigationViewModelFactory = remember(currentLocationManager) {
+            NavigationGuidanceViewModel.provideFactory(currentLocationManager = currentLocationManager)
+        }
         val navigationViewModel =
             remember(activity, navigationViewModelFactory) {
                 val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }

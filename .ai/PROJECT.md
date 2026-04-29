@@ -37,11 +37,11 @@ MVP 필수 범위:
 - 경로 결과 지도 표시와 TTS/자막 안내
 - 북마크와 자주 가는 길 저장
 - 도로 상태 제보: 공사, 장애물, 점자블록 손상 등
-- 사용자 동의 기반 경로 로그 수집
 
 후순위 또는 확장 범위:
 
 - 소셜 로그인과 계정 기반 동기화
+- 사용자 동의 기반 경로 로그 수집
 - 음성 검색, STT/LLM/TTS 기반 목적지 설정
 - 시각장애인 전용 고도화 UI와 TalkBack 최적화
 - 경로 이탈 재탐색
@@ -60,9 +60,9 @@ MVP 필수 범위:
 
 ## Core Domains
 
-- 사용자 도메인: 사용자 설정, 위치 약관, TTS/수집/푸시 설정, 북마크, 자주 가는 길
+- 사용자 도메인: 소셜 로그인, 가입 완료 사용자 유형, 북마크, 자주 가는 길
 - 장소 도메인: 장소 검색, 주변 시설 마커, 접근성 시설 정보
-- 보행 네트워크 도메인: road nodes, road segments, segment features, route logs
+- 보행 네트워크 도메인: road nodes, road segments, segment features
 - 제보 도메인: hazard reports, report images, Slack 기반 검토 흐름
 - 대중교통 도메인: 저상버스, 정류장/노선/도착 정보, 지하철 엘리베이터, 외부 길찾기 후보
 - 운영/인프라 도메인: dev/prod 분리, CI/CD, 모니터링, Blue/Green 운영

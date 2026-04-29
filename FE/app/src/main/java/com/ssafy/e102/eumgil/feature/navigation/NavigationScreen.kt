@@ -1,27 +1,24 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,15 +35,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilTheme
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
 private val NavigationBackground = Color(0xFF1C1C1E)
-private val NavigationDivider = Color(0xFF3A3A3C)
-private val NavigationAmber = Color(0xFFF2B705)
-private val NavigationTextOnAmber = Color(0xFF1C1C1E)
-private val NavigationMuted = Color(0xFF8E8E93)
-private val NavigationExitRed = Color(0xFFFF6B6B)
+private val NavigationYellow = Color(0xFFFFD400)
+private val NavigationBlack = Color(0xFF000000)
 
 @Composable
 fun NavigationScreen(
@@ -54,221 +47,137 @@ fun NavigationScreen(
     onAction: (NavigationUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val enabled = uiState.isExitEnabled
+
     Column(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(NavigationBackground),
-    ) {
-        NavigationMetricsRow(
-            distanceLabel = uiState.stepCard.metrics.getOrNull(0)?.value ?: "-",
-            timeLabel = uiState.stepCard.metrics.getOrNull(1)?.value ?: "-",
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.medium)
-                    .padding(top = EumSpacing.large),
-        )
-
-        Spacer(modifier = Modifier.height(EumSpacing.large))
-
-        NavigationLocationCard(
-            locationLabel = uiState.mapOverlay.currentLocation?.label ?: "현재 위치",
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = EumSpacing.medium),
-        )
-
-        Spacer(modifier = Modifier.height(EumSpacing.medium))
-
-        NavigationExitCard(
-            label = uiState.exitCta.label,
-            supportingText = uiState.exitCta.supportingText,
-            enabled = uiState.isExitEnabled,
-            onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.medium),
-        )
-
-        Spacer(modifier = Modifier.height(EumSpacing.medium))
-    }
-}
-
-@Composable
-private fun NavigationMetricsRow(
-    distanceLabel: String,
-    timeLabel: String,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        NavigationMetricItem(
-            label = "남은 거리",
-            value = distanceLabel,
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = "남은 거리 $distanceLabel"
-                    },
-        )
-
-        Box(
-            modifier =
-                Modifier
-                    .width(1.dp)
-                    .height(76.dp)
-                    .background(NavigationDivider),
-        )
-
-        NavigationMetricItem(
-            label = "예상 시간",
-            value = timeLabel,
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = "예상 시간 $timeLabel"
-                    },
-        )
-    }
-}
-
-@Composable
-private fun NavigationMetricItem(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
+                .background(NavigationBackground)
+                .statusBarsPadding()
+                .padding(horizontal = 28.dp)
+                .padding(top = 24.dp, bottom = EumSpacing.large),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = NavigationMuted,
-            textAlign = TextAlign.Center,
+        Icon(
+            painter = painterResource(id = R.drawable.ic_voice_location_pin),
+            contentDescription = null,
+            tint = NavigationYellow,
+            modifier = Modifier.size(42.dp),
         )
-        Text(
-            text = value,
-            fontSize = 56.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = NavigationAmber,
-            textAlign = TextAlign.Center,
-            letterSpacing = 0.sp,
+
+        NavigationCompletionCard(
+            label = "도착지 저장",
+            enabled = enabled,
+            backgroundColor = NavigationYellow,
+            contentColor = NavigationBlack,
+            icon = {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(96.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(NavigationBlack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_voice_location_pin),
+                        contentDescription = null,
+                        tint = NavigationYellow,
+                        modifier = Modifier.size(70.dp),
+                    )
+                }
+            },
+            onClick = { onAction(NavigationUiAction.SaveBookmarkClicked) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .heightIn(min = 260.dp),
+        )
+
+        NavigationCompletionCard(
+            label = "완료",
+            enabled = enabled,
+            backgroundColor = NavigationBlack,
+            contentColor = NavigationYellow,
+            border = BorderStroke(width = 2.dp, color = NavigationYellow),
+            icon = {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(104.dp)
+                            .border(
+                                width = 8.dp,
+                                color = NavigationYellow,
+                                shape = CircleShape,
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_status_check),
+                        contentDescription = null,
+                        tint = NavigationYellow,
+                        modifier = Modifier.size(62.dp),
+                    )
+                }
+            },
+            onClick = { onAction(NavigationUiAction.NavigationCompleteClicked) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .heightIn(min = 260.dp),
         )
     }
 }
 
 @Composable
-private fun NavigationLocationCard(
-    locationLabel: String,
+private fun NavigationCompletionCard(
+    label: String,
+    enabled: Boolean,
+    backgroundColor: Color,
+    contentColor: Color,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    border: BorderStroke? = null,
 ) {
+    val contentAlpha = if (enabled) 1f else 0.45f
+
     Surface(
         modifier =
-            modifier.semantics(mergeDescendants = true) {
-                contentDescription = "현재 위치 $locationLabel"
-            },
-        shape = RoundedCornerShape(EumRadius.large),
-        color = NavigationAmber,
+            modifier
+                .clip(RoundedCornerShape(24.dp))
+                .clickable(enabled = enabled, onClick = onClick)
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    contentDescription = label
+                },
+        shape = RoundedCornerShape(24.dp),
+        color = backgroundColor,
+        border = border,
     ) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(EumSpacing.xLarge),
+                    .padding(horizontal = 24.dp, vertical = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_voice_location_pin),
-                contentDescription = null,
-                tint = NavigationTextOnAmber,
-                modifier = Modifier.size(72.dp),
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.medium))
-            Text(
-                text = locationLabel,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = NavigationTextOnAmber,
-                textAlign = TextAlign.Center,
-                lineHeight = 40.sp,
-            )
-        }
-    }
-}
-
-@Composable
-private fun NavigationExitCard(
-    label: String,
-    supportingText: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val alpha = if (enabled) 1f else 0.45f
-
-    Row(
-        modifier =
-            modifier
-                .height(96.dp)
-                .clip(RoundedCornerShape(EumRadius.large))
-                .background(Color(0xFF2C2C2E))
-                .clickable(
-                    enabled = enabled,
-                    interactionSource = interactionSource,
-                    indication = rememberRipple(color = NavigationAmber),
-                    onClick = onClick,
-                )
-                .semantics(mergeDescendants = true) {
-                    role = Role.Button
-                    contentDescription = "$label $supportingText"
-                }
-                .padding(horizontal = EumSpacing.large),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(EumRadius.full))
-                    .background(NavigationExitRed.copy(alpha = alpha)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_action_close),
-                contentDescription = null,
-                tint = Color.White.copy(alpha = alpha),
-                modifier = Modifier.size(28.dp),
-            )
-        }
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+            Box(modifier = Modifier.padding(bottom = 36.dp)) {
+                icon()
+            }
             Text(
                 text = label,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = NavigationAmber.copy(alpha = alpha),
-            )
-            Text(
-                text = supportingText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.82f * alpha),
+                color = contentColor.copy(alpha = contentAlpha),
+                fontSize = 48.sp,
+                lineHeight = 56.sp,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                letterSpacing = 0.sp,
                 maxLines = 2,
             )
         }
@@ -279,48 +188,18 @@ private fun NavigationExitCard(
     showBackground = true,
     widthDp = 360,
     heightDp = 800,
-    name = "Navigation ready",
+    name = "Navigation completion",
     backgroundColor = 0xFF1C1C1E,
 )
 @Composable
-private fun NavigationReadyPreview() {
+private fun NavigationCompletionPreview() {
     BusanEumgilTheme {
         NavigationScreen(
             uiState =
                 NavigationUiState(
                     screenState = NavigationScreenState.Ready,
-                    stepCard =
-                        NavigationStepCardUiState(
-                            metrics =
-                                listOf(
-                                    NavigationStepMetricUiState(label = "남은 거리", value = "50m"),
-                                    NavigationStepMetricUiState(label = "예상 시간", value = "2분"),
-                                ),
-                        ),
-                    exitCta =
-                        NavigationCtaUiState(
-                            label = "안내 종료",
-                            supportingText = "안내를 종료하고 지도로 돌아갑니다.",
-                            isEnabled = true,
-                        ),
+                    exitCta = NavigationCtaUiState(isEnabled = true),
                 ),
-            onAction = {},
-        )
-    }
-}
-
-@Preview(
-    showBackground = true,
-    widthDp = 360,
-    heightDp = 800,
-    name = "Navigation loading",
-    backgroundColor = 0xFF1C1C1E,
-)
-@Composable
-private fun NavigationLoadingPreview() {
-    BusanEumgilTheme {
-        NavigationScreen(
-            uiState = NavigationUiState(),
             onAction = {},
         )
     }

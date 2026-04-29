@@ -1,8 +1,10 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 
 class MapShortcutFilterRowConfigurationTest {
     @Test
@@ -19,6 +21,13 @@ class MapShortcutFilterRowConfigurationTest {
             "Dedicated elevator shortcut icon resource should exist.",
             File("src/main/res/drawable/ic_map_shortcut_elevator.png").exists(),
         )
+    }
+
+    @Test
+    fun `map shortcut filter row enlarges only the elevator icon`() {
+        assertEquals(18, shortcutFilterIconSizeDp(MapShortcutFilterKey.ELEVATOR))
+        assertEquals(16, shortcutFilterIconSizeDp(MapShortcutFilterKey.TOILET))
+        assertEquals(16, shortcutFilterIconSizeDp(MapShortcutFilterKey.ACCESSIBLE_PARKING))
     }
 
     @Test

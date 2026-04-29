@@ -97,7 +97,7 @@ private fun ShortcutFilterChip(
             Icon(
                 painter = painterResource(id = shortcutFilterIcon(chip.key)),
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(shortcutFilterIconSizeDp(chip.key).dp),
                 tint = contentColor,
             )
             Text(
@@ -133,4 +133,10 @@ private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
         MapShortcutFilterKey.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         MapShortcutFilterKey.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
         MapShortcutFilterKey.RESTAURANT -> R.drawable.ic_place_restaurant
+    }
+
+internal fun shortcutFilterIconSizeDp(key: MapShortcutFilterKey): Int =
+    when (key) {
+        MapShortcutFilterKey.ELEVATOR -> 18
+        else -> 16
     }

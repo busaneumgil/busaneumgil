@@ -90,17 +90,15 @@ fun MapTopSearchBar(
                 }
             }
 
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
-                shape = RoundedCornerShape(999.dp),
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_permission_mic),
-                    contentDescription = null,
-                    modifier = Modifier.padding(8.dp).size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
+            Icon(
+                painter = painterResource(id = R.drawable.ic_permission_mic),
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .padding(start = 12.dp)
+                        .size(24.dp),
+                tint = MaterialTheme.colorScheme.secondary,
+            )
         }
     }
 }

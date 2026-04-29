@@ -122,7 +122,10 @@ fun MapCategoryFilterBar(
                         selected = option.isSelected,
                         onClick = { onCategoryToggle(option.category) },
                         leadingIcon = {
-                            FilterChipIcon(iconRes = categoryFilterIcon(option.category))
+                            FilterChipIcon(
+                                iconRes = categoryFilterIcon(option.category),
+                                iconSizeDp = categoryFilterIconSizeDp(option.category),
+                            )
                         },
                         label = {
                             Text(text = categoryLabel)
@@ -199,11 +202,12 @@ private fun FilterStatusCard(
 @Composable
 private fun FilterChipIcon(
     @DrawableRes iconRes: Int,
+    iconSizeDp: Int = 18,
 ) {
     Icon(
         painter = painterResource(id = iconRes),
         contentDescription = null,
-        modifier = Modifier.size(18.dp),
+        modifier = Modifier.size(iconSizeDp.dp),
     )
 }
 
@@ -229,4 +233,10 @@ private fun categoryFilterIcon(category: FacilityCategory): Int =
         FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.OTHER -> R.drawable.ic_nav_facility
+    }
+
+internal fun categoryFilterIconSizeDp(category: FacilityCategory): Int =
+    when (category) {
+        FacilityCategory.ELEVATOR -> 20
+        else -> 18
     }

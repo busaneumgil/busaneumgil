@@ -13,6 +13,10 @@ data class SearchUiState(
 sealed interface SearchUiAction {
     data object BackClicked : SearchUiAction
 
+    data class ResultsRouteEntered(
+        val query: String,
+    ) : SearchUiAction
+
     data class QueryChanged(
         val query: String,
     ) : SearchUiAction
@@ -32,6 +36,10 @@ sealed interface SearchUiAction {
 
 sealed interface SearchUiEvent {
     data object NavigateBack : SearchUiEvent
+
+    data class NavigateToResults(
+        val query: String,
+    ) : SearchUiEvent
 
     data object NavigateToRouteSetting : SearchUiEvent
 }

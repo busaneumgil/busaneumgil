@@ -25,6 +25,57 @@ class SearchViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun `search submit with query emits results navigation and loads matching results`() =
+        runTest {
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(searchResults = listOf(result)),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "  부산시청  "))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+
+            assertEquals(SearchUiEvent.NavigateToResults(query = "부산시청"), uiEvent.await())
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Success)
+            assertEquals("부산시청", (resultState as SearchResultUiState.Success).query)
+            assertEquals(listOf(result), resultState.results)
+        }
+
+    @Test
+    fun `recent search click emits results navigation with selected keyword`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.RecentSearchClicked(keyword = "부산역"))
+            advanceUntilIdle()
+
+            assertEquals(SearchUiEvent.NavigateToResults(query = "부산역"), uiEvent.await())
+            assertEquals("부산역", viewModel.uiState.value.query)
+        }
+
+    @Test
     fun `search result click stores selected destination and emits route setting navigation`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -127,10 +178,12 @@ class SearchViewModelTest {
         }
 }
 
-private class FakeSearchRepository : SearchRepository {
+private class FakeSearchRepository(
+    private val searchResults: List<SearchResult> = emptyList(),
+) : SearchRepository {
     val savedRecentDestinations = mutableListOf<RecentDestination>()
 
-    override suspend fun search(query: SearchQuery): List<SearchResult> = emptyList()
+    override suspend fun search(query: SearchQuery): List<SearchResult> = searchResults
 
     override suspend fun getRecentSearches(): List<RecentSearch> = emptyList()
 

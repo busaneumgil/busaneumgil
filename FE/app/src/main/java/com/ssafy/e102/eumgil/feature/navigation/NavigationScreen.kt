@@ -14,8 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -222,6 +223,7 @@ private fun NavigationTopBar(onBackClick: () -> Unit) {
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xxSmall),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),

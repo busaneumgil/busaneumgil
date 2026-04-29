@@ -251,7 +251,7 @@ private fun MobilitySubtypeButton(
             Icon(
                 painter = painterResource(id = mobilitySubtype.iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier.size(mobilitySubtype.iconSizeDp.dp),
                 tint = style.iconTint,
             )
 

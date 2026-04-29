@@ -55,6 +55,20 @@ class TopLevelDestinationTest {
         )
     }
 
+    @Test
+    fun `top level tabs expose icon sizes aligned with MAP-01 emphasis`() {
+        val iconSizeGetter = TopLevelDestination::class.java.getDeclaredMethod("getIconSizeDp")
+        val actualIconSizes =
+            TopLevelDestination.entries.map { destination ->
+                iconSizeGetter.invoke(destination) as Int
+            }
+
+        assertEquals(
+            listOf(30, 30, 30, 30),
+            actualIconSizes,
+        )
+    }
+
     private fun loadStringValues(): Map<String, String> {
         val file = File("src/main/res/values/strings.xml")
         val document =

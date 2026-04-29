@@ -1,0 +1,136 @@
+package com.ssafy.e102.eumgil.feature.lowvision
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListAmber
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListBg
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListCard
+import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListSubText
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.feature.search.SearchResultUiState
+import com.ssafy.e102.eumgil.feature.search.SearchUiAction
+import com.ssafy.e102.eumgil.feature.search.SearchUiState
+
+@Composable
+fun LowVisionSearchScreen(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PlaceListBg),
+    ) {
+        Text(
+            text = "검색 결과",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = PlaceListAmber,
+            textAlign = TextAlign.Center,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
+        )
+
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+        ) {
+            when (val state = uiState.resultState) {
+                is SearchResultUiState.Loading -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = PlaceListAmber)
+                    }
+                }
+
+                is SearchResultUiState.Success -> {
+                    if (state.results.isEmpty()) {
+                        LowVisionSearchNoResultMessage()
+                    } else {
+                        LowVisionSearchResultList(
+                            results = state.results,
+                            onBookmarkClick = { result ->
+                                onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+                            },
+                            onNavigateClick = { result ->
+                                onAction(SearchUiAction.SearchResultClicked(result = result))
+                            },
+                        )
+                    }
+                }
+
+                else -> LowVisionSearchNoResultMessage()
+            }
+        }
+    }
+}
+
+@Composable
+private fun LowVisionSearchResultList(
+    results: List<SearchResult>,
+    onBookmarkClick: (SearchResult) -> Unit,
+    onNavigateClick: (SearchResult) -> Unit,
+) {
+    LazyColumn(
+        contentPadding =
+            PaddingValues(
+                horizontal = EumSpacing.medium,
+                vertical = EumSpacing.medium,
+            ),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        itemsIndexed(
+            items = results,
+            key = { _, result -> result.placeId },
+        ) { index, result ->
+            PlaceListCard(
+                index = index + 1,
+                name = result.title,
+                address = result.subtitle.ifBlank { null },
+                bookmarkLabel = "북마크",
+                onBookmarkClick = { onBookmarkClick(result) },
+                onNavigateClick = { onNavigateClick(result) },
+                modifier = Modifier.fillParentMaxHeight(fraction = 0.47f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LowVisionSearchNoResultMessage() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "목록 없음.",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = PlaceListSubText,
+            textAlign = TextAlign.Center,
+        )
+    }
+}

@@ -1,30 +1,49 @@
 package com.ssafy.e102.eumgil.feature.search
 
-import androidx.compose.foundation.background
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.sp
-import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListAmber
-import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListBg
-import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListCard
-import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListSubText
-import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilTheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchResult
 
 enum class SearchScreenDestination {
@@ -32,168 +51,493 @@ enum class SearchScreenDestination {
     Results,
 }
 
+internal data class DestinationPromoBannerModel(
+    @DrawableRes val imageRes: Int,
+    @StringRes val contentDescriptionRes: Int,
+)
+
+internal fun searchDestinationPromoBannerModel(): DestinationPromoBannerModel =
+    DestinationPromoBannerModel(
+        imageRes = R.drawable.dest01_accessibility_banner,
+        contentDescriptionRes = R.string.search_screen_promo_banner_content_description,
+    )
+
 @Composable
 fun SearchScreen(
-    destination: SearchScreenDestination = SearchScreenDestination.Results,
     uiState: SearchUiState,
     onAction: (SearchUiAction) -> Unit,
     modifier: Modifier = Modifier,
+    destination: SearchScreenDestination = SearchScreenDestination.Entry,
 ) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(PlaceListBg),
-    ) {
-        Text(
-            text =
-                when (destination) {
-                    SearchScreenDestination.Entry -> "장소 검색"
-                    SearchScreenDestination.Results -> "검색 결과"
-                },
-            fontSize = 26.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = PlaceListAmber,
-            textAlign = TextAlign.Center,
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            SearchTopBar(
+                titleRes =
+                    when (destination) {
+                        SearchScreenDestination.Entry -> R.string.search_screen_title
+                        SearchScreenDestination.Results -> R.string.search_results_screen_title
+                    },
+                onBackClick = { onAction(SearchUiAction.BackClicked) },
+            )
+        },
+    ) { innerPadding ->
+        Column(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
-        )
-
-        Box(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            when (val state = uiState.resultState) {
-                is SearchResultUiState.Loading -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = PlaceListAmber)
-                    }
-                }
-                is SearchResultUiState.Success -> {
-                    if (state.results.isEmpty()) {
-                        SearchNoResultMessage()
-                    } else {
-                        SearchResultList(
-                            results = state.results,
-                            onBookmarkClick = { result ->
-                                onAction(SearchUiAction.BookmarkToggleClicked(result = result))
-                            },
-                            onNavigateClick = { result ->
-                                onAction(SearchUiAction.SearchResultClicked(result = result))
-                            },
-                        )
-                    }
-                }
-                else -> SearchNoResultMessage()
+            when (destination) {
+                SearchScreenDestination.Entry ->
+                    SearchEntryContent(
+                        uiState = uiState,
+                        onAction = onAction,
+                    )
+
+                SearchScreenDestination.Results ->
+                    SearchResultsContent(
+                        uiState = uiState,
+                        onAction = onAction,
+                    )
             }
         }
     }
 }
 
 @Composable
-private fun SearchResultList(
-    results: List<SearchResult>,
-    onBookmarkClick: (SearchResult) -> Unit,
-    onNavigateClick: (SearchResult) -> Unit,
+private fun SearchTopBar(
+    @StringRes titleRes: Int,
+    onBackClick: () -> Unit,
 ) {
-    LazyColumn(
-        contentPadding =
-            PaddingValues(
-                horizontal = EumSpacing.medium,
-                vertical = EumSpacing.medium,
-            ),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shadowElevation = 2.dp,
+        tonalElevation = 2.dp,
     ) {
-        itemsIndexed(
-            items = results,
-            key = { _, result -> result.placeId },
-        ) { index, result ->
-            PlaceListCard(
-                index = index + 1,
-                name = result.title,
-                address = result.subtitle.ifBlank { null },
-                bookmarkLabel = "북마크",
-                onBookmarkClick = { onBookmarkClick(result) },
-                onNavigateClick = { onNavigateClick(result) },
-                modifier = Modifier.fillParentMaxHeight(fraction = 0.47f),
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = EumSpacing.xxSmall),
+        ) {
+            IconButton(
+                onClick = onBackClick,
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_back),
+                    contentDescription = stringResource(id = R.string.search_screen_back),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+            Text(
+                text = stringResource(id = titleRes),
+                modifier = Modifier.align(Alignment.Center),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
 }
 
 @Composable
-private fun SearchNoResultMessage() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+private fun SearchEntryContent(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+) {
+    Text(
+        text = stringResource(id = R.string.search_screen_entry_headline),
+        style = MaterialTheme.typography.headlineSmall,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    SearchInputField(
+        query = uiState.query,
+        showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
+        onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+        onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+    )
+    RecentVisitSection(
+        recentSearches = uiState.recentSearches,
+        onAction = onAction,
+    )
+    DestinationPromoBanner()
+}
+
+@Composable
+private fun SearchResultsContent(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+) {
+    SearchInputField(
+        query = uiState.query,
+        showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
+        onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+        onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+    )
+    SearchResultSection(
+        resultState = uiState.resultState,
+        onAction = onAction,
+    )
+}
+
+@Composable
+private fun SearchInputField(
+    query: String,
+    showEmptyQueryError: Boolean,
+    onQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChanged,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text(text = stringResource(id = R.string.search_screen_query_placeholder)) },
+        leadingIcon = {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_nav_search),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        trailingIcon = {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_permission_mic),
+                contentDescription = stringResource(id = R.string.search_screen_voice_input),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        },
+        singleLine = true,
+        isError = showEmptyQueryError,
+        shape = RoundedCornerShape(EumRadius.small),
+        colors =
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                errorContainerColor = MaterialTheme.colorScheme.surface,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions =
+            KeyboardActions(
+                onSearch = { onSearch() },
+            ),
+        supportingText =
+            if (showEmptyQueryError) {
+                {
+                    Text(text = stringResource(id = R.string.search_screen_empty_query_description))
+                }
+            } else {
+                null
+            },
+    )
+}
+
+@Composable
+private fun SearchResultSection(
+    resultState: SearchResultUiState,
+    onAction: (SearchUiAction) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        when (resultState) {
+            SearchResultUiState.Initial ->
+                SearchStateCard(
+                    title = stringResource(id = R.string.search_screen_initial_title),
+                    description = stringResource(id = R.string.search_screen_initial_description),
+                )
+
+            SearchResultUiState.EmptyQuery ->
+                SearchStateCard(
+                    title = stringResource(id = R.string.search_screen_empty_query_title),
+                    description = stringResource(id = R.string.search_screen_empty_query_description),
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
+                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
+                )
+
+            is SearchResultUiState.Typing ->
+                SearchStateCard(
+                    title = stringResource(id = R.string.search_screen_typing_title, resultState.query),
+                    description = stringResource(id = R.string.search_screen_typing_description),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f),
+                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
+                )
+
+            is SearchResultUiState.Loading ->
+                SearchStateCard(
+                    title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
+                    description = stringResource(id = R.string.search_screen_loading_description),
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f),
+                    borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
+                )
+
+            is SearchResultUiState.Success -> {
+                Text(
+                    text = stringResource(id = R.string.search_screen_result_summary, resultState.results.size),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                resultState.results.forEach { result ->
+                    SearchResultItem(
+                        result = result,
+                        onClick = {
+                            onAction(SearchUiAction.SearchResultClicked(result = result))
+                        },
+                    )
+                }
+            }
+
+            is SearchResultUiState.Empty ->
+                SearchStateCard(
+                    title =
+                        stringResource(
+                            id = R.string.search_screen_empty_result_title,
+                            resultState.query,
+                        ),
+                    description = stringResource(id = R.string.search_screen_empty_result_description),
+                )
+
+            is SearchResultUiState.Error ->
+                SearchStateCard(
+                    title = stringResource(id = R.string.search_screen_error_title),
+                    description = stringResource(id = R.string.search_screen_error_description),
+                    supportingText = resultState.message,
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
+                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
+                )
+        }
+    }
+}
+
+@Composable
+private fun RecentVisitSection(
+    recentSearches: List<RecentSearch>,
+    onAction: (SearchUiAction) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = stringResource(id = R.string.search_screen_recent_section_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+
+        if (recentSearches.isEmpty()) {
+            SearchStateCard(
+                title = stringResource(id = R.string.search_screen_recent_section_title),
+                description = stringResource(id = R.string.search_screen_recent_empty),
+            )
+        } else {
+            recentSearches.forEach { recentSearch ->
+                RecentVisitItem(
+                    keyword = recentSearch.keyword,
+                    onClick = {
+                        onAction(
+                            SearchUiAction.RecentSearchClicked(
+                                keyword = recentSearch.keyword,
+                            ),
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentVisitItem(
+    keyword: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
+        shape = RoundedCornerShape(EumRadius.small),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
     ) {
         Text(
-            text = "목록 없음.",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = PlaceListSubText,
-            textAlign = TextAlign.Center,
+            text = keyword,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(EumSpacing.medium),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
 
-@Preview(
-    showBackground = true,
-    widthDp = 360,
-    heightDp = 800,
-    backgroundColor = 0xFF1C1C1E,
-    name = "Search results",
-)
 @Composable
-private fun SearchScreenSuccessPreview() {
-    BusanEumgilTheme {
-        SearchScreen(
-            uiState =
-                SearchUiState(
-                    resultState =
-                        SearchResultUiState.Success(
-                            query = "해운대",
-                            results =
-                                listOf(
-                                    SearchResult(
-                                        placeId = "1",
-                                        title = "해운대역\n공공화장실",
-                                        subtitle = "해운대구",
-                                        latitude = 35.163,
-                                        longitude = 129.163,
-                                    ),
-                                    SearchResult(
-                                        placeId = "2",
-                                        title = "해운대구\n보건소",
-                                        subtitle = "해운대구",
-                                        latitude = 35.160,
-                                        longitude = 129.160,
-                                    ),
-                                ),
-                        ),
-                ),
-            onAction = {},
+private fun DestinationPromoBanner(
+    modifier: Modifier = Modifier,
+) {
+    val model = searchDestinationPromoBannerModel()
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
+        shadowElevation = 2.dp,
+    ) {
+        Image(
+            painter = painterResource(id = model.imageRes),
+            contentDescription = stringResource(id = model.contentDescriptionRes),
+            modifier = Modifier.fillMaxWidth(),
+            contentScale = ContentScale.FillWidth,
         )
     }
 }
 
-@Preview(
-    showBackground = true,
-    widthDp = 360,
-    heightDp = 800,
-    backgroundColor = 0xFF1C1C1E,
-    name = "Search empty",
-)
 @Composable
-private fun SearchScreenEmptyPreview() {
-    BusanEumgilTheme {
-        SearchScreen(
-            uiState = SearchUiState(),
-            onAction = {},
-        )
+private fun SearchResultItem(
+    result: SearchResult,
+    onClick: () -> Unit,
+) {
+    val actionLabel = stringResource(id = R.string.search_screen_result_action_label)
+    val selectableStateDescription = stringResource(id = R.string.search_screen_result_selectable)
+    val accessibilityDescription =
+        if (result.subtitle.isBlank()) {
+            stringResource(
+                id = R.string.search_screen_result_a11y_without_address,
+                result.title,
+            )
+        } else {
+            stringResource(
+                id = R.string.search_screen_result_a11y_with_address,
+                result.title,
+                result.subtitle,
+            )
+        }
+
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = actionLabel,
+                    onClick = onClick,
+                ).semantics(mergeDescendants = true) {
+                    contentDescription = accessibilityDescription
+                    stateDescription = selectableStateDescription
+                },
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        shadowElevation = 2.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            Text(
+                text = result.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = result.subtitle,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.search_screen_result_coordinates,
+                        result.latitude,
+                        result.longitude,
+                    ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(id = R.string.search_screen_result_id, result.placeId),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchStateCard(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+    supportingText: String? = null,
+    containerColor: Color = Color.Unspecified,
+    borderColor: Color = Color.Unspecified,
+) {
+    val resolvedContainerColor =
+        if (containerColor == Color.Unspecified) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            containerColor
+        }
+    val resolvedBorderColor =
+        if (borderColor == Color.Unspecified) {
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)
+        } else {
+            borderColor
+        }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = resolvedContainerColor,
+        border = BorderStroke(1.dp, resolvedBorderColor),
+        shadowElevation = 2.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!supportingText.isNullOrBlank()) {
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

@@ -36,6 +36,19 @@ fun LowVisionHomeBottomNav(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    LowVisionBottomNav(
+        selectedTab = selectedTab,
+        onTabSelected = onTabSelected,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun LowVisionBottomNav(
+    selectedTab: LowVisionBottomTab,
+    onTabSelected: (LowVisionBottomTab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val items = listOf(
         LowVisionBottomTab.HOME to LowVisionNavItem(
             iconRes = R.drawable.ic_nav_home_filled,

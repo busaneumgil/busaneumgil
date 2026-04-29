@@ -47,7 +47,7 @@ fun NavGraphBuilder.onboardingNavGraph(
                     when (primaryUserType) {
                         PrimaryUserType.LOW_VISION -> {
                             settingsRepository.saveLowVisionFollowUpCompleted(isCompleted = true)
-                            navController.navigateToMyPageAfterProfileEdit()
+                            navController.navigateToLowVisionHomeAfterProfileEdit()
                         }
                         PrimaryUserType.MOBILITY_IMPAIRED -> {
                             navController.navigate(
@@ -189,7 +189,7 @@ internal fun resolvePrimaryUserTypeNextRoute(
             }
         OnboardingEntryPoint.PROFILE_EDIT ->
             when (primaryUserType) {
-                PrimaryUserType.LOW_VISION -> TopLevelRoute.MyPage.route
+                PrimaryUserType.LOW_VISION -> LowVisionRoute.Home.route
                 PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.ProfileMobilityTypeSecondary.route
             }
     }
@@ -206,6 +206,15 @@ private fun NavHostController.navigateToMyPageAfterProfileEdit() {
     if (!didPopToMyPage) {
         navigate(TopLevelRoute.MyPage.route) {
             launchSingleTop = true
+        }
+    }
+}
+
+private fun NavHostController.navigateToLowVisionHomeAfterProfileEdit() {
+    navigate(LowVisionRoute.Home.route) {
+        launchSingleTop = true
+        popUpTo(TopLevelRoute.MyPage.route) {
+            inclusive = true
         }
     }
 }

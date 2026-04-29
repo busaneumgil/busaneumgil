@@ -6,6 +6,19 @@ import org.junit.Test
 
 class AppNavHostRoutingTest {
     @Test
+    fun `top level destination entries expose concrete routes`() {
+        assertEquals(
+            listOf(
+                TopLevelRoute.Map.route,
+                TopLevelRoute.SavedRoute.route,
+                ReportRoute.Report.route,
+                TopLevelRoute.MyPage.route,
+            ),
+            TopLevelDestination.entries.map { destination -> destination.route.route },
+        )
+    }
+
+    @Test
     fun `guidance and handoff routes keep map tab active`() {
         assertEquals(TopLevelRoute.Map.route, NavigationRoute.Guidance.route.toCurrentTopLevelRoute())
         assertEquals(TopLevelRoute.Map.route, SearchRoute.Entry.route.toCurrentTopLevelRoute())

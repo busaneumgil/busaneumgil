@@ -62,8 +62,4 @@ sealed interface SearchResultUiState {
         val query: String,
     ) : SearchResultUiState
 
-    data class Error(
-        val query: String,
-        val message: String? = null,
-    ) : SearchResultUiState
-}
+    data class Error

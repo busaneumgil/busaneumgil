@@ -44,6 +44,7 @@ class SearchViewModel(
             SearchUiAction.ClearQueryClicked -> clearQuery()
             SearchUiAction.SearchSubmitted -> submitSearch()
             is SearchUiAction.QueryChanged -> updateQuery(action.query)
+            is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
             is SearchUiAction.SearchResultClicked -> selectSearchResult(action.result)
         }
@@ -135,7 +136,28 @@ class SearchViewModel(
         }
     }
 
-    private fun submitSearch(keyword: String? = null) {
+    private fun enterResultsRoute(query: String) {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) return
+
+        val resultState = mutableUiState.value.resultState
+        if (resultState.hasResultQuery(normalizedQuery)) {
+            mutableUiState.update { state ->
+                state.copy(
+                    query = normalizedQuery,
+                    hasEditedQuery = true,
+                )
+            }
+            return
+        }
+
+        submitSearch(keyword = normalizedQuery, navigateToResults = false)
+    }
+
+    private fun submitSearch(
+        keyword: String? = null,
+        navigateToResults: Boolean = true,
+    ) {
         val normalizedQuery = (keyword ?: mutableUiState.value.query).trim()
 
         if (normalizedQuery.isEmpty()) {
@@ -150,16 +172,18 @@ class SearchViewModel(
         }
 
         searchJob?.cancel()
+        mutableUiState.update { state ->
+            state.copy(
+                query = normalizedQuery,
+                hasEditedQuery = true,
+                resultState = SearchResultUiState.Loading(query = normalizedQuery),
+            )
+        }
+        if (navigateToResults) {
+            emitUiEvent(SearchUiEvent.NavigateToResults(query = normalizedQuery))
+        }
         searchJob =
             viewModelScope.launch {
-                mutableUiState.update { state ->
-                    state.copy(
-                        query = normalizedQuery,
-                        hasEditedQuery = true,
-                        resultState = SearchResultUiState.Loading(query = normalizedQuery),
-                    )
-                }
-
                 val results =
                     try {
                         searchRepository.search(SearchQuery(keyword = normalizedQuery))
@@ -250,3 +274,12 @@ class SearchViewModel(
             }
     }
 }
+
+private fun SearchResultUiState.hasResultQuery(query: String): Boolean =
+    when (this) {
+        is SearchResultUiState.Loading -> this.query == query
+        is SearchResultUiState.Success -> this.query == query
+        is SearchResultUiState.Empty -> this.query == query
+        is SearchResultUiState.Error -> this.query == query
+        else -> false
+    }

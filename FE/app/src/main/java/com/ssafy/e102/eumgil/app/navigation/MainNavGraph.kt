@@ -10,7 +10,9 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -18,7 +20,8 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as Navigatio
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
-import com.ssafy.e102.eumgil.feature.search.SearchRoute as SearchScreenRoute
+import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
+import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     composable(route = TopLevelRoute.Map.route) {
@@ -33,7 +36,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(RouteSettingRoute.Setting.route)
             },
             onNavigateToSearch = {
-                navController.navigate(SearchRoute.Search.route)
+                navController.navigate(SearchRoute.Entry.route)
             },
         )
     }
@@ -60,14 +63,46 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = SearchRoute.Search.route) {
-        SearchScreenRoute(
+    composable(route = SearchRoute.Entry.route) {
+        SearchEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToResults = { query ->
+                navController.navigate(SearchRoute.Results.createRoute(query))
+            },
             onNavigateToRouteSetting = {
                 navController.navigate(RouteSettingRoute.Setting.route) {
-                    popUpTo(SearchRoute.Search.route) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
+        )
+    }
+
+    composable(
+        route = SearchRoute.Results.route,
+        arguments =
+            listOf(
+                navArgument(SearchRoute.Results.ARG_QUERY) {
+                    type = NavType.StringType
+                },
+            ),
+    ) { backStackEntry ->
+        SearchResultsRoute(
+            initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToResults = { query ->
+                navController.navigate(SearchRoute.Results.createRoute(query)) {
+                    launchSingleTop = true
+                }
+            },
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.route) {
+                    popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
                 }

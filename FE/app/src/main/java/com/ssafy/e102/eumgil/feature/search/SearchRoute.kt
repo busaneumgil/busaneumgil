@@ -15,8 +15,46 @@ import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import kotlinx.coroutines.flow.collect
 
 @Composable
-fun SearchRoute(
+fun SearchEntryRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToResults: (String) -> Unit,
+    onNavigateToRouteSetting: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SearchRouteContent(
+        destination = SearchScreenDestination.Entry,
+        initialQuery = null,
+        onNavigateBack = onNavigateBack,
+        onNavigateToResults = onNavigateToResults,
+        onNavigateToRouteSetting = onNavigateToRouteSetting,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun SearchResultsRoute(
+    initialQuery: String,
+    onNavigateBack: () -> Unit,
+    onNavigateToResults: (String) -> Unit,
+    onNavigateToRouteSetting: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SearchRouteContent(
+        destination = SearchScreenDestination.Results,
+        initialQuery = initialQuery,
+        onNavigateBack = onNavigateBack,
+        onNavigateToResults = onNavigateToResults,
+        onNavigateToRouteSetting = onNavigateToRouteSetting,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun SearchRouteContent(
+    destination: SearchScreenDestination,
+    initialQuery: String?,
+    onNavigateBack: () -> Unit,
+    onNavigateToResults: (String) -> Unit,
     onNavigateToRouteSetting: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -38,19 +76,27 @@ fun SearchRoute(
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "SearchRoute requires a ComponentActivity host." }
             ViewModelProvider(owner, viewModelFactory)[SearchViewModel::class.java]
-        }
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToRouteSetting) {
+    LaunchedEffect(viewModel, initialQuery) {
+        if (initialQuery != null) {
+            viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
+        }
+    }
+
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToResults, onNavigateToRouteSetting) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 SearchUiEvent.NavigateBack -> onNavigateBack()
+                is SearchUiEvent.NavigateToResults -> onNavigateToResults(event.query)
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
             }
         }
     }
 
     SearchScreen(
+        destination = destination,
         uiState = uiState,
         onAction = viewModel::onAction,
         modifier = modifier,

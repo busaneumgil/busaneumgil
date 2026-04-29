@@ -20,4 +20,23 @@ class MapShortcutFilterRowConfigurationTest {
             File("src/main/res/drawable/ic_map_shortcut_elevator.png").exists(),
         )
     }
+
+    @Test
+    fun `map top search bar and shortcut filters share medium radius token`() {
+        val searchBarSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapTopSearchBar.kt")
+                .readText()
+        val filterRowSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+
+        assertTrue(
+            "MAP top search bar should reuse the shared medium radius token.",
+            searchBarSource.contains("shape = RoundedCornerShape(EumRadius.medium)"),
+        )
+        assertTrue(
+            "MAP top shortcut filters should match the search bar corner radius token.",
+            filterRowSource.contains("shape = RoundedCornerShape(EumRadius.medium)"),
+        )
+    }
 }

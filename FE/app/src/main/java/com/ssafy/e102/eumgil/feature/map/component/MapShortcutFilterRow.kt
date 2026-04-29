@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
@@ -80,7 +81,7 @@ private fun ShortcutFilterChip(
         onClick = onClick,
         modifier = Modifier.alpha(if (chip.isEnabled) 1f else 0.52f),
         enabled = chip.isEnabled,
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(EumRadius.medium),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),
         shadowElevation = if (selected) 4.dp else 2.dp,

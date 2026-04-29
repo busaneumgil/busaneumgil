@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 
 @Composable
 fun MapTopSearchBar(
@@ -43,7 +44,7 @@ fun MapTopSearchBar(
                 onClick = onClick,
             ),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(EumRadius.medium),
         shadowElevation = 10.dp,
         tonalElevation = 1.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)),

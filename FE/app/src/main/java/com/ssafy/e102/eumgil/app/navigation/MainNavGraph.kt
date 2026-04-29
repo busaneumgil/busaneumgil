@@ -118,43 +118,4 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
-            autoStartNavigation = autoStartNavigation,
-        )
-    }
-
-    composable(route = ReportRoute.Report.route) {
-        ReportScreenRoute(
-            onNavigateBack = {
-                navController.popBackStack()
-            },
-        )
-    }
-
-    composable(route = NavigationRoute.Guidance.route) {
-        NavigationScreenRoute(
-            onNavigateBack = {
-                navController.popBackStack()
-            },
-            onNavigateToMap = {
-                navController.navigateToTopLevel(TopLevelDestination.Map)
-            },
-        )
-    }
-}
-
-fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
-    navigate(destination.route.route) {
-        launchSingleTop = true
-        restoreState = true
-        popUpTo(graph.findStartDestination().id) {
-            saveState = true
-        }
-    }
-}
-
-private tailrec fun Context.findComponentActivity(): ComponentActivity? =
-    when (this) {
-        is ComponentActivity -> this
-        is ContextWrapper -> baseContext.findComponentActivity()
-        else -> null
-    }
+      

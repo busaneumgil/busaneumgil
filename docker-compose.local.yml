@@ -20,6 +20,10 @@ services:
     extends:
       file: docker-compose.shared.yml
       service: minio-init
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-e102}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-e102-e102}
+      MINIO_BUCKET: ${MINIO_BUCKET:-e102-local}
 
   graphhopper:
     build:
@@ -42,6 +46,24 @@ services:
       retries: 20
       start_period: 3m
 
+  ai:
+    build:
+      context: ./AI
+    restart: unless-stopped
+    environment:
+      AI_PORT: ${AI_PORT:-5000}
+    ports:
+      - "${AI_PORT:-5000}:5000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=3).read()\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./BE
@@ -54,6 +76,8 @@ services:
       minio:
         condition: service_started
       graphhopper:
+        condition: service_healthy
+      ai:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
@@ -70,6 +94,7 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-e102-e102}
       S3_REGION: ${MINIO_REGION:-ap-northeast-2}
       GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BASE_URL:-http://graphhopper:8989}
+      AI_BASE_URL: ${AI_BASE_URL:-http://ai:5000}
     ports:
       - "${SERVER_PORT:-8080}:8080"
 

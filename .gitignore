@@ -6,7 +6,6 @@ out/
 HELP.md
 .env
 .env.*
-!.env.example
 .claude/
 .agents/
 .codex/
@@ -21,3 +20,17 @@ FE/awesome-design-md/
 .omx
 .tmp
 *.pem
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+backend.tf
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

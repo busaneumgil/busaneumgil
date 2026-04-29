@@ -15,6 +15,7 @@ BE_DEV_REDIS_LOCAL_PORT="${BE_DEV_REDIS_LOCAL_PORT:-16379}"
 BE_DEV_MINIO_LOCAL_PORT="${BE_DEV_MINIO_LOCAL_PORT:-19000}"
 BE_DEV_GRAPHHOPPER_LOCAL_PORT="${BE_DEV_GRAPHHOPPER_LOCAL_PORT:-18989}"
 BE_DEV_GRAPHHOPPER_REMOTE_PORT="${BE_DEV_GRAPHHOPPER_REMOTE_PORT:-8998}"
+BE_DEV_TUNNEL_PID_FILE="${BE_DEV_TUNNEL_PID_FILE:-$ROOT_DIR/.tmp/be-dev-tunnel.pid}"
 
 server_port() {
   if [ -f "$ENV_FILE" ]; then
@@ -68,6 +69,20 @@ port_open() {
   (echo >"/dev/tcp/127.0.0.1/$port") >/dev/null 2>&1
 }
 
+tracked_tunnel_running() {
+  if [ ! -f "$BE_DEV_TUNNEL_PID_FILE" ]; then
+    return 1
+  fi
+
+  local pid
+  pid="$(cat "$BE_DEV_TUNNEL_PID_FILE" 2>/dev/null || true)"
+  if [ -z "$pid" ]; then
+    return 1
+  fi
+
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
 ensure_dev_tunnel() {
   if [ "$BE_DEV_TUNNEL_AUTO" != "true" ]; then
     return
@@ -78,7 +93,6 @@ ensure_dev_tunnel() {
     echo "Set BE_DEV_TUNNEL_AUTO=false if you opened tunnels manually." >&2
     exit 1
   fi
-
   local ssh_args=()
   if ! port_open "$BE_DEV_DB_LOCAL_PORT"; then
     ssh_args+=(-L "127.0.0.1:$BE_DEV_DB_LOCAL_PORT:127.0.0.1:5432")
@@ -98,23 +112,51 @@ ensure_dev_tunnel() {
     return
   fi
 
+  local ssh_key_for_tunnel="$BE_DEV_SSH_KEY"
+  local temp_ssh_key=""
+  temp_ssh_key="$(mktemp)"
+  cp "$BE_DEV_SSH_KEY" "$temp_ssh_key"
+  chmod 600 "$temp_ssh_key"
+  ssh_key_for_tunnel="$temp_ssh_key"
+
   echo "opening dev tunnel: local $BE_DEV_DB_LOCAL_PORT->5432, $BE_DEV_REDIS_LOCAL_PORT->6379, $BE_DEV_MINIO_LOCAL_PORT->9000, $BE_DEV_GRAPHHOPPER_LOCAL_PORT->$BE_DEV_GRAPHHOPPER_REMOTE_PORT"
-  ssh -fN \
-    -i "$BE_DEV_SSH_KEY" \
+  mkdir -p "$(dirname "$BE_DEV_TUNNEL_PID_FILE")"
+  ssh -nN \
+    -i "$ssh_key_for_tunnel" \
+    -o StrictHostKeyChecking=accept-new \
     -o ExitOnForwardFailure=yes \
     -o ServerAliveInterval=30 \
     -o ServerAliveCountMax=3 \
     "${ssh_args[@]}" \
-    "$BE_DEV_SSH_HOST"
+    "$BE_DEV_SSH_HOST" &
+  local tunnel_pid=$!
+  echo "$tunnel_pid" >"$BE_DEV_TUNNEL_PID_FILE"
 
-  sleep 1
-
+  local port
   for port in "$BE_DEV_DB_LOCAL_PORT" "$BE_DEV_REDIS_LOCAL_PORT" "$BE_DEV_MINIO_LOCAL_PORT" "$BE_DEV_GRAPHHOPPER_LOCAL_PORT"; do
-    if ! port_open "$port"; then
+    local opened=false
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      if ! kill -0 "$tunnel_pid" >/dev/null 2>&1; then
+        rm -f "$BE_DEV_TUNNEL_PID_FILE"
+        rm -f "$temp_ssh_key"
+        echo "Failed to start dev tunnel process" >&2
+        exit 1
+      fi
+      if port_open "$port"; then
+        opened=true
+        break
+      fi
+      sleep 1
+    done
+    if [ "$opened" != "true" ]; then
+      kill "$tunnel_pid" >/dev/null 2>&1 || true
+      rm -f "$BE_DEV_TUNNEL_PID_FILE"
+      rm -f "$temp_ssh_key"
       echo "Failed to open dev tunnel on local port: $port" >&2
       exit 1
     fi
   done
+  rm -f "$temp_ssh_key"
 }
 
 backend_dev_config() {
@@ -133,6 +175,7 @@ backend_dev_config() {
   echo "dev Redis override: host.docker.internal:$BE_DEV_REDIS_LOCAL_PORT"
   echo "dev MinIO override: http://host.docker.internal:$BE_DEV_MINIO_LOCAL_PORT"
   echo "dev GraphHopper override: http://host.docker.internal:$BE_DEV_GRAPHHOPPER_LOCAL_PORT"
+  echo "dev tunnel pid file: $BE_DEV_TUNNEL_PID_FILE"
 }
 
 backend_dev_up() {
@@ -162,10 +205,27 @@ backend_dev_up() {
     -e "GRAPHHOPPER_BASE_URL=http://host.docker.internal:$BE_DEV_GRAPHHOPPER_LOCAL_PORT" \
     -p "$port:8080" \
     "$IMAGE_NAME"
+  echo "backend dev container started. Press Ctrl+C to stop following logs."
+  set +e
+  docker logs -f "$CONTAINER_NAME"
+  local log_status=$?
+  set -e
+  if [ "$log_status" -ne 0 ] && [ "$log_status" -ne 130 ]; then
+    return "$log_status"
+  fi
 }
 
 backend_dev_down() {
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  if tracked_tunnel_running; then
+    local pid
+    pid="$(cat "$BE_DEV_TUNNEL_PID_FILE")"
+    kill "$pid" >/dev/null 2>&1 || true
+    rm -f "$BE_DEV_TUNNEL_PID_FILE"
+    echo "closed tracked dev tunnel: $pid"
+  else
+    rm -f "$BE_DEV_TUNNEL_PID_FILE"
+  fi
 }
 
 backend_dev_logs() {

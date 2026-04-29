@@ -129,7 +129,7 @@ S14P31E102/
   - `.env.local`
   - `.env.dev`
   - `.env.prod`
-  - `.env.example`
+- 환경 변수 key 목록과 템플릿은 노션에서 관리하며, 저장소에는 env example 파일을 두지 않는다.
 - `INF/`에는 설명 문서보다 **운영 설정 자산**을 둔다.
 - 정식 설계안, 장애 대응 절차, 운영 설명은 `Docs/인프라`에서 관리한다.
 
@@ -151,30 +151,30 @@ S14P31E102/
 - `SSM Session Manager`는 SSH 장애 시 복구 채널로도 유지
 - 1차 알람은 AWS 관리 평면 기준으로 운영
 - 보조 모니터링은 `PLG`를 사용
-- 서비스 API와 필요한 관리자 UI는 `ALB`의 `80/443` host-based routing으로 접근한다.
-- EC2에서 외부에 직접 여는 포트는 `22`만 두며, 관리자 고정 IP에서만 허용한다.
+- 서비스 API와 필요한 관리자 UI는 각 서버의 `Nginx` `80/443` host-based routing으로 접근한다.
+- EC2에서 외부에 직접 여는 포트는 `80/443`과 `22`만 두며, `22`는 관리자 고정 IP에서만 허용한다.
 
 ### 서버 역할
 
 - `S1`
-  - `prod` 애플리케이션 활성 노드
   - `dev` 상시 실행
   - `Jenkins` 상시 실행
-  - `GraphHopper runtime` 실행
-  - `Portainer` 관리 UI 실행 가능
+  - `GraphHopper runtime`은 dev serve 용도로 실행
+  - `Grafana`, `Portainer`, `SonarQube`, `PLG` 운영도구 실행
 - `S2`
-  - `green` 배포 검증 및 standby 노드
-  - `PLG` 운영 보조 조회 (`Grafana` 포함)
-  - 필요 시 `green` 승격 시 `PLG` 중지 가능
+  - `primary prod` 실행
+  - 운영 WAS와 AI Flask intent server 실행
+  - prod GraphHopper runtime은 graph-cache build/deploy 흐름 준비 후 활성화
 
 ### 운영 원칙
 
 - 현재 운영은 **2대 기반 현실형 운영안**이다.
-- Blue/Green은 `ALB` target group과 health check를 기준으로 전환한다.
+- 현재는 `S2 primary prod + S1 dev/Jenkins/운영도구` 구조이며, ALB 기반 Blue/Green은 같은 VPC 또는 private routing 정리 이후 확장 옵션으로 둔다.
 - prod와 dev의 역할 경계는 문서와 설정에서 명확해야 한다.
 - GraphHopper의 무거운 build/import 작업은 prod 서버에서 직접 돌리지 않는다.
-- Jenkins, Grafana, Portainer 같은 관리자 UI는 원 포트를 공개하지 않고 `ALB`의 `443` host routing으로만 접근한다.
-- 관리자 UI 라우팅은 ALB listener rule의 source IP 조건, WAF, 또는 인증 연동으로 관리자 접근만 허용한다.
+- Jenkins, Grafana, SonarQube, PLG 같은 관리자 UI는 원 포트를 공개하지 않고 `Nginx`의 `443` host routing으로만 접근한다.
+- Portainer는 외부 공개하지 않고 `make portainer-tunnel` 기반 SSH 터널로만 접근한다.
+- 관리자 UI 라우팅은 OAuth, source IP 제한, VPN, SSH 터널 같은 접근 제한을 전제로 한다.
 - 관리자 UI의 웹 접근은 초기 편의 운영안이며, 운영 안정화 후에는 VPN 또는 SSM 터널 기반 접근으로 축소할 수 있다.
 
 ### 현재 저장소 상태
@@ -209,7 +209,7 @@ make init
 - 개발용: `.env.dev`
 - 운영용: `.env.prod`
 
-필요 시 `.env.example`을 기준으로 환경별 파일을 준비한다.
+필요 시 노션의 env 기준을 확인해 환경별 파일을 준비한다.
 
 ### 4. 문서 먼저 확인
 

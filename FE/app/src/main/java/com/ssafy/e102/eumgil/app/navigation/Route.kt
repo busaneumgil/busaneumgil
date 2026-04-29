@@ -92,8 +92,20 @@ sealed interface LowVisionRoute : AppRoute {
         override val route: String = "low_vision/voice_input"
     }
 
+    data object Bookmark : LowVisionRoute {
+        override val route: String = "low_vision/bookmark"
+    }
+
     data object Search : LowVisionRoute {
         override val route: String = "low_vision/search"
+    }
+
+    data object MyPage : LowVisionRoute {
+        override val route: String = "low_vision/my_page"
+    }
+
+    data object AppInfo : LowVisionRoute {
+        override val route: String = "low_vision/app_info"
     }
 }
 

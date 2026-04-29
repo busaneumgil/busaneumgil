@@ -7,12 +7,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.composable
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionAppInfoRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBookmarkRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionMyPageRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionSearchRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionVoiceInputBottomNav
-import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 
 fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.Home.route) {
@@ -41,6 +45,15 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
+    composable(route = LowVisionRoute.Bookmark.route) {
+        LowVisionBookmarkRoute(
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.createRoute(autoStartNavigation = true))
+            },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+        )
+    }
+
     composable(route = LowVisionRoute.Search.route) {
         Column(
             modifier =
@@ -48,12 +61,11 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                     .fillMaxSize()
                     .background(Color.Black),
         ) {
-            SearchResultsRoute(
+            LowVisionSearchRoute(
                 initialQuery = "",
                 onNavigateBack = {
                     navController.popBackStack()
                 },
-                onNavigateToResults = { _ -> },
                 onNavigateToRouteSetting = {
                     navController.navigate(resolveLowVisionSearchResultRoute()) {
                         launchSingleTop = true
@@ -71,6 +83,32 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
     }
+
+    composable(route = LowVisionRoute.MyPage.route) {
+        LowVisionMyPageRoute(
+            onModeChangeClick = {
+                navController.navigate(resolveLowVisionModeChangeRoute())
+            },
+            onAppInfoClick = {
+                navController.navigate(resolveLowVisionAppInfoRoute())
+            },
+            onLogoutClick = {
+                navController.navigate(resolveLowVisionLogoutRoute()) {
+                    launchSingleTop = true
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        inclusive = true
+                    }
+                }
+            },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+        )
+    }
+
+    composable(route = LowVisionRoute.AppInfo.route) {
+        LowVisionAppInfoRoute(
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+        )
+    }
 }
 
 internal fun resolveLowVisionRecordingCompletedRoute(): String = LowVisionRoute.Search.route
@@ -84,12 +122,18 @@ internal fun resolveLowVisionSearchPopUpRoute(): String = LowVisionRoute.Search.
 
 internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.Home.route
 
+internal fun resolveLowVisionModeChangeRoute(): String = OnboardingRoute.ProfileUserTypePrimary.route
+
+internal fun resolveLowVisionAppInfoRoute(): String = LowVisionRoute.AppInfo.route
+
+internal fun resolveLowVisionLogoutRoute(): String = AuthRoute.Login.route
+
 internal fun resolveLowVisionBottomTabRoute(tab: LowVisionBottomTab): String =
     when (tab) {
         LowVisionBottomTab.HOME -> LowVisionRoute.Home.route
-        LowVisionBottomTab.BOOKMARK -> TopLevelRoute.SavedRoute.route
+        LowVisionBottomTab.BOOKMARK -> LowVisionRoute.Bookmark.route
         LowVisionBottomTab.CATEGORY -> LowVisionRoute.Search.route
-        LowVisionBottomTab.MY_PAGE -> TopLevelRoute.MyPage.route
+        LowVisionBottomTab.MY_PAGE -> LowVisionRoute.MyPage.route
     }
 
 private fun NavHostController.navigateToLowVisionBottomTab(tab: LowVisionBottomTab) {
@@ -106,7 +150,14 @@ private fun NavHostController.navigateToLowVisionBottomTab(tab: LowVisionBottomT
                 }
             }
         }
-        LowVisionBottomTab.BOOKMARK -> navigateToTopLevel(TopLevelDestination.SavedRoute)
+        LowVisionBottomTab.BOOKMARK -> {
+            navigate(LowVisionRoute.Bookmark.route) {
+                launchSingleTop = true
+                popUpTo(LowVisionRoute.Home.route) {
+                    inclusive = false
+                }
+            }
+        }
         LowVisionBottomTab.CATEGORY -> {
             navigate(LowVisionRoute.Search.route) {
                 launchSingleTop = true
@@ -115,6 +166,13 @@ private fun NavHostController.navigateToLowVisionBottomTab(tab: LowVisionBottomT
                 }
             }
         }
-        LowVisionBottomTab.MY_PAGE -> navigateToTopLevel(TopLevelDestination.MyPage)
+        LowVisionBottomTab.MY_PAGE -> {
+            navigate(LowVisionRoute.MyPage.route) {
+                launchSingleTop = true
+                popUpTo(LowVisionRoute.Home.route) {
+                    inclusive = false
+                }
+            }
+        }
     }
 }

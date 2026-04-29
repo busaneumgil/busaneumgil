@@ -32,7 +32,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             onRecordingFinished = {
                 navController.navigate(resolveLowVisionRecordingCompletedRoute()) {
                     launchSingleTop = true
-                    popUpTo(LowVisionRoute.VoiceInput.route) {
+                    popUpTo(resolveLowVisionRecordingPopUpRoute()) {
                         inclusive = true
                     }
                 }
@@ -51,7 +51,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             onNavigateToRouteSetting = {
                 navController.navigate(resolveLowVisionSearchResultRoute()) {
                     launchSingleTop = true
-                    popUpTo(LowVisionRoute.Search.route) {
+                    popUpTo(resolveLowVisionSearchPopUpRoute()) {
                         inclusive = true
                     }
                 }
@@ -62,5 +62,9 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
 internal fun resolveLowVisionRecordingCompletedRoute(): String = LowVisionRoute.Search.route
 
+internal fun resolveLowVisionRecordingPopUpRoute(): String = LowVisionRoute.VoiceInput.route
+
 internal fun resolveLowVisionSearchResultRoute(): String =
     RouteSettingRoute.Setting.createRoute(autoStartNavigation = true)
+
+internal fun resolveLowVisionSearchPopUpRoute(): String = LowVisionRoute.Search.route

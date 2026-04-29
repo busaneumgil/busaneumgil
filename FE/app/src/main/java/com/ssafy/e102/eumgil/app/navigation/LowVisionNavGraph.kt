@@ -5,7 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
-import com.ssafy.e102.eumgil.feature.search.SearchRoute as SearchScreenRoute
+import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 
 /**
  * 시각지원 모드 풀스크린 셸의 네비게이션 그래프.
@@ -42,10 +42,12 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     }
 
     composable(route = LowVisionRoute.Search.route) {
-        SearchScreenRoute(
+        SearchResultsRoute(
+            initialQuery = "",
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToResults = { _ -> },
             onNavigateToRouteSetting = {
                 navController.navigate(resolveLowVisionSearchResultRoute()) {
                     launchSingleTop = true

@@ -6,7 +6,9 @@ import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -508,6 +510,8 @@ private class FakeReportRepository(
         private set
     var deletedDraftId: String? = null
         private set
+
+    override fun observeReportHistory(): Flow<List<ReportOutboxData>> = flowOf(emptyList())
 
     override suspend fun getLatestDraft(): ReportDraftData? = latestDraft
 

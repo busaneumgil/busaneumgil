@@ -98,7 +98,7 @@ private fun PrimaryUserTypeButton(
         ) {
             Box(
                 modifier = Modifier
-                    .size(104.dp)
+                    .size(120.dp)
                     .background(
                         color = style.iconContainerColor,
                         shape = CircleShape,
@@ -108,7 +108,7 @@ private fun PrimaryUserTypeButton(
                 Icon(
                     painter = painterResource(id = primaryUserType.iconRes),
                     contentDescription = null,
-                    modifier = Modifier.size(58.dp),
+                    modifier = Modifier.size(104.dp),
                     tint = style.iconTint,
                 )
             }

@@ -4,23 +4,21 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import kotlinx.coroutines.flow.collect
 
 @Composable
-fun MyPageRoute(
-    onNavigateToUserTypePrimary: () -> Unit,
-    onNavigateToLogin: () -> Unit,
-    onNavigateToReportHistory: () -> Unit,
+fun MyPageReportHistoryRoute(
+    onNavigateBack: () -> Unit,
+    onNavigateToReport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -31,35 +29,30 @@ fun MyPageRoute(
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
         remember(appContainer) {
-            MyPageViewModel.provideFactory(
-                settingsRepository = appContainer.settingsRepository,
-                authSessionRepository = appContainer.authSessionRepository,
-            )
+            MyPageReportHistoryViewModel.provideFactory(reportRepository = appContainer.reportRepository)
         }
     val viewModel =
         remember(activity, viewModelFactory) {
-            val owner = checkNotNull(activity) { "MyPageRoute requires a ComponentActivity host." }
-            ViewModelProvider(owner, viewModelFactory)[MyPageViewModel::class.java]
+            val owner = checkNotNull(activity) { "MyPageReportHistoryRoute requires a ComponentActivity host." }
+            ViewModelProvider(owner, viewModelFactory)[MyPageReportHistoryViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val preparingMessage = stringResource(id = R.string.my_page_preparing_message)
 
-    LaunchedEffect(viewModel, snackbarHostState, preparingMessage) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToReport, snackbarHostState) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                MyPageUiEvent.NavigateToUserTypePrimary -> onNavigateToUserTypePrimary()
-                MyPageUiEvent.NavigateToLogin -> onNavigateToLogin()
-                MyPageUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
-                MyPageUiEvent.ShowPreparingMessage -> snackbarHostState.showSnackbar(preparingMessage)
+                MyPageReportHistoryUiEvent.NavigateBack -> onNavigateBack()
+                MyPageReportHistoryUiEvent.NavigateToReport -> onNavigateToReport()
+                is MyPageReportHistoryUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }
 
-    MyPageScreen(
+    MyPageReportHistoryScreen(
         uiState = uiState,
-        onAction = viewModel::onAction,
         snackbarHostState = snackbarHostState,
+        onAction = viewModel::onAction,
         modifier = modifier,
     )
 }

@@ -54,26 +54,14 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         AppEntryLoadingScreen(modifier = modifier)
         return
     }
+
     val startDestination = appStartDestination ?: return
     val restoredSettings = initialSettings ?: return
-
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
-
-    // 인증·온보딩·저시력 전용 플로우에서는 탭 바를 숨깁니다.
-    val showTopLevelBar = currentRoute != null &&
-        !currentRoute.startsWith("auth/") &&
-        !currentRoute.startsWith("onboarding/") &&
-        !currentRoute.startsWith("low_vision/")
-
-    // 검색·경로 설정·안내 화면에서도 홈(지도) 탭이 활성 상태로 보입니다.
-    val effectiveActiveRoute = when {
-        currentRoute == SearchRoute.Search.route -> TopLevelRoute.Map.route
-        currentRoute == NavigationRoute.Guidance.route -> TopLevelRoute.Map.route
-        currentRoute?.startsWith("route_setting") == true -> TopLevelRoute.Map.route
-        else -> currentRoute
-    }
+    val currentTopLevelRoute = currentRoute.toCurrentTopLevelRoute()
+    val showTopLevelBar = currentTopLevelRoute != null
 
     Scaffold(
         contentWindowInsets = AppNavHostContentWindowInsets,
@@ -81,7 +69,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             if (showTopLevelBar) {
                 EumTopLevelTabBar(
                     destinations = TopLevelDestination.entries,
-                    currentRoute = effectiveActiveRoute,
+                    currentRoute = currentTopLevelRoute,
                     onDestinationSelected = { destination ->
                         navController.navigateToTopLevel(destination)
                     },
@@ -101,4 +89,35 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
             onboardingNavGraph(
                 navController = navController,
-                se
+                settingsRepository = settingsRepository,
+                initialSettings = restoredSettings,
+            )
+            lowVisionNavGraph(navController = navController)
+            mainNavGraph(navController = navController)
+        }
+    }
+}
+
+internal fun String?.toCurrentTopLevelRoute(): String? =
+    when {
+        this == TopLevelRoute.Map.route -> TopLevelRoute.Map.route
+        this == TopLevelRoute.SavedRoute.route -> TopLevelRoute.SavedRoute.route
+        this == ReportRoute.Report.route -> ReportRoute.Report.route
+        this == TopLevelRoute.MyPage.route -> TopLevelRoute.MyPage.route
+        this?.startsWith("${TopLevelRoute.MyPage.route}/") == true -> TopLevelRoute.MyPage.route
+        this == SearchRoute.Entry.route -> TopLevelRoute.Map.route
+        this?.startsWith("search/") == true -> TopLevelRoute.Map.route
+        this == NavigationRoute.Guidance.route -> TopLevelRoute.Map.route
+        this?.startsWith("route_setting") == true -> TopLevelRoute.Map.route
+        else -> null
+    }
+
+@Composable
+private fun AppEntryLoadingScreen(modifier: Modifier = Modifier) {
+    Image(
+        painter = painterResource(id = R.drawable.splash_illustration),
+        contentDescription = stringResource(id = R.string.app_name),
+        modifier = modifier.fillMaxSize(),
+        contentScale = ContentScale.Crop,
+    )
+}

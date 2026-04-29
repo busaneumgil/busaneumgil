@@ -37,6 +37,32 @@ fun NavGraphBuilder.onboardingNavGraph(
         )
     }
 
+    composable(route = OnboardingRoute.ProfileUserTypePrimary.route) {
+        val coroutineScope = rememberCoroutineScope()
+
+        PrimaryUserTypeRoute(
+            onTypeSelected = { primaryUserType ->
+                coroutineScope.launch {
+                    settingsRepository.savePrimaryUserType(primaryUserType.routeValue)
+                    when (primaryUserType) {
+                        PrimaryUserType.LOW_VISION -> {
+                            settingsRepository.saveLowVisionFollowUpCompleted(isCompleted = true)
+                            navController.navigateToMyPageAfterProfileEdit()
+                        }
+                        PrimaryUserType.MOBILITY_IMPAIRED -> {
+                            navController.navigate(
+                                resolvePrimaryUserTypeNextRoute(
+                                    primaryUserType = primaryUserType,
+                                    entryPoint = OnboardingEntryPoint.PROFILE_EDIT,
+                                ),
+                            )
+                        }
+                    }
+                }
+            },
+        )
+    }
+
     composable(route = OnboardingRoute.LowVisionFollowUp.route) {
         val coroutineScope = rememberCoroutineScope()
 
@@ -58,6 +84,19 @@ fun NavGraphBuilder.onboardingNavGraph(
                 coroutineScope.launch {
                     settingsRepository.saveMobilitySubtype(mobilitySubtype.routeValue)
                     navController.navigate(OnboardingRoute.Terms.route)
+                }
+            },
+        )
+    }
+
+    composable(route = OnboardingRoute.ProfileMobilityTypeSecondary.route) {
+        val coroutineScope = rememberCoroutineScope()
+
+        MobilityTypeSecondaryRoute(
+            onNavigateNext = { mobilitySubtype ->
+                coroutineScope.launch {
+                    settingsRepository.saveMobilitySubtype(mobilitySubtype.routeValue)
+                    navController.navigateToMyPageAfterProfileEdit()
                 }
             },
         )
@@ -132,11 +171,41 @@ fun NavGraphBuilder.onboardingNavGraph(
     }
 }
 
-internal fun resolvePrimaryUserTypeNextRoute(primaryUserType: PrimaryUserType): String =
-    when (primaryUserType) {
-        // 시각장애 흐름은 약관 안내 5단계의 1번(agree)부터 시작.
-        PrimaryUserType.LOW_VISION -> OnboardingRoute.TermsGuide.createRoute()
-        PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.MobilityTypeSecondary.route
+internal enum class OnboardingEntryPoint {
+    SIGN_UP,
+    PROFILE_EDIT,
+}
+
+internal fun resolvePrimaryUserTypeNextRoute(
+    primaryUserType: PrimaryUserType,
+    entryPoint: OnboardingEntryPoint = OnboardingEntryPoint.SIGN_UP,
+): String =
+    when (entryPoint) {
+        OnboardingEntryPoint.SIGN_UP ->
+            when (primaryUserType) {
+                // 시각장애 흐름은 약관 안내 5단계의 1번(agree)부터 시작.
+                PrimaryUserType.LOW_VISION -> OnboardingRoute.TermsGuide.createRoute()
+                PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.MobilityTypeSecondary.route
+            }
+        OnboardingEntryPoint.PROFILE_EDIT ->
+            when (primaryUserType) {
+                PrimaryUserType.LOW_VISION -> TopLevelRoute.MyPage.route
+                PrimaryUserType.MOBILITY_IMPAIRED -> OnboardingRoute.ProfileMobilityTypeSecondary.route
+            }
     }
 
 internal fun resolveTermsGuideCompletedRoute(): String = LowVisionRoute.Home.route
+
+private fun NavHostController.navigateToMyPageAfterProfileEdit() {
+    val didPopToMyPage =
+        popBackStack(
+            route = TopLevelRoute.MyPage.route,
+            inclusive = false,
+        )
+
+    if (!didPopToMyPage) {
+        navigate(TopLevelRoute.MyPage.route) {
+            launchSingleTop = true
+        }
+    }
+}

@@ -109,9 +109,13 @@ internal fun topLevelTabBarLayoutSpec(): TopLevelTabBarLayoutSpec =
 
 internal fun topLevelTabIconRes(
     destination: TopLevelDestination,
-    @Suppress("UNUSED_PARAMETER") selected: Boolean,
+    selected: Boolean,
 ): Int =
-    destination.iconRes
+    if (selected) {
+        destination.selectedIconRes
+    } else {
+        destination.iconRes
+    }
 
 internal fun topLevelTabContentColor(selected: Boolean): Color =
     if (selected) {

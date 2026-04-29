@@ -103,7 +103,20 @@ fun MyPageReportHistoryScreen(
                         )
                     }
 
-                MyPageReportHistoryScreenState.CONTENT ->
+                MyPageReportHistoryScreenState.CONTENT -> {
+                    if (shouldShowReportHistoryCreateCta(uiState.screenState)) {
+                        item {
+                            ReportHistoryStateCard(
+                                title = "새 제보 등록",
+                                description = "이동 중 발견한 보행 불편 사항을 추가로 제보할 수 있어요.",
+                                primaryActionLabel = "제보하기",
+                                onPrimaryActionClick = {
+                                    onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
+                                },
+                            )
+                        }
+                    }
+
                     items(
                         items = uiState.reports,
                         key = { report -> report.outboxId },
@@ -115,10 +128,14 @@ fun MyPageReportHistoryScreen(
                             },
                         )
                     }
+                }
             }
         }
     }
 }
+
+internal fun shouldShowReportHistoryCreateCta(screenState: MyPageReportHistoryScreenState): Boolean =
+    screenState == MyPageReportHistoryScreenState.CONTENT
 
 @Composable
 private fun MyPageReportHistoryTopBar(onBackClick: () -> Unit) {

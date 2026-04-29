@@ -95,7 +95,7 @@ class NavigationViewModel(
             NavigationUiAction.NavigationCompleteClicked -> {
                 if (uiState.value.isExitEnabled) {
                     currentLocationManager.stopLocationUpdates()
-                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionVoiceInput)
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionHome)
                 }
             }
             is NavigationUiAction.VoiceGuidanceToggled -> onVoiceGuidanceToggled(action.enabled)

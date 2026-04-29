@@ -24,7 +24,7 @@ fun NavigationRoute(
     onNavigateBack: () -> Unit,
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
-    onNavigateToLowVisionVoiceInput: () -> Unit,
+    onNavigateToLowVisionHome: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -67,7 +67,7 @@ fun NavigationRoute(
         onNavigateBack,
         onNavigateToMap,
         onNavigateToSavedRoute,
-        onNavigateToLowVisionVoiceInput,
+        onNavigateToLowVisionHome,
     ) {
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->
@@ -75,7 +75,7 @@ fun NavigationRoute(
                     NavigationUiEvent.NavigateBack -> onNavigateBack()
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
-                    NavigationUiEvent.NavigateToLowVisionVoiceInput -> onNavigateToLowVisionVoiceInput()
+                    NavigationUiEvent.NavigateToLowVisionHome -> onNavigateToLowVisionHome()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->

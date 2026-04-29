@@ -132,12 +132,14 @@ enum class MobilitySubtype(
     @StringRes val titleRes: Int,
     @StringRes val descriptionRes: Int,
     @DrawableRes val iconRes: Int,
+    val iconSizeDp: Int = 56,
 ) {
     ELECTRIC_WHEELCHAIR(
         routeValue = "electric_wheelchair",
         titleRes = R.string.onboarding_mobility_subtype_electric_title,
         descriptionRes = R.string.onboarding_mobility_subtype_electric_description,
         iconRes = R.drawable.ic_user_electric_wheelchair,
+        iconSizeDp = 64,
     ),
     MANUAL_WHEELCHAIR(
         routeValue = "manual_wheelchair",
@@ -150,6 +152,7 @@ enum class MobilitySubtype(
         titleRes = R.string.onboarding_mobility_subtype_other_title,
         descriptionRes = R.string.onboarding_mobility_subtype_other_description,
         iconRes = R.drawable.ic_user_walking_aid,
+        iconSizeDp = 64,
     ),
     ;
 

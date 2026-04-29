@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -22,6 +23,8 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
 import com.ssafy.e102.eumgil.core.model.InitSettings
+
+internal val AppNavHostContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
@@ -73,6 +76,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     }
 
     Scaffold(
+        contentWindowInsets = AppNavHostContentWindowInsets,
         bottomBar = {
             if (showTopLevelBar) {
                 EumTopLevelTabBar(

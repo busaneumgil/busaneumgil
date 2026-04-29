@@ -35,6 +35,10 @@ class OnboardingContractTest {
             ),
             MobilitySubtype.entries.map { it.iconRes },
         )
+        assertEquals(
+            listOf(64, 56, 64),
+            MobilitySubtype.entries.map { it.iconSizeDp },
+        )
     }
 
     @Test

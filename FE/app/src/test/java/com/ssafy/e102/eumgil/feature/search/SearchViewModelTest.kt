@@ -43,6 +43,7 @@ class SearchViewModelTest {
             val viewModel =
                 SearchViewModel(
                     searchRepository = FakeSearchRepository(searchResults = listOf(result)),
+                    bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                 )
 
@@ -66,6 +67,7 @@ class SearchViewModelTest {
             val viewModel =
                 SearchViewModel(
                     searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                 )
 

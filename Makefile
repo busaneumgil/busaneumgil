@@ -8,12 +8,14 @@ BASH ?= bash
 JIRA_PREFIX ?=
 GIT_EXEC_PATH := $(subst \,/,$(shell git --exec-path))
 MAKE_DOCKER_SCRIPT_DIR := scripts/make/docker
+MAKE_OPS_SCRIPT_DIR := scripts/make/ops
+MAKE_TERRAFORM_SCRIPT_DIR := scripts/make/terraform
 
 ifeq ($(OS),Windows_NT)
 BASH := $(patsubst %/mingw64/libexec/git-core,%/bin/bash.exe,$(GIT_EXEC_PATH))
 endif
 
-.PHONY: init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs
+.PHONY: init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs portainer-tunnel terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan
 
 # Git/Jira 보조 스크립트
 # 로컬 Git 설정과 hook을 한 번에 맞춘다.
@@ -39,3 +41,14 @@ be-dev-config be-dev-up be-dev-down be-dev-logs:
 # Partial local stacks
 be-local-up ai-local-up:
 	@"$(BASH)" $(MAKE_DOCKER_SCRIPT_DIR)/$@.sh
+
+# Ops access
+portainer-tunnel:
+	@"$(BASH)" $(MAKE_OPS_SCRIPT_DIR)/$@.sh
+
+# Terraform: prod
+terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan:
+	@"$(BASH)" $(MAKE_TERRAFORM_SCRIPT_DIR)/$@.sh
+
+terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan:
+	@"$(BASH)" $(MAKE_TERRAFORM_SCRIPT_DIR)/$@.sh

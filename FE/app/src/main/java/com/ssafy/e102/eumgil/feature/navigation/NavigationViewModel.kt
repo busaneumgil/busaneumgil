@@ -9,6 +9,8 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,6 +30,7 @@ import kotlin.math.sqrt
 
 class NavigationViewModel(
     private val currentLocationManager: CurrentLocationManager,
+    private val bookmarkRepository: BookmarkRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(NavigationUiState())
     val uiState: StateFlow<NavigationUiState> = mutableUiState.asStateFlow()
@@ -36,6 +39,7 @@ class NavigationViewModel(
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var initialBriefingRequested = false
+    private var navigationRequest: RouteNavigationRequest? = null
     private var remainingDistanceCalculator = RemainingDistanceCalculator(emptyList())
     private var lastProcessedLocationEpochMillis: Long? = null
 
@@ -44,6 +48,7 @@ class NavigationViewModel(
     }
 
     fun bindNavigationRequest(request: RouteNavigationRequest) {
+        navigationRequest = request
         remainingDistanceCalculator = RemainingDistanceCalculator(request.selectedRoute.previewPolyline.points)
         lastProcessedLocationEpochMillis = null
 
@@ -84,14 +89,13 @@ class NavigationViewModel(
             }
             NavigationUiAction.SaveBookmarkClicked -> {
                 if (uiState.value.isExitEnabled) {
-                    currentLocationManager.stopLocationUpdates()
-                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToSavedRoute)
+                    saveDestinationBookmarkAndNavigate()
                 }
             }
             NavigationUiAction.NavigationCompleteClicked -> {
                 if (uiState.value.isExitEnabled) {
                     currentLocationManager.stopLocationUpdates()
-                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap)
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionHome)
                 }
             }
             is NavigationUiAction.VoiceGuidanceToggled -> onVoiceGuidanceToggled(action.enabled)
@@ -227,19 +231,50 @@ class NavigationViewModel(
         emitUiEvent(NavigationUiEvent.SpeakBriefing(tts.briefingText))
     }
 
+    private fun saveDestinationBookmarkAndNavigate() {
+        viewModelScope.launch {
+            navigationRequest?.toDestinationBookmarkData()?.let { bookmark ->
+                bookmarkRepository.saveBookmark(bookmark)
+            }
+            currentLocationManager.stopLocationUpdates()
+            mutableUiEvent.emit(NavigationUiEvent.StopBriefing)
+            mutableUiEvent.emit(NavigationUiEvent.NavigateToSavedRoute)
+        }
+    }
+
     companion object {
         fun provideFactory(
             currentLocationManager: CurrentLocationManager,
+            bookmarkRepository: BookmarkRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
                     NavigationViewModel(
                         currentLocationManager = currentLocationManager,
+                        bookmarkRepository = bookmarkRepository,
                     ) as T
             }
     }
 }
+
+private fun RouteNavigationRequest.toDestinationBookmarkData(): BookmarkData {
+    val destinationWaypoint = destination
+    val placeId = destinationWaypoint.placeId ?: destinationWaypoint.toNavigationDestinationPlaceId()
+    val placeName = destinationWaypoint.name.orEmpty().ifBlank { "목적지" }
+
+    return BookmarkData(
+        placeId = placeId,
+        placeName = placeName,
+        address = destinationWaypoint.address?.takeIf { address -> address.isNotBlank() },
+        latitude = destinationWaypoint.coordinate.latitude,
+        longitude = destinationWaypoint.coordinate.longitude,
+        category = destinationWaypoint.category?.name,
+    )
+}
+
+private fun RouteWaypoint.toNavigationDestinationPlaceId(): String =
+    "navigation-destination:${coordinate.latitude},${coordinate.longitude}"
 
 internal fun calculateRemainingDistanceMeters(
     current: GeoCoordinate,

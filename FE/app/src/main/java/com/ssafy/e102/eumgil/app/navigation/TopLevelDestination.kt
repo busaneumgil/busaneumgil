@@ -44,11 +44,13 @@ sealed class TopLevelDestination(
     )
 
     companion object {
-        val entries: List<TopLevelDestination> = listOf(
-            Map,
-            SavedRoute,
-            Report,
-            MyPage,
-        )
+        val entries: List<TopLevelDestination>
+            get() =
+                listOf(
+                    Map,
+                    SavedRoute,
+                    Report,
+                    MyPage,
+                )
     }
 }

@@ -3,9 +3,11 @@ package com.ssafy.e102.eumgil.app.navigation
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
@@ -19,11 +21,13 @@ import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
+import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
 import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
+import kotlinx.coroutines.flow.map
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     composable(route = TopLevelRoute.Map.route) {
@@ -137,8 +141,14 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         val currentLocationManager = remember(context) {
             (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
         }
-        val navigationViewModelFactory = remember(currentLocationManager) {
-            NavigationGuidanceViewModel.provideFactory(currentLocationManager = currentLocationManager)
+        val bookmarkRepository = remember(context) {
+            (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
+        }
+        val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository) {
+            NavigationGuidanceViewModel.provideFactory(
+                currentLocationManager = currentLocationManager,
+                bookmarkRepository = bookmarkRepository,
+            )
         }
         val navigationViewModel =
             remember(activity, navigationViewModelFactory) {
@@ -194,6 +204,18 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     }
 
     composable(route = NavigationRoute.Guidance.route) {
+        val context = LocalContext.current
+        val settingsRepository =
+            remember(context) {
+                (context.applicationContext as BusanEumgilApp).appContainer.settingsRepository
+            }
+        val selectedPrimaryUserType by
+            remember(settingsRepository) {
+                settingsRepository
+                    .observeInitSettings()
+                    .map { initSettings -> initSettings.selectedPrimaryUserType }
+            }.collectAsStateWithLifecycle(initialValue = null)
+
         NavigationScreenRoute(
             onNavigateBack = {
                 navController.popBackStack()
@@ -204,9 +226,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToSavedRoute = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
             },
+            onNavigateToLowVisionHome = {
+                navController.navigate(resolveNavigationCompletionRoute()) {
+                    launchSingleTop = true
+                    popUpTo(NavigationRoute.Guidance.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            useLowVisionUi = shouldUseLowVisionNavigationUi(selectedPrimaryUserType),
         )
     }
 }
+
+internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
+    selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue
 
 fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
     navigate(destination.route.route) {

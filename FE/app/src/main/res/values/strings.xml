@@ -451,4 +451,19 @@
     <string name="low_vision_nav_bookmark">북마크</string>
     <string name="low_vision_nav_category">카테고리</string>
     <string name="low_vision_nav_my_page">마이페이지</string>
+    <string name="low_vision_my_page_title">마이페이지</string>
+    <string name="low_vision_my_page_mode_change">모드 변경</string>
+    <string name="low_vision_my_page_app_info">앱 정보</string>
+    <string name="low_vision_my_page_logout">로그아웃</string>
+    <string name="low_vision_app_info_title">앱 정보</string>
+    <string name="low_vision_app_info_service_title">부산이음길</string>
+    <string name="low_vision_app_info_service_body">시각장애 사용자를 위한 큰 글씨, 고대비, 음성 중심 길 안내 화면입니다.</string>
+    <string name="low_vision_app_info_support_title">도움말</string>
+    <string name="low_vision_app_info_support_body">홈에서 음성 입력을 시작하고, 북마크와 카테고리 탭으로 자주 찾는 장소를 이동할 수 있습니다.</string>
+    <string name="low_vision_bookmark_title">북마크</string>
+    <string name="low_vision_bookmark_empty">저장된 장소가 없습니다.</string>
+    <string name="low_vision_bookmark_error">북마크를 불러오지 못했습니다.</string>
+    <string name="low_vision_bookmark_no_address">주소 정보 없음</string>
+    <string name="low_vision_bookmark_navigate">길안내</string>
+    <string name="low_vision_bookmark_remove">삭제</string>
 </resources>

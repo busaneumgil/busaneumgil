@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionVoiceInputBottomNav
+import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
 /**
  * 시각지원 모드 음성 입력(녹음 진행) 화면.
@@ -105,7 +105,7 @@ fun LowVisionVoiceInputScreen(
 
         Spacer(modifier = Modifier.size(0.dp))
 
-        LowVisionVoiceInputBottomNav(
+        LowVisionBottomNav(
             selectedTab = uiState.selectedTab,
             onTabSelected = onTabSelected,
         )

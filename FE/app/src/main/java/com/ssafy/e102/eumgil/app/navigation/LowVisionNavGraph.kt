@@ -1,18 +1,23 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.composable
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionAppInfoRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBookmarkRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionMyPageRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionSearchRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
-import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
+import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
-/**
- * 시각지원 모드 풀스크린 셸의 네비게이션 그래프.
- *
- * Figma file MREqSzkmwhRcXnFS3lzW17, nodes 371:105 (홈) / 371:300 (입력중) 기반.
- * 약관 walkthrough가 완료되면 [LowVisionRoute.Home]으로 진입하도록 호출처에서 연결한다.
- */
 fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.Home.route) {
         LowVisionHomeRoute(
@@ -20,10 +25,9 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 navController.navigate(LowVisionRoute.VoiceInput.route)
             },
             onCurrentLocationClick = {
-                // 현재 위치 카드는 일반 모드 지도(Map)와 의미가 동일하므로 같은 라우트로 이동.
                 navController.navigate(TopLevelRoute.Map.route)
             },
-            onTabSelected = { /* 탭 라우팅은 추후 시각지원 모드 전용 4탭 셸이 잡히면 처리. */ },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
     }
 
@@ -37,25 +41,72 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                     }
                 }
             },
-            onTabSelected = { /* 탭 라우팅은 추후 시각지원 모드 전용 4탭 셸이 잡히면 처리. */ },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+        )
+    }
+
+    composable(route = LowVisionRoute.Bookmark.route) {
+        LowVisionBookmarkRoute(
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.createRoute(autoStartNavigation = true))
+            },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
     }
 
     composable(route = LowVisionRoute.Search.route) {
-        SearchResultsRoute(
-            initialQuery = "",
-            onNavigateBack = {
-                navController.popBackStack()
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+        ) {
+            LowVisionSearchRoute(
+                initialQuery = "",
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToRouteSetting = {
+                    navController.navigate(resolveLowVisionSearchResultRoute()) {
+                        launchSingleTop = true
+                        popUpTo(resolveLowVisionSearchPopUpRoute()) {
+                            inclusive = true
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+
+            LowVisionBottomNav(
+                selectedTab = LowVisionBottomTab.CATEGORY,
+                onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+            )
+        }
+    }
+
+    composable(route = LowVisionRoute.MyPage.route) {
+        LowVisionMyPageRoute(
+            onModeChangeClick = {
+                navController.navigate(resolveLowVisionModeChangeRoute())
             },
-            onNavigateToResults = { _ -> },
-            onNavigateToRouteSetting = {
-                navController.navigate(resolveLowVisionSearchResultRoute()) {
+            onAppInfoClick = {
+                navController.navigate(resolveLowVisionAppInfoRoute())
+            },
+            onLogoutClick = {
+                navController.navigate(resolveLowVisionLogoutRoute()) {
                     launchSingleTop = true
-                    popUpTo(resolveLowVisionSearchPopUpRoute()) {
+                    popUpTo(navController.graph.findStartDestination().id) {
                         inclusive = true
                     }
                 }
             },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+        )
+    }
+
+    composable(route = LowVisionRoute.AppInfo.route) {
+        LowVisionAppInfoRoute(
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
     }
 }
@@ -68,3 +119,80 @@ internal fun resolveLowVisionSearchResultRoute(): String =
     RouteSettingRoute.Setting.createRoute(autoStartNavigation = true)
 
 internal fun resolveLowVisionSearchPopUpRoute(): String = LowVisionRoute.Search.route
+
+internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.Home.route
+
+internal fun resolveLowVisionModeChangeRoute(): String = OnboardingRoute.ProfileUserTypePrimary.route
+
+internal fun resolveLowVisionAppInfoRoute(): String = LowVisionRoute.AppInfo.route
+
+internal fun resolveLowVisionLogoutRoute(): String = AuthRoute.Login.route
+
+internal fun resolveLowVisionBottomTabRoute(tab: LowVisionBottomTab): String =
+    when (tab) {
+        LowVisionBottomTab.HOME -> LowVisionRoute.Home.route
+        LowVisionBottomTab.BOOKMARK -> LowVisionRoute.Bookmark.route
+        LowVisionBottomTab.CATEGORY -> LowVisionRoute.Search.route
+        LowVisionBottomTab.MY_PAGE -> LowVisionRoute.MyPage.route
+    }
+
+internal fun resolveLowVisionSelectedBottomTab(currentRoute: String?): LowVisionBottomTab? =
+    when (currentRoute) {
+        LowVisionRoute.Home.route,
+        LowVisionRoute.VoiceInput.route -> LowVisionBottomTab.HOME
+        LowVisionRoute.Bookmark.route -> LowVisionBottomTab.BOOKMARK
+        LowVisionRoute.Search.route -> LowVisionBottomTab.CATEGORY
+        LowVisionRoute.MyPage.route,
+        LowVisionRoute.AppInfo.route -> LowVisionBottomTab.MY_PAGE
+        else -> null
+    }
+
+internal fun shouldNavigateLowVisionBottomTab(
+    currentRoute: String?,
+    selectedTab: LowVisionBottomTab,
+): Boolean = resolveLowVisionSelectedBottomTab(currentRoute) != selectedTab
+
+private fun NavHostController.navigateToLowVisionBottomTab(tab: LowVisionBottomTab) {
+    if (!shouldNavigateLowVisionBottomTab(currentBackStackEntry?.destination?.route, tab)) {
+        return
+    }
+
+    when (tab) {
+        LowVisionBottomTab.HOME -> {
+            val didPopHome =
+                popBackStack(
+                    route = LowVisionRoute.Home.route,
+                    inclusive = false,
+                )
+            if (!didPopHome) {
+                navigate(LowVisionRoute.Home.route) {
+                    launchSingleTop = true
+                }
+            }
+        }
+        LowVisionBottomTab.BOOKMARK -> {
+            navigate(LowVisionRoute.Bookmark.route) {
+                launchSingleTop = true
+                popUpTo(LowVisionRoute.Home.route) {
+                    inclusive = false
+                }
+            }
+        }
+        LowVisionBottomTab.CATEGORY -> {
+            navigate(LowVisionRoute.Search.route) {
+                launchSingleTop = true
+                popUpTo(LowVisionRoute.Home.route) {
+                    inclusive = false
+                }
+            }
+        }
+        LowVisionBottomTab.MY_PAGE -> {
+            navigate(LowVisionRoute.MyPage.route) {
+                launchSingleTop = true
+                popUpTo(LowVisionRoute.Home.route) {
+                    inclusive = false
+                }
+            }
+        }
+    }
+}

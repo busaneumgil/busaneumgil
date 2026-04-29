@@ -57,17 +57,27 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
-    val showTopLevelBar =
-        TopLevelDestination.entries.any { destination ->
-            destination.route.route == currentRoute
-        }
+
+    // 인증·온보딩·저시력 전용 플로우에서는 탭 바를 숨깁니다.
+    val showTopLevelBar = currentRoute != null &&
+        !currentRoute.startsWith("auth/") &&
+        !currentRoute.startsWith("onboarding/") &&
+        !currentRoute.startsWith("low_vision/")
+
+    // 검색·경로 설정·안내 화면에서도 홈(지도) 탭이 활성 상태로 보입니다.
+    val effectiveActiveRoute = when {
+        currentRoute == SearchRoute.Search.route -> TopLevelRoute.Map.route
+        currentRoute == NavigationRoute.Guidance.route -> TopLevelRoute.Map.route
+        currentRoute?.startsWith("route_setting") == true -> TopLevelRoute.Map.route
+        else -> currentRoute
+    }
 
     Scaffold(
         bottomBar = {
             if (showTopLevelBar) {
                 EumTopLevelTabBar(
                     destinations = TopLevelDestination.entries,
-                    currentRoute = currentRoute,
+                    currentRoute = effectiveActiveRoute,
                     onDestinationSelected = { destination ->
                         navController.navigateToTopLevel(destination)
                     },
@@ -87,21 +97,4 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
             onboardingNavGraph(
                 navController = navController,
-                settingsRepository = settingsRepository,
-                initialSettings = restoredSettings,
-            )
-            lowVisionNavGraph(navController = navController)
-            mainNavGraph(navController = navController)
-        }
-    }
-}
-
-@Composable
-private fun AppEntryLoadingScreen(modifier: Modifier = Modifier) {
-    Image(
-        painter = painterResource(id = R.drawable.splash_illustration),
-        contentDescription = stringResource(id = R.string.app_name),
-        modifier = modifier.fillMaxSize(),
-        contentScale = ContentScale.Crop,
-    )
-}
+                se

@@ -123,6 +123,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
     }
 

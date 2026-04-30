@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.collect
 fun LowVisionNavigationRoute(
     onNavigateToComplete: () -> Unit,
     onNavigateToBookmark: () -> Unit,
+    onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -76,6 +77,7 @@ fun LowVisionNavigationRoute(
     LowVisionNavigationScreen(
         uiState = uiState,
         onAction = viewModel::onAction,
+        onTabSelected = onTabSelected,
         modifier = modifier,
     )
 }

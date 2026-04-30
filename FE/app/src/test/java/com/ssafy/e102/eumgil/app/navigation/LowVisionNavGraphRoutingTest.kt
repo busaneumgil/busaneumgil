@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.app.navigation
 
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class LowVisionNavGraphRoutingTest {
@@ -35,6 +36,11 @@ class LowVisionNavGraphRoutingTest {
             LowVisionRoute.Home.route,
             resolveNavigationCompletionRoute(),
         )
+    }
+
+    @Test
+    fun `current location action stays in low vision home until routing is wired`() {
+        assertNull(resolveLowVisionCurrentLocationRoute())
     }
 
     @Test

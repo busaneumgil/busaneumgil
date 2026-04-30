@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,21 +37,25 @@ fun LowVisionSearchScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(PlaceListBg),
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .background(PlaceListBg)
+                    .statusBarsPadding()
+                    .padding(
+                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                    ),
+        verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
     ) {
         Text(
             text = "검색 결과",
-            fontSize = 26.sp,
+            fontSize = LowVisionScreenDefaults.headerFontSize,
             fontWeight = FontWeight.ExtraBold,
+            lineHeight = LowVisionScreenDefaults.headerLineHeight,
             color = PlaceListAmber,
             textAlign = TextAlign.Center,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
+            modifier = Modifier.fillMaxWidth(),
         )
 
         Box(

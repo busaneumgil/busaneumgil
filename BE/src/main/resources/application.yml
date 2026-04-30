@@ -6,3 +6,12 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+
+social:
+  provider:
+    kakao:
+      user-info-uri: ${KAKAO_USER_INFO_URI:https://kapi.kakao.com/v2/user/me}
+    naver:
+      user-info-uri: ${NAVER_USER_INFO_URI:https://openapi.naver.com/v1/nid/me}
+    google:
+      user-info-uri: ${GOOGLE_USER_INFO_URI:https://openidconnect.googleapis.com/v1/userinfo}

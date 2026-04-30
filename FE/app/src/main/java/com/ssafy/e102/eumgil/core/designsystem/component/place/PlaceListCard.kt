@@ -74,11 +74,11 @@ fun PlaceListCard(
         modifier = modifier
             .fillMaxWidth()
             .border(
-                width = 1.5.dp,
-                color = PlaceListAmber.copy(alpha = 0.8f),
-                shape = RoundedCornerShape(EumRadius.large),
+                width = 3.dp,
+                color = PlaceListAmber,
+                shape = RoundedCornerShape(18.dp),
             )
-            .clip(RoundedCornerShape(EumRadius.large))
+            .clip(RoundedCornerShape(18.dp))
             .background(PlaceListBg)
             .then(
                 if (onContentClick != null) {
@@ -96,49 +96,57 @@ fun PlaceListCard(
                     Modifier
                 },
             )
-            .padding(EumSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            .padding(horizontal = 26.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         // ── 헤더: 번호 뱃지 + 이름 + 주소 ──────────────────────────────────
         Row(
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.Top,
         ) {
             // 번호 뱃지
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(72.dp)
                     .background(
                         color = PlaceListAmber,
-                        shape = RoundedCornerShape(EumRadius.small),
+                        shape = RoundedCornerShape(10.dp),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = index.toString(),
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Black,
                     color = PlaceListOnAmber,
+                    lineHeight = 48.sp,
+                    letterSpacing = 0.sp,
                 )
             }
 
             // 이름 + 주소
             Column(
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = name,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.Black,
                     color = Color.White,
-                    lineHeight = 32.sp,
+                    lineHeight = 52.sp,
+                    letterSpacing = 0.sp,
+                    maxLines = 3,
                 )
                 if (!address.isNullOrBlank()) {
                     Text(
                         text = address,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = PlaceListSubText,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        lineHeight = 32.sp,
+                        letterSpacing = 0.sp,
+                        maxLines = 2,
                     )
                 }
             }
@@ -146,7 +154,7 @@ fun PlaceListCard(
 
         // ── 버튼 영역 ────────────────────────────────────────────────────────
         Column(
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PlaceActionButton(
                 label = bookmarkLabel,
@@ -179,8 +187,8 @@ private fun PlaceActionButton(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(60.dp)
-            .clip(RoundedCornerShape(EumRadius.medium))
+            .height(78.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(PlaceListAmber)
             .clickable(
                 interactionSource = interactionSource,
@@ -198,14 +206,16 @@ private fun PlaceActionButton(
             painter = painterResource(id = iconRes),
             contentDescription = null,
             tint = PlaceListOnAmber,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(46.dp),
         )
-        Spacer(modifier = Modifier.size(EumSpacing.small))
+        Spacer(modifier = Modifier.size(28.dp))
         Text(
             text = label,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 36.sp,
+            lineHeight = 42.sp,
+            fontWeight = FontWeight.Black,
             color = PlaceListOnAmber,
+            letterSpacing = 0.sp,
         )
     }
 }

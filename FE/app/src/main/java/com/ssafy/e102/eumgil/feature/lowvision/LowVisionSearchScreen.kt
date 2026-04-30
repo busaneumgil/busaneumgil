@@ -104,6 +104,7 @@ private fun LowVisionSearchResultList(
     onBriefingClick: (SearchResult) -> Unit,
 ) {
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding =
             PaddingValues(
                 horizontal = EumSpacing.medium,

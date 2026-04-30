@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -35,6 +36,7 @@ import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 private val BriefingBackground = Color(0xFF0D0D0F)
 private val BriefingYellow = Color(0xFFFFD400)
 private val BriefingBlack = Color(0xFF000000)
+private val BriefingWhite = Color(0xFFFFFFFF)
 
 @Composable
 fun LowVisionRouteBriefingScreen(
@@ -56,33 +58,24 @@ fun LowVisionRouteBriefingScreen(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 28.dp, vertical = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                    .padding(horizontal = 28.dp, vertical = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
                 text = "경로 브리핑",
-                color = Color.White,
-                fontSize = 48.sp,
-                lineHeight = 56.sp,
+                color = BriefingWhite,
+                fontSize = 56.sp,
+                lineHeight = 64.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
             )
             Box(
                 modifier =
                     Modifier
-                        .height(7.dp)
-                        .fillMaxWidth(0.24f)
+                        .height(8.dp)
+                        .fillMaxWidth(0.25f)
                         .clip(RoundedCornerShape(999.dp))
                         .background(BriefingYellow),
-            )
-
-            Text(
-                text = "전체 경로",
-                color = BriefingYellow,
-                fontSize = 24.sp,
-                lineHeight = 30.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 0.sp,
             )
 
             Column(
@@ -90,6 +83,7 @@ fun LowVisionRouteBriefingScreen(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f)
+                        .heightIn(min = 270.dp)
                         .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
@@ -105,7 +99,7 @@ fun LowVisionRouteBriefingScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(260.dp),
+                        .height(300.dp),
             )
         }
 
@@ -122,7 +116,7 @@ private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(82.dp)
+                .height(92.dp)
                 .semantics {
                     contentDescription = "${step.sequence}번. ${step.instruction}"
                 },
@@ -133,22 +127,22 @@ private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 18.dp),
+                    .padding(horizontal = 24.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(22.dp),
+            horizontalArrangement = Arrangement.spacedBy(26.dp),
         ) {
             Text(
                 text = step.sequence.toString().padStart(2, '0'),
                 color = BriefingBlack,
-                fontSize = 28.sp,
+                fontSize = 31.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
             )
             Text(
                 text = step.instruction,
                 color = BriefingBlack,
-                fontSize = 34.sp,
-                lineHeight = 40.sp,
+                fontSize = 38.sp,
+                lineHeight = 44.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
                 maxLines = 1,
@@ -160,9 +154,9 @@ private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
                         LowVisionRouteBriefingStepIcon.STRAIGHT -> "↑"
                         LowVisionRouteBriefingStepIcon.TRANSIT -> "▣"
                         LowVisionRouteBriefingStepIcon.TURN -> "↱"
-                    },
+                },
                 color = BriefingBlack,
-                fontSize = 52.sp,
+                fontSize = 56.sp,
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.sp,
@@ -207,16 +201,16 @@ private fun BriefingPlaybackButton(
             Text(
                 text = icon,
                 color = BriefingBlack,
-                fontSize = 72.sp,
+                fontSize = 82.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
             )
-            Spacer(modifier = Modifier.size(34.dp))
+            Spacer(modifier = Modifier.size(38.dp))
             Text(
                 text = label,
                 color = BriefingBlack,
-                fontSize = 64.sp,
-                lineHeight = 70.sp,
+                fontSize = 72.sp,
+                lineHeight = 80.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
             )

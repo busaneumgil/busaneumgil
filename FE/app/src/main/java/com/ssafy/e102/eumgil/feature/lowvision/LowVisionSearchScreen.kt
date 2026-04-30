@@ -33,6 +33,14 @@ import com.ssafy.e102.eumgil.feature.search.SearchResultUiState
 import com.ssafy.e102.eumgil.feature.search.SearchUiAction
 import com.ssafy.e102.eumgil.feature.search.SearchUiState
 
+internal object LowVisionSearchLayoutDefaults {
+    val resultCardMinHeight = 560.dp
+    val resultListBottomPadding = 96.dp
+    val actionButtonHeight = 78.dp
+    val actionButtonGap = 16.dp
+    const val actionButtonCount = 2
+}
+
 @Composable
 fun LowVisionSearchScreen(
     uiState: SearchUiState,
@@ -141,8 +149,10 @@ private fun LowVisionSearchResultList(
         modifier = Modifier.fillMaxSize(),
         contentPadding =
             PaddingValues(
-                horizontal = EumSpacing.medium,
-                vertical = EumSpacing.medium,
+                start = EumSpacing.medium,
+                top = EumSpacing.medium,
+                end = EumSpacing.medium,
+                bottom = LowVisionSearchLayoutDefaults.resultListBottomPadding,
             ),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
@@ -161,7 +171,7 @@ private fun LowVisionSearchResultList(
                 contentClickDescription = "${result.title} 경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
                 bookmarkContentDescription = "${result.title} 저장. 저장 후 북마크로 이동합니다.",
                 navigateContentDescription = "${result.title} 길찾기. 저시력 안내 화면으로 이동합니다.",
-                modifier = Modifier.fillParentMaxHeight(fraction = 0.47f),
+                modifier = Modifier.height(LowVisionSearchLayoutDefaults.resultCardMinHeight),
             )
         }
     }

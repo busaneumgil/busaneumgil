@@ -43,6 +43,18 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `navigation bookmark save returns to low vision bookmark for low vision user`() {
+        assertEquals(
+            LowVisionRoute.Bookmark.route,
+            resolveNavigationSavedRoute(selectedPrimaryUserType = "low_vision"),
+        )
+        assertEquals(
+            TopLevelRoute.SavedRoute.route,
+            resolveNavigationSavedRoute(selectedPrimaryUserType = "mobility_impaired"),
+        )
+    }
+
+    @Test
     fun `current location action stays in low vision home until routing is wired`() {
         assertNull(resolveLowVisionCurrentLocationRoute())
     }

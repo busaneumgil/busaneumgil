@@ -1,9 +1,10 @@
 package com.ssafy.e102.eumgil.feature.report
 
 object ReportFormLimits {
-    const val DESCRIPTION_MAX_LENGTH = 500
+    const val DESCRIPTION_MAX_LENGTH = 300
     const val ADDRESS_MAX_LENGTH = 120
     const val PHOTO_MAX_BYTES = 10L * 1024L * 1024L
+    const val PHOTO_MAX_COUNT = 5
 }
 
 data class ReportUiState(
@@ -22,7 +23,7 @@ data class ReportUiState(
     val isDraftSavable: Boolean
         get() = reportType.value != null ||
             location.value != null ||
-            photo.value != null ||
+            photo.values.isNotEmpty() ||
             description.value.isNotBlank()
 
     val isLocationStepConfirmable: Boolean
@@ -64,11 +65,15 @@ data class ReportLocationInput(
 )
 
 data class ReportPhotoInput(
-    val value: ReportPhoto? = null,
+    val values: List<ReportPhoto> = emptyList(),
     val isTouched: Boolean = false,
     val isDirty: Boolean = false,
     val error: ReportPhotoError? = null,
-)
+) {
+    val count: Int get() = values.size
+    val canAddMore: Boolean get() = values.size < ReportFormLimits.PHOTO_MAX_COUNT
+    val firstOrNull: ReportPhoto? get() = values.firstOrNull()
+}
 
 data class ReportDescriptionInput(
     val value: String = "",
@@ -208,7 +213,9 @@ sealed interface ReportUiAction {
         val photo: ReportPhoto,
     ) : ReportUiAction
 
-    data object PhotoRemoved : ReportUiAction
+    data class PhotoRemovedAt(
+        val index: Int,
+    ) : ReportUiAction
 
     data object PhotoBlurred : ReportUiAction
 
@@ -288,6 +295,7 @@ enum class ReportPhotoError {
     UnsupportedFormat,
     TooLarge,
     Unreadable,
+    TooMany,
 }
 
 enum class ReportDescriptionError {

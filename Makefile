@@ -8,6 +8,7 @@ BASH ?= bash
 JIRA_PREFIX ?=
 GIT_EXEC_PATH := $(subst \,/,$(shell git --exec-path))
 MAKE_DOCKER_SCRIPT_DIR := scripts/make/docker
+MAKE_HELP_SCRIPT := scripts/make/help.sh
 MAKE_OPS_SCRIPT_DIR := scripts/make/ops
 MAKE_TERRAFORM_SCRIPT_DIR := scripts/make/terraform
 
@@ -15,7 +16,11 @@ ifeq ($(OS),Windows_NT)
 BASH := $(patsubst %/mingw64/libexec/git-core,%/bin/bash.exe,$(GIT_EXEC_PATH))
 endif
 
-.PHONY: init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs portainer-tunnel terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan
+.PHONY: help init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs portainer-tunnel terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan
+
+# 사용 가능한 make 타깃과 간단한 설명을 보여준다.
+help:
+	@"$(BASH)" $(MAKE_HELP_SCRIPT)
 
 # Git/Jira 보조 스크립트
 # 로컬 Git 설정과 hook을 한 번에 맞춘다.

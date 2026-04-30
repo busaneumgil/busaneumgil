@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +40,12 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
 private val LowVisionYellow = Color(0xFFFFD400)
+
+internal object LowVisionMyPageLayoutDefaults {
+    const val actionCount = 3
+    const val actionSectionWeight = 1f
+    val actionMinHeight = 112.dp
+}
 
 @Composable
 fun LowVisionMyPageScreen(
@@ -79,25 +83,26 @@ fun LowVisionMyPageScreen(
                 textAlign = TextAlign.Center,
             )
 
-            Spacer(modifier = Modifier.height(56.dp))
-
             LowVisionMyPageAction(
                 labelRes = R.string.low_vision_my_page_mode_change,
                 iconRes = R.drawable.ic_lowvision_mode_change,
                 filled = true,
                 onClick = onModeChangeClick,
+                modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
             )
             LowVisionMyPageAction(
                 labelRes = R.string.low_vision_my_page_app_info,
                 iconRes = R.drawable.ic_status_safe_info,
                 filled = false,
                 onClick = onAppInfoClick,
+                modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
             )
             LowVisionMyPageAction(
                 labelRes = R.string.low_vision_my_page_logout,
                 iconRes = R.drawable.ic_lowvision_logout,
                 filled = false,
                 onClick = onLogoutClick,
+                modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
             )
         }
 
@@ -162,6 +167,7 @@ private fun LowVisionMyPageAction(
     @DrawableRes iconRes: Int,
     filled: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val label = stringResource(id = labelRes)
     val backgroundColor = if (filled) LowVisionYellow else Color.Black
@@ -169,9 +175,9 @@ private fun LowVisionMyPageAction(
 
     Surface(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
-                .heightIn(min = 112.dp)
+                .heightIn(min = LowVisionMyPageLayoutDefaults.actionMinHeight)
                 .semantics {
                     role = Role.Button
                     contentDescription = label

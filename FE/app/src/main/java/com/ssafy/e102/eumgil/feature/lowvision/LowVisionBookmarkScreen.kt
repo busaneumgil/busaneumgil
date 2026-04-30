@@ -68,16 +68,19 @@ fun LowVisionBookmarkScreen(
                 Modifier
                     .weight(1f)
                     .statusBarsPadding()
-                    .padding(horizontal = 24.dp, vertical = 36.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+                    .padding(
+                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                    ),
+            verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
         ) {
             Text(
                 text = stringResource(id = R.string.low_vision_bookmark_title),
                 modifier = Modifier.fillMaxWidth(),
                 color = LowVisionYellow,
-                fontSize = 52.sp,
+                fontSize = LowVisionScreenDefaults.headerFontSize,
                 fontWeight = FontWeight.Black,
-                lineHeight = 60.sp,
+                lineHeight = LowVisionScreenDefaults.headerLineHeight,
                 textAlign = TextAlign.Center,
             )
 

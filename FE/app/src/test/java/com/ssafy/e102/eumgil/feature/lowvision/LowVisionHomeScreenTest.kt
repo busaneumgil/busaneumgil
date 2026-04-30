@@ -8,7 +8,7 @@ import org.junit.Test
 class LowVisionHomeScreenTest {
     @Test
     fun `home screen reserves the low vision title slot without visible text`() {
-        assertEquals(60.dp, LowVisionHomeLayoutDefaults.headerSlotHeight)
+        assertEquals(48.dp, LowVisionHomeLayoutDefaults.headerSlotHeight)
     }
 
     @Test

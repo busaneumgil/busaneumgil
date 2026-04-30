@@ -33,7 +33,7 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionHomeBottomNav
 
 internal object LowVisionHomeLayoutDefaults {
-    val headerSlotHeight = 60.dp
+    val headerSlotHeight = LowVisionScreenDefaults.headerLineHeight.value.dp
     const val voiceActionCardWeight = 2f
     const val currentLocationCardWeight = 1f
     val actionCardGap = 40.dp
@@ -79,7 +79,10 @@ fun LowVisionHomeScreen(
             modifier = Modifier
                 .weight(1f)
                 .statusBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 40.dp),
+                .padding(
+                    horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                    vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                ),
             verticalArrangement = Arrangement.spacedBy(LowVisionHomeLayoutDefaults.actionCardGap),
         ) {
             Spacer(modifier = Modifier.height(LowVisionHomeLayoutDefaults.headerSlotHeight))

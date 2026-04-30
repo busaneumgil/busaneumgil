@@ -22,6 +22,8 @@ fun LowVisionSearchRoute(
     initialQuery: String,
     onNavigateBack: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit,
+    onNavigateToBookmark: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -56,6 +58,8 @@ fun LowVisionSearchRoute(
                 SearchUiEvent.NavigateBack -> onNavigateBack()
                 is SearchUiEvent.NavigateToResults -> Unit
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
+                SearchUiEvent.NavigateToLowVisionBookmark -> onNavigateToBookmark()
             }
         }
     }

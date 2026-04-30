@@ -78,10 +78,13 @@ fun LowVisionSearchScreen(
                         LowVisionSearchResultList(
                             results = state.results,
                             onBookmarkClick = { result ->
-                                onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+                                onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
                             },
                             onNavigateClick = { result ->
                                 onAction(SearchUiAction.SearchResultClicked(result = result))
+                            },
+                            onBriefingClick = { result ->
+                                onAction(SearchUiAction.SearchResultBriefingClicked(result = result))
                             },
                         )
                     }
@@ -98,6 +101,7 @@ private fun LowVisionSearchResultList(
     results: List<SearchResult>,
     onBookmarkClick: (SearchResult) -> Unit,
     onNavigateClick: (SearchResult) -> Unit,
+    onBriefingClick: (SearchResult) -> Unit,
 ) {
     LazyColumn(
         contentPadding =
@@ -115,9 +119,13 @@ private fun LowVisionSearchResultList(
                 index = index + 1,
                 name = result.title,
                 address = result.subtitle.ifBlank { null },
-                bookmarkLabel = "북마크",
+                bookmarkLabel = "저장",
                 onBookmarkClick = { onBookmarkClick(result) },
                 onNavigateClick = { onNavigateClick(result) },
+                onContentClick = { onBriefingClick(result) },
+                contentClickDescription = "${result.title} 경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
+                bookmarkContentDescription = "${result.title} 저장. 저장 후 북마크로 이동합니다.",
+                navigateContentDescription = "${result.title} 길찾기. 저시력 안내 화면으로 이동합니다.",
                 modifier = Modifier.fillParentMaxHeight(fraction = 0.47f),
             )
         }

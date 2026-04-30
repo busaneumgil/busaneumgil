@@ -65,6 +65,10 @@ fun PlaceListCard(
     onBookmarkClick: () -> Unit,
     onNavigateClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onContentClick: (() -> Unit)? = null,
+    contentClickDescription: String? = null,
+    bookmarkContentDescription: String? = null,
+    navigateContentDescription: String? = null,
 ) {
     Column(
         modifier = modifier
@@ -76,6 +80,22 @@ fun PlaceListCard(
             )
             .clip(RoundedCornerShape(EumRadius.large))
             .background(PlaceListBg)
+            .then(
+                if (onContentClick != null) {
+                    Modifier
+                        .clickable(
+                            role = Role.Button,
+                            onClick = onContentClick,
+                        )
+                        .semantics {
+                            contentClickDescription?.let { description ->
+                                contentDescription = description
+                            }
+                        }
+                } else {
+                    Modifier
+                },
+            )
             .padding(EumSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
@@ -132,13 +152,13 @@ fun PlaceListCard(
                 label = bookmarkLabel,
                 iconRes = R.drawable.ic_action_favorite,
                 onClick = onBookmarkClick,
-                contentDescription = "$name $bookmarkLabel",
+                contentDescription = bookmarkContentDescription ?: "$name $bookmarkLabel",
             )
             PlaceActionButton(
                 label = "길찾기",
                 iconRes = R.drawable.ic_nav_route,
                 onClick = onNavigateClick,
-                contentDescription = "$name 길찾기",
+                contentDescription = navigateContentDescription ?: "$name 길찾기",
             )
         }
     }

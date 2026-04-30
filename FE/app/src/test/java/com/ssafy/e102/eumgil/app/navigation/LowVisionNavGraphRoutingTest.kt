@@ -19,9 +19,9 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
-    fun `low vision search result auto starts navigation guidance`() {
+    fun `low vision search result uses low vision guidance route`() {
         assertEquals(
-            RouteSettingRoute.Setting.createRoute(autoStartNavigation = true),
+            LowVisionRoute.Guidance.route,
             resolveLowVisionSearchResultRoute(),
         )
         assertEquals(
@@ -35,9 +35,9 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
-    fun `navigation completion returns to low vision voice input home tab`() {
+    fun `navigation completion returns to low vision completion screen`() {
         assertEquals(
-            LowVisionRoute.Home.route,
+            LowVisionRoute.NavigationComplete.route,
             resolveNavigationCompletionRoute(),
         )
     }
@@ -79,6 +79,9 @@ class LowVisionNavGraphRoutingTest {
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Home.route))
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.VoiceInput.route))
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Search.route))
+        assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.RouteBriefing.route))
+        assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Guidance.route))
+        assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.NavigationComplete.route))
         assertEquals(LowVisionBottomTab.BOOKMARK, resolveLowVisionSelectedBottomTab(LowVisionRoute.Bookmark.route))
         assertEquals(LowVisionBottomTab.CATEGORY, resolveLowVisionSelectedBottomTab(LowVisionRoute.CategorySearch.route))
         assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.MyPage.route))

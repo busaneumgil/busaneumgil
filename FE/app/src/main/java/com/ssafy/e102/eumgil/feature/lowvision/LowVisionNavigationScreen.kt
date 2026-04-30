@@ -2,7 +2,6 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,17 +13,18 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,7 +32,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiState
@@ -42,13 +41,31 @@ private val LowVisionNavigationYellow = Color(0xFFFFD400)
 private val LowVisionNavigationBlack = Color(0xFF000000)
 private val LowVisionNavigationMuted = Color(0xFFBDBDBD)
 
+internal enum class LowVisionNavigationPage(
+    val title: String,
+) {
+    GUIDE(title = "안내 정보"),
+    DISTANCE(title = "남은 거리"),
+    TIME(title = "예상 시간"),
+    STEP(title = "진행 단계"),
+}
+
+internal val lowVisionNavigationPages: List<LowVisionNavigationPage> = LowVisionNavigationPage.entries
+
+internal fun nextLowVisionNavigationPageIndex(currentIndex: Int): Int =
+    (currentIndex + 1).coerceAtMost(lowVisionNavigationPages.lastIndex)
+
+internal fun previousLowVisionNavigationPageIndex(currentIndex: Int): Int =
+    (currentIndex - 1).coerceAtLeast(0)
+
 @Composable
 fun LowVisionNavigationScreen(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val enabled = uiState.isExitEnabled
+    var pageIndex by rememberSaveable { mutableIntStateOf(0) }
+    val page = lowVisionNavigationPages[pageIndex]
 
     Column(
         modifier =
@@ -61,7 +78,8 @@ fun LowVisionNavigationScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        LowVisionGuidanceCard(
+        LowVisionNavigationPageCard(
+            page = page,
             uiState = uiState,
             modifier =
                 Modifier
@@ -70,96 +88,41 @@ fun LowVisionNavigationScreen(
                     .heightIn(min = 360.dp),
         )
 
-        Row(
+        LowVisionNavigationPageActions(
+            pageIndex = pageIndex,
+            onPreviousClick = { pageIndex = previousLowVisionNavigationPageIndex(pageIndex) },
+            onNextClick = {
+                if (pageIndex == lowVisionNavigationPages.lastIndex) {
+                    onAction(NavigationUiAction.NavigationCompleteClicked)
+                } else {
+                    pageIndex = nextLowVisionNavigationPageIndex(pageIndex)
+                }
+            },
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .heightIn(min = 180.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            LowVisionNavigationActionCard(
-                label = "목적지 저장",
-                enabled = enabled,
-                backgroundColor = LowVisionNavigationYellow,
-                contentColor = LowVisionNavigationBlack,
-                icon = {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(LowVisionNavigationBlack),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_voice_location_pin),
-                            contentDescription = null,
-                            tint = LowVisionNavigationYellow,
-                            modifier = Modifier.size(50.dp),
-                        )
-                    }
-                },
-                onClick = { onAction(NavigationUiAction.SaveBookmarkClicked) },
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxSize(),
-            )
-
-            LowVisionNavigationActionCard(
-                label = "안내 완료",
-                enabled = enabled,
-                backgroundColor = LowVisionNavigationBlack,
-                contentColor = LowVisionNavigationYellow,
-                border = BorderStroke(width = 2.dp, color = LowVisionNavigationYellow),
-                icon = {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(78.dp)
-                                .border(
-                                    width = 6.dp,
-                                    color = LowVisionNavigationYellow,
-                                    shape = CircleShape,
-                                ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_status_check),
-                            contentDescription = null,
-                            tint = LowVisionNavigationYellow,
-                            modifier = Modifier.size(46.dp),
-                        )
-                    }
-                },
-                onClick = { onAction(NavigationUiAction.NavigationCompleteClicked) },
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxSize(),
-            )
-        }
+        )
     }
 }
 
 @Composable
-private fun LowVisionGuidanceCard(
+private fun LowVisionNavigationPageCard(
+    page: LowVisionNavigationPage,
     uiState: NavigationUiState,
     modifier: Modifier = Modifier,
 ) {
-    val metrics = uiState.stepCard.metrics
-    val distance = metrics.getOrNull(0)?.value.orEmpty().ifBlank { "-" }
-    val eta = metrics.getOrNull(1)?.value.orEmpty().ifBlank { "-" }
-    val progress = metrics.getOrNull(2)?.value.orEmpty().ifBlank { "-" }
-    val instruction = uiState.stepCard.instruction
-    val supportingText = uiState.stepCard.supportingText
+    val content = page.toPageContent(uiState)
 
     Surface(
         modifier =
             modifier
                 .semantics {
-                    contentDescription = listOf("길 안내 중", instruction, supportingText).joinToString(". ")
+                    contentDescription =
+                        listOf(content.title, content.primaryText, content.secondaryText)
+                            .filter(String::isNotBlank)
+                            .joinToString(". ")
                 },
         shape = RoundedCornerShape(24.dp),
         color = LowVisionNavigationBlack,
@@ -171,100 +134,96 @@ private fun LowVisionGuidanceCard(
                     .fillMaxSize()
                     .padding(horizontal = 28.dp, vertical = 30.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
+            Text(
+                text = content.title,
+                color = LowVisionNavigationYellow,
+                fontSize = 36.sp,
+                lineHeight = 42.sp,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                letterSpacing = 0.sp,
+            )
+            Text(
+                text = content.primaryText,
+                color = Color.White,
+                fontSize = content.primaryFontSizeSp.sp,
+                lineHeight = content.primaryLineHeightSp.sp,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                letterSpacing = 0.sp,
+                maxLines = content.primaryMaxLines,
+                modifier = Modifier.padding(top = 34.dp),
+            )
+            if (content.secondaryText.isNotBlank()) {
                 Text(
-                    text = "길 안내 중",
-                    color = LowVisionNavigationYellow,
-                    fontSize = 34.sp,
-                    lineHeight = 40.sp,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
-                    letterSpacing = 0.sp,
-                )
-                Text(
-                    text = instruction,
-                    color = Color.White,
-                    fontSize = 38.sp,
-                    lineHeight = 46.sp,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
-                    letterSpacing = 0.sp,
-                    maxLines = 3,
-                )
-                Text(
-                    text = supportingText,
+                    text = content.secondaryText,
                     color = LowVisionNavigationMuted,
-                    fontSize = 24.sp,
-                    lineHeight = 32.sp,
+                    fontSize = 26.sp,
+                    lineHeight = 34.sp,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
                     letterSpacing = 0.sp,
-                    maxLines = 3,
+                    maxLines = 4,
+                    modifier = Modifier.padding(top = 24.dp),
                 )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                LowVisionGuidanceMetric(label = "거리", value = distance, modifier = Modifier.weight(1f))
-                LowVisionGuidanceMetric(label = "시간", value = eta, modifier = Modifier.weight(1f))
-                LowVisionGuidanceMetric(label = "단계", value = progress, modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun LowVisionGuidanceMetric(
-    label: String,
-    value: String,
+private fun LowVisionNavigationPageActions(
+    pageIndex: Int,
+    onPreviousClick: () -> Unit,
+    onNextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(LowVisionNavigationYellow)
-                .padding(horizontal = 8.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = label,
-            color = LowVisionNavigationBlack,
-            fontSize = 18.sp,
-            lineHeight = 22.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-            letterSpacing = 0.sp,
-            maxLines = 1,
+        LowVisionNavigationTextCard(
+            label = "이전",
+            actionHint = "이전 안내 정보로 이동합니다.",
+            enabled = pageIndex > 0,
+            backgroundColor = LowVisionNavigationBlack,
+            contentColor = LowVisionNavigationYellow,
+            border = BorderStroke(width = 2.dp, color = LowVisionNavigationYellow),
+            onClick = onPreviousClick,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
         )
-        Text(
-            text = value,
-            color = LowVisionNavigationBlack,
-            fontSize = 24.sp,
-            lineHeight = 30.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-            letterSpacing = 0.sp,
-            maxLines = 1,
+        LowVisionNavigationTextCard(
+            label = if (pageIndex == lowVisionNavigationPages.lastIndex) "안내 완료" else "다음",
+            actionHint =
+                if (pageIndex == lowVisionNavigationPages.lastIndex) {
+                    "두 번 탭하면 안내 완료 화면으로 이동합니다."
+                } else {
+                    "다음 안내 정보로 이동합니다."
+                },
+            enabled = true,
+            backgroundColor = LowVisionNavigationYellow,
+            contentColor = LowVisionNavigationBlack,
+            onClick = onNextClick,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
         )
     }
 }
 
 @Composable
-private fun LowVisionNavigationActionCard(
+private fun LowVisionNavigationTextCard(
     label: String,
+    actionHint: String,
     enabled: Boolean,
     backgroundColor: Color,
     contentColor: Color,
-    icon: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     border: BorderStroke? = null,
@@ -275,33 +234,75 @@ private fun LowVisionNavigationActionCard(
         modifier =
             modifier
                 .clip(RoundedCornerShape(24.dp))
-                .lowVisionButtonSemantics(label)
+                .lowVisionButtonSemantics(label, actionHint)
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(24.dp),
         color = backgroundColor,
         border = border,
     ) {
-        Column(
+        Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp, vertical = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            contentAlignment = Alignment.Center,
         ) {
-            Box(modifier = Modifier.padding(bottom = 20.dp)) {
-                icon()
-            }
             Text(
                 text = label,
                 color = contentColor.copy(alpha = contentAlpha),
-                fontSize = 34.sp,
-                lineHeight = 40.sp,
+                fontSize = 40.sp,
+                lineHeight = 46.sp,
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.sp,
-                maxLines = 2,
+                maxLines = 1,
             )
         }
+    }
+}
+
+private data class LowVisionNavigationPageContent(
+    val title: String,
+    val primaryText: String,
+    val secondaryText: String,
+    val primaryFontSizeSp: Int = 56,
+    val primaryLineHeightSp: Int = 64,
+    val primaryMaxLines: Int = 2,
+)
+
+private fun LowVisionNavigationPage.toPageContent(uiState: NavigationUiState): LowVisionNavigationPageContent {
+    val metrics = uiState.stepCard.metrics
+    val distance = metrics.getOrNull(0)?.value.orEmpty().ifBlank { "-" }
+    val eta = metrics.getOrNull(1)?.value.orEmpty().ifBlank { "-" }
+    val progress = metrics.getOrNull(2)?.value.orEmpty().ifBlank { "-" }
+
+    return when (this) {
+        LowVisionNavigationPage.GUIDE ->
+            LowVisionNavigationPageContent(
+                title = title,
+                primaryText = uiState.stepCard.instruction,
+                secondaryText = uiState.stepCard.supportingText,
+                primaryFontSizeSp = 38,
+                primaryLineHeightSp = 46,
+                primaryMaxLines = 3,
+            )
+        LowVisionNavigationPage.DISTANCE ->
+            LowVisionNavigationPageContent(
+                title = title,
+                primaryText = distance,
+                secondaryText = "목적지까지 남은 거리",
+            )
+        LowVisionNavigationPage.TIME ->
+            LowVisionNavigationPageContent(
+                title = title,
+                primaryText = eta,
+                secondaryText = "목적지까지 예상 시간",
+            )
+        LowVisionNavigationPage.STEP ->
+            LowVisionNavigationPageContent(
+                title = title,
+                primaryText = progress,
+                secondaryText = "현재 진행 단계",
+            )
     }
 }

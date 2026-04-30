@@ -33,7 +33,15 @@ sealed interface SearchUiAction {
         val result: SearchResult,
     ) : SearchUiAction
 
+    data class SearchResultBriefingClicked(
+        val result: SearchResult,
+    ) : SearchUiAction
+
     data class BookmarkToggleClicked(
+        val result: SearchResult,
+    ) : SearchUiAction
+
+    data class LowVisionBookmarkSaveClicked(
         val result: SearchResult,
     ) : SearchUiAction
 }
@@ -46,6 +54,10 @@ sealed interface SearchUiEvent {
     ) : SearchUiEvent
 
     data object NavigateToRouteSetting : SearchUiEvent
+
+    data object NavigateToRouteBriefing : SearchUiEvent
+
+    data object NavigateToLowVisionBookmark : SearchUiEvent
 }
 
 sealed interface SearchResultUiState {

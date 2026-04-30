@@ -15,6 +15,9 @@ import com.ssafy.e102.eumgil.feature.lowvision.LowVisionAppInfoRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBookmarkRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionMyPageRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionNavigationCompleteRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionNavigationRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionRouteBriefingRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionSearchRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
@@ -49,7 +52,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.Bookmark.route) {
         LowVisionBookmarkRoute(
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute(autoStartNavigation = true))
+                navController.navigate(LowVisionRoute.Guidance.route)
             },
             onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
@@ -66,6 +69,47 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         LowVisionSearchResultShell(
             navController = navController,
             selectedTab = LowVisionBottomTab.CATEGORY,
+        )
+    }
+
+    composable(route = LowVisionRoute.RouteBriefing.route) {
+        LowVisionRouteBriefingRoute(
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+        )
+    }
+
+    composable(route = LowVisionRoute.Guidance.route) {
+        LowVisionNavigationRoute(
+            onNavigateToComplete = {
+                navController.navigate(LowVisionRoute.NavigationComplete.route) {
+                    launchSingleTop = true
+                    popUpTo(LowVisionRoute.Guidance.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            onNavigateToBookmark = {
+                navController.navigate(LowVisionRoute.Bookmark.route) {
+                    launchSingleTop = true
+                    popUpTo(LowVisionRoute.Guidance.route) {
+                        inclusive = true
+                    }
+                }
+            },
+        )
+    }
+
+    composable(route = LowVisionRoute.NavigationComplete.route) {
+        LowVisionNavigationCompleteRoute(
+            onNavigateToBookmark = {
+                navController.navigate(LowVisionRoute.Bookmark.route) {
+                    launchSingleTop = true
+                    popUpTo(LowVisionRoute.NavigationComplete.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
     }
 
@@ -114,7 +158,20 @@ private fun LowVisionSearchResultShell(
                 navController.popBackStack()
             },
             onNavigateToRouteSetting = {
-                navController.navigate(resolveLowVisionSearchResultRoute()) {
+                navController.navigate(LowVisionRoute.Guidance.route) {
+                    launchSingleTop = true
+                    popUpTo(searchPopUpRoute) {
+                        inclusive = true
+                    }
+                }
+            },
+            onNavigateToRouteBriefing = {
+                navController.navigate(LowVisionRoute.RouteBriefing.route) {
+                    launchSingleTop = true
+                }
+            },
+            onNavigateToBookmark = {
+                navController.navigate(LowVisionRoute.Bookmark.route) {
                     launchSingleTop = true
                     popUpTo(searchPopUpRoute) {
                         inclusive = true
@@ -136,7 +193,7 @@ internal fun resolveLowVisionRecordingCompletedRoute(): String = LowVisionRoute.
 internal fun resolveLowVisionRecordingPopUpRoute(): String = LowVisionRoute.VoiceInput.route
 
 internal fun resolveLowVisionSearchResultRoute(): String =
-    RouteSettingRoute.Setting.createRoute(autoStartNavigation = true)
+    LowVisionRoute.Guidance.route
 
 internal fun resolveLowVisionSearchPopUpRoute(selectedTab: LowVisionBottomTab = LowVisionBottomTab.HOME): String =
     when (selectedTab) {
@@ -144,7 +201,7 @@ internal fun resolveLowVisionSearchPopUpRoute(selectedTab: LowVisionBottomTab = 
         else -> LowVisionRoute.Search.route
     }
 
-internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.Home.route
+internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.NavigationComplete.route
 
 internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 
@@ -166,7 +223,10 @@ internal fun resolveLowVisionSelectedBottomTab(currentRoute: String?): LowVision
     when (currentRoute) {
         LowVisionRoute.Home.route,
         LowVisionRoute.VoiceInput.route,
-        LowVisionRoute.Search.route -> LowVisionBottomTab.HOME
+        LowVisionRoute.Search.route,
+        LowVisionRoute.RouteBriefing.route,
+        LowVisionRoute.Guidance.route,
+        LowVisionRoute.NavigationComplete.route -> LowVisionBottomTab.HOME
         LowVisionRoute.Bookmark.route -> LowVisionBottomTab.BOOKMARK
         LowVisionRoute.CategorySearch.route -> LowVisionBottomTab.CATEGORY
         LowVisionRoute.MyPage.route,

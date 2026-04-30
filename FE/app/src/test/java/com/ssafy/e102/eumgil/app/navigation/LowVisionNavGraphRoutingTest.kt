@@ -28,6 +28,10 @@ class LowVisionNavGraphRoutingTest {
             LowVisionRoute.Search.route,
             resolveLowVisionSearchPopUpRoute(),
         )
+        assertEquals(
+            LowVisionRoute.CategorySearch.route,
+            resolveLowVisionSearchPopUpRoute(LowVisionBottomTab.CATEGORY),
+        )
     }
 
     @Test
@@ -54,7 +58,7 @@ class LowVisionNavGraphRoutingTest {
     fun `low vision bottom tabs resolve to app destinations`() {
         assertEquals(LowVisionRoute.Home.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.HOME))
         assertEquals(LowVisionRoute.Bookmark.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.BOOKMARK))
-        assertEquals(LowVisionRoute.Search.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.CATEGORY))
+        assertEquals(LowVisionRoute.CategorySearch.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.CATEGORY))
         assertEquals(LowVisionRoute.MyPage.route, resolveLowVisionBottomTabRoute(LowVisionBottomTab.MY_PAGE))
     }
 
@@ -62,8 +66,9 @@ class LowVisionNavGraphRoutingTest {
     fun `low vision selected tab follows current route`() {
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Home.route))
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.VoiceInput.route))
+        assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Search.route))
         assertEquals(LowVisionBottomTab.BOOKMARK, resolveLowVisionSelectedBottomTab(LowVisionRoute.Bookmark.route))
-        assertEquals(LowVisionBottomTab.CATEGORY, resolveLowVisionSelectedBottomTab(LowVisionRoute.Search.route))
+        assertEquals(LowVisionBottomTab.CATEGORY, resolveLowVisionSelectedBottomTab(LowVisionRoute.CategorySearch.route))
         assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.MyPage.route))
         assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.AppInfo.route))
     }
@@ -85,7 +90,7 @@ class LowVisionNavGraphRoutingTest {
             ),
         )
         assertEquals(
-            true,
+            false,
             shouldNavigateLowVisionBottomTab(
                 currentRoute = LowVisionRoute.Search.route,
                 selectedTab = LowVisionBottomTab.HOME,

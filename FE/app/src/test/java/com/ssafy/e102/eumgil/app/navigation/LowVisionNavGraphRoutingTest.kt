@@ -75,6 +75,14 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `low vision category result route carries selected category`() {
+        assertEquals(
+            "low_vision/category_result/%ED%99%94%EC%9E%A5%EC%8B%A4",
+            LowVisionRoute.CategoryResult.createRoute("화장실"),
+        )
+    }
+
+    @Test
     fun `low vision selected tab follows current route`() {
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Home.route))
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.VoiceInput.route))
@@ -84,6 +92,7 @@ class LowVisionNavGraphRoutingTest {
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.NavigationComplete.route))
         assertEquals(LowVisionBottomTab.BOOKMARK, resolveLowVisionSelectedBottomTab(LowVisionRoute.Bookmark.route))
         assertEquals(LowVisionBottomTab.CATEGORY, resolveLowVisionSelectedBottomTab(LowVisionRoute.CategorySearch.route))
+        assertEquals(LowVisionBottomTab.CATEGORY, resolveLowVisionSelectedBottomTab(LowVisionRoute.CategoryResult.route))
         assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.MyPage.route))
         assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.AppInfo.route))
     }

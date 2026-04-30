@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import android.net.Uri
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 sealed interface AppRoute {
     val route: String
@@ -104,6 +106,14 @@ sealed interface LowVisionRoute : AppRoute {
         override val route: String = "low_vision/category_search"
     }
 
+    data object CategoryResult : LowVisionRoute {
+        const val ARG_CATEGORY: String = "category"
+
+        override val route: String = "low_vision/category_result/{$ARG_CATEGORY}"
+
+        fun createRoute(category: String): String = "low_vision/category_result/${category.navArgEncode()}"
+    }
+
     data object RouteBriefing : LowVisionRoute {
         override val route: String = "low_vision/route_briefing"
     }
@@ -172,3 +182,8 @@ sealed interface NavigationRoute : AppRoute {
         override val route: String = "navigation_guidance"
     }
 }
+
+private fun String.navArgEncode(): String =
+    URLEncoder
+        .encode(this, StandardCharsets.UTF_8.toString())
+        .replace("+", "%20")

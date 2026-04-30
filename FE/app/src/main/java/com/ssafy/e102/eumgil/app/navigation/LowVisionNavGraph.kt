@@ -9,10 +9,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionAppInfoRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBookmarkRoute
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionCategoryRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionHomeRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionMyPageRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionNavigationCompleteRoute
@@ -62,13 +65,37 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         LowVisionSearchResultShell(
             navController = navController,
             selectedTab = LowVisionBottomTab.HOME,
+            initialQuery = "",
         )
     }
 
     composable(route = LowVisionRoute.CategorySearch.route) {
+        LowVisionCategoryRoute(
+            onBackClick = {
+                navController.navigateToLowVisionBottomTab(LowVisionBottomTab.HOME)
+            },
+            onCategorySelected = { category ->
+                navController.navigate(LowVisionRoute.CategoryResult.createRoute(category))
+            },
+            onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+        )
+    }
+
+    composable(
+        route = LowVisionRoute.CategoryResult.route,
+        arguments =
+            listOf(
+                navArgument(LowVisionRoute.CategoryResult.ARG_CATEGORY) {
+                    type = NavType.StringType
+                },
+            ),
+    ) { backStackEntry ->
+        val category = backStackEntry.arguments?.getString(LowVisionRoute.CategoryResult.ARG_CATEGORY).orEmpty()
         LowVisionSearchResultShell(
             navController = navController,
             selectedTab = LowVisionBottomTab.CATEGORY,
+            initialQuery = category,
+            categoryLabel = category,
         )
     }
 
@@ -144,6 +171,8 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 private fun LowVisionSearchResultShell(
     navController: NavHostController,
     selectedTab: LowVisionBottomTab,
+    initialQuery: String,
+    categoryLabel: String? = null,
 ) {
     val searchPopUpRoute = resolveLowVisionSearchPopUpRoute(selectedTab)
     Column(
@@ -153,7 +182,7 @@ private fun LowVisionSearchResultShell(
                 .background(Color.Black),
     ) {
         LowVisionSearchRoute(
-            initialQuery = "",
+            initialQuery = initialQuery,
             onNavigateBack = {
                 navController.popBackStack()
             },
@@ -179,6 +208,7 @@ private fun LowVisionSearchResultShell(
                 }
             },
             modifier = Modifier.weight(1f),
+            categoryLabel = categoryLabel,
         )
 
         LowVisionBottomNav(
@@ -228,7 +258,8 @@ internal fun resolveLowVisionSelectedBottomTab(currentRoute: String?): LowVision
         LowVisionRoute.Guidance.route,
         LowVisionRoute.NavigationComplete.route -> LowVisionBottomTab.HOME
         LowVisionRoute.Bookmark.route -> LowVisionBottomTab.BOOKMARK
-        LowVisionRoute.CategorySearch.route -> LowVisionBottomTab.CATEGORY
+        LowVisionRoute.CategorySearch.route,
+        LowVisionRoute.CategoryResult.route -> LowVisionBottomTab.CATEGORY
         LowVisionRoute.MyPage.route,
         LowVisionRoute.AppInfo.route -> LowVisionBottomTab.MY_PAGE
         else -> null

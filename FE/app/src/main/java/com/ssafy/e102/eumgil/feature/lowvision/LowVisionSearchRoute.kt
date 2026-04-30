@@ -25,6 +25,7 @@ fun LowVisionSearchRoute(
     onNavigateToRouteBriefing: () -> Unit,
     onNavigateToBookmark: () -> Unit,
     modifier: Modifier = Modifier,
+    categoryLabel: String? = null,
 ) {
     val context = LocalContext.current
     val appContainer =
@@ -68,6 +69,7 @@ fun LowVisionSearchRoute(
         uiState = uiState,
         onAction = viewModel::onAction,
         modifier = modifier,
+        categoryLabel = categoryLabel,
     )
 }
 

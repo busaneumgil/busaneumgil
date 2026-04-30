@@ -33,8 +33,9 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionHomeBottomNav
 
 internal object LowVisionHomeLayoutDefaults {
-    val primaryActionCardHeight = 252.dp
-    val currentLocationCardHeight = primaryActionCardHeight
+    val headerSlotHeight = 60.dp
+    const val voiceActionCardWeight = 2f
+    const val currentLocationCardWeight = 1f
     val actionCardGap = 40.dp
     const val showsStatusGuide = false
 }
@@ -78,14 +79,16 @@ fun LowVisionHomeScreen(
             modifier = Modifier
                 .weight(1f)
                 .statusBarsPadding()
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 40.dp),
             verticalArrangement = Arrangement.spacedBy(LowVisionHomeLayoutDefaults.actionCardGap),
         ) {
-            // 1) 음성 입력 카드 (큰 카드, 252.7dp)
+            Spacer(modifier = Modifier.height(LowVisionHomeLayoutDefaults.headerSlotHeight))
+
+            // 1) 음성 입력 카드 (하단바 제외 영역의 2/3)
             HomeYellowCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(LowVisionHomeLayoutDefaults.primaryActionCardHeight)
+                    .weight(LowVisionHomeLayoutDefaults.voiceActionCardWeight)
                     .semantics {
                         role = Role.Button
                         contentDescription = voiceCardA11y
@@ -97,11 +100,11 @@ fun LowVisionHomeScreen(
                 onClick = onVoiceInputClick,
             )
 
-            // 2) 현재 위치 카드 (음성 입력과 동일 높이)
+            // 2) 현재 위치 카드 (하단바 제외 영역의 1/3)
             HomeYellowCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(LowVisionHomeLayoutDefaults.currentLocationCardHeight)
+                    .weight(LowVisionHomeLayoutDefaults.currentLocationCardWeight)
                     .semantics {
                         role = Role.Button
                         contentDescription = locationCardA11y
@@ -112,8 +115,6 @@ fun LowVisionHomeScreen(
                 labelSize = 28.sp,
                 onClick = onCurrentLocationClick,
             )
-
-            Spacer(modifier = Modifier.weight(1f))
         }
 
         LowVisionHomeBottomNav(

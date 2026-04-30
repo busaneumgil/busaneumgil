@@ -7,11 +7,18 @@ import org.junit.Test
 
 class LowVisionHomeScreenTest {
     @Test
-    fun `home screen uses two equally sized primary action cards`() {
-        assertEquals(252.dp, LowVisionHomeLayoutDefaults.primaryActionCardHeight)
+    fun `home screen reserves the low vision title slot without visible text`() {
+        assertEquals(60.dp, LowVisionHomeLayoutDefaults.headerSlotHeight)
+    }
+
+    @Test
+    fun `home screen gives voice action twice the remaining area of current location`() {
+        assertEquals(2f, LowVisionHomeLayoutDefaults.voiceActionCardWeight)
+        assertEquals(1f, LowVisionHomeLayoutDefaults.currentLocationCardWeight)
         assertEquals(
-            LowVisionHomeLayoutDefaults.primaryActionCardHeight,
-            LowVisionHomeLayoutDefaults.currentLocationCardHeight,
+            2f,
+            LowVisionHomeLayoutDefaults.voiceActionCardWeight /
+                LowVisionHomeLayoutDefaults.currentLocationCardWeight,
         )
     }
 

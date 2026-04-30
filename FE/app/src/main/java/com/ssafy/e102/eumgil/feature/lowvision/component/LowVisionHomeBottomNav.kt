@@ -17,11 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
+import com.ssafy.e102.eumgil.feature.lowvision.lowVisionButtonSemantics
 
 /**
  * 시각지원 모드 메인 홈 화면용 하단 네비.
@@ -79,21 +81,23 @@ fun LowVisionBottomNav(
     ) {
         items.forEach { (tab, item) ->
             val tint = if (tab == selectedTab) Color(0xFFFFD400) else Color(0xFF777777)
+            val label = stringResource(id = item.labelRes)
             Column(
                 modifier = Modifier
-                    .clickable { onTabSelected(tab) }
+                    .lowVisionButtonSemantics(label)
+                    .clickable(role = Role.Button) { onTabSelected(tab) }
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 Icon(
                     painter = painterResource(id = item.iconRes),
-                    contentDescription = stringResource(id = item.labelRes),
+                    contentDescription = null,
                     tint = tint,
                     modifier = Modifier.size(24.dp),
                 )
                 Text(
-                    text = stringResource(id = item.labelRes),
+                    text = label,
                     color = tint,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Normal,

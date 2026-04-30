@@ -55,7 +55,7 @@ internal object LowVisionCategoryLayoutDefaults {
     val cardBorderWidth = 3.dp
     val cardHorizontalPadding = 16.dp
     val cardVerticalPadding = 24.dp
-    val cardIconSize = 116.dp
+    val cardIconSize = 96.dp
     val cardIconTextGap = 28.dp
     val cardLabelFontSize = 38.sp
     val cardLabelLineHeight = 46.sp
@@ -63,7 +63,10 @@ internal object LowVisionCategoryLayoutDefaults {
 }
 
 internal fun lowVisionCategoryDisplayLabel(label: String): String =
-    label.trim().replace(Regex("\\s+"), "\n")
+    when (val trimmedLabel = label.trim()) {
+        "\uC219\uBC15\uC2DC\uC124" -> "\uC219\uBC15\n\uC2DC\uC124"
+        else -> trimmedLabel.replace(Regex("\\s+"), "\n")
+    }
 
 private val lowVisionCategoryOptions =
     listOf(

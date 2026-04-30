@@ -25,7 +25,7 @@ class LowVisionCategoryScreenTest {
                 LowVisionCategoryLayoutDefaults.cardLabelLineHeight.value
 
         assertTrue(contentHeight <= LowVisionCategoryLayoutDefaults.cardContentBudgetHeightDp)
-        assertEquals(116.dp, LowVisionCategoryLayoutDefaults.cardIconSize)
+        assertEquals(96.dp, LowVisionCategoryLayoutDefaults.cardIconSize)
         assertEquals(38.sp, LowVisionCategoryLayoutDefaults.cardLabelFontSize)
     }
 
@@ -39,5 +39,9 @@ class LowVisionCategoryScreenTest {
         assertEquals(2, LowVisionCategoryLayoutDefaults.cardLabelMaxLines)
         assertEquals("Lodging", lowVisionCategoryDisplayLabel("Lodging"))
         assertEquals("Other\nObstacle", lowVisionCategoryDisplayLabel("Other Obstacle"))
+        assertEquals(
+            "\uC219\uBC15\n\uC2DC\uC124",
+            lowVisionCategoryDisplayLabel("\uC219\uBC15\uC2DC\uC124"),
+        )
     }
 }

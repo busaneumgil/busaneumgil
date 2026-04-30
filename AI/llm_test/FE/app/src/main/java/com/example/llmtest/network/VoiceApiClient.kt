@@ -13,7 +13,7 @@ import retrofit2.http.POST
 import java.util.concurrent.TimeUnit
 
 interface VoiceApiService {
-    @POST("/api/voice/analyze")
+    @POST("/voice/analyze")
     suspend fun analyze(@Body request: VoiceAnalyzeRequest): VoiceAnalyzeResponse
 
     @POST("/api/voice/confirm")

@@ -175,7 +175,7 @@ class VisuallyActivity : AppCompatActivity() {
                     resultLog.appendLine("[${conversationHistory.size / 2}턴] intent: ${response.intent} / 장소명: ${response.placeName ?: "-"}")
                     resultLog.appendLine("[TTS] \"$msg\"")
                     binding.tvResult.text = resultLog.toString().trimEnd()
-                    if (response.intent == "unknown") {
+                    if (response.intent == "UNKNOWN") {
                         // unknown이면 히스토리 초기화 후 재시도
                         conversationHistory.clear()
                     }

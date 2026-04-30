@@ -21,6 +21,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
+import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
@@ -105,6 +106,12 @@ class AppContainer(
     val bookmarkRepository: BookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideBookmarkRepository(
             bookmarkDao = localDatabase.bookmarkDao(),
+            initialBookmarks =
+                if (AppEnvironment.isDebugBuild) {
+                    MockBookmarkFixtures.defaultBookmarks
+                } else {
+                    emptyList()
+                },
         )
     }
 

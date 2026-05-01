@@ -390,6 +390,7 @@ private fun FacilityDetailBookmarkActionButton(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val bookmarkButtonLabel = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
     val bookmarkStateDescription =
         when {
             state.isBookmarkUpdating ->
@@ -434,7 +435,7 @@ private fun FacilityDetailBookmarkActionButton(
                 Modifier
                     .size(48.dp)
                     .semantics {
-                        contentDescription = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
+                        contentDescription = bookmarkButtonLabel
                         stateDescription = bookmarkStateDescription
                     },
         ) {

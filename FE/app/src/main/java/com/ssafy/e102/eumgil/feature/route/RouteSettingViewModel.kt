@@ -48,7 +48,9 @@ class RouteSettingViewModel(
     fun onAction(action: RouteSettingUiAction) {
         when (action) {
             RouteSettingUiAction.BackClicked -> emitUiEvent(RouteSettingUiEvent.NavigateBack)
+            is RouteSettingUiAction.TravelModeSelected -> selectTravelMode(action.mode)
             is RouteSettingUiAction.RouteOptionSelected -> selectRouteOption(action.routeOption)
+            is RouteSettingUiAction.RouteOptionDetailClicked -> openRouteDetail(action.routeOption)
             RouteSettingUiAction.StartNavigationClicked -> startNavigation()
         }
     }
@@ -102,6 +104,7 @@ class RouteSettingViewModel(
                 destinationHandoffState = destinationResolution.handoffState,
                 destinationFallbackMessage = destinationResolution.fallbackMessage,
                 isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
+                selectedTravelMode = DEFAULT_TRAVEL_MODE,
                 selectedOption = selectedOption,
                 optionCards = emptyList(),
                 selectedRoute = null,
@@ -124,6 +127,7 @@ class RouteSettingViewModel(
                 buildUiState(
                     searchData = searchData,
                     destinationResolution = destinationResolution,
+                    selectedTravelMode = DEFAULT_TRAVEL_MODE,
                     requestedOption = selectedOption,
                     ctaAcknowledged = false,
                 )
@@ -145,6 +149,16 @@ class RouteSettingViewModel(
         }
     }
 
+    private fun selectTravelMode(mode: RouteTravelMode) {
+        mutableUiState.update { state ->
+            if (state.selectedTravelMode == mode) {
+                state
+            } else {
+                state.copy(selectedTravelMode = mode)
+            }
+        }
+    }
+
     private fun selectRouteOption(routeOption: RouteOption) {
         val searchData = latestSearchData
         if (searchData == null) {
@@ -156,13 +170,22 @@ class RouteSettingViewModel(
             buildUiState(
                 searchData = searchData,
                 destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
+                selectedTravelMode = mutableUiState.value.selectedTravelMode,
                 requestedOption = routeOption,
                 ctaAcknowledged = mutableUiState.value.ctaAcknowledged,
             )
     }
 
+    private fun openRouteDetail(routeOption: RouteOption) {
+        selectRouteOption(routeOption)
+        emitUiEvent(RouteSettingUiEvent.NavigateToRouteDetail(routeOption))
+    }
+
     private fun startNavigation() {
         if (mutableUiState.value.ctaAcknowledged) {
+            return
+        }
+        if (mutableUiState.value.selectedTravelMode != RouteTravelMode.WALK) {
             return
         }
         if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
@@ -202,6 +225,7 @@ class RouteSettingViewModel(
     private fun buildUiState(
         searchData: RouteSearchData,
         destinationResolution: RouteDestinationResolution,
+        selectedTravelMode: RouteTravelMode,
         requestedOption: RouteOption,
         ctaAcknowledged: Boolean,
     ): RouteSettingUiState {
@@ -232,6 +256,7 @@ class RouteSettingViewModel(
             destinationHandoffState = destinationResolution.handoffState,
             destinationFallbackMessage = destinationResolution.fallbackMessage,
             isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
+            selectedTravelMode = selectedTravelMode,
             selectedOption = resolvedOption,
             optionCards =
                 availableRoutes.map { route ->
@@ -311,8 +336,11 @@ class RouteSettingViewModel(
             )
         }
 
-    private fun RouteCandidate.toSelectedRouteUiState(destination: RouteLocationUiState): RouteSelectedRouteUiState =
-        RouteSelectedRouteUiState(
+    private fun RouteCandidate.toSelectedRouteUiState(destination: RouteLocationUiState): RouteSelectedRouteUiState {
+        val aggregateFlags = aggregateSafetyFlags()
+        val hasUsableDetailSteps = segments.hasUsableDetailSteps()
+
+        return RouteSelectedRouteUiState(
             routeOption = routeOption,
             destination = destination,
             optionTitle = routeOption.toOptionTitle(),
@@ -351,13 +379,15 @@ class RouteSettingViewModel(
             fallbackSegmentCount = preview.fallbackSegmentCount,
             previewFallbackNotice = preview.fallbackNotice(),
             badges = routeBadges(includeSafePriority = true),
+            detailAccessibilityChips = buildDetailAccessibilityChips(aggregateFlags),
+            detailHighlights = buildDetailHighlights(aggregateFlags),
+            detailSteps = buildDetailSteps(destinationName = destination.name, hasUsableDetailSteps = hasUsableDetailSteps),
+            detailFallbackMessage = if (hasUsableDetailSteps) null else ROUTE_DETAIL_FALLBACK_MESSAGE,
         )
+    }
 
     private fun RouteCandidate.routeBadges(includeSafePriority: Boolean): List<RouteOptionBadge> {
-        val aggregateFlags =
-            segments.fold(RouteSegmentSafetyFlags()) { flags, segment ->
-                flags.merge(segment.safetyFlags)
-            }
+        val aggregateFlags = aggregateSafetyFlags()
 
         return buildList {
             if (includeSafePriority && routeOption == RouteOption.SAFE) {
@@ -382,6 +412,186 @@ class RouteSettingViewModel(
                 add(RouteOptionBadge.UNSIGNALIZED_CROSSWALK)
             }
         }.distinct().take(MAX_ROUTE_BADGE_COUNT)
+    }
+
+    private fun RouteCandidate.aggregateSafetyFlags(): RouteSegmentSafetyFlags =
+        segments.fold(RouteSegmentSafetyFlags()) { flags, segment ->
+            flags.merge(segment.safetyFlags)
+        }
+
+    private fun RouteCandidate.buildDetailAccessibilityChips(aggregateFlags: RouteSegmentSafetyFlags): List<RouteDetailChipUiState> =
+        buildList {
+            if (!aggregateFlags.hasStairs && !aggregateFlags.hasCurbGap) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_STEP_FREE,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasAudioSignal) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_AUDIO_SIGNAL,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasBrailleBlock) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_BRAILLE_BLOCK,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasCrosswalk && aggregateFlags.hasSignal) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_SIGNAL_CROSSWALK,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasCrosswalk && !aggregateFlags.hasSignal) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_UNSIGNALIZED_CROSSWALK,
+                        tone = RouteDetailTone.WARNING,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasCurbGap) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_CURB_GAP,
+                        tone = RouteDetailTone.WARNING,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasStairs) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_STAIRS,
+                        tone = RouteDetailTone.WARNING,
+                    ),
+                )
+            }
+            if (isEmpty()) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_PENDING,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+        }.take(MAX_ROUTE_DETAIL_CHIP_COUNT)
+
+    private fun RouteCandidate.buildDetailHighlights(aggregateFlags: RouteSegmentSafetyFlags): List<RouteDetailHighlightUiState> =
+        buildList<RouteDetailHighlightUiState> {
+            if (aggregateFlags.hasAudioSignal) {
+                add(
+                    RouteDetailHighlightUiState(
+                        title = DETAIL_HIGHLIGHT_AUDIO_SIGNAL_TITLE,
+                        description = DETAIL_HIGHLIGHT_AUDIO_SIGNAL_DESCRIPTION,
+                        badgeLabel = DETAIL_HIGHLIGHT_BADGE_SUPPORT,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasBrailleBlock) {
+                add(
+                    RouteDetailHighlightUiState(
+                        title = DETAIL_HIGHLIGHT_BRAILLE_TITLE,
+                        description = DETAIL_HIGHLIGHT_BRAILLE_DESCRIPTION,
+                        badgeLabel = DETAIL_HIGHLIGHT_BADGE_SUPPORT,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasCrosswalk && !aggregateFlags.hasSignal) {
+                add(
+                    RouteDetailHighlightUiState(
+                        title = DETAIL_HIGHLIGHT_UNSIGNALIZED_TITLE,
+                        description = DETAIL_HIGHLIGHT_UNSIGNALIZED_DESCRIPTION,
+                        badgeLabel = DETAIL_HIGHLIGHT_BADGE_WARNING,
+                        tone = RouteDetailTone.WARNING,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasCurbGap) {
+                add(
+                    RouteDetailHighlightUiState(
+                        title = DETAIL_HIGHLIGHT_CURB_GAP_TITLE,
+                        description = DETAIL_HIGHLIGHT_CURB_GAP_DESCRIPTION,
+                        badgeLabel = DETAIL_HIGHLIGHT_BADGE_WARNING,
+                        tone = RouteDetailTone.WARNING,
+                    ),
+                )
+            }
+            if (aggregateFlags.hasStairs) {
+                add(
+                    RouteDetailHighlightUiState(
+                        title = DETAIL_HIGHLIGHT_STAIRS_TITLE,
+                        description = DETAIL_HIGHLIGHT_STAIRS_DESCRIPTION,
+                        badgeLabel = DETAIL_HIGHLIGHT_BADGE_WARNING,
+                        tone = RouteDetailTone.WARNING,
+                    ),
+                )
+            }
+            if (summary.riskLevel == RouteRiskLevel.HIGH && none { highlight -> highlight.tone == RouteDetailTone.WARNING }) {
+                add(
+                    RouteDetailHighlightUiState(
+                        title = DETAIL_HIGHLIGHT_HIGH_RISK_TITLE,
+                        description = DETAIL_HIGHLIGHT_HIGH_RISK_DESCRIPTION,
+                        badgeLabel = DETAIL_HIGHLIGHT_BADGE_WARNING,
+                        tone = RouteDetailTone.WARNING,
+                    ),
+                )
+            }
+        }.take(MAX_ROUTE_DETAIL_HIGHLIGHT_COUNT)
+
+    private fun RouteCandidate.buildDetailSteps(
+        destinationName: String,
+        hasUsableDetailSteps: Boolean,
+    ): List<RouteDetailStepUiState> {
+        val steps =
+            mutableListOf(
+                RouteDetailStepUiState(
+                    indexLabel = DETAIL_STEP_INDEX_START,
+                    title = DETAIL_STEP_START_TITLE,
+                    description = DETAIL_STEP_START_DESCRIPTION,
+                    badgeLabel = routeOption.toOptionTitle(),
+                    tone = RouteDetailTone.INFO,
+                ),
+            )
+
+        if (hasUsableDetailSteps) {
+            steps +=
+                segments
+                    .sortedBy(RouteSegment::sequence)
+                    .mapIndexed { index, segment ->
+                        segment.toDetailStepUiState(displayIndex = index + 2)
+                    }
+        } else {
+            steps +=
+                RouteDetailStepUiState(
+                    indexLabel = DETAIL_STEP_INDEX_FALLBACK,
+                    title = DETAIL_STEP_FALLBACK_TITLE,
+                    description = ROUTE_DETAIL_FALLBACK_MESSAGE,
+                    tone = RouteDetailTone.NEUTRAL,
+                )
+        }
+
+        steps +=
+            RouteDetailStepUiState(
+                indexLabel = (steps.size + 1).toStepIndexLabel(),
+                title = DETAIL_STEP_ARRIVAL_TITLE,
+                description = "$destinationName${DETAIL_STEP_ARRIVAL_SUFFIX}",
+                tone = RouteDetailTone.INFO,
+            )
+
+        return steps
     }
 
     private fun emitUiEvent(event: RouteSettingUiEvent) {
@@ -569,6 +779,68 @@ private fun RouteOption.toOptionTitle(): String =
         RouteOption.SHORTEST -> OPTION_TITLE_SHORTEST
     }
 
+private fun List<RouteSegment>.hasUsableDetailSteps(): Boolean =
+    any { segment ->
+        segment.distanceMeters > 0 ||
+            segment.guidanceMessage.isNotBlank() ||
+            segment.safetyFlags != RouteSegmentSafetyFlags()
+    }
+
+private fun RouteSegment.toDetailStepUiState(displayIndex: Int): RouteDetailStepUiState =
+    RouteDetailStepUiState(
+        indexLabel = displayIndex.toStepIndexLabel(),
+        title = detailStepTitle(),
+        description = detailStepDescription(),
+        distanceLabel = distanceMeters.toDistanceLabel(),
+        badgeLabel = detailStepBadgeLabel(),
+        tone = detailStepTone(),
+    )
+
+private fun RouteSegment.detailStepTitle(): String =
+    when {
+        safetyFlags.hasStairs -> DETAIL_STEP_STAIRS_TITLE
+        safetyFlags.hasCurbGap -> DETAIL_STEP_CURB_GAP_TITLE
+        safetyFlags.hasCrosswalk && safetyFlags.hasSignal && safetyFlags.hasAudioSignal -> DETAIL_STEP_AUDIO_CROSSWALK_TITLE
+        safetyFlags.hasBrailleBlock -> DETAIL_STEP_BRAILLE_BLOCK_TITLE
+        safetyFlags.hasCrosswalk && safetyFlags.hasSignal -> DETAIL_STEP_SIGNAL_CROSSWALK_TITLE
+        safetyFlags.hasCrosswalk && !safetyFlags.hasSignal -> DETAIL_STEP_UNSIGNALIZED_CROSSWALK_TITLE
+        else -> DETAIL_STEP_STRAIGHT_TITLE
+    }
+
+private fun RouteSegment.detailStepDescription(): String {
+    val distanceLabel = distanceMeters.toDistanceLabel()
+
+    return when {
+        safetyFlags.hasStairs -> "$distanceLabel 구간에 계단이 포함되어 있어 보조가 필요할 수 있습니다."
+        safetyFlags.hasCurbGap -> "$distanceLabel 구간에 연석 단차가 있어 속도를 줄이고 이동하세요."
+        safetyFlags.hasCrosswalk && safetyFlags.hasSignal && safetyFlags.hasAudioSignal ->
+            "음향 신호와 신호등을 확인하며 $distanceLabel 이동하세요."
+        safetyFlags.hasBrailleBlock -> "점자블록 유도선을 따라 $distanceLabel 이동하세요."
+        safetyFlags.hasCrosswalk && safetyFlags.hasSignal -> "신호를 확인한 뒤 $distanceLabel 이동하세요."
+        safetyFlags.hasCrosswalk && !safetyFlags.hasSignal -> "신호등이 없어 주변 차량을 확인하며 $distanceLabel 이동하세요."
+        distanceMeters > 0 -> "$distanceLabel 정도 직진 이동하세요."
+        else -> DETAIL_STEP_GENERIC_DESCRIPTION
+    }
+}
+
+private fun RouteSegment.detailStepBadgeLabel(): String? =
+    when {
+        safetyFlags.hasCurbGap || safetyFlags.hasStairs || (safetyFlags.hasCrosswalk && !safetyFlags.hasSignal) ->
+            DETAIL_STEP_BADGE_WARNING
+        safetyFlags.hasAudioSignal -> DETAIL_STEP_BADGE_AUDIO_SIGNAL
+        safetyFlags.hasBrailleBlock -> DETAIL_STEP_BADGE_BRAILLE
+        safetyFlags.hasCrosswalk && safetyFlags.hasSignal -> DETAIL_STEP_BADGE_CROSSWALK
+        else -> null
+    }
+
+private fun RouteSegment.detailStepTone(): RouteDetailTone =
+    when {
+        safetyFlags.hasCurbGap || safetyFlags.hasStairs || (safetyFlags.hasCrosswalk && !safetyFlags.hasSignal) ->
+            RouteDetailTone.WARNING
+        safetyFlags.hasAudioSignal || safetyFlags.hasBrailleBlock -> RouteDetailTone.INFO
+        else -> RouteDetailTone.NEUTRAL
+    }
+
 private fun List<RouteSegment>.primaryGuidanceMessage(): String =
     firstNotNullOfOrNull { segment ->
         segment.guidanceMessage.takeIf { guidanceMessage -> guidanceMessage.isNotBlank() }
@@ -611,6 +883,8 @@ private fun RoutePreviewModel.fallbackNotice(): String? =
     } else {
         null
     }
+
+private fun Int.toStepIndexLabel(): String = toString().padStart(2, '0')
 
 private fun loadingCtaUiState(): RouteSettingCtaUiState =
     RouteSettingCtaUiState(
@@ -689,9 +963,9 @@ private const val DEFAULT_ORIGIN_SUPPORTING_TEXT = "실시간 위치 연동 전�
 private const val DEFAULT_DESTINATION_ADDRESS_FALLBACK = "주소 정보 없음"
 private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "경로 fixture를 불러오지 못했습니다."
 private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동합니다."
-private const val CTA_LABEL_START = "선택한 경로로 안내 시작"
-private const val CTA_SUPPORTING_READY = "201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다."
-private const val CTA_SUPPORTING_ACKNOWLEDGED = "내비게이션 진행 화면 연결은 다음 스레드에서 마무리합니다."
+private const val CTA_LABEL_START = "길 안내 시작"
+private const val CTA_SUPPORTING_READY = "선택한 경로로 길 안내를 시작할 수 있습니다."
+private const val CTA_SUPPORTING_ACKNOWLEDGED = "길 안내를 시작하는 중입니다."
 private const val CTA_SUPPORTING_WAITING_HANDOFF = "검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다."
 private const val CTA_SUPPORTING_INVALID_HANDOFF = "목적지 좌표를 다시 확인하면 안내 시작을 활성화합니다."
 private const val CTA_SUPPORTING_ERROR = "경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다."
@@ -700,10 +974,10 @@ private const val CTA_SUPPORTING_EMPTY = "표시할 경로가 준비되면 시�
 private const val DESTINATION_FALLBACK_EMPTY_MESSAGE = "검색 handoff 전에는 fixture 목적지를 기본 도착지로 유지합니다."
 private const val DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE = "선택한 목적지 좌표를 확인할 수 없어 fixture 목적지로 대체했습니다."
 private const val SUMMARY_VALUE_PENDING = "확인 중"
-private const val OPTION_TITLE_SAFE = "SAFE 우선"
-private const val OPTION_DESCRIPTION_SAFE = "안전 요소와 보행 위험을 함께 고려해 우선 제안하는 경로입니다."
-private const val OPTION_TITLE_SHORTEST = "최단 거리"
-private const val OPTION_DESCRIPTION_SHORTEST = "이동 시간을 줄이는 기준으로 빠른 경로를 비교합니다."
+private const val OPTION_TITLE_SAFE = "안전한 길"
+private const val OPTION_DESCRIPTION_SAFE = "보행 안전 요소를 우선으로 반영한 추천 경로입니다."
+private const val OPTION_TITLE_SHORTEST = "최단거리"
+private const val OPTION_DESCRIPTION_SHORTEST = "이동 거리를 줄이는 기준으로 빠른 경로를 비교합니다."
 private const val OPTION_HIGHLIGHT_RECOMMENDED = "추천"
 private const val OPTION_SELECTION_SELECTED = "현재 선택됨"
 private const val OPTION_SELECTION_AVAILABLE = "탭하여 선택"
@@ -723,8 +997,53 @@ private const val ROUTE_PREVIEW_MAP_NO_DESTINATION_MESSAGE = "Destination is req
 private const val ROUTE_PREVIEW_MAP_INVALID_DESTINATION_MESSAGE = "Destination coordinate is invalid."
 private const val ROUTE_PREVIEW_MAP_NO_ROUTE_MESSAGE = "No selected route is available for the preview map."
 private const val ROUTE_PREVIEW_MAP_POLYLINE_UNAVAILABLE_MESSAGE = "Selected route preview polyline needs at least two points."
+private const val ROUTE_DETAIL_FALLBACK_MESSAGE = "세부 이동 정보는 준비 중입니다. 요약 정보와 주의 구간을 먼저 확인하세요."
+private const val DETAIL_CHIP_STEP_FREE = "단차 없음"
+private const val DETAIL_CHIP_AUDIO_SIGNAL = "음향 신호 있음"
+private const val DETAIL_CHIP_BRAILLE_BLOCK = "점자블록 있음"
+private const val DETAIL_CHIP_SIGNAL_CROSSWALK = "신호등 횡단보도"
+private const val DETAIL_CHIP_UNSIGNALIZED_CROSSWALK = "무신호 횡단 주의"
+private const val DETAIL_CHIP_CURB_GAP = "연석 단차 주의"
+private const val DETAIL_CHIP_STAIRS = "계단 포함"
+private const val DETAIL_CHIP_PENDING = "상세 정보 확인 중"
+private const val DETAIL_HIGHLIGHT_BADGE_SUPPORT = "접근 지원"
+private const val DETAIL_HIGHLIGHT_BADGE_WARNING = "주의 구간"
+private const val DETAIL_HIGHLIGHT_AUDIO_SIGNAL_TITLE = "음향 신호 횡단보도"
+private const val DETAIL_HIGHLIGHT_AUDIO_SIGNAL_DESCRIPTION = "신호와 음성 안내가 있는 횡단보도 구간이 포함되어 있습니다."
+private const val DETAIL_HIGHLIGHT_BRAILLE_TITLE = "점자블록 유도 구간"
+private const val DETAIL_HIGHLIGHT_BRAILLE_DESCRIPTION = "점자블록 유도선을 따라 이동할 수 있는 구간이 포함되어 있습니다."
+private const val DETAIL_HIGHLIGHT_UNSIGNALIZED_TITLE = "무신호 횡단 주의"
+private const val DETAIL_HIGHLIGHT_UNSIGNALIZED_DESCRIPTION = "신호등이 없는 횡단보도 구간이 있어 주변 차량을 확인해야 합니다."
+private const val DETAIL_HIGHLIGHT_CURB_GAP_TITLE = "연석 단차 주의"
+private const val DETAIL_HIGHLIGHT_CURB_GAP_DESCRIPTION = "보도 턱이나 연석 단차가 있어 바퀴와 발끝을 주의해 이동하세요."
+private const val DETAIL_HIGHLIGHT_STAIRS_TITLE = "계단 구간 주의"
+private const val DETAIL_HIGHLIGHT_STAIRS_DESCRIPTION = "계단이 포함된 구간이 있어 보조가 필요할 수 있습니다."
+private const val DETAIL_HIGHLIGHT_HIGH_RISK_TITLE = "주의 구간이 포함된 경로"
+private const val DETAIL_HIGHLIGHT_HIGH_RISK_DESCRIPTION = "상대적으로 위험도가 높은 구간이 포함되어 있어 안내를 천천히 확인하세요."
+private const val DETAIL_STEP_INDEX_START = "01"
+private const val DETAIL_STEP_INDEX_FALLBACK = "02"
+private const val DETAIL_STEP_START_TITLE = "출발"
+private const val DETAIL_STEP_START_DESCRIPTION = "현재 위치에서 선택한 경로 안내를 시작합니다."
+private const val DETAIL_STEP_FALLBACK_TITLE = "세부 경로 확인 중"
+private const val DETAIL_STEP_ARRIVAL_TITLE = "도착"
+private const val DETAIL_STEP_ARRIVAL_SUFFIX = "에 도착합니다."
+private const val DETAIL_STEP_AUDIO_CROSSWALK_TITLE = "음향 신호 횡단보도 이동"
+private const val DETAIL_STEP_BRAILLE_BLOCK_TITLE = "점자블록 유도 구간 이동"
+private const val DETAIL_STEP_SIGNAL_CROSSWALK_TITLE = "신호등 있는 횡단보도 건너기"
+private const val DETAIL_STEP_UNSIGNALIZED_CROSSWALK_TITLE = "무신호 횡단보도 주의"
+private const val DETAIL_STEP_CURB_GAP_TITLE = "연석 단차 구간 주의"
+private const val DETAIL_STEP_STAIRS_TITLE = "계단 구간 주의"
+private const val DETAIL_STEP_STRAIGHT_TITLE = "직진 이동"
+private const val DETAIL_STEP_GENERIC_DESCRIPTION = "이 구간의 세부 정보는 준비 중입니다."
+private const val DETAIL_STEP_BADGE_WARNING = "주의"
+private const val DETAIL_STEP_BADGE_AUDIO_SIGNAL = "음향 신호"
+private const val DETAIL_STEP_BADGE_BRAILLE = "점자블록"
+private const val DETAIL_STEP_BADGE_CROSSWALK = "횡단보도"
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
+private const val MAX_ROUTE_DETAIL_CHIP_COUNT = 4
+private const val MAX_ROUTE_DETAIL_HIGHLIGHT_COUNT = 3
+private val DEFAULT_TRAVEL_MODE = RouteTravelMode.WALK
 private val DEFAULT_SELECTED_OPTION = RouteOption.SAFE
 
 private data class RouteOptionCardPresentation(

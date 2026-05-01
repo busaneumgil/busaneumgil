@@ -16,6 +16,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
@@ -24,6 +25,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScr
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
+import com.ssafy.e102.eumgil.feature.route.RouteDetailEntryRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
 import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
@@ -137,30 +139,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     ) { backStackEntry ->
         val autoStartNavigation =
             backStackEntry.arguments?.getBoolean(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) ?: false
-        val context = LocalContext.current
-        val activity = remember(context) { context.findComponentActivity() }
-        val currentLocationManager = remember(context) {
-            (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
-        }
-        val bookmarkRepository = remember(context) {
-            (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
-        }
-        val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository) {
-            NavigationGuidanceViewModel.provideFactory(
-                currentLocationManager = currentLocationManager,
-                bookmarkRepository = bookmarkRepository,
-            )
-        }
-        val navigationViewModel =
-            remember(activity, navigationViewModelFactory) {
-                val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }
-                ViewModelProvider(owner, navigationViewModelFactory)[NavigationGuidanceViewModel::class.java]
-            }
+        val navigationViewModel = rememberNavigationGuidanceViewModel()
 
         RouteSettingEntryRoute(
             autoStartNavigation = autoStartNavigation,
             onNavigateBack = {
                 navController.popBackStack()
+            },
+            onNavigateToRouteDetail = { routeOption ->
+                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
             },
             onStartNavigation = { request ->
                 navigationViewModel.bindNavigationRequest(request)
@@ -169,6 +156,38 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                         popUpTo(RouteSettingRoute.Setting.route) {
                             inclusive = true
                         }
+                    }
+                }
+            },
+        )
+    }
+
+    composable(
+        route = RouteSettingRoute.Detail.route,
+        arguments =
+            listOf(
+                navArgument(RouteSettingRoute.Detail.ARG_ROUTE_OPTION) {
+                    type = NavType.StringType
+                },
+            ),
+    ) { backStackEntry ->
+        val routeOption =
+            backStackEntry.arguments
+                ?.getString(RouteSettingRoute.Detail.ARG_ROUTE_OPTION)
+                ?.toRouteOptionOrDefault()
+                ?: RouteOption.SAFE
+        val navigationViewModel = rememberNavigationGuidanceViewModel()
+
+        RouteDetailEntryRoute(
+            routeOption = routeOption,
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onStartNavigation = { request ->
+                navigationViewModel.bindNavigationRequest(request)
+                navController.navigate(NavigationRoute.Guidance.route) {
+                    popUpTo(RouteSettingRoute.Detail.createRoute(routeOption)) {
+                        inclusive = true
                     }
                 }
             },
@@ -234,6 +253,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToRouteDetail = { routeOption ->
+                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
+            },
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
@@ -272,3 +294,29 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
         is ContextWrapper -> baseContext.findComponentActivity()
         else -> null
     }
+
+private fun String.toRouteOptionOrDefault(): RouteOption =
+    runCatching { RouteOption.valueOf(this) }.getOrDefault(RouteOption.SAFE)
+
+@androidx.compose.runtime.Composable
+private fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {
+    val context = LocalContext.current
+    val activity = remember(context) { context.findComponentActivity() }
+    val currentLocationManager = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
+    }
+    val bookmarkRepository = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
+    }
+    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository) {
+        NavigationGuidanceViewModel.provideFactory(
+            currentLocationManager = currentLocationManager,
+            bookmarkRepository = bookmarkRepository,
+        )
+    }
+
+    return remember(activity, navigationViewModelFactory) {
+        val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }
+        ViewModelProvider(owner, navigationViewModelFactory)[NavigationGuidanceViewModel::class.java]
+    }
+}

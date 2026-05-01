@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -24,6 +25,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -115,10 +119,17 @@ fun MapScreen(
                     state = facilityDetailSheetUiState.toShellState(),
                     onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
                     modifier = Modifier.fillMaxSize(),
+                    headerActionContent = {
+                        FacilityDetailBookmarkActionButton(
+                            state = facilityDetailSheetUiState,
+                            onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
+                        )
+                    },
                     detailContent = {
                         FacilityDetailAccessibilityTagSection(
                             title = stringResource(id = R.string.map_facility_detail_accessibility_section_title),
                             tags = facilityDetailSheetUiState.accessibilityTags,
+                            overflowTagCount = facilityDetailSheetUiState.accessibilityOverflowTagCount,
                         )
 
                         FacilityDetailSlotCard(
@@ -126,23 +137,12 @@ fun MapScreen(
                             description = facilityDetailSheetUiState.guideMessage,
                         )
                     },
-                    bookmarkContent = {
-                        FacilityDetailBookmarkSection(
-                            state = facilityDetailSheetUiState,
-                            onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
-                        )
-                    },
                     actionContent = {
                         Column(
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         ) {
-                            Text(
-                                text = stringResource(id = R.string.map_facility_detail_action_section_title),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
                             Button(
-                                onClick = { onAction(MapUiAction.FacilityRouteEntryClicked) },
+                                onClick = { onAction(MapUiAction.FacilitySetDestinationClicked) },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 IconTextButtonContent(
@@ -155,6 +155,13 @@ fun MapScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
+                                Text(
+                                    text = message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                     },
                 )
@@ -200,12 +207,11 @@ private data class MapFacilityDetailSheetUiState(
     val title: String,
     val address: String,
     val accessibilityTags: List<String>,
+    val accessibilityOverflowTagCount: Int,
     val guideMessage: String,
     val isBookmarked: Boolean,
     val isBookmarkUpdating: Boolean,
-    val bookmarkMessage: String,
-    val bookmarkActionLabel: String,
-    val isBookmarkError: Boolean,
+    val bookmarkErrorMessage: String?,
 ) {
     fun toShellState(): FacilityDetailBottomSheetShellState =
         FacilityDetailBottomSheetShellState(
@@ -379,51 +385,72 @@ private fun FacilityDetailSlotCard(
 }
 
 @Composable
-private fun FacilityDetailBookmarkSection(
+private fun FacilityDetailBookmarkActionButton(
     state: MapFacilityDetailSheetUiState,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val bookmarkStateDescription =
+        when {
+            state.isBookmarkUpdating ->
+                stringResource(id = R.string.map_facility_detail_bookmark_state_updating)
+
+            state.isBookmarked ->
+                stringResource(id = R.string.map_facility_detail_bookmark_state_saved)
+
+            else -> stringResource(id = R.string.map_facility_detail_bookmark_state_unsaved)
+        }
+    val containerColor =
+        if (state.isBookmarkUpdating || state.isBookmarked) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLowest
+        }
+    val contentColor =
+        if (state.isBookmarkUpdating || state.isBookmarked) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = containerColor,
+        border =
+            BorderStroke(
+                1.dp,
+                if (state.isBookmarkUpdating || state.isBookmarked) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                },
+            ),
     ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Text(
-                text = stringResource(id = R.string.map_facility_detail_bookmark_section_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = state.bookmarkMessage,
-                style = MaterialTheme.typography.bodyMedium,
-                color =
-                    if (state.isBookmarkError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+        IconButton(
+            onClick = onToggle,
+            enabled = state.isBookmarkUpdating.not(),
+            modifier =
+                Modifier
+                    .size(48.dp)
+                    .semantics {
+                        contentDescription = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
+                        stateDescription = bookmarkStateDescription
                     },
+        ) {
+            Icon(
+                painter =
+                    painterResource(
+                        id =
+                            if (state.isBookmarkUpdating) {
+                                R.drawable.ic_status_processing
+                            } else {
+                                R.drawable.ic_action_favorite
+                            },
+                    ),
+                contentDescription = null,
+                tint = contentColor,
             )
-            OutlinedButton(
-                onClick = onToggle,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = state.isBookmarkUpdating.not(),
-            ) {
-                IconTextButtonContent(
-                    iconRes =
-                        if (state.isBookmarkUpdating) {
-                            R.drawable.ic_status_processing
-                        } else {
-                            R.drawable.ic_action_favorite
-                        },
-                    label = state.bookmarkActionLabel,
-                )
-            }
         }
     }
 }
@@ -433,6 +460,7 @@ private fun FacilityDetailBookmarkSection(
 private fun FacilityDetailAccessibilityTagSection(
     title: String,
     tags: List<String>,
+    overflowTagCount: Int,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -463,6 +491,12 @@ private fun FacilityDetailAccessibilityTagSection(
                     tags.forEach { label ->
                         FacilityDetailTagChip(label = label)
                     }
+                    if (overflowTagCount > 0) {
+                        FacilityDetailTagChip(
+                            label = "+$overflowTagCount",
+                            isOverflow = true,
+                        )
+                    }
                 }
             }
         }
@@ -473,11 +507,25 @@ private fun FacilityDetailAccessibilityTagSection(
 private fun FacilityDetailTagChip(
     label: String,
     modifier: Modifier = Modifier,
+    isOverflow: Boolean = false,
 ) {
+    val containerColor =
+        if (isOverflow) {
+            MaterialTheme.colorScheme.surfaceVariant
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
+        }
+    val contentColor =
+        if (isOverflow) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        }
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(EumRadius.full),
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
+        color = containerColor,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Text(
@@ -488,7 +536,7 @@ private fun FacilityDetailTagChip(
                     vertical = EumSpacing.xSmall,
                 ),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = contentColor,
         )
     }
 }
@@ -659,15 +707,14 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             title = "",
             address = "",
             accessibilityTags = emptyList(),
+            accessibilityOverflowTagCount = 0,
             guideMessage = "",
             isBookmarked = false,
             isBookmarkUpdating = false,
-            bookmarkMessage = "",
-            bookmarkActionLabel = "",
-            isBookmarkError = false,
+            bookmarkErrorMessage = null,
         )
     } else {
-        val bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage
+        val accessibilityTags = facilityDetailAccessibilityLabels(detail)
         MapFacilityDetailSheetUiState(
             isVisible = uiState.facilityDetailSheetState.isVisible,
             categoryLabel = facilityDetailCategoryLabel(detail.category),
@@ -678,28 +725,13 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                 ),
             title = detail.name,
             address = facilityDetailAddressLabel(detail),
-            accessibilityTags = facilityDetailAccessibilityLabels(detail),
+            accessibilityTags = accessibilityTags.take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS),
+            accessibilityOverflowTagCount =
+                (accessibilityTags.size - MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS).coerceAtLeast(0),
             guideMessage = facilityDetailGuideMessage(detail),
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
-            bookmarkMessage =
-                bookmarkErrorMessage
-                    ?: if (uiState.facilityDetailSheetState.isBookmarked) {
-                        stringResource(id = R.string.map_facility_detail_bookmark_saved_description)
-                    } else {
-                        stringResource(id = R.string.map_facility_detail_bookmark_unsaved_description)
-                    },
-            bookmarkActionLabel =
-                when {
-                    uiState.facilityDetailSheetState.isBookmarkUpdating ->
-                        stringResource(id = R.string.map_facility_detail_bookmark_action_updating)
-
-                    uiState.facilityDetailSheetState.isBookmarked ->
-                        stringResource(id = R.string.map_facility_detail_bookmark_action_remove)
-
-                    else -> stringResource(id = R.string.map_facility_detail_bookmark_action_add)
-                },
-            isBookmarkError = bookmarkErrorMessage != null,
+            bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     }
 }
@@ -1061,3 +1093,4 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0
+private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3

@@ -120,7 +120,7 @@ class MapViewModel(
         when (action) {
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
-            MapUiAction.FacilityRouteEntryClicked -> handleFacilityRouteEntryClicked()
+            MapUiAction.FacilitySetDestinationClicked -> handleFacilitySetDestinationClicked()
             MapUiAction.LocationActionClicked -> handleLocationAction()
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
@@ -179,7 +179,7 @@ class MapViewModel(
         renderSelectedFacilityState()
     }
 
-    private fun handleFacilityRouteEntryClicked() {
+    private fun handleFacilitySetDestinationClicked() {
         val destination = selectedFacilityDetail?.toPlaceDestination() ?: return
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()

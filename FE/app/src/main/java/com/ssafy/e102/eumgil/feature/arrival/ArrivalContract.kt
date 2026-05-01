@@ -1,7 +1,7 @@
 package com.ssafy.e102.eumgil.feature.arrival
 
 data class ArrivalUiState(
-    val isEvaluationSheetVisible: Boolean = true,
+    val isEvaluationSheetVisible: Boolean = false,
 )
 
 sealed interface ArrivalUiAction {

@@ -82,41 +82,34 @@ fun ArrivalScreen(
             )
         }
 
-        AnimatedVisibility(
-            visible = uiState.isEvaluationSheetVisible,
-            enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut(),
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium)
-                    .navigationBarsPadding()
-                    .fillMaxWidth(),
-        ) {
-            ArrivalEvaluationBottomSheet(
-                uiState = uiState,
-                onAction = onAction,
-                modifier = Modifier.widthIn(max = 520.dp),
-            )
-        }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
+        Column(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .padding(horizontal = EumSpacing.medium)
-                    .padding(
-                        bottom =
-                            if (uiState.isEvaluationSheetVisible) {
-                                304.dp
-                            } else {
-                                EumSpacing.large
-                            },
-                    ),
-        )
+                    .padding(bottom = EumSpacing.medium),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            AnimatedVisibility(
+                visible = uiState.isEvaluationSheetVisible,
+                enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut(),
+            ) {
+                ArrivalEvaluationBottomSheet(
+                    uiState = uiState,
+                    onAction = onAction,
+                    modifier = Modifier.widthIn(max = 520.dp),
+                )
+            }
+        }
     }
 }
 

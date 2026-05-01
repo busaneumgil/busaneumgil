@@ -48,6 +48,7 @@ class RouteSettingViewModel(
     fun onAction(action: RouteSettingUiAction) {
         when (action) {
             RouteSettingUiAction.BackClicked -> emitUiEvent(RouteSettingUiEvent.NavigateBack)
+            is RouteSettingUiAction.TravelModeSelected -> selectTravelMode(action.mode)
             is RouteSettingUiAction.RouteOptionSelected -> selectRouteOption(action.routeOption)
             RouteSettingUiAction.StartNavigationClicked -> startNavigation()
         }
@@ -102,6 +103,7 @@ class RouteSettingViewModel(
                 destinationHandoffState = destinationResolution.handoffState,
                 destinationFallbackMessage = destinationResolution.fallbackMessage,
                 isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
+                selectedTravelMode = DEFAULT_TRAVEL_MODE,
                 selectedOption = selectedOption,
                 optionCards = emptyList(),
                 selectedRoute = null,
@@ -124,6 +126,7 @@ class RouteSettingViewModel(
                 buildUiState(
                     searchData = searchData,
                     destinationResolution = destinationResolution,
+                    selectedTravelMode = DEFAULT_TRAVEL_MODE,
                     requestedOption = selectedOption,
                     ctaAcknowledged = false,
                 )
@@ -145,6 +148,16 @@ class RouteSettingViewModel(
         }
     }
 
+    private fun selectTravelMode(mode: RouteTravelMode) {
+        mutableUiState.update { state ->
+            if (state.selectedTravelMode == mode) {
+                state
+            } else {
+                state.copy(selectedTravelMode = mode)
+            }
+        }
+    }
+
     private fun selectRouteOption(routeOption: RouteOption) {
         val searchData = latestSearchData
         if (searchData == null) {
@@ -156,6 +169,7 @@ class RouteSettingViewModel(
             buildUiState(
                 searchData = searchData,
                 destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
+                selectedTravelMode = mutableUiState.value.selectedTravelMode,
                 requestedOption = routeOption,
                 ctaAcknowledged = mutableUiState.value.ctaAcknowledged,
             )
@@ -163,6 +177,9 @@ class RouteSettingViewModel(
 
     private fun startNavigation() {
         if (mutableUiState.value.ctaAcknowledged) {
+            return
+        }
+        if (mutableUiState.value.selectedTravelMode != RouteTravelMode.WALK) {
             return
         }
         if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
@@ -202,6 +219,7 @@ class RouteSettingViewModel(
     private fun buildUiState(
         searchData: RouteSearchData,
         destinationResolution: RouteDestinationResolution,
+        selectedTravelMode: RouteTravelMode,
         requestedOption: RouteOption,
         ctaAcknowledged: Boolean,
     ): RouteSettingUiState {
@@ -232,6 +250,7 @@ class RouteSettingViewModel(
             destinationHandoffState = destinationResolution.handoffState,
             destinationFallbackMessage = destinationResolution.fallbackMessage,
             isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
+            selectedTravelMode = selectedTravelMode,
             selectedOption = resolvedOption,
             optionCards =
                 availableRoutes.map { route ->
@@ -689,9 +708,9 @@ private const val DEFAULT_ORIGIN_SUPPORTING_TEXT = "실시간 위치 연동 전�
 private const val DEFAULT_DESTINATION_ADDRESS_FALLBACK = "주소 정보 없음"
 private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "경로 fixture를 불러오지 못했습니다."
 private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동합니다."
-private const val CTA_LABEL_START = "선택한 경로로 안내 시작"
-private const val CTA_SUPPORTING_READY = "201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다."
-private const val CTA_SUPPORTING_ACKNOWLEDGED = "내비게이션 진행 화면 연결은 다음 스레드에서 마무리합니다."
+private const val CTA_LABEL_START = "길 안내 시작"
+private const val CTA_SUPPORTING_READY = "선택한 경로로 길 안내를 시작할 수 있습니다."
+private const val CTA_SUPPORTING_ACKNOWLEDGED = "길 안내를 시작하는 중입니다."
 private const val CTA_SUPPORTING_WAITING_HANDOFF = "검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다."
 private const val CTA_SUPPORTING_INVALID_HANDOFF = "목적지 좌표를 다시 확인하면 안내 시작을 활성화합니다."
 private const val CTA_SUPPORTING_ERROR = "경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다."
@@ -725,6 +744,7 @@ private const val ROUTE_PREVIEW_MAP_NO_ROUTE_MESSAGE = "No selected route is ava
 private const val ROUTE_PREVIEW_MAP_POLYLINE_UNAVAILABLE_MESSAGE = "Selected route preview polyline needs at least two points."
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
+private val DEFAULT_TRAVEL_MODE = RouteTravelMode.WALK
 private val DEFAULT_SELECTED_OPTION = RouteOption.SAFE
 
 private data class RouteOptionCardPresentation(

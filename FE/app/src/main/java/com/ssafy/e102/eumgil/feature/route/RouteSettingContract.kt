@@ -16,6 +16,7 @@ data class RouteSettingUiState(
     val destinationHandoffState: RouteDestinationHandoffState = RouteDestinationHandoffState.EMPTY,
     val destinationFallbackMessage: String? = null,
     val isUsingFallbackDestination: Boolean = true,
+    val selectedTravelMode: RouteTravelMode = RouteTravelMode.WALK,
     val selectedOption: RouteOption = RouteOption.SAFE,
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
     val selectedRoute: RouteSelectedRouteUiState? = null,
@@ -25,7 +26,7 @@ data class RouteSettingUiState(
     val ctaAcknowledged: Boolean = false,
 ) {
     val isStartEnabled: Boolean
-        get() = cta.isEnabled
+        get() = cta.isEnabled && selectedTravelMode == RouteTravelMode.WALK
 }
 
 data class RouteLocationUiState(
@@ -97,7 +98,7 @@ data class RouteSummaryMetricUiState(
 )
 
 data class RouteSettingCtaUiState(
-    val label: String = "선택한 경로로 안내 시작",
+    val label: String = "길 안내 시작",
     val supportingText: String = "fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다.",
     val isEnabled: Boolean = false,
 )
@@ -123,6 +124,11 @@ enum class RoutePreviewMapStatus {
     ERROR,
 }
 
+enum class RouteTravelMode {
+    WALK,
+    TRANSIT,
+}
+
 enum class RouteOptionBadge {
     SAFE_PRIORITY,
     STEP_FREE,
@@ -135,6 +141,10 @@ enum class RouteOptionBadge {
 
 sealed interface RouteSettingUiAction {
     data object BackClicked : RouteSettingUiAction
+
+    data class TravelModeSelected(
+        val mode: RouteTravelMode,
+    ) : RouteSettingUiAction
 
     data class RouteOptionSelected(
         val routeOption: RouteOption,

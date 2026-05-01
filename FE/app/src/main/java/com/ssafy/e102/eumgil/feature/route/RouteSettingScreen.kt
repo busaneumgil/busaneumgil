@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,7 +55,9 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import java.util.Locale
 
 @Composable
 fun RouteSettingScreen(
@@ -61,13 +65,11 @@ fun RouteSettingScreen(
     onAction: (RouteSettingUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val description =
+    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
+    val supportingMessage =
         when (uiState.destinationHandoffState) {
             RouteDestinationHandoffState.DIRECT ->
-                stringResource(
-                    id = R.string.route_setting_screen_description_with_destination,
-                    uiState.destination.name,
-                )
+                uiState.destinationFallbackMessage?.takeIf(String::isNotBlank)
 
             RouteDestinationHandoffState.EMPTY ->
                 stringResource(id = R.string.route_setting_screen_description_empty)
@@ -77,6 +79,12 @@ fun RouteSettingScreen(
                     id = R.string.route_setting_screen_description_invalid_handoff,
                     uiState.destination.name,
                 )
+        }
+    val ctaSupportingText =
+        when {
+            !isWalkMode -> stringResource(id = R.string.route_setting_transit_cta_supporting)
+            uiState.cta.isEnabled -> null
+            else -> uiState.cta.supportingText
         }
 
     Scaffold(
@@ -88,7 +96,9 @@ fun RouteSettingScreen(
         },
         bottomBar = {
             RouteSettingBottomBar(
-                uiState = uiState,
+                buttonLabel = uiState.cta.label,
+                enabled = uiState.isStartEnabled,
+                supportingText = ctaSupportingText,
                 onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
             )
         },
@@ -102,19 +112,28 @@ fun RouteSettingScreen(
                     .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            RouteSettingDestinationCard(
+            RouteWaypointCard(
+                origin = uiState.origin,
                 destination = uiState.destination,
-                description = description,
-                fallbackMessage = uiState.destinationFallbackMessage,
+                supportingMessage = supportingMessage,
             )
-            RouteWaypointSection(uiState = uiState)
-            RouteOptionSection(
-                optionCards = uiState.optionCards,
-                onOptionClick = { routeOption ->
-                    onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+            RouteTravelModeTabs(
+                selectedMode = uiState.selectedTravelMode,
+                onModeSelected = { mode ->
+                    onAction(RouteSettingUiAction.TravelModeSelected(mode))
                 },
             )
-            RouteSummarySection(uiState = uiState)
+            RouteMapStage(uiState = uiState)
+            if (isWalkMode) {
+                RouteWalkOptionSection(
+                    uiState = uiState,
+                    onOptionClick = { routeOption ->
+                        onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+                    },
+                )
+            } else {
+                RouteTransitOptionSection()
+            }
         }
     }
 }
@@ -126,23 +145,26 @@ private fun RouteSettingTopBar(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
+        tonalElevation = 1.dp,
     ) {
-        Row(
+        Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xxSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    .padding(horizontal = EumSpacing.xSmall, vertical = EumSpacing.xxSmall),
         ) {
-            TextButton(onClick = onBackClick) {
+            TextButton(
+                onClick = onBackClick,
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
                 Text(text = stringResource(id = R.string.route_setting_back))
             }
             Text(
                 text = stringResource(id = R.string.route_setting_screen_title),
+                modifier = Modifier.align(Alignment.Center),
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -150,261 +172,444 @@ private fun RouteSettingTopBar(
 }
 
 @Composable
-private fun RouteSettingDestinationCard(
+private fun RouteWaypointCard(
+    origin: RouteLocationUiState,
     destination: RouteLocationUiState,
-    description: String,
-    fallbackMessage: String?,
+    supportingMessage: String?,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         shadowElevation = 2.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
+            RouteWaypointRow(
+                label = stringResource(id = R.string.route_setting_origin_label),
+                name = origin.name,
+                supportingText = origin.supportingText,
+                markerColor = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+            )
+            RouteWaypointRow(
+                label = stringResource(id = R.string.route_setting_destination_label),
+                name = destination.name,
+                supportingText = destination.supportingText,
+                markerColor = MaterialTheme.colorScheme.error,
+            )
+            supportingMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteWaypointRow(
+    label: String,
+    name: String,
+    supportingText: String?,
+    markerColor: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(12.dp)
+                    .background(color = markerColor, shape = CircleShape),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(
-                text = stringResource(id = R.string.route_setting_destination_section_title),
-                style = MaterialTheme.typography.titleMedium,
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = markerColor,
+            )
+            Text(
+                text = name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
+            )
+            supportingText?.takeIf(String::isNotBlank)?.let { value ->
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteTravelModeTabs(
+    selectedMode: RouteTravelMode,
+    onModeSelected: (RouteTravelMode) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+    ) {
+        RouteTravelModeTab(
+            label = stringResource(id = R.string.route_setting_travel_mode_walk),
+            isSelected = selectedMode == RouteTravelMode.WALK,
+            modifier = Modifier.weight(1f),
+            onClick = { onModeSelected(RouteTravelMode.WALK) },
+        )
+        RouteTravelModeTab(
+            label = stringResource(id = R.string.route_setting_travel_mode_transit),
+            isSelected = selectedMode == RouteTravelMode.TRANSIT,
+            modifier = Modifier.weight(1f),
+            onClick = { onModeSelected(RouteTravelMode.TRANSIT) },
+        )
+    }
+}
+
+@Composable
+private fun RouteTravelModeTab(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier.clickable(
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color =
+            if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+        border =
+            BorderStroke(
+                1.dp,
+                if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+                },
+            ),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteMapStage(
+    uiState: RouteSettingUiState,
+) {
+    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
+    val selectedRoute = uiState.selectedRoute
+    val previewMap = uiState.routePreviewMap
+    val routeColor = optionAccentColor(selectedRoute?.routeOption ?: RouteOption.SAFE)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+        shadowElevation = 2.dp,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(RoutePreviewMapHeight),
+        ) {
+            RouteMapBackdrop(
+                previewMap = previewMap,
+                routePath =
+                    if (isWalkMode && previewMap.isDisplayable) {
+                        previewMap.polyline
+                    } else {
+                        emptyList()
+                    },
+                routeColor = routeColor,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            when {
+                !isWalkMode ->
+                    RouteMapMessageCard(
+                        title = stringResource(id = R.string.route_setting_transit_placeholder_title),
+                        description = stringResource(id = R.string.route_setting_transit_placeholder_description),
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopStart)
+                                .padding(EumSpacing.medium),
+                    )
+
+                selectedRoute == null || !previewMap.isDisplayable ->
+                    RouteMapMessageCard(
+                        title = routePreviewFallbackTitle(previewMap.status),
+                        description = routePreviewFallbackDescription(previewMap),
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(EumSpacing.medium),
+                    )
+            }
+
+            if (isWalkMode && selectedRoute != null && previewMap.isDisplayable) {
+                RouteMapStatusBadge(
+                    label = selectedRoute.optionTitle,
+                    supportingText = selectedRoute.summaryLabel,
+                    accentColor = routeColor,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(EumSpacing.medium),
+                )
+            }
+
+            RouteMapControls(
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = EumSpacing.small),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteMapStatusBadge(
+    label: String,
+    supportingText: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
+        shadowElevation = 2.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = accentColor,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = supportingText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteMapMessageCard(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.wrapContentWidth(),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+        shadowElevation = 2.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.small),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            destination.metadataLabel?.let { metadataLabel ->
-                Text(
-                    text = metadataLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
-            if (destination.name.isBlank()) {
-                Text(
-                    text = stringResource(id = R.string.route_setting_destination_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                RouteSettingDestinationField(
-                    label = stringResource(id = R.string.route_setting_destination_name_label),
-                    value = destination.name,
-                )
-                RouteSettingDestinationField(
-                    label = stringResource(id = R.string.route_setting_destination_address_label),
-                    value =
-                        destination.supportingText
-                            ?: stringResource(id = R.string.route_setting_destination_address_empty),
-                )
-                destination.coordinate?.let { coordinate ->
-                    RouteSettingDestinationField(
-                        label = stringResource(id = R.string.route_setting_destination_coordinate_label),
-                        value =
-                            stringResource(
-                                id = R.string.route_setting_destination_coordinate_value,
-                                coordinate.latitude,
-                                coordinate.longitude,
-                            ),
-                    )
-                }
-            }
-
-            fallbackMessage?.takeIf(String::isNotBlank)?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
 
 @Composable
-private fun RouteSettingDestinationField(
-    label: String,
-    value: String,
+private fun RouteMapControls(
+    modifier: Modifier = Modifier,
 ) {
     Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+        horizontalAlignment = Alignment.End,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+        RouteMapControlButton(label = "+")
+        RouteMapControlButton(label = "-")
+        RouteMapControlButton(
+            label = stringResource(id = R.string.route_setting_map_control_recenter),
+            isWide = true,
         )
     }
 }
 
 @Composable
-private fun RouteWaypointSection(
-    uiState: RouteSettingUiState,
+private fun RouteMapControlButton(
+    label: String,
+    isWide: Boolean = false,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
-        shadowElevation = 2.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Text(
-                text = stringResource(id = R.string.route_setting_origin_section_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            RouteLocationRow(
-                label = stringResource(id = R.string.route_setting_origin_label),
-                location = uiState.origin,
-                accentColor = MaterialTheme.colorScheme.primary,
-            )
-            RouteLocationRow(
-                label = stringResource(id = R.string.route_setting_destination_label),
-                location = uiState.destination,
-                accentColor = MaterialTheme.colorScheme.error,
-            )
-            uiState.destinationFallbackMessage?.takeIf(String::isNotBlank)?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RouteLocationRow(
-    label: String,
-    location: RouteLocationUiState,
-    accentColor: androidx.compose.ui.graphics.Color,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        verticalAlignment = Alignment.Top,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+        shadowElevation = 4.dp,
     ) {
         Box(
             modifier =
                 Modifier
-                    .padding(top = EumSpacing.xSmall)
-                    .size(10.dp)
-                    .background(color = accentColor, shape = CircleShape),
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    .then(if (isWide) Modifier.widthIn(min = 56.dp) else Modifier)
+                    .padding(horizontal = if (isWide) 12.dp else 0.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-                color = accentColor,
-            )
-            Text(
-                text = location.name,
-                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
             )
-            location.supportingText?.takeIf(String::isNotBlank)?.let { supportingText ->
-                Text(
-                    text = supportingText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            location.coordinate?.let { coordinate ->
-                Text(
-                    text =
-                        stringResource(
-                            id = R.string.route_setting_destination_coordinate_value,
-                            coordinate.latitude,
-                            coordinate.longitude,
-                        ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
 
 @Composable
-private fun RouteOptionSection(
-    optionCards: List<RouteOptionCardUiState>,
-    onOptionClick: (com.ssafy.e102.eumgil.core.model.RouteOption) -> Unit,
+private fun RouteWalkOptionSection(
+    uiState: RouteSettingUiState,
+    onOptionClick: (RouteOption) -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        Text(
-            text = stringResource(id = R.string.route_setting_option_section_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(id = R.string.route_setting_option_section_supporting),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        when {
+            uiState.isLoading ->
+                RouteStateCard(
+                    title = stringResource(id = R.string.route_setting_summary_loading_title),
+                    description = stringResource(id = R.string.route_setting_summary_loading_description),
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.32f),
+                    borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f),
+                )
 
-        optionCards.forEach { optionCard ->
-            RouteOptionCard(
-                card = optionCard,
-                onClick = { onOptionClick(optionCard.routeOption) },
+            uiState.loadErrorMessage != null ->
+                RouteStateCard(
+                    title = stringResource(id = R.string.route_setting_summary_error_title),
+                    description = uiState.loadErrorMessage,
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.32f),
+                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.24f),
+                )
+
+            uiState.optionCards.isEmpty() ->
+                RouteStateCard(
+                    title = stringResource(id = R.string.route_setting_summary_empty_title),
+                    description = stringResource(id = R.string.route_setting_summary_empty_description),
+                )
+
+            else ->
+                uiState.optionCards.forEach { optionCard ->
+                    RouteCompactOptionCard(
+                        card = optionCard,
+                        onClick = { onOptionClick(optionCard.routeOption) },
+                    )
+                }
+        }
+
+        uiState.sourceLabel?.takeIf(String::isNotBlank)?.let { label ->
+            Text(
+                text = stringResource(id = R.string.route_setting_summary_source_value, label),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
+@Composable
+private fun RouteTransitOptionSection() {
+    RouteStateCard(
+        title = stringResource(id = R.string.route_setting_transit_placeholder_title),
+        description = stringResource(id = R.string.route_setting_transit_placeholder_description),
+        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f),
+        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RouteOptionCard(
+private fun RouteCompactOptionCard(
     card: RouteOptionCardUiState,
     onClick: () -> Unit,
 ) {
-    val accentColor = optionAccentColor(routeOption = card.routeOption)
+    val accentColor = optionAccentColor(card.routeOption)
     val containerColor =
         when {
-            card.isSelected && card.routeOption == com.ssafy.e102.eumgil.core.model.RouteOption.SAFE ->
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.46f)
-
-            card.isSelected ->
-                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.42f)
-
-            card.routeOption == com.ssafy.e102.eumgil.core.model.RouteOption.SAFE ->
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f)
-
+            card.isSelected -> accentColor.copy(alpha = 0.1f)
+            card.routeOption == RouteOption.SAFE -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.14f)
             else -> MaterialTheme.colorScheme.surface
         }
     val borderColor =
-        when {
-            card.isSelected -> accentColor.copy(alpha = 0.52f)
-            card.routeOption == com.ssafy.e102.eumgil.core.model.RouteOption.SAFE -> accentColor.copy(alpha = 0.28f)
-            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+        if (card.isSelected) {
+            accentColor.copy(alpha = 0.48f)
+        } else {
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
         }
 
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(
-                    role = Role.Button,
-                    onClick = onClick,
-                ),
+                .clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(EumRadius.large),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),
@@ -416,199 +621,67 @@ private fun RouteOptionCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
+                RouteOptionSelectionIndicator(
+                    isSelected = card.isSelected,
+                    accentColor = accentColor,
+                )
+                Column(
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                    verticalAlignment = Alignment.Top,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    RouteOptionSelectionIndicator(
-                        isSelected = card.isSelected,
-                        accentColor = accentColor,
-                    )
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = card.title,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold,
                         )
-                        Text(
-                            text = card.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        card.highlightLabel?.let { highlightLabel ->
+                            RouteBadgeChip(
+                                label = highlightLabel,
+                                containerColor = accentColor.copy(alpha = 0.12f),
+                                contentColor = accentColor,
+                            )
+                        }
                     }
-                }
-                RouteOptionStateChip(
-                    label = card.selectionLabel,
-                    isSelected = card.isSelected,
-                    accentColor = accentColor,
-                )
-            }
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                card.highlightLabel?.let { highlightLabel ->
-                    RouteBadgeChip(
-                        label = highlightLabel,
-                        containerColor = accentColor.copy(alpha = 0.12f),
-                        contentColor = accentColor,
+                    Text(
+                        text = card.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                card.metrics.forEach { metric ->
-                    RouteOptionMetricChip(metric = metric)
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = compactEstimatedTimeLabel(card.estimatedTimeMinutes),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = compactDistanceLabel(card.distanceMeters),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-
-            Text(
-                text = card.summaryLabel,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
 
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
             ) {
                 RouteRiskChip(riskLevel = card.riskLevel)
-                card.badges.forEach { badge ->
-                    RouteBadgeChip(
-                        label = routeBadgeText(badge),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RouteSummarySection(
-    uiState: RouteSettingUiState,
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-    ) {
-        Text(
-            text = stringResource(id = R.string.route_setting_summary_section_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(id = R.string.route_setting_summary_section_supporting),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        when {
-            uiState.isLoading ->
-                RouteStateCard(
-                    title = stringResource(id = R.string.route_setting_summary_loading_title),
-                    description = stringResource(id = R.string.route_setting_summary_loading_description),
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.38f),
-                    borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.28f),
-                )
-
-            uiState.loadErrorMessage != null ->
-                RouteStateCard(
-                    title = stringResource(id = R.string.route_setting_summary_error_title),
-                    description = uiState.loadErrorMessage,
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.48f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
-                )
-
-            uiState.selectedRoute == null ->
-                RouteStateCard(
-                    title = stringResource(id = R.string.route_setting_summary_empty_title),
-                    description = stringResource(id = R.string.route_setting_summary_empty_description),
-                )
-
-            else ->
-                RouteSummaryCard(
-                    route = uiState.selectedRoute,
-                    previewMap = uiState.routePreviewMap,
-                    sourceLabel = uiState.sourceLabel,
-                )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun RouteSummaryCard(
-    route: RouteSelectedRouteUiState,
-    previewMap: RoutePreviewMapUiState,
-    sourceLabel: String?,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
-        shadowElevation = 2.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            RouteBadgeChip(
-                label = route.optionTitle,
-                containerColor = optionAccentColor(route.routeOption).copy(alpha = 0.12f),
-                contentColor = optionAccentColor(route.routeOption),
-            )
-            Text(
-                text = route.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = route.summaryLabel,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                RouteRiskChip(riskLevel = route.riskLevel)
-                route.badges.forEach { badge ->
+                card.badges.take(2).forEach { badge ->
                     RouteBadgeChip(label = routeBadgeText(badge))
                 }
-            }
-
-            RouteSummaryMetrics(metrics = route.summaryMetrics)
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                Text(
-                    text = stringResource(id = R.string.route_setting_summary_guidance_label),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = route.guidanceMessage,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            RoutePreviewPanel(route = route, previewMap = previewMap)
-
-            sourceLabel?.takeIf(String::isNotBlank)?.let { label ->
-                Text(
-                    text = stringResource(id = R.string.route_setting_summary_source_value, label),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
@@ -620,7 +693,7 @@ private fun RouteOptionSelectionIndicator(
     accentColor: Color,
 ) {
     Surface(
-        modifier = Modifier.padding(top = EumSpacing.xSmall),
+        modifier = Modifier.padding(top = 2.dp),
         shape = CircleShape,
         color = if (isSelected) accentColor.copy(alpha = 0.12f) else Color.Transparent,
         border = BorderStroke(1.dp, if (isSelected) accentColor else MaterialTheme.colorScheme.outline),
@@ -639,261 +712,94 @@ private fun RouteOptionSelectionIndicator(
 }
 
 @Composable
-private fun RouteOptionStateChip(
-    label: String,
-    isSelected: Boolean,
-    accentColor: Color,
+private fun RouteSettingBottomBar(
+    buttonLabel: String,
+    enabled: Boolean,
+    supportingText: String?,
+    onStartClick: () -> Unit,
 ) {
-    RouteBadgeChip(
-        label = label,
-        containerColor =
-            if (isSelected) {
-                accentColor.copy(alpha = 0.12f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            },
-        contentColor =
-            if (isSelected) {
-                accentColor
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-    )
-}
-
-@Composable
-private fun RouteOptionMetricChip(
-    metric: RouteOptionCardMetricUiState,
-) {
-    Surface(
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = metric.label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = metric.value,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RouteSummaryMetrics(
-    metrics: List<RouteSummaryMetricUiState>,
-) {
-    if (metrics.isEmpty()) {
-        return
-    }
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-    ) {
-        metrics.chunked(2).forEach { rowMetrics ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                rowMetrics.forEach { metric ->
-                    RouteSummaryMetricCard(
-                        metric = metric,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (rowMetrics.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RouteSummaryMetricCard(
-    metric: RouteSummaryMetricUiState,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.small),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            Text(
-                text = metric.label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = metric.value,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RoutePreviewPanel(
-    route: RouteSelectedRouteUiState,
-    previewMap: RoutePreviewMapUiState,
-) {
-    val previewLineColor = optionAccentColor(route.routeOption)
-    val previewMutedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
-    val previewBackground = MaterialTheme.colorScheme.surfaceContainerLowest
-    val previewStartColor = MaterialTheme.colorScheme.secondary
-    val previewEndColor = MaterialTheme.colorScheme.error
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = previewBackground,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 8.dp,
+        tonalElevation = 1.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = stringResource(id = R.string.route_setting_preview_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            route.destination.name.takeIf(String::isNotBlank)?.let { destinationName ->
+            supportingText?.let { text ->
                 Text(
-                    text = destinationName,
+                    text = text,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            if (previewMap.isDisplayable) {
-                RoutePreviewMapViewport(
-                    route = route,
-                    previewMap = previewMap,
-                    routeColor = previewLineColor,
-                    originColor = previewStartColor,
-                    destinationColor = previewEndColor,
-                )
-            } else {
-                RouteStateCard(
-                    title = routePreviewFallbackTitle(previewMap.status),
-                    description = routePreviewFallbackDescription(previewMap),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            Text(
-                text =
-                    if (route.fallbackSegmentCount > 0) {
-                        stringResource(
-                            id = R.string.route_setting_preview_meta_with_fallback,
-                            route.renderableSegmentCount,
-                            route.segmentCount,
-                            route.fallbackSegmentCount,
-                        )
-                    } else {
-                        stringResource(
-                            id = R.string.route_setting_preview_meta,
-                            route.renderableSegmentCount,
-                            route.segmentCount,
-                        )
-                    },
-                style = MaterialTheme.typography.bodySmall,
-                color = previewMutedColor,
-            )
-
-            route.previewFallbackNotice?.let { previewFallbackNotice ->
-                Text(
-                    text = previewFallbackNotice,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Button(
+                onClick = onStartClick,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                Text(text = buttonLabel)
             }
         }
     }
 }
 
 @Composable
-private fun RoutePreviewMapViewport(
-    route: RouteSelectedRouteUiState,
+private fun RouteMapBackdrop(
     previewMap: RoutePreviewMapUiState,
+    routePath: List<GeoCoordinate>,
     routeColor: Color,
-    originColor: Color,
-    destinationColor: Color,
+    modifier: Modifier = Modifier,
 ) {
-    val surfaceTint = MaterialTheme.colorScheme.surface
     val outline = MaterialTheme.colorScheme.outline
-    val projectionBounds = routePreviewProjectionBounds(previewMap)
-    val destinationLabel =
-        route.destination.name.takeIf(String::isNotBlank)
-            ?: stringResource(id = R.string.route_setting_destination_label)
-    val accessibilityLabel =
-        stringResource(
-            id = R.string.route_setting_preview_map_a11y,
-            route.optionTitle,
-            destinationLabel,
-            previewMap.polyline.size,
+    val originColor = MaterialTheme.colorScheme.secondary
+    val destinationColor = MaterialTheme.colorScheme.error
+    val projectionMap =
+        previewMap.copy(
+            polyline =
+                if (routePath.isNotEmpty()) {
+                    routePath
+                } else {
+                    listOfNotNull(previewMap.originCoordinate, previewMap.destinationCoordinate)
+                },
         )
     val backgroundBrush =
         Brush.verticalGradient(
             colors =
                 listOf(
                     MaterialTheme.colorScheme.surfaceVariant,
-                    surfaceTint,
+                    MaterialTheme.colorScheme.surfaceContainerLowest,
                 ),
         )
+    val mapDescription = stringResource(id = R.string.route_setting_preview_title)
 
-    Surface(
+    BoxWithConstraints(
         modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(RoutePreviewMapHeight)
+            modifier
+                .background(backgroundBrush)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = accessibilityLabel
+                    contentDescription = mapDescription
                 },
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        BoxWithConstraints(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(backgroundBrush),
-        ) {
-            val horizontalPadding = 28.dp
-            val verticalPadding = 24.dp
-            val markerAreaWidth = (maxWidth - (horizontalPadding * 2)).coerceAtLeast(0.dp)
-            val markerAreaHeight = (maxHeight - (verticalPadding * 2)).coerceAtLeast(0.dp)
+        val projectionBounds = routePreviewProjectionBounds(projectionMap)
+        val horizontalPadding = 28.dp
+        val verticalPadding = 24.dp
+        val markerAreaWidth = (maxWidth - (horizontalPadding * 2)).coerceAtLeast(0.dp)
+        val markerAreaHeight = (maxHeight - (verticalPadding * 2)).coerceAtLeast(0.dp)
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawRoutePreviewMapGrid(outline = outline)
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawRoutePreviewMapGrid(outline = outline)
 
-                val routePath =
-                    previewMap.polyline.toRoutePreviewPath(
+            if (routePath.size >= 2) {
+                val routePreviewPath =
+                    routePath.toRoutePreviewPath(
                         bounds = projectionBounds,
                         canvasSize = size,
                     )
                 drawPath(
-                    path = routePath,
-                    color = routeColor.copy(alpha = 0.28f),
+                    path = routePreviewPath,
+                    color = routeColor.copy(alpha = 0.26f),
                     style =
                         Stroke(
                             width = 12.dp.toPx(),
@@ -902,7 +808,7 @@ private fun RoutePreviewMapViewport(
                         ),
                 )
                 drawPath(
-                    path = routePath,
+                    path = routePreviewPath,
                     color = routeColor,
                     style =
                         Stroke(
@@ -911,65 +817,57 @@ private fun RoutePreviewMapViewport(
                             join = StrokeJoin.Round,
                         ),
                 )
-
-                previewMap.originCoordinate?.let { coordinate ->
-                    drawCircle(
-                        color = originColor.copy(alpha = 0.18f),
-                        radius = 18.dp.toPx(),
-                        center = projectionBounds.project(coordinate).toCanvasOffset(size),
-                    )
-                }
-                previewMap.destinationCoordinate?.let { coordinate ->
-                    drawCircle(
-                        color = destinationColor.copy(alpha = 0.14f),
-                        radius = 20.dp.toPx(),
-                        center = projectionBounds.project(coordinate).toCanvasOffset(size),
-                    )
-                }
             }
 
             previewMap.originCoordinate?.let { coordinate ->
-                RoutePreviewMapMarker(
-                    label = stringResource(id = R.string.route_setting_preview_marker_origin),
-                    containerColor = originColor,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .offsetWithinRoutePreviewMap(
-                                point = projectionBounds.project(coordinate),
-                                areaWidth = markerAreaWidth,
-                                areaHeight = markerAreaHeight,
-                                horizontalPadding = horizontalPadding,
-                                verticalPadding = verticalPadding,
-                                elementSize = RoutePreviewMarkerSize,
-                            ),
+                drawCircle(
+                    color = originColor.copy(alpha = 0.18f),
+                    radius = 18.dp.toPx(),
+                    center = projectionBounds.project(coordinate).toCanvasOffset(size),
                 )
             }
-
             previewMap.destinationCoordinate?.let { coordinate ->
-                RoutePreviewMapMarker(
-                    label = stringResource(id = R.string.route_setting_preview_marker_destination),
-                    containerColor = destinationColor,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .offsetWithinRoutePreviewMap(
-                                point = projectionBounds.project(coordinate),
-                                areaWidth = markerAreaWidth,
-                                areaHeight = markerAreaHeight,
-                                horizontalPadding = horizontalPadding,
-                                verticalPadding = verticalPadding,
-                                elementSize = RoutePreviewMarkerSize,
-                            ),
+                drawCircle(
+                    color = destinationColor.copy(alpha = 0.14f),
+                    radius = 20.dp.toPx(),
+                    center = projectionBounds.project(coordinate).toCanvasOffset(size),
                 )
             }
+        }
 
-            RoutePreviewMapLegend(
-                route = route,
+        previewMap.originCoordinate?.let { coordinate ->
+            RoutePreviewMapMarker(
+                label = stringResource(id = R.string.route_setting_preview_marker_origin),
+                containerColor = originColor,
                 modifier =
                     Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(EumSpacing.small),
+                        .align(Alignment.TopStart)
+                        .offsetWithinRoutePreviewMap(
+                            point = projectionBounds.project(coordinate),
+                            areaWidth = markerAreaWidth,
+                            areaHeight = markerAreaHeight,
+                            horizontalPadding = horizontalPadding,
+                            verticalPadding = verticalPadding,
+                            elementSize = RoutePreviewMarkerSize,
+                        ),
+            )
+        }
+
+        previewMap.destinationCoordinate?.let { coordinate ->
+            RoutePreviewMapMarker(
+                label = stringResource(id = R.string.route_setting_preview_marker_destination),
+                containerColor = destinationColor,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .offsetWithinRoutePreviewMap(
+                            point = projectionBounds.project(coordinate),
+                            areaWidth = markerAreaWidth,
+                            areaHeight = markerAreaHeight,
+                            horizontalPadding = horizontalPadding,
+                            verticalPadding = verticalPadding,
+                            elementSize = RoutePreviewMarkerSize,
+                        ),
             )
         }
     }
@@ -995,56 +893,6 @@ private fun RoutePreviewMapMarker(
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RoutePreviewMapLegend(
-    route: RouteSelectedRouteUiState,
-    modifier: Modifier = Modifier,
-) {
-    val destinationLabel =
-        route.destination.name.takeIf(String::isNotBlank)
-            ?: stringResource(id = R.string.route_setting_destination_label)
-
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
-        shadowElevation = 4.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.small),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-        ) {
-            Text(
-                text = stringResource(id = R.string.route_setting_preview_legend_title),
-                style = MaterialTheme.typography.labelLarge,
-                color = optionAccentColor(route.routeOption),
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text =
-                    stringResource(
-                        id = R.string.route_setting_preview_legend_origin,
-                        route.optionTitle,
-                    ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-            Text(
-                text =
-                    stringResource(
-                        id = R.string.route_setting_preview_legend_destination,
-                        destinationLabel,
-                    ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
             )
         }
     }
@@ -1077,36 +925,6 @@ private fun routePreviewFallbackDescription(previewMap: RoutePreviewMapUiState):
     }
 
 @Composable
-private fun RouteSettingBottomBar(
-    uiState: RouteSettingUiState,
-    onStartClick: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Button(
-                onClick = onStartClick,
-                enabled = uiState.isStartEnabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = uiState.cta.label)
-            }
-            Text(
-                text = uiState.cta.supportingText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
 private fun RouteRiskChip(
     riskLevel: RouteRiskLevel,
 ) {
@@ -1133,8 +951,8 @@ private fun RouteRiskChip(
 private fun RouteBadgeChip(
     label: String,
     modifier: Modifier = Modifier,
-    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.64f),
-    contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.64f),
+    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
 ) {
     Surface(
         modifier = modifier,
@@ -1160,8 +978,8 @@ private fun RouteStateCard(
     title: String,
     description: String,
     modifier: Modifier = Modifier,
-    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surface,
-    borderColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+    borderColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -1210,10 +1028,24 @@ private fun routeBadgeText(badge: RouteOptionBadge): String =
     }
 
 @Composable
-private fun optionAccentColor(routeOption: com.ssafy.e102.eumgil.core.model.RouteOption): Color =
+private fun optionAccentColor(routeOption: RouteOption): Color =
     when (routeOption) {
-        com.ssafy.e102.eumgil.core.model.RouteOption.SAFE -> MaterialTheme.colorScheme.primary
-        com.ssafy.e102.eumgil.core.model.RouteOption.SHORTEST -> MaterialTheme.colorScheme.tertiary
+        RouteOption.SAFE -> MaterialTheme.colorScheme.primary
+        RouteOption.SHORTEST -> MaterialTheme.colorScheme.tertiary
+    }
+
+private fun compactEstimatedTimeLabel(minutes: Int): String =
+    if (minutes > 0) {
+        "${minutes}분"
+    } else {
+        "--"
+    }
+
+private fun compactDistanceLabel(distanceMeters: Int): String =
+    when {
+        distanceMeters <= 0 -> "--"
+        distanceMeters < METERS_PER_KILOMETER -> "${distanceMeters}m"
+        else -> String.format(Locale.US, "%.1fkm", distanceMeters / METERS_PER_KILOMETER.toFloat())
     }
 
 private fun DrawScope.drawRoutePreviewMapGrid(outline: Color) {
@@ -1284,6 +1116,15 @@ private fun routePreviewProjectionBounds(previewMap: RoutePreviewMapUiState): Ro
             previewMap.destinationCoordinate?.let(::add)
         }
 
+    if (coordinates.isEmpty()) {
+        return RoutePreviewProjectionBounds(
+            minLatitude = DEFAULT_PREVIEW_CENTER_LATITUDE - (MIN_ROUTE_PREVIEW_LATITUDE_SPAN / 2.0),
+            maxLatitude = DEFAULT_PREVIEW_CENTER_LATITUDE + (MIN_ROUTE_PREVIEW_LATITUDE_SPAN / 2.0),
+            minLongitude = DEFAULT_PREVIEW_CENTER_LONGITUDE - (MIN_ROUTE_PREVIEW_LONGITUDE_SPAN / 2.0),
+            maxLongitude = DEFAULT_PREVIEW_CENTER_LONGITUDE + (MIN_ROUTE_PREVIEW_LONGITUDE_SPAN / 2.0),
+        )
+    }
+
     val latitudeBounds =
         expandedRoutePreviewBounds(
             minValue = coordinates.minOf { coordinate -> coordinate.latitude },
@@ -1337,7 +1178,7 @@ private data class RoutePreviewProjectionBounds(
                 .coerceIn(0.08f, 0.92f)
         val latitudeRatio =
             (1f - ((coordinate.latitude - minLatitude) / latitudeSpan).toFloat())
-                .coerceIn(0.10f, 0.90f)
+                .coerceIn(0.1f, 0.9f)
 
         return RoutePreviewProjectionPoint(
             xRatio = longitudeRatio,
@@ -1351,7 +1192,10 @@ private data class RoutePreviewProjectionPoint(
     val yRatio: Float,
 )
 
-private val RoutePreviewMapHeight = 220.dp
+private const val METERS_PER_KILOMETER = 1_000
+private const val DEFAULT_PREVIEW_CENTER_LATITUDE = 35.1796
+private const val DEFAULT_PREVIEW_CENTER_LONGITUDE = 129.0756
+private val RoutePreviewMapHeight = 300.dp
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035
 private const val MIN_ROUTE_PREVIEW_LONGITUDE_SPAN = 0.0045

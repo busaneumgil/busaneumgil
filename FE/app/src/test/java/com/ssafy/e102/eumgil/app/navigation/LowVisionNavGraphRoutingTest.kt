@@ -31,9 +31,9 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
-    fun `navigation completion returns to low vision voice input home tab`() {
+    fun `navigation completion moves to arrival screen`() {
         assertEquals(
-            LowVisionRoute.Home.route,
+            "arrival",
             resolveNavigationCompletionRoute(),
         )
     }

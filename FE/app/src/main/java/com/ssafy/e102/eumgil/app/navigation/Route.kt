@@ -156,3 +156,9 @@ sealed interface NavigationRoute : AppRoute {
         override val route: String = "navigation_guidance"
     }
 }
+
+sealed interface ArrivalRoute : AppRoute {
+    data object Entry : ArrivalRoute {
+        override val route: String = "arrival"
+    }
+}

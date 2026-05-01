@@ -90,11 +90,36 @@ data class RouteSelectedRouteUiState(
     val fallbackSegmentCount: Int = 0,
     val previewFallbackNotice: String? = null,
     val badges: List<RouteOptionBadge> = emptyList(),
+    val detailAccessibilityChips: List<RouteDetailChipUiState> = emptyList(),
+    val detailHighlights: List<RouteDetailHighlightUiState> = emptyList(),
+    val detailSteps: List<RouteDetailStepUiState> = emptyList(),
+    val detailFallbackMessage: String? = null,
 )
 
 data class RouteSummaryMetricUiState(
     val label: String,
     val value: String,
+)
+
+data class RouteDetailChipUiState(
+    val label: String,
+    val tone: RouteDetailTone = RouteDetailTone.INFO,
+)
+
+data class RouteDetailHighlightUiState(
+    val title: String,
+    val description: String,
+    val badgeLabel: String,
+    val tone: RouteDetailTone,
+)
+
+data class RouteDetailStepUiState(
+    val indexLabel: String,
+    val title: String,
+    val description: String,
+    val distanceLabel: String? = null,
+    val badgeLabel: String? = null,
+    val tone: RouteDetailTone = RouteDetailTone.NEUTRAL,
 )
 
 data class RouteSettingCtaUiState(
@@ -127,6 +152,12 @@ enum class RoutePreviewMapStatus {
 enum class RouteTravelMode {
     WALK,
     TRANSIT,
+}
+
+enum class RouteDetailTone {
+    NEUTRAL,
+    INFO,
+    WARNING,
 }
 
 enum class RouteOptionBadge {

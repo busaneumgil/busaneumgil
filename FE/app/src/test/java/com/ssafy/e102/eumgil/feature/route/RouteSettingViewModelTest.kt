@@ -113,6 +113,19 @@ class RouteSettingViewModelTest {
             assertEquals("길 안내 시작", uiState.cta.label)
             assertEquals("선택한 경로로 길 안내를 시작할 수 있습니다.", uiState.cta.supportingText)
             assertTrue(uiState.isStartEnabled)
+            assertEquals(
+                listOf("단차 없음", "음향 신호 있음", "점자블록 있음", "신호등 횡단보도"),
+                uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::label),
+            )
+            assertEquals(
+                listOf("음향 신호 횡단보도", "점자블록 유도 구간"),
+                uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
+            )
+            assertEquals(
+                listOf("출발", "음향 신호 횡단보도 이동", "점자블록 유도 구간 이동", "신호등 있는 횡단보도 건너기", "도착"),
+                uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::title),
+            )
+            assertEquals(null, uiState.selectedRoute?.detailFallbackMessage)
         }
 
     @Test
@@ -238,6 +251,16 @@ class RouteSettingViewModelTest {
                 "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다.",
                 selectedRoute.previewFallbackNotice,
             )
+            assertEquals(listOf("상세 정보 확인 중"), selectedRoute.detailAccessibilityChips.map(RouteDetailChipUiState::label))
+            assertTrue(selectedRoute.detailHighlights.isEmpty())
+            assertEquals(
+                listOf("출발", "세부 경로 확인 중", "도착"),
+                selectedRoute.detailSteps.map(RouteDetailStepUiState::title),
+            )
+            assertEquals(
+                "세부 이동 정보는 준비 중입니다. 요약 정보와 주의 구간을 먼저 확인하세요.",
+                selectedRoute.detailFallbackMessage,
+            )
             assertEquals(RoutePreviewMapStatus.POLYLINE_UNAVAILABLE, uiState.routePreviewMap.status)
             assertEquals(RouteOption.SAFE, uiState.routePreviewMap.routeOption)
             assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
@@ -355,6 +378,21 @@ class RouteSettingViewModelTest {
             assertEquals("Shortest Route", uiState.selectedRoute?.title)
             assertEquals(RouteRiskLevel.MEDIUM, uiState.selectedRoute?.riskLevel)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+            assertEquals(
+                listOf("무신호 횡단 주의", "연석 단차 주의"),
+                uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::label),
+            )
+            assertEquals(
+                listOf("무신호 횡단 주의", "연석 단차 주의"),
+                uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
+            )
+            assertEquals(
+                listOf(RouteDetailTone.WARNING, RouteDetailTone.WARNING),
+                uiState.selectedRoute
+                    ?.detailSteps
+                    ?.filter { step -> step.badgeLabel == "주의" }
+                    ?.map(RouteDetailStepUiState::tone),
+            )
             assertTrue(uiState.optionCards.single { card -> card.routeOption == RouteOption.SHORTEST }.isSelected)
             assertEquals(
                 "현재 선택됨",

@@ -23,24 +23,7 @@ fun RouteSettingEntryRoute(
     autoStartNavigation: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val appContainer =
-        remember(context.applicationContext) {
-            (context.applicationContext as BusanEumgilApp).appContainer
-        }
-    val activity = remember(context) { context.findComponentActivity() }
-    val viewModelFactory =
-        remember(appContainer) {
-            RouteSettingViewModel.provideFactory(
-                routeRepository = appContainer.routeRepository,
-                destinationSelectionRepository = appContainer.destinationSelectionRepository,
-            )
-        }
-    val viewModel =
-        remember(activity, viewModelFactory) {
-            val owner = checkNotNull(activity) { "RouteSettingEntryRoute requires a ComponentActivity host." }
-            ViewModelProvider(owner, viewModelFactory)[RouteSettingViewModel::class.java]
-        }
+    val viewModel = rememberRouteSettingViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToRouteDetail, onStartNavigation) {
@@ -64,6 +47,63 @@ fun RouteSettingEntryRoute(
         onAction = viewModel::onAction,
         modifier = modifier,
     )
+}
+
+@Composable
+fun RouteDetailEntryRoute(
+    routeOption: RouteOption,
+    onNavigateBack: () -> Unit,
+    onStartNavigation: (RouteNavigationRequest) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val viewModel = rememberRouteSettingViewModel()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel, routeOption) {
+        viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.WALK))
+        viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+    }
+
+    LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {
+        viewModel.uiEvent.collect { event ->
+            when (event) {
+                RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                is RouteSettingUiEvent.NavigateToRouteDetail -> Unit
+                is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
+            }
+        }
+    }
+
+    RouteDetailScreen(
+        uiState = uiState,
+        onBackClick = onNavigateBack,
+        onStartClick = {
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun rememberRouteSettingViewModel(): RouteSettingViewModel {
+    val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
+    val activity = remember(context) { context.findComponentActivity() }
+    val viewModelFactory =
+        remember(appContainer) {
+            RouteSettingViewModel.provideFactory(
+                routeRepository = appContainer.routeRepository,
+                destinationSelectionRepository = appContainer.destinationSelectionRepository,
+            )
+        }
+
+    return remember(activity, viewModelFactory) {
+        val owner = checkNotNull(activity) { "RouteSettingEntryRoute requires a ComponentActivity host." }
+        ViewModelProvider(owner, viewModelFactory)[RouteSettingViewModel::class.java]
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

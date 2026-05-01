@@ -483,8 +483,8 @@ private fun String.toNavigationRouteTitle(routeOption: RouteOption): String =
 
 private fun RouteOption.toRouteOptionLabel(): String =
     when (this) {
-        RouteOption.SAFE -> "안전 우선"
-        RouteOption.SHORTEST -> "최단 거리"
+        RouteOption.SAFE -> "안전한 길"
+        RouteOption.SHORTEST -> "최단거리"
     }
 
 private fun RouteRiskLevel.toRiskLabel(): String =

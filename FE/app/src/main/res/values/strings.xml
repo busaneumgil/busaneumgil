@@ -188,7 +188,6 @@
     <string name="map_filter_category_charging_station">휠체어 충전</string>
     <string name="map_filter_category_braille_block">점자블록</string>
     <string name="map_filter_category_other">기타</string>
-    <string name="map_facility_detail_close">닫기</string>
     <string name="map_facility_detail_info_section_title">기본 안내</string>
     <string name="map_facility_detail_info_placeholder">상세 설명이 준비되지 않았습니다. 길안내 전 주소와 접근성 태그를 함께 확인해 주세요.</string>
     <string name="map_facility_detail_distance_badge">거리 %1$s</string>
@@ -223,8 +222,7 @@
     <string name="map_facility_detail_guide_fallback_braille_crosswalk_approach">횡단보도 진입 전 보행 신호와 주변 차량 흐름을 함께 확인해 주세요.</string>
     <string name="map_facility_detail_guide_fallback_braille_generic">점자블록 위치를 기준으로 주변 보행 동선을 먼저 확인해 주세요.</string>
     <string name="map_facility_detail_guide_fallback_other">시설 상세 정보는 계속 보강 중입니다. 길안내 전 주소와 주변 동선을 함께 확인해 주세요.</string>
-    <string name="map_facility_detail_action_section_title">길안내 진입</string>
-    <string name="map_facility_detail_route_entry_action">이 시설로 길안내 시작</string>
+    <string name="map_facility_detail_route_entry_action">도착지로 설정</string>
     <string name="map_facility_detail_action_supporting">실제 route setting 연결은 다음 스레드에서 마무리하고, 추가 CTA 슬롯도 이 영역에 확장합니다.</string>
     <string name="saved_route_screen_title">저장한 장소</string>
     <string name="saved_route_header_title">북마크 목록</string>
@@ -326,7 +324,7 @@
     <string name="search_screen_field_support_empty">빈 입력 상태입니다. 한 글자 이상 입력해 주세요.</string>
     <string name="search_screen_field_support_typing">입력 중 상태입니다. 검색 버튼을 누르면 실제 결과를 조회합니다.</string>
     <string name="search_screen_field_support_result">입력값을 수정한 뒤 다시 검색할 수 있습니다.</string>
-    <string name="map_facility_detail_action_supporting_route_setting">선택한 시설을 목적지로 넘긴 뒤 경로 설정 화면으로 진입합니다. 이후 출발지, 옵션, 미리보기는 다음 작업에서 확장합니다.</string>
+    <string name="map_facility_detail_action_supporting_route_setting">선택한 시설을 도착지로 설정하고 경로 설정 화면으로 이동합니다.</string>
     <string name="route_setting_screen_title">경로 지도</string>
     <string name="route_setting_screen_description_empty">아직 선택된 목적지가 없습니다. 지도 또는 검색에서 목적지를 고르면 이 화면에서 route preview와 summary를 함께 확인합니다.</string>
     <string name="route_setting_screen_description_with_destination">%1$s 목적지를 받아 route preview와 summary까지 같은 목적지 기준으로 연결했습니다.</string>
@@ -342,8 +340,16 @@
     <string name="route_setting_transit_cta_supporting">대중교통 경로는 준비 중입니다. 도보 탭에서 길 안내를 시작할 수 있습니다.</string>
     <string name="route_setting_map_control_recenter">위치</string>
     <string name="route_setting_option_section_title">경로 옵션</string>
-    <string name="route_setting_option_section_supporting">옵션을 선택하면 아래 경로 요약이 함께 갱신됩니다.</string>
+    <string name="route_setting_option_section_supporting">카드를 누르면 경로가 선택되고, 우측 화살표를 누르면 상세 화면으로 진입합니다.</string>
+    <string name="route_setting_option_safe_title">안전한 길</string>
+    <string name="route_setting_option_shortest_title">최단거리</string>
     <string name="route_setting_option_recommended">추천</string>
+    <string name="route_setting_card_selected_badge">선택됨</string>
+    <string name="route_setting_card_metric_time">예상 시간</string>
+    <string name="route_setting_card_metric_distance">예상 거리</string>
+    <string name="route_setting_card_a11y_selected">%1$s 경로. 현재 선택됨. %2$s</string>
+    <string name="route_setting_card_a11y_available">%1$s 경로. %2$s. 두 번 탭하면 선택합니다.</string>
+    <string name="route_setting_card_detail_a11y">%1$s 상세 정보 보기</string>
     <string name="route_setting_summary_section_title">경로 요약</string>
     <string name="route_setting_summary_section_supporting">아래 카드는 현재 선택된 옵션의 상세 경로 정보를 보여줍니다.</string>
     <string name="route_setting_summary_guidance_label">첫 안내</string>
@@ -374,11 +380,16 @@
     <string name="route_setting_preview_legend_origin">출발 %1$s</string>
     <string name="route_setting_preview_legend_destination">도착 %1$s</string>
     <string name="route_setting_preview_map_a11y">경로 미리보기 지도, %1$s, 출발지에서 %2$s 도착지까지 %3$d개 지점의 경로를 표시합니다.</string>
-    <string name="route_setting_cta_label">선택한 경로로 안내 시작</string>
+    <string name="route_setting_cta_label">길 안내 시작</string>
     <string name="route_setting_cta_supporting">201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다.</string>
     <string name="route_setting_cta_acknowledged">내비게이션 진행 화면 연결은 다음 스레드에서 마무리합니다.</string>
     <string name="route_setting_cta_error_supporting">경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다.</string>
     <string name="route_setting_cta_loading_supporting">fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다.</string>
+    <string name="route_setting_cta_a11y_enabled">%1$s 버튼. %2$s 선택됨, %3$s</string>
+    <string name="route_setting_cta_a11y_disabled">%1$s 버튼 비활성화. %2$s</string>
+    <string name="route_setting_detail_screen_title">경로 상세</string>
+    <string name="route_setting_detail_placeholder_title">%1$s 상세 정보 준비 중</string>
+    <string name="route_setting_detail_placeholder_description">이번 커밋에서는 ROUTE-01에서 상세 진입과 라우팅만 먼저 연결했습니다. 단계별 경로 정보와 상세 CTA는 다음 커밋에서 구현합니다.</string>
     <string name="route_setting_distance_meters">%1$d m</string>
     <string name="route_setting_distance_kilometers">%.1f km</string>
     <string name="route_setting_eta_distance">%1$d분 · %2$s</string>
@@ -412,12 +423,10 @@
     <string name="navigation_metric_distance">남은 거리</string>
     <string name="navigation_metric_eta">예상 시간</string>
     <string name="navigation_metric_progress">진행 단계</string>
-    <string name="map_facility_detail_bookmark_section_title">북마크</string>
-    <string name="map_facility_detail_bookmark_unsaved_description">자주 확인할 시설이면 북마크에 저장할 수 있습니다.</string>
-    <string name="map_facility_detail_bookmark_saved_description">북마크에 저장된 시설입니다.</string>
-    <string name="map_facility_detail_bookmark_action_add">북마크 추가</string>
-    <string name="map_facility_detail_bookmark_action_remove">북마크 해제</string>
-    <string name="map_facility_detail_bookmark_action_updating">북마크 저장 중</string>
+    <string name="map_facility_detail_bookmark_button_label">장소 북마크</string>
+    <string name="map_facility_detail_bookmark_state_saved">북마크됨</string>
+    <string name="map_facility_detail_bookmark_state_unsaved">북마크 안 됨</string>
+    <string name="map_facility_detail_bookmark_state_updating">북마크 저장 중</string>
 
     <!--
         feature/terms TermsGuideScreen — 시각지원 모드 약관 안내 5단계

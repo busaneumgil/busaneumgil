@@ -150,11 +150,19 @@ sealed interface RouteSettingUiAction {
         val routeOption: RouteOption,
     ) : RouteSettingUiAction
 
+    data class RouteOptionDetailClicked(
+        val routeOption: RouteOption,
+    ) : RouteSettingUiAction
+
     data object StartNavigationClicked : RouteSettingUiAction
 }
 
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
+
+    data class NavigateToRouteDetail(
+        val routeOption: RouteOption,
+    ) : RouteSettingUiEvent
 
     data class StartNavigationRequested(
         val request: RouteNavigationRequest,

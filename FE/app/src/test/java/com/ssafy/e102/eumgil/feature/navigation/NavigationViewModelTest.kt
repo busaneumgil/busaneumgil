@@ -67,7 +67,7 @@ class NavigationViewModelTest {
 
             assertTrue(locationManager.isUpdating)
             assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
-            assertEquals("안전 우선", viewModel.uiState.value.stepCard.statusLabel)
+            assertEquals("안전한 길", viewModel.uiState.value.stepCard.statusLabel)
             assertEquals("350m", viewModel.uiState.value.stepCard.distanceLabel)
             assertEquals("980m", viewModel.uiState.value.stepCard.metrics[0].value)
             assertEquals("16분", viewModel.uiState.value.stepCard.metrics[1].value)

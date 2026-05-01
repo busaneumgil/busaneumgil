@@ -16,6 +16,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
@@ -23,6 +24,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScr
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
+import com.ssafy.e102.eumgil.feature.route.RouteDetailPlaceholderScreen
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
 import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
@@ -161,6 +163,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToRouteDetail = { routeOption ->
+                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
+            },
             onStartNavigation = { request ->
                 navigationViewModel.bindNavigationRequest(request)
                 navController.navigate(NavigationRoute.Guidance.route) {
@@ -170,6 +175,27 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                         }
                     }
                 }
+            },
+        )
+    }
+
+    composable(
+        route = RouteSettingRoute.Detail.route,
+        arguments =
+            listOf(
+                navArgument(RouteSettingRoute.Detail.ARG_ROUTE_OPTION) {
+                    type = NavType.StringType
+                },
+            ),
+    ) { backStackEntry ->
+        RouteDetailPlaceholderScreen(
+            routeOption =
+                backStackEntry.arguments
+                    ?.getString(RouteSettingRoute.Detail.ARG_ROUTE_OPTION)
+                    ?.toRouteOptionOrDefault()
+                    ?: RouteOption.SAFE,
+            onBackClick = {
+                navController.popBackStack()
             },
         )
     }
@@ -258,3 +284,6 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
         is ContextWrapper -> baseContext.findComponentActivity()
         else -> null
     }
+
+private fun String.toRouteOptionOrDefault(): RouteOption =
+    runCatching { RouteOption.valueOf(this) }.getOrDefault(RouteOption.SAFE)

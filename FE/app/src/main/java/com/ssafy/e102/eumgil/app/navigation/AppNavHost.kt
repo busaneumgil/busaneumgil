@@ -103,8 +103,8 @@ internal fun String?.toCurrentTopLevelRoute(): String? =
         this?.startsWith("${TopLevelRoute.MyPage.route}/") == true -> TopLevelRoute.MyPage.route
         this == SearchRoute.Entry.route -> TopLevelRoute.Map.route
         this?.startsWith("search/") == true -> TopLevelRoute.Map.route
-        this == NavigationRoute.Guidance.route -> TopLevelRoute.Map.route
-        this?.startsWith("route_setting") == true -> TopLevelRoute.Map.route
+        this == NavigationRoute.Guidance.route -> null
+        this?.startsWith("route_setting") == true -> null
         else -> null
     }
 

@@ -50,6 +50,7 @@ class RouteSettingViewModel(
             RouteSettingUiAction.BackClicked -> emitUiEvent(RouteSettingUiEvent.NavigateBack)
             is RouteSettingUiAction.TravelModeSelected -> selectTravelMode(action.mode)
             is RouteSettingUiAction.RouteOptionSelected -> selectRouteOption(action.routeOption)
+            is RouteSettingUiAction.RouteOptionDetailClicked -> openRouteDetail(action.routeOption)
             RouteSettingUiAction.StartNavigationClicked -> startNavigation()
         }
     }
@@ -173,6 +174,11 @@ class RouteSettingViewModel(
                 requestedOption = routeOption,
                 ctaAcknowledged = mutableUiState.value.ctaAcknowledged,
             )
+    }
+
+    private fun openRouteDetail(routeOption: RouteOption) {
+        selectRouteOption(routeOption)
+        emitUiEvent(RouteSettingUiEvent.NavigateToRouteDetail(routeOption))
     }
 
     private fun startNavigation() {
@@ -719,10 +725,10 @@ private const val CTA_SUPPORTING_EMPTY = "표시할 경로가 준비되면 시�
 private const val DESTINATION_FALLBACK_EMPTY_MESSAGE = "검색 handoff 전에는 fixture 목적지를 기본 도착지로 유지합니다."
 private const val DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE = "선택한 목적지 좌표를 확인할 수 없어 fixture 목적지로 대체했습니다."
 private const val SUMMARY_VALUE_PENDING = "확인 중"
-private const val OPTION_TITLE_SAFE = "SAFE 우선"
-private const val OPTION_DESCRIPTION_SAFE = "안전 요소와 보행 위험을 함께 고려해 우선 제안하는 경로입니다."
-private const val OPTION_TITLE_SHORTEST = "최단 거리"
-private const val OPTION_DESCRIPTION_SHORTEST = "이동 시간을 줄이는 기준으로 빠른 경로를 비교합니다."
+private const val OPTION_TITLE_SAFE = "안전한 길"
+private const val OPTION_DESCRIPTION_SAFE = "보행 안전 요소를 우선으로 반영한 추천 경로입니다."
+private const val OPTION_TITLE_SHORTEST = "최단거리"
+private const val OPTION_DESCRIPTION_SHORTEST = "이동 거리를 줄이는 기준으로 빠른 경로를 비교합니다."
 private const val OPTION_HIGHLIGHT_RECOMMENDED = "추천"
 private const val OPTION_SELECTION_SELECTED = "현재 선택됨"
 private const val OPTION_SELECTION_AVAILABLE = "탭하여 선택"

@@ -12,11 +12,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import kotlinx.coroutines.flow.collect
 
 @Composable
 fun RouteSettingEntryRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     autoStartNavigation: Boolean = false,
     modifier: Modifier = Modifier,
@@ -41,10 +43,11 @@ fun RouteSettingEntryRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToRouteDetail, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                is RouteSettingUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
             }
         }

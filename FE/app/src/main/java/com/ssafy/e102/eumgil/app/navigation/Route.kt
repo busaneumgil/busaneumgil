@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import android.net.Uri
+import com.ssafy.e102.eumgil.core.model.RouteOption
 
 sealed interface AppRoute {
     val route: String
@@ -126,16 +127,24 @@ sealed interface SearchRoute : AppRoute {
 sealed interface RouteSettingRoute : AppRoute {
     data object Setting : RouteSettingRoute {
         const val ARG_AUTO_START_NAVIGATION: String = "autoStartNavigation"
-        private const val BASE_ROUTE: String = "route_setting"
 
-        override val route: String = "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}"
+        override val route: String = "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}"
 
         fun createRoute(autoStartNavigation: Boolean = false): String =
             if (autoStartNavigation) {
-                "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION=true"
+                "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION=true"
             } else {
-                BASE_ROUTE
+                ROUTE_SETTING_BASE_ROUTE
             }
+    }
+
+    data object Detail : RouteSettingRoute {
+        const val ARG_ROUTE_OPTION: String = "routeOption"
+
+        override val route: String = "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}"
+
+        fun createRoute(routeOption: RouteOption): String =
+            "$ROUTE_SETTING_BASE_ROUTE/detail/${Uri.encode(routeOption.name)}"
     }
 }
 
@@ -156,3 +165,5 @@ sealed interface NavigationRoute : AppRoute {
         override val route: String = "navigation_guidance"
     }
 }
+
+private const val ROUTE_SETTING_BASE_ROUTE: String = "route_setting"

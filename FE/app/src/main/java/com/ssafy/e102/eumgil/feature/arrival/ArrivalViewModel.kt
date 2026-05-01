@@ -22,6 +22,19 @@ class ArrivalViewModel : ViewModel() {
         when (action) {
             ArrivalUiAction.HomeClicked -> emitUiEvent(ArrivalUiEvent.NavigateToMap)
             ArrivalUiAction.ExploreNewRouteClicked -> emitUiEvent(ArrivalUiEvent.NavigateToSearch)
+            is ArrivalUiAction.RatingSelected -> updateSelectedRating(action.rating)
+            ArrivalUiAction.SaveRouteClicked ->
+                mutableUiState.update { state ->
+                    state.copy(isRouteSaveSelected = !state.isRouteSaveSelected)
+                }
+            ArrivalUiAction.SubmitEvaluationClicked ->
+                mutableUiState.update { state ->
+                    if (!state.isEvaluationSubmitEnabled) {
+                        state
+                    } else {
+                        state.copy(isEvaluationSheetVisible = false)
+                    }
+                }
             ArrivalUiAction.EvaluationSheetDismissed ->
                 mutableUiState.update { state ->
                     state.copy(isEvaluationSheetVisible = false)
@@ -34,4 +47,24 @@ class ArrivalViewModel : ViewModel() {
             mutableUiEvent.emit(event)
         }
     }
+
+    private fun updateSelectedRating(rating: Int) {
+        val resolvedRating = rating.coerceIn(1, 5)
+        mutableUiState.update { state ->
+            state.copy(
+                selectedRating = resolvedRating,
+                selectedRatingLabel = resolvedRating.toArrivalEvaluationLabel(),
+            )
+        }
+    }
 }
+
+private fun Int.toArrivalEvaluationLabel(): ArrivalEvaluationLabel =
+    when (this) {
+        1 -> ArrivalEvaluationLabel.VeryDissatisfied
+        2 -> ArrivalEvaluationLabel.Dissatisfied
+        3 -> ArrivalEvaluationLabel.Neutral
+        4 -> ArrivalEvaluationLabel.Satisfied
+        5 -> ArrivalEvaluationLabel.VerySatisfied
+        else -> ArrivalEvaluationLabel.Idle
+    }

@@ -1,13 +1,36 @@
 package com.ssafy.e102.eumgil.feature.arrival
 
+import com.ssafy.e102.eumgil.R
+
 data class ArrivalUiState(
-    val isEvaluationSheetVisible: Boolean = false,
-)
+    val isEvaluationSheetVisible: Boolean = true,
+    val selectedRating: Int = 0,
+    val selectedRatingLabel: ArrivalEvaluationLabel = ArrivalEvaluationLabel.Idle,
+    val isRouteSaveSelected: Boolean = false,
+) {
+    val isEvaluationSubmitEnabled: Boolean
+        get() = selectedRating > 0
+}
+
+enum class ArrivalEvaluationLabel(val labelResId: Int?) {
+    Idle(labelResId = null),
+    VeryDissatisfied(labelResId = R.string.arrival_evaluation_rating_very_dissatisfied),
+    Dissatisfied(labelResId = R.string.arrival_evaluation_rating_dissatisfied),
+    Neutral(labelResId = R.string.arrival_evaluation_rating_neutral),
+    Satisfied(labelResId = R.string.arrival_evaluation_rating_satisfied),
+    VerySatisfied(labelResId = R.string.arrival_evaluation_rating_very_satisfied),
+}
 
 sealed interface ArrivalUiAction {
     data object HomeClicked : ArrivalUiAction
 
     data object ExploreNewRouteClicked : ArrivalUiAction
+
+    data class RatingSelected(val rating: Int) : ArrivalUiAction
+
+    data object SaveRouteClicked : ArrivalUiAction
+
+    data object SubmitEvaluationClicked : ArrivalUiAction
 
     data object EvaluationSheetDismissed : ArrivalUiAction
 }

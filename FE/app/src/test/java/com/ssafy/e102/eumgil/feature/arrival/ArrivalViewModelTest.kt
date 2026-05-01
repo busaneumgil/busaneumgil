@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -18,8 +19,50 @@ class ArrivalViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `entry state hides route evaluation sheet by default`() {
+    fun `entry state auto opens route evaluation sheet by default`() {
         val viewModel = ArrivalViewModel()
+
+        assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
+        assertEquals(0, viewModel.uiState.value.selectedRating)
+        assertEquals(ArrivalEvaluationLabel.Idle, viewModel.uiState.value.selectedRatingLabel)
+        assertFalse(viewModel.uiState.value.isEvaluationSubmitEnabled)
+        assertFalse(viewModel.uiState.value.isRouteSaveSelected)
+    }
+
+    @Test
+    fun `selecting rating updates satisfaction label and enables submit`() {
+        val viewModel = ArrivalViewModel()
+
+        viewModel.onAction(ArrivalUiAction.RatingSelected(4))
+
+        assertEquals(4, viewModel.uiState.value.selectedRating)
+        assertEquals(ArrivalEvaluationLabel.Satisfied, viewModel.uiState.value.selectedRatingLabel)
+        assertTrue(viewModel.uiState.value.isEvaluationSubmitEnabled)
+    }
+
+    @Test
+    fun `save route action toggles local saved selection`() {
+        val viewModel = ArrivalViewModel()
+
+        viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+
+        assertTrue(viewModel.uiState.value.isRouteSaveSelected)
+
+        viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+
+        assertFalse(viewModel.uiState.value.isRouteSaveSelected)
+    }
+
+    @Test
+    fun `submitting evaluation hides sheet only after rating is selected`() {
+        val viewModel = ArrivalViewModel()
+
+        viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
+
+        assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
+
+        viewModel.onAction(ArrivalUiAction.RatingSelected(5))
+        viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
 
         assertFalse(viewModel.uiState.value.isEvaluationSheetVisible)
     }

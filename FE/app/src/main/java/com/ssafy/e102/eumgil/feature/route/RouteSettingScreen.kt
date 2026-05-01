@@ -196,12 +196,13 @@ fun RouteDetailScreen(
                 )
             } else {
                 RouteDetailSummaryCard(selectedRoute = selectedRoute)
-                RouteDetailMetricRow(selectedRoute = selectedRoute)
                 RouteDetailChipSection(chips = selectedRoute.detailAccessibilityChips)
-                RouteDetailHighlightSection(highlights = selectedRoute.detailHighlights)
                 RouteDetailStepsSection(
+                    origin = uiState.origin,
                     steps = selectedRoute.detailSteps,
-                    fallbackMessage = selectedRoute.detailFallbackMessage,
+                    fallbackMessage =
+                        selectedRoute.detailFallbackMessage
+                            ?: stringResource(id = R.string.route_setting_detail_steps_supporting),
                 )
             }
         }
@@ -221,45 +222,44 @@ private fun RouteDetailSummaryCard(
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            Text(
-                text = selectedRoute.optionTitle,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text =
-                    stringResource(
-                        id = R.string.route_setting_detail_summary_destination,
-                        selectedRoute.destination.name,
-                    ),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                verticalAlignment = Alignment.Top,
             ) {
-                RouteRiskChip(riskLevel = selectedRoute.riskLevel)
-                selectedRoute.badges
-                    .take(2)
-                    .forEach { badge ->
-                        val (containerColor, contentColor) = routeOptionBadgeColors(badge = badge)
-                        RouteBadgeChip(
-                            label = routeBadgeText(badge = badge),
-                            containerColor = containerColor,
-                            contentColor = contentColor,
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = selectedRoute.optionTitle,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                id = R.string.route_setting_detail_summary_destination,
+                                selectedRoute.destination.name,
+                            ),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    selectedRoute.destination.supportingText?.takeIf(String::isNotBlank)?.let { supportingText ->
+                        Text(
+                            text = supportingText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+                RouteRiskChip(riskLevel = selectedRoute.riskLevel)
             }
-            Text(
-                text = selectedRoute.summaryLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            RouteDetailMetricRow(selectedRoute = selectedRoute)
         }
     }
 }
@@ -268,20 +268,34 @@ private fun RouteDetailSummaryCard(
 private fun RouteDetailMetricRow(
     selectedRoute: RouteSelectedRouteUiState,
 ) {
-    Row(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)),
     ) {
-        RouteDetailMetricCard(
-            title = stringResource(id = R.string.route_setting_detail_metric_time),
-            value = selectedRoute.estimatedTimeLabel,
-            modifier = Modifier.weight(1f),
-        )
-        RouteDetailMetricCard(
-            title = stringResource(id = R.string.route_setting_detail_metric_distance),
-            value = selectedRoute.distanceLabel,
-            modifier = Modifier.weight(1f),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RouteDetailMetricCard(
+                title = stringResource(id = R.string.route_setting_detail_metric_time),
+                value = selectedRoute.estimatedTimeLabel,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .width(1.dp)
+                        .height(48.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+            )
+            RouteDetailMetricCard(
+                title = stringResource(id = R.string.route_setting_detail_metric_distance),
+                value = selectedRoute.distanceLabel,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -291,28 +305,22 @@ private fun RouteDetailMetricCard(
     value: String,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f)),
+    Column(
+        modifier = modifier.padding(horizontal = EumSpacing.small),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -321,28 +329,22 @@ private fun RouteDetailMetricCard(
 private fun RouteDetailChipSection(
     chips: List<RouteDetailChipUiState>,
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    if (chips.isEmpty()) {
+        return
+    }
+
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
     ) {
-        Text(
-            text = stringResource(id = R.string.route_setting_detail_accessibility_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-        ) {
-            chips.forEach { chip ->
-                val (containerColor, contentColor) = routeDetailToneColors(tone = chip.tone)
-                RouteBadgeChip(
-                    label = chip.label,
-                    containerColor = containerColor,
-                    contentColor = contentColor,
-                )
-            }
+        chips.forEach { chip ->
+            val (containerColor, contentColor) = routeDetailToneColors(tone = chip.tone)
+            RouteBadgeChip(
+                label = chip.label,
+                containerColor = containerColor,
+                contentColor = contentColor,
+            )
         }
     }
 }
@@ -413,98 +415,177 @@ private fun RouteDetailHighlightCard(
 
 @Composable
 private fun RouteDetailStepsSection(
+    origin: RouteLocationUiState,
     steps: List<RouteDetailStepUiState>,
     fallbackMessage: String?,
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-    ) {
-        Text(
-            text = stringResource(id = R.string.route_setting_detail_steps_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        fallbackMessage?.let { message ->
-            RouteStateCard(
-                title = stringResource(id = R.string.route_setting_detail_steps_fallback_title),
-                description = message,
-            )
+    val renderedSteps =
+        if (steps.size > 1) {
+            steps.drop(1)
+        } else {
+            steps
         }
-        Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
-            steps.forEach { step ->
-                RouteDetailStepCard(step = step)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+        shadowElevation = 2.dp,
+    ) {
+        Column {
+            RouteDetailOriginHeader(origin = origin)
+            fallbackMessage?.takeIf(String::isNotBlank)?.let { message ->
+                RouteDetailDivider()
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            renderedSteps.forEachIndexed { index, step ->
+                RouteDetailDivider()
+                RouteDetailStepCard(
+                    step = step,
+                    isLast = index == renderedSteps.lastIndex,
+                )
             }
         }
     }
 }
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
+private fun RouteDetailOriginHeader(
+    origin: RouteLocationUiState,
+) {
+    val markerColor = Color(0xFF16A34A)
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(EumSpacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.size(32.dp),
+            shape = CircleShape,
+            color = markerColor.copy(alpha = 0.12f),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(12.dp)
+                            .background(color = markerColor, shape = CircleShape),
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = stringResource(id = R.string.route_setting_origin_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = markerColor,
+            )
+            Text(
+                text = origin.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            origin.supportingText?.takeIf(String::isNotBlank)?.let { supportingText ->
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteDetailDivider() {
+    Spacer(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+    )
+}
+
+@Composable
 private fun RouteDetailStepCard(
     step: RouteDetailStepUiState,
+    isLast: Boolean,
 ) {
     val (containerColor, contentColor) = routeDetailToneColors(tone = step.tone)
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
-        color = containerColor,
-        border = BorderStroke(1.dp, contentColor.copy(alpha = 0.18f)),
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalAlignment = Alignment.Top,
     ) {
-        Row(
-            modifier = Modifier.padding(EumSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            verticalAlignment = Alignment.Top,
+        Surface(
+            modifier = Modifier.size(34.dp),
+            shape = CircleShape,
+            color = containerColor,
+            border = BorderStroke(1.dp, contentColor.copy(alpha = 0.18f)),
         ) {
-            Surface(
-                modifier = Modifier.size(34.dp),
-                shape = CircleShape,
-                color = contentColor.copy(alpha = 0.14f),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = step.indexLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = contentColor,
-                    )
-                }
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = step.indexLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor,
+                )
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = step.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = step.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = step.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            step.badgeLabel?.let { badgeLabel ->
+                RouteBadgeChip(
+                    label = badgeLabel,
+                    containerColor = contentColor.copy(alpha = 0.14f),
+                    contentColor = contentColor,
                 )
+            }
+        }
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            step.distanceLabel?.let { distanceLabel ->
                 Text(
-                    text = step.description,
+                    text = distanceLabel,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor,
                 )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-                ) {
-                    step.distanceLabel?.let { distanceLabel ->
-                        RouteBadgeChip(
-                            label = distanceLabel,
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    step.badgeLabel?.let { badgeLabel ->
-                        RouteBadgeChip(
-                            label = badgeLabel,
-                            containerColor = contentColor.copy(alpha = 0.14f),
-                            contentColor = contentColor,
-                        )
-                    }
-                }
+            }
+            if (!isLast) {
+                Text(
+                    text = "›",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.outline,
+                )
             }
         }
     }

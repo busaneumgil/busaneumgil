@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -29,6 +30,7 @@ class AppNavHostRoutingTest {
     fun `guidance and route setting routes hide top level tab`() {
         assertNull(NavigationRoute.Guidance.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.Setting.route.toCurrentTopLevelRoute())
+        assertNull(RouteSettingRoute.Detail.createRoute(RouteOption.SAFE).toCurrentTopLevelRoute())
     }
 
     @Test

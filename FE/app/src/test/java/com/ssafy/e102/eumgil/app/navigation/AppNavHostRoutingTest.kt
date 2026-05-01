@@ -24,6 +24,7 @@ class AppNavHostRoutingTest {
         assertEquals(TopLevelRoute.Map.route, SearchRoute.Entry.route.toCurrentTopLevelRoute())
         assertEquals(TopLevelRoute.Map.route, SearchRoute.Results.route.toCurrentTopLevelRoute())
         assertEquals(TopLevelRoute.Map.route, RouteSettingRoute.Setting.route.toCurrentTopLevelRoute())
+        assertEquals(TopLevelRoute.Map.route, "arrival".toCurrentTopLevelRoute())
     }
 
     @Test

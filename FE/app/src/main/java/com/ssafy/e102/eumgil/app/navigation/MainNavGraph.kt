@@ -16,6 +16,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
@@ -203,6 +204,19 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
+    composable(route = ArrivalRoute.Entry.route) {
+        ArrivalScreenRoute(
+            onNavigateToMap = {
+                navController.navigateToTopLevel(TopLevelDestination.Map)
+            },
+            onNavigateToSearch = {
+                navController.navigate(SearchRoute.Entry.route) {
+                    launchSingleTop = true
+                }
+            },
+        )
+    }
+
     composable(route = NavigationRoute.Guidance.route) {
         val context = LocalContext.current
         val settingsRepository =
@@ -226,7 +240,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToSavedRoute = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
             },
-            onNavigateToLowVisionHome = {
+            onNavigateToArrival = {
                 navController.navigate(resolveNavigationCompletionRoute()) {
                     launchSingleTop = true
                     popUpTo(NavigationRoute.Guidance.route) {

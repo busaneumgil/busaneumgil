@@ -429,6 +429,14 @@ class RouteSettingViewModel(
                     ),
                 )
             }
+            if (segments.any { segment -> segment.detailStepKind() == RouteDetailStepKind.ELEVATOR }) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_ELEVATOR,
+                        tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
             if (aggregateFlags.hasAudioSignal) {
                 add(
                     RouteDetailChipUiState(
@@ -442,6 +450,14 @@ class RouteSettingViewModel(
                     RouteDetailChipUiState(
                         label = DETAIL_CHIP_BRAILLE_BLOCK,
                         tone = RouteDetailTone.INFO,
+                    ),
+                )
+            }
+            if (segments.any { segment -> segment.detailStepKind() == RouteDetailStepKind.CONSTRUCTION }) {
+                add(
+                    RouteDetailChipUiState(
+                        label = DETAIL_CHIP_CONSTRUCTION,
+                        tone = RouteDetailTone.WARNING,
                     ),
                 )
             }
@@ -562,6 +578,8 @@ class RouteSettingViewModel(
                     title = DETAIL_STEP_START_TITLE,
                     description = DETAIL_STEP_START_DESCRIPTION,
                     badgeLabel = routeOption.toOptionTitle(),
+                    badgeTone = RouteDetailTone.INFO,
+                    kind = RouteDetailStepKind.START,
                     tone = RouteDetailTone.INFO,
                 ),
             )
@@ -579,6 +597,7 @@ class RouteSettingViewModel(
                     indexLabel = DETAIL_STEP_INDEX_FALLBACK,
                     title = DETAIL_STEP_FALLBACK_TITLE,
                     description = ROUTE_DETAIL_FALLBACK_MESSAGE,
+                    kind = RouteDetailStepKind.FALLBACK,
                     tone = RouteDetailTone.NEUTRAL,
                 )
         }
@@ -588,6 +607,7 @@ class RouteSettingViewModel(
                 indexLabel = (steps.size + 1).toStepIndexLabel(),
                 title = DETAIL_STEP_ARRIVAL_TITLE,
                 description = "$destinationName${DETAIL_STEP_ARRIVAL_SUFFIX}",
+                kind = RouteDetailStepKind.ARRIVAL,
                 tone = RouteDetailTone.INFO,
             )
 
@@ -787,59 +807,170 @@ private fun List<RouteSegment>.hasUsableDetailSteps(): Boolean =
     }
 
 private fun RouteSegment.toDetailStepUiState(displayIndex: Int): RouteDetailStepUiState =
-    RouteDetailStepUiState(
-        indexLabel = displayIndex.toStepIndexLabel(),
-        title = detailStepTitle(),
-        description = detailStepDescription(),
-        distanceLabel = distanceMeters.toDistanceLabel(),
-        badgeLabel = detailStepBadgeLabel(),
-        tone = detailStepTone(),
-    )
-
-private fun RouteSegment.detailStepTitle(): String =
-    when {
-        safetyFlags.hasStairs -> DETAIL_STEP_STAIRS_TITLE
-        safetyFlags.hasCurbGap -> DETAIL_STEP_CURB_GAP_TITLE
-        safetyFlags.hasCrosswalk && safetyFlags.hasSignal && safetyFlags.hasAudioSignal -> DETAIL_STEP_AUDIO_CROSSWALK_TITLE
-        safetyFlags.hasBrailleBlock -> DETAIL_STEP_BRAILLE_BLOCK_TITLE
-        safetyFlags.hasCrosswalk && safetyFlags.hasSignal -> DETAIL_STEP_SIGNAL_CROSSWALK_TITLE
-        safetyFlags.hasCrosswalk && !safetyFlags.hasSignal -> DETAIL_STEP_UNSIGNALIZED_CROSSWALK_TITLE
-        else -> DETAIL_STEP_STRAIGHT_TITLE
+    detailStepKind().let { kind ->
+        RouteDetailStepUiState(
+            indexLabel = displayIndex.toStepIndexLabel(),
+            title = detailStepTitle(kind = kind),
+            description = detailStepDescription(kind = kind),
+            metaLabel = detailStepMetaLabel(kind = kind),
+            badgeLabel = detailStepBadgeLabel(kind = kind),
+            badgeTone = detailStepBadgeTone(kind = kind),
+            kind = kind,
+            tone = detailStepTone(kind = kind),
+        )
     }
 
-private fun RouteSegment.detailStepDescription(): String {
-    val distanceLabel = distanceMeters.toDistanceLabel()
+private fun RouteSegment.detailStepKind(): RouteDetailStepKind {
+    val normalizedGuidance = guidanceMessage.trim().lowercase(Locale.US)
 
     return when {
-        safetyFlags.hasStairs -> "$distanceLabel 구간에 계단이 포함되어 있어 보조가 필요할 수 있습니다."
-        safetyFlags.hasCurbGap -> "$distanceLabel 구간에 연석 단차가 있어 속도를 줄이고 이동하세요."
-        safetyFlags.hasCrosswalk && safetyFlags.hasSignal && safetyFlags.hasAudioSignal ->
-            "음향 신호와 신호등을 확인하며 $distanceLabel 이동하세요."
-        safetyFlags.hasBrailleBlock -> "점자블록 유도선을 따라 $distanceLabel 이동하세요."
-        safetyFlags.hasCrosswalk && safetyFlags.hasSignal -> "신호를 확인한 뒤 $distanceLabel 이동하세요."
-        safetyFlags.hasCrosswalk && !safetyFlags.hasSignal -> "신호등이 없어 주변 차량을 확인하며 $distanceLabel 이동하세요."
-        distanceMeters > 0 -> "$distanceLabel 정도 직진 이동하세요."
-        else -> DETAIL_STEP_GENERIC_DESCRIPTION
+        safetyFlags.hasStairs -> RouteDetailStepKind.STAIRS
+        safetyFlags.hasCurbGap -> RouteDetailStepKind.CURB_GAP
+        normalizedGuidance.containsAnyKeyword("엘리베이터", "elevator", "lift") ->
+            RouteDetailStepKind.ELEVATOR
+        normalizedGuidance.containsAnyKeyword("공사", "construction", "우회", "narrow path") ->
+            RouteDetailStepKind.CONSTRUCTION
+        safetyFlags.hasCrosswalk -> RouteDetailStepKind.CROSSWALK
+        safetyFlags.hasBrailleBlock -> RouteDetailStepKind.TACTILE_GUIDE
+        else -> RouteDetailStepKind.WALK
     }
 }
 
-private fun RouteSegment.detailStepBadgeLabel(): String? =
-    when {
-        safetyFlags.hasCurbGap || safetyFlags.hasStairs || (safetyFlags.hasCrosswalk && !safetyFlags.hasSignal) ->
-            DETAIL_STEP_BADGE_WARNING
-        safetyFlags.hasAudioSignal -> DETAIL_STEP_BADGE_AUDIO_SIGNAL
-        safetyFlags.hasBrailleBlock -> DETAIL_STEP_BADGE_BRAILLE
-        safetyFlags.hasCrosswalk && safetyFlags.hasSignal -> DETAIL_STEP_BADGE_CROSSWALK
-        else -> null
+private fun RouteSegment.detailStepTitle(kind: RouteDetailStepKind): String =
+    when (kind) {
+        RouteDetailStepKind.START -> DETAIL_STEP_START_TITLE
+        RouteDetailStepKind.WALK -> DETAIL_STEP_WALK_TITLE
+        RouteDetailStepKind.TACTILE_GUIDE -> DETAIL_STEP_TACTILE_GUIDE_TITLE
+        RouteDetailStepKind.CROSSWALK -> DETAIL_STEP_CROSSWALK_TITLE
+        RouteDetailStepKind.ELEVATOR -> DETAIL_STEP_ELEVATOR_TITLE
+        RouteDetailStepKind.CONSTRUCTION -> DETAIL_STEP_CONSTRUCTION_TITLE
+        RouteDetailStepKind.CURB_GAP -> DETAIL_STEP_CURB_GAP_TITLE
+        RouteDetailStepKind.STAIRS -> DETAIL_STEP_STAIRS_TITLE
+        RouteDetailStepKind.ARRIVAL -> DETAIL_STEP_ARRIVAL_TITLE
+        RouteDetailStepKind.FALLBACK -> DETAIL_STEP_FALLBACK_TITLE
     }
 
-private fun RouteSegment.detailStepTone(): RouteDetailTone =
-    when {
-        safetyFlags.hasCurbGap || safetyFlags.hasStairs || (safetyFlags.hasCrosswalk && !safetyFlags.hasSignal) ->
-            RouteDetailTone.WARNING
-        safetyFlags.hasAudioSignal || safetyFlags.hasBrailleBlock -> RouteDetailTone.INFO
-        else -> RouteDetailTone.NEUTRAL
+private fun RouteSegment.detailStepDescription(kind: RouteDetailStepKind): String {
+    val distanceLabel = distanceMeters.toDistanceLabel()
+    val guidanceFallback = guidanceMessage.takeIf { message -> message.hasVisibleHangul() }
+
+    if (guidanceFallback != null && guidanceFallback != DEFAULT_GUIDANCE_MESSAGE) {
+        return guidanceFallback
     }
+
+    return when (kind) {
+        RouteDetailStepKind.START -> DETAIL_STEP_START_DESCRIPTION
+        RouteDetailStepKind.WALK ->
+            if (distanceMeters > 0) {
+                "$distanceLabel 정도 직진으로 이동하세요."
+            } else {
+                DETAIL_STEP_GENERIC_DESCRIPTION
+            }
+
+        RouteDetailStepKind.TACTILE_GUIDE ->
+            "점자블록 유도선을 따라 주변 보행 흐름을 유지하며 이동하세요."
+
+        RouteDetailStepKind.CROSSWALK ->
+            if (safetyFlags.hasSignal) {
+                "신호를 확인한 뒤 횡단보도를 건너세요."
+            } else {
+                "주변 차량을 먼저 확인한 뒤 횡단보도를 조심해서 건너세요."
+            }
+
+        RouteDetailStepKind.ELEVATOR -> "안내된 엘리베이터를 이용해 다음 구간으로 이동하세요."
+        RouteDetailStepKind.CONSTRUCTION -> "공사로 통로가 좁을 수 있어 주변을 확인하며 지나가세요."
+        RouteDetailStepKind.CURB_GAP -> "연석 단차가 있어 속도를 줄이고 바퀴 각도를 맞춰 이동하세요."
+        RouteDetailStepKind.STAIRS -> "계단이 포함된 구간이어서 보조가 필요할 수 있습니다."
+        RouteDetailStepKind.ARRIVAL -> DETAIL_STEP_GENERIC_DESCRIPTION
+        RouteDetailStepKind.FALLBACK -> ROUTE_DETAIL_FALLBACK_MESSAGE
+    }
+}
+
+private fun RouteSegment.detailStepMetaLabel(kind: RouteDetailStepKind): String? =
+    when (kind) {
+        RouteDetailStepKind.START,
+        RouteDetailStepKind.ARRIVAL,
+        RouteDetailStepKind.FALLBACK,
+            -> null
+
+        else ->
+            if (distanceMeters > 0) {
+                distanceMeters.toDistanceLabel()
+            } else {
+                DETAIL_STEP_META_PENDING
+            }
+    }
+
+private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String? =
+    when (kind) {
+        RouteDetailStepKind.START,
+        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.ARRIVAL,
+        RouteDetailStepKind.FALLBACK,
+            -> null
+
+        RouteDetailStepKind.TACTILE_GUIDE -> DETAIL_STEP_BADGE_TACTILE_GUIDE
+        RouteDetailStepKind.CROSSWALK ->
+            when {
+                !safetyFlags.hasSignal -> DETAIL_STEP_BADGE_WARNING
+                safetyFlags.hasAudioSignal -> DETAIL_STEP_BADGE_AUDIO_SIGNAL
+                else -> DETAIL_STEP_BADGE_CROSSWALK
+            }
+
+        RouteDetailStepKind.ELEVATOR -> DETAIL_STEP_BADGE_ELEVATOR
+        RouteDetailStepKind.CONSTRUCTION -> DETAIL_STEP_BADGE_CONSTRUCTION
+        RouteDetailStepKind.CURB_GAP -> DETAIL_STEP_BADGE_CURB_GAP
+        RouteDetailStepKind.STAIRS -> DETAIL_STEP_BADGE_WARNING
+    }
+
+private fun RouteSegment.detailStepBadgeTone(kind: RouteDetailStepKind): RouteDetailTone? =
+    when (kind) {
+        RouteDetailStepKind.START,
+        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.ARRIVAL,
+        RouteDetailStepKind.FALLBACK,
+            -> null
+
+        RouteDetailStepKind.TACTILE_GUIDE,
+        RouteDetailStepKind.ELEVATOR,
+            -> RouteDetailTone.INFO
+
+        RouteDetailStepKind.CROSSWALK ->
+            if (safetyFlags.hasAudioSignal) {
+                RouteDetailTone.INFO
+            } else {
+                RouteDetailTone.WARNING
+            }
+
+        RouteDetailStepKind.CONSTRUCTION,
+        RouteDetailStepKind.CURB_GAP,
+        RouteDetailStepKind.STAIRS,
+            -> RouteDetailTone.WARNING
+    }
+
+private fun RouteSegment.detailStepTone(kind: RouteDetailStepKind): RouteDetailTone =
+    when (kind) {
+        RouteDetailStepKind.START,
+        RouteDetailStepKind.ELEVATOR,
+        RouteDetailStepKind.TACTILE_GUIDE,
+        RouteDetailStepKind.ARRIVAL,
+            -> RouteDetailTone.INFO
+
+        RouteDetailStepKind.CROSSWALK,
+        RouteDetailStepKind.CONSTRUCTION,
+        RouteDetailStepKind.CURB_GAP,
+        RouteDetailStepKind.STAIRS,
+            -> RouteDetailTone.WARNING
+
+        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.FALLBACK,
+            -> RouteDetailTone.NEUTRAL
+    }
+
+private fun String.containsAnyKeyword(vararg keywords: String): Boolean =
+    keywords.any { keyword -> contains(keyword, ignoreCase = true) }
+
+private fun String.hasVisibleHangul(): Boolean = any { character -> character in '\uAC00'..'\uD7A3' }
 
 private fun List<RouteSegment>.primaryGuidanceMessage(): String =
     firstNotNullOfOrNull { segment ->
@@ -999,8 +1130,10 @@ private const val ROUTE_PREVIEW_MAP_NO_ROUTE_MESSAGE = "No selected route is ava
 private const val ROUTE_PREVIEW_MAP_POLYLINE_UNAVAILABLE_MESSAGE = "Selected route preview polyline needs at least two points."
 private const val ROUTE_DETAIL_FALLBACK_MESSAGE = "세부 이동 정보는 준비 중입니다. 요약 정보와 주의 구간을 먼저 확인하세요."
 private const val DETAIL_CHIP_STEP_FREE = "단차 없음"
+private const val DETAIL_CHIP_ELEVATOR = "엘리베이터 있음"
 private const val DETAIL_CHIP_AUDIO_SIGNAL = "음향 신호 있음"
 private const val DETAIL_CHIP_BRAILLE_BLOCK = "점자블록 있음"
+private const val DETAIL_CHIP_CONSTRUCTION = "공사 구간 주의"
 private const val DETAIL_CHIP_SIGNAL_CROSSWALK = "신호등 횡단보도"
 private const val DETAIL_CHIP_UNSIGNALIZED_CROSSWALK = "무신호 횡단 주의"
 private const val DETAIL_CHIP_CURB_GAP = "연석 단차 주의"
@@ -1027,18 +1160,22 @@ private const val DETAIL_STEP_START_DESCRIPTION = "현재 위치에서 선택한
 private const val DETAIL_STEP_FALLBACK_TITLE = "세부 경로 확인 중"
 private const val DETAIL_STEP_ARRIVAL_TITLE = "도착"
 private const val DETAIL_STEP_ARRIVAL_SUFFIX = "에 도착합니다."
-private const val DETAIL_STEP_AUDIO_CROSSWALK_TITLE = "음향 신호 횡단보도 이동"
-private const val DETAIL_STEP_BRAILLE_BLOCK_TITLE = "점자블록 유도 구간 이동"
-private const val DETAIL_STEP_SIGNAL_CROSSWALK_TITLE = "신호등 있는 횡단보도 건너기"
-private const val DETAIL_STEP_UNSIGNALIZED_CROSSWALK_TITLE = "무신호 횡단보도 주의"
-private const val DETAIL_STEP_CURB_GAP_TITLE = "연석 단차 구간 주의"
+private const val DETAIL_STEP_WALK_TITLE = "직진 이동"
+private const val DETAIL_STEP_TACTILE_GUIDE_TITLE = "점자블록 따라 이동"
+private const val DETAIL_STEP_CROSSWALK_TITLE = "횡단보도 건너기"
+private const val DETAIL_STEP_ELEVATOR_TITLE = "엘리베이터 이용"
+private const val DETAIL_STEP_CONSTRUCTION_TITLE = "공사 구간 진입"
+private const val DETAIL_STEP_CURB_GAP_TITLE = "단차 구간 주의"
 private const val DETAIL_STEP_STAIRS_TITLE = "계단 구간 주의"
-private const val DETAIL_STEP_STRAIGHT_TITLE = "직진 이동"
 private const val DETAIL_STEP_GENERIC_DESCRIPTION = "이 구간의 세부 정보는 준비 중입니다."
+private const val DETAIL_STEP_META_PENDING = "정보 준비 중"
 private const val DETAIL_STEP_BADGE_WARNING = "주의"
 private const val DETAIL_STEP_BADGE_AUDIO_SIGNAL = "음향 신호"
-private const val DETAIL_STEP_BADGE_BRAILLE = "점자블록"
-private const val DETAIL_STEP_BADGE_CROSSWALK = "횡단보도"
+private const val DETAIL_STEP_BADGE_TACTILE_GUIDE = "점자블록 유도"
+private const val DETAIL_STEP_BADGE_CROSSWALK = "신호 확인"
+private const val DETAIL_STEP_BADGE_ELEVATOR = "엘리베이터 있음"
+private const val DETAIL_STEP_BADGE_CONSTRUCTION = "공사 구간"
+private const val DETAIL_STEP_BADGE_CURB_GAP = "단차 있음"
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
 private const val MAX_ROUTE_DETAIL_CHIP_COUNT = 4

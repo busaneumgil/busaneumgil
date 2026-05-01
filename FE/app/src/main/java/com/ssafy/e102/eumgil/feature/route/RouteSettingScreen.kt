@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -200,9 +202,7 @@ fun RouteDetailScreen(
                 RouteDetailStepsSection(
                     origin = uiState.origin,
                     steps = selectedRoute.detailSteps,
-                    fallbackMessage =
-                        selectedRoute.detailFallbackMessage
-                            ?: stringResource(id = R.string.route_setting_detail_steps_supporting),
+                    fallbackMessage = selectedRoute.detailFallbackMessage,
                 )
             }
         }
@@ -433,23 +433,20 @@ private fun RouteDetailStepsSection(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         shadowElevation = 2.dp,
     ) {
-        Column {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
             RouteDetailOriginHeader(origin = origin)
             fallbackMessage?.takeIf(String::isNotBlank)?.let { message ->
-                RouteDetailDivider()
                 Text(
                     text = message,
-                    modifier = Modifier.padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            renderedSteps.forEachIndexed { index, step ->
-                RouteDetailDivider()
-                RouteDetailStepCard(
-                    step = step,
-                    isLast = index == renderedSteps.lastIndex,
-                )
+            renderedSteps.forEach { step ->
+                RouteDetailStepCard(step = step)
             }
         }
     }
@@ -462,7 +459,7 @@ private fun RouteDetailOriginHeader(
     val markerColor = Color(0xFF16A34A)
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(EumSpacing.medium),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -507,85 +504,120 @@ private fun RouteDetailOriginHeader(
 }
 
 @Composable
-private fun RouteDetailDivider() {
-    Spacer(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-    )
+private fun RouteDetailStepCard(
+    step: RouteDetailStepUiState,
+) {
+    val (containerColor, contentColor) = routeDetailToneColors(tone = step.tone)
+    val (badgeContainerColor, badgeContentColor) =
+        routeDetailToneColors(tone = step.badgeTone ?: step.tone)
+    val cardColor =
+        if (step.tone == RouteDetailTone.NEUTRAL) {
+            MaterialTheme.colorScheme.surfaceContainerLowest
+        } else {
+            containerColor
+        }
+    val metaColor =
+        if (step.tone == RouteDetailTone.NEUTRAL) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            contentColor
+        }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = cardColor,
+        border = BorderStroke(1.dp, contentColor.copy(alpha = 0.16f)),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(EumSpacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            verticalAlignment = Alignment.Top,
+        ) {
+            RouteDetailStepLeadingIcon(
+                kind = step.kind,
+                tone = step.tone,
+                contentColor = contentColor,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = step.indexLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = step.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = step.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                step.badgeLabel?.let { badgeLabel ->
+                    RouteBadgeChip(
+                        label = badgeLabel,
+                        containerColor = badgeContainerColor,
+                        contentColor = badgeContentColor,
+                    )
+                }
+            }
+            step.metaLabel?.let { metaLabel ->
+                Text(
+                    text = metaLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = metaColor,
+                    textAlign = TextAlign.End,
+                )
+            }
+        }
+    }
 }
 
 @Composable
-private fun RouteDetailStepCard(
-    step: RouteDetailStepUiState,
-    isLast: Boolean,
+private fun RouteDetailStepLeadingIcon(
+    kind: RouteDetailStepKind,
+    tone: RouteDetailTone,
+    contentColor: Color,
 ) {
-    val (containerColor, contentColor) = routeDetailToneColors(tone = step.tone)
+    val (containerColor, iconTint) =
+        when (kind) {
+            RouteDetailStepKind.ARRIVAL ->
+                MaterialTheme.colorScheme.error.copy(alpha = 0.12f) to MaterialTheme.colorScheme.error
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        verticalAlignment = Alignment.Top,
+            else -> contentColor.copy(alpha = 0.14f) to contentColor
+        }
+
+    Surface(
+        modifier = Modifier.size(40.dp),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = if (tone == RouteDetailTone.NEUTRAL) MaterialTheme.colorScheme.surface else containerColor,
+        border = BorderStroke(1.dp, iconTint.copy(alpha = 0.16f)),
     ) {
-        Surface(
-            modifier = Modifier.size(34.dp),
-            shape = CircleShape,
-            color = containerColor,
-            border = BorderStroke(1.dp, contentColor.copy(alpha = 0.18f)),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = step.indexLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = contentColor,
-                )
-            }
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = step.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = step.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            step.badgeLabel?.let { badgeLabel ->
-                RouteBadgeChip(
-                    label = badgeLabel,
-                    containerColor = contentColor.copy(alpha = 0.14f),
-                    contentColor = contentColor,
-                )
-            }
-        }
-        Column(
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            step.distanceLabel?.let { distanceLabel ->
-                Text(
-                    text = distanceLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = contentColor,
-                )
-            }
-            if (!isLast) {
-                Text(
-                    text = "›",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.outline,
-                )
+        Box(contentAlignment = Alignment.Center) {
+            when (kind) {
+                RouteDetailStepKind.ARRIVAL -> {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(12.dp)
+                                .background(color = iconTint, shape = CircleShape),
+                    )
+                }
+
+                else -> {
+                    Icon(
+                        painter = painterResource(id = routeDetailStepIconRes(kind = kind)),
+                        contentDescription = null,
+                        tint = iconTint,
+                    )
+                }
             }
         }
     }
@@ -1678,6 +1710,22 @@ private fun routeDetailToneColors(tone: RouteDetailTone): Pair<Color, Color> =
 
         RouteDetailTone.WARNING ->
             MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.36f) to MaterialTheme.colorScheme.tertiary
+    }
+
+private fun routeDetailStepIconRes(kind: RouteDetailStepKind): Int =
+    when (kind) {
+        RouteDetailStepKind.START,
+        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.FALLBACK,
+            -> R.drawable.ic_route_sidewalk
+
+        RouteDetailStepKind.TACTILE_GUIDE -> R.drawable.ic_route_tactile_blocks
+        RouteDetailStepKind.CROSSWALK -> R.drawable.ic_route_crosswalk
+        RouteDetailStepKind.ELEVATOR -> R.drawable.ic_route_elevator
+        RouteDetailStepKind.CONSTRUCTION -> R.drawable.ic_route_construction
+        RouteDetailStepKind.CURB_GAP -> R.drawable.ic_status_warning
+        RouteDetailStepKind.STAIRS -> R.drawable.ic_route_stairs
+        RouteDetailStepKind.ARRIVAL -> R.drawable.ic_status_check
     }
 
 @Composable

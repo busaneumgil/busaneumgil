@@ -114,16 +114,33 @@ class RouteSettingViewModelTest {
             assertEquals("선택한 경로로 길 안내를 시작할 수 있습니다.", uiState.cta.supportingText)
             assertTrue(uiState.isStartEnabled)
             assertEquals(
-                listOf("단차 없음", "음향 신호 있음", "점자블록 있음", "신호등 횡단보도"),
+                listOf("엘리베이터 있음", "공사 구간 주의", "신호등 횡단보도", "연석 단차 주의"),
                 uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::label),
             )
             assertEquals(
-                listOf("음향 신호 횡단보도", "점자블록 유도 구간"),
+                listOf("연석 단차 주의"),
                 uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
             )
             assertEquals(
-                listOf("출발", "음향 신호 횡단보도 이동", "점자블록 유도 구간 이동", "신호등 있는 횡단보도 건너기", "도착"),
+                listOf("출발", "직진 이동", "엘리베이터 이용", "공사 구간 진입", "횡단보도 건너기", "단차 구간 주의", "직진 이동", "도착"),
                 uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::title),
+            )
+            assertEquals(
+                listOf(
+                    RouteDetailStepKind.START,
+                    RouteDetailStepKind.WALK,
+                    RouteDetailStepKind.ELEVATOR,
+                    RouteDetailStepKind.CONSTRUCTION,
+                    RouteDetailStepKind.CROSSWALK,
+                    RouteDetailStepKind.CURB_GAP,
+                    RouteDetailStepKind.WALK,
+                    RouteDetailStepKind.ARRIVAL,
+                ),
+                uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::kind),
+            )
+            assertEquals(
+                listOf("150 m", "90 m", "62 m", "128 m", "100 m", "450 m"),
+                uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1)?.mapNotNull(RouteDetailStepUiState::metaLabel),
             )
             assertEquals(null, uiState.selectedRoute?.detailFallbackMessage)
         }
@@ -387,11 +404,12 @@ class RouteSettingViewModelTest {
                 uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
             )
             assertEquals(
+                listOf(RouteDetailStepKind.CROSSWALK, RouteDetailStepKind.CURB_GAP),
+                uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1)?.map(RouteDetailStepUiState::kind),
+            )
+            assertEquals(
                 listOf(RouteDetailTone.WARNING, RouteDetailTone.WARNING),
-                uiState.selectedRoute
-                    ?.detailSteps
-                    ?.filter { step -> step.badgeLabel == "주의" }
-                    ?.map(RouteDetailStepUiState::tone),
+                uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1)?.map(RouteDetailStepUiState::tone),
             )
             assertTrue(uiState.optionCards.single { card -> card.routeOption == RouteOption.SHORTEST }.isSelected)
             assertEquals(

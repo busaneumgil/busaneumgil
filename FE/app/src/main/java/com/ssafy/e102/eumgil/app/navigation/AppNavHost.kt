@@ -104,6 +104,7 @@ internal fun String?.toCurrentTopLevelRoute(): String? =
         this == SearchRoute.Entry.route -> TopLevelRoute.Map.route
         this?.startsWith("search/") == true -> TopLevelRoute.Map.route
         this == NavigationRoute.Guidance.route -> null
+        this == ArrivalRoute.Entry.route -> TopLevelRoute.Map.route
         this?.startsWith("route_setting") == true -> null
         else -> null
     }

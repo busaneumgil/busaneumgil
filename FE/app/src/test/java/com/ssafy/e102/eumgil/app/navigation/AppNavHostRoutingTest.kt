@@ -19,11 +19,16 @@ class AppNavHostRoutingTest {
     }
 
     @Test
-    fun `guidance and handoff routes keep map tab active`() {
-        assertEquals(TopLevelRoute.Map.route, NavigationRoute.Guidance.route.toCurrentTopLevelRoute())
+    fun `search and arrival routes keep map tab active`() {
         assertEquals(TopLevelRoute.Map.route, SearchRoute.Entry.route.toCurrentTopLevelRoute())
         assertEquals(TopLevelRoute.Map.route, SearchRoute.Results.route.toCurrentTopLevelRoute())
-        assertEquals(TopLevelRoute.Map.route, RouteSettingRoute.Setting.route.toCurrentTopLevelRoute())
+        assertEquals(TopLevelRoute.Map.route, ArrivalRoute.Entry.route.toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `guidance and route setting routes hide top level tab`() {
+        assertNull(NavigationRoute.Guidance.route.toCurrentTopLevelRoute())
+        assertNull(RouteSettingRoute.Setting.route.toCurrentTopLevelRoute())
     }
 
     @Test

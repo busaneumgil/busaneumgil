@@ -167,3 +167,9 @@ sealed interface NavigationRoute : AppRoute {
 }
 
 private const val ROUTE_SETTING_BASE_ROUTE: String = "route_setting"
+
+sealed interface ArrivalRoute : AppRoute {
+    data object Entry : ArrivalRoute {
+        override val route: String = "arrival"
+    }
+}

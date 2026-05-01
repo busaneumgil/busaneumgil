@@ -120,7 +120,7 @@ internal fun resolveLowVisionSearchResultRoute(): String =
 
 internal fun resolveLowVisionSearchPopUpRoute(): String = LowVisionRoute.Search.route
 
-internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.Home.route
+internal fun resolveNavigationCompletionRoute(): String = ArrivalRoute.Entry.route
 
 internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 

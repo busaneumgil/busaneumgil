@@ -27,7 +27,7 @@ fun NavigationRoute(
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
-    onNavigateToLowVisionHome: () -> Unit,
+    onNavigateToArrival: () -> Unit,
     useLowVisionUi: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -72,7 +72,7 @@ fun NavigationRoute(
         onNavigateToRouteDetail,
         onNavigateToMap,
         onNavigateToSavedRoute,
-        onNavigateToLowVisionHome,
+        onNavigateToArrival,
     ) {
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->
@@ -81,7 +81,7 @@ fun NavigationRoute(
                     is NavigationUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
-                    NavigationUiEvent.NavigateToLowVisionHome -> onNavigateToLowVisionHome()
+                    NavigationUiEvent.NavigateToArrival -> onNavigateToArrival()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->

@@ -225,7 +225,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `complete action returns to low vision voice input home`() =
+    fun `complete action stops guidance and opens arrival screen`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel =
@@ -242,7 +242,7 @@ class NavigationViewModelTest {
 
             assertFalse(locationManager.isUpdating)
             assertEquals(
-                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionHome),
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
                 eventsDeferred.await(),
             )
         }
@@ -259,6 +259,23 @@ class NavigationViewModelTest {
                 }
 
             viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            advanceUntilIdle()
+
+            assertNull(eventDeferred.await())
+        }
+
+    @Test
+    fun `complete action is ignored while navigation request is not ready`() =
+        runTest {
+            val viewModel = createViewModel()
+            val eventDeferred =
+                async {
+                    withTimeoutOrNull(100) {
+                        viewModel.uiEvent.first()
+                    }
+                }
+
+            viewModel.onAction(NavigationUiAction.NavigationCompleteClicked)
             advanceUntilIdle()
 
             assertNull(eventDeferred.await())

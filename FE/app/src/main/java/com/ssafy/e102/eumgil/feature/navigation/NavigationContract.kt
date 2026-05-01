@@ -132,7 +132,7 @@ sealed interface NavigationUiEvent {
 
     data object NavigateToSavedRoute : NavigationUiEvent
 
-    data object NavigateToLowVisionHome : NavigationUiEvent
+    data object NavigateToArrival : NavigationUiEvent
 
     data class SpeakBriefing(
         val text: String,

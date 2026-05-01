@@ -27,6 +27,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,6 +53,7 @@ private const val ArrivalRatingCount = 5
 @Composable
 fun ArrivalScreen(
     uiState: ArrivalUiState,
+    snackbarHostState: SnackbarHostState,
     onAction: (ArrivalUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -96,6 +99,24 @@ fun ArrivalScreen(
                 modifier = Modifier.widthIn(max = 520.dp),
             )
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = EumSpacing.medium)
+                    .padding(
+                        bottom =
+                            if (uiState.isEvaluationSheetVisible) {
+                                304.dp
+                            } else {
+                                EumSpacing.large
+                            },
+                    ),
+        )
     }
 }
 
@@ -334,6 +355,7 @@ private fun ArrivalEvaluationBottomSheet(
             ) {
                 OutlinedButton(
                     onClick = { onAction(ArrivalUiAction.SaveRouteClicked) },
+                    enabled = uiState.isRouteSaveEnabled,
                     modifier =
                         Modifier
                             .fillMaxWidth()

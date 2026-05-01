@@ -246,6 +246,23 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `complete action is ignored while navigation request is not ready`() =
+        runTest {
+            val viewModel = createViewModel()
+            val eventDeferred =
+                async {
+                    withTimeoutOrNull(100) {
+                        viewModel.uiEvent.first()
+                    }
+                }
+
+            viewModel.onAction(NavigationUiAction.NavigationCompleteClicked)
+            advanceUntilIdle()
+
+            assertNull(eventDeferred.await())
+        }
+
+    @Test
     fun `tts ready update clears fallback and allows briefing request`() =
         runTest {
             val viewModel = createViewModel()

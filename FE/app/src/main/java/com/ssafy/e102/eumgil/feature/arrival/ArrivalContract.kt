@@ -7,9 +7,14 @@ data class ArrivalUiState(
     val selectedRating: Int = 0,
     val selectedRatingLabel: ArrivalEvaluationLabel = ArrivalEvaluationLabel.Idle,
     val isRouteSaveSelected: Boolean = false,
+    val isRouteSaveUpdating: Boolean = false,
+    val hasRouteSaveTarget: Boolean = false,
 ) {
     val isEvaluationSubmitEnabled: Boolean
         get() = selectedRating > 0
+
+    val isRouteSaveEnabled: Boolean
+        get() = hasRouteSaveTarget && !isRouteSaveUpdating
 }
 
 enum class ArrivalEvaluationLabel(val labelResId: Int?) {
@@ -39,4 +44,8 @@ sealed interface ArrivalUiEvent {
     data object NavigateToMap : ArrivalUiEvent
 
     data object NavigateToSearch : ArrivalUiEvent
+
+    data class ShowSnackbar(
+        val messageResId: Int,
+    ) : ArrivalUiEvent
 }

@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionNavigationScreen
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun NavigationRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
     onNavigateToLowVisionHome: () -> Unit,
@@ -67,6 +69,7 @@ fun NavigationRoute(
     LaunchedEffect(
         viewModel,
         onNavigateBack,
+        onNavigateToRouteDetail,
         onNavigateToMap,
         onNavigateToSavedRoute,
         onNavigateToLowVisionHome,
@@ -75,6 +78,7 @@ fun NavigationRoute(
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     NavigationUiEvent.NavigateBack -> onNavigateBack()
+                    is NavigationUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     NavigationUiEvent.NavigateToLowVisionHome -> onNavigateToLowVisionHome()

@@ -239,6 +239,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToRouteDetail = { routeOption ->
+                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
+            },
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },

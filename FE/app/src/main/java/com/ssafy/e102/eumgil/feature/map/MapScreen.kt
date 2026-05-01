@@ -402,13 +402,13 @@ private fun FacilityDetailBookmarkActionButton(
             else -> stringResource(id = R.string.map_facility_detail_bookmark_state_unsaved)
         }
     val containerColor =
-        if (state.isBookmarkUpdating || state.isBookmarked) {
+        if (state.isBookmarked) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
         } else {
             MaterialTheme.colorScheme.surfaceContainerLowest
         }
     val contentColor =
-        if (state.isBookmarkUpdating || state.isBookmarked) {
+        if (state.isBookmarked) {
             MaterialTheme.colorScheme.primary
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
@@ -418,22 +418,13 @@ private fun FacilityDetailBookmarkActionButton(
         modifier = modifier,
         shape = RoundedCornerShape(EumRadius.medium),
         color = containerColor,
-        border =
-            BorderStroke(
-                1.dp,
-                if (state.isBookmarkUpdating || state.isBookmarked) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-            ),
     ) {
         IconButton(
             onClick = onToggle,
             enabled = state.isBookmarkUpdating.not(),
             modifier =
                 Modifier
-                    .size(48.dp)
+                    .size(44.dp)
                     .semantics {
                         contentDescription = bookmarkButtonLabel
                         stateDescription = bookmarkStateDescription
@@ -444,9 +435,15 @@ private fun FacilityDetailBookmarkActionButton(
                     painterResource(
                         id =
                             if (state.isBookmarkUpdating) {
-                                R.drawable.ic_status_processing
+                                if (state.isBookmarked) {
+                                    R.drawable.ic_nav_bookmark_selected
+                                } else {
+                                    R.drawable.ic_nav_bookmark_outline
+                                }
+                            } else if (state.isBookmarked) {
+                                R.drawable.ic_nav_bookmark_selected
                             } else {
-                                R.drawable.ic_action_favorite
+                                R.drawable.ic_nav_bookmark_outline
                             },
                     ),
                 contentDescription = null,

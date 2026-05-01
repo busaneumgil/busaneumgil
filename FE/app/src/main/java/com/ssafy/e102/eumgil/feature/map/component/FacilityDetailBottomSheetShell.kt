@@ -89,7 +89,6 @@ fun FacilityDetailBottomSheetShell(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = EumSpacing.medium)
                     .fillMaxWidth(),
         ) {
             MapBottomSheetSurface(

@@ -379,7 +379,7 @@ class RouteSettingViewModel(
             fallbackSegmentCount = preview.fallbackSegmentCount,
             previewFallbackNotice = preview.fallbackNotice(),
             badges = routeBadges(includeSafePriority = true),
-            detailAccessibilityChips = buildDetailAccessibilityChips(aggregateFlags),
+            detailAccessibilityChips = buildDetailAccessibilityChips(),
             detailHighlights = buildDetailHighlights(aggregateFlags),
             detailSteps = buildDetailSteps(destinationName = destination.name, hasUsableDetailSteps = hasUsableDetailSteps),
             detailFallbackMessage = if (hasUsableDetailSteps) null else ROUTE_DETAIL_FALLBACK_MESSAGE,
@@ -419,89 +419,46 @@ class RouteSettingViewModel(
             flags.merge(segment.safetyFlags)
         }
 
-    private fun RouteCandidate.buildDetailAccessibilityChips(aggregateFlags: RouteSegmentSafetyFlags): List<RouteDetailChipUiState> =
+    private fun RouteCandidate.buildDetailAccessibilityChips(): List<RouteDetailChipUiState> =
         buildList {
-            if (!aggregateFlags.hasStairs && !aggregateFlags.hasCurbGap) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_STEP_FREE,
-                        tone = RouteDetailTone.INFO,
-                    ),
-                )
+            val routeBadgeKinds =
+                routeBadges(includeSafePriority = false)
+                    .map(RouteOptionBadge::toDetailChipKind)
+                    .toSet()
+            val hasElevator = segments.any { segment -> segment.detailStepKind() == RouteDetailStepKind.ELEVATOR }
+            val hasConstruction = segments.any { segment -> segment.detailStepKind() == RouteDetailStepKind.CONSTRUCTION }
+
+            if (hasElevator) {
+                add(RouteDetailChipKind.ELEVATOR.toUiState())
             }
-            if (segments.any { segment -> segment.detailStepKind() == RouteDetailStepKind.ELEVATOR }) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_ELEVATOR,
-                        tone = RouteDetailTone.INFO,
-                    ),
-                )
+            if (RouteDetailChipKind.STEP_FREE in routeBadgeKinds) {
+                add(RouteDetailChipKind.STEP_FREE.toUiState())
             }
-            if (aggregateFlags.hasAudioSignal) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_AUDIO_SIGNAL,
-                        tone = RouteDetailTone.INFO,
-                    ),
-                )
+            if (hasConstruction) {
+                add(RouteDetailChipKind.CONSTRUCTION.toUiState())
             }
-            if (aggregateFlags.hasBrailleBlock) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_BRAILLE_BLOCK,
-                        tone = RouteDetailTone.INFO,
-                    ),
-                )
+            if (RouteDetailChipKind.SIGNAL_CROSSWALK in routeBadgeKinds) {
+                add(RouteDetailChipKind.SIGNAL_CROSSWALK.toUiState())
             }
-            if (segments.any { segment -> segment.detailStepKind() == RouteDetailStepKind.CONSTRUCTION }) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_CONSTRUCTION,
-                        tone = RouteDetailTone.WARNING,
-                    ),
-                )
+            if (RouteDetailChipKind.UNSIGNALIZED_CROSSWALK in routeBadgeKinds) {
+                add(RouteDetailChipKind.UNSIGNALIZED_CROSSWALK.toUiState())
             }
-            if (aggregateFlags.hasCrosswalk && aggregateFlags.hasSignal) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_SIGNAL_CROSSWALK,
-                        tone = RouteDetailTone.INFO,
-                    ),
-                )
+            if (RouteDetailChipKind.CURB_GAP in routeBadgeKinds) {
+                add(RouteDetailChipKind.CURB_GAP.toUiState())
             }
-            if (aggregateFlags.hasCrosswalk && !aggregateFlags.hasSignal) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_UNSIGNALIZED_CROSSWALK,
-                        tone = RouteDetailTone.WARNING,
-                    ),
-                )
+            if (RouteDetailChipKind.STAIRS in routeBadgeKinds) {
+                add(RouteDetailChipKind.STAIRS.toUiState())
             }
-            if (aggregateFlags.hasCurbGap) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_CURB_GAP,
-                        tone = RouteDetailTone.WARNING,
-                    ),
-                )
+            if (RouteDetailChipKind.AUDIO_SIGNAL in routeBadgeKinds) {
+                add(RouteDetailChipKind.AUDIO_SIGNAL.toUiState())
             }
-            if (aggregateFlags.hasStairs) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_STAIRS,
-                        tone = RouteDetailTone.WARNING,
-                    ),
-                )
+            if (RouteDetailChipKind.BRAILLE_BLOCK in routeBadgeKinds) {
+                add(RouteDetailChipKind.BRAILLE_BLOCK.toUiState())
             }
             if (isEmpty()) {
-                add(
-                    RouteDetailChipUiState(
-                        label = DETAIL_CHIP_PENDING,
-                        tone = RouteDetailTone.INFO,
-                    ),
-                )
+                add(RouteDetailChipKind.PENDING.toUiState())
             }
-        }.take(MAX_ROUTE_DETAIL_CHIP_COUNT)
+        }.distinctBy(RouteDetailChipUiState::kind).take(MAX_ROUTE_DETAIL_CHIP_COUNT)
 
     private fun RouteCandidate.buildDetailHighlights(aggregateFlags: RouteSegmentSafetyFlags): List<RouteDetailHighlightUiState> =
         buildList<RouteDetailHighlightUiState> {
@@ -1082,6 +1039,90 @@ private fun RouteSegmentSafetyFlags.merge(other: RouteSegmentSafetyFlags): Route
         hasAudioSignal = hasAudioSignal || other.hasAudioSignal,
         hasBrailleBlock = hasBrailleBlock || other.hasBrailleBlock,
     )
+
+private fun RouteOptionBadge.toDetailChipKind(): RouteDetailChipKind =
+    when (this) {
+        RouteOptionBadge.SAFE_PRIORITY -> RouteDetailChipKind.PENDING
+        RouteOptionBadge.STEP_FREE -> RouteDetailChipKind.STEP_FREE
+        RouteOptionBadge.AUDIO_SIGNAL -> RouteDetailChipKind.AUDIO_SIGNAL
+        RouteOptionBadge.BRAILLE_BLOCK -> RouteDetailChipKind.BRAILLE_BLOCK
+        RouteOptionBadge.SIGNAL_CROSSWALK -> RouteDetailChipKind.SIGNAL_CROSSWALK
+        RouteOptionBadge.CURB_GAP -> RouteDetailChipKind.CURB_GAP
+        RouteOptionBadge.UNSIGNALIZED_CROSSWALK -> RouteDetailChipKind.UNSIGNALIZED_CROSSWALK
+    }
+
+private fun RouteDetailChipKind.toUiState(): RouteDetailChipUiState =
+    when (this) {
+        RouteDetailChipKind.STEP_FREE ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_STEP_FREE,
+                kind = this,
+                tone = RouteDetailTone.INFO,
+            )
+
+        RouteDetailChipKind.ELEVATOR ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_ELEVATOR,
+                kind = this,
+                tone = RouteDetailTone.INFO,
+            )
+
+        RouteDetailChipKind.AUDIO_SIGNAL ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_AUDIO_SIGNAL,
+                kind = this,
+                tone = RouteDetailTone.INFO,
+            )
+
+        RouteDetailChipKind.BRAILLE_BLOCK ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_BRAILLE_BLOCK,
+                kind = this,
+                tone = RouteDetailTone.INFO,
+            )
+
+        RouteDetailChipKind.CONSTRUCTION ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_CONSTRUCTION,
+                kind = this,
+                tone = RouteDetailTone.WARNING,
+            )
+
+        RouteDetailChipKind.SIGNAL_CROSSWALK ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_SIGNAL_CROSSWALK,
+                kind = this,
+                tone = RouteDetailTone.INFO,
+            )
+
+        RouteDetailChipKind.UNSIGNALIZED_CROSSWALK ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_UNSIGNALIZED_CROSSWALK,
+                kind = this,
+                tone = RouteDetailTone.WARNING,
+            )
+
+        RouteDetailChipKind.CURB_GAP ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_CURB_GAP,
+                kind = this,
+                tone = RouteDetailTone.WARNING,
+            )
+
+        RouteDetailChipKind.STAIRS ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_STAIRS,
+                kind = this,
+                tone = RouteDetailTone.WARNING,
+            )
+
+        RouteDetailChipKind.PENDING ->
+            RouteDetailChipUiState(
+                label = DETAIL_CHIP_PENDING,
+                kind = this,
+                tone = RouteDetailTone.INFO,
+            )
+    }
 
 private fun RouteOption.routeSortOrder(): Int =
     when (this) {

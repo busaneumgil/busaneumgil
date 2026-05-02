@@ -103,6 +103,7 @@ data class RouteSummaryMetricUiState(
 
 data class RouteDetailChipUiState(
     val label: String,
+    val kind: RouteDetailChipKind = RouteDetailChipKind.PENDING,
     val tone: RouteDetailTone = RouteDetailTone.INFO,
 )
 
@@ -160,6 +161,19 @@ enum class RouteDetailTone {
     NEUTRAL,
     INFO,
     WARNING,
+}
+
+enum class RouteDetailChipKind {
+    STEP_FREE,
+    ELEVATOR,
+    AUDIO_SIGNAL,
+    BRAILLE_BLOCK,
+    CONSTRUCTION,
+    SIGNAL_CROSSWALK,
+    UNSIGNALIZED_CROSSWALK,
+    CURB_GAP,
+    STAIRS,
+    PENDING,
 }
 
 enum class RouteDetailStepKind {

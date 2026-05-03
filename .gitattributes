@@ -17,3 +17,8 @@ Makefile text eol=lf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 /Docs/기획/2026-04-17_기획발표_장표.pptx filter=lfs diff=lfs merge=lfs -text
+/AI/ondevice_test/app/libs/sherpa-onnx-1.13.0.aar filter=lfs diff=lfs merge=lfs -text
+/AI/ondevice_test/app/src/main/assets/models/sense_voice/model.int8.onnx filter=lfs diff=lfs merge=lfs -text
+/AI/voice_data/data.jsonl filter=lfs diff=lfs merge=lfs -text
+/FE/app/libs/sherpa-onnx-1.13.0.aar filter=lfs diff=lfs merge=lfs -text
+/FE/app/src/main/assets/models/sense_voice/model.int8.onnx filter=lfs diff=lfs merge=lfs -text

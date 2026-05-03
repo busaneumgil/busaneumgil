@@ -127,15 +127,32 @@ sealed interface SearchRoute : AppRoute {
 sealed interface RouteSettingRoute : AppRoute {
     data object Setting : RouteSettingRoute {
         const val ARG_AUTO_START_NAVIGATION: String = "autoStartNavigation"
+        const val ARG_INITIAL_ROUTE_OPTION: String = "initialRouteOption"
 
-        override val route: String = "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}"
+        override val route: String =
+            "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}" +
+                "&$ARG_INITIAL_ROUTE_OPTION={$ARG_INITIAL_ROUTE_OPTION}"
 
-        fun createRoute(autoStartNavigation: Boolean = false): String =
-            if (autoStartNavigation) {
-                "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION=true"
-            } else {
+        fun createRoute(
+            autoStartNavigation: Boolean = false,
+            initialRouteOption: RouteOption? = null,
+        ): String {
+            val queryParameters =
+                buildList {
+                    if (autoStartNavigation) {
+                        add("$ARG_AUTO_START_NAVIGATION=true")
+                    }
+                    initialRouteOption?.let { routeOption ->
+                        add("$ARG_INITIAL_ROUTE_OPTION=${Uri.encode(routeOption.name)}")
+                    }
+                }
+
+            return if (queryParameters.isEmpty()) {
                 ROUTE_SETTING_BASE_ROUTE
+            } else {
+                "$ROUTE_SETTING_BASE_ROUTE?${queryParameters.joinToString(separator = "&")}"
             }
+        }
     }
 
     data object Detail : RouteSettingRoute {

@@ -22,15 +22,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,6 +110,20 @@ fun ArrivalScreen(
                     uiState = uiState,
                     onAction = onAction,
                     modifier = Modifier.widthIn(max = 520.dp),
+                )
+            }
+        }
+
+        if (uiState.isRouteSaveDialogVisible) {
+            uiState.routeSaveDraft?.let { draft ->
+                ArrivalRouteSaveDialog(
+                    draft = draft,
+                    routeName = uiState.routeNameInput,
+                    isSaving = uiState.isRouteSaveUpdating,
+                    isConfirmEnabled = uiState.isRouteSaveConfirmEnabled,
+                    onRouteNameChanged = { value -> onAction(ArrivalUiAction.RouteNameChanged(value)) },
+                    onDismiss = { onAction(ArrivalUiAction.RouteSaveDialogDismissed) },
+                    onConfirm = { onAction(ArrivalUiAction.ConfirmRouteSaveClicked) },
                 )
             }
         }
@@ -380,7 +397,15 @@ private fun ArrivalEvaluationBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(EumSpacing.xxSmall))
                     Text(
-                        text = stringResource(id = R.string.arrival_evaluation_save_route),
+                        text =
+                            stringResource(
+                                id =
+                                    if (uiState.isRouteSaveSelected) {
+                                        R.string.arrival_evaluation_route_saved
+                                    } else {
+                                        R.string.arrival_evaluation_save_route
+                                    },
+                            ),
                         style = MaterialTheme.typography.labelLarge,
                         color =
                             if (uiState.isRouteSaveSelected) {
@@ -409,3 +434,106 @@ private fun ArrivalEvaluationBottomSheet(
         }
     }
 }
+
+@Composable
+private fun ArrivalRouteSaveDialog(
+    draft: ArrivalRouteSaveDraftUiState,
+    routeName: String,
+    isSaving: Boolean,
+    isConfirmEnabled: Boolean,
+    onRouteNameChanged: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(id = R.string.arrival_route_save_dialog_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id = R.string.arrival_route_save_dialog_summary,
+                            draft.startLabel,
+                            draft.endLabel,
+                        ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = buildRouteSaveMetaLabel(draft = draft),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                OutlinedTextField(
+                    value = routeName,
+                    onValueChange = onRouteNameChanged,
+                    enabled = !isSaving,
+                    singleLine = true,
+                    label = {
+                        Text(text = stringResource(id = R.string.arrival_route_save_dialog_name_label))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = isConfirmEnabled,
+            ) {
+                Text(text = stringResource(id = R.string.arrival_route_save_dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSaving,
+            ) {
+                Text(text = stringResource(id = R.string.arrival_route_save_dialog_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun buildRouteSaveMetaLabel(draft: ArrivalRouteSaveDraftUiState): String {
+    val metaParts =
+        buildList {
+            add(draft.routeOptionLabel)
+            draft.distanceMeters?.let { distanceMeters ->
+                add(
+                    stringResource(
+                        id = R.string.saved_route_meta_distance,
+                        distanceMeters.toSavedRouteDistanceLabel(),
+                    ),
+                )
+            }
+            draft.durationMinutes?.let { durationMinutes ->
+                add(
+                    stringResource(
+                        id = R.string.saved_route_meta_duration,
+                        durationMinutes.toSavedRouteDurationLabel(),
+                    ),
+                )
+            }
+        }
+    return metaParts.joinToString(separator = " · ")
+}
+
+private fun Int.toSavedRouteDistanceLabel(): String =
+    if (this < 1_000) {
+        "${this}m"
+    } else {
+        String.format("%.1fkm", this / 1_000f)
+    }
+
+private fun Int.toSavedRouteDurationLabel(): String = "${this}분"

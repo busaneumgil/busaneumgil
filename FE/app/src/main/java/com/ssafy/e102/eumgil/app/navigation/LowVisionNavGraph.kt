@@ -25,7 +25,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 navController.navigate(LowVisionRoute.VoiceInput.route)
             },
             onCurrentLocationClick = {
-                navController.navigate(TopLevelRoute.Map.route)
+                resolveLowVisionCurrentLocationRoute()?.let(navController::navigate)
             },
             onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
@@ -120,7 +120,9 @@ internal fun resolveLowVisionSearchResultRoute(): String =
 
 internal fun resolveLowVisionSearchPopUpRoute(): String = LowVisionRoute.Search.route
 
-internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.Home.route
+internal fun resolveNavigationCompletionRoute(): String = ArrivalRoute.Entry.route
+
+internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 
 internal fun resolveLowVisionModeChangeRoute(): String = OnboardingRoute.ProfileUserTypePrimary.route
 

@@ -66,8 +66,8 @@ class RouteSettingViewModelTest {
             val safeCard = uiState.optionCards.first()
             val shortestCard = uiState.optionCards.last()
             assertTrue(safeCard.isSelected)
-            assertEquals("SAFE 우선", safeCard.title)
-            assertEquals("안전 요소와 보행 위험을 함께 고려해 우선 제안하는 경로입니다.", safeCard.description)
+            assertEquals("안전한 길", safeCard.title)
+            assertEquals("보행 안전 요소를 우선으로 반영한 추천 경로입니다.", safeCard.description)
             assertEquals("현재 선택됨", safeCard.selectionLabel)
             assertEquals("추천", safeCard.highlightLabel)
             assertEquals(
@@ -78,15 +78,15 @@ class RouteSettingViewModelTest {
                 listOf("낮음", "16분"),
                 safeCard.metrics.map(RouteOptionCardMetricUiState::value),
             )
-            assertEquals("최단 거리", shortestCard.title)
-            assertEquals("이동 시간을 줄이는 기준으로 빠른 경로를 비교합니다.", shortestCard.description)
+            assertEquals("최단거리", shortestCard.title)
+            assertEquals("이동 거리를 줄이는 기준으로 빠른 경로를 비교합니다.", shortestCard.description)
             assertEquals("탭하여 선택", shortestCard.selectionLabel)
             assertEquals(
                 listOf("예상 시간", "예상 거리"),
                 shortestCard.metrics.map(RouteOptionCardMetricUiState::label),
             )
             assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
-            assertEquals("SAFE 우선", uiState.selectedRoute?.optionTitle)
+            assertEquals("안전한 길", uiState.selectedRoute?.optionTitle)
             assertEquals("Safe Route", uiState.selectedRoute?.title)
             assertEquals(980, uiState.selectedRoute?.distanceMeters)
             assertEquals(16, uiState.selectedRoute?.estimatedTimeMinutes)
@@ -110,9 +110,22 @@ class RouteSettingViewModelTest {
             assertEquals(null, uiState.routePreviewMap.fallbackMessage)
             assertTrue(uiState.routePreviewMap.isDisplayable)
             assertTrue(uiState.cta.isEnabled)
-            assertEquals("선택한 경로로 안내 시작", uiState.cta.label)
-            assertEquals("201 작업에서 route setting handoff를 navigation 진행 화면으로 연결합니다.", uiState.cta.supportingText)
+            assertEquals("길 안내 시작", uiState.cta.label)
+            assertEquals("선택한 경로로 길 안내를 시작할 수 있습니다.", uiState.cta.supportingText)
             assertTrue(uiState.isStartEnabled)
+            assertEquals(
+                listOf("단차 없음", "음향 신호 있음", "점자블록 있음", "신호등 횡단보도"),
+                uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::label),
+            )
+            assertEquals(
+                listOf("음향 신호 횡단보도", "점자블록 유도 구간"),
+                uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
+            )
+            assertEquals(
+                listOf("출발", "음향 신호 횡단보도 이동", "점자블록 유도 구간 이동", "신호등 있는 횡단보도 건너기", "도착"),
+                uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::title),
+            )
+            assertEquals(null, uiState.selectedRoute?.detailFallbackMessage)
         }
 
     @Test
@@ -238,6 +251,16 @@ class RouteSettingViewModelTest {
                 "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다.",
                 selectedRoute.previewFallbackNotice,
             )
+            assertEquals(listOf("상세 정보 확인 중"), selectedRoute.detailAccessibilityChips.map(RouteDetailChipUiState::label))
+            assertTrue(selectedRoute.detailHighlights.isEmpty())
+            assertEquals(
+                listOf("출발", "세부 경로 확인 중", "도착"),
+                selectedRoute.detailSteps.map(RouteDetailStepUiState::title),
+            )
+            assertEquals(
+                "세부 이동 정보는 준비 중입니다. 요약 정보와 주의 구간을 먼저 확인하세요.",
+                selectedRoute.detailFallbackMessage,
+            )
             assertEquals(RoutePreviewMapStatus.POLYLINE_UNAVAILABLE, uiState.routePreviewMap.status)
             assertEquals(RouteOption.SAFE, uiState.routePreviewMap.routeOption)
             assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
@@ -351,10 +374,25 @@ class RouteSettingViewModelTest {
             assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
             assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
             assertTrue(uiState.routePreviewMap.isDisplayable)
-            assertEquals("최단 거리", uiState.selectedRoute?.optionTitle)
+            assertEquals("최단거리", uiState.selectedRoute?.optionTitle)
             assertEquals("Shortest Route", uiState.selectedRoute?.title)
             assertEquals(RouteRiskLevel.MEDIUM, uiState.selectedRoute?.riskLevel)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+            assertEquals(
+                listOf("무신호 횡단 주의", "연석 단차 주의"),
+                uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::label),
+            )
+            assertEquals(
+                listOf("무신호 횡단 주의", "연석 단차 주의"),
+                uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
+            )
+            assertEquals(
+                listOf(RouteDetailTone.WARNING, RouteDetailTone.WARNING),
+                uiState.selectedRoute
+                    ?.detailSteps
+                    ?.filter { step -> step.badgeLabel == "주의" }
+                    ?.map(RouteDetailStepUiState::tone),
+            )
             assertTrue(uiState.optionCards.single { card -> card.routeOption == RouteOption.SHORTEST }.isSelected)
             assertEquals(
                 "현재 선택됨",
@@ -364,6 +402,33 @@ class RouteSettingViewModelTest {
                 "탭하여 선택",
                 uiState.optionCards.single { card -> card.routeOption == RouteOption.SAFE }.selectionLabel,
             )
+        }
+
+    @Test
+    fun `route detail action selects target option and emits detail navigation event`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(RouteSettingUiAction.RouteOptionDetailClicked(RouteOption.SHORTEST))
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+            assertEquals(RouteOption.SHORTEST, uiState.selectedOption)
+            assertEquals(RouteOption.SHORTEST, uiState.selectedRoute?.routeOption)
+            val event = uiEvent.await()
+            assertTrue(event is RouteSettingUiEvent.NavigateToRouteDetail)
+            assertEquals(RouteOption.SHORTEST, (event as RouteSettingUiEvent.NavigateToRouteDetail).routeOption)
         }
 
     @Test
@@ -417,7 +482,7 @@ class RouteSettingViewModelTest {
 
             assertTrue(viewModel.uiState.value.ctaAcknowledged)
             assertFalse(viewModel.uiState.value.cta.isEnabled)
-            assertEquals("내비게이션 진행 화면 연결은 다음 스레드에서 마무리합니다.", viewModel.uiState.value.cta.supportingText)
+            assertEquals("길 안내를 시작하는 중입니다.", viewModel.uiState.value.cta.supportingText)
             val event = uiEvent.await()
             assertTrue(event is RouteSettingUiEvent.StartNavigationRequested)
             assertEquals(

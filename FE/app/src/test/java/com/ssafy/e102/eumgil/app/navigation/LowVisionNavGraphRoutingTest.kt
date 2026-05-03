@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.app.navigation
 
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class LowVisionNavGraphRoutingTest {
@@ -30,11 +31,16 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
-    fun `navigation completion returns to low vision voice input home tab`() {
+    fun `navigation completion moves to arrival screen`() {
         assertEquals(
-            LowVisionRoute.Home.route,
+            "arrival",
             resolveNavigationCompletionRoute(),
         )
+    }
+
+    @Test
+    fun `current location action stays in low vision home until routing is wired`() {
+        assertNull(resolveLowVisionCurrentLocationRoute())
     }
 
     @Test

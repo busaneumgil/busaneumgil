@@ -62,17 +62,20 @@ fun LowVisionMyPageScreen(
                 Modifier
                     .weight(1f)
                     .statusBarsPadding()
-                    .padding(horizontal = 24.dp, vertical = 40.dp),
+                    .padding(
+                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                    ),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(32.dp),
+            verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
         ) {
             Text(
                 text = stringResource(id = R.string.low_vision_my_page_title),
                 modifier = Modifier.fillMaxWidth(),
                 color = LowVisionYellow,
-                fontSize = 52.sp,
+                fontSize = LowVisionScreenDefaults.headerFontSize,
                 fontWeight = FontWeight.Black,
-                lineHeight = 60.sp,
+                lineHeight = LowVisionScreenDefaults.headerLineHeight,
                 textAlign = TextAlign.Center,
             )
 
@@ -121,16 +124,19 @@ fun LowVisionAppInfoScreen(
                 Modifier
                     .weight(1f)
                     .statusBarsPadding()
-                    .padding(horizontal = 24.dp, vertical = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+                    .padding(
+                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                    ),
+            verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
         ) {
             Text(
                 text = stringResource(id = R.string.low_vision_app_info_title),
                 modifier = Modifier.fillMaxWidth(),
                 color = LowVisionYellow,
-                fontSize = 48.sp,
+                fontSize = LowVisionScreenDefaults.headerFontSize,
                 fontWeight = FontWeight.Black,
-                lineHeight = 56.sp,
+                lineHeight = LowVisionScreenDefaults.headerLineHeight,
                 textAlign = TextAlign.Center,
             )
             LowVisionInfoPanel(

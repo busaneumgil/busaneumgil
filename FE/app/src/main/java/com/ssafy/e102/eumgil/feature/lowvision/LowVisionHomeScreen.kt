@@ -1,12 +1,10 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +31,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionHomeBottomNav
+
+internal object LowVisionHomeLayoutDefaults {
+    val headerSlotHeight = LowVisionScreenDefaults.headerLineHeight.value.dp
+    const val voiceActionCardWeight = 2f
+    const val currentLocationCardWeight = 1f
+    val actionCardGap = 40.dp
+    const val showsStatusGuide = false
+}
 
 /**
  * 시각지원 모드 메인 홈 화면.
@@ -73,14 +79,19 @@ fun LowVisionHomeScreen(
             modifier = Modifier
                 .weight(1f)
                 .statusBarsPadding()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+                .padding(
+                    horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                    vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                ),
+            verticalArrangement = Arrangement.spacedBy(LowVisionHomeLayoutDefaults.actionCardGap),
         ) {
-            // 1) 음성 입력 카드 (큰 카드, 252.7dp)
+            Spacer(modifier = Modifier.height(LowVisionHomeLayoutDefaults.headerSlotHeight))
+
+            // 1) 음성 입력 카드 (하단바 제외 영역의 2/3)
             HomeYellowCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(252.dp)
+                    .weight(LowVisionHomeLayoutDefaults.voiceActionCardWeight)
                     .semantics {
                         role = Role.Button
                         contentDescription = voiceCardA11y
@@ -92,63 +103,21 @@ fun LowVisionHomeScreen(
                 onClick = onVoiceInputClick,
             )
 
-            // 2) 현재 위치 카드 (작은 카드, 117.92dp)
+            // 2) 현재 위치 카드 (하단바 제외 영역의 1/3)
             HomeYellowCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(118.dp)
+                    .weight(LowVisionHomeLayoutDefaults.currentLocationCardWeight)
                     .semantics {
                         role = Role.Button
                         contentDescription = locationCardA11y
                     },
                 iconRes = R.drawable.ic_voice_location_pin,
-                iconSize = 40.dp,
+                iconSize = 56.dp,
                 label = stringResource(id = R.string.low_vision_home_current_location_label),
-                labelSize = 22.sp,
+                labelSize = 28.sp,
                 onClick = onCurrentLocationClick,
             )
-
-            // 3) 입력 대기 상태 정보 박스
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF1E1E1E))
-                    .border(
-                        width = 1.dp,
-                        color = Color(0xFF333333),
-                        shape = RoundedCornerShape(16.dp),
-                    )
-                    .padding(horizontal = 25.dp, vertical = 21.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_voice_speaker_wave),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp),
-                )
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.low_vision_home_status_title),
-                        color = Color.White,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.low_vision_home_status_description),
-                        color = Color(0xFFCCCCCC),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Normal,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
         }
 
         LowVisionHomeBottomNav(

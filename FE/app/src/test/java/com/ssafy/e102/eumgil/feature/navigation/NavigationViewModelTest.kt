@@ -50,6 +50,7 @@ class NavigationViewModelTest {
             assertFalse(viewModel.uiState.value.mapOverlay.isDisplayable)
             assertTrue(viewModel.uiState.value.mapOverlay.shouldUsePlaceholder)
             assertNull(viewModel.uiState.value.mapOverlay.currentLocation)
+            assertNull(viewModel.uiState.value.selectedRouteOption)
             assertEquals("다음 안내", viewModel.uiState.value.stepCard.sectionLabel)
             assertEquals("준비 중", viewModel.uiState.value.stepCard.statusLabel)
             assertEquals("확인 중", viewModel.uiState.value.stepCard.metrics[0].value)
@@ -67,12 +68,30 @@ class NavigationViewModelTest {
 
             assertTrue(locationManager.isUpdating)
             assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
-            assertEquals("안전 우선", viewModel.uiState.value.stepCard.statusLabel)
+            assertEquals(RouteOption.SAFE, viewModel.uiState.value.selectedRouteOption)
+            assertTrue(viewModel.uiState.value.canOpenRouteDetail)
+            assertEquals("안전한 길", viewModel.uiState.value.stepCard.statusLabel)
             assertEquals("350m", viewModel.uiState.value.stepCard.distanceLabel)
             assertEquals("980m", viewModel.uiState.value.stepCard.metrics[0].value)
             assertEquals("16분", viewModel.uiState.value.stepCard.metrics[1].value)
-            assertEquals("안내 종료", viewModel.uiState.value.exitCta.label)
+            assertEquals("길 안내 종료", viewModel.uiState.value.exitCta.label)
             assertTrue(viewModel.uiState.value.isExitEnabled)
+        }
+
+    @Test
+    fun `route detail action emits navigation event for selected route option`() =
+        runTest {
+            val viewModel = createViewModel()
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.RouteDetailClicked)
+            advanceUntilIdle()
+
+            val event = eventDeferred.await()
+            assertTrue(event is NavigationUiEvent.NavigateToRouteDetail)
+            assertEquals(RouteOption.SAFE, (event as NavigationUiEvent.NavigateToRouteDetail).routeOption)
         }
 
     @Test
@@ -206,7 +225,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `complete action returns to low vision voice input home`() =
+    fun `complete action stops guidance and opens arrival screen`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel =
@@ -223,7 +242,7 @@ class NavigationViewModelTest {
 
             assertFalse(locationManager.isUpdating)
             assertEquals(
-                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionHome),
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
                 eventsDeferred.await(),
             )
         }
@@ -240,6 +259,23 @@ class NavigationViewModelTest {
                 }
 
             viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            advanceUntilIdle()
+
+            assertNull(eventDeferred.await())
+        }
+
+    @Test
+    fun `complete action is ignored while navigation request is not ready`() =
+        runTest {
+            val viewModel = createViewModel()
+            val eventDeferred =
+                async {
+                    withTimeoutOrNull(100) {
+                        viewModel.uiEvent.first()
+                    }
+                }
+
+            viewModel.onAction(NavigationUiAction.NavigationCompleteClicked)
             advanceUntilIdle()
 
             assertNull(eventDeferred.await())

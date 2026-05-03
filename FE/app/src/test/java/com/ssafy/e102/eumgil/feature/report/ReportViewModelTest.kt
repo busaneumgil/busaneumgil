@@ -97,7 +97,7 @@ class ReportViewModelTest {
             assertEquals("복원할 설명", uiState.description.value)
             assertEquals("부산역 인근", uiState.location.addressText)
             assertEquals(ReportLocationSource.MapPin, uiState.location.source)
-            assertEquals("content://draft/photo.jpg", uiState.photo.value?.localUri)
+            assertEquals("content://draft/photo.jpg", uiState.photo.values.firstOrNull()?.localUri)
         }
 
     @Test
@@ -500,6 +500,105 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ReportStep.DetailInput, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    fun `adding photos appends to list and updates count`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            advanceUntilIdle()
+
+            val photoInput = viewModel.uiState.value.photo
+            assertEquals(3, photoInput.count)
+            assertNull(photoInput.error)
+            assertTrue(photoInput.canAddMore)
+        }
+
+    @Test
+    fun `adding more than max photos is capped without TooMany error via UI path`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            repeat(ReportFormLimits.PHOTO_MAX_COUNT + 2) {
+                viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            }
+            advanceUntilIdle()
+
+            val photoInput = viewModel.uiState.value.photo
+            assertEquals(ReportFormLimits.PHOTO_MAX_COUNT, photoInput.count)
+            assertFalse(photoInput.canAddMore)
+            assertNull(photoInput.error)
+        }
+
+    @Test
+    fun `removing photo at index drops only that entry`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            advanceUntilIdle()
+            val before = viewModel.uiState.value.photo.values
+            assertEquals(3, before.size)
+            val targetUri = before[1].localUri
+
+            viewModel.onAction(ReportUiAction.PhotoRemovedAt(1))
+            advanceUntilIdle()
+
+            val after = viewModel.uiState.value.photo.values
+            assertEquals(2, after.size)
+            assertFalse(after.any { it.localUri == targetUri })
+        }
+
+    @Test
+    fun `outbox saves only first photo when multiple are attached`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            val savedOutbox = requireNotNull(repository.savedOutbox)
+            val firstPhoto = viewModel.uiState.value.photo.values.first()
+            assertEquals(firstPhoto.localUri, savedOutbox.photoUri)
+        }
+
+    @Test
+    fun `description max length 300 marks error when exceeded`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            val longText = "가".repeat(ReportFormLimits.DESCRIPTION_MAX_LENGTH + 1)
+            viewModel.onAction(ReportUiAction.DescriptionChanged(longText))
+            advanceUntilIdle()
+
+            val descError = viewModel.uiState.value.description.error
+            assertEquals(ReportDescriptionError.TooLong, descError)
         }
 
     @Test

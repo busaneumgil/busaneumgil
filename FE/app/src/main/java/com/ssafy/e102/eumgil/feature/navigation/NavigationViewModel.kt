@@ -59,6 +59,8 @@ class NavigationViewModel(
         mutableUiState.update { state ->
             state.copy(
                 screenState = screenState,
+                selectedRouteOption = request.selectedRoute.routeOption,
+                mapPlaceholderTitle = request.selectedRoute.title.toNavigationRouteTitle(request.selectedRoute.routeOption),
                 mapPlaceholderDescription = request.toMapPlaceholderDescription(screenState),
                 mapOverlay = request.toMapOverlayUiState(),
                 stepCard = stepCard,
@@ -81,6 +83,13 @@ class NavigationViewModel(
                 currentLocationManager.stopLocationUpdates()
                 emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateBack)
             }
+            NavigationUiAction.RouteDetailClicked -> {
+                uiState.value.selectedRouteOption?.let { routeOption ->
+                    if (uiState.value.canOpenRouteDetail) {
+                        emitUiEvent(NavigationUiEvent.NavigateToRouteDetail(routeOption))
+                    }
+                }
+            }
             NavigationUiAction.ExitNavigationClicked -> {
                 if (uiState.value.isExitEnabled) {
                     currentLocationManager.stopLocationUpdates()
@@ -95,7 +104,7 @@ class NavigationViewModel(
             NavigationUiAction.NavigationCompleteClicked -> {
                 if (uiState.value.isExitEnabled) {
                     currentLocationManager.stopLocationUpdates()
-                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToLowVisionHome)
+                    emitUiEvents(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival)
                 }
             }
             is NavigationUiAction.VoiceGuidanceToggled -> onVoiceGuidanceToggled(action.enabled)
@@ -472,7 +481,7 @@ private fun NavigationScreenState.toExitCtaUiState(): NavigationCtaUiState =
         NavigationScreenState.Ready,
         NavigationScreenState.Empty ->
             NavigationCtaUiState(
-                label = "안내 종료",
+                label = "길 안내 종료",
                 supportingText = "안내를 종료하고 지도로 돌아갑니다.",
                 isEnabled = true,
             )
@@ -483,8 +492,8 @@ private fun String.toNavigationRouteTitle(routeOption: RouteOption): String =
 
 private fun RouteOption.toRouteOptionLabel(): String =
     when (this) {
-        RouteOption.SAFE -> "안전 우선"
-        RouteOption.SHORTEST -> "최단 거리"
+        RouteOption.SAFE -> "안전한 길"
+        RouteOption.SHORTEST -> "최단거리"
     }
 
 private fun RouteRiskLevel.toRiskLabel(): String =

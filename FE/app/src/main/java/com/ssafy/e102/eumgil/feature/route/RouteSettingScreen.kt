@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -55,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
@@ -102,49 +101,57 @@ fun RouteSettingScreen(
                 onBackClick = { onAction(RouteSettingUiAction.BackClicked) },
             )
         },
-        bottomBar = {
-            RouteSettingBottomBar(
-                buttonLabel = uiState.cta.label,
-                enabled = uiState.isStartEnabled,
-                supportingText = ctaSupportingText,
-                selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
-                onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
-            )
-        },
     ) { innerPadding ->
-        Column(
+        BoxWithConstraints(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                    .padding(innerPadding),
         ) {
-            RouteWaypointCard(
-                origin = uiState.origin,
-                destination = uiState.destination,
-                supportingMessage = supportingMessage,
-            )
-            RouteTravelModeTabs(
-                selectedMode = uiState.selectedTravelMode,
-                onModeSelected = { mode ->
-                    onAction(RouteSettingUiAction.TravelModeSelected(mode))
-                },
-            )
-            RouteMapStage(uiState = uiState)
-            if (isWalkMode) {
-                RouteWalkOptionSection(
+            val layoutPolicy = routeSettingLayoutPolicy()
+            val availableContentHeight =
+                maxHeight - RouteSettingScreenVerticalPadding - RouteSettingScreenVerticalPadding
+            val mapHeight = routeSettingMapHeight(availableContentHeight, layoutPolicy)
+
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(
+                            horizontal = EumSpacing.medium,
+                            vertical = RouteSettingScreenVerticalPadding,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(RouteSettingContentGap),
+            ) {
+                RouteWaypointCard(
+                    origin = uiState.origin,
+                    destination = uiState.destination,
+                    supportingMessage = supportingMessage,
+                )
+                RouteTravelModeTabs(
+                    selectedMode = uiState.selectedTravelMode,
+                    onModeSelected = { mode ->
+                        onAction(RouteSettingUiAction.TravelModeSelected(mode))
+                    },
+                )
+                RouteMapStage(
                     uiState = uiState,
+                    modifier = Modifier.height(mapHeight),
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                RouteSettingRouteSheet(
+                    uiState = uiState,
+                    buttonLabel = uiState.cta.label,
+                    supportingText = ctaSupportingText,
+                    selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
                     onOptionClick = { routeOption ->
                         onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
                     },
                     onOptionDetailClick = { routeOption ->
                         onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
                     },
+                    onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
                 )
-            } else {
-                RouteTransitOptionSection()
             }
         }
     }
@@ -802,6 +809,62 @@ internal fun routeScreenTopBarPolicy(): RouteScreenTopBarPolicy =
         titleFontWeight = FontWeight.SemiBold,
     )
 
+internal data class RouteSettingLayoutPolicy(
+    val allowsDefaultVerticalScroll: Boolean,
+    val ctaPlacement: RouteSettingCtaPlacement,
+    val mapHeightPolicy: RouteSettingMapHeightPolicy,
+    val mapMinHeight: Dp,
+    val mapMaxHeight: Dp,
+    val maxVisibleOptionCards: Int,
+    val showsOptionSectionSupportingText: Boolean,
+    val originLabel: String,
+    val destinationLabel: String,
+    val showsWaypointSwapButton: Boolean,
+    val optionContainer: RouteSettingOptionContainer,
+    val travelModeTabShape: RouteSettingTravelModeTabShape,
+    val visibleAccessibilityChipCount: Int,
+)
+
+internal enum class RouteSettingCtaPlacement {
+    BottomSheetContent,
+}
+
+internal enum class RouteSettingMapHeightPolicy {
+    FlexibleConstraintClamp,
+}
+
+internal enum class RouteSettingOptionContainer {
+    BottomSheet,
+}
+
+internal enum class RouteSettingTravelModeTabShape {
+    SegmentedPill,
+}
+
+internal fun routeSettingLayoutPolicy(): RouteSettingLayoutPolicy =
+    RouteSettingLayoutPolicy(
+        allowsDefaultVerticalScroll = false,
+        ctaPlacement = RouteSettingCtaPlacement.BottomSheetContent,
+        mapHeightPolicy = RouteSettingMapHeightPolicy.FlexibleConstraintClamp,
+        mapMinHeight = RouteSettingMapMinHeight,
+        mapMaxHeight = RouteSettingMapMaxHeight,
+        maxVisibleOptionCards = MAX_VISIBLE_OPTION_CARD_COUNT,
+        showsOptionSectionSupportingText = false,
+        originLabel = "출발",
+        destinationLabel = "도착",
+        showsWaypointSwapButton = true,
+        optionContainer = RouteSettingOptionContainer.BottomSheet,
+        travelModeTabShape = RouteSettingTravelModeTabShape.SegmentedPill,
+        visibleAccessibilityChipCount = MAX_VISIBLE_ROUTE_CHIP_COUNT,
+    )
+
+internal fun routeSettingMapHeight(
+    availableContentHeight: Dp,
+    policy: RouteSettingLayoutPolicy = routeSettingLayoutPolicy(),
+): Dp =
+    (availableContentHeight - RouteSettingFixedContentHeightBudget)
+        .coerceIn(policy.mapMinHeight, policy.mapMaxHeight)
+
 @Composable
 private fun RouteWaypointCard(
     origin: RouteLocationUiState,
@@ -816,33 +879,51 @@ private fun RouteWaypointCard(
         shadowElevation = 2.dp,
     ) {
         Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            modifier =
+                Modifier.padding(
+                    horizontal = EumSpacing.small,
+                    vertical = RouteWaypointCardVerticalPadding,
+                ),
+            verticalArrangement = Arrangement.spacedBy(RouteWaypointGap),
         ) {
-            RouteWaypointRow(
-                label = stringResource(id = R.string.route_setting_origin_label),
-                name = origin.name,
-                supportingText = origin.supportingText,
-                markerColor = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-            )
-            RouteWaypointRow(
-                label = stringResource(id = R.string.route_setting_destination_label),
-                name = destination.name,
-                supportingText = destination.supportingText,
-                markerColor = MaterialTheme.colorScheme.error,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(RouteWaypointGap),
+                ) {
+                    RouteWaypointRow(
+                        label = stringResource(id = R.string.route_setting_origin_label),
+                        name = origin.name,
+                        supportingText = origin.supportingText,
+                        markerColor = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                    )
+                    RouteWaypointRow(
+                        label = stringResource(id = R.string.route_setting_destination_label),
+                        name = destination.name,
+                        supportingText = destination.supportingText,
+                        markerColor = MaterialTheme.colorScheme.error,
+                    )
+                }
+                RouteWaypointSwapButton()
+            }
             supportingMessage?.let { message ->
                 Text(
                     text = message,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -858,37 +939,76 @@ private fun RouteWaypointRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        verticalAlignment = Alignment.Top,
     ) {
         Box(
             modifier =
                 Modifier
-                    .size(12.dp)
+                    .padding(top = 7.dp)
+                    .size(RouteWaypointMarkerSize)
                     .background(color = markerColor, shape = CircleShape),
         )
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = markerColor,
-            )
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = markerColor,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             supportingText?.takeIf(String::isNotBlank)?.let { value ->
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun RouteWaypointSwapButton() {
+    val a11yLabel = stringResource(id = R.string.route_setting_waypoint_swap)
+
+    Surface(
+        modifier =
+            Modifier
+                .size(RouteWaypointSwapButtonSize)
+                .clickable(role = Role.Button, onClick = {})
+                .semantics {
+                    contentDescription = a11yLabel
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = "↕",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -930,10 +1050,10 @@ private fun RouteTravelModeTab(
                 role = Role.Button,
                 onClick = onClick,
             ),
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(RouteTravelModeTabRadius),
         color =
             if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
             } else {
                 MaterialTheme.colorScheme.surface
             },
@@ -948,12 +1068,12 @@ private fun RouteTravelModeTab(
             ),
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = RouteTravelModeTabVerticalPadding),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color =
                     if (isSelected) {
@@ -969,6 +1089,7 @@ private fun RouteTravelModeTab(
 @Composable
 private fun RouteMapStage(
     uiState: RouteSettingUiState,
+    modifier: Modifier = Modifier,
 ) {
     val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
     val selectedRoute = uiState.selectedRoute
@@ -976,7 +1097,7 @@ private fun RouteMapStage(
     val routeColor = optionAccentColor(selectedRoute?.routeOption ?: RouteOption.SAFE)
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
@@ -986,7 +1107,7 @@ private fun RouteMapStage(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(RoutePreviewMapHeight),
+                    .fillMaxSize(),
         ) {
             RouteMapBackdrop(
                 previewMap = previewMap,
@@ -1115,14 +1236,14 @@ private fun RouteMapControls(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = Alignment.End,
     ) {
         RouteMapControlButton(label = "+")
         RouteMapControlButton(label = "-")
         RouteMapControlButton(
             label = stringResource(id = R.string.route_setting_map_control_recenter),
-            isWide = true,
+            iconResId = R.drawable.ic_permission_location,
         )
     }
 }
@@ -1130,10 +1251,10 @@ private fun RouteMapControls(
 @Composable
 private fun RouteMapControlButton(
     label: String,
-    isWide: Boolean = false,
+    iconResId: Int? = null,
 ) {
     Surface(
-        shape = CircleShape,
+        shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
         shadowElevation = 4.dp,
@@ -1141,16 +1262,85 @@ private fun RouteMapControlButton(
         Box(
             modifier =
                 Modifier
-                    .then(if (isWide) Modifier.widthIn(min = 56.dp) else Modifier)
-                    .padding(horizontal = if (isWide) 12.dp else 0.dp, vertical = 10.dp),
+                    .size(RouteMapControlButtonSize),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
+            if (iconResId != null) {
+                Icon(
+                    painter = painterResource(id = iconResId),
+                    contentDescription = label,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            } else {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteSettingRouteSheet(
+    uiState: RouteSettingUiState,
+    buttonLabel: String,
+    supportingText: String?,
+    selectedRoute: RouteSelectedRouteUiState?,
+    onOptionClick: (RouteOption) -> Unit,
+    onOptionDetailClick: (RouteOption) -> Unit,
+    onStartClick: () -> Unit,
+) {
+    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
+
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+        shape =
+            RoundedCornerShape(
+                topStart = EumRadius.large,
+                topEnd = EumRadius.large,
+                bottomStart = EumRadius.medium,
+                bottomEnd = EumRadius.medium,
+            ),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+        shadowElevation = 8.dp,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier.padding(
+                    horizontal = EumSpacing.small,
+                    vertical = RouteSettingSheetVerticalPadding,
+                ),
+            verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
+        ) {
+            if (isWalkMode) {
+                RouteWalkOptionSection(
+                    uiState = uiState,
+                    onOptionClick = onOptionClick,
+                    onOptionDetailClick = onOptionDetailClick,
+                )
+            } else {
+                RouteTransitOptionSection()
+            }
+            RouteSettingCtaContent(
+                buttonLabel = buttonLabel,
+                enabled = uiState.isStartEnabled,
+                supportingText = supportingText,
+                selectedRoute = selectedRoute,
+                buttonHeight = RouteSettingInlineCtaButtonHeight,
+                verticalGap = RouteSettingCtaGap,
+                compactSupportingText = true,
+                onStartClick = onStartClick,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -1163,24 +1353,8 @@ private fun RouteWalkOptionSection(
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalArrangement = Arrangement.spacedBy(RouteOptionCardGap),
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = stringResource(id = R.string.route_setting_option_section_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = stringResource(id = R.string.route_setting_option_section_supporting),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
         when {
             uiState.isLoading ->
                 RouteStateCard(
@@ -1213,14 +1387,6 @@ private fun RouteWalkOptionSection(
                     )
                 }
         }
-
-        uiState.sourceLabel?.takeIf(String::isNotBlank)?.let { label ->
-            Text(
-                text = stringResource(id = R.string.route_setting_summary_source_value, label),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 
@@ -1243,7 +1409,7 @@ private fun RouteCompactOptionCard(
 ) {
     val accentColor = optionAccentColor(card.routeOption)
     val titleColor = if (card.isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-    val containerColor = if (card.isSelected) accentColor.copy(alpha = 0.11f) else MaterialTheme.colorScheme.surface
+    val containerColor = MaterialTheme.colorScheme.surface
     val borderColor = if (card.isSelected) accentColor.copy(alpha = 0.72f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
     val detailContentDescription =
         stringResource(
@@ -1275,107 +1441,96 @@ private fun RouteCompactOptionCard(
         shape = RoundedCornerShape(EumRadius.large),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),
-        shadowElevation = if (card.isSelected) 6.dp else 1.dp,
+        shadowElevation = if (card.isSelected) 2.dp else 1.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = EumSpacing.small,
+                        vertical = RouteOptionCardVerticalPadding,
+                    ),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxHeight()
-                        .width(6.dp)
-                        .background(
-                            color = if (card.isSelected) accentColor else Color.Transparent,
-                            shape = RoundedCornerShape(topStart = EumRadius.large, bottomStart = EumRadius.large),
-                        ),
+            RouteOptionSelectionIndicator(
+                isSelected = card.isSelected,
+                accentColor = accentColor,
             )
             Column(
-                modifier = Modifier.weight(1f).padding(EumSpacing.medium),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    RouteOptionSelectionIndicator(
-                        isSelected = card.isSelected,
-                        accentColor = accentColor,
-                    )
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = card.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = titleColor,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            card.highlightLabel?.let { highlightLabel ->
-                                RouteBadgeChip(
-                                    label = highlightLabel,
-                                    containerColor = accentColor.copy(alpha = 0.12f),
-                                    contentColor = accentColor,
-                                )
-                            }
-                            if (card.isSelected) {
-                                RouteBadgeChip(
-                                    label = stringResource(id = R.string.route_setting_card_selected_badge),
-                                    containerColor = accentColor,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            }
-                        }
                         Text(
-                            text = card.description,
-                            style = MaterialTheme.typography.bodySmall,
+                            text =
+                                stringResource(
+                                    id = R.string.route_setting_card_compact_title_format,
+                                    routeOptionCompactPrefix(card.routeOption),
+                                    card.title,
+                                ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = titleColor,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        card.highlightLabel?.let { highlightLabel ->
+                            RouteBadgeChip(
+                                label = highlightLabel,
+                                containerColor = accentColor.copy(alpha = 0.12f),
+                                contentColor = accentColor,
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Text(
+                            text = compactEstimatedTimeLabel(card.estimatedTimeMinutes),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = compactDistanceLabel(card.distanceMeters),
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
                         )
                     }
-                    RouteOptionDetailButton(
-                        a11yLabel = detailContentDescription,
-                        accentColor = accentColor,
-                        onClick = onDetailClick,
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                ) {
-                    RouteMetricTile(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(id = R.string.route_setting_card_metric_time),
-                        value = compactEstimatedTimeLabel(card.estimatedTimeMinutes),
-                        accentColor = accentColor,
-                        isSelected = card.isSelected,
-                    )
-                    RouteMetricTile(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(id = R.string.route_setting_card_metric_distance),
-                        value = compactDistanceLabel(card.distanceMeters),
-                        accentColor = accentColor,
-                        isSelected = card.isSelected,
-                    )
-                }
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                ) {
-                    RouteRiskChip(riskLevel = card.riskLevel)
-                    card.badges
-                        .take(if (card.isSelected) MAX_SELECTED_BADGE_COUNT else MAX_UNSELECTED_BADGE_COUNT)
-                        .forEach { badge ->
-                            RouteBadgeChip(label = routeBadgeText(badge))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    ) {
+                        RouteRiskChip(riskLevel = card.riskLevel)
+                        card.badges
+                            .take(MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT)
+                            .forEach { badge ->
+                                RouteBadgeChip(label = routeBadgeText(badge))
+                            }
+                        val overflowCount = card.badges.size - MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT
+                        if (overflowCount > 0) {
+                            RouteBadgeChip(
+                                label = stringResource(id = R.string.route_setting_card_badge_overflow, overflowCount),
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                }
+                    }
             }
+            RouteOptionDetailButton(
+                a11yLabel = detailContentDescription,
+                accentColor = accentColor,
+                onClick = onDetailClick,
+            )
         }
     }
 }
@@ -1389,7 +1544,7 @@ private fun RouteOptionDetailButton(
     Surface(
         modifier =
             Modifier
-                .size(36.dp)
+                .size(RouteOptionDetailButtonSize)
                 .clickable(role = Role.Button, onClick = onClick)
                 .semantics {
                     contentDescription = a11yLabel
@@ -1478,12 +1633,70 @@ private fun RouteMetricTile(
 }
 
 @Composable
+private fun RouteSettingInlineCta(
+    buttonLabel: String,
+    enabled: Boolean,
+    supportingText: String?,
+    selectedRoute: RouteSelectedRouteUiState?,
+    onStartClick: () -> Unit,
+) {
+    RouteSettingCtaContent(
+        buttonLabel = buttonLabel,
+        enabled = enabled,
+        supportingText = supportingText,
+        selectedRoute = selectedRoute,
+        buttonHeight = RouteSettingInlineCtaButtonHeight,
+        verticalGap = RouteSettingCtaGap,
+        compactSupportingText = true,
+        onStartClick = onStartClick,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+    )
+}
+
+@Composable
 private fun RouteSettingBottomBar(
     buttonLabel: String,
     enabled: Boolean,
     supportingText: String?,
     selectedRoute: RouteSelectedRouteUiState?,
     onStartClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shadowElevation = 8.dp,
+        tonalElevation = 1.dp,
+    ) {
+        RouteSettingCtaContent(
+            buttonLabel = buttonLabel,
+            enabled = enabled,
+            supportingText = supportingText,
+            selectedRoute = selectedRoute,
+            buttonHeight = RouteSettingBottomBarButtonHeight,
+            verticalGap = EumSpacing.small,
+            compactSupportingText = false,
+            onStartClick = onStartClick,
+            modifier =
+                Modifier
+                    .navigationBarsPadding()
+                    .padding(EumSpacing.medium),
+        )
+    }
+}
+
+@Composable
+private fun RouteSettingCtaContent(
+    buttonLabel: String,
+    enabled: Boolean,
+    supportingText: String?,
+    selectedRoute: RouteSelectedRouteUiState?,
+    buttonHeight: Dp,
+    verticalGap: Dp,
+    compactSupportingText: Boolean,
+    onStartClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val ctaContentDescription =
         when {
@@ -1511,45 +1724,43 @@ private fun RouteSettingBottomBar(
             supportingText ?: stringResource(id = R.string.route_setting_cta_state_disabled)
         }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
-        tonalElevation = 1.dp,
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(verticalGap),
     ) {
-        Column(
+        supportingText?.let { text ->
+            Text(
+                text = text,
+                style =
+                    if (compactSupportingText) {
+                        MaterialTheme.typography.labelSmall
+                    } else {
+                        MaterialTheme.typography.bodySmall
+                    },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (compactSupportingText) 1 else Int.MAX_VALUE,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Button(
+            onClick = onStartClick,
+            enabled = enabled,
             modifier =
                 Modifier
-                    .navigationBarsPadding()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    .fillMaxWidth()
+                    .height(buttonHeight)
+                    .semantics {
+                        contentDescription = ctaContentDescription
+                        stateDescription = ctaStateDescription
+                    },
         ) {
-            supportingText?.let { text ->
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Button(
-                onClick = onStartClick,
-                enabled = enabled,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .semantics {
-                            contentDescription = ctaContentDescription
-                            stateDescription = ctaStateDescription
-                        },
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_nav_route),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-                Text(text = buttonLabel)
-            }
+            Icon(
+                painter = painterResource(id = R.drawable.ic_nav_route),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+            Text(text = buttonLabel)
         }
     }
 }
@@ -1917,6 +2128,13 @@ private fun RouteOption.routeOptionTitle(): String =
         RouteOption.SHORTEST -> stringResource(id = R.string.route_setting_option_shortest_title)
     }
 
+@Composable
+private fun routeOptionCompactPrefix(routeOption: RouteOption): String =
+    when (routeOption) {
+        RouteOption.SAFE -> stringResource(id = R.string.route_setting_card_recommended_route)
+        RouteOption.SHORTEST -> stringResource(id = R.string.route_setting_card_alternative_route)
+    }
+
 private fun compactEstimatedTimeLabel(minutes: Int): String =
     if (minutes > 0) {
         "${minutes}분"
@@ -2077,11 +2295,30 @@ private data class RoutePreviewProjectionPoint(
 
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_VISIBLE_OPTION_CARD_COUNT = 2
-private const val MAX_SELECTED_BADGE_COUNT = 3
-private const val MAX_UNSELECTED_BADGE_COUNT = 1
+private const val MAX_VISIBLE_ROUTE_CHIP_COUNT = 2
+private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 1
 private const val DEFAULT_PREVIEW_CENTER_LATITUDE = 35.1796
 private const val DEFAULT_PREVIEW_CENTER_LONGITUDE = 129.0756
-private val RoutePreviewMapHeight = 300.dp
+private val RouteSettingScreenVerticalPadding = 8.dp
+private val RouteSettingContentGap = 6.dp
+private val RouteSettingFixedContentHeightBudget = 354.dp
+private val RouteSettingMapMinHeight = 190.dp
+private val RouteSettingMapMaxHeight = 250.dp
+private val RouteWaypointCardVerticalPadding = 8.dp
+private val RouteWaypointGap = 5.dp
+private val RouteWaypointMarkerSize = 10.dp
+private val RouteWaypointSwapButtonSize = 40.dp
+private val RouteTravelModeTabVerticalPadding = 7.dp
+private val RouteTravelModeTabRadius = 8.dp
+private val RouteMapControlButtonSize = 36.dp
+private val RouteSettingSheetVerticalPadding = 8.dp
+private val RouteSettingSheetGap = 6.dp
+private val RouteOptionCardGap = 6.dp
+private val RouteOptionCardVerticalPadding = 8.dp
+private val RouteOptionDetailButtonSize = 32.dp
+private val RouteSettingInlineCtaButtonHeight = 52.dp
+private val RouteSettingBottomBarButtonHeight = 56.dp
+private val RouteSettingCtaGap = 4.dp
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035
 private const val MIN_ROUTE_PREVIEW_LONGITUDE_SPAN = 0.0045

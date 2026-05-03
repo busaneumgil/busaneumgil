@@ -21,6 +21,7 @@ fun MyPageRoute(
     onNavigateToUserTypePrimary: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onNavigateToReportHistory: () -> Unit,
+    onNavigateToAppInfo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -51,6 +52,7 @@ fun MyPageRoute(
                 MyPageUiEvent.NavigateToUserTypePrimary -> onNavigateToUserTypePrimary()
                 MyPageUiEvent.NavigateToLogin -> onNavigateToLogin()
                 MyPageUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
+                MyPageUiEvent.NavigateToAppInfo -> onNavigateToAppInfo()
                 MyPageUiEvent.ShowPreparingMessage -> snackbarHostState.showSnackbar(preparingMessage)
             }
         }

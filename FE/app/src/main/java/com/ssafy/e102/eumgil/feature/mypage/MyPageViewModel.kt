@@ -56,8 +56,8 @@ class MyPageViewModel(
                 viewModelScope.launch {
                     when (action.menuItem) {
                         MyPageMenuItem.REPORT_HISTORY -> uiEventChannel.send(MyPageUiEvent.NavigateToReportHistory)
-                        MyPageMenuItem.NOTICE,
-                        MyPageMenuItem.APP_HELP -> uiEventChannel.send(MyPageUiEvent.ShowPreparingMessage)
+                        MyPageMenuItem.APP_HELP -> uiEventChannel.send(MyPageUiEvent.NavigateToAppInfo)
+                        MyPageMenuItem.NOTICE -> uiEventChannel.send(MyPageUiEvent.ShowPreparingMessage)
                     }
                 }
             }

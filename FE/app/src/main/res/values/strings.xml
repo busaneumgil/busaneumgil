@@ -342,8 +342,9 @@
     <string name="route_setting_screen_description_invalid_handoff">선택한 목적지 좌표를 확인할 수 없어 %1$s fixture 목적지 기준 preview와 summary를 대신 표시합니다.</string>
     <string name="route_setting_back">뒤로가기</string>
     <string name="route_setting_origin_section_title">출발지와 도착지</string>
-    <string name="route_setting_origin_label">출발지</string>
-    <string name="route_setting_destination_label">도착지</string>
+    <string name="route_setting_origin_label">출발</string>
+    <string name="route_setting_destination_label">도착</string>
+    <string name="route_setting_waypoint_swap">출발지와 도착지 바꾸기</string>
     <string name="route_setting_travel_mode_walk">도보</string>
     <string name="route_setting_travel_mode_transit">대중교통</string>
     <string name="route_setting_transit_placeholder_title">대중교통 경로 준비 중</string>
@@ -355,6 +356,10 @@
     <string name="route_setting_option_safe_title">안전한 길</string>
     <string name="route_setting_option_shortest_title">최단거리</string>
     <string name="route_setting_option_recommended">추천</string>
+    <string name="route_setting_card_recommended_route">추천 경로</string>
+    <string name="route_setting_card_alternative_route">대안 경로</string>
+    <string name="route_setting_card_compact_title_format">%1$s · %2$s</string>
+    <string name="route_setting_card_badge_overflow">+%1$d</string>
     <string name="route_setting_card_selected_badge">선택됨</string>
     <string name="route_setting_card_metric_time">예상 시간</string>
     <string name="route_setting_card_metric_distance">예상 거리</string>

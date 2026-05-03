@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
@@ -61,9 +61,7 @@ fun NavigationScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             NavigationTopBar(
-                canSaveBookmark = uiState.isExitEnabled,
                 onBackClick = { onAction(NavigationUiAction.BackClicked) },
-                onSaveBookmarkClick = { onAction(NavigationUiAction.SaveBookmarkClicked) },
             )
         },
         bottomBar = {
@@ -95,45 +93,34 @@ fun NavigationScreen(
 
 @Composable
 private fun NavigationTopBar(
-    canSaveBookmark: Boolean,
     onBackClick: () -> Unit,
-    onSaveBookmarkClick: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 2.dp,
-        tonalElevation = 1.dp,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = EumSpacing.xSmall, vertical = EumSpacing.xxSmall),
-        ) {
-            TextButton(
-                onClick = onBackClick,
-                modifier = Modifier.align(Alignment.CenterStart),
-            ) {
-                Text(text = stringResource(id = R.string.navigation_back))
-            }
-            Text(
-                text = stringResource(id = R.string.navigation_screen_title),
-                modifier = Modifier.align(Alignment.Center),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            TextButton(
-                onClick = onSaveBookmarkClick,
-                enabled = canSaveBookmark,
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Text(text = stringResource(id = R.string.navigation_bookmark))
-            }
-        }
-    }
+    val policy = navigationTopBarPolicy()
+    EumCenteredTopBar(
+        title = stringResource(id = R.string.navigation_screen_title),
+        onBackClick = if (policy.showBackButton) onBackClick else null,
+        backContentDescription =
+            if (policy.showBackButton) {
+                stringResource(id = R.string.navigation_back)
+            } else {
+                null
+            },
+        titleFontWeight = policy.titleFontWeight,
+    )
 }
+
+internal data class NavigationTopBarPolicy(
+    val showBackButton: Boolean,
+    val showBookmarkAction: Boolean,
+    val titleFontWeight: FontWeight,
+)
+
+internal fun navigationTopBarPolicy(): NavigationTopBarPolicy =
+    NavigationTopBarPolicy(
+        showBackButton = true,
+        showBookmarkAction = false,
+        titleFontWeight = FontWeight.SemiBold,
+    )
 
 @Composable
 private fun NavigationHeroCard(

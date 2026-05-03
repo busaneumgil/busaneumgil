@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
+import com.ssafy.e102.eumgil.core.model.RoutePolyline
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
@@ -40,6 +41,7 @@ class RouteSettingViewModel(
 
     private var latestSearchData: RouteSearchData? = null
     private var hasLoadedInitialDestination: Boolean = false
+    private var areWaypointsSwapped: Boolean = false
 
     init {
         observeSelectedDestination()
@@ -51,6 +53,7 @@ class RouteSettingViewModel(
             is RouteSettingUiAction.TravelModeSelected -> selectTravelMode(action.mode)
             is RouteSettingUiAction.RouteOptionSelected -> selectRouteOption(action.routeOption)
             is RouteSettingUiAction.RouteOptionDetailClicked -> openRouteDetail(action.routeOption)
+            RouteSettingUiAction.WaypointsSwapClicked -> swapWaypoints()
             RouteSettingUiAction.StartNavigationClicked -> startNavigation()
         }
     }
@@ -88,6 +91,7 @@ class RouteSettingViewModel(
         resetSelectedOption: Boolean,
     ) {
         latestSearchData = null
+        areWaypointsSwapped = false
         val selectedOption =
             if (resetSelectedOption) {
                 DEFAULT_SELECTED_OPTION
@@ -130,6 +134,7 @@ class RouteSettingViewModel(
                     selectedTravelMode = DEFAULT_TRAVEL_MODE,
                     requestedOption = selectedOption,
                     ctaAcknowledged = false,
+                    waypointsSwapped = areWaypointsSwapped,
                 )
         }.onFailure { throwable ->
             mutableUiState.update { state ->
@@ -173,6 +178,22 @@ class RouteSettingViewModel(
                 selectedTravelMode = mutableUiState.value.selectedTravelMode,
                 requestedOption = routeOption,
                 ctaAcknowledged = mutableUiState.value.ctaAcknowledged,
+                waypointsSwapped = areWaypointsSwapped,
+            )
+    }
+
+    private fun swapWaypoints() {
+        val searchData = latestSearchData ?: return
+        areWaypointsSwapped = !areWaypointsSwapped
+
+        mutableUiState.value =
+            buildUiState(
+                searchData = searchData,
+                destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
+                selectedTravelMode = mutableUiState.value.selectedTravelMode,
+                requestedOption = mutableUiState.value.selectedOption,
+                ctaAcknowledged = mutableUiState.value.ctaAcknowledged,
+                waypointsSwapped = areWaypointsSwapped,
             )
     }
 
@@ -213,9 +234,9 @@ class RouteSettingViewModel(
             RouteSettingUiEvent.StartNavigationRequested(
                 request =
                     RouteNavigationRequest(
-                        origin = searchData.result.origin,
-                        destination = searchData.result.destination,
-                        selectedRoute = selectedRoute,
+                        origin = if (areWaypointsSwapped) searchData.result.destination else searchData.result.origin,
+                        destination = if (areWaypointsSwapped) searchData.result.origin else searchData.result.destination,
+                        selectedRoute = if (areWaypointsSwapped) selectedRoute.reversedForWaypointSwap() else selectedRoute,
                         source = searchData.source,
                     ),
             ),
@@ -228,9 +249,13 @@ class RouteSettingViewModel(
         selectedTravelMode: RouteTravelMode,
         requestedOption: RouteOption,
         ctaAcknowledged: Boolean,
+        waypointsSwapped: Boolean,
     ): RouteSettingUiState {
         val availableRoutes = searchData.routes.sortedBy { route -> route.routeOption.routeSortOrder() }
+        val resolvedOrigin = originLocationUiState(searchData.result.origin)
         val resolvedDestination = destinationLocationUiState(searchData.result.destination)
+        val displayOrigin = if (waypointsSwapped) resolvedDestination else resolvedOrigin
+        val displayDestination = if (waypointsSwapped) resolvedOrigin else resolvedDestination
         val resolvedOption =
             if (searchData.findRoute(requestedOption) != null) {
                 requestedOption
@@ -240,19 +265,24 @@ class RouteSettingViewModel(
         val selectedRoute =
             searchData.findRoute(resolvedOption)
                 ?: availableRoutes.firstOrNull()
-        val selectedRouteUiState = selectedRoute?.toSelectedRouteUiState(destination = resolvedDestination)
+        val selectedRouteUiState =
+            selectedRoute?.toSelectedRouteUiState(
+                destination = displayDestination,
+                reversePreview = waypointsSwapped,
+            )
         val routePreviewMapUiState =
             selectedRoute.toRoutePreviewMapUiState(
-                originCoordinate = searchData.result.origin.coordinate,
-                destinationCoordinate = searchData.result.destination.coordinate,
+                originCoordinate = displayOrigin.coordinate ?: searchData.result.origin.coordinate,
+                destinationCoordinate = displayDestination.coordinate ?: searchData.result.destination.coordinate,
                 destinationHandoffState = destinationResolution.handoffState,
+                reversePolyline = waypointsSwapped,
             )
 
         return RouteSettingUiState(
             isLoading = false,
             loadErrorMessage = null,
-            origin = originLocationUiState(searchData.result.origin),
-            destination = resolvedDestination,
+            origin = displayOrigin,
+            destination = displayDestination,
             destinationHandoffState = destinationResolution.handoffState,
             destinationFallbackMessage = destinationResolution.fallbackMessage,
             isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
@@ -336,9 +366,18 @@ class RouteSettingViewModel(
             )
         }
 
-    private fun RouteCandidate.toSelectedRouteUiState(destination: RouteLocationUiState): RouteSelectedRouteUiState {
+    private fun RouteCandidate.toSelectedRouteUiState(
+        destination: RouteLocationUiState,
+        reversePreview: Boolean = false,
+    ): RouteSelectedRouteUiState {
         val aggregateFlags = aggregateSafetyFlags()
         val hasUsableDetailSteps = segments.hasUsableDetailSteps()
+        val previewPoints =
+            if (reversePreview) {
+                previewPolyline.points.reversed()
+            } else {
+                previewPolyline.points
+            }
 
         return RouteSelectedRouteUiState(
             routeOption = routeOption,
@@ -373,7 +412,7 @@ class RouteSettingViewModel(
                         value = preview.toRenderableSegmentLabel(),
                     ),
                 ),
-            previewPoints = previewPolyline.points,
+            previewPoints = previewPoints,
             segmentCount = preview.segmentCount,
             renderableSegmentCount = preview.renderableSegmentCount,
             fallbackSegmentCount = preview.fallbackSegmentCount,
@@ -418,6 +457,21 @@ class RouteSettingViewModel(
         segments.fold(RouteSegmentSafetyFlags()) { flags, segment ->
             flags.merge(segment.safetyFlags)
         }
+
+    private fun RouteCandidate.reversedForWaypointSwap(): RouteCandidate =
+        copy(
+            preview =
+                preview.copy(
+                    polyline = RoutePolyline(points = preview.polyline.points.reversed()),
+                ),
+            segments =
+                segments.asReversed().mapIndexed { index, segment ->
+                    segment.copy(
+                        sequence = index + 1,
+                        polyline = RoutePolyline(points = segment.polyline.points.reversed()),
+                    )
+                },
+        )
 
     private fun RouteCandidate.buildDetailAccessibilityChips(): List<RouteDetailChipUiState> =
         buildList {
@@ -649,6 +703,7 @@ private fun RouteCandidate?.toRoutePreviewMapUiState(
     originCoordinate: GeoCoordinate,
     destinationCoordinate: GeoCoordinate,
     destinationHandoffState: RouteDestinationHandoffState,
+    reversePolyline: Boolean = false,
 ): RoutePreviewMapUiState =
     when {
         destinationHandoffState == RouteDestinationHandoffState.EMPTY ->
@@ -688,7 +743,12 @@ private fun RouteCandidate?.toRoutePreviewMapUiState(
                 routeOption = routeOption,
                 originCoordinate = originCoordinate,
                 destinationCoordinate = destinationCoordinate,
-                polyline = previewPolyline.points,
+                polyline =
+                    if (reversePolyline) {
+                        previewPolyline.points.reversed()
+                    } else {
+                        previewPolyline.points
+                    },
             )
     }
 

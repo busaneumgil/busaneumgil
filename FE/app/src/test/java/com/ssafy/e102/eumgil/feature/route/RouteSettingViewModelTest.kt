@@ -423,6 +423,48 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `waypoint swap action swaps displayed endpoints and preview direction`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val initialState = viewModel.uiState.value
+            val initialOrigin = initialState.origin
+            val initialDestination = initialState.destination
+            val initialPreviewPoints = initialState.routePreviewMap.polyline
+
+            viewModel.onAction(RouteSettingUiAction.WaypointsSwapClicked)
+            advanceUntilIdle()
+
+            val swappedState = viewModel.uiState.value
+
+            assertEquals(initialDestination, swappedState.origin)
+            assertEquals(initialOrigin, swappedState.destination)
+            assertEquals(initialDestination.coordinate, swappedState.routePreviewMap.originCoordinate)
+            assertEquals(initialOrigin.coordinate, swappedState.routePreviewMap.destinationCoordinate)
+            assertEquals(initialPreviewPoints.reversed(), swappedState.routePreviewMap.polyline)
+            assertEquals(swappedState.destination, swappedState.selectedRoute?.destination)
+            assertTrue(swappedState.isStartEnabled)
+
+            viewModel.onAction(RouteSettingUiAction.WaypointsSwapClicked)
+            advanceUntilIdle()
+
+            val restoredState = viewModel.uiState.value
+
+            assertEquals(initialOrigin, restoredState.origin)
+            assertEquals(initialDestination, restoredState.destination)
+            assertEquals(initialPreviewPoints, restoredState.routePreviewMap.polyline)
+        }
+
+    @Test
     fun `route detail action selects target option and emits detail navigation event`() =
         runTest {
             val destinationSelectionRepository =

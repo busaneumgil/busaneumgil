@@ -89,7 +89,7 @@ fun LowVisionMyPageScreen(
             )
             LowVisionMyPageAction(
                 labelRes = R.string.low_vision_my_page_app_info,
-                iconRes = R.drawable.ic_status_safe_info,
+                iconRes = R.drawable.ic_status_help_circle,
                 filled = false,
                 onClick = onAppInfoClick,
             )

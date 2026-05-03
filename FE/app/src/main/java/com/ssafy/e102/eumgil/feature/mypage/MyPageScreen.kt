@@ -47,7 +47,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary200
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
@@ -262,7 +261,7 @@ private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.NOTICE,
                 titleRes = R.string.my_page_menu_notice,
-                iconRes = R.drawable.ic_status_neutral,
+                iconRes = R.drawable.ic_mypage_notice_bell_vector,
                 onClick = onMenuClick,
             )
             MyPageMenuRow(
@@ -274,7 +273,7 @@ private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.APP_HELP,
                 titleRes = R.string.my_page_menu_app_help,
-                iconRes = R.drawable.ic_status_safe_info,
+                iconRes = R.drawable.ic_status_help_circle,
                 onClick = onMenuClick,
             )
         }
@@ -310,21 +309,12 @@ private fun MyPageMenuRow(
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(EumPrimary200),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(id = iconRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
             Text(
                 text = title,
                 modifier = Modifier.weight(1f),

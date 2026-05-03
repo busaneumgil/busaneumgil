@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -30,7 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -60,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
@@ -778,45 +777,30 @@ private fun RouteScreenTopBar(
     title: String,
     onBackClick: () -> Unit,
 ) {
-    val backContentDescription = stringResource(id = R.string.route_setting_back)
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 2.dp,
-        tonalElevation = 1.dp,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = EumSpacing.xSmall, vertical = EumSpacing.xxSmall),
-        ) {
-            IconButton(
-                onClick = onBackClick,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .semantics {
-                            contentDescription = backContentDescription
-                        },
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_action_back),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Text(
-                text = title,
-                modifier = Modifier.align(Alignment.Center),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
+    val policy = routeScreenTopBarPolicy()
+    EumCenteredTopBar(
+        title = title,
+        onBackClick = if (policy.showBackButton) onBackClick else null,
+        backContentDescription =
+            if (policy.showBackButton) {
+                stringResource(id = R.string.route_setting_back)
+            } else {
+                null
+            },
+        titleFontWeight = policy.titleFontWeight,
+    )
 }
+
+internal data class RouteScreenTopBarPolicy(
+    val showBackButton: Boolean,
+    val titleFontWeight: FontWeight,
+)
+
+internal fun routeScreenTopBarPolicy(): RouteScreenTopBarPolicy =
+    RouteScreenTopBarPolicy(
+        showBackButton = true,
+        titleFontWeight = FontWeight.SemiBold,
+    )
 
 @Composable
 private fun RouteWaypointCard(

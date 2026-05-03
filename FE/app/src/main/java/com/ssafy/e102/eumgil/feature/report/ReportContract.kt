@@ -19,6 +19,7 @@ data class ReportUiState(
     val draftSaveState: ReportDraftSaveState = ReportDraftSaveState.Idle,
     val outboxState: ReportOutboxState = ReportOutboxState.NotSaved,
     val submitState: ReportSubmitState = ReportSubmitState.Idle,
+    val submittedAtMillis: Long? = null,
 ) {
     val isDraftSavable: Boolean
         get() = reportType.value != null ||

@@ -102,57 +102,45 @@ fun RouteSettingScreen(
             )
         },
     ) { innerPadding ->
-        BoxWithConstraints(
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
+                    .padding(innerPadding)
+                    .padding(top = RouteSettingScreenVerticalPadding),
+            verticalArrangement = Arrangement.spacedBy(RouteSettingContentGap),
         ) {
-            val layoutPolicy = routeSettingLayoutPolicy()
-            val availableContentHeight =
-                maxHeight - RouteSettingScreenVerticalPadding - RouteSettingScreenVerticalPadding
-            val mapHeight = routeSettingMapHeight(availableContentHeight, layoutPolicy)
-
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(
-                            horizontal = EumSpacing.medium,
-                            vertical = RouteSettingScreenVerticalPadding,
-                        ),
-                verticalArrangement = Arrangement.spacedBy(RouteSettingContentGap),
-            ) {
-                RouteWaypointCard(
-                    origin = uiState.origin,
-                    destination = uiState.destination,
-                    supportingMessage = supportingMessage,
-                )
-                RouteTravelModeTabs(
-                    selectedMode = uiState.selectedTravelMode,
-                    onModeSelected = { mode ->
-                        onAction(RouteSettingUiAction.TravelModeSelected(mode))
-                    },
-                )
-                RouteMapStage(
-                    uiState = uiState,
-                    modifier = Modifier.height(mapHeight),
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                RouteSettingRouteSheet(
-                    uiState = uiState,
-                    buttonLabel = uiState.cta.label,
-                    supportingText = ctaSupportingText,
-                    selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
-                    onOptionClick = { routeOption ->
-                        onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
-                    },
-                    onOptionDetailClick = { routeOption ->
-                        onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
-                    },
-                    onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
-                )
-            }
+            RouteWaypointCard(
+                origin = uiState.origin,
+                destination = uiState.destination,
+                supportingMessage = supportingMessage,
+                onSwapClick = { onAction(RouteSettingUiAction.WaypointsSwapClicked) },
+                modifier = Modifier.padding(horizontal = EumSpacing.medium),
+            )
+            RouteTravelModeTabs(
+                selectedMode = uiState.selectedTravelMode,
+                onModeSelected = { mode ->
+                    onAction(RouteSettingUiAction.TravelModeSelected(mode))
+                },
+                modifier = Modifier.padding(horizontal = EumSpacing.medium),
+            )
+            RouteMapStage(
+                uiState = uiState,
+                modifier = Modifier.weight(1f),
+            )
+            RouteSettingRouteSheet(
+                uiState = uiState,
+                buttonLabel = uiState.cta.label,
+                supportingText = ctaSupportingText,
+                selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
+                onOptionClick = { routeOption ->
+                    onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+                },
+                onOptionDetailClick = { routeOption ->
+                    onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
+                },
+                onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
+            )
         }
     }
 }
@@ -813,8 +801,6 @@ internal data class RouteSettingLayoutPolicy(
     val allowsDefaultVerticalScroll: Boolean,
     val ctaPlacement: RouteSettingCtaPlacement,
     val mapHeightPolicy: RouteSettingMapHeightPolicy,
-    val mapMinHeight: Dp,
-    val mapMaxHeight: Dp,
     val maxVisibleOptionCards: Int,
     val showsOptionSectionSupportingText: Boolean,
     val originLabel: String,
@@ -823,6 +809,21 @@ internal data class RouteSettingLayoutPolicy(
     val optionContainer: RouteSettingOptionContainer,
     val travelModeTabShape: RouteSettingTravelModeTabShape,
     val visibleAccessibilityChipCount: Int,
+    val mapFillsRemainingCenterSpace: Boolean,
+    val bottomSheetEdgeToEdge: Boolean,
+    val sheetContainerColor: RouteSettingSheetContainerColor,
+    val showsRecommendedBadge: Boolean,
+    val startCtaIcon: RouteSettingStartCtaIcon,
+    val startCtaIconTint: RouteSettingCtaIconTint,
+    val bottomSheetFlushToWindowBottom: Boolean,
+    val sheetElevation: RouteSettingSheetElevation,
+    val sheetBorder: RouteSettingSheetBorder,
+    val optionCardContainerColor: RouteSettingOptionCardContainerColor,
+    val walkTabIcon: RouteSettingTravelModeIcon,
+    val transitTabIcon: RouteSettingTravelModeIcon,
+    val travelModeActiveColor: RouteSettingTravelModeActiveColor,
+    val travelModeInactiveColor: RouteSettingTravelModeInactiveColor,
+    val travelModeIconSize: RouteSettingTravelModeIconSize,
 )
 
 internal enum class RouteSettingCtaPlacement {
@@ -830,7 +831,7 @@ internal enum class RouteSettingCtaPlacement {
 }
 
 internal enum class RouteSettingMapHeightPolicy {
-    FlexibleConstraintClamp,
+    FillRemainingCenterSpace,
 }
 
 internal enum class RouteSettingOptionContainer {
@@ -841,13 +842,52 @@ internal enum class RouteSettingTravelModeTabShape {
     SegmentedPill,
 }
 
+internal enum class RouteSettingTravelModeIcon {
+    WalkImage,
+    TransitImage,
+}
+
+internal enum class RouteSettingTravelModeActiveColor {
+    PrimaryBlue,
+}
+
+internal enum class RouteSettingTravelModeInactiveColor {
+    Grey700,
+}
+
+internal enum class RouteSettingTravelModeIconSize {
+    Emphasized,
+}
+
+internal enum class RouteSettingSheetContainerColor {
+    White,
+}
+
+internal enum class RouteSettingStartCtaIcon {
+    NavigationPointer,
+}
+
+internal enum class RouteSettingCtaIconTint {
+    OnPrimary,
+}
+
+internal enum class RouteSettingSheetElevation {
+    None,
+}
+
+internal enum class RouteSettingSheetBorder {
+    None,
+}
+
+internal enum class RouteSettingOptionCardContainerColor {
+    White,
+}
+
 internal fun routeSettingLayoutPolicy(): RouteSettingLayoutPolicy =
     RouteSettingLayoutPolicy(
         allowsDefaultVerticalScroll = false,
         ctaPlacement = RouteSettingCtaPlacement.BottomSheetContent,
-        mapHeightPolicy = RouteSettingMapHeightPolicy.FlexibleConstraintClamp,
-        mapMinHeight = RouteSettingMapMinHeight,
-        mapMaxHeight = RouteSettingMapMaxHeight,
+        mapHeightPolicy = RouteSettingMapHeightPolicy.FillRemainingCenterSpace,
         maxVisibleOptionCards = MAX_VISIBLE_OPTION_CARD_COUNT,
         showsOptionSectionSupportingText = false,
         originLabel = "출발",
@@ -856,23 +896,33 @@ internal fun routeSettingLayoutPolicy(): RouteSettingLayoutPolicy =
         optionContainer = RouteSettingOptionContainer.BottomSheet,
         travelModeTabShape = RouteSettingTravelModeTabShape.SegmentedPill,
         visibleAccessibilityChipCount = MAX_VISIBLE_ROUTE_CHIP_COUNT,
+        mapFillsRemainingCenterSpace = true,
+        bottomSheetEdgeToEdge = true,
+        sheetContainerColor = RouteSettingSheetContainerColor.White,
+        showsRecommendedBadge = false,
+        startCtaIcon = RouteSettingStartCtaIcon.NavigationPointer,
+        startCtaIconTint = RouteSettingCtaIconTint.OnPrimary,
+        bottomSheetFlushToWindowBottom = true,
+        sheetElevation = RouteSettingSheetElevation.None,
+        sheetBorder = RouteSettingSheetBorder.None,
+        optionCardContainerColor = RouteSettingOptionCardContainerColor.White,
+        walkTabIcon = RouteSettingTravelModeIcon.WalkImage,
+        transitTabIcon = RouteSettingTravelModeIcon.TransitImage,
+        travelModeActiveColor = RouteSettingTravelModeActiveColor.PrimaryBlue,
+        travelModeInactiveColor = RouteSettingTravelModeInactiveColor.Grey700,
+        travelModeIconSize = RouteSettingTravelModeIconSize.Emphasized,
     )
-
-internal fun routeSettingMapHeight(
-    availableContentHeight: Dp,
-    policy: RouteSettingLayoutPolicy = routeSettingLayoutPolicy(),
-): Dp =
-    (availableContentHeight - RouteSettingFixedContentHeightBudget)
-        .coerceIn(policy.mapMinHeight, policy.mapMaxHeight)
 
 @Composable
 private fun RouteWaypointCard(
     origin: RouteLocationUiState,
     destination: RouteLocationUiState,
     supportingMessage: String?,
+    onSwapClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
@@ -915,7 +965,7 @@ private fun RouteWaypointCard(
                         markerColor = MaterialTheme.colorScheme.error,
                     )
                 }
-                RouteWaypointSwapButton()
+                RouteWaypointSwapButton(onClick = onSwapClick)
             }
             supportingMessage?.let { message ->
                 Text(
@@ -987,14 +1037,14 @@ private fun RouteWaypointRow(
 }
 
 @Composable
-private fun RouteWaypointSwapButton() {
+private fun RouteWaypointSwapButton(onClick: () -> Unit) {
     val a11yLabel = stringResource(id = R.string.route_setting_waypoint_swap)
 
     Surface(
         modifier =
             Modifier
                 .size(RouteWaypointSwapButtonSize)
-                .clickable(role = Role.Button, onClick = {})
+                .clickable(role = Role.Button, onClick = onClick)
                 .semantics {
                     contentDescription = a11yLabel
                 },
@@ -1017,19 +1067,22 @@ private fun RouteWaypointSwapButton() {
 private fun RouteTravelModeTabs(
     selectedMode: RouteTravelMode,
     onModeSelected: (RouteTravelMode) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
     ) {
         RouteTravelModeTab(
             label = stringResource(id = R.string.route_setting_travel_mode_walk),
+            iconResId = R.drawable.ic_route_mode_walk,
             isSelected = selectedMode == RouteTravelMode.WALK,
             modifier = Modifier.weight(1f),
             onClick = { onModeSelected(RouteTravelMode.WALK) },
         )
         RouteTravelModeTab(
             label = stringResource(id = R.string.route_setting_travel_mode_transit),
+            iconResId = R.drawable.ic_route_mode_transit,
             isSelected = selectedMode == RouteTravelMode.TRANSIT,
             modifier = Modifier.weight(1f),
             onClick = { onModeSelected(RouteTravelMode.TRANSIT) },
@@ -1040,6 +1093,7 @@ private fun RouteTravelModeTabs(
 @Composable
 private fun RouteTravelModeTab(
     label: String,
+    iconResId: Int,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1067,24 +1121,35 @@ private fun RouteTravelModeTab(
                 },
             ),
     ) {
-        Box(
+        Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = RouteTravelModeTabVerticalPadding),
-            contentAlignment = Alignment.Center,
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                painter = painterResource(id = iconResId),
+                contentDescription = null,
+                modifier = Modifier.size(RouteTravelModeTabIconSize),
+                tint = routeTravelModeTabContentColor(isSelected = isSelected),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                color =
-                    if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                color = routeTravelModeTabContentColor(isSelected = isSelected),
             )
         }
     }
 }
+
+@Composable
+private fun routeTravelModeTabContentColor(isSelected: Boolean): Color =
+    if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        RouteTravelModeInactiveContentColor
+    }
 
 @Composable
 private fun RouteMapStage(
@@ -1306,13 +1371,10 @@ private fun RouteSettingRouteSheet(
             RoundedCornerShape(
                 topStart = EumRadius.large,
                 topEnd = EumRadius.large,
-                bottomStart = EumRadius.medium,
-                bottomEnd = EumRadius.medium,
+                bottomStart = 0.dp,
+                bottomEnd = 0.dp,
             ),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
-        shadowElevation = 8.dp,
-        tonalElevation = 1.dp,
+        color = Color.White,
     ) {
         Column(
             modifier =
@@ -1409,7 +1471,7 @@ private fun RouteCompactOptionCard(
 ) {
     val accentColor = optionAccentColor(card.routeOption)
     val titleColor = if (card.isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-    val containerColor = MaterialTheme.colorScheme.surface
+    val containerColor = Color.White
     val borderColor = if (card.isSelected) accentColor.copy(alpha = 0.72f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
     val detailContentDescription =
         stringResource(
@@ -1441,7 +1503,6 @@ private fun RouteCompactOptionCard(
         shape = RoundedCornerShape(EumRadius.large),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),
-        shadowElevation = if (card.isSelected) 2.dp else 1.dp,
     ) {
         Row(
             modifier =
@@ -1479,13 +1540,6 @@ private fun RouteCompactOptionCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        card.highlightLabel?.let { highlightLabel ->
-                            RouteBadgeChip(
-                                label = highlightLabel,
-                                containerColor = accentColor.copy(alpha = 0.12f),
-                                contentColor = accentColor,
-                            )
-                        }
                     }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
@@ -1755,9 +1809,10 @@ private fun RouteSettingCtaContent(
                     },
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_route),
+                painter = painterResource(id = R.drawable.ic_route_start_navigation),
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onPrimary,
             )
             Spacer(modifier = Modifier.width(EumSpacing.xSmall))
             Text(text = buttonLabel)
@@ -2299,17 +2354,16 @@ private const val MAX_VISIBLE_ROUTE_CHIP_COUNT = 2
 private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 1
 private const val DEFAULT_PREVIEW_CENTER_LATITUDE = 35.1796
 private const val DEFAULT_PREVIEW_CENTER_LONGITUDE = 129.0756
+private val RouteTravelModeInactiveContentColor = Color(0xFF374151)
 private val RouteSettingScreenVerticalPadding = 8.dp
 private val RouteSettingContentGap = 6.dp
-private val RouteSettingFixedContentHeightBudget = 354.dp
-private val RouteSettingMapMinHeight = 190.dp
-private val RouteSettingMapMaxHeight = 250.dp
 private val RouteWaypointCardVerticalPadding = 8.dp
 private val RouteWaypointGap = 5.dp
 private val RouteWaypointMarkerSize = 10.dp
 private val RouteWaypointSwapButtonSize = 40.dp
 private val RouteTravelModeTabVerticalPadding = 7.dp
 private val RouteTravelModeTabRadius = 8.dp
+private val RouteTravelModeTabIconSize = 24.dp
 private val RouteMapControlButtonSize = 36.dp
 private val RouteSettingSheetVerticalPadding = 8.dp
 private val RouteSettingSheetGap = 6.dp

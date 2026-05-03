@@ -214,6 +214,8 @@ sealed interface RouteSettingUiAction {
         val routeOption: RouteOption,
     ) : RouteSettingUiAction
 
+    data object WaypointsSwapClicked : RouteSettingUiAction
+
     data object StartNavigationClicked : RouteSettingUiAction
 }
 

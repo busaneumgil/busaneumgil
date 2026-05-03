@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -97,7 +99,7 @@ fun ReportScreen(
                         onAction = onAction,
                     )
                 ReportStep.Complete ->
-                    ReportCompleteStep()
+                    ReportCompleteStep(uiState = uiState)
             }
         }
     }
@@ -556,30 +558,124 @@ private fun ReportDetailDraftActions(
 }
 
 @Composable
-private fun ReportCompleteStep() {
+private fun ReportCompleteStep(uiState: ReportUiState) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        ReportCompleteHero()
+        ReportCompleteSummaryCard(uiState = uiState)
+    }
+}
+
+@Composable
+private fun ReportCompleteHero() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Surface(
+            modifier = Modifier.size(72.dp),
+            shape = RoundedCornerShape(percent = 50),
+            color = MaterialTheme.colorScheme.primaryContainer,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_status_check),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        Text(
+            text = "제보가 완료되었습니다!",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = "소중한 제보 감사합니다.\n검토 후 서비스에 반영하겠습니다.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.36f),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.large),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = "제보가 등록되었습니다",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+            ReportCompleteSummaryRow(
+                label = "일시",
+                value = formatSubmittedAt(uiState.submittedAtMillis),
             )
-            Text(
-                text = "제보는 로컬 outbox에 저장되었습니다. 검토 후 지도에 반영됩니다.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ReportCompleteSummaryRow(
+                label = "유형",
+                value = uiState.reportType.value?.label ?: "-",
+            )
+            ReportCompleteSummaryRow(
+                label = "위치",
+                value =
+                    uiState.location.value?.address?.takeIf { it.isNotBlank() }
+                        ?: uiState.location.addressText.ifBlank { "위치 정보 없음" },
+            )
+            ReportCompleteSummaryRow(
+                label = "설명",
+                value = uiState.description.value.trim().ifBlank { "설명 없음" },
             )
         }
     }
+}
+
+@Composable
+private fun ReportCompleteSummaryRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(56.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+private fun formatSubmittedAt(submittedAtMillis: Long?): String {
+    val millis = submittedAtMillis ?: return "-"
+    val formatter =
+        java.text.SimpleDateFormat(
+            "yyyy.MM.dd (E) HH:mm",
+            java.util.Locale.KOREA,
+        )
+    return formatter.format(java.util.Date(millis))
 }
 
 @Composable

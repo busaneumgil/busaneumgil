@@ -377,6 +377,7 @@ class ReportViewModel(
                                 },
                             outboxState = ReportOutboxState.Saved(outboxId = outbox.outboxId),
                             submitState = ReportSubmitState.Success(reportId = null),
+                            submittedAtMillis = System.currentTimeMillis(),
                         )
                     if (isDraftDeleted) {
                         emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))

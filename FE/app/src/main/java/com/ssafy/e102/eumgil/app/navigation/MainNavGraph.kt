@@ -309,12 +309,25 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue
 
+internal data class TopLevelNavigationPolicy(
+    val launchSingleTop: Boolean,
+    val restoreState: Boolean,
+    val saveState: Boolean,
+)
+
+internal val DefaultTopLevelNavigationPolicy: TopLevelNavigationPolicy =
+    TopLevelNavigationPolicy(
+        launchSingleTop = true,
+        restoreState = false,
+        saveState = false,
+    )
+
 fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
     navigate(destination.route.route) {
-        launchSingleTop = true
-        restoreState = true
+        launchSingleTop = DefaultTopLevelNavigationPolicy.launchSingleTop
+        restoreState = DefaultTopLevelNavigationPolicy.restoreState
         popUpTo(graph.findStartDestination().id) {
-            saveState = true
+            saveState = DefaultTopLevelNavigationPolicy.saveState
         }
     }
 }

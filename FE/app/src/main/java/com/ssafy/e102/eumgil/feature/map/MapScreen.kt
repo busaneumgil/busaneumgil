@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -401,12 +402,6 @@ private fun FacilityDetailBookmarkActionButton(
 
             else -> stringResource(id = R.string.map_facility_detail_bookmark_state_unsaved)
         }
-    val containerColor =
-        if (state.isBookmarked) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLowest
-        }
     val contentColor =
         if (state.isBookmarked) {
             MaterialTheme.colorScheme.primary
@@ -417,7 +412,7 @@ private fun FacilityDetailBookmarkActionButton(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(EumRadius.medium),
-        color = containerColor,
+        color = Color.Transparent,
     ) {
         IconButton(
             onClick = onToggle,

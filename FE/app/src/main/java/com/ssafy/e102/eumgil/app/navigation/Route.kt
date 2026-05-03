@@ -158,6 +158,10 @@ sealed interface MyPageSubRoute : AppRoute {
     data object ReportHistory : MyPageSubRoute {
         override val route: String = "my_page/report_history"
     }
+
+    data object AppInfo : MyPageSubRoute {
+        override val route: String = "my_page/app_info"
+    }
 }
 
 sealed interface NavigationRoute : AppRoute {

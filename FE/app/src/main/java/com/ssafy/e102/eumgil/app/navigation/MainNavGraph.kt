@@ -19,6 +19,7 @@ import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
+import com.ssafy.e102.eumgil.feature.mypage.MyPageAppInfoRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -76,6 +77,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToReportHistory = {
                 navController.navigate(MyPageSubRoute.ReportHistory.route)
+            },
+            onNavigateToAppInfo = {
+                navController.navigate(MyPageSubRoute.AppInfo.route)
             },
         )
     }
@@ -219,6 +223,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToReport = {
                 navController.navigate(ReportRoute.Report.route)
+            },
+        )
+    }
+
+    composable(route = MyPageSubRoute.AppInfo.route) {
+        MyPageAppInfoRoute(
+            onNavigateBack = {
+                val didPopToMyPage =
+                    navController.popBackStack(
+                        route = TopLevelRoute.MyPage.route,
+                        inclusive = false,
+                    )
+                if (!didPopToMyPage) {
+                    navController.navigateToTopLevel(TopLevelDestination.MyPage)
+                }
             },
         )
     }

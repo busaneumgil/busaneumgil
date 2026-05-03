@@ -257,6 +257,17 @@
     <string name="my_page_menu_app_help">앱 정보 및 도움말</string>
     <string name="my_page_logout">로그아웃</string>
     <string name="my_page_preparing_message">준비 중입니다.</string>
+    <string name="my_page_back">뒤로가기</string>
+    <string name="my_page_app_info_title">앱 정보 및 도움말</string>
+    <string name="my_page_app_info_version">버전 %1$s</string>
+    <string name="my_page_app_info_description">부산 지역 이동 약자를 위한 무장애 길찾기 서비스</string>
+    <string name="my_page_app_info_guide">이용 가이드</string>
+    <string name="my_page_app_info_customer_center">고객센터</string>
+    <string name="my_page_app_info_customer_center_number">051-123-4567</string>
+    <string name="my_page_app_info_inquiry">1:1 문의하기</string>
+    <string name="my_page_app_info_privacy_policy">개인정보 처리방침</string>
+    <string name="my_page_app_info_service_terms">서비스 이용약관</string>
+    <string name="my_page_app_info_withdraw">회원탈퇴</string>
     <string name="feature_path_map">feature/map</string>
     <string name="feature_path_saved_route">feature/savedroute</string>
     <string name="feature_path_my_page">feature/mypage</string>

@@ -29,10 +29,14 @@ fun MapBottomSheetSurface(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
+        shape =
+            RoundedCornerShape(
+                topStart = EumRadius.large,
+                topEnd = EumRadius.large,
+            ),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.995f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)),
-        shadowElevation = 16.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)),
+        shadowElevation = 12.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),

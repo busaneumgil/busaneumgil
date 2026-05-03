@@ -19,28 +19,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
@@ -59,7 +52,7 @@ fun FacilityDetailBottomSheetShell(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     detailContent: @Composable ColumnScope.() -> Unit,
-    bookmarkContent: (@Composable ColumnScope.() -> Unit)? = null,
+    headerActionContent: (@Composable () -> Unit)? = null,
     actionContent: @Composable ColumnScope.() -> Unit,
 ) {
     val scrimInteractionSource = remember { MutableInteractionSource() }
@@ -67,8 +60,8 @@ fun FacilityDetailBottomSheetShell(
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
-        val sheetScrollState = rememberScrollState()
-        val sheetMaxHeight = maxHeight * 0.78f
+        val detailScrollState = rememberScrollState()
+        val sheetMaxHeight = maxHeight * 0.9f
 
         AnimatedVisibility(
             visible = state.isVisible,
@@ -96,17 +89,16 @@ fun FacilityDetailBottomSheetShell(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium)
-                    .navigationBarsPadding()
                     .fillMaxWidth(),
         ) {
             MapBottomSheetSurface(
                 modifier =
                     Modifier
+                        .fillMaxWidth()
                         .heightIn(max = sheetMaxHeight)
-                        .verticalScroll(sheetScrollState),
             ) {
                 Column(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                 ) {
                     Row(
@@ -150,38 +142,30 @@ fun FacilityDetailBottomSheetShell(
                             )
                         }
 
-                        TextButton(onClick = onDismiss) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_action_close),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Box(modifier = Modifier.width(EumSpacing.xSmall))
-                            Text(text = stringResource(id = R.string.map_facility_detail_close))
+                        headerActionContent?.let { content ->
+                            content()
                         }
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(1f, fill = false)
+                                .verticalScroll(detailScrollState),
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         content = detailContent,
                     )
 
-                    bookmarkContent?.let { slotContent ->
-                        // 119 reserves a dedicated bookmark slot so 212 can wire toggle/persistence
-                        // without reshaping the bottom-sheet section order.
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                            content = slotContent,
-                        )
-                    }
-
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding(),
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         content = actionContent,
                     )

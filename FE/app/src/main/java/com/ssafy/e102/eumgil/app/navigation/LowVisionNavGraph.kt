@@ -232,7 +232,7 @@ internal fun resolveLowVisionSearchPopUpRoute(selectedTab: LowVisionBottomTab = 
         else -> LowVisionRoute.Search.route
     }
 
-internal fun resolveNavigationCompletionRoute(): String = LowVisionRoute.NavigationComplete.route
+internal fun resolveNavigationCompletionRoute(): String = ArrivalRoute.Entry.route
 
 internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 

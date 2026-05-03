@@ -13,14 +13,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -41,6 +39,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RecentSearch
@@ -113,38 +112,11 @@ private fun SearchTopBar(
     @StringRes titleRes: Int,
     onBackClick: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .heightIn(min = 56.dp)
-                    .padding(horizontal = EumSpacing.xxSmall),
-        ) {
-            IconButton(
-                onClick = onBackClick,
-                modifier = Modifier.align(Alignment.CenterStart),
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_action_back),
-                    contentDescription = stringResource(id = R.string.search_screen_back),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            Text(
-                text = stringResource(id = titleRes),
-                modifier = Modifier.align(Alignment.Center),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
+    EumCenteredTopBar(
+        title = stringResource(id = titleRes),
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(id = R.string.search_screen_back),
+    )
 }
 
 @Composable

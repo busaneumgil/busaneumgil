@@ -35,9 +35,9 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
-    fun `navigation completion returns to low vision completion screen`() {
+    fun `navigation completion moves to arrival screen`() {
         assertEquals(
-            LowVisionRoute.NavigationComplete.route,
+            ArrivalRoute.Entry.route,
             resolveNavigationCompletionRoute(),
         )
     }

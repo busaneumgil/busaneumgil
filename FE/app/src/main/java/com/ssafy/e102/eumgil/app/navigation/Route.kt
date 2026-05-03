@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import android.net.Uri
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -152,16 +153,24 @@ sealed interface SearchRoute : AppRoute {
 sealed interface RouteSettingRoute : AppRoute {
     data object Setting : RouteSettingRoute {
         const val ARG_AUTO_START_NAVIGATION: String = "autoStartNavigation"
-        private const val BASE_ROUTE: String = "route_setting"
 
-        override val route: String = "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}"
+        override val route: String = "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}"
 
         fun createRoute(autoStartNavigation: Boolean = false): String =
             if (autoStartNavigation) {
-                "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION=true"
+                "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION=true"
             } else {
-                BASE_ROUTE
+                ROUTE_SETTING_BASE_ROUTE
             }
+    }
+
+    data object Detail : RouteSettingRoute {
+        const val ARG_ROUTE_OPTION: String = "routeOption"
+
+        override val route: String = "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}"
+
+        fun createRoute(routeOption: RouteOption): String =
+            "$ROUTE_SETTING_BASE_ROUTE/detail/${routeOption.name.navArgEncode()}"
     }
 }
 
@@ -175,6 +184,10 @@ sealed interface MyPageSubRoute : AppRoute {
     data object ReportHistory : MyPageSubRoute {
         override val route: String = "my_page/report_history"
     }
+
+    data object AppInfo : MyPageSubRoute {
+        override val route: String = "my_page/app_info"
+    }
 }
 
 sealed interface NavigationRoute : AppRoute {
@@ -187,3 +200,11 @@ private fun String.navArgEncode(): String =
     URLEncoder
         .encode(this, StandardCharsets.UTF_8.toString())
         .replace("+", "%20")
+
+private const val ROUTE_SETTING_BASE_ROUTE: String = "route_setting"
+
+sealed interface ArrivalRoute : AppRoute {
+    data object Entry : ArrivalRoute {
+        override val route: String = "arrival"
+    }
+}

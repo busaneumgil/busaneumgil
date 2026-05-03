@@ -63,10 +63,11 @@ fun LowVisionNavigationRoute(
     LaunchedEffect(viewModel, onNavigateToComplete, onNavigateToBookmark) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                NavigationUiEvent.NavigateToLowVisionHome -> onNavigateToComplete()
+                NavigationUiEvent.NavigateToArrival -> onNavigateToComplete()
                 NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
                 NavigationUiEvent.NavigateBack,
                 NavigationUiEvent.NavigateToMap,
+                is NavigationUiEvent.NavigateToRouteDetail,
                 is NavigationUiEvent.SpeakBriefing,
                 NavigationUiEvent.StopBriefing,
                 is NavigationUiEvent.SetVoiceGuidanceEnabled -> Unit

@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
@@ -117,21 +118,7 @@ fun SavedRouteScreen(
 
 @Composable
 private fun SavedRouteTopBar() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Text(
-            text = stringResource(id = R.string.saved_route_screen_title),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
+    EumCenteredTopBar(title = stringResource(id = R.string.route_saved_route))
 }
 
 @Composable

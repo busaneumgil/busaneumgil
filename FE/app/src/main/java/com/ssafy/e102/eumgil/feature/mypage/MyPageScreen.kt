@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -58,10 +59,13 @@ fun MyPageScreen(
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            MyPageTopBar()
+        },
     ) { innerPadding ->
         Column(
             modifier =
@@ -71,21 +75,12 @@ fun MyPageScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(
                         start = EumSpacing.medium,
-                        top = 40.dp,
                         end = EumSpacing.medium,
+                        top = EumSpacing.medium,
                         bottom = EumSpacing.large,
                     ),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            Text(
-                text = stringResource(id = R.string.my_page_screen_title),
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-            )
-
             ProfileCard(
                 uiState = uiState,
                 onUserTypeChangeClick = {
@@ -127,6 +122,33 @@ fun MyPageScreen(
                     },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun MyPageTopBar() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shadowElevation = 2.dp,
+        tonalElevation = 2.dp,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = EumSpacing.xxSmall),
+        ) {
+            Text(
+                text = stringResource(id = R.string.my_page_screen_title),
+                modifier = Modifier.align(Alignment.Center),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

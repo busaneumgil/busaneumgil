@@ -60,19 +60,21 @@ class GyeongsangProcessor:
         ckpt_dir = self.output_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        # 체크포인트 파일 2종
-        self.ckpt_keys_file = ckpt_dir / "gyeongsang_done.txt"        # key 집합 (빠른 중복 검사)
+        # 체크포인트 파일 3종
+        self.ckpt_keys_file  = ckpt_dir / "gyeongsang_done.txt"         # 발화 key 집합 (중복 검사)
         self.ckpt_records_file = ckpt_dir / "gyeongsang_records.jsonl"  # record 전체 (재시작 복원)
+        self.ckpt_stems_file = ckpt_dir / "gyeongsang_done_stems.txt"   # 완료 파일명 집합 (빠른 스킵)
 
         # 이전 결과 로드
-        self.done_keys: set = self._load_done_keys()
+        self.done_keys: set  = self._load_done_keys()
+        self.done_stems: set = self._load_done_stems()   # 파일 단위 완료 목록
         self.records: List[Dict] = self._load_records()
         self.skipped: List[Dict] = []
 
         if self.records:
             logger.info(
                 f"체크포인트 복원: {len(self.records)}건 이전 결과 로드 "
-                f"(done_keys={len(self.done_keys)})"
+                f"(완료 파일 {len(self.done_stems)}개 / 발화 key {len(self.done_keys)}개)"
             )
 
         self._interrupted = False
@@ -84,6 +86,11 @@ class GyeongsangProcessor:
     def _load_done_keys(self) -> set:
         if self.ckpt_keys_file.exists():
             return set(self.ckpt_keys_file.read_text(encoding="utf-8").splitlines())
+        return set()
+
+    def _load_done_stems(self) -> set:
+        if self.ckpt_stems_file.exists():
+            return set(self.ckpt_stems_file.read_text(encoding="utf-8").splitlines())
         return set()
 
     def _load_records(self) -> List[Dict]:
@@ -106,12 +113,18 @@ class GyeongsangProcessor:
     # ------------------------------------------------------------------ #
 
     def _save_record(self, rec: Dict):
-        """처리된 record를 두 체크포인트 파일에 즉시 기록."""
+        """처리된 record를 체크포인트 파일에 즉시 기록."""
         with open(self.ckpt_keys_file, "a", encoding="utf-8") as f:
             f.write(rec["key"] + "\n")
         with open(self.ckpt_records_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         self.done_keys.add(rec["key"])
+
+    def _mark_stem_done(self, stem: str):
+        """원본 파일 하나를 완전히 처리했을 때 파일명을 기록 → 재시작 시 오디오 읽기 전 스킵."""
+        with open(self.ckpt_stems_file, "a", encoding="utf-8") as f:
+            f.write(stem + "\n")
+        self.done_stems.add(stem)
 
     # ------------------------------------------------------------------ #
     #  hours_done 계산 (재시작 시 이전 진행량 복원)                          #
@@ -261,6 +274,10 @@ class GyeongsangProcessor:
 
                     stem = Path(jname.lstrip("/")).stem
 
+                    # ★ 파일 단위 스킵: 이전 실행에서 완전히 끝난 파일은 오디오 읽기 전에 건너뜀
+                    if stem in self.done_stems:
+                        continue
+
                     if stem not in audio_idx:
                         self.skipped.append({"key": stem, "reason": "no_audio_in_zip"})
                         continue
@@ -281,6 +298,9 @@ class GyeongsangProcessor:
                                 self.records.append(rec)
                                 self._save_record(rec)
                                 hours_done[dtype] = hours_done.get(dtype, 0.0) + rec["duration"] / 3600
+
+                        # ★ 파일의 모든 발화 처리 완료 → 파일명 기록
+                        self._mark_stem_done(stem)
 
                         pbar.set_postfix(
                             {

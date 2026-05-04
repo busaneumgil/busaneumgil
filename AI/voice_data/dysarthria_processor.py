@@ -235,10 +235,12 @@ class DysarthriaProcessor:
         ckpt_dir = self.output_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        self.ckpt_keys_file = ckpt_dir / "dysarthria_done.txt"
+        self.ckpt_keys_file    = ckpt_dir / "dysarthria_done.txt"
         self.ckpt_records_file = ckpt_dir / "dysarthria_records.jsonl"
+        self.ckpt_stems_file   = ckpt_dir / "dysarthria_done_stems.txt"
 
-        self.done_keys: set = self._load_done_keys()
+        self.done_keys: set  = self._load_done_keys()
+        self.done_stems: set = self._load_done_stems()
         self.records: List[Dict] = self._load_records()
         self.skipped: List[Dict] = []
         self._interrupted = False
@@ -246,7 +248,7 @@ class DysarthriaProcessor:
         if self.records:
             logger.info(
                 f"체크포인트 복원: {len(self.records)}건 이전 결과 로드 "
-                f"(done_keys={len(self.done_keys)})"
+                f"(완료 파일 {len(self.done_stems)}개 / 발화 key {len(self.done_keys)}개)"
             )
 
     # ------------------------------------------------------------------ #
@@ -256,6 +258,11 @@ class DysarthriaProcessor:
     def _load_done_keys(self) -> set:
         if self.ckpt_keys_file.exists():
             return set(self.ckpt_keys_file.read_text(encoding="utf-8").splitlines())
+        return set()
+
+    def _load_done_stems(self) -> set:
+        if self.ckpt_stems_file.exists():
+            return set(self.ckpt_stems_file.read_text(encoding="utf-8").splitlines())
         return set()
 
     def _load_records(self) -> List[Dict]:
@@ -278,6 +285,12 @@ class DysarthriaProcessor:
         with open(self.ckpt_records_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         self.done_keys.add(rec["key"])
+
+    def _mark_stem_done(self, stem: str):
+        """원본 파일 하나를 완전히 처리했을 때 파일명 기록 → 재시작 시 오디오 읽기 전 스킵."""
+        with open(self.ckpt_stems_file, "a", encoding="utf-8") as f:
+            f.write(stem + "\n")
+        self.done_stems.add(stem)
 
     def _calc_hours_done(self) -> Dict[str, float]:
         hours: Dict[str, float] = {"neuro": 0.0, "speech": 0.0, "larynx": 0.0}
@@ -372,6 +385,10 @@ class DysarthriaProcessor:
                 if limits and hours_done.get(subdir_name, 0.0) >= limits.get(subdir_name, float("inf")):
                     break
 
+                # ★ 파일 단위 스킵
+                if json_path.stem in self.done_stems:
+                    continue
+
                 try:
                     with open(json_path, encoding="utf-8-sig") as f:
                         meta = json.load(f)
@@ -401,6 +418,9 @@ class DysarthriaProcessor:
                             hours_done[subdir_name] = (
                                 hours_done.get(subdir_name, 0.0) + rec["duration"] / 3600
                             )
+
+                    # ★ 파일 완료 표시
+                    self._mark_stem_done(json_path.stem)
 
                     pbar.set_postfix({"done": len(self.records), f"{subdir_name}h": f"{hours_done.get(subdir_name,0):.2f}"})
 
@@ -532,6 +552,11 @@ class DysarthriaProcessor:
                         break
 
                     stem = Path(jname.lstrip("/")).stem
+
+                    # ★ 파일 단위 스킵
+                    if stem in self.done_stems:
+                        continue
+
                     if stem not in audio_idx:
                         self.skipped.append({"key": stem, "reason": "no_audio_in_zip"})
                         continue
@@ -557,6 +582,9 @@ class DysarthriaProcessor:
                                 hours_done[subdir_name] = (
                                     hours_done.get(subdir_name, 0.0) + rec["duration"] / 3600
                                 )
+
+                        # ★ 파일 완료 표시
+                        self._mark_stem_done(stem)
 
                         pbar.set_postfix({"done": len(self.records)})
 

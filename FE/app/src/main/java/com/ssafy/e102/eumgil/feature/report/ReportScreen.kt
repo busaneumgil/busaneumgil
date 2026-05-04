@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,13 +29,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -45,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
@@ -59,6 +59,7 @@ fun ReportScreen(
         topBar = {
             ReportTopBar(
                 title = reportStepTitle(uiState.currentStep),
+                showBackButton = reportTopBarShowsBackButton(uiState.currentStep),
                 onBackClick = { onAction(ReportUiAction.BackClicked) },
             )
         },
@@ -108,34 +109,27 @@ fun ReportScreen(
 @Composable
 private fun ReportTopBar(
     title: String,
+    showBackButton: Boolean,
     onBackClick: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xxSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            TextButton(onClick = onBackClick) {
-                Text(text = "뒤로")
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
+    EumCenteredTopBar(
+        title = title,
+        onBackClick = if (showBackButton) onBackClick else null,
+        backContentDescription =
+            if (showBackButton) {
+                stringResource(id = R.string.action_go_back_previous_step)
+            } else {
+                null
+            },
+        titleFontWeight = FontWeight.SemiBold,
+    )
 }
+
+internal fun reportTopBarShowsBackButton(step: ReportStep): Boolean =
+    when (step) {
+        ReportStep.LocationConfirm, ReportStep.DetailInput -> true
+        ReportStep.TypeSelection, ReportStep.Complete -> false
+    }
 
 @Composable
 private fun ReportBottomBar(
@@ -956,7 +950,7 @@ private fun ReportDescriptionSection(
 
 private fun reportStepTitle(step: ReportStep): String =
     when (step) {
-        ReportStep.TypeSelection -> "장애물 유형 선택"
+        ReportStep.TypeSelection -> "제보"
         ReportStep.LocationConfirm -> "위치 확인"
         ReportStep.DetailInput -> "상세 정보 입력"
         ReportStep.Complete -> "제보 완료"
@@ -1033,4 +1027,3 @@ private fun reportDescriptionErrorText(error: ReportDescriptionError?): String? 
         ReportDescriptionError.TooLong -> "설명은 ${ReportFormLimits.DESCRIPTION_MAX_LENGTH}자까지 입력할 수 있습니다."
         null -> null
     }
-

@@ -9,6 +9,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ssafy.e102.global.response.ErrorResponse;
 
@@ -51,6 +52,13 @@ public class GlobalExceptionHandler {
 	})
 	public ResponseEntity<ErrorResponse> handleInvalidRequestException(Exception exception) {
 		return invalidInput(CommonErrorCode.INVALID_INPUT.getMessage());
+	}
+
+	@ExceptionHandler(NoResourceFoundException.class)
+	public ResponseEntity<ErrorResponse> handleNoResourceFoundException(NoResourceFoundException exception) {
+		return ResponseEntity
+			.status(CommonErrorCode.NOT_FOUND.getHttpStatus())
+			.body(ErrorResponse.from(CommonErrorCode.NOT_FOUND));
 	}
 
 	@ExceptionHandler(Exception.class)

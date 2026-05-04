@@ -594,6 +594,13 @@ private fun SavedRouteBookmarkListItem(
     isActionEnabled: Boolean,
     onPrimaryActionClick: () -> Unit,
 ) {
+    val accessibilityDescription =
+        stringResource(
+            id = R.string.saved_route_route_a11y_description,
+            routeBookmark.routeName,
+            routeBookmark.startLabel,
+            routeBookmark.endLabel,
+        )
     val borderColor =
         if (isPendingRemoval) {
             MaterialTheme.colorScheme.error.copy(alpha = 0.40f)
@@ -623,7 +630,12 @@ private fun SavedRouteBookmarkListItem(
         ) {
             SavedRoutePathDecoration()
             Column(
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .semantics {
+                            contentDescription = accessibilityDescription
+                        },
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
             ) {
                 Text(

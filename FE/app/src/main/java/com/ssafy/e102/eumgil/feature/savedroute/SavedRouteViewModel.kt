@@ -376,14 +376,14 @@ class SavedRouteViewModel(
     companion object {
         private const val BOOKMARK_REMOVE_SUCCESS_MESSAGE = "선택한 북마크를 삭제했습니다."
         private const val BOOKMARK_REMOVE_FAILURE_MESSAGE = "일부 북마크를 삭제하지 못했습니다. 다시 시도해 주세요."
-        private const val PLACE_BOOKMARK_LOAD_FAILURE_MESSAGE = "저장한 장소를 불러오지 못했습니다."
-        private const val ROUTE_BOOKMARK_LOAD_FAILURE_MESSAGE = "저장한 경로를 불러오지 못했습니다."
-        private const val PLACE_BOOKMARK_REMOVE_SUCCESS_MESSAGE = "저장한 장소를 삭제했습니다."
-        private const val PLACE_BOOKMARK_REMOVE_FAILURE_MESSAGE = "저장한 장소를 삭제하지 못했습니다. 다시 시도해 주세요."
-        private const val ROUTE_BOOKMARK_REMOVE_SUCCESS_MESSAGE = "저장한 경로를 삭제했습니다."
-        private const val ROUTE_BOOKMARK_REMOVE_FAILURE_MESSAGE = "저장한 경로를 삭제하지 못했습니다. 다시 시도해 주세요."
-        private const val INVALID_PLACE_COORDINATE_MESSAGE = "저장한 장소의 좌표가 올바르지 않습니다."
-        private const val INVALID_ROUTE_COORDINATE_MESSAGE = "저장한 경로의 도착지 좌표가 올바르지 않습니다."
+        private const val PLACE_BOOKMARK_LOAD_FAILURE_MESSAGE = "북마크한 장소를 불러오지 못했습니다."
+        private const val ROUTE_BOOKMARK_LOAD_FAILURE_MESSAGE = "북마크한 경로를 불러오지 못했습니다."
+        private const val PLACE_BOOKMARK_REMOVE_SUCCESS_MESSAGE = "북마크한 장소를 삭제했습니다."
+        private const val PLACE_BOOKMARK_REMOVE_FAILURE_MESSAGE = "북마크한 장소를 삭제하지 못했습니다. 다시 시도해 주세요."
+        private const val ROUTE_BOOKMARK_REMOVE_SUCCESS_MESSAGE = "북마크한 경로를 삭제했습니다."
+        private const val ROUTE_BOOKMARK_REMOVE_FAILURE_MESSAGE = "북마크한 경로를 삭제하지 못했습니다. 다시 시도해 주세요."
+        private const val INVALID_PLACE_COORDINATE_MESSAGE = "북마크한 장소의 좌표가 올바르지 않습니다."
+        private const val INVALID_ROUTE_COORDINATE_MESSAGE = "북마크한 경로의 도착지 좌표가 올바르지 않습니다."
 
         fun provideFactory(
             bookmarkRepository: BookmarkRepository,

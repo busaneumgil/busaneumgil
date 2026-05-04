@@ -46,6 +46,24 @@ private val LowVisionNavigationCoral = Color(0xFFFF8B78)
 private val LowVisionNavigationInactive = Color(0xFFE7E7E7)
 private val LowVisionNavigationDivider = Color(0xFF36363A)
 
+internal object LowVisionNavigationLayoutDefaults {
+    val contentTopPadding = 56.dp
+    val contentBottomPadding = 18.dp
+    val contentGap = 24.dp
+    val metricHeaderHeight = 168.dp
+    val metricLabelFontSize = 28.sp
+    val metricLabelLineHeight = 34.sp
+    val metricNumberFontSize = 76.sp
+    val metricNumberLineHeight = 84.sp
+    val metricUnitFontSize = 34.sp
+    val metricUnitLineHeight = 40.sp
+    val currentLocationIconSize = 74.dp
+    val currentLocationIconTextGap = 10.dp
+    val currentLocationVerticalPadding = 12.dp
+    val currentLocationLabelFontSize = 44.sp
+    val currentLocationLabelLineHeight = 50.sp
+}
+
 internal data class LowVisionNavigationMetricSection(
     val label: String,
     val metricIndex: Int,
@@ -60,18 +78,18 @@ internal data class LowVisionNavigationActionCard(
 
 internal fun lowVisionNavigationMetricSections(): List<LowVisionNavigationMetricSection> =
     listOf(
-        LowVisionNavigationMetricSection(label = "남은 거리", metricIndex = 0),
-        LowVisionNavigationMetricSection(label = "남은 시간", metricIndex = 1),
+        LowVisionNavigationMetricSection(label = "\uB0A8\uC740 \uAC70\uB9AC", metricIndex = 0),
+        LowVisionNavigationMetricSection(label = "\uB0A8\uC740 \uC2DC\uAC04", metricIndex = 1),
     )
 
 internal fun lowVisionNavigationActionCards(): List<LowVisionNavigationActionCard> =
     listOf(
         LowVisionNavigationActionCard(
-            label = "현재 위치",
+            label = "\uD604\uC7AC \uC704\uCE58",
             iconRes = R.drawable.ic_voice_location_pin,
         ),
         LowVisionNavigationActionCard(
-            label = "안내 종료",
+            label = "\uC548\uB0B4 \uC885\uB8CC",
             iconRes = R.drawable.ic_action_close,
         ),
     )
@@ -83,6 +101,74 @@ internal fun lowVisionNavigationBottomTabs(): List<LowVisionBottomTab> =
         LowVisionBottomTab.CATEGORY,
         LowVisionBottomTab.MY_PAGE,
     )
+
+internal fun lowVisionNavigationDisplayMetric(
+    section: LowVisionNavigationMetricSection,
+    rawValue: String,
+): String {
+    val trimmedValue = rawValue.trim()
+    if (trimmedValue.isBlank() || trimmedValue == "-") return "-"
+
+    return when (section.metricIndex) {
+        0 -> trimmedValue.asDistanceLabel()
+        1 -> trimmedValue.asMinuteLabel()
+        else -> trimmedValue
+    }
+}
+
+private data class LowVisionMetricValueParts(
+    val number: String,
+    val unit: String,
+)
+
+private val metricNumberRegex = Regex("""\d+(?:\.\d+)?""")
+
+private fun String.asDistanceLabel(): String {
+    if (endsWith("km", ignoreCase = true)) {
+        return metricNumberRegex.find(this)?.value?.let { number -> "${number}km" } ?: this
+    }
+
+    val meters = metricNumberRegex.find(this)?.value?.toDoubleOrNull() ?: return this
+    return if (meters >= 1000.0) {
+        "${(meters / 1000.0).toKilometerText()}km"
+    } else {
+        "${meters.toInt()}m"
+    }
+}
+
+private fun String.asMinuteLabel(): String {
+    if (endsWith("\uBD84")) return this
+
+    val minutes = metricNumberRegex.find(this)?.value?.toDoubleOrNull() ?: return this
+    return "${minutes.toInt()}\uBD84"
+}
+
+private fun Double.toKilometerText(): String {
+    val tenths = kotlin.math.round(this * 10).toInt()
+    val whole = tenths / 10
+    val fraction = tenths % 10
+    return if (fraction == 0) {
+        whole.toString()
+    } else {
+        "$whole.$fraction"
+    }
+}
+
+private fun lowVisionNavigationMetricValueParts(value: String): LowVisionMetricValueParts {
+    val unit =
+        when {
+            value.endsWith("km", ignoreCase = true) -> "km"
+            value.endsWith("m", ignoreCase = true) -> "m"
+            value.endsWith("\uBD84") -> "\uBD84"
+            else -> ""
+        }
+
+    return if (unit.isBlank()) {
+        LowVisionMetricValueParts(number = value, unit = "")
+    } else {
+        LowVisionMetricValueParts(number = value.removeSuffix(unit), unit = unit)
+    }
+}
 
 @Composable
 fun LowVisionNavigationScreen(
@@ -103,15 +189,18 @@ fun LowVisionNavigationScreen(
                     .weight(1f)
                     .statusBarsPadding()
                     .padding(horizontal = 24.dp)
-                    .padding(top = 70.dp, bottom = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(26.dp),
+                    .padding(
+                        top = LowVisionNavigationLayoutDefaults.contentTopPadding,
+                        bottom = LowVisionNavigationLayoutDefaults.contentBottomPadding,
+                    ),
+            verticalArrangement = Arrangement.spacedBy(LowVisionNavigationLayoutDefaults.contentGap),
         ) {
             LowVisionNavigationMetricHeader(
                 uiState = uiState,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(184.dp),
+                        .height(LowVisionNavigationLayoutDefaults.metricHeaderHeight),
             )
 
             LowVisionCurrentLocationCard(
@@ -150,7 +239,8 @@ private fun LowVisionNavigationMetricHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         lowVisionNavigationMetricSections().forEachIndexed { index, section ->
-            val value = uiState.stepCard.metrics.getOrNull(section.metricIndex)?.value.orEmpty().ifBlank { "-" }
+            val rawValue = uiState.stepCard.metrics.getOrNull(section.metricIndex)?.value.orEmpty()
+            val value = lowVisionNavigationDisplayMetric(section, rawValue)
             LowVisionNavigationMetricItem(
                 section = section,
                 value = value,
@@ -191,24 +281,55 @@ private fun LowVisionNavigationMetricItem(
         Text(
             text = section.label,
             color = Color.White,
-            fontSize = 28.sp,
-            lineHeight = 34.sp,
+            fontSize = LowVisionNavigationLayoutDefaults.metricLabelFontSize,
+            lineHeight = LowVisionNavigationLayoutDefaults.metricLabelLineHeight,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 0.sp,
             textAlign = TextAlign.Center,
             maxLines = 1,
         )
+        LowVisionNavigationMetricValue(
+            value = value,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun LowVisionNavigationMetricValue(
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    val parts = lowVisionNavigationMetricValueParts(value)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.Center,
+    ) {
         Text(
-            text = value,
+            text = parts.number,
             color = LowVisionNavigationYellow,
-            fontSize = 88.sp,
-            lineHeight = 96.sp,
+            fontSize = LowVisionNavigationLayoutDefaults.metricNumberFontSize,
+            lineHeight = LowVisionNavigationLayoutDefaults.metricNumberLineHeight,
             fontWeight = FontWeight.Black,
             letterSpacing = 0.sp,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            modifier = Modifier.padding(top = 12.dp),
         )
+        if (parts.unit.isNotBlank()) {
+            Text(
+                text = parts.unit,
+                color = LowVisionNavigationYellow,
+                fontSize = LowVisionNavigationLayoutDefaults.metricUnitFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.metricUnitLineHeight,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 3.dp, bottom = 8.dp),
+            )
+        }
     }
 }
 
@@ -229,7 +350,10 @@ private fun LowVisionCurrentLocationCard(
                     .clearAndSetSemantics {
                         contentDescription = card.label
                     }
-                    .padding(horizontal = 24.dp, vertical = 30.dp),
+                    .padding(
+                        horizontal = 24.dp,
+                        vertical = LowVisionNavigationLayoutDefaults.currentLocationVerticalPadding,
+                    ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -237,14 +361,14 @@ private fun LowVisionCurrentLocationCard(
                 painter = painterResource(id = card.iconRes),
                 contentDescription = null,
                 tint = Color.Black,
-                modifier = Modifier.size(96.dp),
+                modifier = Modifier.size(LowVisionNavigationLayoutDefaults.currentLocationIconSize),
             )
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(LowVisionNavigationLayoutDefaults.currentLocationIconTextGap))
             Text(
                 text = card.label,
                 color = Color.Black,
-                fontSize = 50.sp,
-                lineHeight = 58.sp,
+                fontSize = LowVisionNavigationLayoutDefaults.currentLocationLabelFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.currentLocationLabelLineHeight,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center,
@@ -269,7 +393,7 @@ private fun LowVisionExitNavigationCard(
                 .clip(RoundedCornerShape(18.dp))
                 .lowVisionButtonSemantics(
                     label = card.label,
-                    actionHint = "두 번 탭하면 길 안내를 종료합니다.",
+                    actionHint = "\uB450 \uBC88 \uD0ED\uD558\uBA74 \uAE38 \uC548\uB0B4\uB97C \uC885\uB8CC\uD569\uB2C8\uB2E4.",
                 )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(18.dp),

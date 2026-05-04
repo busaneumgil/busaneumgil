@@ -16,20 +16,19 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.ssafy.e102.domain.auth.client.CompositeSocialTokenVerifier;
-import com.ssafy.e102.domain.auth.client.SocialUserInfo;
+import com.ssafy.e102.domain.auth.social.verifier.CompositeSocialTokenVerifier;
+import com.ssafy.e102.domain.auth.dto.SocialUserInfo;
 import com.ssafy.e102.domain.auth.dto.request.SocialLoginRequest;
 import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
-import com.ssafy.e102.domain.auth.token.RefreshTokenStore;
-import com.ssafy.e102.domain.auth.token.SignupTokenData;
-import com.ssafy.e102.domain.auth.token.SignupTokenStore;
+import com.ssafy.e102.domain.auth.token.AuthTokenStore;
+import com.ssafy.e102.domain.auth.token.SignupTokenPayload;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
-import com.ssafy.e102.global.security.JwtProperties;
-import com.ssafy.e102.global.security.JwtTokenProvider;
+import com.ssafy.e102.global.security.jwt.JwtProperties;
+import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
 class AuthServiceSocialLoginTest {
 
@@ -46,10 +45,7 @@ class AuthServiceSocialLoginTest {
 	private JwtTokenProvider jwtTokenProvider;
 
 	@Mock
-	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private SignupTokenStore signupTokenStore;
+	private AuthTokenStore authTokenStore;
 
 	@Mock
 	private AuthSessionService authSessionService;
@@ -69,8 +65,7 @@ class AuthServiceSocialLoginTest {
 			socialTokenVerifier,
 			userRepository,
 			jwtTokenProvider,
-			refreshTokenStore,
-			signupTokenStore,
+			authTokenStore,
 			jwtProperties,
 			authSessionService);
 	}
@@ -102,10 +97,10 @@ class AuthServiceSocialLoginTest {
 		assertThat(response.userId()).isEqualTo(userId);
 		assertThat(response.selectedPrimaryUserType()).isEqualTo(PrimaryUserType.MOBILITY_IMPAIRED);
 		assertThat(response.selectedMobilitySubtype()).isEqualTo(MobilitySubtype.MANUAL_WHEELCHAIR);
-		verify(refreshTokenStore).save("refresh-token", userId, REFRESH_TOKEN_TTL);
-		verify(signupTokenStore, never()).save(
+		verify(authTokenStore).saveRefreshToken("refresh-token", userId, REFRESH_TOKEN_TTL);
+		verify(authTokenStore, never()).saveSignupToken(
 			"signup-token",
-			new SignupTokenData(SocialProvider.KAKAO, "kakao-user-id"),
+			new SignupTokenPayload(SocialProvider.KAKAO, "kakao-user-id"),
 			SIGNUP_TOKEN_TTL);
 	}
 
@@ -129,9 +124,9 @@ class AuthServiceSocialLoginTest {
 		assertThat(response.userId()).isNull();
 		assertThat(response.selectedPrimaryUserType()).isNull();
 		assertThat(response.selectedMobilitySubtype()).isNull();
-		verify(signupTokenStore).save(
+		verify(authTokenStore).saveSignupToken(
 			"signup-token",
-			new SignupTokenData(SocialProvider.NAVER, "naver-user-id"),
+			new SignupTokenPayload(SocialProvider.NAVER, "naver-user-id"),
 			SIGNUP_TOKEN_TTL);
 		verify(userRepository, never()).save(org.mockito.ArgumentMatchers.any());
 	}

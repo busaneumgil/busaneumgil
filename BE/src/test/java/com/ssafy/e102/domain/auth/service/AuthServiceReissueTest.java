@@ -15,16 +15,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.ssafy.e102.domain.auth.client.CompositeSocialTokenVerifier;
+import com.ssafy.e102.domain.auth.social.verifier.CompositeSocialTokenVerifier;
 import com.ssafy.e102.domain.auth.dto.request.ReissueRequest;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.exception.AuthErrorCode;
 import com.ssafy.e102.domain.auth.exception.AuthException;
-import com.ssafy.e102.domain.auth.token.RefreshTokenStore;
-import com.ssafy.e102.domain.auth.token.SignupTokenStore;
+import com.ssafy.e102.domain.auth.token.AuthTokenStore;
 import com.ssafy.e102.domain.user.repository.UserRepository;
-import com.ssafy.e102.global.security.JwtProperties;
-import com.ssafy.e102.global.security.JwtTokenProvider;
+import com.ssafy.e102.global.security.jwt.JwtProperties;
+import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
 class AuthServiceReissueTest {
 
@@ -40,10 +39,7 @@ class AuthServiceReissueTest {
 	private JwtTokenProvider jwtTokenProvider;
 
 	@Mock
-	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private SignupTokenStore signupTokenStore;
+	private AuthTokenStore authTokenStore;
 
 	@Mock
 	private AuthSessionService authSessionService;
@@ -63,8 +59,7 @@ class AuthServiceReissueTest {
 			socialTokenVerifier,
 			userRepository,
 			jwtTokenProvider,
-			refreshTokenStore,
-			signupTokenStore,
+			authTokenStore,
 			jwtProperties,
 			authSessionService);
 	}
@@ -74,7 +69,7 @@ class AuthServiceReissueTest {
 	void reissue() {
 		UUID userId = UUID.randomUUID();
 		when(jwtTokenProvider.getRefreshTokenSubject("old-refresh-token")).thenReturn(userId);
-		when(refreshTokenStore.findUserId("old-refresh-token")).thenReturn(Optional.of(userId));
+		when(authTokenStore.findRefreshTokenUserId("old-refresh-token")).thenReturn(Optional.of(userId));
 		when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
 		when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("new-refresh-token");
 
@@ -82,7 +77,7 @@ class AuthServiceReissueTest {
 
 		assertThat(response.accessToken()).isEqualTo("new-access-token");
 		assertThat(response.refreshToken()).isEqualTo("new-refresh-token");
-		verify(refreshTokenStore).rotate("old-refresh-token", "new-refresh-token", userId, REFRESH_TOKEN_TTL);
+		verify(authTokenStore).rotateRefreshToken("old-refresh-token", "new-refresh-token", userId, REFRESH_TOKEN_TTL);
 	}
 
 	@Test
@@ -90,7 +85,7 @@ class AuthServiceReissueTest {
 	void rejectMissingRefreshTokenInStore() {
 		UUID userId = UUID.randomUUID();
 		when(jwtTokenProvider.getRefreshTokenSubject("refresh-token")).thenReturn(userId);
-		when(refreshTokenStore.findUserId("refresh-token")).thenReturn(Optional.empty());
+		when(authTokenStore.findRefreshTokenUserId("refresh-token")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> authService.reissue(new ReissueRequest("refresh-token")))
 			.isInstanceOf(AuthException.class)
@@ -102,7 +97,7 @@ class AuthServiceReissueTest {
 	@DisplayName("토큰 subject와 저장소 사용자 ID가 다르면 refresh token을 거부한다")
 	void rejectRefreshTokenSubjectMismatch() {
 		when(jwtTokenProvider.getRefreshTokenSubject("refresh-token")).thenReturn(UUID.randomUUID());
-		when(refreshTokenStore.findUserId("refresh-token")).thenReturn(Optional.of(UUID.randomUUID()));
+		when(authTokenStore.findRefreshTokenUserId("refresh-token")).thenReturn(Optional.of(UUID.randomUUID()));
 
 		assertThatThrownBy(() -> authService.reissue(new ReissueRequest("refresh-token")))
 			.isInstanceOf(AuthException.class)

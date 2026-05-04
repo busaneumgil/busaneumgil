@@ -15,17 +15,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.ssafy.e102.domain.auth.token.AccessTokenBlacklistStore;
-import com.ssafy.e102.domain.auth.token.RefreshTokenStore;
-import com.ssafy.e102.global.security.JwtTokenProvider;
+import com.ssafy.e102.domain.auth.token.AuthTokenStore;
+import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
 class AuthSessionServiceTest {
 
 	@Mock
-	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private AccessTokenBlacklistStore accessTokenBlacklistStore;
+	private AuthTokenStore authTokenStore;
 
 	@Mock
 	private JwtTokenProvider jwtTokenProvider;
@@ -35,7 +31,7 @@ class AuthSessionServiceTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		authSessionService = new AuthSessionService(refreshTokenStore, accessTokenBlacklistStore, jwtTokenProvider);
+		authSessionService = new AuthSessionService(authTokenStore, jwtTokenProvider);
 	}
 
 	@Test
@@ -47,8 +43,8 @@ class AuthSessionServiceTest {
 
 		authSessionService.invalidateUserSession(userId, "access-token");
 
-		verify(refreshTokenStore).deleteByUserId(userId);
-		verify(accessTokenBlacklistStore).save("access-token", remainingTtl);
+		verify(authTokenStore).deleteRefreshTokensByUserId(userId);
+		verify(authTokenStore).saveAccessTokenBlacklist("access-token", remainingTtl);
 	}
 
 	@Test
@@ -59,7 +55,7 @@ class AuthSessionServiceTest {
 
 		authSessionService.invalidateUserSession(userId, "access-token");
 
-		verify(refreshTokenStore).deleteByUserId(userId);
-		verify(accessTokenBlacklistStore, never()).save(any(), any());
+		verify(authTokenStore).deleteRefreshTokensByUserId(userId);
+		verify(authTokenStore, never()).saveAccessTokenBlacklist(any(), any());
 	}
 }

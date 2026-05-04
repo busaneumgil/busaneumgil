@@ -11,12 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.ssafy.e102.domain.auth.client.CompositeSocialTokenVerifier;
-import com.ssafy.e102.domain.auth.token.RefreshTokenStore;
-import com.ssafy.e102.domain.auth.token.SignupTokenStore;
+import com.ssafy.e102.domain.auth.social.verifier.CompositeSocialTokenVerifier;
+import com.ssafy.e102.domain.auth.token.AuthTokenStore;
 import com.ssafy.e102.domain.user.repository.UserRepository;
-import com.ssafy.e102.global.security.JwtProperties;
-import com.ssafy.e102.global.security.JwtTokenProvider;
+import com.ssafy.e102.global.security.jwt.JwtProperties;
+import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
 class AuthServiceLogoutTest {
 
@@ -30,10 +29,7 @@ class AuthServiceLogoutTest {
 	private JwtTokenProvider jwtTokenProvider;
 
 	@Mock
-	private RefreshTokenStore refreshTokenStore;
-
-	@Mock
-	private SignupTokenStore signupTokenStore;
+	private AuthTokenStore authTokenStore;
 
 	@Mock
 	private AuthSessionService authSessionService;
@@ -53,8 +49,7 @@ class AuthServiceLogoutTest {
 			socialTokenVerifier,
 			userRepository,
 			jwtTokenProvider,
-			refreshTokenStore,
-			signupTokenStore,
+			authTokenStore,
 			jwtProperties,
 			authSessionService);
 	}

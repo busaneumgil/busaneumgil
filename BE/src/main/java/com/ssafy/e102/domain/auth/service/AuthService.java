@@ -3,8 +3,8 @@ package com.ssafy.e102.domain.auth.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ssafy.e102.domain.auth.client.CompositeSocialTokenVerifier;
-import com.ssafy.e102.domain.auth.client.SocialUserInfo;
+import com.ssafy.e102.domain.auth.social.verifier.CompositeSocialTokenVerifier;
+import com.ssafy.e102.domain.auth.dto.SocialUserInfo;
 import com.ssafy.e102.domain.auth.dto.request.ReissueRequest;
 import com.ssafy.e102.domain.auth.dto.request.SignupRequest;
 import com.ssafy.e102.domain.auth.dto.request.SocialLoginRequest;
@@ -13,15 +13,13 @@ import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.exception.AuthErrorCode;
 import com.ssafy.e102.domain.auth.exception.AuthException;
-import com.ssafy.e102.domain.auth.token.RefreshTokenStore;
-import com.ssafy.e102.domain.auth.token.SignupTokenData;
-import com.ssafy.e102.domain.auth.token.SignupTokenStore;
+import com.ssafy.e102.domain.auth.token.AuthTokenStore;
+import com.ssafy.e102.domain.auth.token.SignupTokenPayload;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.repository.UserRepository;
-import com.ssafy.e102.global.security.JwtProperties;
-import com.ssafy.e102.global.security.JwtTokenException;
-import com.ssafy.e102.global.security.JwtTokenProvider;
-import com.ssafy.e102.global.security.SignupTokenClaims;
+import com.ssafy.e102.global.security.jwt.JwtProperties;
+import com.ssafy.e102.global.security.jwt.JwtTokenException;
+import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
 @Service
 @Transactional(readOnly = true)
@@ -30,8 +28,7 @@ public class AuthService {
 	private final CompositeSocialTokenVerifier socialTokenVerifier;
 	private final UserRepository userRepository;
 	private final JwtTokenProvider jwtTokenProvider;
-	private final RefreshTokenStore refreshTokenStore;
-	private final SignupTokenStore signupTokenStore;
+	private final AuthTokenStore authTokenStore;
 	private final JwtProperties jwtProperties;
 	private final AuthSessionService authSessionService;
 
@@ -39,15 +36,13 @@ public class AuthService {
 		CompositeSocialTokenVerifier socialTokenVerifier,
 		UserRepository userRepository,
 		JwtTokenProvider jwtTokenProvider,
-		RefreshTokenStore refreshTokenStore,
-		SignupTokenStore signupTokenStore,
+		AuthTokenStore authTokenStore,
 		JwtProperties jwtProperties,
 		AuthSessionService authSessionService) {
 		this.socialTokenVerifier = socialTokenVerifier;
 		this.userRepository = userRepository;
 		this.jwtTokenProvider = jwtTokenProvider;
-		this.refreshTokenStore = refreshTokenStore;
-		this.signupTokenStore = signupTokenStore;
+		this.authTokenStore = authTokenStore;
 		this.jwtProperties = jwtProperties;
 		this.authSessionService = authSessionService;
 	}
@@ -71,24 +66,24 @@ public class AuthService {
 			throw new AuthException(AuthErrorCode.INVALID_AUTH_REQUEST, "필수 약관에 동의해야 합니다.");
 		}
 
-		SignupTokenData signupTokenData = validateSignupToken(request.signupToken());
+		SignupTokenPayload signupTokenPayload = validateSignupToken(request.signupToken());
 		if (userRepository.existsBySocialProviderAndSocialProviderUserId(
-			signupTokenData.socialProvider(),
-			signupTokenData.socialProviderUserId())) {
+			signupTokenPayload.socialProvider(),
+			signupTokenPayload.socialProviderUserId())) {
 			throw new AuthException(AuthErrorCode.ALREADY_REGISTERED_SOCIAL_USER);
 		}
 
 		User user = User.create(
-			signupTokenData.socialProvider(),
-			signupTokenData.socialProviderUserId(),
+			signupTokenPayload.socialProvider(),
+			signupTokenPayload.socialProviderUserId(),
 			request.selectedPrimaryUserType(),
 			request.selectedMobilitySubtype());
 		User savedUser = userRepository.save(user);
-		signupTokenStore.delete(request.signupToken());
+		authTokenStore.deleteSignupToken(request.signupToken());
 
 		String accessToken = jwtTokenProvider.createAccessToken(savedUser.getUserId());
 		String refreshToken = jwtTokenProvider.createRefreshToken(savedUser.getUserId());
-		refreshTokenStore.save(refreshToken, savedUser.getUserId(), jwtProperties.refreshTokenTtl());
+		authTokenStore.saveRefreshToken(refreshToken, savedUser.getUserId(), jwtProperties.refreshTokenTtl());
 
 		return new SignupResponse(
 			accessToken,
@@ -102,7 +97,7 @@ public class AuthService {
 	public TokenResponse reissue(ReissueRequest request) {
 		String oldRefreshToken = request.refreshToken();
 		java.util.UUID tokenSubject = getRefreshTokenSubject(oldRefreshToken);
-		java.util.UUID storedUserId = refreshTokenStore.findUserId(oldRefreshToken)
+		java.util.UUID storedUserId = authTokenStore.findRefreshTokenUserId(oldRefreshToken)
 			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN));
 		if (!tokenSubject.equals(storedUserId)) {
 			throw new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN);
@@ -110,7 +105,8 @@ public class AuthService {
 
 		String newAccessToken = jwtTokenProvider.createAccessToken(tokenSubject);
 		String newRefreshToken = jwtTokenProvider.createRefreshToken(tokenSubject);
-		refreshTokenStore.rotate(oldRefreshToken, newRefreshToken, tokenSubject, jwtProperties.refreshTokenTtl());
+		authTokenStore.rotateRefreshToken(oldRefreshToken, newRefreshToken, tokenSubject,
+			jwtProperties.refreshTokenTtl());
 		return new TokenResponse(newAccessToken, newRefreshToken);
 	}
 
@@ -121,7 +117,7 @@ public class AuthService {
 	private SocialLoginResponse loginExistingUser(User user) {
 		String accessToken = jwtTokenProvider.createAccessToken(user.getUserId());
 		String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
-		refreshTokenStore.save(refreshToken, user.getUserId(), jwtProperties.refreshTokenTtl());
+		authTokenStore.saveRefreshToken(refreshToken, user.getUserId(), jwtProperties.refreshTokenTtl());
 
 		return SocialLoginResponse.existingUser(
 			accessToken,
@@ -135,16 +131,16 @@ public class AuthService {
 		String signupToken = jwtTokenProvider.createSignupToken(
 			socialUserInfo.socialProvider(),
 			socialUserInfo.socialProviderUserId());
-		signupTokenStore.save(signupToken, new SignupTokenData(
+		authTokenStore.saveSignupToken(signupToken, new SignupTokenPayload(
 			socialUserInfo.socialProvider(),
 			socialUserInfo.socialProviderUserId()), jwtProperties.signupTokenTtl());
 
 		return SocialLoginResponse.newUser(signupToken);
 	}
 
-	private SignupTokenData validateSignupToken(String signupToken) {
-		SignupTokenClaims claims = getSignupTokenClaims(signupToken);
-		SignupTokenData stored = signupTokenStore.find(signupToken)
+	private SignupTokenPayload validateSignupToken(String signupToken) {
+		SignupTokenPayload claims = getSignupTokenPayload(signupToken);
+		SignupTokenPayload stored = authTokenStore.findSignupToken(signupToken)
 			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_SIGNUP_TOKEN));
 		if (claims.socialProvider() != stored.socialProvider()
 			|| !claims.socialProviderUserId().equals(stored.socialProviderUserId())) {
@@ -153,9 +149,9 @@ public class AuthService {
 		return stored;
 	}
 
-	private SignupTokenClaims getSignupTokenClaims(String signupToken) {
+	private SignupTokenPayload getSignupTokenPayload(String signupToken) {
 		try {
-			return jwtTokenProvider.getSignupTokenClaims(signupToken);
+			return jwtTokenProvider.getSignupTokenPayload(signupToken);
 		} catch (JwtTokenException exception) {
 			throw new AuthException(AuthErrorCode.INVALID_SIGNUP_TOKEN,
 				AuthErrorCode.INVALID_SIGNUP_TOKEN.getMessage(), exception);

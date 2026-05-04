@@ -46,7 +46,7 @@ class ReportViewModel(
             ReportUiAction.LocationBlurred -> touchLocation()
             ReportUiAction.PhotoAddClicked -> addPhotoShell()
             is ReportUiAction.PhotoSelected -> selectPhoto(action.photo)
-            ReportUiAction.PhotoRemoved -> removePhoto()
+            is ReportUiAction.PhotoRemovedAt -> removePhotoAt(action.index)
             ReportUiAction.PhotoBlurred -> touchPhoto()
             is ReportUiAction.DescriptionChanged -> updateDescription(action.description)
             ReportUiAction.DescriptionBlurred -> touchDescription()
@@ -278,9 +278,10 @@ class ReportViewModel(
     }
 
     private fun addPhotoShell() {
+        val nextIndex = mutableUiState.value.photo.values.size
         selectPhoto(
             ReportPhoto(
-                localUri = "content://mock/report-photo.jpg",
+                localUri = "content://mock/report-photo-$nextIndex.jpg",
                 mimeType = "image/jpeg",
                 sizeBytes = 1_024_000,
             ),
@@ -291,7 +292,7 @@ class ReportViewModel(
         mutableUiState.update { state ->
             state.copy(
                 screenState = ReportScreenState.Editing,
-                photo = state.photo.withValue(photo),
+                photo = state.photo.withAdded(photo),
                 draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
@@ -299,17 +300,11 @@ class ReportViewModel(
         }
     }
 
-    private fun removePhoto() {
-        val clearedPhoto =
-            ReportPhotoInput(
-                isTouched = true,
-                isDirty = true,
-            )
-
+    private fun removePhotoAt(index: Int) {
         mutableUiState.update { state ->
             state.copy(
                 screenState = ReportScreenState.Editing,
-                photo = clearedPhoto,
+                photo = state.photo.withRemovedAt(index),
                 draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
@@ -382,6 +377,7 @@ class ReportViewModel(
                                 },
                             outboxState = ReportOutboxState.Saved(outboxId = outbox.outboxId),
                             submitState = ReportSubmitState.Success(reportId = null),
+                            submittedAtMillis = System.currentTimeMillis(),
                         )
                     if (isDraftDeleted) {
                         emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))
@@ -470,7 +466,7 @@ private data class ReportDraftSnapshot(
     val reportType: ReportType?,
     val location: ReportLocation?,
     val addressText: String,
-    val photo: ReportPhoto?,
+    val photos: List<ReportPhoto>,
     val description: String,
 )
 
@@ -479,14 +475,14 @@ private fun ReportUiState.toDraftSnapshot(): ReportDraftSnapshot =
         reportType = reportType.value,
         location = location.value,
         addressText = location.addressText,
-        photo = photo.value,
+        photos = photo.values,
         description = description.value,
     )
 
 private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDraftData {
     val now = System.currentTimeMillis()
     val locationValue = location.value
-    val photoValue = photo.value
+    val firstPhoto = photo.firstOrNull
     val draftId = draftId ?: existingDraft?.draftId.orEmpty()
 
     return ReportDraftData(
@@ -497,9 +493,9 @@ private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDr
         latitude = locationValue?.latitude,
         longitude = locationValue?.longitude,
         locationSource = location.source.name,
-        photoUri = photoValue?.localUri,
-        photoMimeType = photoValue?.mimeType,
-        photoSizeBytes = photoValue?.sizeBytes,
+        photoUri = firstPhoto?.localUri,
+        photoMimeType = firstPhoto?.mimeType,
+        photoSizeBytes = firstPhoto?.sizeBytes,
         createdAtMillis = existingDraft?.createdAtMillis ?: 0L,
         updatedAtMillis = now,
     )
@@ -509,7 +505,7 @@ private fun ReportUiState.toOutboxData(): ReportOutboxData {
     val now = System.currentTimeMillis()
     val reportTypeValue = requireNotNull(reportType.value)
     val locationValue = requireNotNull(location.value)
-    val photoValue = photo.value
+    val firstPhoto = photo.firstOrNull
 
     return ReportOutboxData(
         outboxId = "",
@@ -518,9 +514,9 @@ private fun ReportUiState.toOutboxData(): ReportOutboxData {
         address = locationValue.address ?: location.addressText.trim().ifEmpty { null },
         latitude = locationValue.latitude,
         longitude = locationValue.longitude,
-        photoUri = photoValue?.localUri,
-        photoMimeType = photoValue?.mimeType,
-        photoSizeBytes = photoValue?.sizeBytes,
+        photoUri = firstPhoto?.localUri,
+        photoMimeType = firstPhoto?.mimeType,
+        photoSizeBytes = firstPhoto?.sizeBytes,
         createdAtMillis = now,
         updatedAtMillis = now,
     )
@@ -539,14 +535,16 @@ private fun ReportDraftData.toUiState(): ReportUiState {
             null
         }
     val locationSource = locationSource.toReportLocationSource()
-    val photo =
+    val photos =
         photoUri?.takeIf(String::isNotBlank)?.let { uri ->
-            ReportPhoto(
-                localUri = uri,
-                mimeType = photoMimeType,
-                sizeBytes = photoSizeBytes,
+            listOf(
+                ReportPhoto(
+                    localUri = uri,
+                    mimeType = photoMimeType,
+                    sizeBytes = photoSizeBytes,
+                ),
             )
-        }
+        } ?: emptyList()
 
     val resumedStep =
         when {
@@ -575,9 +573,9 @@ private fun ReportDraftData.toUiState(): ReportUiState {
             ),
         photo =
             ReportPhotoInput(
-                value = photo,
-                isDirty = photo != null,
-                error = validatePhoto(photo),
+                values = photos,
+                isDirty = photos.isNotEmpty(),
+                error = validatePhotos(photos),
             ),
         description =
             ReportDescriptionInput(
@@ -653,18 +651,40 @@ private fun ReportLocationInput.validated(touched: Boolean = isTouched): ReportL
         error = validateLocation(value, addressText),
     )
 
-private fun ReportPhotoInput.withValue(photo: ReportPhoto): ReportPhotoInput =
-    copy(
-        value = photo,
+private fun ReportPhotoInput.withAdded(photo: ReportPhoto): ReportPhotoInput {
+    val nextValues =
+        if (values.size >= ReportFormLimits.PHOTO_MAX_COUNT) {
+            values
+        } else {
+            values + photo
+        }
+    return copy(
+        values = nextValues,
         isTouched = true,
         isDirty = true,
-        error = validatePhoto(photo),
+        error = validatePhotos(nextValues),
     )
+}
+
+private fun ReportPhotoInput.withRemovedAt(index: Int): ReportPhotoInput {
+    val nextValues =
+        if (index in values.indices) {
+            values.toMutableList().also { it.removeAt(index) }
+        } else {
+            values
+        }
+    return copy(
+        values = nextValues,
+        isTouched = true,
+        isDirty = true,
+        error = validatePhotos(nextValues),
+    )
+}
 
 private fun ReportPhotoInput.validated(touched: Boolean = isTouched): ReportPhotoInput =
     copy(
         isTouched = touched,
-        error = validatePhoto(value),
+        error = validatePhotos(values),
     )
 
 private fun ReportDescriptionInput.withValue(description: String): ReportDescriptionInput =
@@ -711,16 +731,18 @@ private fun validateLocation(
 private fun ReportLocation.hasValidCoordinate(): Boolean =
     latitude in -90.0..90.0 && longitude in -180.0..180.0
 
-private fun validatePhoto(photo: ReportPhoto?): ReportPhotoError? {
-    if (photo == null) return null
-    if (photo.localUri.isBlank()) return ReportPhotoError.Unreadable
-    if (photo.mimeType != null && !photo.mimeType.startsWith("image/")) {
-        return ReportPhotoError.UnsupportedFormat
+private fun validatePhotos(photos: List<ReportPhoto>): ReportPhotoError? {
+    if (photos.isEmpty()) return null
+    if (photos.size > ReportFormLimits.PHOTO_MAX_COUNT) return ReportPhotoError.TooMany
+    photos.forEach { photo ->
+        if (photo.localUri.isBlank()) return ReportPhotoError.Unreadable
+        if (photo.mimeType != null && !photo.mimeType.startsWith("image/")) {
+            return ReportPhotoError.UnsupportedFormat
+        }
+        if (photo.sizeBytes != null && photo.sizeBytes > ReportFormLimits.PHOTO_MAX_BYTES) {
+            return ReportPhotoError.TooLarge
+        }
     }
-    if (photo.sizeBytes != null && photo.sizeBytes > ReportFormLimits.PHOTO_MAX_BYTES) {
-        return ReportPhotoError.TooLarge
-    }
-
     return null
 }
 

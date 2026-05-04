@@ -1,6 +1,9 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import android.net.Uri
+import com.ssafy.e102.eumgil.core.model.RouteOption
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 sealed interface AppRoute {
     val route: String
@@ -100,6 +103,30 @@ sealed interface LowVisionRoute : AppRoute {
         override val route: String = "low_vision/search"
     }
 
+    data object CategorySearch : LowVisionRoute {
+        override val route: String = "low_vision/category_search"
+    }
+
+    data object CategoryResult : LowVisionRoute {
+        const val ARG_CATEGORY: String = "category"
+
+        override val route: String = "low_vision/category_result/{$ARG_CATEGORY}"
+
+        fun createRoute(category: String): String = "low_vision/category_result/${category.navArgEncode()}"
+    }
+
+    data object RouteBriefing : LowVisionRoute {
+        override val route: String = "low_vision/route_briefing"
+    }
+
+    data object Guidance : LowVisionRoute {
+        override val route: String = "low_vision/guidance"
+    }
+
+    data object NavigationComplete : LowVisionRoute {
+        override val route: String = "low_vision/navigation_complete"
+    }
+
     data object MyPage : LowVisionRoute {
         override val route: String = "low_vision/my_page"
     }
@@ -126,16 +153,41 @@ sealed interface SearchRoute : AppRoute {
 sealed interface RouteSettingRoute : AppRoute {
     data object Setting : RouteSettingRoute {
         const val ARG_AUTO_START_NAVIGATION: String = "autoStartNavigation"
-        private const val BASE_ROUTE: String = "route_setting"
+        const val ARG_INITIAL_ROUTE_OPTION: String = "initialRouteOption"
 
-        override val route: String = "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}"
+        override val route: String =
+            "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}" +
+                "&$ARG_INITIAL_ROUTE_OPTION={$ARG_INITIAL_ROUTE_OPTION}"
 
-        fun createRoute(autoStartNavigation: Boolean = false): String =
-            if (autoStartNavigation) {
-                "$BASE_ROUTE?$ARG_AUTO_START_NAVIGATION=true"
+        fun createRoute(
+            autoStartNavigation: Boolean = false,
+            initialRouteOption: RouteOption? = null,
+        ): String {
+            val queryParameters =
+                buildList {
+                    if (autoStartNavigation) {
+                        add("$ARG_AUTO_START_NAVIGATION=true")
+                    }
+                    initialRouteOption?.let { routeOption ->
+                        add("$ARG_INITIAL_ROUTE_OPTION=${Uri.encode(routeOption.name)}")
+                    }
+                }
+
+            return if (queryParameters.isEmpty()) {
+                ROUTE_SETTING_BASE_ROUTE
             } else {
-                BASE_ROUTE
+                "$ROUTE_SETTING_BASE_ROUTE?${queryParameters.joinToString(separator = "&")}"
             }
+        }
+    }
+
+    data object Detail : RouteSettingRoute {
+        const val ARG_ROUTE_OPTION: String = "routeOption"
+
+        override val route: String = "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}"
+
+        fun createRoute(routeOption: RouteOption): String =
+            "$ROUTE_SETTING_BASE_ROUTE/detail/${routeOption.name.navArgEncode()}"
     }
 }
 
@@ -149,10 +201,27 @@ sealed interface MyPageSubRoute : AppRoute {
     data object ReportHistory : MyPageSubRoute {
         override val route: String = "my_page/report_history"
     }
+
+    data object AppInfo : MyPageSubRoute {
+        override val route: String = "my_page/app_info"
+    }
 }
 
 sealed interface NavigationRoute : AppRoute {
     data object Guidance : NavigationRoute {
         override val route: String = "navigation_guidance"
+    }
+}
+
+private fun String.navArgEncode(): String =
+    URLEncoder
+        .encode(this, StandardCharsets.UTF_8.toString())
+        .replace("+", "%20")
+
+private const val ROUTE_SETTING_BASE_ROUTE: String = "route_setting"
+
+sealed interface ArrivalRoute : AppRoute {
+    data object Entry : ArrivalRoute {
+        override val route: String = "arrival"
     }
 }

@@ -50,11 +50,25 @@ class SearchViewModel(
             is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
             is SearchUiAction.SearchResultClicked -> selectSearchResult(action.result)
+            is SearchUiAction.SearchResultBriefingClicked -> briefSearchResult(action.result)
             is SearchUiAction.BookmarkToggleClicked -> toggleBookmark(action.result)
+            is SearchUiAction.LowVisionBookmarkSaveClicked -> saveLowVisionBookmark(action.result)
         }
     }
 
     private fun selectSearchResult(result: SearchResult) {
+        if (!handoffSearchResult(result)) return
+
+        emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun briefSearchResult(result: SearchResult) {
+        if (!handoffSearchResult(result)) return
+
+        emitUiEvent(SearchUiEvent.NavigateToRouteBriefing)
+    }
+
+    private fun handoffSearchResult(result: SearchResult): Boolean {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
             mutableUiState.update { state ->
@@ -66,12 +80,12 @@ class SearchViewModel(
                         ),
                 )
             }
-            return
+            return false
         }
 
         destinationSelectionRepository.updateSelectedDestination(destination)
         persistRecentDestination(result = result, destination = destination)
-        emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
+        return true
     }
 
     private fun persistRecentDestination(
@@ -131,6 +145,50 @@ class SearchViewModel(
                         ),
                     )
                 }
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                mutableUiState.update { state ->
+                    state.copy(
+                        resultState =
+                            SearchResultUiState.Error(
+                                query = state.query.trim(),
+                                message = BOOKMARK_TOGGLE_FAILURE_MESSAGE,
+                            ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun saveLowVisionBookmark(result: SearchResult) {
+        val destination = result.toPlaceDestinationOrNull()
+        if (destination == null) {
+            mutableUiState.update { state ->
+                state.copy(
+                    resultState =
+                        SearchResultUiState.Error(
+                            query = state.query.trim(),
+                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
+                        ),
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                bookmarkRepository.saveBookmark(
+                    BookmarkData(
+                        placeId = destination.placeId,
+                        placeName = destination.name,
+                        address = destination.address,
+                        latitude = destination.latitude,
+                        longitude = destination.longitude,
+                        category = destination.category?.name,
+                    ),
+                )
+            }.onSuccess {
+                emitUiEvent(SearchUiEvent.NavigateToLowVisionBookmark)
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 mutableUiState.update { state ->

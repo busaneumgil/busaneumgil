@@ -41,7 +41,7 @@ sealed interface MapUiAction {
 
     data object FacilityDetailDismissed : MapUiAction
 
-    data object FacilityRouteEntryClicked : MapUiAction
+    data object FacilitySetDestinationClicked : MapUiAction
 
     data class ShortcutFilterClicked(
         val key: MapShortcutFilterKey,

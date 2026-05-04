@@ -4,8 +4,8 @@ import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,13 +29,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -44,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
@@ -58,6 +59,7 @@ fun ReportScreen(
         topBar = {
             ReportTopBar(
                 title = reportStepTitle(uiState.currentStep),
+                showBackButton = reportTopBarShowsBackButton(uiState.currentStep),
                 onBackClick = { onAction(ReportUiAction.BackClicked) },
             )
         },
@@ -98,7 +100,7 @@ fun ReportScreen(
                         onAction = onAction,
                     )
                 ReportStep.Complete ->
-                    ReportCompleteStep()
+                    ReportCompleteStep(uiState = uiState)
             }
         }
     }
@@ -107,34 +109,27 @@ fun ReportScreen(
 @Composable
 private fun ReportTopBar(
     title: String,
+    showBackButton: Boolean,
     onBackClick: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xxSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            TextButton(onClick = onBackClick) {
-                Text(text = "뒤로")
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
+    EumCenteredTopBar(
+        title = title,
+        onBackClick = if (showBackButton) onBackClick else null,
+        backContentDescription =
+            if (showBackButton) {
+                stringResource(id = R.string.action_go_back_previous_step)
+            } else {
+                null
+            },
+        titleFontWeight = FontWeight.SemiBold,
+    )
 }
+
+internal fun reportTopBarShowsBackButton(step: ReportStep): Boolean =
+    when (step) {
+        ReportStep.LocationConfirm, ReportStep.DetailInput -> true
+        ReportStep.TypeSelection, ReportStep.Complete -> false
+    }
 
 @Composable
 private fun ReportBottomBar(
@@ -149,16 +144,14 @@ private fun ReportBottomBar(
                 enabled = uiState.isLocationStepConfirmable,
                 onClick = { onAction(ReportUiAction.NextStepClicked) },
             )
-        ReportStep.DetailInput ->
+        ReportStep.DetailInput -> {
+            val submitting = uiState.submitState is ReportSubmitState.Submitting
             ReportPrimaryActionBar(
-                label =
-                    reportSubmitButtonText(
-                        completed = false,
-                        submitting = uiState.submitState is ReportSubmitState.Submitting,
-                    ),
+                label = if (submitting) "제출 중" else "다음",
                 enabled = uiState.isSubmitEnabled,
                 onClick = { onAction(ReportUiAction.SubmitClicked) },
             )
+        }
         ReportStep.Complete ->
             ReportPrimaryActionBar(
                 label = "제보 내역 확인하기",
@@ -507,12 +500,12 @@ private fun ReportDetailStep(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
 ) {
-    ReportPhotoSection(
-        input = uiState.photo,
-        onAction = onAction,
-    )
     ReportDescriptionSection(
         input = uiState.description,
+        onAction = onAction,
+    )
+    ReportPhotoSection(
+        input = uiState.photo,
         onAction = onAction,
     )
     ReportDetailDraftActions(
@@ -559,30 +552,124 @@ private fun ReportDetailDraftActions(
 }
 
 @Composable
-private fun ReportCompleteStep() {
+private fun ReportCompleteStep(uiState: ReportUiState) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        ReportCompleteHero()
+        ReportCompleteSummaryCard(uiState = uiState)
+    }
+}
+
+@Composable
+private fun ReportCompleteHero() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Surface(
+            modifier = Modifier.size(72.dp),
+            shape = RoundedCornerShape(percent = 50),
+            color = MaterialTheme.colorScheme.primaryContainer,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_status_check),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        Text(
+            text = "제보가 완료되었습니다!",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = "소중한 제보 감사합니다.\n검토 후 서비스에 반영하겠습니다.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.36f),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.large),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = "제보가 등록되었습니다",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+            ReportCompleteSummaryRow(
+                label = "일시",
+                value = formatSubmittedAt(uiState.submittedAtMillis),
             )
-            Text(
-                text = "제보는 로컬 outbox에 저장되었습니다. 검토 후 지도에 반영됩니다.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ReportCompleteSummaryRow(
+                label = "유형",
+                value = uiState.reportType.value?.label ?: "-",
+            )
+            ReportCompleteSummaryRow(
+                label = "위치",
+                value =
+                    uiState.location.value?.address?.takeIf { it.isNotBlank() }
+                        ?: uiState.location.addressText.ifBlank { "위치 정보 없음" },
+            )
+            ReportCompleteSummaryRow(
+                label = "설명",
+                value = uiState.description.value.trim().ifBlank { "설명 없음" },
             )
         }
     }
+}
+
+@Composable
+private fun ReportCompleteSummaryRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(56.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+private fun formatSubmittedAt(submittedAtMillis: Long?): String {
+    val millis = submittedAtMillis ?: return "-"
+    val formatter =
+        java.text.SimpleDateFormat(
+            "yyyy.MM.dd (E) HH:mm",
+            java.util.Locale.KOREA,
+        )
+    return formatter.format(java.util.Date(millis))
 }
 
 @Composable
@@ -590,100 +677,11 @@ private fun ReportPhotoSection(
     input: ReportPhotoInput,
     onAction: (ReportUiAction) -> Unit,
 ) {
-    val photo = input.value
-
-    ReportFormSection(
-        title = "사진 첨부",
-        helperText = reportPhotoErrorText(input.error) ?: "사진은 선택 사항입니다.",
-        isError = input.error != null,
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            shape = RoundedCornerShape(EumRadius.medium),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
-        ) {
-            Column(
-                modifier = Modifier.padding(EumSpacing.medium),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                Text(
-                    text = if (photo == null) "첨부된 사진 없음" else "사진 1장 첨부됨",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = photo?.localUri ?: "현장 사진을 첨부할 영역입니다.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        if (photo == null) {
-            OutlinedButton(
-                onClick = { onAction(ReportUiAction.PhotoAddClicked) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = "사진 첨부")
-            }
-        } else {
-            OutlinedButton(
-                onClick = { onAction(ReportUiAction.PhotoRemoved) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = "사진 제거")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReportDescriptionSection(
-    input: ReportDescriptionInput,
-    onAction: (ReportUiAction) -> Unit,
-) {
     val isError = input.error != null
-    val supportingText =
-        reportDescriptionErrorText(input.error)
-            ?: "상황을 짧게 적어주세요. ${input.value.length}/${ReportFormLimits.DESCRIPTION_MAX_LENGTH}"
+    val helperText =
+        reportPhotoErrorText(input.error)
+            ?: "사진은 선택 사항입니다. 최대 ${ReportFormLimits.PHOTO_MAX_COUNT}장까지 첨부할 수 있어요."
 
-    ReportFormSection(
-        title = "상세 설명",
-        helperText = "설명은 선택 사항입니다.",
-        isError = false,
-    ) {
-        OutlinedTextField(
-            value = input.value,
-            onValueChange = { onAction(ReportUiAction.DescriptionChanged(it)) },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { focusState: FocusState ->
-                        if (!focusState.isFocused) {
-                            onAction(ReportUiAction.DescriptionBlurred)
-                        }
-                    },
-            label = { Text(text = "설명") },
-            placeholder = { Text(text = "예: 보도 중앙에 이동을 막는 장애물이 있어요.") },
-            supportingText = { Text(text = supportingText) },
-            isError = isError,
-            minLines = 4,
-            keyboardOptions =
-                KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                ),
-        )
-    }
-}
-
-@Composable
-private fun ReportFormSection(
-    title: String,
-    helperText: String,
-    isError: Boolean,
-    content: @Composable ColumnScope.() -> Unit,
-) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -703,13 +701,29 @@ private fun ReportFormSection(
             modifier = Modifier.padding(EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "사진 첨부 (선택)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "${input.count}/${ReportFormLimits.PHOTO_MAX_COUNT}장",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            ReportPhotoGrid(
+                photos = input.values,
+                canAddMore = input.canAddMore,
+                onAddClick = { onAction(ReportUiAction.PhotoAddClicked) },
+                onRemoveClick = { index -> onAction(ReportUiAction.PhotoRemovedAt(index)) },
             )
-            content()
             Text(
                 text = helperText,
                 style = MaterialTheme.typography.bodyMedium,
@@ -724,9 +738,219 @@ private fun ReportFormSection(
     }
 }
 
+@Composable
+private fun ReportPhotoGrid(
+    photos: List<ReportPhoto>,
+    canAddMore: Boolean,
+    onAddClick: () -> Unit,
+    onRemoveClick: (Int) -> Unit,
+) {
+    val itemsPerRow = 3
+    val cells: List<PhotoCell> =
+        buildList {
+            photos.forEachIndexed { index, photo ->
+                add(PhotoCell.Item(index = index, photo = photo))
+            }
+            if (canAddMore) {
+                add(PhotoCell.Add)
+            }
+        }
+    if (cells.isEmpty()) {
+        // canAddMore=false 이면서 photos가 비어있을 수 없지만, 안전하게 처리.
+        return
+    }
+    cells.chunked(itemsPerRow).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            row.forEach { cell ->
+                when (cell) {
+                    is PhotoCell.Item ->
+                        ReportPhotoThumb(
+                            photo = cell.photo,
+                            onRemoveClick = { onRemoveClick(cell.index) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    PhotoCell.Add ->
+                        ReportPhotoAddTile(
+                            onClick = onAddClick,
+                            modifier = Modifier.weight(1f),
+                        )
+                }
+            }
+            repeat(itemsPerRow - row.size) {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+private sealed interface PhotoCell {
+    data class Item(val index: Int, val photo: ReportPhoto) : PhotoCell
+    data object Add : PhotoCell
+}
+
+@Composable
+private fun ReportPhotoThumb(
+    photo: ReportPhoto,
+    onRemoveClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .heightIn(min = 96.dp)
+                .clickable(onClick = onRemoveClick)
+                .semantics {
+                    contentDescription = "첨부된 사진. 탭하여 제거합니다."
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "사진",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "제거",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportPhotoAddTile(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .heightIn(min = 96.dp)
+                .clickable(onClick = onClick)
+                .semantics {
+                    contentDescription = "사진을 추가합니다."
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "+",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = "추가",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportDescriptionSection(
+    input: ReportDescriptionInput,
+    onAction: (ReportUiAction) -> Unit,
+) {
+    val isError = input.error != null
+    val charCountText = "${input.value.length}/${ReportFormLimits.DESCRIPTION_MAX_LENGTH}"
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(EumRadius.large),
+        border =
+            BorderStroke(
+                width = 1.dp,
+                color =
+                    if (isError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                    },
+            ),
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            Text(
+                text = "상세 설명",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "아래 문제 상황을 자세히 알려주세요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = input.value,
+                onValueChange = { onAction(ReportUiAction.DescriptionChanged(it)) },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focusState: FocusState ->
+                            if (!focusState.isFocused) {
+                                onAction(ReportUiAction.DescriptionBlurred)
+                            }
+                        },
+                placeholder = { Text(text = "예: 보도 중앙에 이동을 막는 장애물이 있어요.") },
+                isError = isError,
+                minLines = 4,
+                keyboardOptions =
+                    KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                    ),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Text(
+                    text =
+                        reportDescriptionErrorText(input.error) ?: charCountText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color =
+                        if (isError) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                )
+            }
+        }
+    }
+}
+
 private fun reportStepTitle(step: ReportStep): String =
     when (step) {
-        ReportStep.TypeSelection -> "장애물 유형 선택"
+        ReportStep.TypeSelection -> "제보"
         ReportStep.LocationConfirm -> "위치 확인"
         ReportStep.DetailInput -> "상세 정보 입력"
         ReportStep.Complete -> "제보 완료"
@@ -793,6 +1017,8 @@ private fun reportPhotoErrorText(error: ReportPhotoError?): String? =
         ReportPhotoError.UnsupportedFormat -> "지원하지 않는 사진 형식입니다."
         ReportPhotoError.TooLarge -> "사진 용량이 너무 큽니다."
         ReportPhotoError.Unreadable -> "사진을 읽을 수 없습니다."
+        ReportPhotoError.TooMany ->
+            "사진은 최대 ${ReportFormLimits.PHOTO_MAX_COUNT}장까지 첨부할 수 있습니다."
         null -> null
     }
 
@@ -800,14 +1026,4 @@ private fun reportDescriptionErrorText(error: ReportDescriptionError?): String? 
     when (error) {
         ReportDescriptionError.TooLong -> "설명은 ${ReportFormLimits.DESCRIPTION_MAX_LENGTH}자까지 입력할 수 있습니다."
         null -> null
-    }
-
-private fun reportSubmitButtonText(
-    completed: Boolean,
-    submitting: Boolean,
-): String =
-    when {
-        completed -> "제출 완료"
-        submitting -> "제출 중"
-        else -> "제보 제출"
     }

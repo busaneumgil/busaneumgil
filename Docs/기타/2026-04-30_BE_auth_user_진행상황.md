@@ -168,7 +168,7 @@
 ## 남은 결정 사항
 
 - 회원탈퇴 정책
-  - 현재는 `users` 물리 삭제와 인증 세션 무효화 기준으로 구현
+  - 현재는 `users` soft delete와 인증 세션 무효화 기준으로 구현
   - bookmark/favorite route/rating/report 테이블이 붙으면 삭제/보존/익명화 정책을 다시 반영해야 한다.
 - signup token TTL
   - 현재 기본값은 10분

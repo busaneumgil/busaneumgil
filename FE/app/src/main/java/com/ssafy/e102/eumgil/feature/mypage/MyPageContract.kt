@@ -48,5 +48,7 @@ sealed interface MyPageUiEvent {
 
     data object NavigateToReportHistory : MyPageUiEvent
 
+    data object NavigateToAppInfo : MyPageUiEvent
+
     data object ShowPreparingMessage : MyPageUiEvent
 }

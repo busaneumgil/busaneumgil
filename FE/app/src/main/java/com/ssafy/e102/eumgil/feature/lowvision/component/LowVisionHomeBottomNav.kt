@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,11 +18,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
+import com.ssafy.e102.eumgil.feature.lowvision.lowVisionButtonSemantics
+
+object LowVisionBottomNavDefaults {
+    const val itemCount = 4
+    const val itemWeight = 1f
+    val height = 80.dp
+}
 
 /**
  * 시각지원 모드 메인 홈 화면용 하단 네비.
@@ -71,29 +80,31 @@ fun LowVisionBottomNav(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(80.dp)
-            .background(Color.Black)
-            .padding(horizontal = 27.dp),
+            .height(LowVisionBottomNavDefaults.height)
+            .background(Color.Black),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         items.forEach { (tab, item) ->
             val tint = if (tab == selectedTab) Color(0xFFFFD400) else Color(0xFF777777)
+            val label = stringResource(id = item.labelRes)
             Column(
                 modifier = Modifier
-                    .clickable { onTabSelected(tab) }
+                    .weight(LowVisionBottomNavDefaults.itemWeight)
+                    .fillMaxHeight()
+                    .lowVisionButtonSemantics(label)
+                    .clickable(role = Role.Button) { onTabSelected(tab) }
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(1.dp),
+                verticalArrangement = Arrangement.Center,
             ) {
                 Icon(
                     painter = painterResource(id = item.iconRes),
-                    contentDescription = stringResource(id = item.labelRes),
+                    contentDescription = null,
                     tint = tint,
                     modifier = Modifier.size(24.dp),
                 )
                 Text(
-                    text = stringResource(id = item.labelRes),
+                    text = label,
                     color = tint,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Normal,

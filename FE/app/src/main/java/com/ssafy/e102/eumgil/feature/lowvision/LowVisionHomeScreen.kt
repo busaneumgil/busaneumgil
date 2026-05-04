@@ -22,10 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,8 +63,8 @@ fun LowVisionHomeScreen(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val voiceCardA11y = stringResource(id = R.string.low_vision_home_voice_card_a11y)
-    val locationCardA11y = stringResource(id = R.string.low_vision_home_location_card_a11y)
+    val voiceInputLabel = stringResource(id = R.string.low_vision_home_voice_input_label)
+    val currentLocationLabel = stringResource(id = R.string.low_vision_home_current_location_label)
 
     Column(
         modifier = modifier
@@ -92,13 +88,13 @@ fun LowVisionHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(LowVisionHomeLayoutDefaults.voiceActionCardWeight)
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = voiceCardA11y
-                    },
+                    .lowVisionButtonSemantics(
+                        label = voiceInputLabel,
+                        actionHint = "두 번 탭하면 시작합니다.",
+                    ),
                 iconRes = R.drawable.ic_voice_mic,
                 iconSize = 64.dp,
-                label = stringResource(id = R.string.low_vision_home_voice_input_label),
+                label = voiceInputLabel,
                 labelSize = 28.sp,
                 onClick = onVoiceInputClick,
             )
@@ -108,13 +104,10 @@ fun LowVisionHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(LowVisionHomeLayoutDefaults.currentLocationCardWeight)
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = locationCardA11y
-                    },
+                    .lowVisionPreparingButtonSemantics(currentLocationLabel),
                 iconRes = R.drawable.ic_voice_location_pin,
                 iconSize = 56.dp,
-                label = stringResource(id = R.string.low_vision_home_current_location_label),
+                label = currentLocationLabel,
                 labelSize = 28.sp,
                 onClick = onCurrentLocationClick,
             )

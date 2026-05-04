@@ -1,10 +1,12 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 
 data class NavigationUiState(
     val screenState: NavigationScreenState = NavigationScreenState.Loading,
+    val selectedRouteOption: RouteOption? = null,
     val mapPlaceholderTitle: String = "Navigation map",
     val mapPlaceholderDescription: String = "Preparing route guidance.",
     val mapOverlay: NavigationMapOverlayUiState = NavigationMapOverlayUiState(),
@@ -14,6 +16,18 @@ data class NavigationUiState(
 ) {
     val isExitEnabled: Boolean
         get() = exitCta.isEnabled
+
+    val canOpenRouteDetail: Boolean
+        get() = selectedRouteOption != null && screenState != NavigationScreenState.Loading
+
+    val remainingDistanceLabel: String
+        get() = stepCard.metrics.getOrNull(0)?.value ?: "확인 중"
+
+    val remainingEtaLabel: String
+        get() = stepCard.metrics.getOrNull(1)?.value ?: "확인 중"
+
+    val progressLabel: String
+        get() = stepCard.metrics.getOrNull(2)?.value ?: "-"
 }
 
 enum class NavigationScreenState {
@@ -90,6 +104,8 @@ sealed interface NavigationUiAction {
 
     data object BackClicked : NavigationUiAction
 
+    data object RouteDetailClicked : NavigationUiAction
+
     data object ExitNavigationClicked : NavigationUiAction
 
     data object SaveBookmarkClicked : NavigationUiAction
@@ -108,11 +124,15 @@ sealed interface NavigationUiAction {
 sealed interface NavigationUiEvent {
     data object NavigateBack : NavigationUiEvent
 
+    data class NavigateToRouteDetail(
+        val routeOption: RouteOption,
+    ) : NavigationUiEvent
+
     data object NavigateToMap : NavigationUiEvent
 
     data object NavigateToSavedRoute : NavigationUiEvent
 
-    data object NavigateToLowVisionHome : NavigationUiEvent
+    data object NavigateToArrival : NavigationUiEvent
 
     data class SpeakBriefing(
         val text: String,

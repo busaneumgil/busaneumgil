@@ -16,6 +16,7 @@ data class RouteSettingUiState(
     val destinationHandoffState: RouteDestinationHandoffState = RouteDestinationHandoffState.EMPTY,
     val destinationFallbackMessage: String? = null,
     val isUsingFallbackDestination: Boolean = true,
+    val selectedTravelMode: RouteTravelMode = RouteTravelMode.WALK,
     val selectedOption: RouteOption = RouteOption.SAFE,
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
     val selectedRoute: RouteSelectedRouteUiState? = null,
@@ -25,7 +26,7 @@ data class RouteSettingUiState(
     val ctaAcknowledged: Boolean = false,
 ) {
     val isStartEnabled: Boolean
-        get() = cta.isEnabled
+        get() = cta.isEnabled && selectedTravelMode == RouteTravelMode.WALK
 }
 
 data class RouteLocationUiState(
@@ -89,6 +90,10 @@ data class RouteSelectedRouteUiState(
     val fallbackSegmentCount: Int = 0,
     val previewFallbackNotice: String? = null,
     val badges: List<RouteOptionBadge> = emptyList(),
+    val detailAccessibilityChips: List<RouteDetailChipUiState> = emptyList(),
+    val detailHighlights: List<RouteDetailHighlightUiState> = emptyList(),
+    val detailSteps: List<RouteDetailStepUiState> = emptyList(),
+    val detailFallbackMessage: String? = null,
 )
 
 data class RouteSummaryMetricUiState(
@@ -96,8 +101,32 @@ data class RouteSummaryMetricUiState(
     val value: String,
 )
 
+data class RouteDetailChipUiState(
+    val label: String,
+    val kind: RouteDetailChipKind = RouteDetailChipKind.PENDING,
+    val tone: RouteDetailTone = RouteDetailTone.INFO,
+)
+
+data class RouteDetailHighlightUiState(
+    val title: String,
+    val description: String,
+    val badgeLabel: String,
+    val tone: RouteDetailTone,
+)
+
+data class RouteDetailStepUiState(
+    val indexLabel: String,
+    val title: String,
+    val description: String,
+    val metaLabel: String? = null,
+    val badgeLabel: String? = null,
+    val badgeTone: RouteDetailTone? = null,
+    val kind: RouteDetailStepKind = RouteDetailStepKind.WALK,
+    val tone: RouteDetailTone = RouteDetailTone.NEUTRAL,
+)
+
 data class RouteSettingCtaUiState(
-    val label: String = "선택한 경로로 안내 시작",
+    val label: String = "길 안내 시작",
     val supportingText: String = "fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다.",
     val isEnabled: Boolean = false,
 )
@@ -123,6 +152,43 @@ enum class RoutePreviewMapStatus {
     ERROR,
 }
 
+enum class RouteTravelMode {
+    WALK,
+    TRANSIT,
+}
+
+enum class RouteDetailTone {
+    NEUTRAL,
+    INFO,
+    WARNING,
+}
+
+enum class RouteDetailChipKind {
+    STEP_FREE,
+    ELEVATOR,
+    AUDIO_SIGNAL,
+    BRAILLE_BLOCK,
+    CONSTRUCTION,
+    SIGNAL_CROSSWALK,
+    UNSIGNALIZED_CROSSWALK,
+    CURB_GAP,
+    STAIRS,
+    PENDING,
+}
+
+enum class RouteDetailStepKind {
+    START,
+    WALK,
+    TACTILE_GUIDE,
+    CROSSWALK,
+    ELEVATOR,
+    CONSTRUCTION,
+    CURB_GAP,
+    STAIRS,
+    ARRIVAL,
+    FALLBACK,
+}
+
 enum class RouteOptionBadge {
     SAFE_PRIORITY,
     STEP_FREE,
@@ -136,15 +202,29 @@ enum class RouteOptionBadge {
 sealed interface RouteSettingUiAction {
     data object BackClicked : RouteSettingUiAction
 
+    data class TravelModeSelected(
+        val mode: RouteTravelMode,
+    ) : RouteSettingUiAction
+
     data class RouteOptionSelected(
         val routeOption: RouteOption,
     ) : RouteSettingUiAction
+
+    data class RouteOptionDetailClicked(
+        val routeOption: RouteOption,
+    ) : RouteSettingUiAction
+
+    data object WaypointsSwapClicked : RouteSettingUiAction
 
     data object StartNavigationClicked : RouteSettingUiAction
 }
 
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
+
+    data class NavigateToRouteDetail(
+        val routeOption: RouteOption,
+    ) : RouteSettingUiEvent
 
     data class StartNavigationRequested(
         val request: RouteNavigationRequest,

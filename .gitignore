@@ -16,6 +16,7 @@ HELP.md
 .ai/.claude/settings.local.json
 .gstack/
 FE/awesome-design-md/
+FE/analytics.settings
 
 .omx
 .tmp

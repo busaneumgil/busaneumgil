@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
@@ -43,6 +44,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             resolveAppStartDestination(
                 authGateState = authGateState,
                 initSettings = savedSettings,
+                forceLowVisionTermsGuide = BuildConfig.FORCE_LOW_VISION_TERMS_GUIDE,
             )
     }
 
@@ -103,8 +105,9 @@ internal fun String?.toCurrentTopLevelRoute(): String? =
         this?.startsWith("${TopLevelRoute.MyPage.route}/") == true -> TopLevelRoute.MyPage.route
         this == SearchRoute.Entry.route -> TopLevelRoute.Map.route
         this?.startsWith("search/") == true -> TopLevelRoute.Map.route
-        this == NavigationRoute.Guidance.route -> TopLevelRoute.Map.route
-        this?.startsWith("route_setting") == true -> TopLevelRoute.Map.route
+        this == NavigationRoute.Guidance.route -> null
+        this == ArrivalRoute.Entry.route -> TopLevelRoute.Map.route
+        this?.startsWith("route_setting") == true -> null
         else -> null
     }
 

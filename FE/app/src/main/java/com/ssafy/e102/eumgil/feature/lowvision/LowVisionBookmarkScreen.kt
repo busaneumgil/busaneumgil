@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.savedroute.SavedPlaceUiModel
-import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteScreenState
+import com.ssafy.e102.eumgil.feature.savedroute.SavedBookmarkContentState
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteUiAction
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteUiState
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
@@ -84,8 +84,8 @@ fun LowVisionBookmarkScreen(
                 textAlign = TextAlign.Center,
             )
 
-            when (uiState.screenState) {
-                SavedRouteScreenState.LOADING -> {
+            when (uiState.placeContent.screenState) {
+                SavedBookmarkContentState.LOADING -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
@@ -93,33 +93,35 @@ fun LowVisionBookmarkScreen(
                         CircularProgressIndicator(color = LowVisionYellow)
                     }
                 }
-                SavedRouteScreenState.EMPTY -> {
+                SavedBookmarkContentState.EMPTY -> {
                     LowVisionBookmarkMessage(
                         message = stringResource(id = R.string.low_vision_bookmark_empty),
                     )
                 }
-                SavedRouteScreenState.ERROR -> {
+                SavedBookmarkContentState.ERROR -> {
                     LowVisionBookmarkMessage(
-                        message = uiState.errorMessage ?: stringResource(id = R.string.low_vision_bookmark_error),
+                        message =
+                            uiState.placeContent.errorMessage
+                                ?: stringResource(id = R.string.low_vision_bookmark_error),
                     )
                 }
-                SavedRouteScreenState.CONTENT -> {
+                SavedBookmarkContentState.CONTENT -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
                         itemsIndexed(
-                            items = uiState.places,
+                            items = uiState.placeContent.places,
                             key = { _, place -> place.placeId },
                         ) { index, place ->
                             LowVisionBookmarkPlaceCard(
                                 index = index + 1,
                                 place = place,
                                 onNavigateClick = {
-                                    onAction(SavedRouteUiAction.RouteGuideClicked(place.placeId))
+                                    onAction(SavedRouteUiAction.PlaceRouteGuideClicked(place.placeId))
                                 },
                                 onRemoveClick = {
-                                    onAction(SavedRouteUiAction.BookmarkRemoveClicked(place.placeId))
+                                    onAction(SavedRouteUiAction.PlaceRemoveClicked(place.placeId))
                                 },
                             )
                         }

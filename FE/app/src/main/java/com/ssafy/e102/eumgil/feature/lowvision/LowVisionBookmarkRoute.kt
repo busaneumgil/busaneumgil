@@ -31,6 +31,7 @@ fun LowVisionBookmarkRoute(
         remember(appContainer) {
             SavedRouteViewModel.provideFactory(
                 bookmarkRepository = appContainer.bookmarkRepository,
+                routeBookmarkRepository = appContainer.routeBookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
             )
         }
@@ -44,7 +45,7 @@ fun LowVisionBookmarkRoute(
     LaunchedEffect(viewModel, onNavigateToRouteSetting) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                is SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 SavedRouteUiEvent.NavigateToMap,
                 is SavedRouteUiEvent.ShowSnackbar,
                 -> Unit

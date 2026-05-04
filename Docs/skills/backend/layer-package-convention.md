@@ -68,7 +68,7 @@ place
 
 ## Controller 기준
 
-- API 기본 prefix는 `/api`를 사용한다.
+- API는 API 전용 서브도메인에서 노출하며, 기본 path prefix로 `/api`를 붙이지 않는다.
 - API path, method, status code는 API 명세서를 따른다.
 - Request Body가 있는 API에는 `@Valid`를 붙인다.
 - Entity를 API 응답으로 직접 반환하지 않는다.
@@ -80,7 +80,7 @@ place
 ```java
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/places")
+@RequestMapping("/places")
 public class PlaceController {
 
     private final PlaceService placeService;

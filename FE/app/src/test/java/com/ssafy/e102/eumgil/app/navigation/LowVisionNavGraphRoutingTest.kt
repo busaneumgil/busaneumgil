@@ -19,6 +19,14 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `voice input cancel returns to low vision home`() {
+        assertEquals(
+            LowVisionRoute.Home.route,
+            resolveLowVisionVoiceInputCancelRoute(),
+        )
+    }
+
+    @Test
     fun `low vision search result uses low vision guidance route`() {
         assertEquals(
             LowVisionRoute.Guidance.route,

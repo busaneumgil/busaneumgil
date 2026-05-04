@@ -86,7 +86,7 @@
   - `S14P31E102-370`
   - `S14P31E102-372`
 - 남은 작업:
-  - `S14P31E102-373`: `POST /api/auth/social-login` 기존/신규 사용자 흐름 구현
+  - `S14P31E102-373`: `POST /auth/social-login` 기존/신규 사용자 흐름 구현
   - `S14P31E102-374`: 신규 사용자 signup token 기반 회원가입 완료 흐름 구현
 - MR 제목:
   - `S14P31E102-362 [BE] 소셜 로그인 및 회원가입 토큰 흐름 구현`
@@ -107,11 +107,11 @@
   - `S14P31E102-379`
   - `S14P31E102-380`
 - 남은 작업:
-  - `POST /api/auth/reissue`
-  - `POST /api/auth/logout`
-  - `GET /api/users/me`
-  - `PATCH /api/users/me/user-type`
-  - `DELETE /api/users/me`는 회원탈퇴 정책 확정 후 포함
+  - `POST /auth/reissue`
+  - `POST /auth/logout`
+  - `GET /users/me`
+  - `PATCH /users/me/user-type`
+  - `DELETE /users/me`는 회원탈퇴 정책 확정 후 포함
   - controller/service/failure path 테스트
   - Swagger 문서 정합성 확인
 - MR 제목:

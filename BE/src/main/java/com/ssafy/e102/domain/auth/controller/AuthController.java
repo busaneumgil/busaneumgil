@@ -1,13 +1,11 @@
 package com.ssafy.e102.domain.auth.controller;
 
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.auth.dto.request.ReissueRequest;
@@ -18,21 +16,17 @@ import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.global.response.ApiResponse;
-import com.ssafy.e102.global.security.AuthPrincipal;
+import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
-	private static final String BEARER_PREFIX = "Bearer ";
-
 	private final AuthService authService;
-
-	public AuthController(AuthService authService) {
-		this.authService = authService;
-	}
 
 	@PostMapping("/social-login")
 	public ApiResponse<SocialLoginResponse> socialLogin(
@@ -42,12 +36,11 @@ public class AuthController {
 	}
 
 	@PostMapping("/signup")
-	public ResponseEntity<ApiResponse<SignupResponse>> signup(
+	@ResponseStatus(HttpStatus.CREATED)
+	public ApiResponse<SignupResponse> signup(
 		@Valid @RequestBody
 		SignupRequest request) {
-		return ResponseEntity
-			.status(HttpStatus.CREATED)
-			.body(ApiResponse.created(authService.signup(request)));
+		return ApiResponse.created(authService.signup(request));
 	}
 
 	@PostMapping("/reissue")
@@ -58,16 +51,10 @@ public class AuthController {
 	}
 
 	@PostMapping("/logout")
-	public ResponseEntity<Void> logout(
-		Authentication authentication,
-		@RequestHeader(HttpHeaders.AUTHORIZATION)
-		String authorizationHeader) {
-		AuthPrincipal principal = (AuthPrincipal)authentication.getPrincipal();
-		authService.logout(principal.userId(), extractBearerToken(authorizationHeader));
-		return ResponseEntity.noContent().build();
-	}
-
-	private String extractBearerToken(String authorizationHeader) {
-		return authorizationHeader.substring(BEARER_PREFIX.length());
+	public ApiResponse<Void> logout(
+		@AuthenticationPrincipal
+		AuthPrincipal principal) {
+		authService.logout(principal.userId(), principal.accessToken());
+		return ApiResponse.successMessage("로그아웃되었습니다.");
 	}
 }

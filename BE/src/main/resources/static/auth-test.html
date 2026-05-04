@@ -421,8 +421,7 @@
 	let authTestConfig = {
 		kakaoJavaScriptKey: "",
 		naverClientId: "",
-		googleClientId: "",
-		naverCallbackUrl: currentPageUrl()
+		googleClientId: ""
 	};
 
 	// 테스트 페이지는 우리 API가 받는 socialAccessToken을 바로 확보해야 해서 access token 로그인 함수를 제공하는 SDK를 사용한다.
@@ -542,7 +541,7 @@
 		return body;
 	}
 
-	async function authorizedRequest(method, path) {
+	async function authorizedRequest(method, path, options = {}) {
 		const accessToken = requireValue($("accessToken").value, "서비스 access token");
 		setStatus(`${path} 호출 중`);
 		const response = await fetch(endpoint(path), {
@@ -553,11 +552,18 @@
 		});
 		const text = await response.text();
 		const body = text ? JSON.parse(text) : null;
-		showResponse(response.status, body);
-		setStatus(`${path} 응답 ${response.status}`);
-		if (response.status === 204) {
+		const displayBody = body ?? (response.ok && options.emptySuccessMessage
+			? { message: options.emptySuccessMessage }
+			: null);
+		showResponse(response.status, displayBody);
+		if (response.status === 204 || (response.ok && options.clearTokensOnSuccess)) {
 			clearServiceTokens();
 		}
+		if (response.ok) {
+			setStatus(options.successStatus ?? `${path} 응답 ${response.status}`);
+			return body;
+		}
+		setStatus(options.failureStatus ?? `${path} 실패 ${response.status}`);
 		return body;
 	}
 
@@ -593,7 +599,7 @@
 		const callbackUrl = currentPageUrl();
 		$("providerConsoleGuide").textContent =
 			`제공자 콘솔 등록값: 카카오 Web 사이트 도메인 ${origin}, 카카오 Redirect URI ${callbackUrl}, ` +
-			`구글 Authorized JavaScript origins ${origin}, 네이버 Callback URL ${authTestConfig.naverCallbackUrl || callbackUrl}`;
+			`구글 Authorized JavaScript origins ${origin}, 네이버 Callback URL ${callbackUrl}`;
 	}
 
 	async function kakaoLogin() {
@@ -624,7 +630,7 @@
 
 	function naverLogin() {
 		const clientId = requireValue(authTestConfig.naverClientId, "네이버 Client ID");
-		const redirectUri = requireValue(authTestConfig.naverCallbackUrl, "네이버 콜백 URL");
+		const redirectUri = currentPageUrl();
 		const state = crypto.randomUUID();
 		sessionStorage.setItem(NAVER_STATE_KEY, state);
 		const authorizeUrl = new URL("https://nid.naver.com/oauth2.0/authorize");
@@ -741,14 +747,24 @@
 	});
 
 	$("logoutButton").addEventListener("click", () => {
-		authorizedRequest("POST", "/api/auth/logout").catch((error) => {
+		authorizedRequest("POST", "/api/auth/logout", {
+			successStatus: "로그아웃 성공",
+			failureStatus: "로그아웃 실패",
+			emptySuccessMessage: "로그아웃되었습니다. 서비스 토큰을 비웠습니다.",
+			clearTokensOnSuccess: true
+		}).catch((error) => {
 			setStatus("로그아웃 요청 실패");
 			showResponse("CLIENT_ERROR", { message: error.message });
 		});
 	});
 
 	$("withdrawButton").addEventListener("click", () => {
-		authorizedRequest("DELETE", "/api/users/me").catch((error) => {
+		authorizedRequest("DELETE", "/api/users/me", {
+			successStatus: "회원탈퇴 성공",
+			failureStatus: "회원탈퇴 실패",
+			emptySuccessMessage: "회원탈퇴가 완료되었습니다. 서비스 토큰을 비웠습니다.",
+			clearTokensOnSuccess: true
+		}).catch((error) => {
 			setStatus("회원탈퇴 요청 실패");
 			showResponse("CLIENT_ERROR", { message: error.message });
 		});

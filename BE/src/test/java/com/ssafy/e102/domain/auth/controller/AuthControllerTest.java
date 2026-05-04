@@ -4,7 +4,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,10 +14,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -28,7 +27,7 @@ import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
-import com.ssafy.e102.global.security.AuthPrincipal;
+import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 class AuthControllerTest {
 
@@ -40,7 +39,9 @@ class AuthControllerTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService)).build();
+		mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService))
+			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+			.build();
 	}
 
 	@Test
@@ -109,18 +110,19 @@ class AuthControllerTest {
 	}
 
 	@Test
-	@DisplayName("로그아웃 요청은 현재 사용자 세션을 무효화하고 204를 반환한다")
+	@DisplayName("로그아웃 요청은 현재 사용자 세션을 무효화하고 성공 메시지를 반환한다")
 	void logout() throws Exception {
 		UUID userId = UUID.randomUUID();
 		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-			new AuthPrincipal(userId), null);
+			new AuthPrincipal(userId, "access-token"), null);
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 
 		mockMvc.perform(post("/api/auth/logout")
-			.principal(authentication)
-			.header(HttpHeaders.AUTHORIZATION, "Bearer access-token"))
-			.andExpect(status().isNoContent())
-			.andExpect(content().string(""));
+			.principal(authentication))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data").doesNotExist())
+			.andExpect(jsonPath("$.message").value("로그아웃되었습니다."));
 
 		verify(authService).logout(userId, "access-token");
 		SecurityContextHolder.clearContext();

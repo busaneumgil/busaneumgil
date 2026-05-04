@@ -159,11 +159,13 @@ private fun MyPageAppInfoTopBar(onBackClick: () -> Unit) {
 
 @Composable
 private fun MyPageAppInfoHeroCard() {
+    val style = myPageAppInfoHeroCardStyle()
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(width = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
+        colors = CardDefaults.cardColors(containerColor = style.containerColor),
+        border = BorderStroke(width = 1.dp, color = style.borderColor),
     ) {
         Row(
             modifier =
@@ -176,7 +178,7 @@ private fun MyPageAppInfoHeroCard() {
             Surface(
                 modifier = Modifier.size(72.dp),
                 shape = RoundedCornerShape(EumRadius.medium),
-                color = MaterialTheme.colorScheme.primary,
+                color = style.logoSurfaceColor,
             ) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -199,17 +201,17 @@ private fun MyPageAppInfoHeroCard() {
                     text = stringResource(id = R.string.app_name),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = style.titleColor,
                 )
                 Text(
                     text = stringResource(id = R.string.my_page_app_info_version, BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = style.versionColor,
                 )
                 Text(
                     text = stringResource(id = R.string.my_page_app_info_description),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = style.descriptionColor,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )

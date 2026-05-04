@@ -39,9 +39,6 @@ def parse_time(time_str: str) -> float:
 
 
 class GyeongsangProcessor:
-    # subset_hours 모드에서 유형별 목표 시간
-    SUBSET_HOURS_BY_TYPE = {"st": 5.0, "say": 5.0, "talk": 4.0}
-
     def __init__(
         self,
         data_dir: str,
@@ -126,20 +123,7 @@ class GyeongsangProcessor:
             f.write(stem + "\n")
         self.done_stems.add(stem)
 
-    # ------------------------------------------------------------------ #
-    #  hours_done 계산 (재시작 시 이전 진행량 복원)                          #
-    # ------------------------------------------------------------------ #
 
-    def _calc_hours_done(self) -> Dict[str, float]:
-        """현재 records에서 유형별 처리 시간 계산."""
-        hours: Dict[str, float] = {"st": 0.0, "say": 0.0, "talk": 0.0}
-        for r in self.records:
-            src = r.get("source", "")
-            # "gyeongsang_st" → "st", "gyeongsang_talk" → "talk"
-            dtype = src.replace("gyeongsang_", "")
-            if dtype in hours:
-                hours[dtype] += r.get("duration", 0.0) / 3600
-        return hours
 
     # ------------------------------------------------------------------ #
     #  zip 파일 탐색                                                        #
@@ -191,30 +175,19 @@ class GyeongsangProcessor:
 
         Ctrl+C 등으로 중단하면 현재까지의 결과를 보존하고 종료.
         다음 실행 시 체크포인트에서 자동으로 재개.
+        subset_hours는 pipeline 인자로만 받고, 실제 한도 제어는
+        체크포인트 파일명 스킵으로만 동작한다.
         """
         pairs = self._zip_pairs()
         logger.info(f"경상도 zip 쌍 {len(pairs)}개 발견")
-
-        # 이전 진행량 복원 (재시작 시 subset 한도 계산에 반영)
-        hours_done = self._calc_hours_done()
-        limits: Dict[str, float] = {}
-        if self.subset_hours is not None:
-            limits = self.SUBSET_HOURS_BY_TYPE
-            logger.info(
-                f"서브셋 모드 재개: 이전 진행량 "
-                f"st={hours_done['st']:.2f}h / say={hours_done['say']:.2f}h / talk={hours_done['talk']:.2f}h"
-            )
 
         try:
             for audio_zip_path, label_zip_path, dtype in pairs:
                 if self._interrupted:
                     break
-                if limits and hours_done.get(dtype, 0.0) >= limits.get(dtype, float("inf")):
-                    logger.info(f"서브셋 한도 도달: {dtype} ({hours_done[dtype]:.2f}h)")
-                    continue
                 logger.info(f"처리 시작: {dtype} | {label_zip_path.name}")
                 try:
-                    self._process_pair(audio_zip_path, label_zip_path, dtype, hours_done, limits)
+                    self._process_pair(audio_zip_path, label_zip_path, dtype)
                 except KeyboardInterrupt:
                     self._interrupted = True
                     logger.warning("KeyboardInterrupt — 현재 zip 처리 중단, 이후 zip 건너뜀")
@@ -256,8 +229,6 @@ class GyeongsangProcessor:
         audio_path: Path,
         label_path: Path,
         dtype: str,
-        hours_done: Dict[str, float],
-        limits: Dict[str, float],
     ):
         with zipfile.ZipFile(audio_path, "r") as az, zipfile.ZipFile(label_path, "r") as lz:
             audio_idx = self._audio_index(az)
@@ -267,9 +238,6 @@ class GyeongsangProcessor:
             try:
                 for jname in pbar:
                     if self._interrupted:
-                        break
-                    if limits and hours_done.get(dtype, 0.0) >= limits.get(dtype, float("inf")):
-                        pbar.close()
                         break
 
                     stem = Path(jname.lstrip("/")).stem
@@ -297,17 +265,11 @@ class GyeongsangProcessor:
                             if rec["key"] not in self.done_keys:
                                 self.records.append(rec)
                                 self._save_record(rec)
-                                hours_done[dtype] = hours_done.get(dtype, 0.0) + rec["duration"] / 3600
 
                         # ★ 파일의 모든 발화 처리 완료 → 파일명 기록
                         self._mark_stem_done(stem)
 
-                        pbar.set_postfix(
-                            {
-                                "done": len(self.records),
-                                f"{dtype}h": f"{hours_done.get(dtype,0):.2f}",
-                            }
-                        )
+                        pbar.set_postfix({"done": len(self.records)})
 
                     except KeyboardInterrupt:
                         self._interrupted = True
@@ -428,7 +390,7 @@ class GyeongsangProcessor:
         for idx, seg in enumerate(final):
             dur = seg["end"] - seg["start"]
             txt = seg["text"]
-            key = f"talk_{stem}_{idx:04d}"
+            key = f"{stem}_{idx:04d}"
 
             if key in self.done_keys:
                 continue

@@ -215,8 +215,6 @@ class DysarthriaProcessor:
       └── dysarthria_records.jsonl  ← 처리 완료 record 전체 (재시작 복원)
     """
 
-    SUBSET_HOURS_BY_TYPE = {"neuro": 2.0, "speech": 2.0, "larynx": 2.0}
-
     def __init__(
         self,
         data_dir: str,
@@ -292,18 +290,7 @@ class DysarthriaProcessor:
             f.write(stem + "\n")
         self.done_stems.add(stem)
 
-    def _calc_hours_done(self) -> Dict[str, float]:
-        hours: Dict[str, float] = {"neuro": 0.0, "speech": 0.0, "larynx": 0.0}
-        src_to_subdir = {v: k for k, v in {
-            "neuro": "dysarthria_neuro",
-            "speech": "dysarthria_speech",
-            "larynx": "dysarthria_larynx",
-        }.items()}
-        for r in self.records:
-            subdir = src_to_subdir.get(r.get("source", ""), "")
-            if subdir in hours:
-                hours[subdir] += r.get("duration", 0.0) / 3600
-        return hours
+
 
     # ------------------------------------------------------------------ #
 
@@ -311,16 +298,6 @@ class DysarthriaProcessor:
         if not self.data_dir.exists():
             logger.warning(f"구음장애 데이터 디렉토리 없음: {self.data_dir}")
             return []
-
-        hours_done = self._calc_hours_done()
-        limits: Dict[str, float] = {}
-        if self.subset_hours is not None:
-            limits = self.SUBSET_HOURS_BY_TYPE
-            logger.info(
-                f"서브셋 모드 재개: "
-                f"neuro={hours_done['neuro']:.2f}h / speech={hours_done['speech']:.2f}h / "
-                f"larynx={hours_done['larynx']:.2f}h"
-            )
 
         try:
             for subdir_name, type_code in SUBDIR_TO_TYPE.items():
@@ -330,12 +307,9 @@ class DysarthriaProcessor:
                 if not subdir.exists():
                     logger.warning(f"서브디렉토리 없음: {subdir}")
                     continue
-                if limits and hours_done.get(subdir_name, 0.0) >= limits.get(subdir_name, float("inf")):
-                    logger.info(f"서브셋 한도 도달: {subdir_name}")
-                    continue
                 logger.info(f"구음장애 처리: {subdir_name} (Type {type_code})")
                 try:
-                    self._process_subdir(subdir, subdir_name, type_code, hours_done, limits)
+                    self._process_subdir(subdir, subdir_name, type_code)
                 except KeyboardInterrupt:
                     self._interrupted = True
                     logger.warning("KeyboardInterrupt — 현재 subdir 처리 중단")
@@ -364,8 +338,6 @@ class DysarthriaProcessor:
         subdir: Path,
         subdir_name: str,
         type_code: str,
-        hours_done: Dict[str, float],
-        limits: Dict[str, float],
     ):
         audio_dir = subdir / "audio"
         label_dir = subdir / "label"
@@ -381,8 +353,6 @@ class DysarthriaProcessor:
         try:
             for json_path in pbar:
                 if self._interrupted:
-                    break
-                if limits and hours_done.get(subdir_name, 0.0) >= limits.get(subdir_name, float("inf")):
                     break
 
                 # ★ 파일 단위 스킵
@@ -415,14 +385,11 @@ class DysarthriaProcessor:
                         if rec["key"] not in self.done_keys:
                             self.records.append(rec)
                             self._save_record(rec)
-                            hours_done[subdir_name] = (
-                                hours_done.get(subdir_name, 0.0) + rec["duration"] / 3600
-                            )
 
                     # ★ 파일 완료 표시
                     self._mark_stem_done(json_path.stem)
 
-                    pbar.set_postfix({"done": len(self.records), f"{subdir_name}h": f"{hours_done.get(subdir_name,0):.2f}"})
+                    pbar.set_postfix({"done": len(self.records)})
 
                 except KeyboardInterrupt:
                     self._interrupted = True
@@ -530,9 +497,6 @@ class DysarthriaProcessor:
         type_code: str,
     ) -> List[Dict]:
         """zip 아카이브에서 직접 처리 (다운로드 직후 구조에 대응)."""
-        hours_done: Dict[str, float] = {subdir_name: 0.0}
-        limits = self.SUBSET_HOURS_BY_TYPE if self.subset_hours is not None else {}
-
         with zipfile.ZipFile(audio_zip_path, "r") as az, zipfile.ZipFile(
             label_zip_path, "r"
         ) as lz:
@@ -547,8 +511,6 @@ class DysarthriaProcessor:
             try:
                 for jname in pbar:
                     if self._interrupted:
-                        break
-                    if limits and hours_done.get(subdir_name, 0.0) >= limits.get(subdir_name, float("inf")):
                         break
 
                     stem = Path(jname.lstrip("/")).stem
@@ -579,9 +541,6 @@ class DysarthriaProcessor:
                             if rec["key"] not in self.done_keys:
                                 self.records.append(rec)
                                 self._save_record(rec)
-                                hours_done[subdir_name] = (
-                                    hours_done.get(subdir_name, 0.0) + rec["duration"] / 3600
-                                )
 
                         # ★ 파일 완료 표시
                         self._mark_stem_done(stem)

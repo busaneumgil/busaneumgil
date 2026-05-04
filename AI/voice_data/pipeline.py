@@ -242,7 +242,7 @@ def main():
         "--subset_hours",
         type=float,
         default=None,
-        help="서브셋 처리 시간 (예: 20). None이면 전체 처리",
+        help="(현재 미사용) 서브셋 실험용 플래그. 실제 처리 한도는 체크포인트 파일명 스킵으로 제어됩니다.",
     )
     parser.add_argument("--num_workers", type=int, default=1, help="현재 미사용 (향후 병렬처리 예정)")
     parser.add_argument("--seed", type=int, default=42)
@@ -284,21 +284,20 @@ def main():
     interrupted = gy_processor._interrupted
 
     # ---- 2. 구음장애 처리 ---------------------------------------------- #
-    dy_processor = DysarthriaProcessor(
-        data_dir=args.dysarthria_dir or "NOT_EXISTS",
-        output_dir=str(output_dir),
-        subset_hours=args.subset_hours,
-        seed=args.seed,
-    )
+    dy_processor: Optional[DysarthriaProcessor] = None
     dy_records: List[Dict] = []
+
     if not interrupted and args.dysarthria_dir and Path(args.dysarthria_dir).exists():
+        dy_processor = DysarthriaProcessor(
+            data_dir=args.dysarthria_dir,
+            output_dir=str(output_dir),
+            subset_hours=args.subset_hours,
+            seed=args.seed,
+        )
         dy_records = dy_processor.process()
         interrupted = dy_processor._interrupted
     else:
-        # 구음장애 데이터 없어도 체크포인트에서 이전 결과 복원
-        dy_records = dy_processor.records
-        if not args.dysarthria_dir or not Path(args.dysarthria_dir).exists():
-            logger.info("구음장애 데이터 경로 없음 → 건너뜀")
+        logger.info("구음장애 데이터 경로 없음 → 건너뜀")
 
     # ---- 중단 시 현재까지 결과만 저장하고 종료 --------------------------- #
     def _save_partial_and_exit(gy_recs: List[Dict], dy_recs: List[Dict]):

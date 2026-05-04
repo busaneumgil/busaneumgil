@@ -26,6 +26,7 @@ val defaultBaseUrl = "https://api.example.com"
 val debugBaseUrl = appProperty("app.debug.baseUrl", defaultBaseUrl)
 val debugMockMode = appProperty("app.debug.mockMode", "false")
 val debugDemoMode = appProperty("app.debug.demoMode", "false")
+val debugForceLowVisionTermsGuide = appProperty("app.debug.forceLowVisionTermsGuide", "false")
 val releaseBaseUrl = appProperty("app.release.baseUrl", debugBaseUrl)
 
 android {
@@ -50,6 +51,7 @@ android {
             buildConfigField("String", "BASE_URL", quoted(debugBaseUrl))
             buildConfigField("boolean", "IS_MOCK_MODE", debugMockMode)
             buildConfigField("boolean", "IS_DEMO_MODE", debugDemoMode)
+            buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", debugForceLowVisionTermsGuide)
         }
 
         release {
@@ -57,6 +59,7 @@ android {
             buildConfigField("String", "BASE_URL", quoted(releaseBaseUrl))
             buildConfigField("boolean", "IS_MOCK_MODE", "false")
             buildConfigField("boolean", "IS_DEMO_MODE", "false")
+            buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

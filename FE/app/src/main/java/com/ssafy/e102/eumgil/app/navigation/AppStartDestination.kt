@@ -19,6 +19,10 @@ sealed interface AppStartDestination {
         override val route: String = OnboardingRoute.UserTypePrimary.route
     }
 
+    data object LowVisionTermsGuide : AppStartDestination {
+        override val route: String = OnboardingRoute.TermsGuide.createRoute()
+    }
+
     data object Map : AppStartDestination {
         override val route: String = TopLevelRoute.Map.route
     }
@@ -31,9 +35,11 @@ sealed interface AppStartDestination {
 fun resolveAppStartDestination(
     authGateState: AuthGateState,
     initSettings: InitSettings,
+    forceLowVisionTermsGuide: Boolean = false,
 ): AppStartDestination {
     if (!authGateState.hasSession) return AppStartDestination.Login
     if (!authGateState.isProfileCompleted) return AppStartDestination.ProfileSetup
+    if (forceLowVisionTermsGuide) return AppStartDestination.LowVisionTermsGuide
 
     return if (initSettings.isOnboardingCompleted) {
         if (initSettings.selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {

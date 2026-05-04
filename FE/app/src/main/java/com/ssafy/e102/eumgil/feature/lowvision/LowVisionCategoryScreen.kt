@@ -28,6 +28,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -64,11 +67,15 @@ internal object LowVisionCategoryLayoutDefaults {
 
 internal fun lowVisionCategoryDisplayLabel(label: String): String =
     when (val trimmedLabel = label.trim()) {
+        "엘리베이터" -> "엘리\n베이터"
         "\uC219\uBC15\uC2DC\uC124" -> "\uC219\uBC15\n\uC2DC\uC124"
         else -> trimmedLabel.replace(Regex("\\s+"), "\n")
     }
 
-private val lowVisionCategoryOptions =
+internal fun lowVisionCategoryResultA11yHint(label: String): String =
+    "${label.trim()}에 대한 결과를 안내합니다."
+
+internal val lowVisionCategoryOptions =
     listOf(
         LowVisionCategoryOption(
             label = "화장실",
@@ -79,12 +86,18 @@ private val lowVisionCategoryOptions =
             iconRes = R.drawable.ic_place_restaurant,
         ),
         LowVisionCategoryOption(
-            label = "숙박시설",
-            iconRes = R.drawable.ic_place_lodging,
+            label = "승강기",
+            talkBackLabel = "승강기, 엘리베이터",
+            iconRes = R.drawable.ic_route_elevator,
         ),
         LowVisionCategoryOption(
-            label = "병원",
-            iconRes = R.drawable.ic_place_hospital,
+            label = "관광지",
+            resultA11yHintOverride = "무장애 관광지. 편하게 즐길 수 있는 관광지를 안내합니다.",
+            iconRes = R.drawable.ic_nav_facility,
+        ),
+        LowVisionCategoryOption(
+            label = "휠체어 충전",
+            iconRes = R.drawable.ic_place_charging,
         ),
     )
 
@@ -222,10 +235,10 @@ private fun LowVisionCategoryCard(
                     shape = RoundedCornerShape(LowVisionCategoryLayoutDefaults.cardCornerRadius),
                 )
                 .background(LowVisionCategoryBackground)
-                .lowVisionButtonSemantics(
-                    label = option.label,
-                    actionHint = "두 번 탭하면 ${option.label} 결과를 봅니다.",
-                )
+                .clearAndSetSemantics {
+                    role = Role.Button
+                    contentDescription = option.resultA11yHint
+                }
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(
                     horizontal = LowVisionCategoryLayoutDefaults.cardHorizontalPadding,
@@ -255,7 +268,12 @@ private fun LowVisionCategoryCard(
     }
 }
 
-private data class LowVisionCategoryOption(
+internal data class LowVisionCategoryOption(
     val label: String,
+    val talkBackLabel: String = label,
+    val resultA11yHintOverride: String? = null,
     @DrawableRes val iconRes: Int,
-)
+) {
+    val resultA11yHint: String
+        get() = resultA11yHintOverride ?: lowVisionCategoryResultA11yHint(talkBackLabel)
+}

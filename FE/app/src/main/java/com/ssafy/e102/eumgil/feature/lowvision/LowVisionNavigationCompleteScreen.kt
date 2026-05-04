@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
 private val CompleteBackground = Color(0xFF0D0D0F)
-private val CompleteYellow = Color(0xFFFFD400)
+private val CompleteYellow = LowVisionScreenDefaults.brandYellow
 private val CompleteBlack = Color(0xFF000000)
 
 @Composable

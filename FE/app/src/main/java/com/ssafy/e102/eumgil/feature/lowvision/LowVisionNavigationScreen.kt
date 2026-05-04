@@ -41,7 +41,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationUiState
 
 private val LowVisionNavigationBackground = Color(0xFF0D0D0F)
 private val LowVisionNavigationPanel = Color(0xFF202123)
-private val LowVisionNavigationYellow = Color(0xFFFFD400)
+private val LowVisionNavigationYellow = LowVisionScreenDefaults.brandYellow
 private val LowVisionNavigationCoral = Color(0xFFFF8B78)
 private val LowVisionNavigationInactive = Color(0xFFE7E7E7)
 private val LowVisionNavigationDivider = Color(0xFF36363A)

@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
 private val BriefingBackground = Color(0xFF0D0D0F)
-private val BriefingYellow = Color(0xFFFFD400)
+private val BriefingYellow = LowVisionScreenDefaults.brandYellow
 private val BriefingBlack = Color(0xFF000000)
 private val BriefingWhite = Color(0xFFFFFFFF)
 

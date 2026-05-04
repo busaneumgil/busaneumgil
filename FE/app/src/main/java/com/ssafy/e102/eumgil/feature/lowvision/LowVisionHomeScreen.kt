@@ -42,7 +42,7 @@ internal object LowVisionHomeLayoutDefaults {
  * 출처: Figma file MREqSzkmwhRcXnFS3lzW17, node 371:105 ("home").
  *
  * 디자인 규칙(Figma get_variable_defs):
- *   - color/yellow/50  = #FFD400 (Gold)        — 카드, 활성 nav
+ *   - color/yellow/50  = #FFCC00 (Gold)        — 카드, 활성 nav
  *   - color/black/solid = #000000              — 배경
  *   - color/grey/12    = #1E1E1E                — info-box 배경
  *   - color/grey/20    = #333333                — info-box 보더
@@ -132,7 +132,7 @@ private fun HomeYellowCard(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFFFFD400))
+            .background(LowVisionScreenDefaults.brandYellow)
             .clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {

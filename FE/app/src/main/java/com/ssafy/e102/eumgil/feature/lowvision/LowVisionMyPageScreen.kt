@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
-private val LowVisionYellow = Color(0xFFFFD400)
+private val LowVisionYellow = LowVisionScreenDefaults.brandYellow
 
 internal object LowVisionMyPageLayoutDefaults {
     const val actionCount = 3

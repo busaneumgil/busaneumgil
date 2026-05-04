@@ -451,7 +451,7 @@
     <string name="route_setting_detail_highlight_title">주요 구간</string>
     <string name="route_setting_detail_highlight_empty_title">추가 주의 구간 없음</string>
     <string name="route_setting_detail_highlight_empty_description">현재 선택한 경로에서 별도로 강조할 주의 구간이 확인되지 않았습니다.</string>
-    <string name="route_setting_detail_steps_title">단계별 안내</string>
+    <string name="route_setting_detail_steps_title">경로 안내</string>
     <string name="route_setting_detail_steps_fallback_title">세부 이동 정보 준비 중</string>
     <string name="route_setting_detail_steps_supporting">단계별 시간과 세부 시설 정보는 준비 중이며, 현재는 요약 기반 경로 흐름을 먼저 제공합니다.</string>
     <string name="route_setting_detail_steps_a11y">단계별 경로 안내, %1$d개 단계</string>

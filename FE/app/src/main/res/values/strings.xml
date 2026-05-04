@@ -256,6 +256,17 @@
     <string name="saved_route_route_summary">%1$s → %2$s</string>
     <string name="saved_route_meta_distance">거리 %1$s</string>
     <string name="saved_route_meta_duration">예상 %1$s</string>
+    <string name="bookmark_screen_title">북마크</string>
+    <string name="bookmark_edit_enter">편집</string>
+    <string name="bookmark_edit_done">완료</string>
+    <string name="bookmark_tab_place">장소</string>
+    <string name="bookmark_tab_route">경로</string>
+    <string name="bookmark_route_guide_cta">길찾기</string>
+    <string name="bookmark_place_empty_title">북마크한 장소가 없어요</string>
+    <string name="bookmark_place_empty_description">마음에 드는 장소를 검색해 북마크에 담아 보세요.</string>
+    <string name="bookmark_place_empty_search_cta">장소 검색하기</string>
+    <string name="bookmark_route_placeholder_title">경로 북마크는 곧 만나요</string>
+    <string name="bookmark_route_placeholder_description">이번 업데이트에서는 장소 북마크만 제공합니다. 경로 북마크는 다음 업데이트(BMK-02)에서 제공돼요.</string>
     <string name="my_page_screen_title">마이페이지</string>
     <string name="my_page_screen_description">계정 정보와 주요 메뉴를 확인하는 마이페이지 화면입니다.</string>
     <string name="my_page_default_user_name">이용진 사용자</string>

@@ -20,10 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,22 +49,22 @@ fun LowVisionVoiceInputScreen(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val recordingA11y = stringResource(id = R.string.low_vision_voice_input_screen_a11y)
+    val recordingLabel = stringResource(id = R.string.low_vision_voice_input_recording_label)
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .semantics {
-                role = Role.Button
-                contentDescription = recordingA11y
-            },
+            .background(Color.Black),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .statusBarsPadding()
+                .lowVisionButtonSemantics(
+                    label = recordingLabel,
+                    actionHint = "두 번 탭하면 입력을 종료합니다.",
+                )
                 .clickable { onCancelRecording() },
             contentAlignment = Alignment.Center,
         ) {
@@ -95,7 +91,7 @@ fun LowVisionVoiceInputScreen(
                 }
 
                 Text(
-                    text = stringResource(id = R.string.low_vision_voice_input_recording_label),
+                    text = recordingLabel,
                     color = Color(0xFFFFD400),
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Black,

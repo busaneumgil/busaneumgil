@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -78,7 +79,7 @@ class SavedRouteViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
             advanceUntilIdle()
@@ -102,7 +103,7 @@ class SavedRouteViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SavedRouteUiAction.PlaceRouteGuideClicked(placeId = "bookmark-place-1"))
             advanceUntilIdle()
@@ -129,7 +130,7 @@ class SavedRouteViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
             advanceUntilIdle()

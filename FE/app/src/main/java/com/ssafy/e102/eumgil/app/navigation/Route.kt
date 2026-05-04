@@ -2,6 +2,8 @@ package com.ssafy.e102.eumgil.app.navigation
 
 import android.net.Uri
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 sealed interface AppRoute {
     val route: String
@@ -101,6 +103,30 @@ sealed interface LowVisionRoute : AppRoute {
         override val route: String = "low_vision/search"
     }
 
+    data object CategorySearch : LowVisionRoute {
+        override val route: String = "low_vision/category_search"
+    }
+
+    data object CategoryResult : LowVisionRoute {
+        const val ARG_CATEGORY: String = "category"
+
+        override val route: String = "low_vision/category_result/{$ARG_CATEGORY}"
+
+        fun createRoute(category: String): String = "low_vision/category_result/${category.navArgEncode()}"
+    }
+
+    data object RouteBriefing : LowVisionRoute {
+        override val route: String = "low_vision/route_briefing"
+    }
+
+    data object Guidance : LowVisionRoute {
+        override val route: String = "low_vision/guidance"
+    }
+
+    data object NavigationComplete : LowVisionRoute {
+        override val route: String = "low_vision/navigation_complete"
+    }
+
     data object MyPage : LowVisionRoute {
         override val route: String = "low_vision/my_page"
     }
@@ -161,7 +187,7 @@ sealed interface RouteSettingRoute : AppRoute {
         override val route: String = "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}"
 
         fun createRoute(routeOption: RouteOption): String =
-            "$ROUTE_SETTING_BASE_ROUTE/detail/${Uri.encode(routeOption.name)}"
+            "$ROUTE_SETTING_BASE_ROUTE/detail/${routeOption.name.navArgEncode()}"
     }
 }
 
@@ -186,6 +212,11 @@ sealed interface NavigationRoute : AppRoute {
         override val route: String = "navigation_guidance"
     }
 }
+
+private fun String.navArgEncode(): String =
+    URLEncoder
+        .encode(this, StandardCharsets.UTF_8.toString())
+        .replace("+", "%20")
 
 private const val ROUTE_SETTING_BASE_ROUTE: String = "route_setting"
 

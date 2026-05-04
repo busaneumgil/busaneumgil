@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultAuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultBookmarkRepository
@@ -57,8 +58,12 @@ object RepositoryModule {
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,
+        initialBookmarks: List<BookmarkData> = emptyList(),
     ): BookmarkRepository =
-        DefaultBookmarkRepository(bookmarkDao = bookmarkDao)
+        DefaultBookmarkRepository(
+            bookmarkDao = bookmarkDao,
+            initialBookmarks = initialBookmarks,
+        )
 
     fun provideRouteBookmarkRepository(): RouteBookmarkRepository = FakeRouteBookmarkRepository()
 

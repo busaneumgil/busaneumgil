@@ -33,6 +33,8 @@ internal object LowVisionHomeLayoutDefaults {
     const val voiceActionCardWeight = 2f
     const val currentLocationCardWeight = 1f
     val actionCardGap = 40.dp
+    val actionLabelFontSize = 48.sp
+    val actionLabelFontWeight = FontWeight.Black
     const val showsStatusGuide = false
 }
 
@@ -95,7 +97,6 @@ fun LowVisionHomeScreen(
                 iconRes = R.drawable.ic_voice_mic,
                 iconSize = 64.dp,
                 label = voiceInputLabel,
-                labelSize = 28.sp,
                 onClick = onVoiceInputClick,
             )
 
@@ -108,7 +109,6 @@ fun LowVisionHomeScreen(
                 iconRes = R.drawable.ic_voice_location_pin,
                 iconSize = 56.dp,
                 label = currentLocationLabel,
-                labelSize = 28.sp,
                 onClick = onCurrentLocationClick,
             )
         }
@@ -125,7 +125,6 @@ private fun HomeYellowCard(
     iconRes: Int,
     iconSize: androidx.compose.ui.unit.Dp,
     label: String,
-    labelSize: androidx.compose.ui.unit.TextUnit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -149,8 +148,8 @@ private fun HomeYellowCard(
             Text(
                 text = label,
                 color = Color.Black,
-                fontSize = labelSize,
-                fontWeight = FontWeight.Bold,
+                fontSize = LowVisionHomeLayoutDefaults.actionLabelFontSize,
+                fontWeight = LowVisionHomeLayoutDefaults.actionLabelFontWeight,
                 letterSpacing = (-1).sp,
             )
         }

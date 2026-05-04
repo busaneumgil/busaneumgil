@@ -27,7 +27,7 @@ class MapShortcutFilterRowConfigurationTest {
     fun `map shortcut filter row enlarges only the elevator icon`() {
         assertEquals(18, shortcutFilterIconSizeDp(MapShortcutFilterKey.ELEVATOR))
         assertEquals(16, shortcutFilterIconSizeDp(MapShortcutFilterKey.TOILET))
-        assertEquals(16, shortcutFilterIconSizeDp(MapShortcutFilterKey.ACCESSIBLE_PARKING))
+        assertEquals(16, shortcutFilterIconSizeDp(MapShortcutFilterKey.FOOD_CAFE))
     }
 
     @Test

@@ -6,13 +6,14 @@ import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
-import com.ssafy.e102.eumgil.core.model.AccessibilityTag
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.FacilityMarkerSeed
+import com.ssafy.e102.eumgil.core.model.FacilitySeed
 import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
 import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
@@ -168,10 +169,10 @@ class MapViewModelTest {
 
             advanceUntilIdle()
 
-            assertEquals(13, viewModel.uiState.value.markerOverlayState.totalMarkerCount)
-            assertEquals(13, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertEquals(17, viewModel.uiState.value.markerOverlayState.totalMarkerCount)
+            assertEquals(17, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
             assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
-            assertEquals(6, viewModel.uiState.value.markerFilterState.categoryOptions.size)
+            assertEquals(10, viewModel.uiState.value.markerFilterState.categoryOptions.size)
         }
 
     @Test
@@ -198,9 +199,13 @@ class MapViewModelTest {
                     FacilityCategory.TOILET,
                     FacilityCategory.ELEVATOR,
                     FacilityCategory.CHARGING_STATION,
+                    FacilityCategory.FOOD_CAFE,
+                    FacilityCategory.TOURIST_SPOT,
+                    FacilityCategory.ACCOMMODATION,
+                    FacilityCategory.HEALTHCARE,
+                    FacilityCategory.WELFARE,
+                    FacilityCategory.PUBLIC_OFFICE,
                     FacilityCategory.BRAILLE_BLOCK,
-                    FacilityCategory.TOURIST_ATTRACTION,
-                    FacilityCategory.RESTAURANT,
                 ),
                 categoryOrder,
             )
@@ -286,7 +291,7 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
-            assertEquals(13, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertEquals(17, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
         }
 
     @Test
@@ -487,12 +492,12 @@ class MapViewModelTest {
 
             advanceUntilIdle()
 
-            val restaurantMarkerId =
+            val foodCafeMarkerId =
                 viewModel.uiState.value.markerOverlayState.markers
-                    .first { marker -> marker.categoryType.category == FacilityCategory.RESTAURANT }
+                    .first { marker -> marker.categoryType.category == FacilityCategory.FOOD_CAFE }
                     .markerId
 
-            viewModel.onAction(MapUiAction.MarkerTapped(restaurantMarkerId))
+            viewModel.onAction(MapUiAction.MarkerTapped(foodCafeMarkerId))
             viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
             advanceUntilIdle()
 
@@ -600,7 +605,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `shortcut filter row hides more chip and parking shortcut filters markers`() =
+    fun `shortcut filter row exposes contract aligned quick filters`() =
         runTest {
             val viewModel =
                 MapViewModel(
@@ -618,16 +623,34 @@ class MapViewModelTest {
                 listOf(
                     MapShortcutFilterKey.TOILET,
                     MapShortcutFilterKey.ELEVATOR,
-                    MapShortcutFilterKey.ACCESSIBLE_PARKING,
                     MapShortcutFilterKey.CHARGING_STATION,
-                    MapShortcutFilterKey.BRAILLE_BLOCK,
-                    MapShortcutFilterKey.TOURIST_ATTRACTION,
-                    MapShortcutFilterKey.RESTAURANT,
+                    MapShortcutFilterKey.FOOD_CAFE,
+                    MapShortcutFilterKey.TOURIST_SPOT,
+                    MapShortcutFilterKey.ACCOMMODATION,
+                    MapShortcutFilterKey.HEALTHCARE,
+                    MapShortcutFilterKey.WELFARE,
+                    MapShortcutFilterKey.PUBLIC_OFFICE,
                 ),
                 viewModel.uiState.value.shortcutFilterState.chips.map { chip -> chip.key },
             )
+        }
 
-            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.ACCESSIBLE_PARKING))
+    @Test
+    fun `shortcut filter charging station chip narrows visible markers to charging facilities`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.CHARGING_STATION))
             advanceUntilIdle()
 
             val visibleMarkers = viewModel.uiState.value.markerOverlayState.visibleMarkers
@@ -636,14 +659,38 @@ class MapViewModelTest {
             assertTrue(visibleMarkers.size < viewModel.uiState.value.markerOverlayState.totalMarkerCount)
             assertTrue(
                 visibleMarkers.all { marker ->
-                    AccessibilityTag.ACCESSIBLE_PARKING in marker.accessibilityTags
+                    marker.categoryType.category == FacilityCategory.CHARGING_STATION
                 },
             )
             assertTrue(
                 viewModel.uiState.value.shortcutFilterState.chips
-                    .first { chip -> chip.key == MapShortcutFilterKey.ACCESSIBLE_PARKING }
+                    .first { chip -> chip.key == MapShortcutFilterKey.CHARGING_STATION }
                     .isSelected,
             )
+        }
+
+    @Test
+    fun `category filter options exclude other even when browse data contains other markers`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = facilitySeedRepositoryWithOtherCategory(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertFalse(
+                viewModel.uiState.value.markerFilterState.categoryOptions.any { option ->
+                    option.category == FacilityCategory.OTHER
+                },
+            )
+            assertEquals(2, viewModel.uiState.value.markerOverlayState.totalMarkerCount)
+            assertEquals(2, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
         }
 
     @Test
@@ -779,6 +826,68 @@ private fun testFacilitySeedRepository(): FacilitySeedRepository =
         localDataSource = FacilitySeedLocalDataSource(),
         mockDataSource = FacilitySeedMockDataSource(),
     )
+
+private fun facilitySeedRepositoryWithOtherCategory(): FacilitySeedRepository =
+    object : FacilitySeedRepository {
+        private val toiletMarker =
+            FacilityMarkerSeed(
+                facilityId = "facility-toilet",
+                name = "장애인 화장실",
+                coordinate = GeoCoordinate(latitude = 35.1, longitude = 129.1),
+                category = FacilityCategory.TOILET,
+            )
+        private val otherMarker =
+            FacilityMarkerSeed(
+                facilityId = "facility-other",
+                name = "기타 편의시설",
+                coordinate = GeoCoordinate(latitude = 35.2, longitude = 129.2),
+                category = FacilityCategory.OTHER,
+            )
+        private val details =
+            listOf(
+                FacilityDetailSeed(
+                    facilityId = toiletMarker.facilityId,
+                    name = toiletMarker.name,
+                    address = "부산광역시 테스트구 1",
+                    coordinate = toiletMarker.coordinate,
+                    category = toiletMarker.category,
+                ),
+                FacilityDetailSeed(
+                    facilityId = otherMarker.facilityId,
+                    name = otherMarker.name,
+                    address = "부산광역시 테스트구 2",
+                    coordinate = otherMarker.coordinate,
+                    category = otherMarker.category,
+                ),
+            )
+
+        override suspend fun getSeedCatalog(): FacilitySeedCatalog =
+            FacilitySeedCatalog(
+                facilities =
+                    details.map { detail ->
+                        FacilitySeed(
+                            facilityId = detail.facilityId,
+                            name = detail.name,
+                            address = detail.address,
+                            coordinate = detail.coordinate,
+                            category = detail.category,
+                        )
+                    },
+            )
+
+        override suspend fun getFacilityBrowseData(query: FacilitySeedQuery): FacilityBrowseData =
+            FacilityBrowseData(
+                facilityMarkers = listOf(toiletMarker, otherMarker),
+                detailsById = details.associateBy { detail -> detail.facilityId },
+                availableCategories = listOf(FacilityCategory.TOILET, FacilityCategory.OTHER),
+            )
+
+        override suspend fun getFacilityMarkers(query: FacilitySeedQuery): List<FacilityMarkerSeed> =
+            listOf(toiletMarker, otherMarker)
+
+        override suspend fun getFacilityDetail(facilityId: String): FacilityDetailSeed? =
+            details.firstOrNull { detail -> detail.facilityId == facilityId }
+    }
 
 private class EmptyFacilitySeedRepository : FacilitySeedRepository {
     override suspend fun getSeedCatalog(): FacilitySeedCatalog = FacilitySeedCatalog()

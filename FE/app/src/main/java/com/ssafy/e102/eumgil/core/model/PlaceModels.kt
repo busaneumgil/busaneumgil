@@ -1,12 +1,18 @@
 package com.ssafy.e102.eumgil.core.model
 
 enum class PlaceCategory {
-    RESTAURANT,
-    TOURIST_ATTRACTION,
     TOILET,
     ELEVATOR,
     CHARGING_STATION,
+    FOOD_CAFE,
+    TOURIST_SPOT,
+    ACCOMMODATION,
+    HEALTHCARE,
+    WELFARE,
+    PUBLIC_OFFICE,
     BRAILLE_BLOCK,
+    RESTAURANT,
+    TOURIST_ATTRACTION,
     OTHER,
 }
 

@@ -3,17 +3,20 @@ package com.ssafy.e102.eumgil.feature.map
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -128,14 +131,7 @@ fun MapScreen(
                     },
                     detailContent = {
                         FacilityDetailAccessibilityTagSection(
-                            title = stringResource(id = R.string.map_facility_detail_accessibility_section_title),
                             tags = facilityDetailSheetUiState.accessibilityTags,
-                            overflowTagCount = facilityDetailSheetUiState.accessibilityOverflowTagCount,
-                        )
-
-                        FacilityDetailSlotCard(
-                            title = stringResource(id = R.string.map_facility_detail_info_section_title),
-                            description = facilityDetailSheetUiState.guideMessage,
                         )
                     },
                     actionContent = {
@@ -144,18 +140,22 @@ fun MapScreen(
                         ) {
                             Button(
                                 onClick = { onAction(MapUiAction.FacilitySetDestinationClicked) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors =
+                                    ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    ),
                             ) {
                                 IconTextButtonContent(
                                     iconRes = R.drawable.ic_direction_destination,
                                     label = stringResource(id = R.string.map_facility_detail_route_entry_action),
                                 )
                             }
-                            Text(
-                                text = stringResource(id = R.string.map_facility_detail_action_supporting_route_setting),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                             facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
                                 Text(
                                     text = message,
@@ -203,13 +203,11 @@ private data class MapLocationPanelState(
 @Immutable
 private data class MapFacilityDetailSheetUiState(
     val isVisible: Boolean,
-    val categoryLabel: String,
-    val distanceLabel: String,
+    @DrawableRes val placeIconRes: Int,
+    val metaLabel: String,
     val title: String,
     val address: String,
     val accessibilityTags: List<String>,
-    val accessibilityOverflowTagCount: Int,
-    val guideMessage: String,
     val isBookmarked: Boolean,
     val isBookmarkUpdating: Boolean,
     val bookmarkErrorMessage: String?,
@@ -217,8 +215,8 @@ private data class MapFacilityDetailSheetUiState(
     fun toShellState(): FacilityDetailBottomSheetShellState =
         FacilityDetailBottomSheetShellState(
             isVisible = isVisible,
-            categoryLabel = categoryLabel,
-            distanceLabel = distanceLabel,
+            placeIconRes = placeIconRes,
+            metaLabel = metaLabel,
             title = title,
             address = address,
         )
@@ -356,36 +354,6 @@ private fun IconTextButtonContent(
 }
 
 @Composable
-private fun FacilityDetailSlotCard(
-    title: String,
-    description: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
 private fun FacilityDetailBookmarkActionButton(
     state: MapFacilityDetailSheetUiState,
     onToggle: () -> Unit,
@@ -448,48 +416,36 @@ private fun FacilityDetailBookmarkActionButton(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FacilityDetailAccessibilityTagSection(
-    title: String,
     tags: List<String>,
-    overflowTagCount: Int,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
     ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
+        val cardLabels =
             if (tags.isEmpty()) {
-                FacilityDetailTagChip(
-                    label = stringResource(id = R.string.map_facility_detail_accessibility_empty),
-                )
+                listOf(stringResource(id = R.string.map_facility_detail_accessibility_empty))
             } else {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                ) {
-                    tags.forEach { label ->
-                        FacilityDetailTagChip(label = label)
-                    }
-                    if (overflowTagCount > 0) {
-                        FacilityDetailTagChip(
-                            label = "+$overflowTagCount",
-                            isOverflow = true,
-                        )
-                    }
+                tags
+            }
+
+        cardLabels.chunked(2).forEach { rowLabels ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            ) {
+                rowLabels.forEach { label ->
+                    FacilityDetailTagCard(
+                        label = label,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                if (rowLabels.size == 1) {
+                    Box(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -497,40 +453,29 @@ private fun FacilityDetailAccessibilityTagSection(
 }
 
 @Composable
-private fun FacilityDetailTagChip(
+private fun FacilityDetailTagCard(
     label: String,
     modifier: Modifier = Modifier,
-    isOverflow: Boolean = false,
 ) {
-    val containerColor =
-        if (isOverflow) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
-        }
-    val contentColor =
-        if (isOverflow) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        }
-
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(EumRadius.full),
-        color = containerColor,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
     ) {
-        Text(
-            text = label,
+        Box(
             modifier =
-                Modifier.padding(
-                    horizontal = EumSpacing.small,
-                    vertical = EumSpacing.xSmall,
-                ),
-            style = MaterialTheme.typography.labelMedium,
-            color = contentColor,
-        )
+                Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .padding(horizontal = EumSpacing.small),
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.align(androidx.compose.ui.Alignment.Center),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 
@@ -695,33 +640,27 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
     return if (detail == null) {
         MapFacilityDetailSheetUiState(
             isVisible = false,
-            categoryLabel = "",
-            distanceLabel = "",
+            placeIconRes = R.drawable.ic_nav_facility,
+            metaLabel = "",
             title = "",
             address = "",
             accessibilityTags = emptyList(),
-            accessibilityOverflowTagCount = 0,
-            guideMessage = "",
             isBookmarked = false,
             isBookmarkUpdating = false,
             bookmarkErrorMessage = null,
         )
     } else {
-        val accessibilityTags = facilityDetailAccessibilityLabels(detail)
         MapFacilityDetailSheetUiState(
             isVisible = uiState.facilityDetailSheetState.isVisible,
-            categoryLabel = facilityDetailCategoryLabel(detail.category),
-            distanceLabel =
-                facilityDetailDistanceBadgeLabel(
+            placeIconRes = facilityDetailPlaceIconRes(detail.category),
+            metaLabel =
+                facilityDetailMetaLabel(
                     detail = detail,
                     locationStatus = uiState.locationStatus,
                 ),
             title = detail.name,
             address = facilityDetailAddressLabel(detail),
-            accessibilityTags = accessibilityTags.take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS),
-            accessibilityOverflowTagCount =
-                (accessibilityTags.size - MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS).coerceAtLeast(0),
-            guideMessage = facilityDetailGuideMessage(detail),
+            accessibilityTags = facilityDetailAccessibilityLabels(detail),
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
             bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
@@ -885,29 +824,33 @@ private fun coordinateText(location: MapCoordinate): String =
 @Composable
 private fun facilityDetailCategoryLabel(category: FacilityCategory): String =
     when (category) {
-        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_filter_category_restaurant)
-        FacilityCategory.TOURIST_ATTRACTION -> stringResource(id = R.string.map_filter_category_tourist_attraction)
         FacilityCategory.TOILET -> stringResource(id = R.string.map_filter_category_toilet)
         FacilityCategory.ELEVATOR -> stringResource(id = R.string.map_filter_category_elevator)
         FacilityCategory.CHARGING_STATION -> stringResource(id = R.string.map_filter_category_charging_station)
+        FacilityCategory.FOOD_CAFE -> "식당·카페"
+        FacilityCategory.TOURIST_SPOT -> "무장애 관광지"
+        FacilityCategory.ACCOMMODATION -> "숙박"
+        FacilityCategory.HEALTHCARE -> "병원"
+        FacilityCategory.WELFARE -> "복지관"
+        FacilityCategory.PUBLIC_OFFICE -> "관공서"
         FacilityCategory.BRAILLE_BLOCK -> stringResource(id = R.string.map_filter_category_braille_block)
+        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_filter_category_restaurant)
+        FacilityCategory.TOURIST_ATTRACTION -> stringResource(id = R.string.map_filter_category_tourist_attraction)
         FacilityCategory.OTHER -> stringResource(id = R.string.map_filter_category_other)
     }
 
 @Composable
-private fun facilityDetailDistanceBadgeLabel(
+private fun facilityDetailMetaLabel(
     detail: FacilityDetailSeed,
     locationStatus: MapLocationStatus,
 ): String {
+    val categoryLabel = facilityDetailCategoryLabel(detail.category)
     val distanceMeters = facilityDistanceMeters(detail.coordinate, locationStatus)
     if (distanceMeters == null) {
-        return stringResource(id = R.string.map_facility_detail_distance_badge_unknown)
+        return categoryLabel
     }
 
-    return stringResource(
-        id = R.string.map_facility_detail_distance_badge,
-        facilityDistanceValueLabel(distanceMeters),
-    )
+    return "$categoryLabel / ${facilityDistanceValueLabel(distanceMeters)}"
 }
 
 @Composable
@@ -952,14 +895,17 @@ private fun facilityDetailGuideMessage(detail: FacilityDetailSeed): String =
 @Composable
 private fun defaultFacilityGuideMessage(detail: FacilityDetailSeed): String =
     when (detail.category) {
-        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_facility_detail_guide_fallback_restaurant)
-        FacilityCategory.TOURIST_ATTRACTION ->
-            stringResource(id = R.string.map_facility_detail_guide_fallback_tourist_attraction)
-
         FacilityCategory.TOILET -> stringResource(id = R.string.map_facility_detail_guide_fallback_toilet)
         FacilityCategory.ELEVATOR -> stringResource(id = R.string.map_facility_detail_guide_fallback_elevator)
         FacilityCategory.CHARGING_STATION ->
             stringResource(id = R.string.map_facility_detail_guide_fallback_charging_station)
+
+        FacilityCategory.FOOD_CAFE -> "출입 동선과 테이블 간격을 먼저 확인한 뒤 방문해 주세요."
+        FacilityCategory.TOURIST_SPOT -> "주 출입구 접근 여부와 주변 경사를 먼저 확인해 주세요."
+        FacilityCategory.ACCOMMODATION -> "장애인 객실 여부와 출입 동선을 먼저 확인해 주세요."
+        FacilityCategory.HEALTHCARE -> "접수 공간과 진료실까지의 이동 동선을 먼저 확인해 주세요."
+        FacilityCategory.WELFARE -> "주 출입구 경사와 내부 이동 여건을 먼저 확인해 주세요."
+        FacilityCategory.PUBLIC_OFFICE -> "민원실 접근 동선과 엘리베이터 위치를 먼저 확인해 주세요."
 
         FacilityCategory.BRAILLE_BLOCK ->
             when (detail.brailleBlockType) {
@@ -974,6 +920,10 @@ private fun defaultFacilityGuideMessage(detail: FacilityDetailSeed): String =
 
                 null -> stringResource(id = R.string.map_facility_detail_guide_fallback_braille_generic)
             }
+
+        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_facility_detail_guide_fallback_restaurant)
+        FacilityCategory.TOURIST_ATTRACTION ->
+            stringResource(id = R.string.map_facility_detail_guide_fallback_tourist_attraction)
 
         FacilityCategory.OTHER -> stringResource(id = R.string.map_facility_detail_guide_fallback_other)
     }
@@ -1072,14 +1022,38 @@ private fun recentDestinationTagLabel(rawKey: String): String? =
     }
 
 @DrawableRes
+private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
+    when (category) {
+        FacilityCategory.TOILET -> R.drawable.ic_place_restroom
+        FacilityCategory.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
+        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_cafe
+        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
+        FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_lodging
+        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_hospital
+        FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
+        FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
+        FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
+    }
+
+@DrawableRes
 private fun recentDestinationIcon(category: PlaceCategory?): Int =
     when (category) {
-        PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
-        PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
         PlaceCategory.TOILET -> R.drawable.ic_place_restroom
         PlaceCategory.ELEVATOR -> R.drawable.ic_route_elevator
         PlaceCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        PlaceCategory.FOOD_CAFE -> R.drawable.ic_place_restaurant
+        PlaceCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
+        PlaceCategory.ACCOMMODATION -> R.drawable.ic_place_lodging
+        PlaceCategory.HEALTHCARE -> R.drawable.ic_place_hospital
+        PlaceCategory.WELFARE -> R.drawable.ic_place_welfare
+        PlaceCategory.PUBLIC_OFFICE -> R.drawable.ic_nav_facility
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
+        PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
+        PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
         PlaceCategory.OTHER -> R.drawable.ic_nav_facility
         null -> R.drawable.ic_nav_facility
     }

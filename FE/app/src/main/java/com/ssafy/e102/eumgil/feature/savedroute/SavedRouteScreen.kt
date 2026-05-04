@@ -770,6 +770,12 @@ private fun SavedRouteTagChip(label: String) {
 @Composable
 private fun savedPlaceCategoryLabel(category: String?): String =
     when (category) {
+        "FOOD_CAFE" -> "식당·카페"
+        "TOURIST_SPOT" -> "무장애 관광지"
+        "ACCOMMODATION" -> "숙박"
+        "HEALTHCARE" -> "병원"
+        "WELFARE" -> "복지관"
+        "PUBLIC_OFFICE" -> "관공서"
         "RESTAURANT" -> stringResource(id = R.string.map_filter_category_restaurant)
         "TOURIST_ATTRACTION" -> stringResource(id = R.string.map_filter_category_tourist_attraction)
         "TOILET" -> stringResource(id = R.string.map_filter_category_toilet)

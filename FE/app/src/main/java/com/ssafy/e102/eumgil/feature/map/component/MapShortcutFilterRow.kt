@@ -114,12 +114,13 @@ private fun shortcutFilterLabel(key: MapShortcutFilterKey): String =
     when (key) {
         MapShortcutFilterKey.TOILET -> "장애인 화장실"
         MapShortcutFilterKey.ELEVATOR -> "엘리베이터"
-        MapShortcutFilterKey.ACCESSIBLE_PARKING -> "장애인 주차장"
-        MapShortcutFilterKey.MORE -> "더보기"
-        MapShortcutFilterKey.CHARGING_STATION -> "휠체어 충전"
-        MapShortcutFilterKey.BRAILLE_BLOCK -> "점자블록"
-        MapShortcutFilterKey.TOURIST_ATTRACTION -> "무장애 관광지"
-        MapShortcutFilterKey.RESTAURANT -> "접근 가능 음식점"
+        MapShortcutFilterKey.CHARGING_STATION -> "전동보장구 충전"
+        MapShortcutFilterKey.FOOD_CAFE -> "식당·카페"
+        MapShortcutFilterKey.TOURIST_SPOT -> "무장애 관광지"
+        MapShortcutFilterKey.ACCOMMODATION -> "숙박"
+        MapShortcutFilterKey.HEALTHCARE -> "병원"
+        MapShortcutFilterKey.WELFARE -> "복지관"
+        MapShortcutFilterKey.PUBLIC_OFFICE -> "관공서"
     }
 
 @DrawableRes
@@ -127,12 +128,13 @@ private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
     when (key) {
         MapShortcutFilterKey.TOILET -> R.drawable.ic_place_restroom
         MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
-        MapShortcutFilterKey.ACCESSIBLE_PARKING -> R.drawable.ic_place_parking
-        MapShortcutFilterKey.MORE -> R.drawable.ic_action_more
         MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging
-        MapShortcutFilterKey.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        MapShortcutFilterKey.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
-        MapShortcutFilterKey.RESTAURANT -> R.drawable.ic_place_restaurant
+        MapShortcutFilterKey.FOOD_CAFE -> R.drawable.ic_place_restaurant
+        MapShortcutFilterKey.TOURIST_SPOT -> R.drawable.ic_nav_facility
+        MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_place_lodging
+        MapShortcutFilterKey.HEALTHCARE -> R.drawable.ic_place_hospital
+        MapShortcutFilterKey.WELFARE -> R.drawable.ic_place_welfare
+        MapShortcutFilterKey.PUBLIC_OFFICE -> R.drawable.ic_nav_facility
     }
 
 internal fun shortcutFilterIconSizeDp(key: MapShortcutFilterKey): Int =

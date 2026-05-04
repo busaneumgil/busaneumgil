@@ -46,6 +46,31 @@ class SavedRouteViewModel(
             SavedRouteUiAction.RetryClicked -> observeBookmarks()
             is SavedRouteUiAction.RouteGuideClicked ->
                 handoffPlace(action.placeId, SavedRouteUiEvent.NavigateToRouteSetting)
+            is SavedRouteUiAction.TabSelected -> selectTab(action.tab)
+            SavedRouteUiAction.EditModeToggled -> toggleEditMode()
+        }
+    }
+
+    private fun selectTab(tab: BookmarkTab) {
+        mutableUiState.update { state ->
+            if (state.selectedTab == tab) {
+                state
+            } else {
+                state.copy(
+                    selectedTab = tab,
+                    isEditMode = false,
+                )
+            }
+        }
+    }
+
+    private fun toggleEditMode() {
+        mutableUiState.update { state ->
+            if (!state.canEnterEditMode && !state.isEditMode) {
+                state
+            } else {
+                state.copy(isEditMode = !state.isEditMode)
+            }
         }
     }
 
@@ -77,15 +102,17 @@ class SavedRouteViewModel(
                     .collectLatest { bookmarks ->
                         latestPlaces = bookmarks.map(BookmarkData::toSavedPlaceUiModel)
                         mutableUiState.update { state ->
+                            val nextScreenState =
+                                if (latestPlaces.isEmpty()) {
+                                    SavedRouteScreenState.EMPTY
+                                } else {
+                                    SavedRouteScreenState.CONTENT
+                                }
                             state.copy(
-                                screenState =
-                                    if (latestPlaces.isEmpty()) {
-                                        SavedRouteScreenState.EMPTY
-                                    } else {
-                                        SavedRouteScreenState.CONTENT
-                                    },
+                                screenState = nextScreenState,
                                 places = latestPlaces,
                                 errorMessage = null,
+                                isEditMode = state.isEditMode && latestPlaces.isNotEmpty(),
                             )
                         }
                     }

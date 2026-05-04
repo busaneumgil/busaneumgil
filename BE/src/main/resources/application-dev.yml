@@ -7,7 +7,7 @@ spring:
   jpa:
     database: postgresql
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     open-in-view: false
   data:
     redis:

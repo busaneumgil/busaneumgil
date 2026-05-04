@@ -40,6 +40,7 @@ class LowVisionCategoryScreenTest {
         assertEquals("Lodging", lowVisionCategoryDisplayLabel("Lodging"))
         assertEquals("Other\nObstacle", lowVisionCategoryDisplayLabel("Other Obstacle"))
         assertEquals("승강기", lowVisionCategoryDisplayLabel("승강기"))
+        assertEquals("엘리베이터", lowVisionCategoryDisplayLabel("엘리베이터"))
         assertEquals(
             "\uC219\uBC15\n\uC2DC\uC124",
             lowVisionCategoryDisplayLabel("\uC219\uBC15\uC2DC\uC124"),

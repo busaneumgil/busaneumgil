@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -69,9 +68,10 @@ class AuthServiceReissueTest {
 	void reissue() {
 		UUID userId = UUID.randomUUID();
 		when(jwtTokenProvider.getRefreshTokenSubject("old-refresh-token")).thenReturn(userId);
-		when(authTokenStore.findRefreshTokenUserId("old-refresh-token")).thenReturn(Optional.of(userId));
 		when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
 		when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("new-refresh-token");
+		when(authTokenStore.rotateRefreshToken("old-refresh-token", "new-refresh-token", userId, REFRESH_TOKEN_TTL))
+			.thenReturn(true);
 
 		TokenResponse response = authService.reissue(new ReissueRequest("old-refresh-token"));
 
@@ -85,7 +85,10 @@ class AuthServiceReissueTest {
 	void rejectMissingRefreshTokenInStore() {
 		UUID userId = UUID.randomUUID();
 		when(jwtTokenProvider.getRefreshTokenSubject("refresh-token")).thenReturn(userId);
-		when(authTokenStore.findRefreshTokenUserId("refresh-token")).thenReturn(Optional.empty());
+		when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
+		when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("new-refresh-token");
+		when(authTokenStore.rotateRefreshToken("refresh-token", "new-refresh-token", userId, REFRESH_TOKEN_TTL))
+			.thenReturn(false);
 
 		assertThatThrownBy(() -> authService.reissue(new ReissueRequest("refresh-token")))
 			.isInstanceOf(AuthException.class)
@@ -96,8 +99,12 @@ class AuthServiceReissueTest {
 	@Test
 	@DisplayName("토큰 subject와 저장소 사용자 ID가 다르면 refresh token을 거부한다")
 	void rejectRefreshTokenSubjectMismatch() {
-		when(jwtTokenProvider.getRefreshTokenSubject("refresh-token")).thenReturn(UUID.randomUUID());
-		when(authTokenStore.findRefreshTokenUserId("refresh-token")).thenReturn(Optional.of(UUID.randomUUID()));
+		UUID userId = UUID.randomUUID();
+		when(jwtTokenProvider.getRefreshTokenSubject("refresh-token")).thenReturn(userId);
+		when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
+		when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("new-refresh-token");
+		when(authTokenStore.rotateRefreshToken("refresh-token", "new-refresh-token", userId, REFRESH_TOKEN_TTL))
+			.thenReturn(false);
 
 		assertThatThrownBy(() -> authService.reissue(new ReissueRequest("refresh-token")))
 			.isInstanceOf(AuthException.class)

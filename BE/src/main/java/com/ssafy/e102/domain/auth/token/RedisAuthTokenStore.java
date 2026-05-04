@@ -1,12 +1,15 @@
 package com.ssafy.e102.domain.auth.token;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -21,6 +24,21 @@ public class RedisAuthTokenStore implements AuthTokenStore {
 	private static final String REFRESH_USER_KEY_PREFIX = "auth:refresh:user:";
 	private static final String SIGNUP_KEY_PREFIX = "auth:signup:";
 	private static final String ACCESS_BLACKLIST_KEY_PREFIX = "auth:access-blacklist:";
+	private static final RedisScript<Long> ROTATE_REFRESH_TOKEN_SCRIPT = new DefaultRedisScript<>("""
+		local storedUserId = redis.call('GET', KEYS[1])
+		if not storedUserId then
+			return 0
+		end
+		if storedUserId ~= ARGV[1] then
+			return 0
+		end
+		redis.call('DEL', KEYS[1])
+		redis.call('SREM', KEYS[2], ARGV[3])
+		redis.call('SET', KEYS[3], ARGV[1], 'EX', ARGV[2])
+		redis.call('SADD', KEYS[2], ARGV[4])
+		redis.call('EXPIRE', KEYS[2], ARGV[2])
+		return 1
+		""", Long.class);
 
 	private final StringRedisTemplate redisTemplate;
 	private final ObjectMapper objectMapper;
@@ -46,9 +64,20 @@ public class RedisAuthTokenStore implements AuthTokenStore {
 	}
 
 	@Override
-	public void rotateRefreshToken(String oldRefreshToken, String newRefreshToken, UUID userId, Duration ttl) {
-		deleteRefreshToken(oldRefreshToken);
-		saveRefreshToken(newRefreshToken, userId, ttl);
+	public boolean rotateRefreshToken(String oldRefreshToken, String newRefreshToken, UUID userId, Duration ttl) {
+		String oldTokenHash = TokenHash.sha256(oldRefreshToken);
+		String newTokenHash = TokenHash.sha256(newRefreshToken);
+		Long result = redisTemplate.execute(
+			ROTATE_REFRESH_TOKEN_SCRIPT,
+			List.of(
+				refreshTokenKey(oldTokenHash),
+				refreshUserKey(userId),
+				refreshTokenKey(newTokenHash)),
+			userId.toString(),
+			ttl.toSeconds(),
+			oldTokenHash,
+			newTokenHash);
+		return Long.valueOf(1L).equals(result);
 	}
 
 	@Override

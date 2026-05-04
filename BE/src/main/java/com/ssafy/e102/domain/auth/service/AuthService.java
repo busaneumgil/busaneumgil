@@ -79,11 +79,11 @@ public class AuthService {
 			request.selectedPrimaryUserType(),
 			request.selectedMobilitySubtype());
 		User savedUser = userRepository.save(user);
-		authTokenStore.deleteSignupToken(request.signupToken());
 
 		String accessToken = jwtTokenProvider.createAccessToken(savedUser.getUserId());
 		String refreshToken = jwtTokenProvider.createRefreshToken(savedUser.getUserId());
 		authTokenStore.saveRefreshToken(refreshToken, savedUser.getUserId(), jwtProperties.refreshTokenTtl());
+		authTokenStore.deleteSignupToken(request.signupToken());
 
 		return new SignupResponse(
 			accessToken,
@@ -97,16 +97,14 @@ public class AuthService {
 	public TokenResponse reissue(ReissueRequest request) {
 		String oldRefreshToken = request.refreshToken();
 		java.util.UUID tokenSubject = getRefreshTokenSubject(oldRefreshToken);
-		java.util.UUID storedUserId = authTokenStore.findRefreshTokenUserId(oldRefreshToken)
-			.orElseThrow(() -> new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN));
-		if (!tokenSubject.equals(storedUserId)) {
-			throw new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN);
-		}
 
 		String newAccessToken = jwtTokenProvider.createAccessToken(tokenSubject);
 		String newRefreshToken = jwtTokenProvider.createRefreshToken(tokenSubject);
-		authTokenStore.rotateRefreshToken(oldRefreshToken, newRefreshToken, tokenSubject,
+		boolean rotated = authTokenStore.rotateRefreshToken(oldRefreshToken, newRefreshToken, tokenSubject,
 			jwtProperties.refreshTokenTtl());
+		if (!rotated) {
+			throw new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN);
+		}
 		return new TokenResponse(newAccessToken, newRefreshToken);
 	}
 

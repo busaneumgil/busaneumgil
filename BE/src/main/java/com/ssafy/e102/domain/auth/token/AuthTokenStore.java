@@ -10,7 +10,7 @@ public interface AuthTokenStore {
 
 	Optional<UUID> findRefreshTokenUserId(String refreshToken);
 
-	void rotateRefreshToken(String oldRefreshToken, String newRefreshToken, UUID userId, Duration ttl);
+	boolean rotateRefreshToken(String oldRefreshToken, String newRefreshToken, UUID userId, Duration ttl);
 
 	void deleteRefreshToken(String refreshToken);
 

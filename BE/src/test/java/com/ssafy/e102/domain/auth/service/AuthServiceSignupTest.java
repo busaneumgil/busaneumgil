@@ -3,7 +3,7 @@ package com.ssafy.e102.domain.auth.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -101,8 +102,9 @@ class AuthServiceSignupTest {
 		assertThat(response.userId()).isEqualTo(userId);
 		assertThat(response.selectedPrimaryUserType()).isEqualTo(PrimaryUserType.MOBILITY_IMPAIRED);
 		assertThat(response.selectedMobilitySubtype()).isEqualTo(MobilitySubtype.MANUAL_WHEELCHAIR);
-		verify(authTokenStore).deleteSignupToken("signup-token");
-		verify(authTokenStore).saveRefreshToken("refresh-token", userId, REFRESH_TOKEN_TTL);
+		InOrder inOrder = inOrder(authTokenStore);
+		inOrder.verify(authTokenStore).saveRefreshToken("refresh-token", userId, REFRESH_TOKEN_TTL);
+		inOrder.verify(authTokenStore).deleteSignupToken("signup-token");
 	}
 
 	@Test

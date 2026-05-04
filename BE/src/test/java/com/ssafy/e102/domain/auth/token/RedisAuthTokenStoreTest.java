@@ -1,11 +1,14 @@
 package com.ssafy.e102.domain.auth.token;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -19,6 +22,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.user.type.SocialProvider;
@@ -76,19 +80,51 @@ class RedisAuthTokenStoreTest {
 	}
 
 	@Test
-	@DisplayName("리프레시 토큰 회전은 기존 토큰을 지우고 새 토큰을 저장한다")
+	@DisplayName("리프레시 토큰 회전은 Redis 원자 연산으로 기존 토큰을 한 번만 소비하고 새 토큰을 저장한다")
 	void rotateRefreshToken() {
 		UUID userId = UUID.randomUUID();
 		Duration ttl = Duration.ofDays(14);
+		when(redisTemplate.execute(
+			org.mockito.ArgumentMatchers.<RedisScript<Long>>any(),
+			org.mockito.ArgumentMatchers.<List<String>>any(),
+			eq(userId.toString()),
+			eq(ttl.toSeconds()),
+			eq("66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6"),
+			eq("c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338")))
+			.thenReturn(1L);
 
-		authTokenStore.rotateRefreshToken("old-refresh-token", "new-refresh-token", userId, ttl);
+		boolean rotated = authTokenStore.rotateRefreshToken("old-refresh-token", "new-refresh-token", userId, ttl);
 
-		verify(redisTemplate).delete("auth:refresh:66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6");
-		verify(valueOperations).set(
-			"auth:refresh:c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338",
-			userId.toString(),
-			ttl.toSeconds(),
-			TimeUnit.SECONDS);
+		assertThat(rotated).isTrue();
+		verify(redisTemplate).execute(org.mockito.ArgumentMatchers.<RedisScript<Long>>any(),
+			org.mockito.ArgumentMatchers.<List<String>>argThat(
+				keys -> keys.contains("auth:refresh:66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6")
+					&& keys.contains("auth:refresh:c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338")
+					&& keys.contains("auth:refresh:user:" + userId)),
+			eq(userId.toString()),
+			eq(ttl.toSeconds()),
+			eq("66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6"),
+			eq("c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338"));
+	}
+
+	@Test
+	@DisplayName("이미 소비된 리프레시 토큰 회전은 실패하고 새 토큰을 저장하지 않는다")
+	void rejectAlreadyConsumedRefreshTokenRotation() {
+		UUID userId = UUID.randomUUID();
+		Duration ttl = Duration.ofDays(14);
+		when(redisTemplate.execute(
+			org.mockito.ArgumentMatchers.<RedisScript<Long>>any(),
+			org.mockito.ArgumentMatchers.<List<String>>any(),
+			eq(userId.toString()),
+			eq(ttl.toSeconds()),
+			eq("66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6"),
+			eq("c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338")))
+			.thenReturn(0L);
+
+		boolean rotated = authTokenStore.rotateRefreshToken("old-refresh-token", "new-refresh-token", userId, ttl);
+
+		assertThat(rotated).isFalse();
+		verifyNoInteractions(valueOperations);
 	}
 
 	@Test

@@ -108,7 +108,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.Guidance.route) {
         LowVisionNavigationRoute(
             onNavigateToComplete = {
-                navController.navigate(LowVisionRoute.NavigationComplete.route) {
+                navController.navigate(resolveLowVisionNavigationExitRoute()) {
                     launchSingleTop = true
                     popUpTo(LowVisionRoute.Guidance.route) {
                         inclusive = true
@@ -233,6 +233,8 @@ internal fun resolveLowVisionSearchPopUpRoute(selectedTab: LowVisionBottomTab = 
     }
 
 internal fun resolveNavigationCompletionRoute(): String = ArrivalRoute.Entry.route
+
+internal fun resolveLowVisionNavigationExitRoute(): String = LowVisionRoute.Home.route
 
 internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 

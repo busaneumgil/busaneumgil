@@ -51,6 +51,8 @@ class SavedRouteViewModel(
                     state.copy(selectedTab = action.tab)
                 }
             }
+            SavedRouteUiAction.EditClicked -> enterEditMode()
+            SavedRouteUiAction.EditDoneClicked -> applyPendingRemovals()
             SavedRouteUiAction.ExploreMapClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToMap)
             SavedRouteUiAction.RetryClicked -> retryCurrentTab()
             is SavedRouteUiAction.PlaceClicked -> handoffPlace(action.placeId, SavedRouteUiEvent.NavigateToMap)
@@ -59,9 +61,110 @@ class SavedRouteViewModel(
                     placeId = action.placeId,
                     event = SavedRouteUiEvent.NavigateToRouteSetting(),
                 )
+            is SavedRouteUiAction.PlaceDeleteClicked -> togglePlaceRemoval(action.placeId)
             is SavedRouteUiAction.PlaceRemoveClicked -> removePlaceBookmark(action.placeId)
             is SavedRouteUiAction.RouteGuideClicked -> handoffRouteBookmark(action.bookmarkId)
+            is SavedRouteUiAction.RouteDeleteClicked -> toggleRouteRemoval(action.bookmarkId)
             is SavedRouteUiAction.RouteRemoveClicked -> removeRouteBookmark(action.bookmarkId)
+        }
+    }
+
+    private fun enterEditMode() {
+        mutableUiState.update { state ->
+            if (state.isApplyingEditChanges) {
+                state
+            } else {
+                state.copy(isEditMode = true)
+            }
+        }
+    }
+
+    private fun togglePlaceRemoval(placeId: String) {
+        mutableUiState.update { state ->
+            if (!state.isEditMode || state.isApplyingEditChanges) {
+                state
+            } else {
+                state.copy(
+                    pendingPlaceRemovalIds = state.pendingPlaceRemovalIds.toggled(placeId),
+                    placeContent = state.placeContent.copy(errorMessage = null),
+                )
+            }
+        }
+    }
+
+    private fun toggleRouteRemoval(bookmarkId: String) {
+        mutableUiState.update { state ->
+            if (!state.isEditMode || state.isApplyingEditChanges) {
+                state
+            } else {
+                state.copy(
+                    pendingRouteRemovalIds = state.pendingRouteRemovalIds.toggled(bookmarkId),
+                    routeContent = state.routeContent.copy(errorMessage = null),
+                )
+            }
+        }
+    }
+
+    private fun applyPendingRemovals() {
+        val currentState = uiState.value
+        if (!currentState.isEditMode || currentState.isApplyingEditChanges) return
+
+        val pendingPlaceRemovalIds = currentState.pendingPlaceRemovalIds
+        val pendingRouteRemovalIds = currentState.pendingRouteRemovalIds
+        if (pendingPlaceRemovalIds.isEmpty() && pendingRouteRemovalIds.isEmpty()) {
+            mutableUiState.update { state ->
+                state.copy(isEditMode = false)
+            }
+            return
+        }
+
+        mutableUiState.update { state ->
+            state.copy(isApplyingEditChanges = true)
+        }
+
+        viewModelScope.launch {
+            val failedPlaceRemovalIds =
+                pendingPlaceRemovalIds.filterTo(mutableSetOf()) { placeId ->
+                    runCatching { bookmarkRepository.deleteBookmark(placeId) }.isFailure
+                }
+            val failedRouteRemovalIds =
+                pendingRouteRemovalIds.filterTo(mutableSetOf()) { bookmarkId ->
+                    runCatching { routeBookmarkRepository.deleteRouteBookmark(bookmarkId) }.isFailure
+                }
+
+            mutableUiState.update { state ->
+                state.copy(
+                    isEditMode = failedPlaceRemovalIds.isNotEmpty() || failedRouteRemovalIds.isNotEmpty(),
+                    isApplyingEditChanges = false,
+                    pendingPlaceRemovalIds = failedPlaceRemovalIds,
+                    pendingRouteRemovalIds = failedRouteRemovalIds,
+                    placeContent =
+                        state.placeContent.copy(
+                            errorMessage =
+                                when {
+                                    failedPlaceRemovalIds.isNotEmpty() -> PLACE_BOOKMARK_REMOVE_FAILURE_MESSAGE
+                                    pendingPlaceRemovalIds.isNotEmpty() -> null
+                                    else -> state.placeContent.errorMessage
+                                },
+                        ),
+                    routeContent =
+                        state.routeContent.copy(
+                            errorMessage =
+                                when {
+                                    failedRouteRemovalIds.isNotEmpty() -> ROUTE_BOOKMARK_REMOVE_FAILURE_MESSAGE
+                                    pendingRouteRemovalIds.isNotEmpty() -> null
+                                    else -> state.routeContent.errorMessage
+                                },
+                        ),
+                )
+            }
+
+            when {
+                failedPlaceRemovalIds.isEmpty() && failedRouteRemovalIds.isEmpty() ->
+                    emitUiEvent(SavedRouteUiEvent.ShowSnackbar(BOOKMARK_REMOVE_SUCCESS_MESSAGE))
+                else ->
+                    emitUiEvent(SavedRouteUiEvent.ShowSnackbar(BOOKMARK_REMOVE_FAILURE_MESSAGE))
+            }
         }
     }
 
@@ -271,6 +374,8 @@ class SavedRouteViewModel(
     }
 
     companion object {
+        private const val BOOKMARK_REMOVE_SUCCESS_MESSAGE = "선택한 북마크를 삭제했습니다."
+        private const val BOOKMARK_REMOVE_FAILURE_MESSAGE = "일부 북마크를 삭제하지 못했습니다. 다시 시도해 주세요."
         private const val PLACE_BOOKMARK_LOAD_FAILURE_MESSAGE = "저장한 장소를 불러오지 못했습니다."
         private const val ROUTE_BOOKMARK_LOAD_FAILURE_MESSAGE = "저장한 경로를 불러오지 못했습니다."
         private const val PLACE_BOOKMARK_REMOVE_SUCCESS_MESSAGE = "저장한 장소를 삭제했습니다."
@@ -346,4 +451,11 @@ private fun SavedRouteBookmarkUiModel.toPlaceDestination(): PlaceDestination =
 private fun String?.toPlaceCategoryOrNull(): PlaceCategory? =
     this?.let { value ->
         runCatching { PlaceCategory.valueOf(value) }.getOrNull()
+    }
+
+private fun Set<String>.toggled(value: String): Set<String> =
+    if (value in this) {
+        this - value
+    } else {
+        this + value
     }

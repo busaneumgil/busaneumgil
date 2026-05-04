@@ -7,6 +7,10 @@ data class SavedRouteUiState(
     val selectedTab: SavedBookmarkTab = SavedBookmarkTab.PLACE,
     val placeContent: SavedPlaceContentUiState = SavedPlaceContentUiState(),
     val routeContent: SavedRouteBookmarkContentUiState = SavedRouteBookmarkContentUiState(),
+    val isEditMode: Boolean = false,
+    val isApplyingEditChanges: Boolean = false,
+    val pendingPlaceRemovalIds: Set<String> = emptySet(),
+    val pendingRouteRemovalIds: Set<String> = emptySet(),
 )
 
 data class SavedPlaceContentUiState(
@@ -59,6 +63,10 @@ sealed interface SavedRouteUiAction {
         val tab: SavedBookmarkTab,
     ) : SavedRouteUiAction
 
+    data object EditClicked : SavedRouteUiAction
+
+    data object EditDoneClicked : SavedRouteUiAction
+
     data object ExploreMapClicked : SavedRouteUiAction
 
     data object RetryClicked : SavedRouteUiAction
@@ -71,11 +79,19 @@ sealed interface SavedRouteUiAction {
         val placeId: String,
     ) : SavedRouteUiAction
 
+    data class PlaceDeleteClicked(
+        val placeId: String,
+    ) : SavedRouteUiAction
+
     data class PlaceRemoveClicked(
         val placeId: String,
     ) : SavedRouteUiAction
 
     data class RouteGuideClicked(
+        val bookmarkId: String,
+    ) : SavedRouteUiAction
+
+    data class RouteDeleteClicked(
         val bookmarkId: String,
     ) : SavedRouteUiAction
 

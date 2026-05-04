@@ -21,7 +21,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -179,7 +181,38 @@ class SavedRouteViewModelTest {
         }
 
     @Test
-    fun `remove route bookmark updates route list state`() =
+    fun `edit mode defers place bookmark deletion until done`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark()))
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.EditClicked)
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isEditMode)
+            assertTrue("bookmark-place-1" in viewModel.uiState.value.pendingPlaceRemovalIds)
+            assertEquals(1, viewModel.uiState.value.placeContent.places.size)
+            assertEquals(1, bookmarkRepository.bookmarks.value.size)
+
+            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isEditMode)
+            assertEquals(SavedBookmarkContentState.EMPTY, viewModel.uiState.value.placeContent.screenState)
+            assertEquals(emptyList<SavedPlaceUiModel>(), viewModel.uiState.value.placeContent.places)
+            assertEquals(emptyList<BookmarkData>(), bookmarkRepository.bookmarks.value)
+        }
+
+    @Test
+    fun `edit mode defers route bookmark deletion until done`() =
         runTest {
             val routeBookmarkRepository =
                 FakeRouteBookmarkRepository(
@@ -194,9 +227,19 @@ class SavedRouteViewModelTest {
 
             advanceUntilIdle()
 
-            viewModel.onAction(SavedRouteUiAction.RouteRemoveClicked(bookmarkId = "route-bookmark-1"))
+            viewModel.onAction(SavedRouteUiAction.EditClicked)
+            viewModel.onAction(SavedRouteUiAction.RouteDeleteClicked(bookmarkId = "route-bookmark-1"))
             advanceUntilIdle()
 
+            assertTrue(viewModel.uiState.value.isEditMode)
+            assertTrue("route-bookmark-1" in viewModel.uiState.value.pendingRouteRemovalIds)
+            assertEquals(1, viewModel.uiState.value.routeContent.routes.size)
+            assertEquals(1, routeBookmarkRepository.routeBookmarks.value.size)
+
+            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isEditMode)
             assertEquals(SavedBookmarkContentState.EMPTY, viewModel.uiState.value.routeContent.screenState)
             assertEquals(emptyList<SavedRouteBookmarkUiModel>(), viewModel.uiState.value.routeContent.routes)
         }
@@ -207,37 +250,37 @@ private class FakeBookmarkRepository(
     private val failObserve: Boolean = false,
     private val failDelete: Boolean = false,
 ) : BookmarkRepository {
-    private val mutableBookmarks = MutableStateFlow(bookmarks)
+    val bookmarks = MutableStateFlow(bookmarks)
 
     override fun observeBookmarks(): Flow<List<BookmarkData>> =
         if (failObserve) {
             flow { error("bookmark load failed") }
         } else {
-            mutableBookmarks
+            bookmarks
         }
 
     override suspend fun isBookmarked(placeId: String): Boolean =
-        mutableBookmarks.value.any { bookmark -> bookmark.placeId == placeId }
+        bookmarks.value.any { bookmark -> bookmark.placeId == placeId }
 
     override suspend fun saveBookmark(bookmark: BookmarkData) {
-        mutableBookmarks.value = mutableBookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
+        bookmarks.value = bookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
     }
 
     override suspend fun deleteBookmark(placeId: String) {
         if (failDelete) error("bookmark delete failed")
-        mutableBookmarks.value = mutableBookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
+        bookmarks.value = bookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
     }
 }
 
 private class FakeRouteBookmarkRepository(
     routeBookmarks: List<RouteBookmark> = emptyList(),
 ) : RouteBookmarkRepository {
-    private val mutableRouteBookmarks = MutableStateFlow(routeBookmarks)
+    val routeBookmarks = MutableStateFlow(routeBookmarks)
 
-    override fun observeRouteBookmarks(): Flow<List<RouteBookmark>> = mutableRouteBookmarks
+    override fun observeRouteBookmarks(): Flow<List<RouteBookmark>> = routeBookmarks
 
     override suspend fun isBookmarked(draft: RouteBookmarkDraft): Boolean =
-        mutableRouteBookmarks.value.any { bookmark ->
+        routeBookmarks.value.any { bookmark ->
             bookmark.startPoint == draft.startPoint &&
                 bookmark.endPoint == draft.endPoint &&
                 bookmark.routeOption == draft.routeOption
@@ -258,13 +301,13 @@ private class FakeRouteBookmarkRepository(
                 createdAt = 1L,
                 updatedAt = 1L,
             )
-        mutableRouteBookmarks.value = listOf(savedBookmark)
+        routeBookmarks.value = listOf(savedBookmark)
         return savedBookmark
     }
 
     override suspend fun deleteRouteBookmark(bookmarkId: String) {
-        mutableRouteBookmarks.value =
-            mutableRouteBookmarks.value.filterNot { bookmark ->
+        routeBookmarks.value =
+            routeBookmarks.value.filterNot { bookmark ->
                 bookmark.bookmarkId == bookmarkId
             }
     }

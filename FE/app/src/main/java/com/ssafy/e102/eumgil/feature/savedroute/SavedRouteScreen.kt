@@ -6,20 +6,25 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -30,13 +35,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -51,7 +57,25 @@ fun SavedRouteScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            SavedRouteTopBar()
+            SavedRouteTopBar(
+                isEditMode = uiState.isEditMode,
+                isActionEnabled =
+                    if (uiState.isEditMode) {
+                        !uiState.isApplyingEditChanges
+                    } else {
+                        uiState.placeContent.places.isNotEmpty() ||
+                            uiState.routeContent.routes.isNotEmpty()
+                    },
+                onActionClick = {
+                    onAction(
+                        if (uiState.isEditMode) {
+                            SavedRouteUiAction.EditDoneClicked
+                        } else {
+                            SavedRouteUiAction.EditClicked
+                        },
+                    )
+                },
+            )
         },
     ) { innerPadding ->
         Column(
@@ -71,12 +95,18 @@ fun SavedRouteScreen(
                 SavedBookmarkTab.PLACE ->
                     SavedPlaceContent(
                         content = uiState.placeContent,
+                        isEditMode = uiState.isEditMode,
+                        isActionEnabled = !uiState.isApplyingEditChanges,
+                        pendingRemovalIds = uiState.pendingPlaceRemovalIds,
                         onAction = onAction,
                         modifier = Modifier.weight(1f),
                     )
                 SavedBookmarkTab.ROUTE ->
                     SavedRouteBookmarkContent(
                         content = uiState.routeContent,
+                        isEditMode = uiState.isEditMode,
+                        isActionEnabled = !uiState.isApplyingEditChanges,
+                        pendingRemovalIds = uiState.pendingRouteRemovalIds,
                         onAction = onAction,
                         modifier = Modifier.weight(1f),
                     )
@@ -86,8 +116,57 @@ fun SavedRouteScreen(
 }
 
 @Composable
-private fun SavedRouteTopBar() {
-    EumCenteredTopBar(title = stringResource(id = R.string.route_saved_route))
+private fun SavedRouteTopBar(
+    isEditMode: Boolean,
+    isActionEnabled: Boolean,
+    onActionClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 8.dp),
+        ) {
+            Text(
+                text = stringResource(id = R.string.route_saved_route),
+                modifier = Modifier.align(Alignment.Center),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            TextButton(
+                onClick = onActionClick,
+                enabled = isActionEnabled,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                contentPadding = PaddingValues(horizontal = EumSpacing.small, vertical = 6.dp),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id =
+                                if (isEditMode) {
+                                    R.string.saved_route_done
+                                } else {
+                                    R.string.saved_route_edit
+                                },
+                        ),
+                    style = MaterialTheme.typography.labelLarge,
+                    color =
+                        if (isActionEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+                        },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -102,7 +181,10 @@ private fun SavedBookmarkTabRow(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             SavedBookmarkTabButton(
@@ -168,6 +250,9 @@ private fun SavedBookmarkTabButton(
 @Composable
 private fun SavedPlaceContent(
     content: SavedPlaceContentUiState,
+    isEditMode: Boolean,
+    isActionEnabled: Boolean,
+    pendingRemovalIds: Set<String>,
     onAction: (SavedRouteUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -214,14 +299,25 @@ private fun SavedPlaceContent(
                 ) { place ->
                     SavedPlaceListItem(
                         place = place,
-                        onPlaceClick = {
-                            onAction(SavedRouteUiAction.PlaceClicked(placeId = place.placeId))
-                        },
-                        onGuideClick = {
-                            onAction(SavedRouteUiAction.PlaceRouteGuideClicked(placeId = place.placeId))
-                        },
-                        onRemoveClick = {
-                            onAction(SavedRouteUiAction.PlaceRemoveClicked(placeId = place.placeId))
+                        isEditMode = isEditMode,
+                        isPendingRemoval = place.placeId in pendingRemovalIds,
+                        isActionEnabled = isActionEnabled,
+                        onPlaceClick =
+                            if (isEditMode) {
+                                null
+                            } else {
+                                {
+                                    onAction(SavedRouteUiAction.PlaceClicked(placeId = place.placeId))
+                                }
+                            },
+                        onPrimaryActionClick = {
+                            onAction(
+                                if (isEditMode) {
+                                    SavedRouteUiAction.PlaceDeleteClicked(placeId = place.placeId)
+                                } else {
+                                    SavedRouteUiAction.PlaceRouteGuideClicked(placeId = place.placeId)
+                                },
+                            )
                         },
                     )
                 }
@@ -232,6 +328,9 @@ private fun SavedPlaceContent(
 @Composable
 private fun SavedRouteBookmarkContent(
     content: SavedRouteBookmarkContentUiState,
+    isEditMode: Boolean,
+    isActionEnabled: Boolean,
+    pendingRemovalIds: Set<String>,
     onAction: (SavedRouteUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -278,11 +377,17 @@ private fun SavedRouteBookmarkContent(
                 ) { routeBookmark ->
                     SavedRouteBookmarkListItem(
                         routeBookmark = routeBookmark,
-                        onGuideClick = {
-                            onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = routeBookmark.bookmarkId))
-                        },
-                        onRemoveClick = {
-                            onAction(SavedRouteUiAction.RouteRemoveClicked(bookmarkId = routeBookmark.bookmarkId))
+                        isEditMode = isEditMode,
+                        isPendingRemoval = routeBookmark.bookmarkId in pendingRemovalIds,
+                        isActionEnabled = isActionEnabled,
+                        onPrimaryActionClick = {
+                            onAction(
+                                if (isEditMode) {
+                                    SavedRouteUiAction.RouteDeleteClicked(bookmarkId = routeBookmark.bookmarkId)
+                                } else {
+                                    SavedRouteUiAction.RouteGuideClicked(bookmarkId = routeBookmark.bookmarkId)
+                                },
+                            )
                         },
                     )
                 }
@@ -398,9 +503,11 @@ private fun SavedRouteInlineMessage(message: String) {
 @Composable
 private fun SavedPlaceListItem(
     place: SavedPlaceUiModel,
-    onPlaceClick: () -> Unit,
-    onGuideClick: () -> Unit,
-    onRemoveClick: () -> Unit,
+    isEditMode: Boolean,
+    isPendingRemoval: Boolean,
+    isActionEnabled: Boolean,
+    onPlaceClick: (() -> Unit)?,
+    onPrimaryActionClick: () -> Unit,
 ) {
     val accessibilityDescription =
         stringResource(
@@ -408,12 +515,24 @@ private fun SavedPlaceListItem(
             place.name,
             place.address ?: stringResource(id = R.string.saved_route_address_empty),
         )
+    val borderColor =
+        if (isPendingRemoval) {
+            MaterialTheme.colorScheme.error.copy(alpha = 0.40f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant
+        }
+    val containerColor =
+        if (isPendingRemoval) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
             modifier =
@@ -427,9 +546,15 @@ private fun SavedPlaceListItem(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .clickable(
-                            role = Role.Button,
-                            onClick = onPlaceClick,
+                        .then(
+                            if (onPlaceClick != null) {
+                                Modifier.clickable(
+                                    role = Role.Button,
+                                    onClick = onPlaceClick,
+                                )
+                            } else {
+                                Modifier
+                            },
                         )
                         .semantics {
                             contentDescription = accessibilityDescription
@@ -452,9 +577,10 @@ private fun SavedPlaceListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            SavedBookmarkActionColumn(
-                onGuideClick = onGuideClick,
-                onRemoveClick = onRemoveClick,
+            SavedBookmarkPrimaryActionButton(
+                isEditMode = isEditMode,
+                enabled = isActionEnabled,
+                onClick = onPrimaryActionClick,
             )
         }
     }
@@ -463,14 +589,29 @@ private fun SavedPlaceListItem(
 @Composable
 private fun SavedRouteBookmarkListItem(
     routeBookmark: SavedRouteBookmarkUiModel,
-    onGuideClick: () -> Unit,
-    onRemoveClick: () -> Unit,
+    isEditMode: Boolean,
+    isPendingRemoval: Boolean,
+    isActionEnabled: Boolean,
+    onPrimaryActionClick: () -> Unit,
 ) {
+    val borderColor =
+        if (isPendingRemoval) {
+            MaterialTheme.colorScheme.error.copy(alpha = 0.40f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant
+        }
+    val containerColor =
+        if (isPendingRemoval) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
             modifier =
@@ -478,7 +619,7 @@ private fun SavedRouteBookmarkListItem(
                     .fillMaxWidth()
                     .padding(EumSpacing.medium),
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             SavedRoutePathDecoration()
             Column(
@@ -513,28 +654,70 @@ private fun SavedRouteBookmarkListItem(
                     SavedRouteTagChip(label = routeOptionLabel(routeBookmark.routeOption))
                 }
             }
-            SavedBookmarkActionColumn(
-                onGuideClick = onGuideClick,
-                onRemoveClick = onRemoveClick,
+            SavedBookmarkPrimaryActionButton(
+                isEditMode = isEditMode,
+                enabled = isActionEnabled,
+                onClick = onPrimaryActionClick,
             )
         }
     }
 }
 
 @Composable
-private fun SavedBookmarkActionColumn(
-    onGuideClick: () -> Unit,
-    onRemoveClick: () -> Unit,
+private fun SavedBookmarkPrimaryActionButton(
+    isEditMode: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
-    Column(
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-    ) {
-        OutlinedButton(onClick = onGuideClick) {
-            Text(text = stringResource(id = R.string.saved_route_start_route))
+    val shape = RoundedCornerShape(EumRadius.full)
+    if (isEditMode) {
+        Button(
+            onClick = onClick,
+            modifier =
+                modifier.heightIn(min = 42.dp),
+            enabled = enabled,
+            shape = shape,
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                    disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.40f),
+                    disabledContentColor = MaterialTheme.colorScheme.onError.copy(alpha = 0.78f),
+                ),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            Text(
+                text = stringResource(id = R.string.saved_route_remove_bookmark),
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
-        TextButton(onClick = onRemoveClick) {
-            Text(text = stringResource(id = R.string.saved_route_remove_bookmark))
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier =
+                modifier.heightIn(min = 42.dp),
+            enabled = enabled,
+            shape = shape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.36f)),
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.56f),
+                ),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_route_start_navigation),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = stringResource(id = R.string.saved_route_start_route),
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }

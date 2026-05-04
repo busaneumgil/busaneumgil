@@ -237,7 +237,9 @@
     <string name="saved_route_retry">다시 시도</string>
     <string name="saved_route_address_empty">주소 정보 없음</string>
     <string name="saved_route_view_on_map">지도 보기</string>
-    <string name="saved_route_start_route">길안내</string>
+    <string name="saved_route_edit">편집</string>
+    <string name="saved_route_done">완료</string>
+    <string name="saved_route_start_route">길찾기</string>
     <string name="saved_route_remove_bookmark">삭제</string>
     <string name="saved_route_place_a11y_description">%1$s, %2$s. 지도에서 확인하려면 선택하세요.</string>
     <string name="saved_route_tab_place">장소</string>
@@ -591,6 +593,6 @@
     <string name="low_vision_bookmark_empty">저장된 장소가 없습니다.</string>
     <string name="low_vision_bookmark_error">북마크를 불러오지 못했습니다.</string>
     <string name="low_vision_bookmark_no_address">주소 정보 없음</string>
-    <string name="low_vision_bookmark_navigate">길안내</string>
+    <string name="low_vision_bookmark_navigate">길찾기</string>
     <string name="low_vision_bookmark_remove">삭제</string>
 </resources>

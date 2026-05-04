@@ -3,9 +3,6 @@ package com.ssafy.e102.eumgil.feature.lowvision
 /**
  * 시각지원(저시력/시각장애) 모드의 풀스크린 셸 화면들이 공유하는 하단 네비 탭 정의.
  *
- * 약관 walkthrough([com.ssafy.e102.eumgil.feature.terms.TermsBottomTab])와 라벨이
- * 다르다(약관: "마이" / 본 셸: "마이페이지")는 점 때문에 별도 enum으로 분리한다.
- *
  * 출처: Figma file MREqSzkmwhRcXnFS3lzW17
  *   - node 371:157 (홈 nav.bottom-nav)
  *   - node 371:311 (입력중 nav.nav)

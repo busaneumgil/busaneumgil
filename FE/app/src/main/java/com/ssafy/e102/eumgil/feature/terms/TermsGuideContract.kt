@@ -27,6 +27,7 @@ enum class TermsGuideStep(
     @StringRes val cardLabelRes: Int,
     @StringRes val hintRes: Int,
     val showMoreButton: Boolean,
+    val iconText: String? = null,
 ) {
     AGREE(
         sequence = 1,
@@ -59,6 +60,7 @@ enum class TermsGuideStep(
         cardLabelRes = R.string.terms_guide_step_age_card,
         hintRes = R.string.terms_guide_hint_confirm,
         showMoreButton = false,
+        iconText = "14+",
     ),
     PRIVACY(
         sequence = 5,
@@ -98,18 +100,4 @@ data class TermsGuideUiState(
     val currentStep: Int get() = step.sequence
     val totalSteps: Int get() = TermsGuideStep.TOTAL_STEPS
     val pageIndex: Int get() = (currentStep - 1).coerceIn(0, totalSteps - 1)
-}
-
-/**
- * Bottom navigation tabs rendered at the bottom of the high-contrast walkthrough.
- *
- * Selection here only highlights the tab; tab routing is delegated to the caller because
- * the destinations live under [com.ssafy.e102.eumgil.app.navigation.TopLevelDestination]
- * and are not all reachable while onboarding is incomplete.
- */
-enum class TermsBottomTab {
-    HOME,
-    BOOKMARK,
-    CATEGORY,
-    MY,
 }

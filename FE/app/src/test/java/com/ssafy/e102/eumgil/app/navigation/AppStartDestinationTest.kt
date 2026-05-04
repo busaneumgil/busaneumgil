@@ -51,6 +51,40 @@ class AppStartDestinationRoutingTest {
     }
 
     @Test
+    fun `profile complete session can force low vision terms guide for local debug`() {
+        val destination =
+            resolveAppStartDestination(
+                authGateState = AuthGateState(
+                    authSession = AuthSession(accessToken = "test-token"),
+                    isProfileCompleted = true,
+                ),
+                initSettings =
+                    InitSettings(
+                        selectedPrimaryUserType = PrimaryUserType.LOW_VISION.routeValue,
+                        isLowVisionFollowUpCompleted = true,
+                        isLocationTermsAgreed = true,
+                        isPrivacyPolicyAgreed = true,
+                    ),
+                forceLowVisionTermsGuide = true,
+            )
+
+        assertSame(AppStartDestination.LowVisionTermsGuide, destination)
+        assertEquals(OnboardingRoute.TermsGuide.createRoute(), destination.route)
+    }
+
+    @Test
+    fun `local debug low vision terms guide keeps login gate`() {
+        val destination =
+            resolveAppStartDestination(
+                authGateState = AuthGateState(),
+                initSettings = completedInitSettings,
+                forceLowVisionTermsGuide = true,
+            )
+
+        assertSame(AppStartDestination.Login, destination)
+    }
+
+    @Test
     fun `profile complete session still starts ONB-001 when only primary user type is stored`() {
         val destination =
             resolveAppStartDestination(

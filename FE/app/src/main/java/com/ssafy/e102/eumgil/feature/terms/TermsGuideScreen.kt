@@ -8,12 +8,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -34,8 +33,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.feature.terms.component.TermsAccessibleBottomNav
 import com.ssafy.e102.eumgil.feature.terms.component.TermsPagerIndicator
+
+internal object TermsGuideLayoutDefaults {
+    const val showBottomNav: Boolean = false
+    const val mainActionCardWeight = 2f
+    const val detailActionCardWeight = 1f
+    val actionCardCornerRadius = 35.dp
+    val moreButtonCornerRadius = actionCardCornerRadius
+    val cardLabelFontSize = 48.sp
+    val textIconFontSize = 88.sp
+    val textIconLineHeight = 96.sp
+    val hintFontSize = 28.sp
+    val hintLineHeight = 36.sp
+    val moreButtonFontSize = 34.sp
+    val moreButtonLineHeight = 42.sp
+    val moreButtonMinHeight = 74.dp
+    val actionCardGap = 32.dp
+    val mainActionHorizontalPadding = 42.dp
+    val bottomContentHorizontalPadding = 28.dp
+    val bottomContentBottomPadding = 28.dp
+}
 
 /**
  * High-contrast "약관 안내" walkthrough screen — generic shell for all 5 steps.
@@ -51,20 +69,16 @@ import com.ssafy.e102.eumgil.feature.terms.component.TermsPagerIndicator
  *   - color/yellow/50  = #FFCC00  (Supernova)
  *   - color/black/solid = #000000
  *   - color/grey/27    = #444444  (Tundora, inactive dots)
- *   - color/grey/47    = #777777  (Boulder, inactive nav text)
- *   - color/grey/13    = #222222  (Mine Shaft, bottom nav top border)
- *   - radius main-card = 35dp, button = 12dp
+ *   - radius main-card/button = 35dp
  *   - title 24sp/ExtraBold, card 40sp/Black + letter spacing -1sp,
- *     hint 18sp/Bold, button 20sp/Black, nav label 10sp/Normal.
+ *     hint 28sp/Black, button 34sp/Black.
  */
 @Composable
 fun TermsGuideScreen(
     uiState: TermsGuideUiState,
     onAdvance: () -> Unit,
     onMoreDetails: () -> Unit,
-    onTabSelected: (TermsBottomTab) -> Unit,
     modifier: Modifier = Modifier,
-    selectedTab: TermsBottomTab = TermsBottomTab.HOME,
 ) {
     val step = uiState.step
     val cardLabel = stringResource(id = step.cardLabelRes)
@@ -97,110 +111,127 @@ fun TermsGuideScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
-
-        // 2. Main card — yellow surface with step icon + step label.
-        //    Double-tap commits the step (advance or finalize), per Figma hint copy
-        //    and the existing onboarding voice-guide pattern.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 42.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(335.dp)
-                    .clip(RoundedCornerShape(35.dp))
-                    .background(Color(0xFFFFCC00))
-                    .border(
-                        width = 2.dp,
-                        color = Color.White,
-                        shape = RoundedCornerShape(35.dp),
-                    )
-                    .pointerInput(step) {
-                        detectTapGestures(
-                            onDoubleTap = { onAdvance() },
-                        )
-                    }
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = cardA11y
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(
-                        painter = painterResource(id = step.iconRes),
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(90.dp),
-                    )
-                    Text(
-                        text = cardLabel,
-                        color = Color.Black,
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = (-1).sp,
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // 3. Bottom content — hint always present; "자세히 보기" button conditional.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .weight(1f)
+                .padding(top = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(TermsGuideLayoutDefaults.actionCardGap),
         ) {
-            Text(
-                text = hintText,
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 20.dp, bottom = 22.dp),
-            )
-
-            if (step.showMoreButton) {
+            // 2. Main card — yellow surface with step icon + step label.
+            //    Double-tap commits the step (advance or finalize), per Figma hint copy
+            //    and the existing onboarding voice-guide pattern.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(TermsGuideLayoutDefaults.mainActionCardWeight)
+                    .padding(horizontal = TermsGuideLayoutDefaults.mainActionHorizontalPadding),
+                contentAlignment = Alignment.Center,
+            ) {
                 Box(
                     modifier = Modifier
-                        .width(288.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(TermsGuideLayoutDefaults.actionCardCornerRadius))
                         .background(Color(0xFFFFCC00))
-                        .clickable { onMoreDetails() }
-                        .padding(top = 20.dp, bottom = 21.dp),
+                        .border(
+                            width = 2.dp,
+                            color = Color.White,
+                            shape = RoundedCornerShape(TermsGuideLayoutDefaults.actionCardCornerRadius),
+                        )
+                        .pointerInput(step) {
+                            detectTapGestures(
+                                onDoubleTap = { onAdvance() },
+                            )
+                        }
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = cardA11y
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = stringResource(id = R.string.terms_guide_more_button),
-                        color = Color.Black,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (step.iconText == null) {
+                            Icon(
+                                painter = painterResource(id = step.iconRes),
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size(90.dp),
+                            )
+                        } else {
+                            Text(
+                                text = step.iconText,
+                                color = Color.Black,
+                                fontSize = TermsGuideLayoutDefaults.textIconFontSize,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.sp,
+                                lineHeight = TermsGuideLayoutDefaults.textIconLineHeight,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        Text(
+                            text = cardLabel,
+                            color = Color.Black,
+                            fontSize = TermsGuideLayoutDefaults.cardLabelFontSize,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = (-1).sp,
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
-        }
+            // 3. Bottom detail action — use the same 2:1 touch-target rhythm as low-vision home.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(TermsGuideLayoutDefaults.detailActionCardWeight)
+                    .background(Color.Black)
+                    .padding(
+                        start = TermsGuideLayoutDefaults.bottomContentHorizontalPadding,
+                        end = TermsGuideLayoutDefaults.bottomContentHorizontalPadding,
+                        bottom = TermsGuideLayoutDefaults.bottomContentBottomPadding,
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = hintText,
+                    color = Color.White,
+                    fontSize = TermsGuideLayoutDefaults.hintFontSize,
+                    lineHeight = TermsGuideLayoutDefaults.hintLineHeight,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                )
 
-        // 4. Bottom navigation (top border #222 = grey/13).
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF222222))
-                .padding(top = 1.dp),
-        ) {
-            TermsAccessibleBottomNav(
-                selectedTab = selectedTab,
-                onTabSelected = onTabSelected,
-            )
+                if (step.showMoreButton) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .defaultMinSize(minHeight = TermsGuideLayoutDefaults.moreButtonMinHeight)
+                            .clip(RoundedCornerShape(TermsGuideLayoutDefaults.moreButtonCornerRadius))
+                            .background(Color(0xFFFFCC00))
+                            .clickable { onMoreDetails() }
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.terms_guide_more_button),
+                            color = Color.Black,
+                            fontSize = TermsGuideLayoutDefaults.moreButtonFontSize,
+                            lineHeight = TermsGuideLayoutDefaults.moreButtonLineHeight,
+                            fontWeight = FontWeight.Black,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }

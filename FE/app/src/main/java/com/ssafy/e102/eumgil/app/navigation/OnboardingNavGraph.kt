@@ -153,12 +153,7 @@ fun NavGraphBuilder.onboardingNavGraph(
                         isPrivacyPolicyAgreed = true,
                     )
 
-                    navController.navigate(resolveTermsGuideCompletedRoute()) {
-                        launchSingleTop = true
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            inclusive = true
-                        }
-                    }
+                    navController.navigateToLowVisionHomeAfterTermsGuide()
                 }
             },
             onRequestDetails = { _ ->
@@ -166,7 +161,6 @@ fun NavGraphBuilder.onboardingNavGraph(
                 // 항목별 상세 화면이 별도로 생기면 step 분기로 라우팅을 갈라주면 됨.
                 navController.navigate(OnboardingRoute.Terms.route)
             },
-            onTabSelected = { /* Selection only highlights; tab routing is owned by AppNavHost. */ },
         )
     }
 }
@@ -195,6 +189,25 @@ internal fun resolvePrimaryUserTypeNextRoute(
     }
 
 internal fun resolveTermsGuideCompletedRoute(): String = LowVisionRoute.Home.route
+
+private fun NavHostController.navigateToLowVisionHomeAfterTermsGuide() {
+    val didPopFromSignUpStart =
+        popBackStack(
+            route = OnboardingRoute.UserTypePrimary.route,
+            inclusive = true,
+        )
+
+    if (!didPopFromSignUpStart) {
+        popBackStack(
+            route = OnboardingRoute.TermsGuide.route,
+            inclusive = true,
+        )
+    }
+
+    navigate(resolveTermsGuideCompletedRoute()) {
+        launchSingleTop = true
+    }
+}
 
 private fun NavHostController.navigateToMyPageAfterProfileEdit() {
     val didPopToMyPage =

@@ -72,7 +72,7 @@ Terraform은 실제 AWS 리소스를 생성/변경할 수 있으므로 Makefile�
 `plan` 결과를 검토하고 승인한 뒤 환경 디렉터리에서 직접 `terraform apply`를 실행한다.
 
 운영도구 중 외부에 직접 공개하지 않는 도구는 `scripts/make/ops/`에 접속 전용 target을 둔다.
-예를 들어 `make portainer-tunnel`은 S1 서버로 SSH 터널을 열고 로컬 `http://localhost:9000`에서 Portainer에 접속하게 한다.
+예를 들어 `make portainer-tunnel`은 S1 서버로 SSH 터널을 열고 로컬 `http://localhost:19000`에서 Portainer에 접속하게 한다.
 
 ## 빈 디렉터리
 

@@ -1,13 +1,14 @@
 # BE Auth/User 진행상황
 
 > 작성일: 2026-04-30
-> 브랜치: `be/feat/auth-S14P31E102-368`
+> 최종 수정일: 2026-05-04
+> 브랜치: `be/feat/auth-S14P31E102-364`
 
 ## 현재 브랜치 상태
 
-- 이 브랜치는 `be/feat/auth-S14P31E102-362`의 Auth/User foundation 작업 위에 쌓인 stacked branch이다.
-- MR1이 develop에 먼저 머지되면, 이 브랜치는 develop 기준으로 rebase 또는 retarget 정리가 필요하다.
-- DTO 일부는 API 구현 단계에서 다시 반영할 예정이며, 현재 MR2 범위에서는 보안/토큰/소셜 verifier 기반을 우선 구현했다.
+- 이 브랜치는 Auth/User foundation, security/token/social login, session/user API 작업 위에 쌓인 stacked branch이다.
+- MR1, MR2가 develop에 먼저 머지되면, 이 브랜치는 develop 기준으로 rebase 또는 retarget 정리가 필요하다.
+- 현재 브랜치에는 MR3 대상 작업과 함께 auth/security/token 패키지 정리, 테스트 페이지 보강, 문서 정합성 보강이 포함되어 있다.
 
 ## 완료한 작업
 
@@ -43,13 +44,58 @@
   - provider 응답을 `SocialUserInfo`로 정규화
   - provider 4xx는 `INVALID_SOCIAL_TOKEN`
   - provider 5xx/호출 실패/응답 이상은 `SOCIAL_PROVIDER_API_FAILED`
+- `S14P31E102-373`: `POST /auth/social-login` 기존/신규 사용자 흐름 구현
+  - 기존 가입 완료 사용자는 access token, refresh token, userId, 사용자 유형을 반환
+  - 신규 소셜 사용자는 `users` row를 만들지 않고 signup token만 반환
+  - refresh token은 Redis 저장소에 저장
+  - signup token은 Redis 저장소에 social provider identity와 함께 저장
+- `S14P31E102-374`: `POST /auth/signup` 회원가입 완료 흐름 구현
+  - signup token JWT와 Redis 저장소 값을 함께 검증
+  - 필수 약관 동의와 사용자 유형 조합 검증
+  - 가입 완료 시점에만 `users` row 생성
+  - 가입 완료 후 signup token 삭제 및 service token 발급
+- `S14P31E102-375`: `POST /auth/reissue` refresh token rotation 구현
+  - refresh token subject와 Redis 저장소 사용자 ID를 함께 검증
+  - 기존 refresh token 삭제 후 새 refresh token 저장
+  - 재발급 실패는 `INVALID_REFRESH_TOKEN`으로 매핑
+
+### MR3: Session/User API/Test/Swagger
+
+- `S14P31E102-364`: 로그아웃과 회원탈퇴 세션 무효화 구현
+  - 로그아웃 시 해당 사용자의 refresh token을 삭제하고 현재 access token을 blacklist에 등록
+  - 회원탈퇴 시 `users` row를 물리 삭제하고 남은 인증 세션을 무효화
+  - 성공 응답은 `200 OK`와 `ApiResponse` body로 통일
+- `S14P31E102-376`: 내 정보 조회 API 구현
+  - `GET /users/me`
+  - `@AuthenticationPrincipal AuthPrincipal` 기준으로 현재 사용자 조회
+- `S14P31E102-377`: 사용자 유형 수정 API 구현
+  - `PATCH /users/me/user-type`
+  - 저시력자/보행약자 사용자 유형 조합 검증 재사용
+- `S14P31E102-378`, `S14P31E102-379`, `S14P31E102-380`: 테스트, 테스트 페이지, 문서/Swagger 정합성 확인
+  - controller/service/security/token 테스트 보강
+  - `auth-test.html` local/dev 전용 접근 제어와 실제 소셜 로그인 버튼 보강
+  - 로그아웃/회원탈퇴 성공/실패 메시지 표시
+  - 없는 정적/API 경로가 500이 아니라 404로 내려가도록 전역 예외 처리 보강
+- 구조 정리:
+  - `global.security.config/filter/handler/jwt/principal` 하위 패키지로 security 파일 분리
+  - auth social verifier를 `domain.auth.social` 하위로 이동
+  - refresh/signup/access blacklist 저장소를 `AuthTokenStore`로 통합
+  - 테스트 페이지 지원 코드를 `global.test.auth` 하위로 이동
 
 ## 검증 내역
 
-- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.global.security.SecurityConfigTest`
-- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.global.security.JwtTokenProviderTest --tests com.ssafy.e102.global.security.SecurityConfigTest`
-- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.auth.token.RedisRefreshTokenStoreTest --tests com.ssafy.e102.domain.auth.token.RedisSignupTokenStoreTest`
-- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.auth.client.SocialTokenVerifierTest --tests com.ssafy.e102.domain.auth.client.CompositeSocialTokenVerifierTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.global.security.config.SecurityConfigTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.global.security.jwt.JwtTokenProviderTest --tests com.ssafy.e102.global.security.config.SecurityConfigTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.auth.token.RedisAuthTokenStoreTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.auth.social.verifier.SocialTokenVerifierTest --tests com.ssafy.e102.domain.auth.social.verifier.CompositeSocialTokenVerifierTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.auth.service.AuthServiceSocialLoginTest --tests com.ssafy.e102.domain.auth.controller.AuthControllerTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.auth.service.AuthServiceSignupTest --tests com.ssafy.e102.domain.auth.controller.AuthControllerTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.auth.service.AuthServiceReissueTest --tests com.ssafy.e102.domain.auth.controller.AuthControllerTest`
+- `cd BE && .\gradlew.bat test --tests com.ssafy.e102.domain.user.controller.UserControllerTest --tests com.ssafy.e102.domain.user.service.UserServiceProfileTest`
+- `cd BE && .\gradlew.bat processResources test`
+- `cd BE && .\gradlew.bat spotlessApply test`
+- `GET http://localhost:8080/v3/api-docs`: auth/user endpoints 노출 확인
+- `POST /auth/logout`, `DELETE /users/me`: 200 응답 body 수동 확인
 - `cd BE && .\gradlew.bat spotlessJavaCheck`
 - `cd BE && .\gradlew.bat checkstyleMain checkstyleTest`
 - `cd BE && .\gradlew.bat test`
@@ -85,9 +131,10 @@
   - `S14P31E102-369`
   - `S14P31E102-370`
   - `S14P31E102-372`
+  - `S14P31E102-373`
+  - `S14P31E102-374`
 - 남은 작업:
-  - `S14P31E102-373`: `POST /auth/social-login` 기존/신규 사용자 흐름 구현
-  - `S14P31E102-374`: 신규 사용자 signup token 기반 회원가입 완료 흐름 구현
+  - MR2 기능 구현은 완료. MR 생성/갱신 전 최종 리뷰와 필요 시 Swagger 문서 보강 필요
 - MR 제목:
   - `S14P31E102-362 [BE] 소셜 로그인 및 회원가입 토큰 흐름 구현`
 - 리뷰 포인트:
@@ -106,27 +153,28 @@
   - `S14P31E102-378`
   - `S14P31E102-379`
   - `S14P31E102-380`
-- 남은 작업:
+- 현재 완료:
   - `POST /auth/reissue`
   - `POST /auth/logout`
   - `GET /users/me`
   - `PATCH /users/me/user-type`
-  - `DELETE /users/me`는 회원탈퇴 정책 확정 후 포함
-  - controller/service/failure path 테스트
-  - Swagger 문서 정합성 확인
+  - `DELETE /users/me`
+  - controller/service/security/token/failure path 테스트
+  - `auth-test.html` local/dev 전용 테스트 페이지와 수동 검증 흐름
+  - Swagger/OpenAPI endpoint 노출 확인
 - MR 제목:
   - `S14P31E102-364 [BE] 토큰 재발급 로그아웃 사용자 API 및 테스트 구현`
 
 ## 남은 결정 사항
 
 - 회원탈퇴 정책
-  - soft delete인지, 물리 삭제/익명화인지 확정 필요
-  - bookmark/favorite route/rating/report 보존 정책 확정 필요
+  - 현재는 `users` soft delete와 인증 세션 무효화 기준으로 구현
+  - bookmark/favorite route/rating/report 테이블이 붙으면 삭제/보존/익명화 정책을 다시 반영해야 한다.
 - signup token TTL
   - 현재 기본값은 10분
   - FE 온보딩 흐름 기준으로 충분한지 확인 필요
 - provider 운영 범위
   - Kakao/Naver/Google 모두 production-ready로 열지, MVP에서 일부만 우선 운영할지 확인 필요
-- MR2 병합 순서
-  - MR1이 먼저 머지되어야 MR2 diff가 리뷰 가능하다.
-  - MR1 머지 후 MR2는 develop 기준 rebase가 필요할 수 있다.
+- MR 병합 순서
+  - MR1, MR2가 먼저 머지되어야 MR3 diff가 리뷰 가능하다.
+  - 선행 MR 머지 후 MR3는 develop 기준 rebase가 필요할 수 있다.

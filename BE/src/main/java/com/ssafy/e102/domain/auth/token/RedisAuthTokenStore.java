@@ -67,6 +67,7 @@ public class RedisAuthTokenStore implements AuthTokenStore {
 	public boolean rotateRefreshToken(String oldRefreshToken, String newRefreshToken, UUID userId, Duration ttl) {
 		String oldTokenHash = TokenHash.sha256(oldRefreshToken);
 		String newTokenHash = TokenHash.sha256(newRefreshToken);
+		String ttlSeconds = String.valueOf(ttl.toSeconds());
 		Long result = redisTemplate.execute(
 			ROTATE_REFRESH_TOKEN_SCRIPT,
 			List.of(
@@ -74,7 +75,7 @@ public class RedisAuthTokenStore implements AuthTokenStore {
 				refreshUserKey(userId),
 				refreshTokenKey(newTokenHash)),
 			userId.toString(),
-			ttl.toSeconds(),
+			ttlSeconds,
 			oldTokenHash,
 			newTokenHash);
 		return Long.valueOf(1L).equals(result);

@@ -17,6 +17,9 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmark WHERE placeId = :placeId LIMIT 1")
     suspend fun getBookmark(placeId: String): BookmarkEntity?
 
+    @Query("SELECT COUNT(*) FROM bookmark")
+    suspend fun getBookmarkCount(): Int
+
     @Upsert
     suspend fun upsertBookmark(bookmark: BookmarkEntity)
 

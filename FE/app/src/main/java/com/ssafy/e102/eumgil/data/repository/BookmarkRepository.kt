@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 
 interface BookmarkRepository {
     fun observeBookmarks(): Flow<List<BookmarkData>>
@@ -27,12 +28,18 @@ data class BookmarkData(
 
 class DefaultBookmarkRepository(
     private val bookmarkDao: BookmarkDao,
+    private val initialBookmarks: List<BookmarkData> = emptyList(),
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : BookmarkRepository {
+    private var hasSeededInitialBookmarks = false
+
     override fun observeBookmarks(): Flow<List<BookmarkData>> =
-        bookmarkDao.observeBookmarks().map { bookmarks ->
-            bookmarks.map(BookmarkEntity::toBookmarkData)
-        }
+        bookmarkDao
+            .observeBookmarks()
+            .onStart { seedInitialBookmarksIfNeeded() }
+            .map { bookmarks ->
+                bookmarks.map(BookmarkEntity::toBookmarkData)
+            }
 
     override suspend fun isBookmarked(placeId: String): Boolean =
         bookmarkDao.getBookmark(placeId) != null
@@ -59,6 +66,20 @@ class DefaultBookmarkRepository(
     override suspend fun deleteBookmark(placeId: String) {
         bookmarkDao.deleteBookmark(placeId)
     }
+
+    private suspend fun seedInitialBookmarksIfNeeded() {
+        if (hasSeededInitialBookmarks || initialBookmarks.isEmpty()) return
+
+        hasSeededInitialBookmarks = true
+        if (bookmarkDao.getBookmarkCount() > 0) return
+
+        val now = clock()
+        bookmarkDao.upsertBookmarks(
+            initialBookmarks.map { bookmark ->
+                bookmark.toBookmarkEntity(createdAt = now, updatedAt = now)
+            },
+        )
+    }
 }
 
 private fun BookmarkEntity.toBookmarkData(): BookmarkData =
@@ -79,4 +100,19 @@ fun FacilityDetailSeed.toBookmarkData(): BookmarkData =
         latitude = coordinate.latitude,
         longitude = coordinate.longitude,
         category = category.name,
+    )
+
+private fun BookmarkData.toBookmarkEntity(
+    createdAt: Long,
+    updatedAt: Long,
+): BookmarkEntity =
+    BookmarkEntity(
+        placeId = placeId,
+        placeName = placeName,
+        address = address,
+        latitude = latitude,
+        longitude = longitude,
+        category = category,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
     )

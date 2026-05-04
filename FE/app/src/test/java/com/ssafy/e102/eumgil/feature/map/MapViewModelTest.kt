@@ -458,7 +458,7 @@ class MapViewModelTest {
 
             val selectedDetail = checkNotNull(viewModel.uiState.value.facilityDetailSheetState.detail)
 
-            viewModel.onAction(MapUiAction.FacilityRouteEntryClicked)
+            viewModel.onAction(MapUiAction.FacilitySetDestinationClicked)
             advanceUntilIdle()
 
             val event =

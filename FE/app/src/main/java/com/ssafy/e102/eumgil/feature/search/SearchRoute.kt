@@ -92,6 +92,8 @@ private fun SearchRouteContent(
                 SearchUiEvent.NavigateBack -> onNavigateBack()
                 is SearchUiEvent.NavigateToResults -> onNavigateToResults(event.query)
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                SearchUiEvent.NavigateToRouteBriefing,
+                SearchUiEvent.NavigateToLowVisionBookmark -> Unit
             }
         }
     }

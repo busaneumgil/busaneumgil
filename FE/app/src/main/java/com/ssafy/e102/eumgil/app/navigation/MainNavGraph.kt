@@ -267,6 +267,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     .observeInitSettings()
                     .map { initSettings -> initSettings.selectedPrimaryUserType }
             }.collectAsStateWithLifecycle(initialValue = null)
+        val useLowVisionUi = shouldUseLowVisionNavigationUi(selectedPrimaryUserType)
 
         NavigationScreenRoute(
             onNavigateBack = {
@@ -279,7 +280,16 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
             onNavigateToSavedRoute = {
-                navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
+                if (useLowVisionUi) {
+                    navController.navigate(resolveNavigationSavedRoute(selectedPrimaryUserType)) {
+                        launchSingleTop = true
+                        popUpTo(NavigationRoute.Guidance.route) {
+                            inclusive = true
+                        }
+                    }
+                } else {
+                    navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
+                }
             },
             onNavigateToArrival = {
                 navController.navigate(resolveNavigationCompletionRoute()) {
@@ -289,10 +299,17 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
-            useLowVisionUi = shouldUseLowVisionNavigationUi(selectedPrimaryUserType),
+            useLowVisionUi = useLowVisionUi,
         )
     }
 }
+
+internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): String =
+    if (shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {
+        LowVisionRoute.Bookmark.route
+    } else {
+        TopLevelRoute.SavedRoute.route
+    }
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue

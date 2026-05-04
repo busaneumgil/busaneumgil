@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -48,7 +49,7 @@ class SearchViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SearchUiAction.QueryChanged(query = "  부산시청  "))
             viewModel.onAction(SearchUiAction.SearchSubmitted)
@@ -72,7 +73,7 @@ class SearchViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SearchUiAction.RecentSearchClicked(keyword = "부산역"))
             advanceUntilIdle()
@@ -102,13 +103,43 @@ class SearchViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
             advanceUntilIdle()
 
             assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
             assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
+        }
+
+    @Test
+    fun `search result briefing click stores selected destination and emits route briefing navigation`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultBriefingClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
+            assertEquals(SearchUiEvent.NavigateToRouteBriefing, uiEvent.await())
         }
 
     @Test
@@ -222,6 +253,46 @@ class SearchViewModelTest {
                 ),
                 bookmarkRepository.bookmarks.value.single(),
             )
+        }
+
+    @Test
+    fun `low vision bookmark save always saves result and navigates to low vision bookmark`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "place-1",
+                    placeName = "Busan City Hall",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = "TOURIST_ATTRACTION",
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+            assertEquals(SearchUiEvent.NavigateToLowVisionBookmark, uiEvent.await())
         }
 
     @Test

@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.core.tts
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,8 @@ interface TextToSpeechController {
 data class TextToSpeechState(
     val enabled: Boolean = true,
     val availability: TextToSpeechAvailability = TextToSpeechAvailability.Initializing,
+    val isSpeaking: Boolean = false,
+    val completedUtteranceCount: Int = 0,
 ) {
     val canSpeak: Boolean
         get() = enabled && availability == TextToSpeechAvailability.Ready
@@ -69,6 +72,7 @@ class AndroidTextToSpeechController(
     override fun stop() {
         pendingText = null
         runCatching { engine?.stop() }
+        mutableState.update { it.copy(isSpeaking = false) }
     }
 
     override fun shutdown() {
@@ -107,6 +111,34 @@ class AndroidTextToSpeechController(
         }
 
         mutableState.update { it.copy(availability = TextToSpeechAvailability.Ready) }
+        engine?.setOnUtteranceProgressListener(
+            object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    mutableState.update { it.copy(isSpeaking = true) }
+                }
+
+                override fun onDone(utteranceId: String?) {
+                    mutableState.update { state ->
+                        state.copy(
+                            isSpeaking = false,
+                            completedUtteranceCount = state.completedUtteranceCount + 1,
+                        )
+                    }
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    onSpeechFinishedWithError()
+                }
+
+                override fun onError(
+                    utteranceId: String?,
+                    errorCode: Int,
+                ) {
+                    onSpeechFinishedWithError()
+                }
+            },
+        )
         speakPendingText()
     }
 
@@ -121,12 +153,28 @@ class AndroidTextToSpeechController(
 
         if (result == TextToSpeech.ERROR) {
             markUnavailable()
+        } else {
+            mutableState.update { it.copy(isSpeaking = true) }
         }
     }
 
     private fun markUnavailable() {
         pendingText = null
-        mutableState.update { it.copy(availability = TextToSpeechAvailability.Unavailable) }
+        mutableState.update {
+            it.copy(
+                availability = TextToSpeechAvailability.Unavailable,
+                isSpeaking = false,
+            )
+        }
+    }
+
+    private fun onSpeechFinishedWithError() {
+        mutableState.update { state ->
+            state.copy(
+                isSpeaking = false,
+                completedUtteranceCount = state.completedUtteranceCount + 1,
+            )
+        }
     }
 }
 

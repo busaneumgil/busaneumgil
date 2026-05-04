@@ -67,7 +67,6 @@ internal object LowVisionCategoryLayoutDefaults {
 
 internal fun lowVisionCategoryDisplayLabel(label: String): String =
     when (val trimmedLabel = label.trim()) {
-        "엘리베이터" -> "엘리\n베이터"
         "\uC219\uBC15\uC2DC\uC124" -> "\uC219\uBC15\n\uC2DC\uC124"
         else -> trimmedLabel.replace(Regex("\\s+"), "\n")
     }

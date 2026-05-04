@@ -32,6 +32,7 @@ sealed interface AppStartDestination {
     }
 }
 
+@JvmOverloads
 fun resolveAppStartDestination(
     authGateState: AuthGateState,
     initSettings: InitSettings,

@@ -40,8 +40,8 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
     composable(route = LowVisionRoute.VoiceInput.route) {
         LowVisionVoiceInputRoute(
-            onRecordingFinished = {
-                navController.navigate(resolveLowVisionRecordingCompletedRoute()) {
+            onCancelRecording = {
+                navController.navigate(resolveLowVisionVoiceInputCancelRoute()) {
                     launchSingleTop = true
                     popUpTo(resolveLowVisionRecordingPopUpRoute()) {
                         inclusive = true
@@ -108,7 +108,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
     composable(route = LowVisionRoute.Guidance.route) {
         LowVisionNavigationRoute(
             onNavigateToComplete = {
-                navController.navigate(LowVisionRoute.NavigationComplete.route) {
+                navController.navigate(resolveLowVisionNavigationExitRoute()) {
                     launchSingleTop = true
                     popUpTo(LowVisionRoute.Guidance.route) {
                         inclusive = true
@@ -221,6 +221,8 @@ private fun LowVisionSearchResultShell(
 
 internal fun resolveLowVisionRecordingCompletedRoute(): String = LowVisionRoute.Search.route
 
+internal fun resolveLowVisionVoiceInputCancelRoute(): String = LowVisionRoute.Home.route
+
 internal fun resolveLowVisionRecordingPopUpRoute(): String = LowVisionRoute.VoiceInput.route
 
 internal fun resolveLowVisionSearchResultRoute(): String =
@@ -233,6 +235,8 @@ internal fun resolveLowVisionSearchPopUpRoute(selectedTab: LowVisionBottomTab = 
     }
 
 internal fun resolveNavigationCompletionRoute(): String = ArrivalRoute.Entry.route
+
+internal fun resolveLowVisionNavigationExitRoute(): String = LowVisionRoute.Home.route
 
 internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 

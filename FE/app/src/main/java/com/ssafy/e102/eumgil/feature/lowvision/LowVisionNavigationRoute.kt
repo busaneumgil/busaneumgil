@@ -62,15 +62,10 @@ fun LowVisionNavigationRoute(
 
     LaunchedEffect(viewModel, onNavigateToComplete, onNavigateToBookmark) {
         viewModel.uiEvent.collect { event ->
-            when (event) {
-                NavigationUiEvent.NavigateToArrival -> onNavigateToComplete()
-                NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
-                NavigationUiEvent.NavigateBack,
-                NavigationUiEvent.NavigateToMap,
-                is NavigationUiEvent.NavigateToRouteDetail,
-                is NavigationUiEvent.SpeakBriefing,
-                NavigationUiEvent.StopBriefing,
-                is NavigationUiEvent.SetVoiceGuidanceEnabled -> Unit
+            when {
+                shouldNavigateLowVisionHome(event) -> onNavigateToComplete()
+                event == NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
+                else -> Unit
             }
         }
     }
@@ -82,6 +77,9 @@ fun LowVisionNavigationRoute(
         modifier = modifier,
     )
 }
+
+internal fun shouldNavigateLowVisionHome(event: NavigationUiEvent): Boolean =
+    event == NavigationUiEvent.NavigateToMap || event == NavigationUiEvent.NavigateToArrival
 
 private suspend fun RouteRepository.buildLowVisionNavigationRequest(
     destinationSelectionRepository: DestinationSelectionRepository,

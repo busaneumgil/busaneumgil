@@ -11,13 +11,13 @@ import androidx.compose.ui.Modifier
  */
 @Composable
 fun LowVisionVoiceInputRoute(
-    onRecordingFinished: () -> Unit,
+    onCancelRecording: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LowVisionVoiceInputScreen(
         uiState = LowVisionVoiceInputUiState(selectedTab = LowVisionBottomTab.HOME),
-        onCancelRecording = onRecordingFinished,
+        onCancelRecording = onCancelRecording,
         onTabSelected = onTabSelected,
         modifier = modifier,
     )

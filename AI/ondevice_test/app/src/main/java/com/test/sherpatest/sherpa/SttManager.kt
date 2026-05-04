@@ -67,16 +67,18 @@ class SttManager(context: Context) {
         val stream = recognizer.createStream()
         stream.acceptWaveform(samples, sampleRate = SAMPLE_RATE)
         recognizer.decode(stream)
-        val result = recognizer.getResult(stream).text
+        val rawResult = recognizer.getResult(stream).text
+        // <|ko|>, <|NEUTRAL|>, <|Speech|> 등 SenseVoice 태그 제거
+        val result = rawResult.replace(Regex("<\\|[^|]+\\|>"), "").trim()
         val sttTimeMs = System.currentTimeMillis() - sttStart
 
         val totalTimeMs = System.currentTimeMillis() - recordingStartTimeMs
         val rtf = if (audioLengthMs > 0) sttTimeMs.toFloat() / audioLengthMs.toFloat() else 0f
 
-        Log.d(TAG, "STT result='$result' sttTime=${sttTimeMs}ms audioLen=${audioLengthMs}ms RTF=${"%.3f".format(rtf)}")
+        Log.d(TAG, "STT raw='$rawResult' result='$result' sttTime=${sttTimeMs}ms audioLen=${audioLengthMs}ms RTF=${"%.3f".format(rtf)}")
 
         return SttResult(
-            text = result.trim(),
+            text = result,
             totalTimeMs = totalTimeMs,
             vadTimeMs = vadTimeMs,
             sttTimeMs = sttTimeMs,

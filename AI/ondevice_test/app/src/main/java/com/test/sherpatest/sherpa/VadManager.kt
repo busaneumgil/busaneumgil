@@ -23,7 +23,7 @@ class VadManager(context: Context) {
             sileroVadModelConfig = SileroVadModelConfig(
                 model = vadPath,
                 threshold = 0.5f,
-                minSilenceDuration = 0.5f,
+                minSilenceDuration = 1.5f,
                 minSpeechDuration = 0.25f,
                 windowSize = WINDOW_SIZE,
                 maxSpeechDuration = 30.0f

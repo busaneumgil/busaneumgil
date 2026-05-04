@@ -115,35 +115,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val windowSamples = ShortArray(VadManager.WINDOW_SIZE)
                 val floatWindow = FloatArray(VadManager.WINDOW_SIZE)
 
+                // 발화 누적 및 자동 종료 관련 변수
+                // WINDOW_SIZE=512, 16kHz → 1프레임 = 32ms → 30프레임 ≈ 0.96초 무음 후 자동 종료
+                val SILENCE_FRAMES_FOR_STOP = 30
+                var voiceDetectedEver = false
+                var silenceFrameCount = 0
+                val accumulatedSamples = mutableListOf<Float>()
+                var totalVadTimeMs = 0L
+                var frameCount = 0
+
+                Log.d(TAG, "=== 녹음 시작 - 마이크 오디오 수신 대기 중 ===")
+
                 while (_uiState.value.isRecording) {
                     val read = audioRecorder.readSamplesSync(windowSamples)
                     if (read <= 0) continue
+
+                    frameCount++
 
                     // Short → Float 정규화
                     for (i in 0 until read) {
                         floatWindow[i] = windowSamples[i] / 32768.0f
                     }
 
+                    // 10프레임(~320ms)마다 오디오 수신 확인 로그
+                    if (frameCount % 10 == 0) {
+                        val rms = floatWindow.take(read).map { it * it }.average().let { Math.sqrt(it) }
+                        Log.d(TAG, "[오디오 수신 중] frame=$frameCount rms=${"%.4f".format(rms)}")
+                    }
+
                     val vadStart = System.currentTimeMillis()
                     vadManager?.acceptWaveform(floatWindow.copyOf(read))
-                    val vadTimeMs = System.currentTimeMillis() - vadStart
+                    totalVadTimeMs += System.currentTimeMillis() - vadStart
 
-                    // 발화 세그먼트 소비
+                    // VAD 세그먼트가 있으면 누적 (STT는 아직 호출 안 함)
+                    var hadSegment = false
                     while (vadManager?.isEmpty() == false) {
                         val segment = vadManager?.front() ?: break
                         vadManager?.popSegment()
+                        accumulatedSamples.addAll(segment.samples.toList())
+                        hadSegment = true
+                    }
 
-                        val samples = segment.samples
-                        processSegment(samples, vadTimeMs)
+                    if (hadSegment) {
+                        if (!voiceDetectedEver) {
+                            Log.d(TAG, ">>> 발화 감지 시작! 음성 누적 중...")
+                        }
+                        // 발화 감지 → 무음 카운터 리셋
+                        voiceDetectedEver = true
+                        silenceFrameCount = 0
+                        Log.d(TAG, "[VAD] 발화 세그먼트 추가 - 누적 샘플 수: ${accumulatedSamples.size}")
+                    } else {
+                        silenceFrameCount++
+                        if (voiceDetectedEver && silenceFrameCount % 5 == 0) {
+                            Log.d(TAG, "[VAD] 무음 감지 중 - $silenceFrameCount / $SILENCE_FRAMES_FOR_STOP 프레임")
+                        }
+                    }
+
+                    // 발화 후 무음 지속 → 루프 종료 후 STT
+                    if (voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP) {
+                        Log.d(TAG, "=== 무음 감지 (~${SILENCE_FRAMES_FOR_STOP * 32}ms) → 녹음 자동 종료, STT 준비 ===")
+                        break
+                    }
+
+                    // 발화 없이 무음만 오래 지속 → 루프 종료 (STT 스킵)
+                    if (!voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP * 2) {
+                        Log.d(TAG, "=== 발화 없음 타임아웃 → 녹음 종료 (STT 스킵) ===")
+                        break
                     }
                 }
 
-                // 녹음 종료 후 flush
+                // 루프 종료 후 flush로 남은 세그먼트 수집
+                Log.d(TAG, "--- flush 시작 ---")
                 vadManager?.flush()
                 while (vadManager?.isEmpty() == false) {
                     val segment = vadManager?.front() ?: break
                     vadManager?.popSegment()
-                    processSegment(segment.samples, 0L)
+                    accumulatedSamples.addAll(segment.samples.toList())
+                }
+
+                // 누적된 발화 전체를 한 번에 STT 호출
+                if (voiceDetectedEver && accumulatedSamples.isNotEmpty()) {
+                    val audioSec = accumulatedSamples.size / 16000f
+                    Log.d(TAG, "=== STT 추론 시작 - 누적 샘플: ${accumulatedSamples.size} (${String.format("%.2f", audioSec)}초) ===")
+                    processSegment(accumulatedSamples.toFloatArray(), totalVadTimeMs)
+                    Log.d(TAG, "=== STT 추론 완료 ===")
+                } else {
+                    Log.d(TAG, "발화 없음 - STT 호출 스킵")
                 }
 
             } catch (e: Exception) {
@@ -153,6 +210,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } finally {
                 audioRecorder.stop()
+                _uiState.update { it.copy(isRecording = false) }
             }
         }
     }

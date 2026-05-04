@@ -4,16 +4,21 @@ pipeline.py
 
 사용 예시:
   # 서브셋 20시간 처리
-  python pipeline.py \\
-      --gyeongsang_dir "C:/Users/SSAFY/Desktop/suyeon/voice_data/korean_saturi/01-1.정식개방데이터" \\
-      --output_dir output \\
-      --subset_hours 20
+  python pipeline.py --subset_hours 20
 
   # 전체 처리
+  python pipeline.py
+
+  # 경로 직접 지정
   python pipeline.py \\
-      --gyeongsang_dir "C:/.../01-1.정식개방데이터" \\
-      --dysarthria_dir "C:/.../dysarthria" \\
-      --output_dir output
+      --gyeongsang_dir "C:/Users/SSAFY/Desktop/suyeon/voice_data/korean_saturi" \\
+      --dysarthria_dir "C:/Users/SSAFY/Desktop/suyeon/voice_data/hard_voice" \\
+      --output_dir "C:/Users/SSAFY/Desktop/suyeon/voice_data/preprocessing_output"
+
+출력 구조:
+  C:/Users/SSAFY/Desktop/suyeon/voice_data/preprocessing_output/  ← WAV 세그먼트, 체크포인트, JSONL
+  C:/Users/SSAFY/Desktop/suyeon/voice_data/preprocessing_output/results/  ← 리포트
+  <작업폴더>/data.jsonl  ← 최종 JSONL (작업 폴더에만 복사)
 
 실행 순서:
   1. GyeongsangProcessor  → 경상도 방언 전처리
@@ -29,6 +34,7 @@ import csv
 import json
 import logging
 import os
+import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -224,13 +230,13 @@ def main():
     )
     parser.add_argument(
         "--output_dir",
-        default="output",
-        help="전처리 결과 저장 경로 (기본: ./output)",
+        default=r"C:\Users\SSAFY\Desktop\suyeon\voice_data\preprocessing_output",
+        help="전처리 결과 저장 경로",
     )
     parser.add_argument(
         "--results_dir",
-        default="results",
-        help="리포트 저장 경로 (기본: ./results)",
+        default=r"C:\Users\SSAFY\Desktop\suyeon\voice_data\preprocessing_output\results",
+        help="리포트 저장 경로",
     )
     parser.add_argument(
         "--subset_hours",
@@ -311,6 +317,8 @@ def main():
         write_kaldi_files(dev_p, output_dir / "dev")
         write_kaldi_files(test_p, output_dir / "test")
         write_report(gy_processor, dy_processor, train_p, dev_p, test_p, results_dir)
+        work_dir_jsonl = Path(__file__).parent / "data.jsonl"
+        shutil.copy(output_dir / "data.jsonl", work_dir_jsonl)
         logger.info(
             f"부분 저장 완료. 다음 실행 시 체크포인트에서 이어서 처리됩니다.\n"
             f"  체크포인트: {output_dir / 'checkpoints'}"
@@ -350,6 +358,11 @@ def main():
 
     # ---- 6. 전처리 리포트 ---------------------------------------------- #
     write_report(gy_processor, dy_processor, train, dev, test, results_dir)
+
+    # ---- data.jsonl 작업 폴더에 복사 ----------------------------------- #
+    work_dir_jsonl = Path(__file__).parent / "data.jsonl"
+    shutil.copy(output_dir / "data.jsonl", work_dir_jsonl)
+    logger.info(f"data.jsonl 작업 폴더 복사: {work_dir_jsonl}")
 
     # ---- 최종 요약 ----------------------------------------------------- #
     total_dur = sum(r.get("duration", 0) for r in all_records)

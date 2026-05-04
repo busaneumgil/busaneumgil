@@ -13,4 +13,6 @@ public interface RefreshTokenStore {
 	void rotate(String oldRefreshToken, String newRefreshToken, UUID userId, Duration ttl);
 
 	void delete(String refreshToken);
+
+	void deleteByUserId(UUID userId);
 }

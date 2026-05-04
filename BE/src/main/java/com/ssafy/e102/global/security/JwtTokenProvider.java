@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
 import java.util.UUID;
 
 import javax.crypto.SecretKey;
@@ -67,6 +68,20 @@ public class JwtTokenProvider {
 
 	public UUID getAccessTokenSubject(String token) {
 		return UUID.fromString(getSubject(token, ACCESS_TOKEN_TYPE));
+	}
+
+	public Optional<Duration> getAccessTokenRemainingTtl(String token) {
+		try {
+			Claims claims = parseClaims(token);
+			validateTokenType(claims, ACCESS_TOKEN_TYPE);
+			Duration remainingTtl = Duration.between(clock.instant(), claims.getExpiration().toInstant());
+			if (remainingTtl.isNegative() || remainingTtl.isZero()) {
+				return Optional.empty();
+			}
+			return Optional.of(remainingTtl);
+		} catch (JwtTokenException exception) {
+			return Optional.empty();
+		}
 	}
 
 	public UUID getRefreshTokenSubject(String token) {

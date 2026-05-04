@@ -21,9 +21,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private static final String BEARER_PREFIX = "Bearer ";
 
 	private final JwtTokenProvider jwtTokenProvider;
+	private final com.ssafy.e102.domain.auth.token.AccessTokenBlacklistStore accessTokenBlacklistStore;
 
-	public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+	public JwtAuthenticationFilter(
+		JwtTokenProvider jwtTokenProvider,
+		com.ssafy.e102.domain.auth.token.AccessTokenBlacklistStore accessTokenBlacklistStore) {
 		this.jwtTokenProvider = jwtTokenProvider;
+		this.accessTokenBlacklistStore = accessTokenBlacklistStore;
 	}
 
 	@Override
@@ -34,7 +38,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		String bearerToken = request.getHeader(HttpHeaders.AUTHORIZATION);
 
 		if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(BEARER_PREFIX)) {
-			authenticate(request, bearerToken.substring(BEARER_PREFIX.length()));
+			String accessToken = bearerToken.substring(BEARER_PREFIX.length());
+			if (!accessTokenBlacklistStore.contains(accessToken)) {
+				authenticate(request, accessToken);
+			}
 		}
 
 		filterChain.doFilter(request, response);

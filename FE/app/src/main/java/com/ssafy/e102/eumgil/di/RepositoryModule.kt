@@ -30,10 +30,12 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.FakeRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
+import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -62,6 +64,8 @@ object RepositoryModule {
             bookmarkDao = bookmarkDao,
             initialBookmarks = initialBookmarks,
         )
+
+    fun provideRouteBookmarkRepository(): RouteBookmarkRepository = FakeRouteBookmarkRepository()
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,

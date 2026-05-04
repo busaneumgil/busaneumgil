@@ -31,6 +31,7 @@ import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
+import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -113,6 +114,10 @@ class AppContainer(
                     emptyList()
                 },
         )
+    }
+
+    val routeBookmarkRepository: RouteBookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideRouteBookmarkRepository()
     }
 
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {

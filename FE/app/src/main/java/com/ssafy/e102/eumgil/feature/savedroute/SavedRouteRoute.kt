@@ -12,12 +12,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.RouteOption
 import kotlinx.coroutines.flow.collect
 
 @Composable
 fun SavedRouteRoute(
     onNavigateToMap: () -> Unit,
-    onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteSetting: (RouteOption?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -30,6 +31,7 @@ fun SavedRouteRoute(
         remember(appContainer) {
             SavedRouteViewModel.provideFactory(
                 bookmarkRepository = appContainer.bookmarkRepository,
+                routeBookmarkRepository = appContainer.routeBookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
             )
         }
@@ -44,7 +46,7 @@ fun SavedRouteRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 SavedRouteUiEvent.NavigateToMap -> onNavigateToMap()
-                SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                is SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting(event.initialRouteOption)
                 is SavedRouteUiEvent.ShowSnackbar -> Unit
             }
         }

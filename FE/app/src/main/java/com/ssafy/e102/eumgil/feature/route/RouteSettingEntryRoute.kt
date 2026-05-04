@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
@@ -21,10 +24,12 @@ fun RouteSettingEntryRoute(
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     autoStartNavigation: Boolean = false,
+    initialRouteOption: RouteOption? = null,
     modifier: Modifier = Modifier,
 ) {
     val viewModel = rememberRouteSettingViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var initialRouteOptionApplied by rememberSaveable(initialRouteOption) { mutableStateOf(false) }
 
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToRouteDetail, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
@@ -39,6 +44,20 @@ fun RouteSettingEntryRoute(
     LaunchedEffect(viewModel, autoStartNavigation, uiState.isStartEnabled, uiState.ctaAcknowledged) {
         if (autoStartNavigation && uiState.isStartEnabled && !uiState.ctaAcknowledged) {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+        }
+    }
+
+    LaunchedEffect(viewModel, initialRouteOption, uiState.isLoading, uiState.optionCards, initialRouteOptionApplied) {
+        if (
+            !initialRouteOptionApplied &&
+            initialRouteOption != null &&
+            !uiState.isLoading &&
+            uiState.optionCards.isNotEmpty()
+        ) {
+            if (uiState.selectedOption != initialRouteOption) {
+                viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(initialRouteOption))
+            }
+            initialRouteOptionApplied = true
         }
     }
 

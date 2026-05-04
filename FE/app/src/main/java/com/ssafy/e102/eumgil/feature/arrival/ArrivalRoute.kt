@@ -1,5 +1,8 @@
 package com.ssafy.e102.eumgil.feature.arrival
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -7,9 +10,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
@@ -23,11 +28,12 @@ fun ArrivalRoute(
         remember(context.applicationContext) {
             (context.applicationContext as BusanEumgilApp).appContainer
         }
+    val navigationViewModel = rememberNavigationGuidanceViewModel()
     val viewModelFactory =
-        remember(appContainer) {
+        remember(appContainer, navigationViewModel) {
             ArrivalViewModel.provideFactory(
-                bookmarkRepository = appContainer.bookmarkRepository,
-                destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                routeBookmarkRepository = appContainer.routeBookmarkRepository,
+                currentRouteBookmarkDraft = navigationViewModel.currentRouteBookmarkDraft(),
             )
         }
     val viewModel: ArrivalViewModel = viewModel(factory = viewModelFactory)
@@ -54,3 +60,32 @@ fun ArrivalRoute(
         modifier = modifier,
     )
 }
+
+@Composable
+private fun rememberNavigationGuidanceViewModel(): NavigationViewModel {
+    val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
+    val activity = remember(context) { context.findComponentActivity() }
+    val navigationViewModelFactory =
+        remember(appContainer) {
+            NavigationViewModel.provideFactory(
+                currentLocationManager = appContainer.currentLocationManager,
+                bookmarkRepository = appContainer.bookmarkRepository,
+            )
+        }
+
+    return remember(activity, navigationViewModelFactory) {
+        val owner = checkNotNull(activity) { "ArrivalRoute requires a ComponentActivity host." }
+        ViewModelProvider(owner, navigationViewModelFactory)[NavigationViewModel::class.java]
+    }
+}
+
+private tailrec fun Context.findComponentActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity -> this
+        is ContextWrapper -> baseContext.findComponentActivity()
+        else -> null
+    }

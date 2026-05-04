@@ -1,15 +1,29 @@
 package com.ssafy.e102.eumgil.feature.savedroute
 
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteOption
+
 data class SavedRouteUiState(
-    val screenState: SavedRouteScreenState = SavedRouteScreenState.LOADING,
-    val selectedTab: BookmarkTab = BookmarkTab.PLACE,
+    val selectedTab: SavedBookmarkTab = SavedBookmarkTab.PLACE,
+    val placeContent: SavedPlaceContentUiState = SavedPlaceContentUiState(),
+    val routeContent: SavedRouteBookmarkContentUiState = SavedRouteBookmarkContentUiState(),
     val isEditMode: Boolean = false,
+    val isApplyingEditChanges: Boolean = false,
+    val pendingPlaceRemovalIds: Set<String> = emptySet(),
+    val pendingRouteRemovalIds: Set<String> = emptySet(),
+)
+
+data class SavedPlaceContentUiState(
+    val screenState: SavedBookmarkContentState = SavedBookmarkContentState.LOADING,
     val places: List<SavedPlaceUiModel> = emptyList(),
     val errorMessage: String? = null,
-) {
-    val canEnterEditMode: Boolean
-        get() = selectedTab == BookmarkTab.PLACE && places.isNotEmpty()
-}
+)
+
+data class SavedRouteBookmarkContentUiState(
+    val screenState: SavedBookmarkContentState = SavedBookmarkContentState.LOADING,
+    val routes: List<SavedRouteBookmarkUiModel> = emptyList(),
+    val errorMessage: String? = null,
+)
 
 data class SavedPlaceUiModel(
     val placeId: String,
@@ -20,46 +34,78 @@ data class SavedPlaceUiModel(
     val longitude: Double,
 )
 
-enum class SavedRouteScreenState {
+data class SavedRouteBookmarkUiModel(
+    val bookmarkId: String,
+    val routeName: String,
+    val startLabel: String,
+    val endLabel: String,
+    val startPoint: GeoCoordinate,
+    val endPoint: GeoCoordinate,
+    val routeOption: RouteOption,
+    val distanceMeters: Int? = null,
+    val durationMinutes: Int? = null,
+)
+
+enum class SavedBookmarkTab {
+    PLACE,
+    ROUTE,
+}
+
+enum class SavedBookmarkContentState {
     LOADING,
     CONTENT,
     EMPTY,
     ERROR,
 }
 
-enum class BookmarkTab {
-    PLACE,
-    ROUTE,
-}
-
 sealed interface SavedRouteUiAction {
+    data class TabSelected(
+        val tab: SavedBookmarkTab,
+    ) : SavedRouteUiAction
+
+    data object EditClicked : SavedRouteUiAction
+
+    data object EditDoneClicked : SavedRouteUiAction
+
     data object ExploreMapClicked : SavedRouteUiAction
 
     data object RetryClicked : SavedRouteUiAction
-
-    data class TabSelected(
-        val tab: BookmarkTab,
-    ) : SavedRouteUiAction
-
-    data object EditModeToggled : SavedRouteUiAction
 
     data class PlaceClicked(
         val placeId: String,
     ) : SavedRouteUiAction
 
-    data class RouteGuideClicked(
+    data class PlaceRouteGuideClicked(
         val placeId: String,
     ) : SavedRouteUiAction
 
-    data class BookmarkRemoveClicked(
+    data class PlaceDeleteClicked(
         val placeId: String,
+    ) : SavedRouteUiAction
+
+    data class PlaceRemoveClicked(
+        val placeId: String,
+    ) : SavedRouteUiAction
+
+    data class RouteGuideClicked(
+        val bookmarkId: String,
+    ) : SavedRouteUiAction
+
+    data class RouteDeleteClicked(
+        val bookmarkId: String,
+    ) : SavedRouteUiAction
+
+    data class RouteRemoveClicked(
+        val bookmarkId: String,
     ) : SavedRouteUiAction
 }
 
 sealed interface SavedRouteUiEvent {
     data object NavigateToMap : SavedRouteUiEvent
 
-    data object NavigateToRouteSetting : SavedRouteUiEvent
+    data class NavigateToRouteSetting(
+        val initialRouteOption: RouteOption? = null,
+    ) : SavedRouteUiEvent
 
     data class ShowSnackbar(
         val message: String,

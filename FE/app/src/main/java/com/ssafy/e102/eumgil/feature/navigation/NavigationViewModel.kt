@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
@@ -75,6 +76,8 @@ class NavigationViewModel(
 
         currentLocationManager.startLocationUpdates()
     }
+
+    fun currentRouteBookmarkDraft(): RouteBookmarkDraft? = navigationRequest?.toRouteBookmarkDraft()
 
     fun onAction(action: NavigationUiAction) {
         when (action) {
@@ -281,6 +284,17 @@ private fun RouteNavigationRequest.toDestinationBookmarkData(): BookmarkData {
         category = destinationWaypoint.category?.name,
     )
 }
+
+private fun RouteNavigationRequest.toRouteBookmarkDraft(): RouteBookmarkDraft =
+    RouteBookmarkDraft(
+        startLabel = origin.name.orEmpty().ifBlank { "출발지" },
+        endLabel = destination.name.orEmpty().ifBlank { "도착지" },
+        startPoint = origin.coordinate,
+        endPoint = destination.coordinate,
+        routeOption = selectedRoute.routeOption,
+        distanceMeters = selectedRoute.summary.distanceMeters.takeIf { distance -> distance > 0 },
+        durationMinutes = selectedRoute.summary.estimatedTimeMinutes.takeIf { duration -> duration > 0 },
+    )
 
 private fun RouteWaypoint.toNavigationDestinationPlaceId(): String =
     "navigation-destination:${coordinate.latitude},${coordinate.longitude}"

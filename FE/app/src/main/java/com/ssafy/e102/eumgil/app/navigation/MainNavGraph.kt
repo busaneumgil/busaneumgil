@@ -56,8 +56,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
-            onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute())
+            onNavigateToRouteSetting = { routeOption ->
+                navController.navigate(
+                    RouteSettingRoute.Setting.createRoute(initialRouteOption = routeOption),
+                )
             },
         )
     }
@@ -139,14 +141,24 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     type = NavType.BoolType
                     defaultValue = false
                 },
+                navArgument(RouteSettingRoute.Setting.ARG_INITIAL_ROUTE_OPTION) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val autoStartNavigation =
             backStackEntry.arguments?.getBoolean(RouteSettingRoute.Setting.ARG_AUTO_START_NAVIGATION) ?: false
+        val initialRouteOption =
+            backStackEntry.arguments
+                ?.getString(RouteSettingRoute.Setting.ARG_INITIAL_ROUTE_OPTION)
+                ?.let(RouteOption::fromValue)
         val navigationViewModel = rememberNavigationGuidanceViewModel()
 
         RouteSettingEntryRoute(
             autoStartNavigation = autoStartNavigation,
+            initialRouteOption = initialRouteOption,
             onNavigateBack = {
                 navController.popBackStack()
             },

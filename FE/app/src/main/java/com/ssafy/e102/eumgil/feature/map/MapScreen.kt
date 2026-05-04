@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1027,15 +1026,15 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
         FacilityCategory.TOILET -> R.drawable.ic_place_restroom
         FacilityCategory.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
         FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
-        FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_cafe
-        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
-        FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_lodging
-        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_hospital
+        FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe
+        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
+        FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
         FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
         FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
-        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         FacilityCategory.OTHER -> R.drawable.ic_nav_facility
     }
 
@@ -1045,15 +1044,15 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.TOILET -> R.drawable.ic_place_restroom
         PlaceCategory.ELEVATOR -> R.drawable.ic_route_elevator
         PlaceCategory.CHARGING_STATION -> R.drawable.ic_place_charging
-        PlaceCategory.FOOD_CAFE -> R.drawable.ic_place_restaurant
-        PlaceCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
-        PlaceCategory.ACCOMMODATION -> R.drawable.ic_place_lodging
-        PlaceCategory.HEALTHCARE -> R.drawable.ic_place_hospital
+        PlaceCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe
+        PlaceCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
+        PlaceCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        PlaceCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
         PlaceCategory.WELFARE -> R.drawable.ic_place_welfare
-        PlaceCategory.PUBLIC_OFFICE -> R.drawable.ic_nav_facility
+        PlaceCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
-        PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         PlaceCategory.OTHER -> R.drawable.ic_nav_facility
         null -> R.drawable.ic_nav_facility
     }

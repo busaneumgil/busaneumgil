@@ -129,16 +129,21 @@ private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
         MapShortcutFilterKey.TOILET -> R.drawable.ic_place_restroom
         MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
         MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging
-        MapShortcutFilterKey.FOOD_CAFE -> R.drawable.ic_place_restaurant
-        MapShortcutFilterKey.TOURIST_SPOT -> R.drawable.ic_nav_facility
-        MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_place_lodging
-        MapShortcutFilterKey.HEALTHCARE -> R.drawable.ic_place_hospital
+        MapShortcutFilterKey.FOOD_CAFE -> R.drawable.ic_place_food_cafe
+        MapShortcutFilterKey.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
+        MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        MapShortcutFilterKey.HEALTHCARE -> R.drawable.ic_place_healthcare
         MapShortcutFilterKey.WELFARE -> R.drawable.ic_place_welfare
-        MapShortcutFilterKey.PUBLIC_OFFICE -> R.drawable.ic_nav_facility
+        MapShortcutFilterKey.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
     }
 
 internal fun shortcutFilterIconSizeDp(key: MapShortcutFilterKey): Int =
     when (key) {
-        MapShortcutFilterKey.ELEVATOR -> 18
+        MapShortcutFilterKey.ELEVATOR,
+        MapShortcutFilterKey.TOURIST_SPOT,
+        MapShortcutFilterKey.ACCOMMODATION,
+        MapShortcutFilterKey.WELFARE,
+        MapShortcutFilterKey.PUBLIC_OFFICE,
+        -> 20
         else -> 16
     }

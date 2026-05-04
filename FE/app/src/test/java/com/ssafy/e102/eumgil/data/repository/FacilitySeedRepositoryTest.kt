@@ -23,9 +23,9 @@ class FacilitySeedRepositoryTest {
         runBlocking {
             val catalog = repository.getSeedCatalog()
 
-            assertEquals(9, catalog.facilities.size)
+            assertEquals(13, catalog.facilities.size)
             assertEquals(4, catalog.brailleBlocks.size)
-            assertEquals(13, catalog.allSeeds.size)
+            assertEquals(17, catalog.allSeeds.size)
             assertTrue(catalog.facilities.all { seed -> seed.category != FacilityCategory.BRAILLE_BLOCK })
             assertTrue(catalog.brailleBlocks.all { seed -> seed.category == FacilityCategory.BRAILLE_BLOCK })
         }
@@ -37,11 +37,15 @@ class FacilitySeedRepositoryTest {
 
             assertEquals(
                 setOf(
-                    FacilityCategory.RESTAURANT,
-                    FacilityCategory.TOURIST_ATTRACTION,
+                    FacilityCategory.FOOD_CAFE,
+                    FacilityCategory.TOURIST_SPOT,
                     FacilityCategory.TOILET,
                     FacilityCategory.ELEVATOR,
                     FacilityCategory.CHARGING_STATION,
+                    FacilityCategory.ACCOMMODATION,
+                    FacilityCategory.HEALTHCARE,
+                    FacilityCategory.WELFARE,
+                    FacilityCategory.PUBLIC_OFFICE,
                 ),
                 catalog.facilities.map { seed -> seed.category }.toSet(),
             )
@@ -60,17 +64,21 @@ class FacilitySeedRepositoryTest {
         runBlocking {
             val browseData = repository.getFacilityBrowseData()
 
-            assertEquals(9, browseData.facilityMarkers.size)
+            assertEquals(13, browseData.facilityMarkers.size)
             assertEquals(4, browseData.brailleBlockMarkers.size)
-            assertEquals(13, browseData.allMarkers.size)
-            assertEquals(13, browseData.detailsById.size)
+            assertEquals(17, browseData.allMarkers.size)
+            assertEquals(17, browseData.detailsById.size)
             assertEquals(
                 listOf(
-                    FacilityCategory.RESTAURANT,
-                    FacilityCategory.TOURIST_ATTRACTION,
                     FacilityCategory.TOILET,
                     FacilityCategory.ELEVATOR,
                     FacilityCategory.CHARGING_STATION,
+                    FacilityCategory.FOOD_CAFE,
+                    FacilityCategory.TOURIST_SPOT,
+                    FacilityCategory.ACCOMMODATION,
+                    FacilityCategory.HEALTHCARE,
+                    FacilityCategory.WELFARE,
+                    FacilityCategory.PUBLIC_OFFICE,
                     FacilityCategory.BRAILLE_BLOCK,
                 ),
                 browseData.availableCategories,

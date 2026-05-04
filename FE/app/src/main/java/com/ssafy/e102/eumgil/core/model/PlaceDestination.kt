@@ -59,11 +59,17 @@ private fun Double.isValidLongitude(): Boolean = isFinite() && this in -180.0..1
 
 private fun FacilityCategory.toPlaceCategory(): PlaceCategory =
     when (this) {
-        FacilityCategory.RESTAURANT -> PlaceCategory.RESTAURANT
-        FacilityCategory.TOURIST_ATTRACTION -> PlaceCategory.TOURIST_ATTRACTION
         FacilityCategory.TOILET -> PlaceCategory.TOILET
         FacilityCategory.ELEVATOR -> PlaceCategory.ELEVATOR
         FacilityCategory.CHARGING_STATION -> PlaceCategory.CHARGING_STATION
+        FacilityCategory.FOOD_CAFE -> PlaceCategory.FOOD_CAFE
+        FacilityCategory.TOURIST_SPOT -> PlaceCategory.TOURIST_SPOT
+        FacilityCategory.ACCOMMODATION -> PlaceCategory.ACCOMMODATION
+        FacilityCategory.HEALTHCARE -> PlaceCategory.HEALTHCARE
+        FacilityCategory.WELFARE -> PlaceCategory.WELFARE
+        FacilityCategory.PUBLIC_OFFICE -> PlaceCategory.PUBLIC_OFFICE
         FacilityCategory.BRAILLE_BLOCK -> PlaceCategory.BRAILLE_BLOCK
+        FacilityCategory.RESTAURANT -> PlaceCategory.RESTAURANT
+        FacilityCategory.TOURIST_ATTRACTION -> PlaceCategory.TOURIST_ATTRACTION
         FacilityCategory.OTHER -> PlaceCategory.OTHER
     }

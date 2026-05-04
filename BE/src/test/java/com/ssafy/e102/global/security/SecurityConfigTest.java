@@ -1,5 +1,7 @@
 package com.ssafy.e102.global.security;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -16,12 +18,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.E102Application;
+import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
+import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
+import com.ssafy.e102.domain.auth.service.AuthService;
+import com.ssafy.e102.domain.auth.token.AccessTokenBlacklistStore;
+import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.global.response.ApiResponse;
 
 @SpringBootTest(classes = {E102Application.class, SecurityConfigTest.SecurityTestController.class})
@@ -34,12 +41,26 @@ class SecurityConfigTest {
 	@Autowired
 	private JwtTokenProvider jwtTokenProvider;
 
+	@MockitoBean
+	private AuthService authService;
+
+	@MockitoBean
+	private AccessTokenBlacklistStore accessTokenBlacklistStore;
+
 	@Test
 	@DisplayName("소셜 로그인은 인증 없이 접근할 수 있다")
 	void socialLoginIsPublic() throws Exception {
+		when(authService.socialLogin(any()))
+			.thenReturn(SocialLoginResponse.existingUser(
+				"access-token",
+				"refresh-token",
+				UUID.randomUUID(),
+				PrimaryUserType.LOW_VISION,
+				null));
+
 		mockMvc.perform(post("/api/auth/social-login")
 			.contentType(MediaType.APPLICATION_JSON)
-			.content("{}"))
+			.content("{\"socialProvider\":\"KAKAO\",\"socialAccessToken\":\"kakao-access-token\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"));
 	}
@@ -47,9 +68,11 @@ class SecurityConfigTest {
 	@Test
 	@DisplayName("토큰 재발급은 인증 없이 접근할 수 있다")
 	void reissueIsPublic() throws Exception {
+		when(authService.reissue(any())).thenReturn(new TokenResponse("new-access-token", "new-refresh-token"));
+
 		mockMvc.perform(post("/api/auth/reissue")
 			.contentType(MediaType.APPLICATION_JSON)
-			.content("{}"))
+			.content("{\"refreshToken\":\"refresh-token\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"));
 	}
@@ -86,23 +109,21 @@ class SecurityConfigTest {
 			.andExpect(jsonPath("$.data").value(userId.toString()));
 	}
 
+	@Test
+	@DisplayName("블랙리스트에 있는 액세스 토큰은 인증하지 않는다")
+	void blacklistedAccessTokenIsRejected() throws Exception {
+		UUID userId = UUID.randomUUID();
+		String accessToken = jwtTokenProvider.createAccessToken(userId);
+		when(accessTokenBlacklistStore.contains(accessToken)).thenReturn(true);
+
+		mockMvc.perform(get("/api/users/me")
+			.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.status").value("A4010"));
+	}
+
 	@RestController
 	static class SecurityTestController {
-
-		@PostMapping("/api/auth/social-login")
-		ApiResponse<String> socialLogin() {
-			return ApiResponse.success("ok");
-		}
-
-		@PostMapping("/api/auth/reissue")
-		ApiResponse<String> reissue() {
-			return ApiResponse.success("ok");
-		}
-
-		@PostMapping("/api/auth/logout")
-		ApiResponse<String> logout() {
-			return ApiResponse.success("ok");
-		}
 
 		@GetMapping("/api/users/me")
 		ApiResponse<String> usersMe(

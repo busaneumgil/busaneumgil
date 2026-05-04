@@ -17,6 +17,10 @@ spring:
       ssl:
         enabled: ${REDIS_SSL:false}
 
+auth:
+  test:
+    enabled: ${AUTH_TEST_ENABLED:true}
+
 jwt:
   secret: ${JWT_SECRET}
   issuer: ${JWT_ISSUER:e102-dev}

@@ -5,7 +5,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -25,12 +28,16 @@ class RedisRefreshTokenStoreTest {
 	@Mock
 	private ValueOperations<String, String> valueOperations;
 
+	@Mock
+	private SetOperations<String, String> setOperations;
+
 	private RedisRefreshTokenStore refreshTokenStore;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
 		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+		when(redisTemplate.opsForSet()).thenReturn(setOperations);
 		refreshTokenStore = new RedisRefreshTokenStore(redisTemplate);
 	}
 
@@ -47,6 +54,10 @@ class RedisRefreshTokenStoreTest {
 			userId.toString(),
 			ttl.toSeconds(),
 			TimeUnit.SECONDS);
+		verify(setOperations).add(
+			"auth:refresh:user:" + userId,
+			"0eb17643d4e9261163783a420859c92c7d212fa9624106a12b510afbec266120");
+		verify(redisTemplate).expire("auth:refresh:user:" + userId, ttl.toSeconds(), TimeUnit.SECONDS);
 	}
 
 	@Test
@@ -75,5 +86,19 @@ class RedisRefreshTokenStoreTest {
 			userId.toString(),
 			ttl.toSeconds(),
 			TimeUnit.SECONDS);
+	}
+
+	@Test
+	@DisplayName("사용자 ID로 저장된 모든 리프레시 토큰을 삭제한다")
+	void deleteRefreshTokensByUserId() {
+		UUID userId = UUID.randomUUID();
+		when(setOperations.members("auth:refresh:user:" + userId))
+			.thenReturn(Set.of("token-hash-1", "token-hash-2"));
+
+		refreshTokenStore.deleteByUserId(userId);
+
+		verify(redisTemplate).delete(org.mockito.ArgumentMatchers.<Collection<String>>argThat(keys -> keys.containsAll(
+			Set.of("auth:refresh:token-hash-1", "auth:refresh:token-hash-2"))));
+		verify(redisTemplate).delete("auth:refresh:user:" + userId);
 	}
 }

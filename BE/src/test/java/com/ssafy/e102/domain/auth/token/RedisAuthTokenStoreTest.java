@@ -88,7 +88,7 @@ class RedisAuthTokenStoreTest {
 			org.mockito.ArgumentMatchers.<RedisScript<Long>>any(),
 			org.mockito.ArgumentMatchers.<List<String>>any(),
 			eq(userId.toString()),
-			eq(ttl.toSeconds()),
+			eq(String.valueOf(ttl.toSeconds())),
 			eq("66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6"),
 			eq("c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338")))
 			.thenReturn(1L);
@@ -102,7 +102,7 @@ class RedisAuthTokenStoreTest {
 					&& keys.contains("auth:refresh:c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338")
 					&& keys.contains("auth:refresh:user:" + userId)),
 			eq(userId.toString()),
-			eq(ttl.toSeconds()),
+			eq(String.valueOf(ttl.toSeconds())),
 			eq("66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6"),
 			eq("c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338"));
 	}
@@ -116,7 +116,7 @@ class RedisAuthTokenStoreTest {
 			org.mockito.ArgumentMatchers.<RedisScript<Long>>any(),
 			org.mockito.ArgumentMatchers.<List<String>>any(),
 			eq(userId.toString()),
-			eq(ttl.toSeconds()),
+			eq(String.valueOf(ttl.toSeconds())),
 			eq("66e4f4e9739a9ef9a9d6e414cfd05780c4ab0eb03e21fbf90ebf87e76d4db8f6"),
 			eq("c40dd1765d767caae2588f0ee1de9181d8a44cc9306261eb2c9e526351188338")))
 			.thenReturn(0L);

@@ -18,7 +18,7 @@ public class AuthTestEndpointAccessFilter extends OncePerRequestFilter {
 
 	private static final Set<String> TEST_ENDPOINTS = Set.of(
 		"/auth-test.html",
-		"/api/auth/test-config");
+		"/auth/test-config");
 
 	private final AuthTestConfigProperties properties;
 

@@ -61,7 +61,7 @@ class SecurityConfigTest {
 				PrimaryUserType.LOW_VISION,
 				null));
 
-		mockMvc.perform(post("/api/auth/social-login")
+		mockMvc.perform(post("/auth/social-login")
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"socialProvider\":\"KAKAO\",\"socialAccessToken\":\"kakao-access-token\"}"))
 			.andExpect(status().isOk())
@@ -73,7 +73,7 @@ class SecurityConfigTest {
 	void reissueIsPublic() throws Exception {
 		when(authService.reissue(any())).thenReturn(new TokenResponse("new-access-token", "new-refresh-token"));
 
-		mockMvc.perform(post("/api/auth/reissue")
+		mockMvc.perform(post("/auth/reissue")
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"refreshToken\":\"refresh-token\"}"))
 			.andExpect(status().isOk())
@@ -83,7 +83,7 @@ class SecurityConfigTest {
 	@Test
 	@DisplayName("내 정보 조회는 인증이 필요하다")
 	void usersMeRequiresAuthentication() throws Exception {
-		mockMvc.perform(get("/api/users/me"))
+		mockMvc.perform(get("/users/me"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(jsonPath("$.status").value("A4010"))
@@ -93,7 +93,7 @@ class SecurityConfigTest {
 	@Test
 	@DisplayName("로그아웃은 인증이 필요하다")
 	void logoutRequiresAuthentication() throws Exception {
-		mockMvc.perform(post("/api/auth/logout"))
+		mockMvc.perform(post("/auth/logout"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(jsonPath("$.status").value("A4010"))
@@ -108,7 +108,7 @@ class SecurityConfigTest {
 		when(userService.getMe(userId))
 			.thenReturn(new UserMeResponse(userId, SocialProvider.KAKAO, PrimaryUserType.LOW_VISION, null));
 
-		mockMvc.perform(get("/api/users/me")
+		mockMvc.perform(get("/users/me")
 			.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.userId").value(userId.toString()));
@@ -121,7 +121,7 @@ class SecurityConfigTest {
 		String accessToken = jwtTokenProvider.createAccessToken(userId);
 		when(authTokenStore.containsAccessToken(accessToken)).thenReturn(true);
 
-		mockMvc.perform(get("/api/users/me")
+		mockMvc.perform(get("/users/me")
 			.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.status").value("A4010"));

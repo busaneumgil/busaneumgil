@@ -56,7 +56,7 @@ class UserControllerTest {
 				PrimaryUserType.MOBILITY_IMPAIRED,
 				MobilitySubtype.MANUAL_WHEELCHAIR));
 
-		mockMvc.perform(get("/api/users/me")
+		mockMvc.perform(get("/users/me")
 			.principal(authentication))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
@@ -77,7 +77,7 @@ class UserControllerTest {
 		Mockito.when(userService.updateUserType(userId, PrimaryUserType.LOW_VISION, null))
 			.thenReturn(new UserTypeResponse(userId, PrimaryUserType.LOW_VISION, null));
 
-		mockMvc.perform(patch("/api/users/me/user-type")
+		mockMvc.perform(patch("/users/me/user-type")
 			.principal(authentication)
 			.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
 			.content("{\"selectedPrimaryUserType\":\"LOW_VISION\"}"))
@@ -97,7 +97,7 @@ class UserControllerTest {
 		UUID userId = UUID.randomUUID();
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 
-		mockMvc.perform(delete("/api/users/me")
+		mockMvc.perform(delete("/users/me")
 			.principal(authentication))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))

@@ -44,17 +44,17 @@
   - provider 응답을 `SocialUserInfo`로 정규화
   - provider 4xx는 `INVALID_SOCIAL_TOKEN`
   - provider 5xx/호출 실패/응답 이상은 `SOCIAL_PROVIDER_API_FAILED`
-- `S14P31E102-373`: `POST /api/auth/social-login` 기존/신규 사용자 흐름 구현
+- `S14P31E102-373`: `POST /auth/social-login` 기존/신규 사용자 흐름 구현
   - 기존 가입 완료 사용자는 access token, refresh token, userId, 사용자 유형을 반환
   - 신규 소셜 사용자는 `users` row를 만들지 않고 signup token만 반환
   - refresh token은 Redis 저장소에 저장
   - signup token은 Redis 저장소에 social provider identity와 함께 저장
-- `S14P31E102-374`: `POST /api/auth/signup` 회원가입 완료 흐름 구현
+- `S14P31E102-374`: `POST /auth/signup` 회원가입 완료 흐름 구현
   - signup token JWT와 Redis 저장소 값을 함께 검증
   - 필수 약관 동의와 사용자 유형 조합 검증
   - 가입 완료 시점에만 `users` row 생성
   - 가입 완료 후 signup token 삭제 및 service token 발급
-- `S14P31E102-375`: `POST /api/auth/reissue` refresh token rotation 구현
+- `S14P31E102-375`: `POST /auth/reissue` refresh token rotation 구현
   - refresh token subject와 Redis 저장소 사용자 ID를 함께 검증
   - 기존 refresh token 삭제 후 새 refresh token 저장
   - 재발급 실패는 `INVALID_REFRESH_TOKEN`으로 매핑
@@ -66,10 +66,10 @@
   - 회원탈퇴 시 `users` row를 물리 삭제하고 남은 인증 세션을 무효화
   - 성공 응답은 `200 OK`와 `ApiResponse` body로 통일
 - `S14P31E102-376`: 내 정보 조회 API 구현
-  - `GET /api/users/me`
+  - `GET /users/me`
   - `@AuthenticationPrincipal AuthPrincipal` 기준으로 현재 사용자 조회
 - `S14P31E102-377`: 사용자 유형 수정 API 구현
-  - `PATCH /api/users/me/user-type`
+  - `PATCH /users/me/user-type`
   - 저시력자/보행약자 사용자 유형 조합 검증 재사용
 - `S14P31E102-378`, `S14P31E102-379`, `S14P31E102-380`: 테스트, 테스트 페이지, 문서/Swagger 정합성 확인
   - controller/service/security/token 테스트 보강
@@ -95,7 +95,7 @@
 - `cd BE && .\gradlew.bat processResources test`
 - `cd BE && .\gradlew.bat spotlessApply test`
 - `GET http://localhost:8080/v3/api-docs`: auth/user endpoints 노출 확인
-- `POST /api/auth/logout`, `DELETE /api/users/me`: 200 응답 body 수동 확인
+- `POST /auth/logout`, `DELETE /users/me`: 200 응답 body 수동 확인
 - `cd BE && .\gradlew.bat spotlessJavaCheck`
 - `cd BE && .\gradlew.bat checkstyleMain checkstyleTest`
 - `cd BE && .\gradlew.bat test`
@@ -154,11 +154,11 @@
   - `S14P31E102-379`
   - `S14P31E102-380`
 - 현재 완료:
-  - `POST /api/auth/reissue`
-  - `POST /api/auth/logout`
-  - `GET /api/users/me`
-  - `PATCH /api/users/me/user-type`
-  - `DELETE /api/users/me`
+  - `POST /auth/reissue`
+  - `POST /auth/logout`
+  - `GET /users/me`
+  - `PATCH /users/me/user-type`
+  - `DELETE /users/me`
   - controller/service/security/token/failure path 테스트
   - `auth-test.html` local/dev 전용 테스트 페이지와 수동 검증 흐름
   - Swagger/OpenAPI endpoint 노출 확인

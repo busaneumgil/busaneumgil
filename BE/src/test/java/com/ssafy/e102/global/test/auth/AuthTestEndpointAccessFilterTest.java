@@ -28,7 +28,7 @@ class AuthTestEndpointAccessFilterTest {
 	@DisplayName("테스트 페이지가 비활성화되면 test-config 요청을 404로 막는다")
 	void disabledAuthTestConfigReturnsNotFound() throws Exception {
 		AuthTestEndpointAccessFilter filter = new AuthTestEndpointAccessFilter(disabledProperties());
-		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/auth/test-config");
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/auth/test-config");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		MockFilterChain filterChain = new MockFilterChain();
 
@@ -54,7 +54,7 @@ class AuthTestEndpointAccessFilterTest {
 	@DisplayName("테스트 페이지 경로가 아니면 비활성화 상태여도 요청을 통과시킨다")
 	void unrelatedPathPassesThrough() throws Exception {
 		AuthTestEndpointAccessFilter filter = new AuthTestEndpointAccessFilter(disabledProperties());
-		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/auth/social-login");
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/auth/social-login");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		jakarta.servlet.FilterChain filterChain = org.mockito.Mockito.mock(jakarta.servlet.FilterChain.class);
 

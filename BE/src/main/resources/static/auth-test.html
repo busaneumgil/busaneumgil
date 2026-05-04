@@ -333,7 +333,7 @@
 					<span>Google 로그인</span>
 				</button>
 			</div>
-			<div class="help">로그인 성공 시 provider access token을 받아 우리 `/api/auth/social-login`까지 자동 호출합니다.</div>
+			<div class="help">로그인 성공 시 provider access token을 받아 우리 `/auth/social-login`까지 자동 호출합니다.</div>
 
 			<div class="warning" id="configStatus">.env.test 소셜 로그인 설정 확인 중</div>
 			<div class="help" id="providerConsoleGuide"></div>
@@ -481,7 +481,7 @@
 	function setProviderAccessToken(provider, token) {
 		selectProvider(provider);
 		$("socialAccessToken").value = token;
-		return postJson("/api/auth/social-login", {
+		return postJson("/auth/social-login", {
 			socialProvider: provider,
 			socialAccessToken: token
 		});
@@ -568,7 +568,7 @@
 	}
 
 	async function loadAuthTestConfig() {
-		const response = await fetch("/api/auth/test-config");
+		const response = await fetch("/auth/test-config");
 		if (!response.ok) {
 			throw new Error("테스트 설정을 불러오지 못했습니다.");
 		}
@@ -691,7 +691,7 @@
 	}
 
 	$("socialLoginButton").addEventListener("click", () => {
-		postJson("/api/auth/social-login", {
+		postJson("/auth/social-login", {
 			socialProvider: checkedValue("socialProvider"),
 			socialAccessToken: $("socialAccessToken").value.trim()
 		}).catch((error) => {
@@ -726,7 +726,7 @@
 	$("signupButton").addEventListener("click", () => {
 		const primaryType = checkedValue("primaryType");
 		const subtype = primaryType === "MOBILITY_IMPAIRED" ? checkedValue("mobilitySubtype") : null;
-		postJson("/api/auth/signup", {
+		postJson("/auth/signup", {
 			signupToken: $("signupToken").value.trim(),
 			selectedPrimaryUserType: primaryType,
 			selectedMobilitySubtype: subtype,
@@ -738,7 +738,7 @@
 	});
 
 	$("reissueButton").addEventListener("click", () => {
-		postJson("/api/auth/reissue", {
+		postJson("/auth/reissue", {
 			refreshToken: $("refreshToken").value.trim()
 		}).catch((error) => {
 			setStatus("요청 실패");
@@ -747,7 +747,7 @@
 	});
 
 	$("logoutButton").addEventListener("click", () => {
-		authorizedRequest("POST", "/api/auth/logout", {
+		authorizedRequest("POST", "/auth/logout", {
 			successStatus: "로그아웃 성공",
 			failureStatus: "로그아웃 실패",
 			emptySuccessMessage: "로그아웃되었습니다. 서비스 토큰을 비웠습니다.",
@@ -759,7 +759,7 @@
 	});
 
 	$("withdrawButton").addEventListener("click", () => {
-		authorizedRequest("DELETE", "/api/users/me", {
+		authorizedRequest("DELETE", "/users/me", {
 			successStatus: "회원탈퇴 성공",
 			failureStatus: "회원탈퇴 실패",
 			emptySuccessMessage: "회원탈퇴가 완료되었습니다. 서비스 토큰을 비웠습니다.",

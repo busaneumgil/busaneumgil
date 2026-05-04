@@ -56,7 +56,7 @@ class AuthControllerTest {
 				PrimaryUserType.MOBILITY_IMPAIRED,
 				MobilitySubtype.MANUAL_WHEELCHAIR));
 
-		mockMvc.perform(post("/api/auth/social-login")
+		mockMvc.perform(post("/auth/social-login")
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"socialProvider\":\"KAKAO\",\"socialAccessToken\":\"kakao-access-token\"}"))
 			.andExpect(status().isOk())
@@ -82,7 +82,7 @@ class AuthControllerTest {
 				PrimaryUserType.LOW_VISION,
 				null));
 
-		mockMvc.perform(post("/api/auth/signup")
+		mockMvc.perform(post("/auth/signup")
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"signupToken\":\"signup-token\",\"selectedPrimaryUserType\":\"LOW_VISION\","
 				+ "\"requiredTermsAccepted\":true}"))
@@ -100,7 +100,7 @@ class AuthControllerTest {
 	void reissue() throws Exception {
 		when(authService.reissue(any())).thenReturn(new TokenResponse("new-access-token", "new-refresh-token"));
 
-		mockMvc.perform(post("/api/auth/reissue")
+		mockMvc.perform(post("/auth/reissue")
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"refreshToken\":\"refresh-token\"}"))
 			.andExpect(status().isOk())
@@ -117,7 +117,7 @@ class AuthControllerTest {
 			new AuthPrincipal(userId, "access-token"), null);
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 
-		mockMvc.perform(post("/api/auth/logout")
+		mockMvc.perform(post("/auth/logout")
 			.principal(authentication))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))

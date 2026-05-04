@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/auth/test-config")
+@RequestMapping("/auth/test-config")
 @EnableConfigurationProperties(AuthTestConfigProperties.class)
 @ConditionalOnProperty(prefix = "auth.test", name = "enabled", havingValue = "true")
 public class AuthTestConfigController {

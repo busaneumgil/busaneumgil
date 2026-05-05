@@ -7,8 +7,15 @@ object WerCalculator {
      * WER = (삽입 + 삭제 + 대체) / 정답 단어 수
      */
     fun calculate(reference: String, hypothesis: String): Float {
-        val refWords = reference.trim().split("\\s+".toRegex()).filter { it.isNotEmpty() }
-        val hypWords = hypothesis.trim().split("\\s+".toRegex()).filter { it.isNotEmpty() }
+        val normalize = { s: String ->
+            s.trim()
+             .replace(Regex("[.,!?。、··]"), "")
+             .replace("\\s+".toRegex(), " ")
+             .trim()
+        }
+
+        val refWords = normalize(reference).split(" ").filter { it.isNotEmpty() }
+        val hypWords = normalize(hypothesis).split(" ").filter { it.isNotEmpty() }
 
         if (refWords.isEmpty()) return if (hypWords.isEmpty()) 0f else 1f
 

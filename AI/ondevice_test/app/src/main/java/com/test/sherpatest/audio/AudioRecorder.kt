@@ -3,6 +3,8 @@ package com.test.sherpatest.audio
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +21,8 @@ class AudioRecorder {
 
     private var audioRecord: AudioRecord? = null
     private var noiseSuppressor: NoiseSuppressor? = null
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private var gainControl: AutomaticGainControl? = null
     private var isRecording = false
 
     val bufferSize: Int
@@ -37,10 +41,36 @@ class AudioRecorder {
             buffer
         )
 
+        val sessionId = audioRecord!!.audioSessionId
+
+        // NoiseSuppressor
         if (NoiseSuppressor.isAvailable()) {
-            noiseSuppressor = NoiseSuppressor.create(audioRecord!!.audioSessionId)
-            noiseSuppressor?.enabled = true
-            Log.d(TAG, "NoiseSuppressor enabled")
+            noiseSuppressor = NoiseSuppressor.create(sessionId)?.also {
+                it.enabled = true
+                Log.d(TAG, "NoiseSuppressor 활성화")
+            }
+        } else {
+            Log.d(TAG, "NoiseSuppressor 미지원 기기")
+        }
+
+        // AcousticEchoCanceler
+        if (AcousticEchoCanceler.isAvailable()) {
+            echoCanceler = AcousticEchoCanceler.create(sessionId)?.also {
+                it.enabled = true
+                Log.d(TAG, "AcousticEchoCanceler 활성화")
+            }
+        } else {
+            Log.d(TAG, "AcousticEchoCanceler 미지원 기기")
+        }
+
+        // AutomaticGainControl
+        if (AutomaticGainControl.isAvailable()) {
+            gainControl = AutomaticGainControl.create(sessionId)?.also {
+                it.enabled = true
+                Log.d(TAG, "AutomaticGainControl 활성화")
+            }
+        } else {
+            Log.d(TAG, "AutomaticGainControl 미지원 기기")
         }
 
         audioRecord?.startRecording()
@@ -52,6 +82,10 @@ class AudioRecorder {
         isRecording = false
         noiseSuppressor?.release()
         noiseSuppressor = null
+        echoCanceler?.release()
+        echoCanceler = null
+        gainControl?.release()
+        gainControl = null
         audioRecord?.stop()
         audioRecord?.release()
         audioRecord = null

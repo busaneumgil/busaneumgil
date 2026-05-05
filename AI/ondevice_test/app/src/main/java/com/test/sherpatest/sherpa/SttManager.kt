@@ -3,6 +3,7 @@ package com.test.sherpatest.sherpa
 import android.content.Context
 import android.util.Log
 import com.k2fsa.sherpa.onnx.FeatureConfig
+import java.io.File
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
@@ -30,7 +31,9 @@ class SttManager(context: Context) {
     init {
         val modelPath = SherpaManager.senseVoiceModelPath(context)
         val tokensPath = SherpaManager.tokensPath(context)
-        Log.d(TAG, "Loading SenseVoice model: $modelPath")
+        // 파일 존재 여부 및 크기 확인
+        Log.d(TAG, "modelPath=$modelPath exists=${File(modelPath).exists()} size=${File(modelPath).length()}")
+        Log.d(TAG, "tokensPath=$tokensPath exists=${File(tokensPath).exists()}")
 
         val config = OfflineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),

@@ -22,7 +22,7 @@ class VadManager(context: Context) {
         val config = VadModelConfig(
             sileroVadModelConfig = SileroVadModelConfig(
                 model = vadPath,
-                threshold = 0.5f,
+                threshold = 0.3f,
                 minSilenceDuration = 1.5f,
                 minSpeechDuration = 0.25f,
                 windowSize = WINDOW_SIZE,

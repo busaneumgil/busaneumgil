@@ -147,7 +147,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     vadManager?.acceptWaveform(floatWindow.copyOf(read))
                     totalVadTimeMs += System.currentTimeMillis() - vadStart
 
-                    // VAD 세그먼트가 있으면 누적 (STT는 아직 호출 안 함)
+                    // VAD 완성 세그먼트 누적 (minSilenceDuration 침묵 후 큐에 추가됨)
                     var hadSegment = false
                     while (vadManager?.isEmpty() == false) {
                         val segment = vadManager?.front() ?: break
@@ -156,28 +156,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         hadSegment = true
                     }
 
-                    if (hadSegment) {
-                        if (!voiceDetectedEver) {
-                            Log.d(TAG, ">>> 발화 감지 시작! 음성 누적 중...")
+                    // isSpeechDetected(): VAD가 현재 발화 중으로 판단하는지 실시간 확인
+                    val currentlySpeaking = vadManager?.isSpeechDetected() ?: false
+
+                    when {
+                        hadSegment -> {
+                            // 완성된 세그먼트 수집 → 발화 확인, 무음 카운터 리셋
+                            if (!voiceDetectedEver) Log.d(TAG, ">>> 발화 감지 시작! 음성 누적 중...")
+                            voiceDetectedEver = true
+                            silenceFrameCount = 0
+                            Log.d(TAG, "[VAD] 세그먼트 완성 - 누적 샘플: ${accumulatedSamples.size}")
                         }
-                        // 발화 감지 → 무음 카운터 리셋
-                        voiceDetectedEver = true
-                        silenceFrameCount = 0
-                        Log.d(TAG, "[VAD] 발화 세그먼트 추가 - 누적 샘플 수: ${accumulatedSamples.size}")
-                    } else {
-                        silenceFrameCount++
-                        if (voiceDetectedEver && silenceFrameCount % 5 == 0) {
-                            Log.d(TAG, "[VAD] 무음 감지 중 - $silenceFrameCount / $SILENCE_FRAMES_FOR_STOP 프레임")
+                        currentlySpeaking -> {
+                            // 세그먼트 미완성이지만 현재 발화 중 → 무음 카운터 리셋
+                            if (!voiceDetectedEver) Log.d(TAG, ">>> 발화 감지 시작! 음성 누적 중...")
+                            voiceDetectedEver = true
+                            silenceFrameCount = 0
+                        }
+                        else -> {
+                            // 발화 없음 → 무음 카운터 증가
+                            silenceFrameCount++
+                            if (voiceDetectedEver && silenceFrameCount % 5 == 0) {
+                                Log.d(TAG, "[VAD] 무음 감지 중 - $silenceFrameCount / $SILENCE_FRAMES_FOR_STOP 프레임")
+                            }
                         }
                     }
 
-                    // 발화 후 무음 지속 → 루프 종료 후 STT
-                    if (voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP) {
-                        Log.d(TAG, "=== 무음 감지 (~${SILENCE_FRAMES_FOR_STOP * 32}ms) → 녹음 자동 종료, STT 준비 ===")
+                    // 세그먼트 완성 + 현재 발화 없음 → VAD가 끝을 확인한 것 → 즉시 STT
+                    if (hadSegment && !currentlySpeaking) {
+                        Log.d(TAG, "=== 세그먼트 완성 + 발화 종료 → STT 준비 ===")
                         break
                     }
 
-                    // 발화 없이 무음만 오래 지속 → 루프 종료 (STT 스킵)
+                    // 발화 감지 후 무음 지속 (fallback) → STT
+                    if (voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP) {
+                        Log.d(TAG, "=== 무음 ${SILENCE_FRAMES_FOR_STOP * 32}ms 지속 → STT 준비 ===")
+                        break
+                    }
+
+                    // 발화 없이 무음만 오래 지속 → 타임아웃 (STT 스킵)
                     if (!voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP * 2) {
                         Log.d(TAG, "=== 발화 없음 타임아웃 → 녹음 종료 (STT 스킵) ===")
                         break

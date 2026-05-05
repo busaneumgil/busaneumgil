@@ -46,4 +46,20 @@ class PlaceDestinationTest {
         assertEquals(129.1636, destination.longitude, 0.0)
         assertEquals(PlaceCategory.TOILET, destination.category)
     }
+
+    @Test
+    fun `facility detail handoff preserves new place categories for recent destination consumers`() {
+        val detail =
+            FacilityDetailSeed(
+                facilityId = "facility-2",
+                name = "Busan District Office",
+                address = "10 Jungang-daero, Busan",
+                coordinate = GeoCoordinate(latitude = 35.1798, longitude = 129.0758),
+                category = FacilityCategory.PUBLIC_OFFICE,
+            )
+
+        val destination = detail.toPlaceDestination()
+
+        assertEquals(PlaceCategory.PUBLIC_OFFICE, destination.category)
+    }
 }

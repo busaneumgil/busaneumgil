@@ -311,8 +311,8 @@ class DysarthriaProcessor:
         대응하는 원천데이터 zip은 TL→TS 치환으로 찾는다.
         """
         pairs = []
-        label_dir = self.data_dir / "1. Training" / "라벨링데이터"
-        audio_dir = self.data_dir / "1. Training" / "원천데이터"
+        label_dir = self.data_dir / "1.Training" / "라벨링데이터"
+        audio_dir = self.data_dir / "1.Training" / "원천데이터"
 
         if not label_dir.exists():
             logger.warning(f"라벨링데이터 폴더 없음: {label_dir}")

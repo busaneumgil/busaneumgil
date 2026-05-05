@@ -16,6 +16,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
+internal val OnboardingCompactLayoutSpacing = EumSpacing.medium
+internal val OnboardingCompactLayoutVerticalPadding = 20.dp
+
 @Composable
 fun OnboardingSelectionFrame(
     currentStep: Int,
@@ -33,8 +36,8 @@ fun OnboardingSelectionFrame(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = EumSpacing.medium, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            .padding(horizontal = EumSpacing.medium, vertical = OnboardingCompactLayoutVerticalPadding),
+        verticalArrangement = Arrangement.spacedBy(OnboardingCompactLayoutSpacing),
     ) {
         OnboardingProgressHeader(
             currentStep = currentStep,

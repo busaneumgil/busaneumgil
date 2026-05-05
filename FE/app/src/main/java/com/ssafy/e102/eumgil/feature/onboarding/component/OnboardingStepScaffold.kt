@@ -5,12 +5,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -63,8 +65,20 @@ fun OnboardingStepScaffold(
     secondaryAction: OnboardingStepAction? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val contentSpacing =
+        when (headerStyle) {
+            OnboardingStepHeaderStyle.CENTERED_COMPACT -> OnboardingCompactLayoutSpacing
+            OnboardingStepHeaderStyle.DEFAULT -> EumSpacing.large
+        }
+    val contentVerticalPadding =
+        when (headerStyle) {
+            OnboardingStepHeaderStyle.CENTERED_COMPACT -> OnboardingCompactLayoutVerticalPadding
+            OnboardingStepHeaderStyle.DEFAULT -> EumSpacing.large
+        }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -108,8 +122,9 @@ fun OnboardingStepScaffold(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
-                .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.large),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.large),
+                .statusBarsPadding()
+                .padding(horizontal = EumSpacing.medium, vertical = contentVerticalPadding),
+            verticalArrangement = Arrangement.spacedBy(contentSpacing),
         ) {
             if (navigationAction != null || topAction != null) {
                 Row(

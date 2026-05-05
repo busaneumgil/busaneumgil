@@ -225,7 +225,7 @@ def main():
     )
     parser.add_argument(
         "--dysarthria_dir",
-        default=None,
+        default=r"C:\Users\SSAFY\Desktop\suyeon\voice_data\hard_voice",
         help="구음장애 데이터 최상위 경로 (neuro/speech/larynx 포함). 없으면 건너뜀",
     )
     parser.add_argument(
@@ -242,7 +242,25 @@ def main():
         "--subset_hours",
         type=float,
         default=None,
-        help="(현재 미사용) 서브셋 실험용 플래그. 실제 처리 한도는 체크포인트 파일명 스킵으로 제어됩니다.",
+        help="서브셋 처리 시간 (예: 100). dtype별 한도가 지정되면 무시됨",
+    )
+    parser.add_argument(
+        "--gy_st_hours",
+        type=float,
+        default=None,
+        help="경상도 st_(따라말하기) 처리 시간 한도 (예: 40)",
+    )
+    parser.add_argument(
+        "--gy_say_hours",
+        type=float,
+        default=None,
+        help="경상도 say_(질문답하기) 처리 시간 한도 (예: 40)",
+    )
+    parser.add_argument(
+        "--dys_hours",
+        type=float,
+        default=None,
+        help="구음장애 처리 시간 한도 (예: 20)",
     )
     parser.add_argument("--num_workers", type=int, default=1, help="현재 미사용 (향후 병렬처리 예정)")
     parser.add_argument("--seed", type=int, default=42)
@@ -252,6 +270,15 @@ def main():
         help="데이터 불균형 보정 건너뜀 (빠른 테스트용)",
     )
     args = parser.parse_args()
+
+    # dtype별 한도 구성
+    dtype_hours = {}
+    if args.gy_st_hours is not None:
+        dtype_hours["st"] = args.gy_st_hours
+    if args.gy_say_hours is not None:
+        dtype_hours["say"] = args.gy_say_hours
+    # dtype_hours가 비어있으면 None으로 (subset_hours 전체 모드)
+    gy_dtype_hours = dtype_hours if dtype_hours else None
 
     output_dir = Path(args.output_dir)
     results_dir = Path(args.results_dir)
@@ -271,6 +298,9 @@ def main():
     logger.info(f"  output_dir:     {output_dir.resolve()}")
     logger.info(f"  results_dir:    {results_dir.resolve()}")
     logger.info(f"  subset_hours:   {args.subset_hours}")
+    logger.info(f"  gy_st_hours:    {args.gy_st_hours}")
+    logger.info(f"  gy_say_hours:   {args.gy_say_hours}")
+    logger.info(f"  dys_hours:      {args.dys_hours}")
     logger.info("=" * 60)
 
     # ---- 1. 경상도 방언 처리 ------------------------------------------ #
@@ -278,6 +308,7 @@ def main():
         data_dir=args.gyeongsang_dir,
         output_dir=str(output_dir),
         subset_hours=args.subset_hours,
+        dtype_hours=gy_dtype_hours,
         seed=args.seed,
     )
     gy_records = gy_processor.process()
@@ -291,7 +322,7 @@ def main():
         dy_processor = DysarthriaProcessor(
             data_dir=args.dysarthria_dir,
             output_dir=str(output_dir),
-            subset_hours=args.subset_hours,
+            subset_hours=args.dys_hours,
             seed=args.seed,
         )
         dy_records = dy_processor.process()

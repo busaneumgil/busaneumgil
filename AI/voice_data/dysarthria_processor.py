@@ -62,7 +62,10 @@ TARGET_SR = 16000
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.?!])\s+")
 
 TYPE_TO_SOURCE = {"01": "dysarthria_neuro", "02": "dysarthria_speech", "03": "dysarthria_larynx"}
-SUBDIR_TO_TYPE = {"neuro": "01", "speech": "02", "larynx": "03"}
+
+# 라벨 zip 파일명 prefix → 장애 타입 코드
+# TL01_뇌신경장애.zip → "01", TL02_언어청각장애.zip → "02", TL03_후두장애.zip → "03"
+ZIP_TYPE_MAP = {"TL01": "01", "TL02": "02", "TL03": "03"}
 
 
 def resample_audio(audio: np.ndarray, orig_sr: int, target_sr: int = TARGET_SR) -> np.ndarray:
@@ -205,12 +208,19 @@ def _merge_flags(
 
 
 class DysarthriaProcessor:
-    """구음장애 데이터 전처리기.
+    """구음장애 데이터 전처리기 (zip 아카이브 기반).
 
-    데이터가 extracted 디렉토리 구조일 때도, zip 아카이브일 때도 동작.
+    데이터 구조:
+      data_dir/
+      └── 1. Training/
+          ├── 라벨링데이터/
+          │   └── TL01_뇌신경장애.zip  (내부: 서브카테고리폴더/*.json)
+          └── 원천데이터/
+              └── TS01_뇌신경장애.zip  (내부: 서브카테고리폴더/*.wav)
 
     체크포인트 (중단/재시작 지원):
       output_dir/checkpoints/
+      ├── dysarthria_done_stems.txt ← 처리 완료 파일명 목록
       ├── dysarthria_done.txt       ← 처리 완료 key 목록
       └── dysarthria_records.jsonl  ← 처리 완료 record 전체 (재시작 복원)
     """
@@ -294,25 +304,73 @@ class DysarthriaProcessor:
 
     # ------------------------------------------------------------------ #
 
+    def _zip_pairs(self) -> List[Tuple[Path, Path, str]]:
+        """(audio_zip, label_zip, type_code) 쌍 목록 반환.
+
+        data_dir/1. Training/라벨링데이터/TL0X_*.zip 을 기준으로 탐색.
+        대응하는 원천데이터 zip은 TL→TS 치환으로 찾는다.
+        """
+        pairs = []
+        label_dir = self.data_dir / "1. Training" / "라벨링데이터"
+        audio_dir = self.data_dir / "1. Training" / "원천데이터"
+
+        if not label_dir.exists():
+            logger.warning(f"라벨링데이터 폴더 없음: {label_dir}")
+            return pairs
+
+        for label_zip in sorted(label_dir.glob("TL0*.zip")):
+            prefix = label_zip.stem[:4]  # "TL01"
+            type_code = ZIP_TYPE_MAP.get(prefix)
+            if type_code is None:
+                logger.warning(f"알 수 없는 zip prefix: {label_zip.name}")
+                continue
+
+            audio_zip_name = "TS" + label_zip.name[2:]  # TL→TS
+            audio_zip = audio_dir / audio_zip_name
+            if not audio_zip.exists():
+                logger.warning(f"원천데이터 zip 없음: {audio_zip}")
+                continue
+
+            pairs.append((audio_zip, label_zip, type_code))
+            logger.info(f"zip 쌍: type={type_code} | {label_zip.name}")
+
+        return pairs
+
     def process(self) -> List[Dict]:
         if not self.data_dir.exists():
             logger.warning(f"구음장애 데이터 디렉토리 없음: {self.data_dir}")
             return []
 
+        pairs = self._zip_pairs()
+        logger.info(f"구음장애 zip 쌍 {len(pairs)}개 발견")
+
+        # 재시작 시 이전 진행량 복원
+        total_hours_done = sum(r.get("duration", 0.0) for r in self.records) / 3600
+        if self.subset_hours is not None:
+            logger.info(
+                f"서브셋 모드: 한도={self.subset_hours}h, 이전 진행량={total_hours_done:.2f}h"
+            )
+
         try:
-            for subdir_name, type_code in SUBDIR_TO_TYPE.items():
+            for audio_zip, label_zip, type_code in pairs:
                 if self._interrupted:
                     break
-                subdir = self.data_dir / subdir_name
-                if not subdir.exists():
-                    logger.warning(f"서브디렉토리 없음: {subdir}")
-                    continue
-                logger.info(f"구음장애 처리: {subdir_name} (Type {type_code})")
+                if self.subset_hours is not None and total_hours_done >= self.subset_hours:
+                    logger.info(f"서브셋 한도 도달 ({total_hours_done:.2f}h) → 종료")
+                    break
+                logger.info(f"구음장애 처리: type={type_code} | {label_zip.name}")
                 try:
-                    self._process_subdir(subdir, subdir_name, type_code)
+                    added_hours = self._process_zip_pair(
+                        audio_zip, label_zip, type_code,
+                        remaining_hours=(
+                            self.subset_hours - total_hours_done
+                            if self.subset_hours is not None else None
+                        ),
+                    )
+                    total_hours_done += added_hours
                 except KeyboardInterrupt:
                     self._interrupted = True
-                    logger.warning("KeyboardInterrupt — 현재 subdir 처리 중단")
+                    logger.warning("KeyboardInterrupt — 현재 zip 처리 중단")
                     break
         except KeyboardInterrupt:
             self._interrupted = True
@@ -333,75 +391,88 @@ class DysarthriaProcessor:
 
     # ------------------------------------------------------------------ #
 
-    def _process_subdir(
+    def _process_zip_pair(
         self,
-        subdir: Path,
-        subdir_name: str,
+        audio_zip: Path,
+        label_zip: Path,
         type_code: str,
-    ):
-        audio_dir = subdir / "audio"
-        label_dir = subdir / "label"
+        remaining_hours: Optional[float] = None,
+    ) -> float:
+        """라벨 zip + 원천 zip 쌍을 처리. 추가된 총 시간(시간 단위)을 반환.
 
-        if not audio_dir.exists() or not label_dir.exists():
-            logger.warning(f"audio/label 디렉토리 없음: {subdir}")
-            return
+        zip 내부 구조:
+          label_zip: 서브카테고리폴더/*.json
+          audio_zip: 서브카테고리폴더/*.wav  (파일명 stem 동일)
+        """
+        added_hours = 0.0
+        source_name = TYPE_TO_SOURCE.get(type_code, "dysarthria_unknown")
 
-        json_files = sorted(label_dir.glob("*.json"))
-        logger.info(f"  JSON 파일 {len(json_files)}개")
+        with zipfile.ZipFile(str(audio_zip), "r") as az, zipfile.ZipFile(str(label_zip), "r") as lz:
+            audio_idx = {
+                Path(n).stem: n
+                for n in az.namelist()
+                if n.lower().endswith(".wav")
+            }
+            json_names = sorted(n for n in lz.namelist() if n.lower().endswith(".json"))
+            logger.info(f"  JSON {len(json_names)}개 / WAV {len(audio_idx)}개")
 
-        pbar = tqdm(json_files, desc=f"dysarthria_{subdir_name}", unit="files", leave=True)
-        try:
-            for json_path in pbar:
-                if self._interrupted:
-                    break
+            pbar = tqdm(json_names, desc=f"dysarthria_{source_name}", unit="files", leave=True)
+            try:
+                for jname in pbar:
+                    if self._interrupted:
+                        break
+                    if remaining_hours is not None and added_hours >= remaining_hours:
+                        logger.info(f"서브셋 한도 도달 (zip 내부) → 중단")
+                        pbar.close()
+                        break
 
-                # ★ 파일 단위 스킵
-                if json_path.stem in self.done_stems:
-                    continue
+                    stem = Path(jname).stem
 
-                try:
-                    with open(json_path, encoding="utf-8-sig") as f:
-                        meta = json.load(f)
-
-                    file_id = meta.get("File_id", json_path.stem + ".wav")
-                    audio_path = audio_dir / file_id
-                    if not audio_path.exists():
-                        audio_path = audio_dir / (json_path.stem + ".wav")
-                    if not audio_path.exists():
-                        self.skipped.append({"key": json_path.stem, "reason": "audio_not_found"})
+                    # ★ 파일 단위 스킵
+                    if stem in self.done_stems:
                         continue
 
-                    audio, sr = sf.read(str(audio_path))
-                    if audio.ndim > 1:
-                        audio = audio[:, 0]
+                    if stem not in audio_idx:
+                        self.skipped.append({"key": stem, "reason": "no_audio_in_zip"})
+                        continue
 
-                    orig_sr = int(meta.get("Meta_info", {}).get("SamplingRate", sr))
-                    if orig_sr != TARGET_SR:
-                        audio = resample_audio(audio, orig_sr, TARGET_SR)
-                        sr = TARGET_SR
+                    try:
+                        with lz.open(jname) as f:
+                            meta = json.loads(f.read().decode("utf-8-sig"))
+                        with az.open(audio_idx[stem]) as f:
+                            audio, sr = sf.read(io.BytesIO(f.read()))
+                        if audio.ndim > 1:
+                            audio = audio[:, 0]
 
-                    recs = self._process_file(meta, audio, sr, type_code, subdir_name, json_path.stem)
-                    for rec in recs:
-                        if rec["key"] not in self.done_keys:
-                            self.records.append(rec)
-                            self._save_record(rec)
+                        orig_sr = int(meta.get("Meta_info", {}).get("SamplingRate", sr))
+                        if orig_sr != TARGET_SR:
+                            audio = resample_audio(audio, orig_sr, TARGET_SR)
+                            sr = TARGET_SR
 
-                    # ★ 파일 완료 표시
-                    self._mark_stem_done(json_path.stem)
+                        recs = self._process_file(meta, audio, sr, type_code, source_name, stem)
+                        for rec in recs:
+                            if rec["key"] not in self.done_keys:
+                                self.records.append(rec)
+                                self._save_record(rec)
+                                added_hours += rec.get("duration", 0.0) / 3600
 
-                    pbar.set_postfix({"done": len(self.records)})
+                        # ★ 파일 완료 표시
+                        self._mark_stem_done(stem)
 
-                except KeyboardInterrupt:
-                    self._interrupted = True
-                    pbar.close()
-                    raise
-                except Exception as e:
-                    logger.warning(f"파일 스킵 {json_path.stem}: {e}")
-                    self.skipped.append({"key": json_path.stem, "reason": str(e)[:120]})
-        except KeyboardInterrupt:
-            pbar.close()
-            raise
+                        pbar.set_postfix({"done": len(self.records), "hours": f"{added_hours:.2f}"})
 
+                    except KeyboardInterrupt:
+                        self._interrupted = True
+                        pbar.close()
+                        raise
+                    except Exception as e:
+                        logger.warning(f"파일 스킵 {stem}: {e}")
+                        self.skipped.append({"key": stem, "reason": str(e)[:120]})
+            except KeyboardInterrupt:
+                pbar.close()
+                raise
+
+        return added_hours
     # ------------------------------------------------------------------ #
 
     def _process_file(
@@ -485,77 +556,3 @@ class DysarthriaProcessor:
 
         return recs
 
-    # ------------------------------------------------------------------ #
-    #  zip 모드 지원 (AI Hub 원본이 zip인 경우)                             #
-    # ------------------------------------------------------------------ #
-
-    def process_from_zip(
-        self,
-        audio_zip_path: str,
-        label_zip_path: str,
-        subdir_name: str,
-        type_code: str,
-    ) -> List[Dict]:
-        """zip 아카이브에서 직접 처리 (다운로드 직후 구조에 대응)."""
-        with zipfile.ZipFile(audio_zip_path, "r") as az, zipfile.ZipFile(
-            label_zip_path, "r"
-        ) as lz:
-            audio_idx = {
-                Path(n.lstrip("/")).stem: n
-                for n in az.namelist()
-                if n.lower().endswith(".wav")
-            }
-            json_names = sorted(n for n in lz.namelist() if n.lower().endswith(".json"))
-
-            pbar = tqdm(json_names, desc=f"dysarthria_{subdir_name}", unit="files", leave=True)
-            try:
-                for jname in pbar:
-                    if self._interrupted:
-                        break
-
-                    stem = Path(jname.lstrip("/")).stem
-
-                    # ★ 파일 단위 스킵
-                    if stem in self.done_stems:
-                        continue
-
-                    if stem not in audio_idx:
-                        self.skipped.append({"key": stem, "reason": "no_audio_in_zip"})
-                        continue
-
-                    try:
-                        with lz.open(jname) as f:
-                            meta = json.loads(f.read().decode("utf-8-sig"))
-                        with az.open(audio_idx[stem]) as f:
-                            audio, sr = sf.read(io.BytesIO(f.read()))
-                        if audio.ndim > 1:
-                            audio = audio[:, 0]
-
-                        orig_sr = int(meta.get("Meta_info", {}).get("SamplingRate", sr))
-                        if orig_sr != TARGET_SR:
-                            audio = resample_audio(audio, orig_sr, TARGET_SR)
-                            sr = TARGET_SR
-
-                        recs = self._process_file(meta, audio, sr, type_code, subdir_name, stem)
-                        for rec in recs:
-                            if rec["key"] not in self.done_keys:
-                                self.records.append(rec)
-                                self._save_record(rec)
-
-                        # ★ 파일 완료 표시
-                        self._mark_stem_done(stem)
-
-                        pbar.set_postfix({"done": len(self.records)})
-
-                    except KeyboardInterrupt:
-                        self._interrupted = True
-                        pbar.close()
-                        raise
-                    except Exception as e:
-                        logger.warning(f"파일 스킵 {stem}: {e}")
-                        self.skipped.append({"key": stem, "reason": str(e)[:120]})
-            except KeyboardInterrupt:
-                pbar.close()
-                raise
-
-        return self.records

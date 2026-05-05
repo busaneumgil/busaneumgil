@@ -44,11 +44,15 @@ class GyeongsangProcessor:
         data_dir: str,
         output_dir: str,
         subset_hours: Optional[float] = None,
+        dtype_hours: Optional[Dict[str, float]] = None,
         seed: int = 42,
     ):
         self.data_dir = Path(data_dir)
         self.output_dir = Path(output_dir)
         self.subset_hours = subset_hours
+        # dtype별 한도: {"st": 40.0, "say": 40.0} 형태
+        # 없으면 subset_hours 전체로 제어
+        self.dtype_hours = dtype_hours or {}
         self.seed = seed
 
         self.audio_out = self.output_dir / "processed_audio" / "gyeongsang"
@@ -173,21 +177,61 @@ class GyeongsangProcessor:
     def process(self) -> List[Dict]:
         """전체 경상도 데이터를 처리한다.
 
-        Ctrl+C 등으로 중단하면 현재까지의 결과를 보존하고 종료.
-        다음 실행 시 체크포인트에서 자동으로 재개.
-        subset_hours는 pipeline 인자로만 받고, 실제 한도 제어는
-        체크포인트 파일명 스킵으로만 동작한다.
+        dtype_hours가 지정되면 dtype별로 독립적인 시간 한도를 적용.
+        talk_ 은 dtype_hours에 없으면 자동으로 건너뜀.
+        subset_hours는 dtype_hours가 없을 때 전체 한도로 사용.
         """
         pairs = self._zip_pairs()
         logger.info(f"경상도 zip 쌍 {len(pairs)}개 발견")
+
+        # dtype별 진행량 복원
+        hours_done: Dict[str, float] = {}
+        for r in self.records:
+            src = r.get("source", "")
+            dtype = src.replace("gyeongsang_", "")
+            hours_done[dtype] = hours_done.get(dtype, 0.0) + r.get("duration", 0.0) / 3600
+
+        if self.dtype_hours:
+            logger.info(f"dtype별 한도: {self.dtype_hours}")
+            logger.info(f"dtype별 이전 진행량: { {k: round(v,2) for k,v in hours_done.items()} }")
+        elif self.subset_hours is not None:
+            total_done = sum(hours_done.values())
+            logger.info(f"서브셋 모드: 한도={self.subset_hours}h, 이전 진행량={total_done:.2f}h")
+
+        total_hours_done = sum(hours_done.values())
 
         try:
             for audio_zip_path, label_zip_path, dtype in pairs:
                 if self._interrupted:
                     break
+
+                # dtype_hours가 지정된 경우: 해당 dtype이 목록에 없으면 건너뜀 (talk 제외 등)
+                if self.dtype_hours:
+                    if dtype not in self.dtype_hours:
+                        logger.info(f"dtype={dtype} 한도 없음 → 건너뜀")
+                        continue
+                    if hours_done.get(dtype, 0.0) >= self.dtype_hours[dtype]:
+                        logger.info(f"dtype={dtype} 한도 도달 ({hours_done.get(dtype,0):.2f}h) → 건너뜀")
+                        continue
+                    remaining = self.dtype_hours[dtype] - hours_done.get(dtype, 0.0)
+                else:
+                    # 전체 한도 모드
+                    if self.subset_hours is not None and total_hours_done >= self.subset_hours:
+                        logger.info(f"서브셋 한도 도달 ({total_hours_done:.2f}h) → 종료")
+                        break
+                    remaining = (
+                        self.subset_hours - total_hours_done
+                        if self.subset_hours is not None else None
+                    )
+
                 logger.info(f"처리 시작: {dtype} | {label_zip_path.name}")
                 try:
-                    self._process_pair(audio_zip_path, label_zip_path, dtype)
+                    added_hours = self._process_pair(
+                        audio_zip_path, label_zip_path, dtype,
+                        remaining_hours=remaining,
+                    )
+                    hours_done[dtype] = hours_done.get(dtype, 0.0) + added_hours
+                    total_hours_done += added_hours
                 except KeyboardInterrupt:
                     self._interrupted = True
                     logger.warning("KeyboardInterrupt — 현재 zip 처리 중단, 이후 zip 건너뜀")
@@ -229,7 +273,10 @@ class GyeongsangProcessor:
         audio_path: Path,
         label_path: Path,
         dtype: str,
-    ):
+        remaining_hours: Optional[float] = None,
+    ) -> float:
+        """zip 쌍 처리. 추가된 총 시간(시간 단위)을 반환."""
+        added_hours = 0.0
         with zipfile.ZipFile(audio_path, "r") as az, zipfile.ZipFile(label_path, "r") as lz:
             audio_idx = self._audio_index(az)
             json_names = sorted(n for n in lz.namelist() if n.lower().endswith(".json"))
@@ -238,6 +285,10 @@ class GyeongsangProcessor:
             try:
                 for jname in pbar:
                     if self._interrupted:
+                        break
+                    if remaining_hours is not None and added_hours >= remaining_hours:
+                        logger.info(f"서브셋 한도 도달 (zip 내부) → 다음 zip 건너뜀")
+                        pbar.close()
                         break
 
                     stem = Path(jname.lstrip("/")).stem
@@ -265,11 +316,12 @@ class GyeongsangProcessor:
                             if rec["key"] not in self.done_keys:
                                 self.records.append(rec)
                                 self._save_record(rec)
+                                added_hours += rec.get("duration", 0.0) / 3600
 
                         # ★ 파일의 모든 발화 처리 완료 → 파일명 기록
                         self._mark_stem_done(stem)
 
-                        pbar.set_postfix({"done": len(self.records)})
+                        pbar.set_postfix({"done": len(self.records), "hours": f"{added_hours:.2f}"})
 
                     except KeyboardInterrupt:
                         self._interrupted = True
@@ -283,9 +335,7 @@ class GyeongsangProcessor:
                 pbar.close()
                 raise
 
-    # ------------------------------------------------------------------ #
-    #  st_ / say_ 처리 (sentences 단위)                                    #
-    # ------------------------------------------------------------------ #
+        return added_hours
 
     def _process_sentences(
         self, meta: Dict, audio: np.ndarray, sr: int, dtype: str, stem: str

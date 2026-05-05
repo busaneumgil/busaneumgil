@@ -22,6 +22,8 @@ import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
+import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
@@ -29,6 +31,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.KakaoSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
@@ -70,6 +73,12 @@ class AppContainer(
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
     private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchLocalDataSource() }
 
+    private val httpJsonClient by lazy(LazyThreadSafetyMode.NONE) {
+        HttpJsonClient(baseUrl = AppEnvironment.baseUrl)
+    }
+    private val authRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        AuthRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
     }
@@ -100,7 +109,10 @@ class AppContainer(
 
     val authLoginRepository: AuthLoginRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideAuthLoginRepository(
+            authRemoteDataSource = authRemoteDataSource,
+            socialAccessTokenProvider = KakaoSocialAccessTokenProvider(context = appContext),
             authSessionRepository = authSessionRepository,
+            settingsRepository = settingsRepository,
         )
     }
 

@@ -38,6 +38,7 @@ fun resolveAppStartDestination(
     initSettings: InitSettings,
     forceLowVisionTermsGuide: Boolean = false,
 ): AppStartDestination {
+    if (authGateState.hasPendingSignup) return AppStartDestination.UserTypePrimaryStep
     if (!authGateState.hasSession) return AppStartDestination.Login
     if (!authGateState.isProfileCompleted) return AppStartDestination.ProfileSetup
     if (forceLowVisionTermsGuide) return AppStartDestination.LowVisionTermsGuide

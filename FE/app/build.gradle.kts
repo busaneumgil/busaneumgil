@@ -22,12 +22,14 @@ fun appProperty(name: String, defaultValue: String): String {
         ?: defaultValue
 }
 
-val defaultBaseUrl = "https://api.example.com"
+val defaultBaseUrl = "https://api.dev.busaneumgil.com/"
 val debugBaseUrl = appProperty("app.debug.baseUrl", defaultBaseUrl)
 val debugMockMode = appProperty("app.debug.mockMode", "false")
 val debugDemoMode = appProperty("app.debug.demoMode", "false")
 val debugForceLowVisionTermsGuide = appProperty("app.debug.forceLowVisionTermsGuide", "false")
+val debugKakaoNativeAppKey = appProperty("app.debug.kakaoNativeAppKey", "")
 val releaseBaseUrl = appProperty("app.release.baseUrl", debugBaseUrl)
+val releaseKakaoNativeAppKey = appProperty("app.release.kakaoNativeAppKey", debugKakaoNativeAppKey)
 
 android {
     namespace = "com.ssafy.e102.eumgil"
@@ -52,6 +54,8 @@ android {
             buildConfigField("boolean", "IS_MOCK_MODE", debugMockMode)
             buildConfigField("boolean", "IS_DEMO_MODE", debugDemoMode)
             buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", debugForceLowVisionTermsGuide)
+            buildConfigField("String", "KAKAO_NATIVE_APP_KEY", quoted(debugKakaoNativeAppKey))
+            manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = debugKakaoNativeAppKey
         }
 
         release {
@@ -60,6 +64,8 @@ android {
             buildConfigField("boolean", "IS_MOCK_MODE", "false")
             buildConfigField("boolean", "IS_DEMO_MODE", "false")
             buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", "false")
+            buildConfigField("String", "KAKAO_NATIVE_APP_KEY", quoted(releaseKakaoNativeAppKey))
+            manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = releaseKakaoNativeAppKey
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -107,6 +113,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("com.kakao.sdk:v2-user:2.23.4")
     ksp("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")

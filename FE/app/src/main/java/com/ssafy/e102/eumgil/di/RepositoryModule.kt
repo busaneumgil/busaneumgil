@@ -19,6 +19,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -35,11 +36,13 @@ import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.FakeRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.ServerAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.ServerAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.data.repository.SocialAccessTokenProvider
@@ -67,6 +70,21 @@ object RepositoryModule {
             ServerAuthLoginRepository(
                 authRemoteDataSource = authRemoteDataSource,
                 socialAccessTokenProvider = socialAccessTokenProvider,
+                authSessionRepository = authSessionRepository,
+                settingsRepository = settingsRepository,
+            )
+        }
+
+    fun provideAuthSignupRepository(
+        authRemoteDataSource: AuthRemoteDataSource,
+        authSessionRepository: AuthSessionRepository,
+        settingsRepository: SettingsRepository,
+    ): AuthSignupRepository =
+        if (AppEnvironment.isMockMode) {
+            LocalOnlyAuthSignupRepository()
+        } else {
+            ServerAuthSignupRepository(
+                authRemoteDataSource = authRemoteDataSource,
                 authSessionRepository = authSessionRepository,
                 settingsRepository = settingsRepository,
             )

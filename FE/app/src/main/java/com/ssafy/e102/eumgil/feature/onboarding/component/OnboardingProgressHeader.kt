@@ -54,7 +54,7 @@ fun OnboardingProgressHeader(
 
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xLarge),
     ) {
         LinearProgressIndicator(
             progress = { animatedProgress },
@@ -70,9 +70,9 @@ fun OnboardingProgressHeader(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
             Text(
-                text = title,
+                text = title.stabilizeOnboardingWrap(),
                 modifier = Modifier.fillMaxWidth(),
-                style = titleStyle,
+                style = titleStyle.onboardingHeadingLineBreak(),
                 fontWeight = titleFontWeight,
                 color = OnboardingHeaderTitle,
                 textAlign = TextAlign.Center,
@@ -80,9 +80,9 @@ fun OnboardingProgressHeader(
 
             if (description.isNotBlank()) {
                 Text(
-                    text = description,
+                    text = description.stabilizeOnboardingWrap(),
                     modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.onboardingBodyLineBreak(),
                     color = OnboardingHeaderDescription,
                     textAlign = TextAlign.Center,
                 )

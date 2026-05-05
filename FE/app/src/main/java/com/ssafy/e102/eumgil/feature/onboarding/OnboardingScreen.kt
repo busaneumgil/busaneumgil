@@ -43,6 +43,9 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.feature.onboarding.component.onboardingBodyLineBreak
+import com.ssafy.e102.eumgil.feature.onboarding.component.onboardingHeadingLineBreak
+import com.ssafy.e102.eumgil.feature.onboarding.component.stabilizeOnboardingWrap
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingSelectionFrame
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingStepAction
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingStepHeaderStyle
@@ -85,7 +88,7 @@ private fun PrimaryUserTypeButton(
                 role = Role.Button
             },
         color = style.containerColor,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.scaleL),
         border = BorderStroke(width = 2.dp, color = style.borderColor),
         onClick = onClick,
     ) {
@@ -118,16 +121,16 @@ private fun PrimaryUserTypeButton(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
             ) {
                 Text(
-                    text = stringResource(id = primaryUserType.titleRes),
-                    style = MaterialTheme.typography.headlineMedium,
+                    text = stringResource(id = primaryUserType.titleRes).stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.headlineMedium.onboardingHeadingLineBreak(),
                     fontSize = 38.sp,
                     lineHeight = 42.sp,
                     fontWeight = FontWeight.Black,
                     color = style.titleColor,
                 )
                 Text(
-                    text = stringResource(id = primaryUserType.descriptionRes),
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = stringResource(id = primaryUserType.descriptionRes).stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
                     fontSize = 18.sp,
                     lineHeight = 26.sp,
                     color = style.descriptionColor,
@@ -163,14 +166,14 @@ fun LowVisionFollowUpScreen(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
             ) {
                 Text(
-                    text = stringResource(id = R.string.onboarding_low_vision_follow_up_card_title),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = stringResource(id = R.string.onboarding_low_vision_follow_up_card_title).stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.titleMedium.onboardingHeadingLineBreak(),
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 Text(
-                    text = stringResource(id = R.string.onboarding_low_vision_follow_up_card_description),
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = stringResource(id = R.string.onboarding_low_vision_follow_up_card_description).stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
@@ -189,7 +192,6 @@ fun MobilitySubtypeScreen(
         totalSteps = 5,
         title = stringResource(id = R.string.onboarding_mobility_subtype_screen_title),
         description = stringResource(id = R.string.onboarding_mobility_subtype_screen_supporting),
-        headerTitleFontWeight = FontWeight.Black,
         modifier = modifier,
     ) {
         MobilitySubtype.entries.forEach { mobilitySubtype ->
@@ -238,7 +240,7 @@ private fun MobilitySubtypeButton(
             } else {
                 style.containerColor
             },
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(EumRadius.scaleL),
         border = BorderStroke(width = if (selected) 2.dp else 1.dp, color = style.borderColor),
     ) {
         Row(
@@ -260,16 +262,16 @@ private fun MobilitySubtypeButton(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
             ) {
                 Text(
-                    text = stringResource(id = mobilitySubtype.titleRes),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = stringResource(id = mobilitySubtype.titleRes).stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.titleMedium.onboardingHeadingLineBreak(),
                     fontSize = 26.sp,
                     lineHeight = 32.sp,
                     fontWeight = FontWeight.Black,
                     color = style.titleColor,
                 )
                 Text(
-                    text = stringResource(id = mobilitySubtype.descriptionRes),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = stringResource(id = mobilitySubtype.descriptionRes).stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.bodyMedium.onboardingBodyLineBreak(),
                     fontSize = 16.sp,
                     lineHeight = 22.sp,
                     color = style.descriptionColor,
@@ -387,7 +389,7 @@ private fun LocationTermsAllAgreementRow(
                 role = Role.Checkbox,
             ),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.scaleM),
         border =
             BorderStroke(
                 width = 1.dp,
@@ -413,9 +415,9 @@ private fun LocationTermsAllAgreementRow(
                 colors = locationTermsCheckboxColors(),
             )
             Text(
-                text = stringResource(id = R.string.onboarding_terms_all_agreement_title),
+                text = stringResource(id = R.string.onboarding_terms_all_agreement_title).stabilizeOnboardingWrap(),
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -451,7 +453,7 @@ private fun LocationTermsAgreementRow(
                 role = Role.Checkbox,
             ),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.scaleM),
         border =
             BorderStroke(
                 width = 1.dp,
@@ -478,9 +480,9 @@ private fun LocationTermsAgreementRow(
             )
 
             Text(
-                text = buildLocationTermsLabel(stringResource(id = item.titleRes)),
+                text = buildLocationTermsLabel(stringResource(id = item.titleRes).stabilizeOnboardingWrap()),
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
                 color = MaterialTheme.colorScheme.onSurface,
             )
 

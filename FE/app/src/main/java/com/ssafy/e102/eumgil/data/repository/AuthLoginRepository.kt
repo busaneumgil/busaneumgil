@@ -85,36 +85,9 @@ class ServerAuthLoginRepository(
                 ),
             isProfileCompleted = true,
         )
-        settingsRepository.savePrimaryUserType(selectedPrimaryUserType.toPrimaryUserTypeRouteValue())
-        response.selectedMobilitySubtype
-            ?.toMobilitySubtypeRouteValue()
-            ?.let { settingsRepository.saveMobilitySubtype(it) }
-        settingsRepository.saveLowVisionFollowUpCompleted(
-            isCompleted = selectedPrimaryUserType == SERVER_PRIMARY_USER_TYPE_LOW_VISION,
+        settingsRepository.syncOnboardingStateFromServer(
+            selectedPrimaryUserType = selectedPrimaryUserType,
+            selectedMobilitySubtype = response.selectedMobilitySubtype,
         )
-        settingsRepository.saveLocationTermsAgreement(
-            isLocationTermsAgreed = true,
-            isPrivacyPolicyAgreed = true,
-        )
-    }
-
-    private fun String.toPrimaryUserTypeRouteValue(): String =
-        when (this) {
-            SERVER_PRIMARY_USER_TYPE_LOW_VISION -> "low_vision"
-            SERVER_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED -> "mobility_impaired"
-            else -> throw IllegalStateException("지원하지 않는 사용자 유형입니다.")
-        }
-
-    private fun String.toMobilitySubtypeRouteValue(): String =
-        when (this) {
-            "POWER_WHEELCHAIR" -> "electric_wheelchair"
-            "MANUAL_WHEELCHAIR" -> "manual_wheelchair"
-            "OTHER_MOBILITY" -> "other_mobility_impaired"
-            else -> throw IllegalStateException("지원하지 않는 보행약자 세부 유형입니다.")
-        }
-
-    private companion object {
-        private const val SERVER_PRIMARY_USER_TYPE_LOW_VISION = "LOW_VISION"
-        private const val SERVER_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED = "MOBILITY_IMPAIRED"
     }
 }

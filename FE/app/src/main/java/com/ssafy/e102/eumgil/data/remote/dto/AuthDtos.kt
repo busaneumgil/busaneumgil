@@ -9,3 +9,11 @@ data class SocialLoginResponseDto(
     val selectedPrimaryUserType: String?,
     val selectedMobilitySubtype: String?,
 )
+
+data class SignupResponseDto(
+    val accessToken: String,
+    val refreshToken: String,
+    val userId: String,
+    val selectedPrimaryUserType: String,
+    val selectedMobilitySubtype: String?,
+)

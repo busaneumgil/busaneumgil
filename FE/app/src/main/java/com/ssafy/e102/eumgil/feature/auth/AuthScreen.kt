@@ -81,14 +81,14 @@ fun LoginScreen(
                     .systemBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.weight(0.78f))
             LoginHero(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = EumSpacing.large),
             )
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(0.28f))
             Image(
                 painter = painterResource(id = R.drawable.auth_login_skyline),
                 contentDescription = null,
@@ -107,7 +107,11 @@ fun LoginScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = EumSpacing.large)
+                        .padding(
+                            start = EumSpacing.large,
+                            end = EumSpacing.large,
+                            bottom = EumSpacing.large,
+                        )
                         .navigationBarsPadding(),
             )
         }

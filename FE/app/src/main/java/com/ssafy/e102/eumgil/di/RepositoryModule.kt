@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.di
 
+import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
@@ -14,6 +15,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
@@ -38,7 +40,9 @@ import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.ServerAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.SocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolicy
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
@@ -52,9 +56,21 @@ object RepositoryModule {
         DefaultAuthSessionRepository(authSessionLocalDataSource = authSessionLocalDataSource)
 
     fun provideAuthLoginRepository(
+        authRemoteDataSource: AuthRemoteDataSource,
+        socialAccessTokenProvider: SocialAccessTokenProvider,
         authSessionRepository: AuthSessionRepository,
+        settingsRepository: SettingsRepository,
     ): AuthLoginRepository =
-        LocalOnlyAuthLoginRepository(authSessionRepository = authSessionRepository)
+        if (AppEnvironment.isMockMode) {
+            LocalOnlyAuthLoginRepository(authSessionRepository = authSessionRepository)
+        } else {
+            ServerAuthLoginRepository(
+                authRemoteDataSource = authRemoteDataSource,
+                socialAccessTokenProvider = socialAccessTokenProvider,
+                authSessionRepository = authSessionRepository,
+                settingsRepository = settingsRepository,
+            )
+        }
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,

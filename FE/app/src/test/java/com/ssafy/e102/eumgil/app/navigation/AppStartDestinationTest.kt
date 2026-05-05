@@ -22,6 +22,18 @@ class AppStartDestinationRoutingTest {
     }
 
     @Test
+    fun `pending signup token starts at onboarding primary user type route`() {
+        val destination =
+            resolveAppStartDestination(
+                authGateState = AuthGateState(signupToken = "signup-token"),
+                initSettings = InitSettings(),
+            )
+
+        assertSame(AppStartDestination.UserTypePrimaryStep, destination)
+        assertEquals(OnboardingRoute.UserTypePrimary.route, destination.route)
+    }
+
+    @Test
     fun `authenticated profile incomplete session starts at AUTH-002 route`() {
         val destination =
             resolveAppStartDestination(

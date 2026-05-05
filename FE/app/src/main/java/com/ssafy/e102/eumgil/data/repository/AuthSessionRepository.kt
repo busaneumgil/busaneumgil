@@ -15,6 +15,10 @@ interface AuthSessionRepository {
         isProfileCompleted: Boolean,
     )
 
+    suspend fun saveSignupToken(signupToken: String)
+
+    suspend fun clearSignupToken()
+
     suspend fun markProfileCompleted()
 
     suspend fun clearAuthSession()
@@ -37,6 +41,14 @@ class DefaultAuthSessionRepository(
             authSession = authSession,
             isProfileCompleted = isProfileCompleted,
         )
+    }
+
+    override suspend fun saveSignupToken(signupToken: String) {
+        authSessionLocalDataSource.saveSignupToken(signupToken = signupToken)
+    }
+
+    override suspend fun clearSignupToken() {
+        authSessionLocalDataSource.clearSignupToken()
     }
 
     override suspend fun markProfileCompleted() {

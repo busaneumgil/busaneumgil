@@ -158,6 +158,10 @@ private class FakeAuthSessionRepository : AuthSessionRepository {
         isProfileCompleted: Boolean,
     ) = Unit
 
+    override suspend fun saveSignupToken(signupToken: String) = Unit
+
+    override suspend fun clearSignupToken() = Unit
+
     override suspend fun markProfileCompleted() = Unit
 
     override suspend fun clearAuthSession() {

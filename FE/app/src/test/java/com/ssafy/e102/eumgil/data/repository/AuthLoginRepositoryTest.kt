@@ -63,21 +63,22 @@ class AuthLoginRepositoryTest {
     fun `new user social login stores signup token without service session`() =
         runTest {
             val authSessionRepository = RecordingAuthSessionRepository()
+            val authRemoteDataSource =
+                FakeAuthRemoteDataSource(
+                    socialLoginResponse =
+                        SocialLoginResponseDto(
+                            signupRequired = true,
+                            signupToken = "signup-token",
+                            accessToken = null,
+                            refreshToken = null,
+                            userId = null,
+                            selectedPrimaryUserType = null,
+                            selectedMobilitySubtype = null,
+                        ),
+                )
             val repository =
                 ServerAuthLoginRepository(
-                    authRemoteDataSource =
-                        FakeAuthRemoteDataSource(
-                            socialLoginResponse =
-                                SocialLoginResponseDto(
-                                    signupRequired = true,
-                                    signupToken = "signup-token",
-                                    accessToken = null,
-                                    refreshToken = null,
-                                    userId = null,
-                                    selectedPrimaryUserType = null,
-                                    selectedMobilitySubtype = null,
-                                ),
-                        ),
+                    authRemoteDataSource = authRemoteDataSource,
                     socialAccessTokenProvider =
                         FakeSocialAccessTokenProvider(accessToken = "naver-access-token"),
                     authSessionRepository = authSessionRepository,
@@ -88,6 +89,39 @@ class AuthLoginRepositoryTest {
 
             assertNull(authSessionRepository.savedAuthSession)
             assertEquals("signup-token", authSessionRepository.savedSignupToken)
+            assertEquals("NAVER", authRemoteDataSource.latestSocialProvider)
+            assertEquals("naver-access-token", authRemoteDataSource.latestSocialAccessToken)
+        }
+
+    @Test
+    fun `google social login sends google provider and access token to auth api`() =
+        runTest {
+            val authRemoteDataSource =
+                FakeAuthRemoteDataSource(
+                    socialLoginResponse =
+                        SocialLoginResponseDto(
+                            signupRequired = true,
+                            signupToken = "google-signup-token",
+                            accessToken = null,
+                            refreshToken = null,
+                            userId = null,
+                            selectedPrimaryUserType = null,
+                            selectedMobilitySubtype = null,
+                        ),
+                )
+            val repository =
+                ServerAuthLoginRepository(
+                    authRemoteDataSource = authRemoteDataSource,
+                    socialAccessTokenProvider =
+                        FakeSocialAccessTokenProvider(accessToken = "google-access-token"),
+                    authSessionRepository = RecordingAuthSessionRepository(),
+                    settingsRepository = RecordingSettingsRepository(),
+                )
+
+            repository.login(AuthLoginRequest(providerKey = "auth-ui-google"))
+
+            assertEquals("GOOGLE", authRemoteDataSource.latestSocialProvider)
+            assertEquals("google-access-token", authRemoteDataSource.latestSocialAccessToken)
         }
 }
 

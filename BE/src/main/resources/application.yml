@@ -14,7 +14,7 @@ social:
     naver:
       user-info-uri: ${NAVER_USER_INFO_URI:https://openapi.naver.com/v1/nid/me}
     google:
-      web-client-id: ${GOOGLE_WEB_CLIENT_ID:}
+      user-info-uri: ${GOOGLE_USER_INFO_URI:https://openidconnect.googleapis.com/v1/userinfo}
 
 auth:
   test:

@@ -1,13 +1,18 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import android.app.Activity
 import android.content.Context
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialException
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.AuthorizationResult
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
 import com.kakao.sdk.auth.model.OAuthToken
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
@@ -77,55 +82,166 @@ class KakaoSocialAccessTokenProvider(
 }
 
 class GoogleSocialAccessTokenProvider(
-    private val activityProvider: () -> Context?,
+    private val activityProvider: () -> Activity?,
 ) : SocialAccessTokenProvider {
+    private var authorizationLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
+    private var launcherOwnerIdentity: Int? = null
+    private var authorizationResultHandler: ((Result<AuthorizationResult>) -> Unit)? = null
+
     override suspend fun getAccessToken(provider: AuthSocialProvider): String {
         if (provider != AuthSocialProvider.GOOGLE) {
             throw IllegalStateException("${provider.displayName} Android login key and SDK connection are required.")
         }
-        if (BuildConfig.GOOGLE_SERVER_CLIENT_ID.isBlank()) {
-            throw IllegalStateException("Google Web Client ID is required.")
-        }
         val activityContext =
-            activityProvider()
-                ?: throw IllegalStateException("Google login requires a foreground Activity.")
+            activityProvider() as? ComponentActivity
+                ?: throw IllegalStateException("Google login requires a foreground ComponentActivity.")
 
-        return requestGoogleIdToken(activityContext)
+        return requestGoogleAccessToken(activityContext)
     }
 
-    private suspend fun requestGoogleIdToken(activityContext: Context): String {
-        val signInWithGoogleOption =
-            GetSignInWithGoogleOption.Builder(
-                serverClientId = BuildConfig.GOOGLE_SERVER_CLIENT_ID,
-            ).build()
-        val request =
-            GetCredentialRequest.Builder()
-                .addCredentialOption(signInWithGoogleOption)
-                .build()
+    private suspend fun requestGoogleAccessToken(activity: ComponentActivity): String {
+        val authorizationResult =
+            requestAuthorization(
+                activity = activity,
+                request =
+                    AuthorizationRequest.builder()
+                        .setRequestedScopes(GOOGLE_USERINFO_SCOPES)
+                        .build(),
+            )
 
-        val response =
-            try {
-                CredentialManager.create(activityContext).getCredential(
-                    context = activityContext,
-                    request = request,
-                )
-            } catch (exception: GetCredentialException) {
-                throw IllegalStateException("Google login failed.", exception)
+        return authorizationResult.accessToken
+            ?.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Google login did not return an access token.")
+    }
+
+    private suspend fun requestAuthorization(
+        activity: ComponentActivity,
+        request: AuthorizationRequest,
+    ): AuthorizationResult =
+        suspendCancellableCoroutine { continuation ->
+            val launcher = resolveAuthorizationLauncher(activity)
+            val authorizationClient = Identity.getAuthorizationClient(activity)
+
+            authorizationResultHandler = { result ->
+                if (continuation.isActive) {
+                    result.fold(
+                        onSuccess = { authorizationResult ->
+                            continuation.resume(authorizationResult)
+                        },
+                        onFailure = { exception ->
+                            continuation.resumeWithException(exception)
+                        },
+                    )
+                }
             }
 
-        val credential = response.credential
-        if (
-            credential !is CustomCredential ||
-            credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-        ) {
-            throw IllegalStateException("Google login returned an unsupported credential.")
+            authorizationClient
+                .authorize(request)
+                .addOnSuccessListener { authorizationResult ->
+                    if (!continuation.isActive) {
+                        clearAuthorizationResultHandler()
+                        return@addOnSuccessListener
+                    }
+
+                    if (authorizationResult.hasResolution()) {
+                        val pendingIntent = authorizationResult.pendingIntent
+                        if (pendingIntent == null) {
+                            clearAuthorizationResultHandler()
+                            continuation.resumeWithException(
+                                IllegalStateException("Google login requires user consent, but no resolution was returned."),
+                            )
+                        } else {
+                            launcher.launch(
+                                IntentSenderRequest.Builder(pendingIntent.intentSender).build(),
+                            )
+                        }
+                    } else {
+                        clearAuthorizationResultHandler()
+                        continuation.resume(authorizationResult)
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    if (continuation.isActive) {
+                        clearAuthorizationResultHandler()
+                        continuation.resumeWithException(
+                            IllegalStateException("Google login failed.", exception),
+                        )
+                    }
+                }
+
+            continuation.invokeOnCancellation {
+                clearAuthorizationResultHandler()
+            }
         }
 
-        return try {
-            GoogleIdTokenCredential.createFrom(credential.data).idToken
-        } catch (exception: GoogleIdTokenParsingException) {
-            throw IllegalStateException("Google login returned an invalid ID token.", exception)
+    private fun resolveAuthorizationLauncher(activity: ComponentActivity): ActivityResultLauncher<IntentSenderRequest> {
+        val activityIdentity = System.identityHashCode(activity)
+        val currentLauncher = authorizationLauncher
+        if (currentLauncher != null && launcherOwnerIdentity == activityIdentity) {
+            return currentLauncher
         }
+
+        clearAuthorizationLauncher()
+
+        val key = "google_authorization_$activityIdentity"
+        launcherOwnerIdentity = activityIdentity
+        authorizationLauncher =
+            activity.activityResultRegistry.register(
+                key,
+                ActivityResultContracts.StartIntentSenderForResult(),
+            ) { activityResult ->
+                val handler = authorizationResultHandler ?: return@register
+                try {
+                    clearAuthorizationResultHandler()
+                    handler(
+                        Result.success(
+                            Identity.getAuthorizationClient(activity)
+                                .getAuthorizationResultFromIntent(activityResult.data),
+                        ),
+                    )
+                } catch (exception: ApiException) {
+                    clearAuthorizationResultHandler()
+                    handler(Result.failure(IllegalStateException("Google login failed.", exception)))
+                }
+            }
+
+        activity.lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                override fun onDestroy(owner: LifecycleOwner) {
+                    if (launcherOwnerIdentity == activityIdentity) {
+                        authorizationResultHandler?.invoke(
+                            Result.failure(
+                                IllegalStateException("Google login was interrupted because the activity was destroyed."),
+                            ),
+                        )
+                        clearAuthorizationLauncher()
+                    }
+                    owner.lifecycle.removeObserver(this)
+                }
+            },
+        )
+
+        return checkNotNull(authorizationLauncher)
+    }
+
+    private fun clearAuthorizationResultHandler() {
+        authorizationResultHandler = null
+    }
+
+    private fun clearAuthorizationLauncher() {
+        authorizationLauncher?.unregister()
+        authorizationLauncher = null
+        launcherOwnerIdentity = null
+        clearAuthorizationResultHandler()
+    }
+
+    private companion object {
+        val GOOGLE_USERINFO_SCOPES =
+            listOf(
+                Scope("openid"),
+                Scope("profile"),
+                Scope("email"),
+            )
     }
 }
 

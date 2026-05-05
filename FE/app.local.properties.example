@@ -13,7 +13,6 @@ app.debug.kakaoNativeAppKey=
 app.debug.naverClientId=
 app.debug.naverClientSecret=
 app.debug.naverClientName=부산이음길
-app.debug.googleServerClientId=
 
 # Release environment
 app.release.baseUrl=https://api.dev.busaneumgil.com/
@@ -21,4 +20,3 @@ app.release.kakaoNativeAppKey=
 app.release.naverClientId=
 app.release.naverClientSecret=
 app.release.naverClientName=부산이음길
-app.release.googleServerClientId=

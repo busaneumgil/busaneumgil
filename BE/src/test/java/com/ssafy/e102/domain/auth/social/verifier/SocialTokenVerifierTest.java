@@ -18,10 +18,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
-import com.ssafy.e102.domain.auth.dto.SocialUserInfo;
 import com.ssafy.e102.domain.auth.exception.AuthErrorCode;
 import com.ssafy.e102.domain.auth.exception.AuthException;
 import com.ssafy.e102.domain.auth.social.config.SocialProviderProperties;
+import com.ssafy.e102.domain.auth.dto.SocialUserInfo;
 import com.ssafy.e102.domain.user.type.SocialProvider;
 
 class SocialTokenVerifierTest {
@@ -70,17 +70,20 @@ class SocialTokenVerifierTest {
 	}
 
 	@Test
-	@DisplayName("구글 ID token으로 구글 사용자 subject를 조회한다")
+	@DisplayName("구글 access token으로 구글 사용자 subject를 조회한다")
 	void verifyGoogleToken() {
-		SocialTokenVerifier verifier = new GoogleSocialTokenVerifier(idToken -> {
-			assertThat(idToken).isEqualTo("google-id-token");
-			return "google-sub";
-		});
+		SocialTokenVerifier verifier = new GoogleSocialTokenVerifier(restTemplate,
+			new SocialProviderProperties.Google("https://openidconnect.google.test/v1/userinfo"));
+		server.expect(requestTo("https://openidconnect.google.test/v1/userinfo"))
+			.andExpect(method(HttpMethod.GET))
+			.andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer google-token"))
+			.andRespond(withSuccess("{\"sub\":\"google-sub\"}", MediaType.APPLICATION_JSON));
 
-		SocialUserInfo userInfo = verifier.verify("google-id-token");
+		SocialUserInfo userInfo = verifier.verify("google-token");
 
 		assertThat(userInfo.socialProvider()).isEqualTo(SocialProvider.GOOGLE);
 		assertThat(userInfo.socialProviderUserId()).isEqualTo("google-sub");
+		server.verify();
 	}
 
 	@Test
@@ -100,12 +103,12 @@ class SocialTokenVerifierTest {
 	@Test
 	@DisplayName("provider 5xx 응답은 소셜 연동 실패로 매핑한다")
 	void mapProviderServerErrorToApiFailed() {
-		SocialTokenVerifier verifier = new KakaoSocialTokenVerifier(restTemplate,
-			new SocialProviderProperties.Kakao("https://kapi.kakao.test/v2/user/me"));
-		server.expect(requestTo("https://kapi.kakao.test/v2/user/me"))
+		SocialTokenVerifier verifier = new GoogleSocialTokenVerifier(restTemplate,
+			new SocialProviderProperties.Google("https://openidconnect.google.test/v1/userinfo"));
+		server.expect(requestTo("https://openidconnect.google.test/v1/userinfo"))
 			.andRespond(withServerError());
 
-		assertThatThrownBy(() -> verifier.verify("kakao-token"))
+		assertThatThrownBy(() -> verifier.verify("google-token"))
 			.isInstanceOf(AuthException.class)
 			.extracting("errorCode")
 			.isEqualTo(AuthErrorCode.SOCIAL_PROVIDER_API_FAILED);

@@ -26,6 +26,10 @@ public record SocialProviderProperties(Kakao kakao, Naver naver, Google google) 
 		}
 	}
 
-	public record Google(String webClientId) {
+	public record Google(String userInfoUri) {
+
+		public Google {
+			Assert.hasText(userInfoUri, "구글 사용자 정보 조회 URI는 필수입니다.");
+		}
 	}
 }

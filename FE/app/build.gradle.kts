@@ -31,11 +31,13 @@ val debugKakaoNativeAppKey = appProperty("app.debug.kakaoNativeAppKey", "")
 val debugNaverClientId = appProperty("app.debug.naverClientId", "")
 val debugNaverClientSecret = appProperty("app.debug.naverClientSecret", "")
 val debugNaverClientName = appProperty("app.debug.naverClientName", "BusanEumGil")
+val debugGoogleServerClientId = appProperty("app.debug.googleServerClientId", "")
 val releaseBaseUrl = appProperty("app.release.baseUrl", debugBaseUrl)
 val releaseKakaoNativeAppKey = appProperty("app.release.kakaoNativeAppKey", debugKakaoNativeAppKey)
 val releaseNaverClientId = appProperty("app.release.naverClientId", debugNaverClientId)
 val releaseNaverClientSecret = appProperty("app.release.naverClientSecret", debugNaverClientSecret)
 val releaseNaverClientName = appProperty("app.release.naverClientName", debugNaverClientName)
+val releaseGoogleServerClientId = appProperty("app.release.googleServerClientId", debugGoogleServerClientId)
 
 android {
     namespace = "com.ssafy.e102.eumgil"
@@ -64,7 +66,9 @@ android {
             buildConfigField("String", "NAVER_CLIENT_ID", quoted(debugNaverClientId))
             buildConfigField("String", "NAVER_CLIENT_SECRET", quoted(debugNaverClientSecret))
             buildConfigField("String", "NAVER_CLIENT_NAME", quoted(debugNaverClientName))
+            buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", quoted(debugGoogleServerClientId))
             manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = debugKakaoNativeAppKey
+            manifestPlaceholders["USES_CLEARTEXT_TRAFFIC"] = "true"
         }
 
         release {
@@ -77,7 +81,9 @@ android {
             buildConfigField("String", "NAVER_CLIENT_ID", quoted(releaseNaverClientId))
             buildConfigField("String", "NAVER_CLIENT_SECRET", quoted(releaseNaverClientSecret))
             buildConfigField("String", "NAVER_CLIENT_NAME", quoted(releaseNaverClientName))
+            buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", quoted(releaseGoogleServerClientId))
             manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = releaseKakaoNativeAppKey
+            manifestPlaceholders["USES_CLEARTEXT_TRAFFIC"] = "false"
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -119,6 +125,8 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation(platform("androidx.compose:compose-bom:2024.02.02"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -126,6 +134,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("com.kakao.sdk:v2-user:2.23.4")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.navercorp.nid:oauth:5.9.1")
     ksp("androidx.room:room-compiler:2.6.1")
 

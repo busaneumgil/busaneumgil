@@ -33,6 +33,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.GoogleSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.KakaoSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.NaverSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
@@ -119,6 +120,10 @@ class AppContainer(
                         mapOf(
                             AuthSocialProvider.KAKAO to
                                 KakaoSocialAccessTokenProvider(context = appContext),
+                            AuthSocialProvider.GOOGLE to
+                                GoogleSocialAccessTokenProvider(
+                                    activityProvider = { ForegroundActivityProvider.currentActivity },
+                                ),
                             AuthSocialProvider.NAVER to
                                 NaverSocialAccessTokenProvider(
                                     activityProvider = { ForegroundActivityProvider.currentActivity },

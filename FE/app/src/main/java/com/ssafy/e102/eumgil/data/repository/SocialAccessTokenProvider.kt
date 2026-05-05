@@ -1,6 +1,13 @@
 package com.ssafy.e102.eumgil.data.repository
 
 import android.content.Context
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.kakao.sdk.auth.model.OAuthToken
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
@@ -65,6 +72,59 @@ class KakaoSocialAccessTokenProvider(
             } else {
                 UserApiClient.instance.loginWithKakaoAccount(context, callback = callback)
             }
+        }
+    }
+}
+
+class GoogleSocialAccessTokenProvider(
+    private val activityProvider: () -> Context?,
+) : SocialAccessTokenProvider {
+    override suspend fun getAccessToken(provider: AuthSocialProvider): String {
+        if (provider != AuthSocialProvider.GOOGLE) {
+            throw IllegalStateException("${provider.displayName} Android login key and SDK connection are required.")
+        }
+        if (BuildConfig.GOOGLE_SERVER_CLIENT_ID.isBlank()) {
+            throw IllegalStateException("Google Web Client ID is required.")
+        }
+        val activityContext =
+            activityProvider()
+                ?: throw IllegalStateException("Google login requires a foreground Activity.")
+
+        return requestGoogleIdToken(activityContext)
+    }
+
+    private suspend fun requestGoogleIdToken(activityContext: Context): String {
+        val signInWithGoogleOption =
+            GetSignInWithGoogleOption.Builder(
+                serverClientId = BuildConfig.GOOGLE_SERVER_CLIENT_ID,
+            ).build()
+        val request =
+            GetCredentialRequest.Builder()
+                .addCredentialOption(signInWithGoogleOption)
+                .build()
+
+        val response =
+            try {
+                CredentialManager.create(activityContext).getCredential(
+                    context = activityContext,
+                    request = request,
+                )
+            } catch (exception: GetCredentialException) {
+                throw IllegalStateException("Google login failed.", exception)
+            }
+
+        val credential = response.credential
+        if (
+            credential !is CustomCredential ||
+            credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) {
+            throw IllegalStateException("Google login returned an unsupported credential.")
+        }
+
+        return try {
+            GoogleIdTokenCredential.createFrom(credential.data).idToken
+        } catch (exception: GoogleIdTokenParsingException) {
+            throw IllegalStateException("Google login returned an invalid ID token.", exception)
         }
     }
 }

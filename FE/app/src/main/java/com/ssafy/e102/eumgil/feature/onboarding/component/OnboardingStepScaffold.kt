@@ -109,7 +109,7 @@ fun OnboardingStepScaffold(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape = RoundedCornerShape(EumRadius.large),
+                        shape = RoundedCornerShape(EumRadius.scaleM),
                     ) {
                         Text(text = primaryActionLabel)
                     }
@@ -186,15 +186,15 @@ fun OnboardingStepScaffold(
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                     ) {
                         Text(
-                            text = title,
-                            style = MaterialTheme.typography.displayLarge,
+                            text = title.stabilizeOnboardingWrap(),
+                            style = MaterialTheme.typography.displayLarge.onboardingHeadingLineBreak(),
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onBackground,
                         )
                         if (description.isNotBlank()) {
                             Text(
-                                text = description,
-                                style = MaterialTheme.typography.bodyLarge,
+                                text = description.stabilizeOnboardingWrap(),
+                                style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }

@@ -28,10 +28,13 @@ import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.KakaoSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.NaverSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
@@ -110,7 +113,18 @@ class AppContainer(
     val authLoginRepository: AuthLoginRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideAuthLoginRepository(
             authRemoteDataSource = authRemoteDataSource,
-            socialAccessTokenProvider = KakaoSocialAccessTokenProvider(context = appContext),
+            socialAccessTokenProvider =
+                CompositeSocialAccessTokenProvider(
+                    providersBySocialProvider =
+                        mapOf(
+                            AuthSocialProvider.KAKAO to
+                                KakaoSocialAccessTokenProvider(context = appContext),
+                            AuthSocialProvider.NAVER to
+                                NaverSocialAccessTokenProvider(
+                                    activityProvider = { ForegroundActivityProvider.currentActivity },
+                                ),
+                        ),
+                ),
             authSessionRepository = authSessionRepository,
             settingsRepository = settingsRepository,
         )

@@ -25,10 +25,10 @@ class OnboardingNavGraphRoutingTest {
     }
 
     @Test
-    fun `terms guide completion moves to low vision home`() {
+    fun `completed low vision onboarding moves to low vision home`() {
         assertEquals(
             LowVisionRoute.Home.route,
-            resolveTermsGuideCompletedRoute(),
+            resolveOnboardingCompletedRoute(PrimaryUserType.LOW_VISION.routeValue),
         )
     }
 
@@ -59,6 +59,14 @@ class OnboardingNavGraphRoutingTest {
                 primaryUserType = PrimaryUserType.MOBILITY_IMPAIRED,
                 entryPoint = OnboardingEntryPoint.PROFILE_EDIT,
             ),
+        )
+    }
+
+    @Test
+    fun `completed mobility impaired onboarding moves to map`() {
+        assertEquals(
+            TopLevelRoute.Map.route,
+            resolveOnboardingCompletedRoute(PrimaryUserType.MOBILITY_IMPAIRED.routeValue),
         )
     }
 }

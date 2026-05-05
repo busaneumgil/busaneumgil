@@ -27,6 +27,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -130,6 +131,14 @@ class AppContainer(
                                 ),
                         ),
                 ),
+            authSessionRepository = authSessionRepository,
+            settingsRepository = settingsRepository,
+        )
+    }
+
+    val authSignupRepository: AuthSignupRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideAuthSignupRepository(
+            authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
             settingsRepository = settingsRepository,
         )

@@ -33,6 +33,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val appContainer = remember(context) { (context as BusanEumgilApp).appContainer }
     val settingsRepository = remember(appContainer) { appContainer.settingsRepository }
     val authSessionRepository = remember(appContainer) { appContainer.authSessionRepository }
+    val authSignupRepository = remember(appContainer) { appContainer.authSignupRepository }
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
     var initialSettings by remember { mutableStateOf<InitSettings?>(null) }
 
@@ -88,6 +89,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             onboardingNavGraph(
                 navController = navController,
                 settingsRepository = settingsRepository,
+                authSignupRepository = authSignupRepository,
                 initialSettings = restoredSettings,
             )
             lowVisionNavGraph(navController = navController)

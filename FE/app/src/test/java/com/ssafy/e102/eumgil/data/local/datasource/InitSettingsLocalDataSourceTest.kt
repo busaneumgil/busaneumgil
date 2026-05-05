@@ -43,6 +43,23 @@ class InitSettingsLocalDataSourceTest {
             assertTrue(settings.isPrivacyPolicyAgreed)
         }
 
+    @Test
+    fun `saving low vision type again clears stale mobility subtype and keeps follow up flag`() =
+        runTest {
+            val dataSource = createDataSource()
+
+            dataSource.savePrimaryUserType(PrimaryUserType.LOW_VISION.routeValue)
+            dataSource.saveMobilitySubtype(MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
+            dataSource.saveLowVisionFollowUpCompleted(isCompleted = true)
+
+            dataSource.savePrimaryUserType(PrimaryUserType.LOW_VISION.routeValue)
+
+            val settings = dataSource.getInitSettings()
+            assertEquals(PrimaryUserType.LOW_VISION.routeValue, settings.selectedPrimaryUserType)
+            assertNull(settings.selectedMobilitySubtype)
+            assertTrue(settings.isLowVisionFollowUpCompleted)
+        }
+
     private fun TestScope.createDataSource(): InitSettingsLocalDataSource {
         val file = File(temporaryFolder.newFolder(), "init_settings.preferences_pb")
         val dataStore =

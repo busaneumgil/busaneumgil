@@ -37,7 +37,7 @@ public class FavoriteRoute extends BaseEntity {
 	@Column(nullable = false, updatable = false)
 	private Long favRouteId;
 
-	@Column(nullable = false, length = 100)
+	@Column(nullable = false, length = 511)
 	private String routeName;
 
 	@Column(nullable = false, length = 255)

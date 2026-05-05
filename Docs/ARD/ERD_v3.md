@@ -278,7 +278,7 @@ erDiagram
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 자주 가는 길 ID | favRouteId | BIGINT | NOT NULL |  |
-| 경로명 | routeName | VARCHAR(100) | NOT NULL |  |
+| 경로명 | routeName | VARCHAR(511) | NOT NULL |  |
 | 출발지명 | startLabel | VARCHAR(255) | NOT NULL |  |
 | 도착지명 | endLabel | VARCHAR(255) | NOT NULL |  |
 | 출발지 좌표 | startPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |

@@ -70,6 +70,24 @@ class FavoriteRouteTest {
 	}
 
 	@Test
+	@DisplayName("경로명은 출발지명과 도착지명의 최대 길이를 합친 값까지 생성한다")
+	void createRouteNameWithMaxLengthLabels() {
+		String startLabel = "s".repeat(255);
+		String endLabel = "e".repeat(255);
+
+		FavoriteRoute favoriteRoute = FavoriteRoute.create(
+			user(UUID.randomUUID()),
+			startLabel,
+			endLabel,
+			point(35.1686, 129.0576),
+			point(35.1152, 129.0422),
+			RouteOption.SAFE);
+
+		assertThat(favoriteRoute.getRouteName()).isEqualTo(startLabel + "-" + endLabel);
+		assertThat(favoriteRoute.getRouteName()).hasSize(511);
+	}
+
+	@Test
 	@DisplayName("경로 북마크 생성 시 필수값이 없으면 생성 요청 오류로 거부한다")
 	void rejectInvalidCreateRequest() {
 		assertThatThrownBy(() -> FavoriteRoute.create(

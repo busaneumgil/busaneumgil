@@ -44,6 +44,7 @@ Use `.ai/LANES.md` to separate FE and BE work inside the monorepo. Prefer `/fe-*
 - Main outputs: reusable plan sections in `.ai/LOCAL/PLANS/current-sprint.md` or a linked implementation plan artifact, explicit execution units, test and validation matrix, risk register, optional ADR drafts, backlog or roadmap deltas
 - Required docs: PRD, API, ARD/ERD, PoC, infra, and conventions from `.ai/DOCS.md`
 - Lane split: use `/fe-plan` or `/be-plan` unless the work intentionally spans both sides
+- BE requirement: backend planning must run the Backend Design Analyzer and Failure Scenario Generator from `.ai/PLANS/implementation-plan-template.md`, including source of truth, duplicate request behavior, retry safety, transaction boundaries, concurrency consistency, bottlenecks, and test strategy
 - Handoff: build, review, and QA consume these artifacts directly
 
 ### Build
@@ -53,6 +54,7 @@ Use `.ai/LANES.md` to separate FE and BE work inside the monorepo. Prefer `/fe-*
 - Main outputs: code changes, tests, and implementation notes recorded in sprint artifacts when behavior or scope changed
 - Required docs: API contracts, ERD, backend conventions, infra docs, or UI specs relevant to the touched files
 - Lane split: use `/fe-start`, `/fe-fix-bug`, `/fe-refactor-module`, `/fe-write-test`, `/fe-investigate` for FE; use `/be-start`, `/be-fix-bug`, `/be-refactor-module`, `/be-write-test`, `/be-investigate` for BE
+- Pre-implementation gate: before code edits, record predicted changed files, why each file changes, expected side effects, test cases, rollback trigger, implementation order, and self-review focus
 - Handoff: review inherits the approved plan, not just the diff
 
 ### Review
@@ -71,6 +73,8 @@ Use `.ai/LANES.md` to separate FE and BE work inside the monorepo. Prefer `/fe-*
 - Main outputs: bug and risk reports, smoke-check references, scorecard updates, regression notes
 - Required docs: user flows, acceptance criteria, API contracts, and deployment/runtime assumptions from `.ai/DOCS.md`
 - Lane split: use `/fe-qa`, `/fe-qa-only`, `/fe-benchmark` for FE flows; use `/be-qa`, `/be-qa-only`, `/be-benchmark` for API/server flows
+- BE requirement: record compile, unit, integration, API response, DB migration, security, performance, and log/metric verification, preferring `./gradlew clean test`, `./gradlew check`, and `./gradlew bootJar` for Spring Boot projects when present
+- Metrics requirement: backend benchmark or QA evidence must explain the feature with measurements or explicit blockers for average latency, p95 latency, maximum TPS, error rate, DB query count, external API calls, and cache hit rate
 - Handoff: ship consumes readiness status rather than assuming tests passed means production-ready
 
 ### Ship
@@ -79,6 +83,7 @@ Use `.ai/LANES.md` to separate FE and BE work inside the monorepo. Prefer `/fe-*
 - Goal: verify readiness gates, release safely, and keep release docs aligned
 - Main outputs: release checklist status, deployment verification, rollback readiness, release notes
 - Lane split: use `/fe-ship`, `/fe-document-release`, `/fe-canary`, `/fe-deploy-check` for frontend releases; use `/be-ship`, `/be-document-release`, `/be-canary`, `/be-deploy-check` for backend releases
+- BE gate: do not mark backend work ready when verification or metric rows are missing without an explicit blocker or not-applicable reason
 - Handoff: try consumes what actually happened, not what was intended
 
 ### Reflect

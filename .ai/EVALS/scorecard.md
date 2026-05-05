@@ -13,6 +13,9 @@ Use this file with `.ai/scripts/score.sh` to judge whether a cloned repository h
 - Memory and evaluation hygiene
 - Structured progress visibility
 - Retry and failure discipline
+- Backend design analysis completeness
+- Backend failure scenario coverage
+- Backend verification and metrics evidence
 - Dashboard visibility
 
 ## Interpretation

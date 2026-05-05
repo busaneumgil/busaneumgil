@@ -27,13 +27,17 @@ Measure whether the change introduced unacceptable performance regressions or su
 2. Define what should be measured and why it matters.
 3. Capture a baseline if one exists or note that none exists.
 4. Measure the changed path and compare results.
-5. Record significant regressions, gains, missing baselines, or stale performance assumptions in `.ai/LOCAL/PLANS/current-sprint.md` and `.ai/EVALS/scorecard.md`.
+5. For backend features, fill the Metrics Explainer table with measured values or explicit blockers for average response time, p95 response time, maximum TPS, error rate, DB query count, external API call count, and cache hit rate.
+6. Record the measurement environment, dataset or fixture size, concurrency level, warmup assumptions, and whether results came from local, staging, production, logs, APM, or a synthetic benchmark.
+7. Record significant regressions, gains, missing baselines, or stale performance assumptions in `.ai/LOCAL/PLANS/current-sprint.md` and `.ai/EVALS/scorecard.md`.
 
 ## outputs
 
 - Benchmark summary
 - Before-versus-after comparison
 - Performance risk note when relevant
+- Metrics Explainer table for backend features
+- Measurement environment and blocker notes
 
 ## escalation rules
 

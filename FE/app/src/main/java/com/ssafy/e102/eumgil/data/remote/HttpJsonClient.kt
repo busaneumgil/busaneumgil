@@ -5,6 +5,7 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,6 +19,20 @@ class HttpJsonClient(
     private val connectTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
     private val readTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
 ) {
+    suspend fun getJson(
+        path: String,
+        queryParams: Map<String, String> = emptyMap(),
+        headers: Map<String, String> = emptyMap(),
+    ): HttpJsonResponse =
+        withContext(Dispatchers.IO) {
+            val connection = openConnection(path, queryParams)
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("Accept", "application/json")
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+
+            connection.toHttpJsonResponse()
+        }
+
     suspend fun postJson(
         path: String,
         body: String,
@@ -38,19 +53,49 @@ class HttpJsonClient(
             connection.toHttpJsonResponse()
         }
 
-    private fun openConnection(path: String): HttpURLConnection =
-        URL(normalizeUrl(path)).openConnection().let { connection ->
+    suspend fun deleteJson(
+        path: String,
+        queryParams: Map<String, String> = emptyMap(),
+        headers: Map<String, String> = emptyMap(),
+    ): HttpJsonResponse =
+        withContext(Dispatchers.IO) {
+            val connection = openConnection(path, queryParams)
+            connection.requestMethod = "DELETE"
+            connection.setRequestProperty("Accept", "application/json")
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+
+            connection.toHttpJsonResponse()
+        }
+
+    private fun openConnection(
+        path: String,
+        queryParams: Map<String, String> = emptyMap(),
+    ): HttpURLConnection =
+        URL(buildUrl(path, queryParams)).openConnection().let { connection ->
             (connection as HttpURLConnection).apply {
                 connectTimeout = connectTimeoutMillis
                 readTimeout = readTimeoutMillis
             }
         }
 
-    private fun normalizeUrl(path: String): String {
+    private fun buildUrl(
+        path: String,
+        queryParams: Map<String, String>,
+    ): String {
         val normalizedBaseUrl = baseUrl.trimEnd('/')
         val normalizedPath = path.trimStart('/')
-        return "$normalizedBaseUrl/$normalizedPath"
+        val urlWithoutQuery = "$normalizedBaseUrl/$normalizedPath"
+
+        if (queryParams.isEmpty()) return urlWithoutQuery
+
+        val query =
+            queryParams.entries.joinToString("&") { (key, value) ->
+                "${urlEncode(key)}=${urlEncode(value)}"
+            }
+        return "$urlWithoutQuery?$query"
     }
+
+    private fun urlEncode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
 
     private fun HttpURLConnection.toHttpJsonResponse(): HttpJsonResponse {
         val statusCode = responseCode

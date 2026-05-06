@@ -22,12 +22,20 @@ fun appProperty(name: String, defaultValue: String): String {
         ?: defaultValue
 }
 
-val defaultBaseUrl = "https://api.example.com"
+val defaultBaseUrl = "https://api.dev.busaneumgil.com/"
 val debugBaseUrl = appProperty("app.debug.baseUrl", defaultBaseUrl)
 val debugMockMode = appProperty("app.debug.mockMode", "false")
 val debugDemoMode = appProperty("app.debug.demoMode", "false")
 val debugForceLowVisionTermsGuide = appProperty("app.debug.forceLowVisionTermsGuide", "false")
+val debugKakaoNativeAppKey = appProperty("app.debug.kakaoNativeAppKey", "")
+val debugNaverClientId = appProperty("app.debug.naverClientId", "")
+val debugNaverClientSecret = appProperty("app.debug.naverClientSecret", "")
+val debugNaverClientName = appProperty("app.debug.naverClientName", "BusanEumGil")
 val releaseBaseUrl = appProperty("app.release.baseUrl", debugBaseUrl)
+val releaseKakaoNativeAppKey = appProperty("app.release.kakaoNativeAppKey", debugKakaoNativeAppKey)
+val releaseNaverClientId = appProperty("app.release.naverClientId", debugNaverClientId)
+val releaseNaverClientSecret = appProperty("app.release.naverClientSecret", debugNaverClientSecret)
+val releaseNaverClientName = appProperty("app.release.naverClientName", debugNaverClientName)
 
 android {
     namespace = "com.ssafy.e102.eumgil"
@@ -52,6 +60,12 @@ android {
             buildConfigField("boolean", "IS_MOCK_MODE", debugMockMode)
             buildConfigField("boolean", "IS_DEMO_MODE", debugDemoMode)
             buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", debugForceLowVisionTermsGuide)
+            buildConfigField("String", "KAKAO_NATIVE_APP_KEY", quoted(debugKakaoNativeAppKey))
+            buildConfigField("String", "NAVER_CLIENT_ID", quoted(debugNaverClientId))
+            buildConfigField("String", "NAVER_CLIENT_SECRET", quoted(debugNaverClientSecret))
+            buildConfigField("String", "NAVER_CLIENT_NAME", quoted(debugNaverClientName))
+            manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = debugKakaoNativeAppKey
+            manifestPlaceholders["USES_CLEARTEXT_TRAFFIC"] = "true"
         }
 
         release {
@@ -60,6 +74,12 @@ android {
             buildConfigField("boolean", "IS_MOCK_MODE", "false")
             buildConfigField("boolean", "IS_DEMO_MODE", "false")
             buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", "false")
+            buildConfigField("String", "KAKAO_NATIVE_APP_KEY", quoted(releaseKakaoNativeAppKey))
+            buildConfigField("String", "NAVER_CLIENT_ID", quoted(releaseNaverClientId))
+            buildConfigField("String", "NAVER_CLIENT_SECRET", quoted(releaseNaverClientSecret))
+            buildConfigField("String", "NAVER_CLIENT_NAME", quoted(releaseNaverClientName))
+            manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = releaseKakaoNativeAppKey
+            manifestPlaceholders["USES_CLEARTEXT_TRAFFIC"] = "false"
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -113,6 +133,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("com.kakao.sdk:v2-user:2.23.4")
+    implementation("com.google.android.gms:play-services-auth:21.5.1")
+    implementation("com.navercorp.nid:oauth:5.9.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")

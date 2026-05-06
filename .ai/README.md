@@ -52,6 +52,16 @@ Claude에서 같은 스킬 명령이나 훅 설정이 보이지 않으면 `sync-
 
 작은 작업은 `/fe-make` 또는 `/be-make`를 건너뛰고 바로 `/fe-plan` 또는 `/be-plan`으로 시작해도 됩니다.
 
+## 백엔드 엔지니어링 하네스
+
+BE 작업은 계획 단계에서 바로 구현하지 않고 아래 항목을 먼저 채웁니다. 기준 템플릿은 `.ai/PLANS/implementation-plan-template.md`입니다.
+
+- Design Analyzer: 요구사항, 도메인, 예상 트래픽, 데이터 구조, 외부 의존성을 입력으로 두고 상태 흐름, API 후보, 데이터 변경 지점, 트랜잭션 경계, 실패 지점, 병목, 테스트 전략을 기록합니다.
+- Failure Scenario Generator: 중복 요청, 캐시/DB 부분 성공, DB 커밋 후 응답 전 서버 종료, 처리 중 만료, 다중 인스턴스 동시 처리 시나리오를 먼저 씁니다.
+- Implementation Harness: 수정 예상 파일, 수정 이유, 예상 부작용, 테스트 케이스, 롤백 조건을 작성한 뒤 영향 범위, 구현 순서, 테스트 계획, 코드 수정, 자체 리뷰 순서로 진행합니다.
+- Verification Harness: 컴파일, 단위/통합 테스트, API 응답, DB 마이그레이션, 보안, 성능, 로그/메트릭을 검증합니다. Spring Boot는 가능한 경우 `./gradlew clean test`, `./gradlew check`, `./gradlew bootJar`를 사용합니다.
+- Metrics Explainer: 평균 응답 시간, p95 응답 시간, 최대 TPS, 에러율, DB 쿼리 수, 외부 API 호출 수, 캐시 hit rate를 측정값 또는 명시적 blocker로 남깁니다.
+
 ## 스킬 명령어
 
 모든 공통 스킬에는 FE/BE 전용 명령이 있습니다. 예: `/start`의 FE 버전은 `/fe-start`, BE 버전은 `/be-start`입니다.

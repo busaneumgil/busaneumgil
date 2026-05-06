@@ -584,20 +584,6 @@ private fun markerOverlayJitter(markerId: String): MarkerOffset {
 
 private fun markerPalette(marker: MapMarkerUiModel): MarkerPalette =
     when (marker.categoryType.category) {
-        FacilityCategory.RESTAURANT ->
-            MarkerPalette(
-                container = Color(0xFFD96A39),
-                content = Color.White,
-                border = Color(0xFFF7D3C3),
-            )
-
-        FacilityCategory.TOURIST_ATTRACTION ->
-            MarkerPalette(
-                container = Color(0xFF1976D2),
-                content = Color.White,
-                border = Color(0xFFC7E0FF),
-            )
-
         FacilityCategory.TOILET ->
             MarkerPalette(
                 container = Color(0xFF00897B),
@@ -619,11 +605,67 @@ private fun markerPalette(marker: MapMarkerUiModel): MarkerPalette =
                 border = Color(0xFFF1D6AA),
             )
 
+        FacilityCategory.FOOD_CAFE ->
+            MarkerPalette(
+                container = Color(0xFFD96A39),
+                content = Color.White,
+                border = Color(0xFFF7D3C3),
+            )
+
+        FacilityCategory.TOURIST_SPOT ->
+            MarkerPalette(
+                container = Color(0xFF1976D2),
+                content = Color.White,
+                border = Color(0xFFC7E0FF),
+            )
+
+        FacilityCategory.ACCOMMODATION ->
+            MarkerPalette(
+                container = Color(0xFF8D6E63),
+                content = Color.White,
+                border = Color(0xFFE5D4CD),
+            )
+
+        FacilityCategory.HEALTHCARE ->
+            MarkerPalette(
+                container = Color(0xFFC62828),
+                content = Color.White,
+                border = Color(0xFFF5C4C4),
+            )
+
+        FacilityCategory.WELFARE ->
+            MarkerPalette(
+                container = Color(0xFF2E7D6B),
+                content = Color.White,
+                border = Color(0xFFC7E7DE),
+            )
+
+        FacilityCategory.PUBLIC_OFFICE ->
+            MarkerPalette(
+                container = Color(0xFF546E7A),
+                content = Color.White,
+                border = Color(0xFFD1DADF),
+            )
+
         FacilityCategory.BRAILLE_BLOCK ->
             MarkerPalette(
                 container = Color(0xFF7A5A1D),
                 content = Color.White,
                 border = Color(0xFFF0DEB7),
+            )
+
+        FacilityCategory.RESTAURANT ->
+            MarkerPalette(
+                container = Color(0xFFD96A39),
+                content = Color.White,
+                border = Color(0xFFF7D3C3),
+            )
+
+        FacilityCategory.TOURIST_ATTRACTION ->
+            MarkerPalette(
+                container = Color(0xFF1976D2),
+                content = Color.White,
+                border = Color(0xFFC7E0FF),
             )
 
         FacilityCategory.OTHER ->
@@ -636,12 +678,18 @@ private fun markerPalette(marker: MapMarkerUiModel): MarkerPalette =
 
 private fun markerLabel(marker: MapMarkerUiModel): String =
     when (marker.categoryType.category) {
-        FacilityCategory.RESTAURANT -> "R"
-        FacilityCategory.TOURIST_ATTRACTION -> "A"
         FacilityCategory.TOILET -> "WC"
         FacilityCategory.ELEVATOR -> "EV"
         FacilityCategory.CHARGING_STATION -> "CH"
+        FacilityCategory.FOOD_CAFE -> "FC"
+        FacilityCategory.TOURIST_SPOT -> "TS"
+        FacilityCategory.ACCOMMODATION -> "ST"
+        FacilityCategory.HEALTHCARE -> "HP"
+        FacilityCategory.WELFARE -> "WF"
+        FacilityCategory.PUBLIC_OFFICE -> "PO"
         FacilityCategory.OTHER -> "OT"
+        FacilityCategory.RESTAURANT -> "R"
+        FacilityCategory.TOURIST_ATTRACTION -> "A"
         FacilityCategory.BRAILLE_BLOCK ->
             when (marker.categoryType.brailleBlockType) {
                 BrailleBlockType.GUIDING_LINE -> "BG"

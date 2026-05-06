@@ -18,6 +18,7 @@ Turn product intent or an existing implementation plan into an execution-ready a
 ## inputs
 
 - Existing project documents such as PRD, ERD, blueprint, and prior implementation notes
+- Feature requirements, domain description, expected traffic, data structures, and external dependency assumptions when backend behavior is involved
 - `.ai/DOCS.md`
 - Relevant `Docs/API/`, `Docs/ARD/`, `Docs/PoC/`, `Docs/인프라/`, `Docs/컨벤션/`, and `Docs/skills/backend/` documents
 - `.ai/LOCAL/PLANS/current-sprint.md`
@@ -31,20 +32,27 @@ Turn product intent or an existing implementation plan into an execution-ready a
 1. Load `.ai/DOCS.md`, then read the relevant API, ERD, PoC, infra, backend convention, and planning docs.
 2. Read the existing plan and supporting docs, then identify what is still vague, oversized, internally inconsistent, or missing.
 3. Map the proposed flow: trigger, data movement, state changes, storage boundaries, external dependencies, and trust boundaries.
-4. Cross-check API paths, request/response fields, error codes, tables, entities, and package rules against `Docs/`.
-5. Break the work into small execution units with explicit dependencies, changed surfaces, build steps, review focus, QA path, and measurable done criteria.
-6. Convert missing tests and validation into an explicit test and validation matrix instead of leaving them as loose suggestions.
-7. Convert every risk into one of three buckets: mitigated now, execution task, or true open question that requires outside confirmation.
-8. Update `.ai/LOCAL/PLANS/current-sprint.md` or a linked plan artifact under `.ai/LOCAL/PLANS/` using the implementation plan template so build, review, and QA can consume it directly.
-9. Update `.ai/ARCHITECTURE.md` or draft an ADR when the system shape, source of truth, or trust boundary changed materially.
-10. Run `.ai/scripts/check-plan-readiness.sh` on the updated plan artifact and iterate until it passes or until a repeated blocked failure must be escalated through the circuit breaker path.
+4. For backend work, run the Backend Design Analyzer from `.ai/PLANS/implementation-plan-template.md`: capture requirements, domain, expected traffic, data structures, external dependencies, state flow, API candidates, data mutation points, transaction boundaries, failure points, expected bottlenecks, and test strategy.
+5. For backend work, answer the required consistency questions explicitly: source of truth, duplicate request behavior, retry safety, transaction boundaries, and concurrent request data integrity.
+6. Generate concrete failure scenarios before implementation. Cover duplicate requests, partial cache/DB success, committed DB work followed by response-time crash, expiry or business-time changes during processing, and multi-instance concurrency when relevant.
+7. Cross-check API paths, request/response fields, error codes, tables, entities, transaction rules, indexes, idempotency keys, and package rules against `Docs/`.
+8. Break the work into small execution units with explicit dependencies, changed surfaces, build steps, review focus, QA path, and measurable done criteria.
+9. Convert missing tests and validation into an explicit test and validation matrix instead of leaving them as loose suggestions. Backend plans must include compile, unit, integration, API, migration, security, performance, and log/metric validation or a reason each item is not applicable.
+10. Add a Metrics Explainer target table for backend features with expected measurement method for average latency, p95 latency, maximum TPS, error rate, DB query count, external API calls, and cache hit rate.
+11. Convert every risk into one of three buckets: mitigated now, execution task, or true open question that requires outside confirmation.
+12. Update `.ai/LOCAL/PLANS/current-sprint.md` or a linked plan artifact under `.ai/LOCAL/PLANS/` using the implementation plan template so build, review, and QA can consume it directly.
+13. Update `.ai/ARCHITECTURE.md` or draft an ADR when the system shape, source of truth, transaction boundary, or trust boundary changed materially.
+14. Run `.ai/scripts/check-plan-readiness.sh` on the updated plan artifact and iterate until it passes or until a repeated blocked failure must be escalated through the circuit breaker path.
 
 ## outputs
 
 - Revised implementation plan artifact
 - Data flow and failure mode summary
+- Backend Design Analyzer section when backend behavior is involved
+- Failure Scenario Generator table when backend behavior is involved
 - Trust boundary notes
 - Test and validation matrix
+- Metrics Explainer target table for backend features
 - Review and QA handoff sections
 - Explicit risk register and open question list
 

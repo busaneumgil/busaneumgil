@@ -8,7 +8,6 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason as PermissionUnavailableReason
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
-import com.ssafy.e102.eumgil.core.model.AccessibilityTag
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
@@ -222,21 +221,8 @@ class MapViewModel(
 
     private fun handleShortcutFilterClicked(key: MapShortcutFilterKey) {
         val browseData = facilityBrowseData ?: return
-        if (key == MapShortcutFilterKey.MORE) return
 
-        if (key == MapShortcutFilterKey.ACCESSIBLE_PARKING) {
-            selectedShortcutFilterKey =
-                if (selectedShortcutFilterKey == key) {
-                    null
-                } else {
-                    key
-                }
-            markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-            renderMarkerBrowseState()
-            return
-        }
-
-        val category = key.toFacilityCategory() ?: return
+        val category = key.toFacilityCategory(browseData.availableCategories.toSet()) ?: return
         val isSameShortcut = selectedShortcutFilterKey == key
         selectedShortcutFilterKey = if (isSameShortcut) null else key
         markerFilterSelectionState =
@@ -258,7 +244,7 @@ class MapViewModel(
                 browseData = browseData,
                 selection = markerFilterSelectionState,
             )
-        val overlayState = applyShortcutFilter(baseOverlayState)
+        val overlayState = baseOverlayState
         val filterState =
             MapBrowseStateFactory.createFilterUiState(
                 browseData = browseData,
@@ -777,39 +763,10 @@ class MapViewModel(
         }
     }
 
-    private fun applyShortcutFilter(
-        overlayState: com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState,
-    ): com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState {
-        if (selectedShortcutFilterKey != MapShortcutFilterKey.ACCESSIBLE_PARKING) {
-            return overlayState
-        }
-
-        val markers =
-            overlayState.markers.map { marker ->
-                if (
-                    marker.displayState == MapMarkerDisplayState.VISIBLE &&
-                    AccessibilityTag.ACCESSIBLE_PARKING in marker.accessibilityTags
-                ) {
-                    marker
-                } else {
-                    marker.copy(displayState = MapMarkerDisplayState.HIDDEN_BY_FILTER)
-                }
-            }
-
-        return overlayState.copy(
-            markers = markers,
-            visibleMarkerCount = markers.count { marker -> marker.displayState == MapMarkerDisplayState.VISIBLE },
-        )
-    }
-
     private fun createShortcutFilterState(
         browseData: FacilityBrowseData? = facilityBrowseData,
     ): MapShortcutFilterRowState {
         val availableCategories = browseData?.availableCategories?.toSet().orEmpty()
-        val hasAccessibleParking =
-            browseData?.allMarkers?.any { marker ->
-                AccessibilityTag.ACCESSIBLE_PARKING in marker.accessibilityTags
-            } == true
 
         return MapShortcutFilterRowState(
             chips =
@@ -821,16 +778,26 @@ class MapViewModel(
                             when (key) {
                                 MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET in availableCategories
                                 MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR in availableCategories
-                                MapShortcutFilterKey.ACCESSIBLE_PARKING -> hasAccessibleParking
-                                MapShortcutFilterKey.MORE -> true
                                 MapShortcutFilterKey.CHARGING_STATION ->
                                     FacilityCategory.CHARGING_STATION in availableCategories
 
-                                MapShortcutFilterKey.BRAILLE_BLOCK -> FacilityCategory.BRAILLE_BLOCK in availableCategories
-                                MapShortcutFilterKey.TOURIST_ATTRACTION ->
-                                    FacilityCategory.TOURIST_ATTRACTION in availableCategories
+                                MapShortcutFilterKey.FOOD_CAFE ->
+                                    FacilityCategory.FOOD_CAFE in availableCategories ||
+                                        FacilityCategory.RESTAURANT in availableCategories
 
-                                MapShortcutFilterKey.RESTAURANT -> FacilityCategory.RESTAURANT in availableCategories
+                                MapShortcutFilterKey.TOURIST_SPOT ->
+                                    FacilityCategory.TOURIST_SPOT in availableCategories ||
+                                        FacilityCategory.TOURIST_ATTRACTION in availableCategories
+
+                                MapShortcutFilterKey.ACCOMMODATION ->
+                                    FacilityCategory.ACCOMMODATION in availableCategories
+
+                                MapShortcutFilterKey.HEALTHCARE ->
+                                    FacilityCategory.HEALTHCARE in availableCategories
+
+                                MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE in availableCategories
+                                MapShortcutFilterKey.PUBLIC_OFFICE ->
+                                    FacilityCategory.PUBLIC_OFFICE in availableCategories
                             },
                     )
                 },
@@ -859,11 +826,13 @@ class MapViewModel(
             listOf(
                 MapShortcutFilterKey.TOILET,
                 MapShortcutFilterKey.ELEVATOR,
-                MapShortcutFilterKey.ACCESSIBLE_PARKING,
                 MapShortcutFilterKey.CHARGING_STATION,
-                MapShortcutFilterKey.BRAILLE_BLOCK,
-                MapShortcutFilterKey.TOURIST_ATTRACTION,
-                MapShortcutFilterKey.RESTAURANT,
+                MapShortcutFilterKey.FOOD_CAFE,
+                MapShortcutFilterKey.TOURIST_SPOT,
+                MapShortcutFilterKey.ACCOMMODATION,
+                MapShortcutFilterKey.HEALTHCARE,
+                MapShortcutFilterKey.WELFARE,
+                MapShortcutFilterKey.PUBLIC_OFFICE,
             )
         private const val LOCATION_LOOKUP_TIMEOUT_MILLIS = 5_000L
         private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 3
@@ -919,16 +888,29 @@ private data class SelectedFacilityBookmarkState(
     val errorMessage: String? = null,
 )
 
-private fun MapShortcutFilterKey.toFacilityCategory(): FacilityCategory? =
+private fun MapShortcutFilterKey.toFacilityCategory(availableCategories: Set<FacilityCategory>): FacilityCategory? =
     when (this) {
         MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET
         MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR
         MapShortcutFilterKey.CHARGING_STATION -> FacilityCategory.CHARGING_STATION
-        MapShortcutFilterKey.BRAILLE_BLOCK -> FacilityCategory.BRAILLE_BLOCK
-        MapShortcutFilterKey.TOURIST_ATTRACTION -> FacilityCategory.TOURIST_ATTRACTION
-        MapShortcutFilterKey.RESTAURANT -> FacilityCategory.RESTAURANT
-        MapShortcutFilterKey.ACCESSIBLE_PARKING -> null
-        MapShortcutFilterKey.MORE -> null
+        MapShortcutFilterKey.FOOD_CAFE ->
+            when {
+                FacilityCategory.FOOD_CAFE in availableCategories -> FacilityCategory.FOOD_CAFE
+                FacilityCategory.RESTAURANT in availableCategories -> FacilityCategory.RESTAURANT
+                else -> FacilityCategory.FOOD_CAFE
+            }
+
+        MapShortcutFilterKey.TOURIST_SPOT ->
+            when {
+                FacilityCategory.TOURIST_SPOT in availableCategories -> FacilityCategory.TOURIST_SPOT
+                FacilityCategory.TOURIST_ATTRACTION in availableCategories -> FacilityCategory.TOURIST_ATTRACTION
+                else -> FacilityCategory.TOURIST_SPOT
+            }
+
+        MapShortcutFilterKey.ACCOMMODATION -> FacilityCategory.ACCOMMODATION
+        MapShortcutFilterKey.HEALTHCARE -> FacilityCategory.HEALTHCARE
+        MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE
+        MapShortcutFilterKey.PUBLIC_OFFICE -> FacilityCategory.PUBLIC_OFFICE
     }
 
 private fun FacilityCategory.toShortcutFilterKey(): MapShortcutFilterKey? =
@@ -936,8 +918,14 @@ private fun FacilityCategory.toShortcutFilterKey(): MapShortcutFilterKey? =
         FacilityCategory.TOILET -> MapShortcutFilterKey.TOILET
         FacilityCategory.ELEVATOR -> MapShortcutFilterKey.ELEVATOR
         FacilityCategory.CHARGING_STATION -> MapShortcutFilterKey.CHARGING_STATION
-        FacilityCategory.BRAILLE_BLOCK -> MapShortcutFilterKey.BRAILLE_BLOCK
-        FacilityCategory.TOURIST_ATTRACTION -> MapShortcutFilterKey.TOURIST_ATTRACTION
-        FacilityCategory.RESTAURANT -> MapShortcutFilterKey.RESTAURANT
+        FacilityCategory.FOOD_CAFE -> MapShortcutFilterKey.FOOD_CAFE
+        FacilityCategory.TOURIST_SPOT -> MapShortcutFilterKey.TOURIST_SPOT
+        FacilityCategory.ACCOMMODATION -> MapShortcutFilterKey.ACCOMMODATION
+        FacilityCategory.HEALTHCARE -> MapShortcutFilterKey.HEALTHCARE
+        FacilityCategory.WELFARE -> MapShortcutFilterKey.WELFARE
+        FacilityCategory.PUBLIC_OFFICE -> MapShortcutFilterKey.PUBLIC_OFFICE
+        FacilityCategory.BRAILLE_BLOCK -> null
+        FacilityCategory.RESTAURANT -> MapShortcutFilterKey.FOOD_CAFE
+        FacilityCategory.TOURIST_ATTRACTION -> MapShortcutFilterKey.TOURIST_SPOT
         FacilityCategory.OTHER -> null
     }

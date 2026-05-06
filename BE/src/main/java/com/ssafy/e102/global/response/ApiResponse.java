@@ -16,4 +16,12 @@ public record ApiResponse<T>(
 	public static ApiResponse<Void> success() {
 		return new ApiResponse<>("S2000", null, "정상 처리되었습니다.");
 	}
+
+	public static ApiResponse<Void> successMessage(String message) {
+		return new ApiResponse<>("S2000", null, message);
+	}
+
+	public static ApiResponse<Void> noContent() {
+		return new ApiResponse<>("S2040", null, "콘텐츠가 없습니다.");
+	}
 }

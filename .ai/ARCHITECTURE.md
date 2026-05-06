@@ -23,7 +23,7 @@ This template now separates the portable harness core from repo-root entrypoints
 
 - The portable unit is `.ai/`.
 - A repository can adopt the harness by copying only `.ai/`.
-- Root entrypoints such as `AGENTS.md` and `CLAUDE.md` are install surfaces, not the design source.
+- Root `AGENTS.md` is the unified install surface for Codex and Claude, not the design source.
 - Generated adapters remain rebuildable views over canonical `.ai/` sources.
 
 ## Harness control model
@@ -47,8 +47,8 @@ The operating philosophy is: when an agent repeats a mistake, strengthen the sys
 7. Evaluation and release update `.ai/LOCAL/EVALS/metrics.json` and related logs.
 8. Shared learning updates go into `.ai/MEMORY/`, `.ai/SKILLS/`, `.ai/EVALS/`, or `.ai/DECISIONS/`.
 9. `.ai/scripts/sync-adapters.sh` copies canonical skills and runtime adapter templates into `.ai/.claude/`, `.ai/.agents/`, and `.ai/.codex/`.
-10. `.ai/scripts/install-root-entrypoints.sh` can install root `AGENTS.md`, `CLAUDE.md`, and an optional `README.md` pointer for hosts that require root discovery.
-11. Claude uses root `CLAUDE.md` plus the ignored root `.claude/skills` and `.claude/settings.json` shims, which are generated from `.ai/.claude/`.
+10. `.ai/scripts/install-root-entrypoints.sh` can install root `AGENTS.md` and an optional `README.md` pointer for hosts that require root discovery.
+11. Claude guidance is referenced from root `AGENTS.md` and uses the ignored root `.claude/skills` and `.claude/settings.json` shims, which are generated from `.ai/.claude/`.
 12. Codex uses root `AGENTS.md` and the ignored root `.agents/skills` discovery shim, which is generated from `.ai/.agents/skills`.
 13. `.ai/scripts/dashboard.sh` turns progress, metrics, and harness state into a visible status summary.
 

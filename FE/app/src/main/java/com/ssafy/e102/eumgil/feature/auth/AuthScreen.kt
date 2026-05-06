@@ -67,6 +67,7 @@ fun LoginScreen(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
                     .fillMaxWidth()
                     .height(300.dp)
                     .alpha(0.88f),
@@ -77,20 +78,24 @@ fun LoginScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .systemBarsPadding()
-                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.large),
+                    .systemBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(EumSpacing.xLarge))
-            LoginHero()
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(0.78f))
+            LoginHero(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = EumSpacing.large),
+            )
+            Spacer(modifier = Modifier.weight(0.28f))
             Image(
                 painter = painterResource(id = R.drawable.auth_login_skyline),
                 contentDescription = null,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .aspectRatio(1.6f)
+                        .aspectRatio(1.52f)
                         .alpha(0.92f),
                 alignment = Alignment.BottomCenter,
                 contentScale = ContentScale.FillWidth,
@@ -102,7 +107,12 @@ fun LoginScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                    .navigationBarsPadding()
+                        .padding(
+                            start = EumSpacing.large,
+                            end = EumSpacing.large,
+                            bottom = EumSpacing.large,
+                        )
+                        .navigationBarsPadding(),
             )
         }
     }
@@ -142,7 +152,7 @@ private fun LoginHero(modifier: Modifier = Modifier) {
                     lineHeight = 44.sp,
                 ),
             color = EumPrimary600,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(4.dp))

@@ -22,15 +22,25 @@ import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
+import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.GoogleSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.KakaoSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.NaverSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
+import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -69,6 +79,15 @@ class AppContainer(
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
     private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchLocalDataSource() }
 
+    private val httpJsonClient by lazy(LazyThreadSafetyMode.NONE) {
+        HttpJsonClient(baseUrl = AppEnvironment.baseUrl)
+    }
+    private val authRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        AuthRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
+    private val bookmarksRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        BookmarksRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
     }
@@ -99,13 +118,44 @@ class AppContainer(
 
     val authLoginRepository: AuthLoginRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideAuthLoginRepository(
+            authRemoteDataSource = authRemoteDataSource,
+            socialAccessTokenProvider =
+                CompositeSocialAccessTokenProvider(
+                    providersBySocialProvider =
+                        mapOf(
+                            AuthSocialProvider.KAKAO to
+                                KakaoSocialAccessTokenProvider(context = appContext),
+                            AuthSocialProvider.GOOGLE to
+                                GoogleSocialAccessTokenProvider(
+                                    activityProvider = { ForegroundActivityProvider.currentActivity },
+                                ),
+                            AuthSocialProvider.NAVER to
+                                NaverSocialAccessTokenProvider(
+                                    activityProvider = { ForegroundActivityProvider.currentActivity },
+                                ),
+                        ),
+                ),
             authSessionRepository = authSessionRepository,
+            settingsRepository = settingsRepository,
+        )
+    }
+
+    val authSignupRepository: AuthSignupRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideAuthSignupRepository(
+            authRemoteDataSource = authRemoteDataSource,
+            authSessionRepository = authSessionRepository,
+            settingsRepository = settingsRepository,
         )
     }
 
     val bookmarkRepository: BookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideBookmarkRepository(
             bookmarkDao = localDatabase.bookmarkDao(),
+            bookmarksRemoteDataSource =
+                if (AppEnvironment.isMockMode) null else bookmarksRemoteDataSource,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
             initialBookmarks =
                 if (AppEnvironment.isDebugBuild) {
                     MockBookmarkFixtures.defaultBookmarks
@@ -113,6 +163,10 @@ class AppContainer(
                     emptyList()
                 },
         )
+    }
+
+    val routeBookmarkRepository: RouteBookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideRouteBookmarkRepository()
     }
 
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {

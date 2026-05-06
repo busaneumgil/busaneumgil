@@ -214,24 +214,36 @@ private fun FilterChipIcon(
 @Composable
 private fun categoryFilterLabel(category: FacilityCategory): String =
     when (category) {
-        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_filter_category_restaurant)
-        FacilityCategory.TOURIST_ATTRACTION -> stringResource(id = R.string.map_filter_category_tourist_attraction)
         FacilityCategory.TOILET -> stringResource(id = R.string.map_filter_category_toilet)
         FacilityCategory.ELEVATOR -> stringResource(id = R.string.map_filter_category_elevator)
         FacilityCategory.CHARGING_STATION -> stringResource(id = R.string.map_filter_category_charging_station)
+        FacilityCategory.FOOD_CAFE -> "식당·카페"
+        FacilityCategory.TOURIST_SPOT -> "무장애 관광지"
+        FacilityCategory.ACCOMMODATION -> "숙박"
+        FacilityCategory.HEALTHCARE -> "병원"
+        FacilityCategory.WELFARE -> "복지관"
+        FacilityCategory.PUBLIC_OFFICE -> "관공서"
         FacilityCategory.BRAILLE_BLOCK -> stringResource(id = R.string.map_filter_category_braille_block)
+        FacilityCategory.RESTAURANT -> stringResource(id = R.string.map_filter_category_restaurant)
+        FacilityCategory.TOURIST_ATTRACTION -> stringResource(id = R.string.map_filter_category_tourist_attraction)
         FacilityCategory.OTHER -> stringResource(id = R.string.map_filter_category_other)
     }
 
 @DrawableRes
 private fun categoryFilterIcon(category: FacilityCategory): Int =
     when (category) {
-        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
-        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
         FacilityCategory.TOILET -> R.drawable.ic_place_restroom
         FacilityCategory.ELEVATOR -> R.drawable.ic_route_elevator
         FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe
+        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
+        FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
+        FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
+        FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         FacilityCategory.OTHER -> R.drawable.ic_nav_facility
     }
 

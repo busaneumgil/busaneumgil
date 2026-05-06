@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.di
 
+import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
@@ -14,9 +15,12 @@ import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -30,13 +34,19 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.FakeRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
+import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.ServerAuthSignupRepository
+import com.ssafy.e102.eumgil.data.repository.ServerAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.SocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolicy
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
@@ -50,18 +60,51 @@ object RepositoryModule {
         DefaultAuthSessionRepository(authSessionLocalDataSource = authSessionLocalDataSource)
 
     fun provideAuthLoginRepository(
+        authRemoteDataSource: AuthRemoteDataSource,
+        socialAccessTokenProvider: SocialAccessTokenProvider,
         authSessionRepository: AuthSessionRepository,
+        settingsRepository: SettingsRepository,
     ): AuthLoginRepository =
-        LocalOnlyAuthLoginRepository(authSessionRepository = authSessionRepository)
+        if (AppEnvironment.isMockMode) {
+            LocalOnlyAuthLoginRepository(authSessionRepository = authSessionRepository)
+        } else {
+            ServerAuthLoginRepository(
+                authRemoteDataSource = authRemoteDataSource,
+                socialAccessTokenProvider = socialAccessTokenProvider,
+                authSessionRepository = authSessionRepository,
+                settingsRepository = settingsRepository,
+            )
+        }
+
+    fun provideAuthSignupRepository(
+        authRemoteDataSource: AuthRemoteDataSource,
+        authSessionRepository: AuthSessionRepository,
+        settingsRepository: SettingsRepository,
+    ): AuthSignupRepository =
+        if (AppEnvironment.isMockMode) {
+            LocalOnlyAuthSignupRepository()
+        } else {
+            ServerAuthSignupRepository(
+                authRemoteDataSource = authRemoteDataSource,
+                authSessionRepository = authSessionRepository,
+                settingsRepository = settingsRepository,
+            )
+        }
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,
+        bookmarksRemoteDataSource: BookmarksRemoteDataSource? = null,
+        accessTokenProvider: suspend () -> String? = { null },
         initialBookmarks: List<BookmarkData> = emptyList(),
     ): BookmarkRepository =
         DefaultBookmarkRepository(
             bookmarkDao = bookmarkDao,
+            bookmarksRemoteDataSource = bookmarksRemoteDataSource,
+            accessTokenProvider = accessTokenProvider,
             initialBookmarks = initialBookmarks,
         )
+
+    fun provideRouteBookmarkRepository(): RouteBookmarkRepository = FakeRouteBookmarkRepository()
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,

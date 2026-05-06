@@ -56,5 +56,5 @@ make portainer-tunnel
 접속 주소:
 
 ```text
-http://localhost:9000
+http://localhost:19000
 ```

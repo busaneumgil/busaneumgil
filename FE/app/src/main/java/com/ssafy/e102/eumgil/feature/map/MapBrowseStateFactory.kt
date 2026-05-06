@@ -75,6 +75,7 @@ internal object MapBrowseStateFactory {
             selection = normalizedSelection,
             categoryOptions =
                 browseData.availableCategories
+                    .filter(::shouldExposeCategoryOption)
                     .sortedWith(compareBy(::categoryFilterPriority, FacilityCategory::ordinal))
                     .map { category ->
                         MapCategoryFilterOption(
@@ -225,9 +226,20 @@ internal object MapBrowseStateFactory {
             FacilityCategory.TOILET -> 0
             FacilityCategory.ELEVATOR -> 1
             FacilityCategory.CHARGING_STATION -> 2
-            FacilityCategory.BRAILLE_BLOCK -> 3
-            FacilityCategory.TOURIST_ATTRACTION -> 4
-            FacilityCategory.RESTAURANT -> 5
-            FacilityCategory.OTHER -> 6
+            FacilityCategory.FOOD_CAFE -> 3
+            FacilityCategory.TOURIST_SPOT -> 4
+            FacilityCategory.ACCOMMODATION -> 5
+            FacilityCategory.HEALTHCARE -> 6
+            FacilityCategory.WELFARE -> 7
+            FacilityCategory.PUBLIC_OFFICE -> 8
+            FacilityCategory.BRAILLE_BLOCK -> 9
+            FacilityCategory.RESTAURANT -> 10
+            FacilityCategory.TOURIST_ATTRACTION -> 11
+            FacilityCategory.OTHER -> 12
         }
+
+    private fun shouldExposeCategoryOption(category: FacilityCategory): Boolean =
+        category != FacilityCategory.OTHER &&
+            category != FacilityCategory.RESTAURANT &&
+            category != FacilityCategory.TOURIST_ATTRACTION
 }

@@ -2,9 +2,21 @@
 # You can still override any value with -P on the Gradle command line.
 
 # Debug environment
-app.debug.baseUrl=https://api.example.com
+app.debug.baseUrl=https://api.dev.busaneumgil.com/
 app.debug.mockMode=false
 app.debug.demoMode=false
+app.debug.forceLowVisionTermsGuide=false
+
+# Social login keys for local Android debug builds.
+# Do not commit real values in this example file.
+app.debug.kakaoNativeAppKey=
+app.debug.naverClientId=
+app.debug.naverClientSecret=
+app.debug.naverClientName=부산이음길
 
 # Release environment
-app.release.baseUrl=https://api.example.com
+app.release.baseUrl=https://api.dev.busaneumgil.com/
+app.release.kakaoNativeAppKey=
+app.release.naverClientId=
+app.release.naverClientSecret=
+app.release.naverClientName=부산이음길

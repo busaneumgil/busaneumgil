@@ -1,25 +1,24 @@
 package com.ssafy.e102.eumgil.feature.arrival
 
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.model.PlaceDestination
-import com.ssafy.e102.eumgil.data.repository.BookmarkData
-import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
-import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteBookmark
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
+import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -30,7 +29,7 @@ class ArrivalViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `entry state auto opens route evaluation sheet with unsaved destination`() =
+    fun `entry state auto opens route evaluation sheet with unsaved route draft`() =
         runTest {
             val viewModel = createViewModel()
             advanceUntilIdle()
@@ -39,26 +38,34 @@ class ArrivalViewModelTest {
             assertEquals(0, viewModel.uiState.value.selectedRating)
             assertEquals(ArrivalEvaluationLabel.Idle, viewModel.uiState.value.selectedRatingLabel)
             assertFalse(viewModel.uiState.value.isEvaluationSubmitEnabled)
+            assertNotNull(viewModel.uiState.value.routeSaveDraft)
+            assertEquals("부산시청-해운대해수욕장", viewModel.uiState.value.routeNameInput)
             assertFalse(viewModel.uiState.value.isRouteSaveSelected)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
             assertTrue(viewModel.uiState.value.isRouteSaveEnabled)
         }
 
     @Test
-    fun `entry state reflects already saved destination bookmark`() =
+    fun `entry state reflects already saved route bookmark`() =
         runTest {
-            val destination = testDestination()
+            val draft = testRouteBookmarkDraft()
             val viewModel =
                 createViewModel(
-                    bookmarkRepository =
-                        FakeBookmarkRepository(
-                            bookmarks = listOf(destination.toBookmarkData()),
+                    routeBookmarkRepository =
+                        FakeRouteBookmarkRepository(
+                            savedBookmarks =
+                                listOf(
+                                    testRouteBookmark(
+                                        request = draft.toSaveRequest(),
+                                    ),
+                                ),
                         ),
                 )
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.isRouteSaveSelected)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
+            assertFalse(viewModel.uiState.value.isRouteSaveEnabled)
         }
 
     @Test
@@ -73,71 +80,65 @@ class ArrivalViewModelTest {
     }
 
     @Test
-    fun `save route action stores destination bookmark and emits success snackbar`() =
+    fun `save route action opens route name dialog with default name`() =
         runTest {
-            val bookmarkRepository = FakeBookmarkRepository()
-            val viewModel = createViewModel(bookmarkRepository = bookmarkRepository)
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+
+            assertTrue(viewModel.uiState.value.isRouteSaveDialogVisible)
+            assertEquals("부산시청-해운대해수욕장", viewModel.uiState.value.routeNameInput)
+        }
+
+    @Test
+    fun `confirm route save stores route bookmark and emits success snackbar`() =
+        runTest {
+            val routeBookmarkRepository = FakeRouteBookmarkRepository()
+            val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
             advanceUntilIdle()
             val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
 
             viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+            viewModel.onAction(ArrivalUiAction.RouteNameChanged("출근 경로"))
+            viewModel.onAction(ArrivalUiAction.ConfirmRouteSaveClicked)
             advanceUntilIdle()
 
             assertEquals(
-                listOf(testDestination().toBookmarkData()),
-                bookmarkRepository.bookmarks.value,
+                "출근 경로",
+                routeBookmarkRepository.savedBookmarks.value.single().routeName,
             )
             assertTrue(viewModel.uiState.value.isRouteSaveSelected)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
+            assertFalse(viewModel.uiState.value.isRouteSaveDialogVisible)
             assertEquals(
-                ArrivalUiEvent.ShowSnackbar(R.string.arrival_bookmark_save_success_message),
+                ArrivalUiEvent.ShowSnackbar(R.string.arrival_route_save_success_message),
                 eventDeferred.await(),
             )
         }
 
     @Test
-    fun `save route action removes existing destination bookmark and emits success snackbar`() =
+    fun `route save failure keeps dialog open and emits failure snackbar`() =
         runTest {
-            val destination = testDestination()
-            val bookmarkRepository =
-                FakeBookmarkRepository(
-                    bookmarks = listOf(destination.toBookmarkData()),
+            val viewModel =
+                createViewModel(
+                    routeBookmarkRepository =
+                        FakeRouteBookmarkRepository(
+                            saveFailure = IllegalStateException("save failed"),
+                        ),
                 )
-            val viewModel = createViewModel(bookmarkRepository = bookmarkRepository)
             advanceUntilIdle()
             val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
 
             viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+            viewModel.onAction(ArrivalUiAction.ConfirmRouteSaveClicked)
             advanceUntilIdle()
 
-            assertTrue(bookmarkRepository.bookmarks.value.isEmpty())
             assertFalse(viewModel.uiState.value.isRouteSaveSelected)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
+            assertTrue(viewModel.uiState.value.isRouteSaveDialogVisible)
             assertEquals(
-                ArrivalUiEvent.ShowSnackbar(R.string.arrival_bookmark_delete_success_message),
-                eventDeferred.await(),
-            )
-        }
-
-    @Test
-    fun `save route failure restores previous bookmark state and emits failure snackbar`() =
-        runTest {
-            val bookmarkRepository =
-                FakeBookmarkRepository(
-                    saveFailure = IllegalStateException("save failed"),
-                )
-            val viewModel = createViewModel(bookmarkRepository = bookmarkRepository)
-            advanceUntilIdle()
-            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
-
-            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
-            advanceUntilIdle()
-
-            assertTrue(bookmarkRepository.bookmarks.value.isEmpty())
-            assertFalse(viewModel.uiState.value.isRouteSaveSelected)
-            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
-            assertEquals(
-                ArrivalUiEvent.ShowSnackbar(R.string.arrival_bookmark_update_failure_message),
+                ArrivalUiEvent.ShowSnackbar(R.string.arrival_route_save_failure_message),
                 eventDeferred.await(),
             )
         }
@@ -191,73 +192,63 @@ class ArrivalViewModelTest {
 }
 
 private fun createViewModel(
-    bookmarkRepository: BookmarkRepository = FakeBookmarkRepository(),
-    destinationSelectionRepository: DestinationSelectionRepository =
-        FakeDestinationSelectionRepository(destination = testDestination()),
+    routeBookmarkRepository: RouteBookmarkRepository = FakeRouteBookmarkRepository(),
+    routeBookmarkDraft: RouteBookmarkDraft = testRouteBookmarkDraft(),
 ): ArrivalViewModel =
     ArrivalViewModel(
-        bookmarkRepository = bookmarkRepository,
-        destinationSelectionRepository = destinationSelectionRepository,
+        routeBookmarkRepository = routeBookmarkRepository,
+        currentRouteBookmarkDraft = routeBookmarkDraft,
     )
 
-private class FakeBookmarkRepository(
-    bookmarks: List<BookmarkData> = emptyList(),
+private class FakeRouteBookmarkRepository(
+    savedBookmarks: List<RouteBookmark> = emptyList(),
     private val saveFailure: Throwable? = null,
-    private val deleteFailure: Throwable? = null,
-) : BookmarkRepository {
-    val bookmarks = MutableStateFlow(bookmarks)
+) : RouteBookmarkRepository {
+    val savedBookmarks = MutableStateFlow(savedBookmarks)
 
-    override fun observeBookmarks(): Flow<List<BookmarkData>> = bookmarks
+    override fun observeRouteBookmarks(): Flow<List<RouteBookmark>> = savedBookmarks
 
-    override suspend fun isBookmarked(placeId: String): Boolean =
-        bookmarks.value.any { bookmark -> bookmark.placeId == placeId }
+    override suspend fun isBookmarked(draft: RouteBookmarkDraft): Boolean =
+        savedBookmarks.value.any { bookmark ->
+            bookmark.startPoint == draft.startPoint &&
+                bookmark.endPoint == draft.endPoint &&
+                bookmark.routeOption == draft.routeOption
+        }
 
-    override suspend fun saveBookmark(bookmark: BookmarkData) {
+    override suspend fun saveRouteBookmark(request: RouteBookmarkSaveRequest): RouteBookmark {
         saveFailure?.let { throw it }
-        bookmarks.value = bookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
+        val savedBookmark = testRouteBookmark(request = request)
+        savedBookmarks.value = listOf(savedBookmark)
+        return savedBookmark
     }
 
-    override suspend fun deleteBookmark(placeId: String) {
-        deleteFailure?.let { throw it }
-        bookmarks.value = bookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
-    }
+    override suspend fun deleteRouteBookmark(bookmarkId: String) = Unit
 }
 
-private class FakeDestinationSelectionRepository(
-    destination: PlaceDestination? = null,
-) : DestinationSelectionRepository {
-    private val mutableSelectedDestination = MutableStateFlow(destination)
-    private val mutableSelectionRequests = MutableSharedFlow<PlaceDestination>(extraBufferCapacity = 1)
-
-    override val selectedDestination: StateFlow<PlaceDestination?> = mutableSelectedDestination.asStateFlow()
-    override val selectionRequests: Flow<PlaceDestination> = mutableSelectionRequests.asSharedFlow()
-
-    override fun updateSelectedDestination(destination: PlaceDestination) {
-        mutableSelectedDestination.value = destination
-        mutableSelectionRequests.tryEmit(destination)
-    }
-
-    override fun clearSelectedDestination() {
-        mutableSelectedDestination.value = null
-    }
-}
-
-private fun testDestination(): PlaceDestination =
-    PlaceDestination(
-        placeId = "arrival-destination",
-        name = "부산시민공원",
-        address = "부산광역시 부산진구 시민공원로 73",
-        latitude = 35.1681,
-        longitude = 129.0574,
-        category = null,
+private fun testRouteBookmarkDraft(): RouteBookmarkDraft =
+    RouteBookmarkDraft(
+        startLabel = "부산시청",
+        endLabel = "해운대해수욕장",
+        startPoint = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
+        endPoint = GeoCoordinate(latitude = 35.1587, longitude = 129.1604),
+        routeOption = RouteOption.SAFE,
+        distanceMeters = 11_200,
+        durationMinutes = 28,
     )
 
-private fun PlaceDestination.toBookmarkData(): BookmarkData =
-    BookmarkData(
-        placeId = placeId,
-        placeName = name,
-        address = address,
-        latitude = latitude,
-        longitude = longitude,
-        category = category?.name,
+private fun testRouteBookmark(
+    request: RouteBookmarkSaveRequest,
+): RouteBookmark =
+    RouteBookmark(
+        bookmarkId = "route-bookmark:test",
+        routeName = request.routeName,
+        startLabel = request.startLabel,
+        endLabel = request.endLabel,
+        startPoint = request.startPoint,
+        endPoint = request.endPoint,
+        routeOption = request.routeOption,
+        distanceMeters = request.distanceMeters,
+        durationMinutes = request.durationMinutes,
+        createdAt = 1L,
+        updatedAt = 1L,
     )

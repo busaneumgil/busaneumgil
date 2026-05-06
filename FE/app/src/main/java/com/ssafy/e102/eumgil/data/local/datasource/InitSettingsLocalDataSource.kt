@@ -45,8 +45,10 @@ class InitSettingsLocalDataSource(
             val currentType = preferences[InitSettingsPreferences.selectedPrimaryUserType]
 
             preferences[InitSettingsPreferences.selectedPrimaryUserType] = selectedPrimaryUserType
-            if (currentType != selectedPrimaryUserType) {
+            if (currentType != selectedPrimaryUserType || selectedPrimaryUserType == LOW_VISION_ROUTE_VALUE) {
                 preferences.remove(InitSettingsPreferences.selectedMobilitySubtype)
+            }
+            if (selectedPrimaryUserType != LOW_VISION_ROUTE_VALUE || currentType != selectedPrimaryUserType) {
                 preferences.remove(InitSettingsPreferences.isLowVisionFollowUpCompleted)
             }
         }
@@ -72,5 +74,9 @@ class InitSettingsLocalDataSource(
             preferences[InitSettingsPreferences.isLocationTermsAgreed] = isLocationTermsAgreed
             preferences[InitSettingsPreferences.isPrivacyPolicyAgreed] = isPrivacyPolicyAgreed
         }
+    }
+
+    private companion object {
+        private const val LOW_VISION_ROUTE_VALUE = "low_vision"
     }
 }

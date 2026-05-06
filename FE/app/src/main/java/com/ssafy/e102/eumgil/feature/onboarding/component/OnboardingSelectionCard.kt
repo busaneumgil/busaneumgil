@@ -69,7 +69,7 @@ fun OnboardingSelectionCard(
                 role = Role.RadioButton,
             ),
         color = colors.containerColor,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.scaleL),
         tonalElevation = if (selected) 3.dp else 0.dp,
         border = BorderStroke(width = colors.borderWidth, color = colors.borderColor),
     ) {
@@ -108,13 +108,13 @@ fun OnboardingSelectionCard(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
             ) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    text = title.stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.titleMedium.onboardingHeadingLineBreak(),
                     color = colors.titleColor,
                 )
                 Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = description.stabilizeOnboardingWrap(),
+                    style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
                     color = colors.descriptionColor,
                 )
             }

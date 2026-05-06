@@ -77,25 +77,25 @@ internal fun lowVisionCategoryResultA11yHint(label: String): String =
 internal val lowVisionCategoryOptions =
     listOf(
         LowVisionCategoryOption(
-            label = "화장실",
+            label = "\uD654\uC7A5\uC2E4",
             iconRes = R.drawable.ic_lowvision_category_restroom,
         ),
         LowVisionCategoryOption(
-            label = "음식점",
+            label = "\uC74C\uC2DD\uC810",
             iconRes = R.drawable.ic_lowvision_category_restaurant,
         ),
         LowVisionCategoryOption(
-            label = "승강기",
-            talkBackLabel = "승강기, 엘리베이터",
+            label = "\uC2B9\uAC15\uAE30",
+            talkBackLabel = "\uC2B9\uAC15\uAE30, \uC5D8\uB9AC\uBCA0\uC774\uD130",
             iconRes = R.drawable.ic_lowvision_category_elevator,
         ),
         LowVisionCategoryOption(
-            label = "관광지",
-            resultA11yHintOverride = "무장애 관광지. 편하게 즐길 수 있는 관광지를 안내합니다.",
+            label = "\uAD00\uAD11\uC9C0",
+            resultA11yHintOverride = "\uBB34\uC7A5\uC560 \uAD00\uAD11\uC9C0. \uD3B8\uD558\uAC8C \uC990\uAE38 \uC218 \uC788\uB294 \uAD00\uAD11\uC9C0\uB97C \uC548\uB0B4\uD569\uB2C8\uB2E4.",
             iconRes = R.drawable.ic_lowvision_category_tourism,
         ),
         LowVisionCategoryOption(
-            label = "휠체어 충전",
+            label = "\uD720\uCCB4\uC5B4 \uCDA9\uC804",
             iconRes = R.drawable.ic_lowvision_category_charging,
         ),
     )

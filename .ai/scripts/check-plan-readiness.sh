@@ -25,6 +25,14 @@ required_sections=(
   "## Open Questions"
 )
 
+backend_required_sections=(
+  "## Backend Design Analyzer"
+  "## Failure Scenario Generator"
+  "## Implementation Harness Preflight"
+  "## Backend Verification Harness"
+  "## Metrics Explainer"
+)
+
 missing=0
 for section in "${required_sections[@]}"; do
   if ! grep -q "^${section}$" "$TARGET"; then
@@ -32,6 +40,15 @@ for section in "${required_sections[@]}"; do
     missing=1
   fi
 done
+
+if grep -Eq '^- Lane:[[:space:]]*BE([[:space:]]*$|[[:space:]])' "$TARGET"; then
+  for section in "${backend_required_sections[@]}"; do
+    if ! grep -q "^${section}$" "$TARGET"; then
+      echo "plan-readiness: missing backend section '$section' in $TARGET" >&2
+      missing=1
+    fi
+  done
+fi
 
 if [[ "$missing" -ne 0 ]]; then
   exit 2

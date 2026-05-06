@@ -36,7 +36,7 @@
 ## 판단 원칙
 
 - 명세에 없는 필드나 API를 코드 작성 중 임의로 추가하지 않는다.
-- API 기본 prefix는 `/api`를 사용한다.
+- API는 `api.busaneumgil.com` 같은 API 전용 서브도메인을 기준으로 노출하며, 기본 path prefix로 `/api`를 붙이지 않는다.
 - 설계가 애매하면 DB 구조보다 API 명세와 기능 흐름을 먼저 확인한다.
 - JPA Auditing과 `BaseEntity` 기준은 `layer-package-convention.md`를 따른다.
 - PostGIS 세부 구현 방식은 PoC 전까지 확정 규칙으로 강제하지 않는다.

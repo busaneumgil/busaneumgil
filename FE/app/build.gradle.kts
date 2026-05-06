@@ -112,6 +112,12 @@ android {
     }
 }
 
+tasks.register("testClasses") {
+    group = "verification"
+    description = "Compatibility task for IDE runners that expect Java plugin-style testClasses."
+    dependsOn("compileDebugUnitTestSources")
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.core:core-splashscreen:1.0.1")

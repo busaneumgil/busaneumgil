@@ -31,13 +31,11 @@ fun TermsGuideRoute(
     initialStep: TermsGuideStep,
     onCompleted: () -> Unit,
     onRequestDetails: (TermsGuideStep) -> Unit,
-    onTabSelected: (TermsBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var stepRouteValue by rememberSaveable(initialStep.routeValue) {
         mutableStateOf(initialStep.routeValue)
     }
-    var selectedTab by rememberSaveable { mutableStateOf(TermsBottomTab.HOME) }
 
     val currentStep = TermsGuideStep.fromRouteValue(stepRouteValue) ?: initialStep
     val uiState = TermsGuideUiState(step = currentStep)
@@ -53,11 +51,6 @@ fun TermsGuideRoute(
             }
         },
         onMoreDetails = { onRequestDetails(currentStep) },
-        onTabSelected = { tab ->
-            selectedTab = tab
-            onTabSelected(tab)
-        },
-        selectedTab = selectedTab,
         modifier = modifier,
     )
 }

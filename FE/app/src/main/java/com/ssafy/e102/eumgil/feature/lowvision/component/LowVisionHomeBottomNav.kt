@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionScreenDefaults
 import com.ssafy.e102.eumgil.feature.lowvision.lowVisionButtonSemantics
 
 object LowVisionBottomNavDefaults {
@@ -35,7 +36,7 @@ object LowVisionBottomNavDefaults {
 /**
  * 시각지원 모드 메인 홈 화면용 하단 네비.
  *
- * Figma node 371:157 — 80dp 높이, 활성 탭은 노랑(#FFD400) 아이콘+라벨, 비활성은
+ * Figma node 371:157 — 80dp 높이, 활성 탭은 노랑(#FFCC00) 아이콘+라벨, 비활성은
  * Boulder(#777). 약관 walkthrough의 nav가 활성 탭에 노랑 배경을 깔던 것과 다르게
  * 본 셸은 텍스트·아이콘 색만 노랑으로 바뀐다.
  */
@@ -85,7 +86,7 @@ fun LowVisionBottomNav(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         items.forEach { (tab, item) ->
-            val tint = if (tab == selectedTab) Color(0xFFFFD400) else Color(0xFF777777)
+            val tint = if (tab == selectedTab) LowVisionScreenDefaults.brandYellow else Color(0xFF777777)
             val label = stringResource(id = item.labelRes)
             Column(
                 modifier = Modifier

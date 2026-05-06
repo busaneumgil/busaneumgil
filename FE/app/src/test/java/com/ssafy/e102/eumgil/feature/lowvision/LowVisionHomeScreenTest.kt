@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -25,5 +27,11 @@ class LowVisionHomeScreenTest {
     @Test
     fun `home screen hides status guide while voice output is not wired`() {
         assertFalse(LowVisionHomeLayoutDefaults.showsStatusGuide)
+    }
+
+    @Test
+    fun `home action labels match terms guide card typography`() {
+        assertEquals(48.sp, LowVisionHomeLayoutDefaults.actionLabelFontSize)
+        assertEquals(FontWeight.Black, LowVisionHomeLayoutDefaults.actionLabelFontWeight)
     }
 }

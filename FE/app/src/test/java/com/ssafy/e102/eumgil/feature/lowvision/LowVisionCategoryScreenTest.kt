@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ssafy.e102.eumgil.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -68,6 +69,20 @@ class LowVisionCategoryScreenTest {
         assertEquals(
             "무장애 관광지. 편하게 즐길 수 있는 관광지를 안내합니다.",
             lowVisionCategoryOptions.first { option -> option.label == "관광지" }.resultA11yHint,
+        )
+    }
+
+    @Test
+    fun `category options use low vision optimized line icons`() {
+        assertEquals(
+            listOf(
+                R.drawable.ic_lowvision_category_restroom,
+                R.drawable.ic_lowvision_category_restaurant,
+                R.drawable.ic_lowvision_category_elevator,
+                R.drawable.ic_lowvision_category_tourism,
+                R.drawable.ic_lowvision_category_charging,
+            ),
+            lowVisionCategoryOptions.map { option -> option.iconRes },
         )
     }
 }

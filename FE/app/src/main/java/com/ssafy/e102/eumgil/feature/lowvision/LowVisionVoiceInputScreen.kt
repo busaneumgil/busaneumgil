@@ -32,7 +32,7 @@ import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
  * 출처: Figma file MREqSzkmwhRcXnFS3lzW17, node 371:300 ("div.phone").
  *
  * 디자인 규칙:
- *   - color/yellow/50  = #FFD400  (Gold)            — 마이크 원 보더, 입력중 텍스트, 활성 nav
+ *   - color/yellow/50  = #FFCC00  (Gold)            — 마이크 원 보더, 입력중 텍스트, 활성 nav
  *   - color/black/solid = #000000                   — 배경
  *   - color/grey/15    = #252525  (Mine Shaft 변)  — nav 상단 1dp 보더
  *   - color/grey/33    = #555555  (Emperor)         — 비활성 nav 라벨
@@ -77,7 +77,7 @@ fun LowVisionVoiceInputScreen(
                         .size(140.dp)
                         .border(
                             width = 5.dp,
-                            color = Color(0xFFFFD400),
+                            color = LowVisionScreenDefaults.brandYellow,
                             shape = CircleShape,
                         ),
                     contentAlignment = Alignment.Center,
@@ -85,14 +85,14 @@ fun LowVisionVoiceInputScreen(
                     Icon(
                         painter = painterResource(id = R.drawable.ic_voice_mic),
                         contentDescription = null,
-                        tint = Color(0xFFFFD400),
+                        tint = LowVisionScreenDefaults.brandYellow,
                         modifier = Modifier.size(84.dp),
                     )
                 }
 
                 Text(
                     text = recordingLabel,
-                    color = Color(0xFFFFD400),
+                    color = LowVisionScreenDefaults.brandYellow,
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Black,
                 )

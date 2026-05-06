@@ -206,7 +206,6 @@ fun NavGraphBuilder.onboardingNavGraph(
                 // 항목별 상세 화면이 별도로 생기면 step 분기로 라우팅을 갈라주면 됨.
                 navController.navigate(OnboardingRoute.Terms.route)
             },
-            onTabSelected = { /* Selection only highlights; tab routing is owned by AppNavHost. */ },
         )
     }
 }

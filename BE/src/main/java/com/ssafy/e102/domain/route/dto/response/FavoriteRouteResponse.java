@@ -14,7 +14,7 @@ public record FavoriteRouteResponse(
 	GeoPointResponse endPoint,
 	RouteOption routeOption) {
 
-	public static FavoriteRouteResponse from(FavoriteRoute favoriteRoute, GeoPointConverter geoPointConverter) {
+	public static FavoriteRouteResponse of(FavoriteRoute favoriteRoute, GeoPointConverter geoPointConverter) {
 		return new FavoriteRouteResponse(
 			favoriteRoute.getFavRouteId(),
 			favoriteRoute.getRouteName(),

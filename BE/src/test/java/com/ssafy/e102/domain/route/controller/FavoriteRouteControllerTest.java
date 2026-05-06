@@ -52,11 +52,11 @@ class FavoriteRouteControllerTest {
 	}
 
 	@Test
-	@DisplayName("경로 북마크 목록 조회는 현재 사용자의 페이지를 반환한다")
+	@DisplayName("경로 북마크 목록 조회는 현재 사용자의 cursor 목록을 반환한다")
 	void getFavoriteRoutes() throws Exception {
 		UUID userId = UUID.randomUUID();
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
-		when(favoriteRouteService.getFavoriteRoutes(userId, 0, 10))
+		when(favoriteRouteService.getFavoriteRoutes(userId, null, 10))
 			.thenReturn(new FavoriteRouteListResponse(
 				List.of(new FavoriteRouteResponse(
 					1L,
@@ -66,10 +66,8 @@ class FavoriteRouteControllerTest {
 					new GeoPointResponse(35.1686, 129.0576),
 					new GeoPointResponse(35.1152, 129.0422),
 					RouteOption.SAFE)),
-				0,
 				10,
-				1,
-				1,
+				null,
 				false));
 
 		mockMvc.perform(get("/favorite-routes")
@@ -81,9 +79,43 @@ class FavoriteRouteControllerTest {
 			.andExpect(jsonPath("$.data.content[0].startPoint.lat").value(35.1686))
 			.andExpect(jsonPath("$.data.content[0].startPoint.lng").value(129.0576))
 			.andExpect(jsonPath("$.data.content[0].routeOption").value("SAFE"))
+			.andExpect(jsonPath("$.data.nextCursor").doesNotExist())
 			.andExpect(jsonPath("$.data.hasNext").value(false));
 
-		verify(favoriteRouteService).getFavoriteRoutes(userId, 0, 10);
+		verify(favoriteRouteService).getFavoriteRoutes(userId, null, 10);
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("경로 북마크 목록 조회는 cursor와 size를 전달한다")
+	void getFavoriteRoutesWithCursor() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(favoriteRouteService.getFavoriteRoutes(userId, 10L, 2))
+			.thenReturn(new FavoriteRouteListResponse(
+				List.of(new FavoriteRouteResponse(
+					3L,
+					"서면역-부산역",
+					"서면역",
+					"부산역",
+					new GeoPointResponse(35.1577, 129.0592),
+					new GeoPointResponse(35.1152, 129.0422),
+					RouteOption.SHORTEST)),
+				2,
+				3L,
+				true));
+
+		mockMvc.perform(get("/favorite-routes")
+			.param("cursor", "10")
+			.param("size", "2")
+			.principal(authentication))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.content[0].favRouteId").value(3))
+			.andExpect(jsonPath("$.data.nextCursor").value(3))
+			.andExpect(jsonPath("$.data.hasNext").value(true));
+
+		verify(favoriteRouteService).getFavoriteRoutes(userId, 10L, 2);
 		SecurityContextHolder.clearContext();
 	}
 

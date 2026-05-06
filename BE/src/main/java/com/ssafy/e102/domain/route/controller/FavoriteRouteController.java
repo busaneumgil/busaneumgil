@@ -42,11 +42,11 @@ public class FavoriteRouteController {
 	public ApiResponse<FavoriteRouteListResponse> getFavoriteRoutes(
 		@AuthenticationPrincipal
 		AuthPrincipal principal,
-		@RequestParam(defaultValue = "0") @Min(0)
-		int page,
+		@RequestParam(required = false) @Positive
+		Long cursor,
 		@RequestParam(defaultValue = "10") @Min(1) @Max(100)
 		int size) {
-		return ApiResponse.success(favoriteRouteService.getFavoriteRoutes(principal.userId(), page, size));
+		return ApiResponse.success(favoriteRouteService.getFavoriteRoutes(principal.userId(), cursor, size));
 	}
 
 	@PostMapping

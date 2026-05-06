@@ -3,8 +3,8 @@ package com.ssafy.e102.domain.route.service;
 import java.util.UUID;
 
 import org.locationtech.jts.geom.Point;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +27,7 @@ import com.ssafy.e102.global.geo.GeoPointConverter;
 @Transactional(readOnly = true)
 public class FavoriteRouteService {
 
-	private static final Sort LATEST_FIRST = Sort.by(Sort.Direction.DESC, "updatedAt");
+	private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "favRouteId");
 
 	private final FavoriteRouteRepository favoriteRouteRepository;
 	private final UserRepository userRepository;
@@ -42,11 +42,16 @@ public class FavoriteRouteService {
 		this.geoPointConverter = geoPointConverter;
 	}
 
-	public FavoriteRouteListResponse getFavoriteRoutes(UUID userId, int page, int size) {
-		Page<FavoriteRoute> favoriteRoutes = favoriteRouteRepository.findAllByUser_UserId(
-			userId,
-			PageRequest.of(page, size, LATEST_FIRST));
-		return FavoriteRouteListResponse.from(favoriteRoutes, geoPointConverter);
+	public FavoriteRouteListResponse getFavoriteRoutes(UUID userId, Long cursor, int size) {
+		PageRequest pageRequest = PageRequest.of(0, size, NEWEST_FIRST);
+		Slice<FavoriteRoute> favoriteRoutes = cursor == null
+			? favoriteRouteRepository.findAllByUser_UserId(userId, pageRequest)
+			: favoriteRouteRepository.findAllByUser_UserIdAndFavRouteIdLessThan(userId, cursor, pageRequest);
+		return FavoriteRouteListResponse.of(
+			favoriteRoutes.getContent(),
+			size,
+			favoriteRoutes.hasNext(),
+			geoPointConverter);
 	}
 
 	@Transactional

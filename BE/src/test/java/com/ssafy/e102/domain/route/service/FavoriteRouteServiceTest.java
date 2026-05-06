@@ -16,8 +16,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -56,22 +56,38 @@ class FavoriteRouteServiceTest {
 	}
 
 	@Test
-	@DisplayName("경로 북마크 목록은 최신 저장순 페이지로 조회한다")
+	@DisplayName("경로 북마크 목록은 최신 저장순 cursor 기반으로 조회한다")
 	void getFavoriteRoutes() {
 		UUID userId = UUID.randomUUID();
 		FavoriteRoute favoriteRoute = favoriteRoute(user(userId), 1L);
-		PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "updatedAt"));
+		PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "favRouteId"));
 		when(favoriteRouteRepository.findAllByUser_UserId(userId, pageable))
-			.thenReturn(new PageImpl<>(List.of(favoriteRoute), pageable, 1));
+			.thenReturn(new SliceImpl<>(List.of(favoriteRoute), pageable, false));
 
-		FavoriteRouteListResponse response = favoriteRouteService.getFavoriteRoutes(userId, 0, 10);
+		FavoriteRouteListResponse response = favoriteRouteService.getFavoriteRoutes(userId, null, 10);
 
 		assertThat(response.content()).hasSize(1);
 		assertThat(response.content().get(0).favRouteId()).isEqualTo(1L);
 		assertThat(response.content().get(0).routeName()).isEqualTo("부산시민공원-부산역");
-		assertThat(response.page()).isZero();
 		assertThat(response.size()).isEqualTo(10);
-		assertThat(response.totalElements()).isEqualTo(1);
+		assertThat(response.nextCursor()).isNull();
+		assertThat(response.hasNext()).isFalse();
+	}
+
+	@Test
+	@DisplayName("경로 북마크 목록은 마지막 경로 ID 이후 cursor로 조회한다")
+	void getFavoriteRoutesWithCursor() {
+		UUID userId = UUID.randomUUID();
+		FavoriteRoute favoriteRoute = favoriteRoute(user(userId), 3L);
+		PageRequest pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "favRouteId"));
+		when(favoriteRouteRepository.findAllByUser_UserIdAndFavRouteIdLessThan(userId, 10L, pageable))
+			.thenReturn(new SliceImpl<>(List.of(favoriteRoute), pageable, true));
+
+		FavoriteRouteListResponse response = favoriteRouteService.getFavoriteRoutes(userId, 10L, 2);
+
+		assertThat(response.content()).hasSize(1);
+		assertThat(response.nextCursor()).isEqualTo(3L);
+		assertThat(response.hasNext()).isTrue();
 	}
 
 	@Test

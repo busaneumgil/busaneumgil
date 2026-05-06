@@ -200,6 +200,11 @@ require_psql() {
   fi
 }
 
+psql_file_literal() {
+  local path="$1"
+  printf "'%s'" "${path//\'/\'\'}"
+}
+
 load_into_dev_db() {
   local nodes_csv="$1"
   local segments_csv="$2"
@@ -225,6 +230,10 @@ load_into_dev_db() {
     exit 1
   fi
 
+  local nodes_csv_literal segments_csv_literal
+  nodes_csv_literal="$(psql_file_literal "$nodes_csv")"
+  segments_csv_literal="$(psql_file_literal "$segments_csv")"
+
   echo "loading road network CSV into dev DB: 127.0.0.1:$BE_DEV_DB_LOCAL_PORT/$db_name"
   PGPASSWORD="$db_password" psql \
     -h 127.0.0.1 \
@@ -232,8 +241,8 @@ load_into_dev_db() {
     -U "$db_user" \
     -d "$db_name" \
     -v ON_ERROR_STOP=1 \
-    -v nodes_csv="$nodes_csv" \
-    -v segments_csv="$segments_csv" <<'SQL'
+    -v nodes_csv="$nodes_csv_literal" \
+    -v segments_csv="$segments_csv_literal" <<'SQL'
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 CREATE TEMP TABLE staging_road_nodes (
@@ -261,8 +270,8 @@ CREATE TEMP TABLE staging_road_segments (
   "segmentType" text
 );
 
-\copy staging_road_nodes FROM :'nodes_csv' WITH (FORMAT csv, HEADER true)
-\copy staging_road_segments FROM :'segments_csv' WITH (FORMAT csv, HEADER true)
+\copy staging_road_nodes FROM :nodes_csv WITH (FORMAT csv, HEADER true)
+\copy staging_road_segments FROM :segments_csv WITH (FORMAT csv, HEADER true)
 
 BEGIN;
 

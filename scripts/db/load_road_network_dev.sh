@@ -1,0 +1,416 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# be-dev helpers read .env.dev and prepare the SSH tunnel.
+# This script runs psql COPY over that tunnel to load road network CSV files.
+source "$ROOT_DIR/scripts/make/lib/be-dev.sh"
+
+NODES_CSV="${ROAD_NODES_CSV:-$ROOT_DIR/.ai/LOCAL/nodes.csv}"
+SEGMENTS_CSV="${ROAD_SEGMENTS_CSV:-$ROOT_DIR/.ai/LOCAL/segments.csv}"
+VALIDATE_ONLY=false
+SKIP_TUNNEL="${ROAD_NETWORK_SKIP_TUNNEL:-false}"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/db/load_road_network_dev.sh [--validate-only] [--skip-tunnel]
+
+Loads .ai/LOCAL/nodes.csv and .ai/LOCAL/segments.csv into dev DB tables:
+  - road_nodes
+  - road_segments
+
+Environment overrides:
+  ROAD_NODES_CSV=/path/to/nodes.csv
+  ROAD_SEGMENTS_CSV=/path/to/segments.csv
+  ROAD_NETWORK_SKIP_TUNNEL=true
+  ENV_FILE=/path/to/.env.dev
+
+Prerequisites:
+  - psql must be installed for DB load mode.
+  - .env.dev must contain POSTGRES_DB, DB_USERNAME, DB_PASSWORD.
+  - K14E102T.pem must exist unless --skip-tunnel is used or a tunnel is already open.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --validate-only)
+      VALIDATE_ONLY=true
+      ;;
+    --skip-tunnel)
+      SKIP_TUNNEL=true
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+abs_path() {
+  local path="$1"
+  if [ ! -f "$path" ]; then
+    echo "Missing file: $path" >&2
+    exit 1
+  fi
+  echo "$(cd "$(dirname "$path")" && pwd)/$(basename "$path")"
+}
+
+validate_csv() {
+  local nodes_csv="$1"
+  local segments_csv="$2"
+
+  # Validate CSV structure and enum candidates before opening a DB transaction.
+  # If this fails, no dev DB state is changed.
+  python3 - "$nodes_csv" "$segments_csv" <<'PY'
+import csv
+import sys
+from collections import Counter
+from decimal import Decimal, InvalidOperation
+
+nodes_path, segments_path = sys.argv[1], sys.argv[2]
+
+node_header = ["vertexId", "sourceNodeKey", "point"]
+segment_header = [
+    "edgeId",
+    "fromNodeId",
+    "toNodeId",
+    "geom",
+    "lengthMeter",
+    "walkAccess",
+    "avgSlopePercent",
+    "widthMeter",
+    "brailleBlockState",
+    "audioSignalState",
+    "slopeState",
+    "widthState",
+    "surfaceState",
+    "stairsState",
+    "signalState",
+    "segmentType",
+]
+
+allowed = {
+    "walkAccess": {"YES", "NO", "UNKNOWN"},
+    "brailleBlockState": {"YES", "NO", "UNKNOWN"},
+    "audioSignalState": {"YES", "NO", "UNKNOWN"},
+    "slopeState": {"FLAT", "MODERATE", "STEEP", "RISK", "UNKNOWN"},
+    "widthState": {"ADEQUATE_150", "ADEQUATE_120", "NARROW", "UNKNOWN"},
+    "surfaceState": {"PAVED", "UNPAVED", "UNKNOWN"},
+    "stairsState": {"YES", "NO", "UNKNOWN"},
+    "signalState": {"YES", "NO", "UNKNOWN"},
+    "segmentType": {"CROSS_WALK", "SIDE_LINE"},
+}
+
+
+def fail(message):
+    print(f"CSV validation failed: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def require_header(path, expected):
+    with open(path, newline="", encoding="utf-8-sig") as file:
+        reader = csv.DictReader(file)
+        if reader.fieldnames != expected:
+            fail(f"{path} header mismatch. expected={expected}, actual={reader.fieldnames}")
+        return reader.fieldnames
+
+
+require_header(nodes_path, node_header)
+require_header(segments_path, segment_header)
+
+node_ids = set()
+source_keys = set()
+node_rows = 0
+with open(nodes_path, newline="", encoding="utf-8-sig") as file:
+    for line_no, row in enumerate(csv.DictReader(file), start=2):
+        node_rows += 1
+        if not row["vertexId"] or not row["sourceNodeKey"] or not row["point"]:
+            fail(f"{nodes_path}:{line_no} contains blank required value")
+        try:
+            vertex_id = int(row["vertexId"])
+        except ValueError:
+            fail(f"{nodes_path}:{line_no} vertexId is not a number: {row['vertexId']}")
+        if vertex_id in node_ids:
+            fail(f"{nodes_path}:{line_no} duplicate vertexId: {vertex_id}")
+        node_ids.add(vertex_id)
+        if row["sourceNodeKey"] in source_keys:
+            fail(f"{nodes_path}:{line_no} duplicate sourceNodeKey: {row['sourceNodeKey']}")
+        if len(row["sourceNodeKey"]) > 100:
+            fail(f"{nodes_path}:{line_no} sourceNodeKey exceeds 100 chars")
+        source_keys.add(row["sourceNodeKey"])
+        if not row["point"].startswith("SRID=4326;POINT(") or not row["point"].endswith(")"):
+            fail(f"{nodes_path}:{line_no} invalid point EWKT: {row['point'][:120]}")
+
+edge_ids = set()
+segment_rows = 0
+enum_counts = {key: Counter() for key in allowed}
+with open(segments_path, newline="", encoding="utf-8-sig") as file:
+    for line_no, row in enumerate(csv.DictReader(file), start=2):
+        segment_rows += 1
+        for key in ["edgeId", "fromNodeId", "toNodeId", "geom", "lengthMeter"]:
+            if not row[key]:
+                fail(f"{segments_path}:{line_no} blank required value: {key}")
+        try:
+            edge_id = int(row["edgeId"])
+            from_node_id = int(row["fromNodeId"])
+            to_node_id = int(row["toNodeId"])
+        except ValueError as exc:
+            fail(f"{segments_path}:{line_no} invalid numeric id: {exc}")
+        if edge_id in edge_ids:
+            fail(f"{segments_path}:{line_no} duplicate edgeId: {edge_id}")
+        edge_ids.add(edge_id)
+        if from_node_id not in node_ids or to_node_id not in node_ids:
+            fail(f"{segments_path}:{line_no} node reference not found: {from_node_id}->{to_node_id}")
+        if not row["geom"].startswith("SRID=4326;LINESTRING(") or not row["geom"].endswith(")"):
+            fail(f"{segments_path}:{line_no} invalid linestring EWKT: {row['geom'][:120]}")
+        for key in ["lengthMeter", "avgSlopePercent", "widthMeter"]:
+            if row[key]:
+                try:
+                    Decimal(row[key])
+                except InvalidOperation:
+                    fail(f"{segments_path}:{line_no} invalid decimal {key}: {row[key]}")
+        for key, candidates in allowed.items():
+            value = row[key]
+            if not value:
+                fail(f"{segments_path}:{line_no} blank enum value: {key}")
+            if value not in candidates:
+                fail(f"{segments_path}:{line_no} invalid {key}: {value}")
+            enum_counts[key][value] += 1
+
+print(f"CSV validation ok: nodes={node_rows}, segments={segment_rows}")
+for key in sorted(enum_counts):
+    values = ", ".join(f"{name}={count}" for name, count in sorted(enum_counts[key].items()))
+    print(f"  {key}: {values}")
+PY
+}
+
+require_psql() {
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "psql is required. Install PostgreSQL client tools first." >&2
+    exit 1
+  fi
+}
+
+load_into_dev_db() {
+  local nodes_csv="$1"
+  local segments_csv="$2"
+
+  ensure_env_file
+  if [ "$SKIP_TUNNEL" != "true" ]; then
+    ensure_dev_tunnel
+  fi
+  require_psql
+
+  local db_name db_user db_password
+  db_name="$(dev_db_name)"
+  db_user="$(env_value DB_USERNAME)"
+  db_password="$(env_value DB_PASSWORD)"
+  if [ -z "$db_user" ]; then
+    db_user="$(env_value POSTGRES_USER)"
+  fi
+  if [ -z "$db_password" ]; then
+    db_password="$(env_value POSTGRES_PASSWORD)"
+  fi
+  if [ -z "$db_user" ] || [ -z "$db_password" ]; then
+    echo "Missing DB credentials in $ENV_FILE. Expected DB_USERNAME/DB_PASSWORD or POSTGRES_USER/POSTGRES_PASSWORD." >&2
+    exit 1
+  fi
+
+  echo "loading road network CSV into dev DB: 127.0.0.1:$BE_DEV_DB_LOCAL_PORT/$db_name"
+  PGPASSWORD="$db_password" psql \
+    -h 127.0.0.1 \
+    -p "$BE_DEV_DB_LOCAL_PORT" \
+    -U "$db_user" \
+    -d "$db_name" \
+    -v ON_ERROR_STOP=1 \
+    -v nodes_csv="$nodes_csv" \
+    -v segments_csv="$segments_csv" <<'SQL'
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE TEMP TABLE staging_road_nodes (
+  "vertexId" text,
+  "sourceNodeKey" text,
+  "point" text
+);
+
+CREATE TEMP TABLE staging_road_segments (
+  "edgeId" text,
+  "fromNodeId" text,
+  "toNodeId" text,
+  "geom" text,
+  "lengthMeter" text,
+  "walkAccess" text,
+  "avgSlopePercent" text,
+  "widthMeter" text,
+  "brailleBlockState" text,
+  "audioSignalState" text,
+  "slopeState" text,
+  "widthState" text,
+  "surfaceState" text,
+  "stairsState" text,
+  "signalState" text,
+  "segmentType" text
+);
+
+\copy staging_road_nodes FROM :'nodes_csv' WITH (FORMAT csv, HEADER true)
+\copy staging_road_segments FROM :'segments_csv' WITH (FORMAT csv, HEADER true)
+
+BEGIN;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM staging_road_segments s
+    LEFT JOIN staging_road_nodes nf ON nf."vertexId" = s."fromNodeId"
+    LEFT JOIN staging_road_nodes nt ON nt."vertexId" = s."toNodeId"
+    WHERE nf."vertexId" IS NULL OR nt."vertexId" IS NULL
+  ) THEN
+    RAISE EXCEPTION 'staging_road_segments contains orphan node references';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM staging_road_segments
+    WHERE "segmentType" NOT IN ('CROSS_WALK', 'SIDE_LINE')
+  ) THEN
+    RAISE EXCEPTION 'staging_road_segments contains invalid segmentType';
+  END IF;
+END
+$$;
+
+TRUNCATE TABLE road_segments, road_nodes;
+
+INSERT INTO road_nodes (
+  "vertexId",
+  "sourceNodeKey",
+  "point"
+)
+SELECT
+  "vertexId"::bigint,
+  "sourceNodeKey",
+  ST_GeomFromEWKT("point")::geometry(Point, 4326)
+FROM staging_road_nodes;
+
+INSERT INTO road_segments (
+  "edgeId",
+  "fromNodeId",
+  "toNodeId",
+  "geom",
+  "lengthMeter",
+  "walkAccess",
+  "avgSlopePercent",
+  "widthMeter",
+  "brailleBlockState",
+  "audioSignalState",
+  "slopeState",
+  "widthState",
+  "surfaceState",
+  "stairsState",
+  "signalState",
+  "segmentType"
+)
+SELECT
+  "edgeId"::bigint,
+  "fromNodeId"::bigint,
+  "toNodeId"::bigint,
+  ST_GeomFromEWKT("geom")::geometry(LineString, 4326),
+  "lengthMeter"::numeric(10, 2),
+  "walkAccess",
+  NULLIF("avgSlopePercent", '')::numeric(6, 2),
+  NULLIF("widthMeter", '')::numeric(6, 2),
+  "brailleBlockState",
+  "audioSignalState",
+  "slopeState",
+  "widthState",
+  "surfaceState",
+  "stairsState",
+  "signalState",
+  "segmentType"
+FROM staging_road_segments;
+
+DO $$
+DECLARE
+  staging_node_count bigint;
+  staging_segment_count bigint;
+  loaded_node_count bigint;
+  loaded_segment_count bigint;
+  orphan_count bigint;
+  invalid_point_count bigint;
+  invalid_segment_count bigint;
+BEGIN
+  SELECT COUNT(*) INTO staging_node_count FROM staging_road_nodes;
+  SELECT COUNT(*) INTO staging_segment_count FROM staging_road_segments;
+  SELECT COUNT(*) INTO loaded_node_count FROM road_nodes;
+  SELECT COUNT(*) INTO loaded_segment_count FROM road_segments;
+
+  IF staging_node_count <> loaded_node_count THEN
+    RAISE EXCEPTION 'road_nodes count mismatch: staging %, loaded %', staging_node_count, loaded_node_count;
+  END IF;
+  IF staging_segment_count <> loaded_segment_count THEN
+    RAISE EXCEPTION 'road_segments count mismatch: staging %, loaded %', staging_segment_count, loaded_segment_count;
+  END IF;
+
+  SELECT COUNT(*)
+  INTO orphan_count
+  FROM road_segments s
+  LEFT JOIN road_nodes nf ON nf."vertexId" = s."fromNodeId"
+  LEFT JOIN road_nodes nt ON nt."vertexId" = s."toNodeId"
+  WHERE nf."vertexId" IS NULL OR nt."vertexId" IS NULL;
+
+  SELECT COUNT(*) INTO invalid_point_count FROM road_nodes WHERE NOT ST_IsValid("point");
+  SELECT COUNT(*) INTO invalid_segment_count FROM road_segments WHERE NOT ST_IsValid("geom");
+
+  IF orphan_count <> 0 THEN
+    RAISE EXCEPTION 'road_segments orphan reference count: %', orphan_count;
+  END IF;
+  IF invalid_point_count <> 0 THEN
+    RAISE EXCEPTION 'invalid road_nodes point count: %', invalid_point_count;
+  END IF;
+  IF invalid_segment_count <> 0 THEN
+    RAISE EXCEPTION 'invalid road_segments geom count: %', invalid_segment_count;
+  END IF;
+
+  RAISE NOTICE 'road network load ok: nodes %, segments %', loaded_node_count, loaded_segment_count;
+END
+$$;
+
+COMMIT;
+
+SELECT 'road_nodes' AS table_name, COUNT(*) AS row_count FROM road_nodes
+UNION ALL
+SELECT 'road_segments' AS table_name, COUNT(*) AS row_count FROM road_segments
+ORDER BY table_name;
+
+SELECT "segmentType", COUNT(*) AS row_count
+FROM road_segments
+GROUP BY "segmentType"
+ORDER BY "segmentType";
+SQL
+}
+
+main() {
+  NODES_CSV="$(abs_path "$NODES_CSV")"
+  SEGMENTS_CSV="$(abs_path "$SEGMENTS_CSV")"
+
+  echo "nodes csv: $NODES_CSV"
+  echo "segments csv: $SEGMENTS_CSV"
+  validate_csv "$NODES_CSV" "$SEGMENTS_CSV"
+
+  if [ "$VALIDATE_ONLY" = "true" ]; then
+    exit 0
+  fi
+
+  load_into_dev_db "$NODES_CSV" "$SEGMENTS_CSV"
+}
+
+main "$@"

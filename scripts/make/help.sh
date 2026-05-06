@@ -31,6 +31,9 @@ Docker host scripts
   be-dev-down                  백엔드 dev host 서비스를 중지한다
   be-dev-logs                  백엔드 dev host 로그를 확인한다
 
+Dev DB data
+  road-network-dev-load        LOCAL nodes/segments CSV를 dev DB road 테이블에 적재한다
+
 GraphHopper
   graphhopper-local-build      local DB에서 graph-cache를 생성한다
   graphhopper-dev-build        dev DB에서 graph-cache를 생성한다

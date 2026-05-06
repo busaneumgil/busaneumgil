@@ -38,6 +38,24 @@ open class AuthRemoteDataSource(
         )
     }
 
+    open suspend fun logout(accessToken: String): String {
+        val response =
+            httpJsonClient.postJson(
+                path = "/auth/logout",
+                body = "",
+                headers =
+                    mapOf(
+                        AUTHORIZATION_HEADER_NAME to "$BEARER_PREFIX $accessToken",
+                    ),
+            )
+        val responseJson = response.body.toJsonObjectOrNull()
+        response.throwIfNotSuccessful(responseJson = responseJson)
+
+        return responseJson?.optString("message")
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_LOGOUT_SUCCESS_MESSAGE
+    }
+
     open suspend fun signup(
         signupToken: String,
         selectedPrimaryUserType: String,
@@ -142,6 +160,8 @@ open class AuthRemoteDataSource(
             null
         } else {
             optString(name).takeIf { it.isNotBlank() }
+        }
+
     private fun HttpJsonResponse.throwIfNotSuccessful(responseJson: JSONObject?) {
         if (statusCode !in 200..299) {
             throw AuthApiException(
@@ -155,10 +175,11 @@ open class AuthRemoteDataSource(
         }
     }
 
-        }
-
     private companion object {
         private const val DEFAULT_AUTH_API_ERROR_MESSAGE = "인증 서버 요청에 실패했습니다."
+        private const val DEFAULT_LOGOUT_SUCCESS_MESSAGE = "로그아웃되었습니다."
+        private const val AUTHORIZATION_HEADER_NAME = "Authorization"
+        private const val BEARER_PREFIX = "Bearer"
     }
 }
 

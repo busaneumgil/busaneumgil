@@ -28,6 +28,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
+import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
@@ -125,7 +126,10 @@ class AppContainer(
                     providersBySocialProvider =
                         mapOf(
                             AuthSocialProvider.KAKAO to
-                                KakaoSocialAccessTokenProvider(context = appContext),
+                                KakaoSocialAccessTokenProvider(
+                                    context = appContext,
+                                    activityContextProvider = { ForegroundActivityProvider.currentActivity },
+                                ),
                             AuthSocialProvider.GOOGLE to
                                 GoogleSocialAccessTokenProvider(
                                     activityProvider = { ForegroundActivityProvider.currentActivity },
@@ -149,9 +153,17 @@ class AppContainer(
         )
     }
 
+    val authLogoutRepository: AuthLogoutRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideAuthLogoutRepository(
+            authRemoteDataSource = authRemoteDataSource,
+            authSessionRepository = authSessionRepository,
+        )
+    }
+
     val userProfileRepository: UserProfileRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideUserProfileRepository(
             userRemoteDataSource = userRemoteDataSource,
+            authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
             settingsRepository = settingsRepository,
         )
@@ -163,7 +175,6 @@ class AppContainer(
             initialBookmarks =
                 if (AppEnvironment.isDebugBuild) {
                     MockBookmarkFixtures.defaultBookmarks
-            authRemoteDataSource = authRemoteDataSource,
                 } else {
                     emptyList()
                 },

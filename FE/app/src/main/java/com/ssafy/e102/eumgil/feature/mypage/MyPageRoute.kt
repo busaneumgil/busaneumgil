@@ -35,6 +35,7 @@ fun MyPageRoute(
             MyPageViewModel.provideFactory(
                 settingsRepository = appContainer.settingsRepository,
                 authSessionRepository = appContainer.authSessionRepository,
+                authLogoutRepository = appContainer.authLogoutRepository,
                 userProfileRepository = appContainer.userProfileRepository,
             )
         }
@@ -59,6 +60,7 @@ fun MyPageRoute(
                     snackbarHostState.showSnackbar(
                         context.getString(R.string.my_page_profile_sync_failed),
                     )
+                is MyPageUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }

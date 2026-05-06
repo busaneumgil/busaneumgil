@@ -35,6 +35,7 @@ fun MyPageRoute(
             MyPageViewModel.provideFactory(
                 settingsRepository = appContainer.settingsRepository,
                 authSessionRepository = appContainer.authSessionRepository,
+                userProfileRepository = appContainer.userProfileRepository,
             )
         }
     val viewModel =
@@ -54,6 +55,10 @@ fun MyPageRoute(
                 MyPageUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
                 MyPageUiEvent.NavigateToAppInfo -> onNavigateToAppInfo()
                 MyPageUiEvent.ShowPreparingMessage -> snackbarHostState.showSnackbar(preparingMessage)
+                MyPageUiEvent.ShowProfileSyncFailedMessage ->
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.my_page_profile_sync_failed),
+                    )
             }
         }
     }

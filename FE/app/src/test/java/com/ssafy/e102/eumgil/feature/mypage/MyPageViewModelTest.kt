@@ -6,6 +6,9 @@ import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.core.model.RepositoryDebugSettings
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.UserProfile
+import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
+import com.ssafy.e102.eumgil.data.repository.UserProfileSyncResult
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -42,6 +45,7 @@ class MyPageViewModelTest {
                 MyPageViewModel(
                     settingsRepository = settingsRepository,
                     authSessionRepository = FakeAuthSessionRepository(),
+                    userProfileRepository = FakeUserProfileRepository(),
                 )
 
             advanceUntilIdle()
@@ -59,6 +63,7 @@ class MyPageViewModelTest {
                 MyPageViewModel(
                     settingsRepository = FakeSettingsRepository(),
                     authSessionRepository = FakeAuthSessionRepository(),
+                    userProfileRepository = FakeUserProfileRepository(),
                 )
 
             viewModel.onAction(MyPageUiAction.UserTypeChangeClicked)
@@ -80,6 +85,7 @@ class MyPageViewModelTest {
                 MyPageViewModel(
                     settingsRepository = FakeSettingsRepository(),
                     authSessionRepository = authSessionRepository,
+                    userProfileRepository = FakeUserProfileRepository(),
                 )
 
             viewModel.onAction(MyPageUiAction.LogoutClicked)
@@ -92,6 +98,93 @@ class MyPageViewModelTest {
 
             assertTrue(authSessionRepository.clearAuthSessionCalled)
             assertSame(MyPageUiEvent.NavigateToLogin, event)
+        }
+
+    @Test
+    fun `profile sync success updates ui state from synchronized local mirror`() =
+        runTest {
+            val settingsRepository = FakeSettingsRepository()
+            val viewModel =
+                MyPageViewModel(
+                    settingsRepository = settingsRepository,
+                    authSessionRepository = FakeAuthSessionRepository(),
+                    userProfileRepository =
+                        FakeUserProfileRepository(
+                            onSync = {
+                                settingsRepository.savePrimaryUserType("mobility_impaired")
+                                settingsRepository.saveMobilitySubtype("manual_wheelchair")
+                                UserProfileSyncResult.Success(
+                                    UserProfile(
+                                        userId = "018f7f6c-2b7e-7c3a-9f4a-8b4e3b7c9a01",
+                                        socialProvider = "KAKAO",
+                                        selectedPrimaryUserType = "MOBILITY_IMPAIRED",
+                                        selectedMobilitySubtype = "MANUAL_WHEELCHAIR",
+                                    ),
+                                )
+                            },
+                        ),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(MyPageUserMode.MOBILITY_IMPAIRED, viewModel.uiState.value.userMode)
+            assertEquals(MyPageMobilitySubtype.MANUAL_WHEELCHAIR, viewModel.uiState.value.mobilitySubtype)
+        }
+
+    @Test
+    fun `profile sync auth failure clears session and emits login navigation event`() =
+        runTest {
+            val authSessionRepository = FakeAuthSessionRepository()
+            val viewModel =
+                MyPageViewModel(
+                    settingsRepository = FakeSettingsRepository(),
+                    authSessionRepository = authSessionRepository,
+                    userProfileRepository =
+                        FakeUserProfileRepository(
+                            result = UserProfileSyncResult.AuthenticationFailed,
+                        ),
+                )
+
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertTrue(authSessionRepository.clearAuthSessionCalled)
+            assertSame(MyPageUiEvent.NavigateToLogin, event)
+        }
+
+    @Test
+    fun `profile sync network failure keeps local fallback and emits error message event`() =
+        runTest {
+            val viewModel =
+                MyPageViewModel(
+                    settingsRepository =
+                        FakeSettingsRepository(
+                            initSettings =
+                                InitSettings(
+                                    selectedPrimaryUserType = "low_vision",
+                                    isLowVisionFollowUpCompleted = true,
+                                ),
+                        ),
+                    authSessionRepository = FakeAuthSessionRepository(),
+                    userProfileRepository =
+                        FakeUserProfileRepository(
+                            result = UserProfileSyncResult.Failure(message = "network error"),
+                        ),
+                )
+
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals(MyPageUserMode.LOW_VISION, viewModel.uiState.value.userMode)
+            assertSame(MyPageUiEvent.ShowProfileSyncFailedMessage, event)
         }
 }
 
@@ -167,4 +260,19 @@ private class FakeAuthSessionRepository : AuthSessionRepository {
     override suspend fun clearAuthSession() {
         clearAuthSessionCalled = true
     }
+}
+
+private class FakeUserProfileRepository(
+    private val result: UserProfileSyncResult =
+        UserProfileSyncResult.Success(
+            UserProfile(
+                userId = null,
+                socialProvider = null,
+                selectedPrimaryUserType = null,
+                selectedMobilitySubtype = null,
+            ),
+        ),
+    private val onSync: (suspend () -> UserProfileSyncResult)? = null,
+) : UserProfileRepository {
+    override suspend fun syncMyProfile(): UserProfileSyncResult = onSync?.invoke() ?: result
 }

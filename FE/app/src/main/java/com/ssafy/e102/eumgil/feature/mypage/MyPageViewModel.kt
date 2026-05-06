@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
+import com.ssafy.e102.eumgil.data.repository.UserProfileSyncResult
 import com.ssafy.e102.eumgil.feature.onboarding.MobilitySubtype
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import kotlinx.coroutines.channels.Channel
@@ -20,6 +22,7 @@ import kotlinx.coroutines.launch
 class MyPageViewModel(
     private val settingsRepository: SettingsRepository,
     private val authSessionRepository: AuthSessionRepository,
+    private val userProfileRepository: UserProfileRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MyPageUiState())
     val uiState: StateFlow<MyPageUiState> = mutableUiState.asStateFlow()
@@ -30,6 +33,7 @@ class MyPageViewModel(
     init {
         observeInitSettings()
         observeRepositoryDebugSettings()
+        refreshMyProfile()
     }
 
     fun onAction(action: MyPageUiAction) {
@@ -91,10 +95,28 @@ class MyPageViewModel(
         }
     }
 
+    private fun refreshMyProfile() {
+        viewModelScope.launch {
+            when (userProfileRepository.syncMyProfile()) {
+                is UserProfileSyncResult.Success -> Unit
+                UserProfileSyncResult.MissingSession,
+                UserProfileSyncResult.AuthenticationFailed
+                -> {
+                    authSessionRepository.clearAuthSession()
+                    uiEventChannel.send(MyPageUiEvent.NavigateToLogin)
+                }
+                is UserProfileSyncResult.Failure -> {
+                    uiEventChannel.send(MyPageUiEvent.ShowProfileSyncFailedMessage)
+                }
+            }
+        }
+    }
+
     companion object {
         fun provideFactory(
             settingsRepository: SettingsRepository,
             authSessionRepository: AuthSessionRepository,
+            userProfileRepository: UserProfileRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -103,6 +125,7 @@ class MyPageViewModel(
                         return MyPageViewModel(
                             settingsRepository = settingsRepository,
                             authSessionRepository = authSessionRepository,
+                            userProfileRepository = userProfileRepository,
                         ) as T
                     }
 

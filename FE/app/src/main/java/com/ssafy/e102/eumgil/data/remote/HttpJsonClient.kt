@@ -18,6 +18,19 @@ class HttpJsonClient(
     private val connectTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
     private val readTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
 ) {
+    suspend fun getJson(
+        path: String,
+        headers: Map<String, String> = emptyMap(),
+    ): HttpJsonResponse =
+        withContext(Dispatchers.IO) {
+            val connection = openConnection(path)
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("Accept", "application/json")
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+
+            connection.toHttpJsonResponse()
+        }
+
     suspend fun postJson(
         path: String,
         body: String,

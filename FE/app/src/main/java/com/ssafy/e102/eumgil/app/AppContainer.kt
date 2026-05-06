@@ -26,6 +26,7 @@ import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
@@ -43,6 +44,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import com.ssafy.e102.eumgil.di.RepositoryModule
 
@@ -89,6 +91,9 @@ class AppContainer(
     }
     private val searchRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         SearchRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+    }
+    private val userRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        UserRemoteDataSource(httpJsonClient = httpJsonClient)
     }
 
     private val placesMockDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesMockDataSource() }
@@ -139,6 +144,14 @@ class AppContainer(
     val authSignupRepository: AuthSignupRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideAuthSignupRepository(
             authRemoteDataSource = authRemoteDataSource,
+            authSessionRepository = authSessionRepository,
+            settingsRepository = settingsRepository,
+        )
+    }
+
+    val userProfileRepository: UserProfileRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideUserProfileRepository(
+            userRemoteDataSource = userRemoteDataSource,
             authSessionRepository = authSessionRepository,
             settingsRepository = settingsRepository,
         )

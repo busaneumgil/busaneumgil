@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
@@ -37,6 +38,7 @@ import com.ssafy.e102.eumgil.data.repository.FakeRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthSignupRepository
+import com.ssafy.e102.eumgil.data.repository.LocalOnlyUserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
@@ -46,6 +48,8 @@ import com.ssafy.e102.eumgil.data.repository.ServerAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.ServerAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.data.repository.SocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.ServerUserProfileRepository
+import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolicy
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
@@ -85,6 +89,21 @@ object RepositoryModule {
         } else {
             ServerAuthSignupRepository(
                 authRemoteDataSource = authRemoteDataSource,
+                authSessionRepository = authSessionRepository,
+                settingsRepository = settingsRepository,
+            )
+        }
+
+    fun provideUserProfileRepository(
+        userRemoteDataSource: UserRemoteDataSource,
+        authSessionRepository: AuthSessionRepository,
+        settingsRepository: SettingsRepository,
+    ): UserProfileRepository =
+        if (AppEnvironment.isMockMode) {
+            LocalOnlyUserProfileRepository()
+        } else {
+            ServerUserProfileRepository(
+                userRemoteDataSource = userRemoteDataSource,
                 authSessionRepository = authSessionRepository,
                 settingsRepository = settingsRepository,
             )

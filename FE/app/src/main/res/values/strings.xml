@@ -267,6 +267,7 @@
     <string name="my_page_menu_app_help">앱 정보 및 도움말</string>
     <string name="my_page_logout">로그아웃</string>
     <string name="my_page_preparing_message">준비 중입니다.</string>
+    <string name="my_page_profile_sync_failed">최신 사용자 정보를 불러오지 못했습니다. 저장된 정보를 표시합니다.</string>
     <string name="my_page_back">뒤로가기</string>
     <string name="my_page_app_info_title">앱 정보 및 도움말</string>
     <string name="my_page_app_info_version">버전 %1$s</string>

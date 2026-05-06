@@ -51,4 +51,6 @@ sealed interface MyPageUiEvent {
     data object NavigateToAppInfo : MyPageUiEvent
 
     data object ShowPreparingMessage : MyPageUiEvent
+
+    data object ShowProfileSyncFailedMessage : MyPageUiEvent
 }

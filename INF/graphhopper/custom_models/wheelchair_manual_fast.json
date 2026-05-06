@@ -1,9 +1,71 @@
 {
   "priority": [
-    { "if": "true", "multiply_by": "1" }
+    {
+      "if": "walk_access == NO",
+      "multiply_by": "0"
+    },
+    {
+      "if": "walk_access == UNKNOWN",
+      "multiply_by": "0.80"
+    },
+    {
+      "if": "avg_slope_percent >= 15.0",
+      "multiply_by": "0"
+    },
+    {
+      "if": "stairs_state == YES",
+      "multiply_by": "0.00"
+    },
+    {
+      "if": "stairs_state == UNKNOWN",
+      "multiply_by": "0.75"
+    },
+    {
+      "if": "slope_state == MODERATE",
+      "multiply_by": "0.65"
+    },
+    {
+      "if": "slope_state == STEEP",
+      "multiply_by": "0.25"
+    },
+    {
+      "if": "slope_state == UNKNOWN",
+      "multiply_by": "0.90"
+    },
+    {
+      "if": "width_state == NARROW_120",
+      "multiply_by": "0.80"
+    },
+    {
+      "if": "width_state == NARROW_90",
+      "multiply_by": "0.25"
+    },
+    {
+      "if": "width_state == UNKNOWN",
+      "multiply_by": "0.90"
+    },
+    {
+      "if": "surface_state == UNPAVED",
+      "multiply_by": "0.45"
+    },
+    {
+      "if": "surface_state == UNKNOWN",
+      "multiply_by": "0.85"
+    },
+    {
+      "if": "segment_type == CROSS_WALK && signal_state == NO",
+      "multiply_by": "0.90"
+    },
+    {
+      "if": "segment_type == CROSS_WALK && signal_state == UNKNOWN",
+      "multiply_by": "0.95"
+    }
   ],
   "speed": [
-    { "if": "true", "limit_to": "1.80" }
+    {
+      "if": "true",
+      "limit_to": "1.80"
+    }
   ],
   "distance_influence": 55
 }

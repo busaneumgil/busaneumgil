@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import os
-import re
 import sys
 import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs, urlparse
-
-import psycopg2
 
 
 DEFAULT_NODES_SQL = '''
@@ -25,13 +22,17 @@ SELECT
   "toNodeId" AS to_node_id,
   ST_AsText("geom"::geometry) AS geom_wkt,
   COALESCE("walkAccess"::text, 'UNKNOWN') AS walk_access,
-  "avgSlopePercent" AS avg_slope_percent,
-  COALESCE("widthState", 'UNKNOWN') AS width_state,
-  COALESCE("slopeState", 'UNKNOWN') AS slope_state,
-  COALESCE("stairsState", 'UNKNOWN') AS stairs_state,
-  COALESCE("crossingState", 'UNKNOWN') AS crossing_state
+  COALESCE("avgSlopePercent", 0.0) AS avg_slope_percent,
+  COALESCE("widthMeter", 0.0) AS width_meter,
+  COALESCE("brailleBlockState"::text, 'UNKNOWN') AS braille_block_state,
+  COALESCE("audioSignalState"::text, 'UNKNOWN') AS audio_signal_state,
+  COALESCE("slopeState"::text, 'UNKNOWN') AS slope_state,
+  COALESCE("widthState"::text, 'UNKNOWN') AS width_state,
+  COALESCE("surfaceState"::text, 'UNKNOWN') AS surface_state,
+  COALESCE("stairsState"::text, 'UNKNOWN') AS stairs_state,
+  COALESCE("signalState"::text, 'UNKNOWN') AS signal_state,
+  COALESCE("segmentType"::text, 'SIDE_LINE') AS segment_type
 FROM road_segments
-WHERE COALESCE("walkAccess"::text, 'UNKNOWN') <> 'NO'
 ORDER BY "edgeId"
 '''
 
@@ -54,6 +55,8 @@ def jdbc_to_dsn(jdbc_url: str) -> dict:
 
 
 def connect():
+    import psycopg2
+
     db_url = os.getenv("DB_URL")
     if db_url:
         dsn = jdbc_to_dsn(db_url)
@@ -98,7 +101,18 @@ def parse_linestring_wkt(value):
     return points
 
 
+def normalize_export_value(value, fallback):
+    if value is None:
+        return fallback
+    text = str(value)
+    if text == "":
+        return fallback
+    return text
+
+
 def write_osm(nodes, segments, output):
+    # The exporter is the boundary between PostGIS camelCase columns and the GraphHopper
+    # custom parser. Keep tag names aligned with Graphhopper_pipeline.md's ieum:* contract.
     root = ET.Element("osm", {"version": "0.6", "generator": "e102-postgis-graphhopper-export"})
     node_id_map = {int(node["vertex_id"]): index + 1 for index, node in enumerate(nodes)}
     next_synthetic_node_id = len(node_id_map) + 1
@@ -113,12 +127,14 @@ def write_osm(nodes, segments, output):
                 "lon": f'{float(node["lon"]):.8f}',
             },
         )
-        tag(osm_node, "e102:vertex_id", node["vertex_id"])
+        tag(osm_node, "ieum:vertex_id", node["vertex_id"])
 
     segment_refs = []
     for segment in segments:
         refs = [node_id_map[int(segment["from_node_id"])]]
         coords = parse_linestring_wkt(segment.get("geom_wkt"))
+        if len(coords) < 2:
+            raise ValueError(f'road_segment edge_id={segment["edge_id"]} has invalid LINESTRING geometry')
         for lon, lat in coords[1:-1]:
             synthetic_id = next_synthetic_node_id
             next_synthetic_node_id += 1
@@ -141,13 +157,19 @@ def write_osm(nodes, segments, output):
             ET.SubElement(way, "nd", {"ref": str(ref)})
         tag(way, "highway", "footway")
         tag(way, "foot", "yes")
-        tag(way, "e102:edge_id", segment["edge_id"])
-        tag(way, "e102:walk_access", segment["walk_access"])
-        tag(way, "e102:avg_slope_percent", segment["avg_slope_percent"])
-        tag(way, "e102:width_state", segment["width_state"])
-        tag(way, "e102:slope_state", segment["slope_state"])
-        tag(way, "e102:stairs_state", segment["stairs_state"])
-        tag(way, "e102:crossing_state", segment["crossing_state"])
+        tag(way, "oneway", "no")
+        tag(way, "ieum:edge_id", segment["edge_id"])
+        tag(way, "ieum:walk_access", normalize_export_value(segment.get("walk_access"), "UNKNOWN"))
+        tag(way, "ieum:avg_slope_percent", normalize_export_value(segment.get("avg_slope_percent"), "0.0"))
+        tag(way, "ieum:width_meter", normalize_export_value(segment.get("width_meter"), "0.0"))
+        tag(way, "ieum:braille_block_state", normalize_export_value(segment.get("braille_block_state"), "UNKNOWN"))
+        tag(way, "ieum:audio_signal_state", normalize_export_value(segment.get("audio_signal_state"), "UNKNOWN"))
+        tag(way, "ieum:slope_state", normalize_export_value(segment.get("slope_state"), "UNKNOWN"))
+        tag(way, "ieum:width_state", normalize_export_value(segment.get("width_state"), "UNKNOWN"))
+        tag(way, "ieum:surface_state", normalize_export_value(segment.get("surface_state"), "UNKNOWN"))
+        tag(way, "ieum:stairs_state", normalize_export_value(segment.get("stairs_state"), "UNKNOWN"))
+        tag(way, "ieum:signal_state", normalize_export_value(segment.get("signal_state"), "UNKNOWN"))
+        tag(way, "ieum:segment_type", normalize_export_value(segment.get("segment_type"), "SIDE_LINE"))
 
     tree = ET.ElementTree(root)
     ET.indent(tree, space="  ")

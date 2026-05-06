@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import json
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -19,14 +20,15 @@ def load_export_module():
 
 class GraphhopperExportTest(unittest.TestCase):
 
-    def test_write_osm_exports_ieum_tags_for_all_segments(self):
-        module = load_export_module()
-        nodes = [
+    def sample_nodes(self):
+        return [
             {"vertex_id": 10, "lon": 128.1, "lat": 35.1},
             {"vertex_id": 20, "lon": 128.2, "lat": 35.2},
             {"vertex_id": 30, "lon": 128.3, "lat": 35.3},
         ]
-        segments = [
+
+    def sample_segments(self):
+        return [
             {
                 "edge_id": 1,
                 "from_node_id": 10,
@@ -63,6 +65,11 @@ class GraphhopperExportTest(unittest.TestCase):
             },
         ]
 
+    def test_write_osm_exports_ieum_tags_for_all_segments(self):
+        module = load_export_module()
+        nodes = self.sample_nodes()
+        segments = self.sample_segments()
+
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "road-network.osm"
             module.write_osm(nodes, segments, output)
@@ -84,6 +91,47 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual(second_way_tags["ieum:surface_state"], "PAVED")
         self.assertNotIn("e102:edge_id", first_way_tags)
         self.assertNotIn("ieum:crossing_state", first_way_tags)
+
+    def test_validate_graph_reports_pass_with_unknown_warnings(self):
+        module = load_export_module()
+
+        report = module.validate_graph(self.sample_nodes(), self.sample_segments(), "road-network.osm")
+
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["summary"]["nodeCount"], 3)
+        self.assertEqual(report["summary"]["segmentCount"], 2)
+        self.assertEqual(report["summary"]["routeableEdgeCount"], 1)
+        self.assertEqual(report["summary"]["blockerCount"], 0)
+        self.assertEqual(report["enumCounts"]["segment_type"]["CROSS_WALK"], 1)
+        self.assertTrue(any(warning["kind"] == "high_unknown_ratio" for warning in report["warnings"]))
+
+    def test_validate_graph_blocks_bad_topology_and_enum(self):
+        module = load_export_module()
+        bad_segments = self.sample_segments()
+        bad_segments[1] = {
+            **bad_segments[1],
+            "to_node_id": 999,
+            "geom_wkt": "LINESTRING(128.2 35.2, 128.21 35.21)",
+            "surface_state": "YES",
+        }
+
+        report = module.validate_graph(self.sample_nodes(), bad_segments, "road-network.osm")
+
+        blocker_kinds = {blocker["kind"] for blocker in report["blockers"]}
+        self.assertEqual(report["status"], "FAIL")
+        self.assertIn("missing_node_reference", blocker_kinds)
+        self.assertIn("enum_violation", blocker_kinds)
+
+    def test_write_json_report_creates_parent_directory(self):
+        module = load_export_module()
+        report = module.validate_graph(self.sample_nodes(), self.sample_segments(), "road-network.osm")
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "validation" / "report.json"
+            module.write_json_report(report_path, report)
+            parsed = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(parsed["status"], "PASS")
 
 
 if __name__ == "__main__":

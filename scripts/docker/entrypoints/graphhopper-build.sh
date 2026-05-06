@@ -3,16 +3,20 @@ set -eu
 
 CONFIG_FILE="${GRAPHHOPPER_BUILD_CONFIG_FILE:-/opt/graphhopper/config-build.yml}"
 IMPORT_FILE="${GRAPHHOPPER_IMPORT_FILE:-/graphhopper/import/road-network.osm}"
+VALIDATION_REPORT_FILE="${GRAPHHOPPER_VALIDATION_REPORT_FILE:-/graphhopper/import/road-network-validation-report.json}"
 BUILD_LOCATION="${GRAPHHOPPER_BUILD_LOCATION:-/graphhopper/build-cache}"
 GRAPH_LOCATION="${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}"
 IMPORT_TIMEOUT_SECONDS="${GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS:-1800}"
 
 mkdir -p "$(dirname "$IMPORT_FILE")" "$GRAPH_LOCATION"
+mkdir -p "$(dirname "$VALIDATION_REPORT_FILE")"
 mkdir -p "$BUILD_LOCATION"
 find "$BUILD_LOCATION" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 echo "Exporting PostgreSQL road network to temporary OSM: $IMPORT_FILE"
-python3 /usr/local/bin/export-postgis-to-osm.py --output "$IMPORT_FILE"
+python3 /usr/local/bin/export-postgis-to-osm.py \
+  --output "$IMPORT_FILE" \
+  --report-json "$VALIDATION_REPORT_FILE"
 
 if [ ! -s "$IMPORT_FILE" ]; then
   echo "GraphHopper import file is empty: $IMPORT_FILE" >&2

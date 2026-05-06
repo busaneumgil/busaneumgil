@@ -17,6 +17,8 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public final class IeumEncodedValues {
+    private static final String IEUM_TAG_PREFIX = "ieum:";
+
     public static final String WALK_ACCESS = "walk_access";
     public static final String AVG_SLOPE_PERCENT = "avg_slope_percent";
     public static final String WIDTH_METER = "width_meter";
@@ -61,10 +63,10 @@ public final class IeumEncodedValues {
     private static BiFunction<EncodedValueLookup, PMap, TagParser> createTagParser(String name) {
         return (lookup, properties) -> {
             if (AVG_SLOPE_PERCENT.equals(name)) {
-                return new IeumDecimalTagParser(lookup.getDecimalEncodedValue(name), 0.0);
+                return new IeumDecimalTagParser(lookup.getDecimalEncodedValue(name), tagName(name), 0.0);
             }
             if (WIDTH_METER.equals(name)) {
-                return new IeumDecimalTagParser(lookup.getDecimalEncodedValue(name), 0.0);
+                return new IeumDecimalTagParser(lookup.getDecimalEncodedValue(name), tagName(name), 0.0);
             }
             return createEnumTagParser(name, lookup);
         };
@@ -73,17 +75,21 @@ public final class IeumEncodedValues {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static TagParser createEnumTagParser(String name, EncodedValueLookup lookup) {
         if (SLOPE_STATE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SlopeState.class), SlopeState.UNKNOWN);
+            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SlopeState.class), tagName(name), SlopeState.UNKNOWN);
         }
         if (WIDTH_STATE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, WidthState.class), WidthState.UNKNOWN);
+            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, WidthState.class), tagName(name), WidthState.UNKNOWN);
         }
         if (SURFACE_STATE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SurfaceState.class), SurfaceState.UNKNOWN);
+            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SurfaceState.class), tagName(name), SurfaceState.UNKNOWN);
         }
         if (SEGMENT_TYPE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SegmentType.class), SegmentType.SIDE_LINE);
+            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SegmentType.class), tagName(name), SegmentType.SIDE_LINE);
         }
-        return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, YesNoUnknown.class), YesNoUnknown.UNKNOWN);
+        return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, YesNoUnknown.class), tagName(name), YesNoUnknown.UNKNOWN);
+    }
+
+    private static String tagName(String name) {
+        return IEUM_TAG_PREFIX + name;
     }
 }

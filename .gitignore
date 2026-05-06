@@ -20,6 +20,7 @@ FE/analytics.settings
 
 .omx
 .tmp
+.playwright-mcp/
 *.pem
 
 # Terraform

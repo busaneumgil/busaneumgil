@@ -13,9 +13,8 @@ services:
       - path: ./.env.jenkins
         required: false
     environment:
-      JENKINS_ADMIN_ID: ${JENKINS_ADMIN_ID:-admin}
-      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD}
-      JAVA_OPTS: -Djenkins.install.runSetupWizard=false
+      TZ: Asia/Seoul
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Seoul
       JENKINS_OPTS: --httpPort=8080
       JENKINS_FORCE_LOCAL_ADMIN: ${JENKINS_FORCE_LOCAL_ADMIN:-false}
     ports:
@@ -25,7 +24,8 @@ services:
       - jenkins-home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/ubuntu/e102/.env.dev:/opt/e102-server/.env.dev:ro
-      - /home/ubuntu/e102/.env.prod:/opt/e102-server/.env.prod:ro
+      - /home/ubuntu/e102/prod-secrets/.env.prod:/opt/e102-server/.env.prod:ro
+      - /home/ubuntu/e102/prod-secrets:/var/jenkins_home/prod-secrets:ro
       - /home/ubuntu/e102/docker-compose.s1.override.yml:/opt/e102-server/docker-compose.s1.override.yml:ro
       - /home/ubuntu/e102/.jenkins-webhook-secret:/opt/e102-server/jenkins-webhook-secret:ro
     networks:

@@ -251,6 +251,14 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     navController.navigateToTopLevel(TopLevelDestination.MyPage)
                 }
             },
+            onNavigateToLogin = {
+                navController.navigate(AuthRoute.Login.route) {
+                    launchSingleTop = true
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        inclusive = true
+                    }
+                }
+            },
         )
     }
 

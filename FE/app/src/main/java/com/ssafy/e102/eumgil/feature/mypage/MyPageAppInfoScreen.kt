@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -33,6 +34,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +54,7 @@ private data class MyPageAppInfoActionItem(
 
 @Composable
 fun MyPageAppInfoScreen(
+    uiState: MyPageAppInfoUiState,
     snackbarHostState: SnackbarHostState,
     onBackClick: () -> Unit,
     onGuideClick: () -> Unit,
@@ -60,6 +64,19 @@ fun MyPageAppInfoScreen(
     onWithdrawClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isWithdrawLoading = uiState.isWithdrawLoading
+    val withdrawLabel =
+        if (isWithdrawLoading) {
+            stringResource(id = R.string.my_page_app_info_withdraw_loading)
+        } else {
+            stringResource(id = R.string.my_page_app_info_withdraw)
+        }
+    val withdrawStateDescription =
+        if (isWithdrawLoading) {
+            stringResource(id = R.string.my_page_app_info_withdraw_state_loading)
+        } else {
+            stringResource(id = R.string.my_page_app_info_withdraw_state_enabled)
+        }
     val supportItems =
         listOf(
             MyPageAppInfoActionItem(
@@ -125,22 +142,40 @@ fun MyPageAppInfoScreen(
             item {
                 Button(
                     onClick = onWithdrawClick,
+                    enabled = !isWithdrawLoading,
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 48.dp),
+                            .heightIn(min = 48.dp)
+                            .semantics {
+                                stateDescription = withdrawStateDescription
+                            },
                     shape = RoundedCornerShape(EumRadius.small),
                     colors =
                         ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.10f),
                             contentColor = MaterialTheme.colorScheme.error,
+                            disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
+                            disabledContentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.60f),
                         ),
                 ) {
-                    Text(
-                        text = stringResource(id = R.string.my_page_app_info_withdraw),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (isWithdrawLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        Text(
+                            text = withdrawLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }

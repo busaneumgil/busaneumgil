@@ -71,6 +71,19 @@ class HttpJsonClient(
             connection.toHttpJsonResponse()
         }
 
+    suspend fun deleteJson(
+        path: String,
+        headers: Map<String, String> = emptyMap(),
+    ): HttpJsonResponse =
+        withContext(Dispatchers.IO) {
+            val connection = openConnection(path)
+            connection.requestMethod = "DELETE"
+            connection.setRequestProperty("Accept", "application/json")
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+
+            connection.toHttpJsonResponse()
+        }
+
     private fun openConnection(path: String): HttpURLConnection =
         URL(normalizeUrl(path)).openConnection().let { connection ->
             (connection as HttpURLConnection).apply {

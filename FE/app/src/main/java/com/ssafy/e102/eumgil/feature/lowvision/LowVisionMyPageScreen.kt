@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,66 +48,86 @@ internal object LowVisionMyPageLayoutDefaults {
 
 @Composable
 fun LowVisionMyPageScreen(
+    isLogoutLoading: Boolean,
+    snackbarHostState: SnackbarHostState,
     onModeChangeClick: () -> Unit,
     onAppInfoClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Box(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(Color.Black),
     ) {
         Column(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .statusBarsPadding()
-                    .padding(
-                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
-                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
-                    ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
+            modifier = Modifier.fillMaxSize(),
         ) {
-            Text(
-                text = stringResource(id = R.string.low_vision_my_page_title),
-                modifier = Modifier.fillMaxWidth(),
-                color = LowVisionYellow,
-                fontSize = LowVisionScreenDefaults.headerFontSize,
-                fontWeight = FontWeight.Black,
-                lineHeight = LowVisionScreenDefaults.headerLineHeight,
-                textAlign = TextAlign.Center,
-            )
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .statusBarsPadding()
+                        .padding(
+                            horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                            vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                        ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.low_vision_my_page_title),
+                    modifier = Modifier.fillMaxWidth(),
+                    color = LowVisionYellow,
+                    fontSize = LowVisionScreenDefaults.headerFontSize,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = LowVisionScreenDefaults.headerLineHeight,
+                    textAlign = TextAlign.Center,
+                )
 
-            LowVisionMyPageAction(
-                labelRes = R.string.low_vision_my_page_mode_change,
-                iconRes = R.drawable.ic_lowvision_mode_change,
-                filled = true,
-                onClick = onModeChangeClick,
-                modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
-            )
-            LowVisionMyPageAction(
-                labelRes = R.string.low_vision_my_page_app_info,
-                iconRes = R.drawable.ic_status_help_circle,
-                filled = false,
-                onClick = onAppInfoClick,
-                modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
-            )
-            LowVisionMyPageAction(
-                labelRes = R.string.low_vision_my_page_logout,
-                iconRes = R.drawable.ic_lowvision_logout,
-                filled = false,
-                onClick = onLogoutClick,
-                modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
+                LowVisionMyPageAction(
+                    labelRes = R.string.low_vision_my_page_mode_change,
+                    iconRes = R.drawable.ic_lowvision_mode_change,
+                    filled = true,
+                    onClick = onModeChangeClick,
+                    modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
+                )
+                LowVisionMyPageAction(
+                    labelRes = R.string.low_vision_my_page_app_info,
+                    iconRes = R.drawable.ic_status_help_circle,
+                    filled = false,
+                    onClick = onAppInfoClick,
+                    modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
+                )
+                LowVisionMyPageAction(
+                    labelRes =
+                        if (isLogoutLoading) {
+                            R.string.low_vision_my_page_logout_loading
+                        } else {
+                            R.string.low_vision_my_page_logout
+                        },
+                    iconRes = R.drawable.ic_lowvision_logout,
+                    filled = false,
+                    enabled = !isLogoutLoading,
+                    onClick = onLogoutClick,
+                    modifier = Modifier.weight(LowVisionMyPageLayoutDefaults.actionSectionWeight),
+                )
+            }
+
+            LowVisionBottomNav(
+                selectedTab = LowVisionBottomTab.MY_PAGE,
+                onTabSelected = onTabSelected,
             )
         }
 
-        LowVisionBottomNav(
-            selectedTab = LowVisionBottomTab.MY_PAGE,
-            onTabSelected = onTabSelected,
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 24.dp, vertical = 104.dp),
         )
     }
 }
@@ -165,10 +187,13 @@ private fun LowVisionMyPageAction(
     filled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val label = stringResource(id = labelRes)
-    val backgroundColor = if (filled) LowVisionYellow else Color.Black
-    val contentColor = if (filled) Color.Black else LowVisionYellow
+    val baseBackgroundColor = if (filled) LowVisionYellow else Color.Black
+    val baseContentColor = if (filled) Color.Black else LowVisionYellow
+    val backgroundColor = if (enabled) baseBackgroundColor else baseBackgroundColor.copy(alpha = 0.55f)
+    val contentColor = if (enabled) baseContentColor else baseContentColor.copy(alpha = 0.55f)
 
     Surface(
         modifier =
@@ -176,10 +201,28 @@ private fun LowVisionMyPageAction(
                 .fillMaxWidth()
                 .heightIn(min = LowVisionMyPageLayoutDefaults.actionMinHeight)
                 .lowVisionButtonSemantics(label)
-                .clickable(onClickLabel = label, role = Role.Button, onClick = onClick),
+                .clickable(
+                    enabled = enabled,
+                    onClickLabel = label,
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
         shape = RoundedCornerShape(16.dp),
         color = backgroundColor,
-        border = if (filled) null else BorderStroke(width = 3.dp, color = LowVisionYellow),
+        border =
+            if (filled) {
+                null
+            } else {
+                BorderStroke(
+                    width = 3.dp,
+                    color =
+                        if (enabled) {
+                            LowVisionYellow
+                        } else {
+                            LowVisionYellow.copy(alpha = 0.55f)
+                        },
+                )
+            },
     ) {
         Row(
             modifier =

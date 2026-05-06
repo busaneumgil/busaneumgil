@@ -17,3 +17,12 @@ data class SignupResponseDto(
     val selectedPrimaryUserType: String,
     val selectedMobilitySubtype: String?,
 )
+
+data class ReissueRequestDto(
+    val refreshToken: String,
+)
+
+data class ReissueResponseDto(
+    val accessToken: String,
+    val refreshToken: String,
+)

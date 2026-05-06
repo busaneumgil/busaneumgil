@@ -1,17 +1,16 @@
 #!/bin/sh
 set -eu
 
-DATA_FILE="${GRAPHHOPPER_DATA_FILE:-/data/raw/busan.osm.pbf}"
-CONFIG_FILE="${GRAPHHOPPER_CONFIG_FILE:-/opt/graphhopper/config-local.yml}"
+CONFIG_FILE="${GRAPHHOPPER_CONFIG_FILE:-/opt/graphhopper/config-runtime.yml}"
 GRAPH_LOCATION="${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}"
 
-if [ ! -f "$DATA_FILE" ]; then
-  echo "GraphHopper data file not found: $DATA_FILE" >&2
+if [ ! -d "$GRAPH_LOCATION" ] || [ -z "$(find "$GRAPH_LOCATION" -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
+  echo "GraphHopper graph-cache not found or empty: $GRAPH_LOCATION" >&2
+  echo "Run the graphhopper-build job before starting GraphHopper runtime." >&2
   exit 1
 fi
 
 exec java ${JAVA_OPTS:-} \
-  -Ddw.graphhopper.datareader.file="$DATA_FILE" \
   -Ddw.graphhopper.graph.location="$GRAPH_LOCATION" \
   -jar /opt/graphhopper/graphhopper-web.jar \
   server "$CONFIG_FILE"

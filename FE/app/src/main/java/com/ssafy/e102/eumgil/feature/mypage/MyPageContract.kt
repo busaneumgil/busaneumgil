@@ -7,6 +7,7 @@ data class MyPageUiState(
     val isDebugSectionVisible: Boolean = false,
     val isRuntimeToggleEnabled: Boolean = false,
     val isForceMockEnabled: Boolean = false,
+    val isLogoutLoading: Boolean = false,
 )
 
 enum class MyPageUserMode {
@@ -51,4 +52,10 @@ sealed interface MyPageUiEvent {
     data object NavigateToAppInfo : MyPageUiEvent
 
     data object ShowPreparingMessage : MyPageUiEvent
+
+    data object ShowProfileSyncFailedMessage : MyPageUiEvent
+
+    data class ShowSnackbar(
+        val message: String,
+    ) : MyPageUiEvent
 }

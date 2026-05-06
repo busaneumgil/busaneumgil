@@ -266,7 +266,9 @@
     <string name="my_page_menu_report_history">제보 내역</string>
     <string name="my_page_menu_app_help">앱 정보 및 도움말</string>
     <string name="my_page_logout">로그아웃</string>
+    <string name="my_page_logout_loading">로그아웃 중...</string>
     <string name="my_page_preparing_message">준비 중입니다.</string>
+    <string name="my_page_profile_sync_failed">최신 사용자 정보를 불러오지 못했습니다. 저장된 정보를 표시합니다.</string>
     <string name="my_page_back">뒤로가기</string>
     <string name="my_page_app_info_title">앱 정보 및 도움말</string>
     <string name="my_page_app_info_version">버전 %1$s</string>
@@ -278,6 +280,9 @@
     <string name="my_page_app_info_privacy_policy">개인정보 처리방침</string>
     <string name="my_page_app_info_service_terms">서비스 이용약관</string>
     <string name="my_page_app_info_withdraw">회원탈퇴</string>
+    <string name="my_page_app_info_withdraw_loading">회원탈퇴 처리 중</string>
+    <string name="my_page_app_info_withdraw_state_enabled">회원탈퇴 가능</string>
+    <string name="my_page_app_info_withdraw_state_loading">회원탈퇴 처리 중</string>
     <string name="feature_path_map">feature/map</string>
     <string name="feature_path_saved_route">feature/savedroute</string>
     <string name="feature_path_my_page">feature/mypage</string>
@@ -565,6 +570,7 @@
     <string name="low_vision_my_page_mode_change">모드 변경</string>
     <string name="low_vision_my_page_app_info">앱 정보</string>
     <string name="low_vision_my_page_logout">로그아웃</string>
+    <string name="low_vision_my_page_logout_loading">로그아웃 중...</string>
     <string name="low_vision_app_info_title">앱 정보</string>
     <string name="low_vision_app_info_service_title">부산이음길</string>
     <string name="low_vision_app_info_service_body">시각장애 사용자를 위한 큰 글씨, 고대비, 음성 중심 길 안내 화면입니다.</string>

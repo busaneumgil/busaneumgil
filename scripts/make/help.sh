@@ -20,11 +20,21 @@ Docker Compose: dev server
   dev-down                     dev 스택을 중지한다
   dev-logs                     dev 스택 로그를 확인한다
 
+Docker Compose: prod server
+  prod-config                  prod compose 설정을 렌더링한다
+  prod-up                      prod backend/ai runtime을 실행한다
+  prod-up-graphhopper          prod GraphHopper runtime까지 실행한다
+
 Docker host scripts
   be-dev-config                백엔드 dev host 설정을 렌더링한다
   be-dev-up                    백엔드 dev host 서비스를 실행한다
   be-dev-down                  백엔드 dev host 서비스를 중지한다
   be-dev-logs                  백엔드 dev host 로그를 확인한다
+
+GraphHopper
+  graphhopper-local-build      local DB에서 graph-cache를 생성한다
+  graphhopper-dev-build        dev DB에서 graph-cache를 생성한다
+  graphhopper-prod-build       prod DB에서 graph-cache를 생성한다
 
 Partial local stacks
   be-local-up                  백엔드 local 서비스만 실행한다

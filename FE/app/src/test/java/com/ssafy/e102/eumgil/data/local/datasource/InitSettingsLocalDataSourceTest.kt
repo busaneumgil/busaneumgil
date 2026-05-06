@@ -60,6 +60,29 @@ class InitSettingsLocalDataSourceTest {
             assertTrue(settings.isLowVisionFollowUpCompleted)
         }
 
+    @Test
+    fun `clearing init settings removes onboarding progress and agreement flags`() =
+        runTest {
+            val dataSource = createDataSource()
+
+            dataSource.savePrimaryUserType(PrimaryUserType.MOBILITY_IMPAIRED.routeValue)
+            dataSource.saveMobilitySubtype(MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
+            dataSource.saveLowVisionFollowUpCompleted(isCompleted = true)
+            dataSource.saveLocationTermsAgreement(
+                isLocationTermsAgreed = true,
+                isPrivacyPolicyAgreed = true,
+            )
+
+            dataSource.clearInitSettings()
+
+            val settings = dataSource.getInitSettings()
+            assertNull(settings.selectedPrimaryUserType)
+            assertNull(settings.selectedMobilitySubtype)
+            assertFalse(settings.isLowVisionFollowUpCompleted)
+            assertFalse(settings.isLocationTermsAgreed)
+            assertFalse(settings.isPrivacyPolicyAgreed)
+        }
+
     private fun TestScope.createDataSource(): InitSettingsLocalDataSource {
         val file = File(temporaryFolder.newFolder(), "init_settings.preferences_pb")
         val dataStore =

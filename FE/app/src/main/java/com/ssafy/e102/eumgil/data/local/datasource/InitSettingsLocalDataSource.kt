@@ -76,6 +76,16 @@ class InitSettingsLocalDataSource(
         }
     }
 
+    suspend fun clearInitSettings() {
+        dataStore.edit { preferences ->
+            preferences.remove(InitSettingsPreferences.selectedPrimaryUserType)
+            preferences.remove(InitSettingsPreferences.selectedMobilitySubtype)
+            preferences.remove(InitSettingsPreferences.isLowVisionFollowUpCompleted)
+            preferences.remove(InitSettingsPreferences.isLocationTermsAgreed)
+            preferences.remove(InitSettingsPreferences.isPrivacyPolicyAgreed)
+        }
+    }
+
     private companion object {
         private const val LOW_VISION_ROUTE_VALUE = "low_vision"
     }

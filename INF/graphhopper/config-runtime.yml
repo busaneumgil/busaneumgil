@@ -1,0 +1,39 @@
+graphhopper:
+  graph.location: graph-cache
+
+  profiles:
+    - name: foot
+      custom_model:
+        speed:
+          - if: "true"
+            limit_to: 5
+        priority:
+          - if: "true"
+            multiply_by: 1
+
+  profiles_ch: []
+  profiles_lm: []
+
+  graph.encoded_values: |
+    foot_access, foot_average_speed, foot_priority, foot_road_access, hike_rating, country, road_class, mtb_rating
+  prepare.min_network_size: 2
+  prepare.subnetworks.threads: 1
+  import.osm.ignored_highways: []
+  routing.non_ch.max_waypoint_distance: 1000000
+  graph.dataaccess.default_type: RAM_STORE
+
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: 0.0.0.0
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+
+logging:
+  appenders:
+    - type: console

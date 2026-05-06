@@ -18,4 +18,6 @@ interface InitSettingsRepository {
         isLocationTermsAgreed: Boolean,
         isPrivacyPolicyAgreed: Boolean,
     )
+
+    suspend fun clearInitSettings()
 }

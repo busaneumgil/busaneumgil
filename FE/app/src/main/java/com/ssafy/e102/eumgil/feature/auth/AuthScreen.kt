@@ -198,6 +198,21 @@ private fun SocialLoginPanel(
                 },
             )
         }
+
+        uiState.errorMessage?.let { message ->
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.92f),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    textAlign = TextAlign.Start,
+                )
+            }
+        }
     }
 }
 

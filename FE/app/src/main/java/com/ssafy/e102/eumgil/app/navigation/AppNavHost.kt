@@ -22,8 +22,9 @@ import androidx.navigation.compose.rememberNavController
 import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
-import com.ssafy.e102.eumgil.core.model.InitSettings
+import com.ssafy.e102.eumgil.data.repository.provideProfileUserTypeUpdateRepository
 
 internal val AppNavHostContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
@@ -34,13 +35,20 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val settingsRepository = remember(appContainer) { appContainer.settingsRepository }
     val authSessionRepository = remember(appContainer) { appContainer.authSessionRepository }
     val authSignupRepository = remember(appContainer) { appContainer.authSignupRepository }
+    val profileUserTypeUpdateRepository =
+        remember(authSessionRepository, settingsRepository) {
+            provideProfileUserTypeUpdateRepository(
+                baseUrl = AppEnvironment.baseUrl,
+                authSessionRepository = authSessionRepository,
+                settingsRepository = settingsRepository,
+                isMockMode = AppEnvironment.isMockMode,
+            )
+        }
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
-    var initialSettings by remember { mutableStateOf<InitSettings?>(null) }
 
     LaunchedEffect(authSessionRepository, settingsRepository) {
         val authGateState = authSessionRepository.getAuthGateState()
         val savedSettings = settingsRepository.getInitSettings()
-        initialSettings = savedSettings
         appStartDestination =
             resolveAppStartDestination(
                 authGateState = authGateState,
@@ -49,13 +57,12 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
     }
 
-    if (appStartDestination == null || initialSettings == null) {
+    if (appStartDestination == null) {
         AppEntryLoadingScreen(modifier = modifier)
         return
     }
 
     val startDestination = appStartDestination ?: return
-    val restoredSettings = initialSettings ?: return
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
@@ -90,7 +97,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 navController = navController,
                 settingsRepository = settingsRepository,
                 authSignupRepository = authSignupRepository,
-                initialSettings = restoredSettings,
+                profileUserTypeUpdateRepository = profileUserTypeUpdateRepository,
             )
             lowVisionNavGraph(navController = navController)
             mainNavGraph(navController = navController)

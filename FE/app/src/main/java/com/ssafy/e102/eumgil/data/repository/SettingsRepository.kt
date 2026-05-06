@@ -51,6 +51,10 @@ class DefaultSettingsRepository(
         )
     }
 
+    override suspend fun clearInitSettings() {
+        initSettingsLocalDataSource.clearInitSettings()
+    }
+
     override fun observeRepositoryDebugSettings(): Flow<RepositoryDebugSettings> =
         debugSettingsLocalDataSource
             .observeForceMockEnabled()

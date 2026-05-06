@@ -7,7 +7,7 @@ ARG GRAPHHOPPER_VERSION
 WORKDIR /opt/graphhopper
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates python3 python3-psycopg2 \
+    && apt-get install -y --no-install-recommends curl ca-certificates osmium-tool python3 python3-psycopg2 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL -o graphhopper-web.jar "https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/${GRAPHHOPPER_VERSION}/graphhopper-web-${GRAPHHOPPER_VERSION}.jar"

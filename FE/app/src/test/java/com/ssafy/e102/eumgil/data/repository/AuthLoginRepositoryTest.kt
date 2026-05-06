@@ -63,6 +63,7 @@ class AuthLoginRepositoryTest {
     fun `new user social login stores signup token without service session`() =
         runTest {
             val authSessionRepository = RecordingAuthSessionRepository()
+            val settingsRepository = RecordingSettingsRepository()
             val authRemoteDataSource =
                 FakeAuthRemoteDataSource(
                     socialLoginResponse =
@@ -82,13 +83,14 @@ class AuthLoginRepositoryTest {
                     socialAccessTokenProvider =
                         FakeSocialAccessTokenProvider(accessToken = "naver-access-token"),
                     authSessionRepository = authSessionRepository,
-                    settingsRepository = RecordingSettingsRepository(),
+                    settingsRepository = settingsRepository,
                 )
 
             repository.login(AuthLoginRequest(providerKey = "auth-ui-naver"))
 
             assertNull(authSessionRepository.savedAuthSession)
             assertEquals("signup-token", authSessionRepository.savedSignupToken)
+            assertTrue(settingsRepository.clearInitSettingsCalled)
             assertEquals("NAVER", authRemoteDataSource.latestSocialProvider)
             assertEquals("naver-access-token", authRemoteDataSource.latestSocialAccessToken)
         }
@@ -189,6 +191,8 @@ private class RecordingSettingsRepository : SettingsRepository {
         private set
     var savedLocationTermsAgreed: Boolean = false
         private set
+    var clearInitSettingsCalled: Boolean = false
+        private set
 
     override fun observeInitSettings(): Flow<InitSettings> = flowOf(InitSettings())
 
@@ -211,6 +215,10 @@ private class RecordingSettingsRepository : SettingsRepository {
         isPrivacyPolicyAgreed: Boolean,
     ) {
         savedLocationTermsAgreed = isLocationTermsAgreed
+    }
+
+    override suspend fun clearInitSettings() {
+        clearInitSettingsCalled = true
     }
 
     override fun observeRepositoryDebugSettings() = emptyFlow<RepositoryDebugSettings>()

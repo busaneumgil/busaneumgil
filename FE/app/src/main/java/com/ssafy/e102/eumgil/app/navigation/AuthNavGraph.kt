@@ -37,7 +37,6 @@ fun NavGraphBuilder.authNavGraph(
             },
         )
     }
-
     composable(route = AuthRoute.ProfileSetup.route) {
         val coroutineScope = rememberCoroutineScope()
 

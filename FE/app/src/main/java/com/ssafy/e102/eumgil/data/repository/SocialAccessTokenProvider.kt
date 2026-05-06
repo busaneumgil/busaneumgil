@@ -28,6 +28,39 @@ interface SocialAccessTokenProvider {
     suspend fun getAccessToken(provider: AuthSocialProvider): String
 }
 
+internal interface KakaoLoginClient {
+    fun isKakaoTalkLoginAvailable(context: Context): Boolean
+
+    fun loginWithKakaoTalk(
+        context: Context,
+        callback: (OAuthToken?, Throwable?) -> Unit,
+    )
+
+    fun loginWithKakaoAccount(
+        context: Context,
+        callback: (OAuthToken?, Throwable?) -> Unit,
+    )
+}
+
+private object DefaultKakaoLoginClient : KakaoLoginClient {
+    override fun isKakaoTalkLoginAvailable(context: Context): Boolean =
+        UserApiClient.instance.isKakaoTalkLoginAvailable(context)
+
+    override fun loginWithKakaoTalk(
+        context: Context,
+        callback: (OAuthToken?, Throwable?) -> Unit,
+    ) {
+        UserApiClient.instance.loginWithKakaoTalk(context, callback = callback)
+    }
+
+    override fun loginWithKakaoAccount(
+        context: Context,
+        callback: (OAuthToken?, Throwable?) -> Unit,
+    ) {
+        UserApiClient.instance.loginWithKakaoAccount(context, callback = callback)
+    }
+}
+
 class CompositeSocialAccessTokenProvider(
     private val providersBySocialProvider: Map<AuthSocialProvider, SocialAccessTokenProvider>,
 ) : SocialAccessTokenProvider {
@@ -42,43 +75,79 @@ class UnavailableSocialAccessTokenProvider : SocialAccessTokenProvider {
     }
 }
 
-class KakaoSocialAccessTokenProvider(
+internal class KakaoSocialAccessTokenProvider(
     private val context: Context,
+    private val activityContextProvider: () -> Context? = { null },
+    private val kakaoLoginClient: KakaoLoginClient = DefaultKakaoLoginClient,
 ) : SocialAccessTokenProvider {
     override suspend fun getAccessToken(provider: AuthSocialProvider): String {
+        requireKakaoProvider(provider)
+        requireKakaoNativeAppKey()
+        return suspendCancellableCoroutine { continuation ->
+            startKakaoLogin(
+                loginContext = resolveLoginContext(),
+                callback =
+                    createAccessTokenCallback(
+                        onSuccess = { accessToken ->
+                            if (continuation.isActive) {
+                                continuation.resume(accessToken)
+                            }
+                        },
+                        onFailure = { error ->
+                            if (continuation.isActive) {
+                                continuation.resumeWithException(error)
+                            }
+                        },
+                    ),
+            )
+        }
+    }
+
+    private fun resolveLoginContext(): Context = activityContextProvider() ?: context
+
+    private fun requireKakaoProvider(provider: AuthSocialProvider) {
         if (provider != AuthSocialProvider.KAKAO) {
             throw IllegalStateException("${provider.displayName} Android login key and SDK connection are required.")
         }
+    }
+
+    private fun requireKakaoNativeAppKey() {
         if (BuildConfig.KAKAO_NATIVE_APP_KEY.isBlank()) {
             throw IllegalStateException("Kakao Native App Key is required.")
         }
+    }
 
-        return suspendCancellableCoroutine { continuation ->
-            val callback: (OAuthToken?, Throwable?) -> Unit = { token, error ->
-                when {
-                    error != null && continuation.isActive -> continuation.resumeWithException(error)
-                    token != null && continuation.isActive -> continuation.resume(token.accessToken)
-                    continuation.isActive -> {
-                        continuation.resumeWithException(IllegalStateException("Kakao login did not return an access token."))
-                    }
-                }
-            }
+    private fun startKakaoLogin(
+        loginContext: Context,
+        callback: (OAuthToken?, Throwable?) -> Unit,
+    ) {
+        if (!kakaoLoginClient.isKakaoTalkLoginAvailable(loginContext)) {
+            kakaoLoginClient.loginWithKakaoAccount(loginContext, callback = callback)
+            return
+        }
 
-            if (UserApiClient.instance.isKakaoTalkLoginAvailable(context)) {
-                UserApiClient.instance.loginWithKakaoTalk(context) { token, error ->
-                    if (error is ClientError && error.reason == ClientErrorCause.Cancelled) {
-                        callback(null, error)
-                    } else if (error != null) {
-                        UserApiClient.instance.loginWithKakaoAccount(context, callback = callback)
-                    } else {
-                        callback(token, null)
-                    }
-                }
-            } else {
-                UserApiClient.instance.loginWithKakaoAccount(context, callback = callback)
+        kakaoLoginClient.loginWithKakaoTalk(loginContext) { token, error ->
+            when {
+                error is ClientError && error.reason == ClientErrorCause.Cancelled ->
+                    callback(null, error)
+                error != null ->
+                    kakaoLoginClient.loginWithKakaoAccount(loginContext, callback = callback)
+                else -> callback(token, null)
             }
         }
     }
+
+    private fun createAccessTokenCallback(
+        onSuccess: (String) -> Unit,
+        onFailure: (Throwable) -> Unit,
+    ): (OAuthToken?, Throwable?) -> Unit =
+        { token, error ->
+            when {
+                error != null -> onFailure(error)
+                token != null -> onSuccess(token.accessToken)
+                else -> onFailure(IllegalStateException("Kakao login did not return an access token."))
+            }
+        }
 }
 
 class GoogleSocialAccessTokenProvider(

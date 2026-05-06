@@ -2,6 +2,8 @@ package com.ssafy.e102.eumgil.data.remote.datasource
 
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueRequestDto
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.SignupResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.SocialLoginResponseDto
 import org.json.JSONObject
@@ -34,6 +36,24 @@ open class AuthRemoteDataSource(
             selectedPrimaryUserType = dataJson.optNullableString("selectedPrimaryUserType"),
             selectedMobilitySubtype = dataJson.optNullableString("selectedMobilitySubtype"),
         )
+    }
+
+    open suspend fun logout(accessToken: String): String {
+        val response =
+            httpJsonClient.postJson(
+                path = "/auth/logout",
+                body = "",
+                headers =
+                    mapOf(
+                        AUTHORIZATION_HEADER_NAME to "$BEARER_PREFIX $accessToken",
+                    ),
+            )
+        val responseJson = response.body.toJsonObjectOrNull()
+        response.throwIfNotSuccessful(responseJson = responseJson)
+
+        return responseJson?.optString("message")
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_LOGOUT_SUCCESS_MESSAGE
     }
 
     open suspend fun signup(
@@ -90,20 +110,42 @@ open class AuthRemoteDataSource(
         )
     }
 
+    open suspend fun reissue(refreshToken: String): ReissueResponseDto {
+        val request = ReissueRequestDto(refreshToken = refreshToken)
+        val response =
+            httpJsonClient.postJson(
+                path = "/auth/reissue",
+                body =
+                    JSONObject()
+                        .put("refreshToken", request.refreshToken)
+                        .toString(),
+            )
+        val responseJson = response.body.toJsonObjectOrNull()
+        val dataJson = response.requireDataJson(responseJson)
+
+        return ReissueResponseDto(
+            accessToken =
+                dataJson.optNullableString("accessToken")
+                    ?: throw AuthApiException(
+                        httpStatusCode = response.statusCode,
+                        status = responseJson?.optString("status").orEmpty(),
+                        message = DEFAULT_AUTH_API_ERROR_MESSAGE,
+                    ),
+            refreshToken =
+                dataJson.optNullableString("refreshToken")
+                    ?: throw AuthApiException(
+                        httpStatusCode = response.statusCode,
+                        status = responseJson?.optString("status").orEmpty(),
+                        message = DEFAULT_AUTH_API_ERROR_MESSAGE,
+                    ),
+        )
+    }
+
     private fun String.toJsonObjectOrNull(): JSONObject? =
         runCatching { JSONObject(this) }.getOrNull()
 
     private fun HttpJsonResponse.requireDataJson(responseJson: JSONObject?): JSONObject {
-        if (statusCode !in 200..299) {
-            throw AuthApiException(
-                httpStatusCode = statusCode,
-                status = responseJson?.optString("status").orEmpty(),
-                message =
-                    responseJson?.optString("message")
-                        ?.takeIf { it.isNotBlank() }
-                        ?: DEFAULT_AUTH_API_ERROR_MESSAGE,
-            )
-        }
+        throwIfNotSuccessful(responseJson = responseJson)
 
         return responseJson?.optJSONObject("data")
             ?: throw AuthApiException(
@@ -120,8 +162,24 @@ open class AuthRemoteDataSource(
             optString(name).takeIf { it.isNotBlank() }
         }
 
+    private fun HttpJsonResponse.throwIfNotSuccessful(responseJson: JSONObject?) {
+        if (statusCode !in 200..299) {
+            throw AuthApiException(
+                httpStatusCode = statusCode,
+                status = responseJson?.optString("status").orEmpty(),
+                message =
+                    responseJson?.optString("message")
+                        ?.takeIf { it.isNotBlank() }
+                        ?: DEFAULT_AUTH_API_ERROR_MESSAGE,
+            )
+        }
+    }
+
     private companion object {
         private const val DEFAULT_AUTH_API_ERROR_MESSAGE = "인증 서버 요청에 실패했습니다."
+        private const val DEFAULT_LOGOUT_SUCCESS_MESSAGE = "로그아웃되었습니다."
+        private const val AUTHORIZATION_HEADER_NAME = "Authorization"
+        private const val BEARER_PREFIX = "Bearer"
     }
 }
 

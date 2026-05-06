@@ -24,6 +24,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
@@ -83,6 +84,9 @@ class AppContainer(
     }
     private val authRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         AuthRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
+    private val bookmarksRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        BookmarksRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
@@ -147,6 +151,11 @@ class AppContainer(
     val bookmarkRepository: BookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideBookmarkRepository(
             bookmarkDao = localDatabase.bookmarkDao(),
+            bookmarksRemoteDataSource =
+                if (AppEnvironment.isMockMode) null else bookmarksRemoteDataSource,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
             initialBookmarks =
                 if (AppEnvironment.isDebugBuild) {
                     MockBookmarkFixtures.defaultBookmarks

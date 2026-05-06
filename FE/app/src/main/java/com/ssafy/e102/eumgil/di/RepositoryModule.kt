@@ -16,6 +16,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
@@ -92,10 +93,14 @@ object RepositoryModule {
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,
+        bookmarksRemoteDataSource: BookmarksRemoteDataSource? = null,
+        accessTokenProvider: suspend () -> String? = { null },
         initialBookmarks: List<BookmarkData> = emptyList(),
     ): BookmarkRepository =
         DefaultBookmarkRepository(
             bookmarkDao = bookmarkDao,
+            bookmarksRemoteDataSource = bookmarksRemoteDataSource,
+            accessTokenProvider = accessTokenProvider,
             initialBookmarks = initialBookmarks,
         )
 

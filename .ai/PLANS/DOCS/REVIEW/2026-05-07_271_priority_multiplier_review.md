@@ -2,7 +2,7 @@
 
 ## 커밋
 
-`Feat[S14P31E102-271]: 보행 priority multiplier 반영`
+`✨ Feat[S14P31E102-271]: 보행 priority multiplier 반영`
 
 ## 구현 범위
 

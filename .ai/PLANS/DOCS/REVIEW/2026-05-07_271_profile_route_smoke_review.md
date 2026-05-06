@@ -2,7 +2,7 @@
 
 ## 커밋
 
-`Chore[S14P31E102-271]: 접근성 profile route 검증 추가`
+`🔧 Chore[S14P31E102-271]: 접근성 profile route 검증 추가`
 
 ## 구현 범위
 

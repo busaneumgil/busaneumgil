@@ -59,8 +59,8 @@
 
 ## 커밋
 
-- `afabca1` `Feat[S14P31E102-271]: GraphHopper validation report 생성`
-- `7fd1489` `Feat[S14P31E102-271]: PBF 및 graph-cache 빌드 파이프라인 구현`
+- `afabca1` `✨ Feat[S14P31E102-271]: GraphHopper validation report 생성`
+- `7fd1489` `✨ Feat[S14P31E102-271]: PBF 및 graph-cache 빌드 파이프라인 구현`
 
 ## 검증
 

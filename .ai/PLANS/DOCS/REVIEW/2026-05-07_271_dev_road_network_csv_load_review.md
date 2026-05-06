@@ -2,7 +2,7 @@
 
 ## 커밋
 
-- 메시지: `Chore[S14P31E102-271]: dev road network CSV 적재 절차 추가`
+- 메시지: `🔧 Chore[S14P31E102-271]: dev road network CSV 적재 절차 추가`
 - 브랜치: `be/feat/graphhopper-setting-271`
 
 ## 구현 범위

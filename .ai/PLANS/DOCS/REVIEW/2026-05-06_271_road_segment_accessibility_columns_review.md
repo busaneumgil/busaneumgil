@@ -2,7 +2,7 @@
 
 ## 커밋
 
-- 메시지: `Feat[S14P31E102-271]: road segment 접근성 컬럼 정합성 반영`
+- 메시지: `✨ Feat[S14P31E102-271]: road segment 접근성 컬럼 정합성 반영`
 - 브랜치: `be/feat/graphhopper-setting-271`
 
 ## 구현 범위

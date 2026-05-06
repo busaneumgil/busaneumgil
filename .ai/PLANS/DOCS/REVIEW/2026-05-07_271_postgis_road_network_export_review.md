@@ -2,7 +2,7 @@
 
 ## 커밋
 
-- 메시지: `Feat[S14P31E102-271]: PostGIS road network export 구현`
+- 메시지: `✨ Feat[S14P31E102-271]: PostGIS road network export 구현`
 - 브랜치: `be/feat/graphhopper-setting-271`
 
 ## 구현 범위

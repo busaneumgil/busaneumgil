@@ -37,6 +37,7 @@ fun MyPageAppInfoRoute(
             provideAccountWithdrawalRepository(
                 baseUrl = AppEnvironment.baseUrl,
                 authSessionRepository = appContainer.authSessionRepository,
+                initSettingsRepository = appContainer.settingsRepository,
                 bookmarkDao = appContainer.localDatabase.bookmarkDao(),
                 isMockMode = AppEnvironment.isMockMode,
             )

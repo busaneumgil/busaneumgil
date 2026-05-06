@@ -30,10 +30,15 @@ interface AccountWithdrawalLocalDataCleaner {
 fun provideAccountWithdrawalRepository(
     baseUrl: String,
     authSessionRepository: AuthSessionRepository,
+    initSettingsRepository: InitSettingsRepository,
     bookmarkDao: BookmarkDao,
     isMockMode: Boolean,
 ): AccountWithdrawalRepository {
-    val localDataCleaner = DefaultAccountWithdrawalLocalDataCleaner(bookmarkDao = bookmarkDao)
+    val localDataCleaner =
+        DefaultAccountWithdrawalLocalDataCleaner(
+            bookmarkDao = bookmarkDao,
+            initSettingsRepository = initSettingsRepository,
+        )
 
     return if (isMockMode) {
         LocalOnlyAccountWithdrawalRepository(
@@ -51,9 +56,11 @@ fun provideAccountWithdrawalRepository(
 
 class DefaultAccountWithdrawalLocalDataCleaner(
     private val bookmarkDao: BookmarkDao,
+    private val initSettingsRepository: InitSettingsRepository,
 ) : AccountWithdrawalLocalDataCleaner {
     override suspend fun clearAfterWithdrawal() {
         bookmarkDao.clearBookmarks()
+        initSettingsRepository.clearInitSettings()
     }
 }
 

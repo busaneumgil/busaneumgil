@@ -56,6 +56,7 @@ class ServerAuthLoginRepository(
             val signupToken =
                 response.signupToken
                     ?: throw IllegalStateException("회원가입 토큰을 받지 못했습니다.")
+            settingsRepository.clearInitSettings()
             authSessionRepository.saveSignupToken(signupToken = signupToken)
             return
         }

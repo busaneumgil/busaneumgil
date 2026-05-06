@@ -2,6 +2,9 @@ package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
+import com.ssafy.e102.eumgil.core.model.InitSettings
+import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
+import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
@@ -135,6 +138,23 @@ class AccountWithdrawalRepositoryTest {
             assertTrue(authSessionRepository.clearAuthSessionCalled)
             assertFalse(localDataCleaner.clearCalled)
         }
+
+    @Test
+    fun `default local data cleaner clears bookmarks and onboarding state`() =
+        runTest {
+            val bookmarkDao = RecordingBookmarkDao()
+            val initSettingsRepository = RecordingInitSettingsRepository()
+            val cleaner =
+                DefaultAccountWithdrawalLocalDataCleaner(
+                    bookmarkDao = bookmarkDao,
+                    initSettingsRepository = initSettingsRepository,
+                )
+
+            cleaner.clearAfterWithdrawal()
+
+            assertTrue(bookmarkDao.clearBookmarksCalled)
+            assertTrue(initSettingsRepository.clearInitSettingsCalled)
+        }
 }
 
 private class FakeWithdrawUserRemoteDataSource(
@@ -183,5 +203,52 @@ private class RecordingAccountWithdrawalLocalDataCleaner : AccountWithdrawalLoca
 
     override suspend fun clearAfterWithdrawal() {
         clearCalled = true
+    }
+}
+
+private class RecordingBookmarkDao : BookmarkDao {
+    var clearBookmarksCalled: Boolean = false
+        private set
+
+    override fun observeBookmarks(): Flow<List<BookmarkEntity>> = emptyFlow()
+
+    override fun observeBookmark(placeId: String): Flow<BookmarkEntity?> = emptyFlow()
+
+    override suspend fun getBookmark(placeId: String): BookmarkEntity? = null
+
+    override suspend fun getBookmarkCount(): Int = 0
+
+    override suspend fun upsertBookmark(bookmark: BookmarkEntity) = Unit
+
+    override suspend fun upsertBookmarks(bookmarks: List<BookmarkEntity>) = Unit
+
+    override suspend fun deleteBookmark(placeId: String) = Unit
+
+    override suspend fun clearBookmarks() {
+        clearBookmarksCalled = true
+    }
+}
+
+private class RecordingInitSettingsRepository : InitSettingsRepository {
+    var clearInitSettingsCalled: Boolean = false
+        private set
+
+    override fun observeInitSettings(): Flow<InitSettings> = emptyFlow()
+
+    override suspend fun getInitSettings(): InitSettings = InitSettings()
+
+    override suspend fun savePrimaryUserType(selectedPrimaryUserType: String) = Unit
+
+    override suspend fun saveMobilitySubtype(selectedMobilitySubtype: String) = Unit
+
+    override suspend fun saveLowVisionFollowUpCompleted(isCompleted: Boolean) = Unit
+
+    override suspend fun saveLocationTermsAgreement(
+        isLocationTermsAgreed: Boolean,
+        isPrivacyPolicyAgreed: Boolean,
+    ) = Unit
+
+    override suspend fun clearInitSettings() {
+        clearInitSettingsCalled = true
     }
 }

@@ -228,6 +228,10 @@ private class FakeSettingsRepository(
             )
     }
 
+    override suspend fun clearInitSettings() {
+        initSettingsFlow.value = InitSettings()
+    }
+
     override fun observeRepositoryDebugSettings(): Flow<RepositoryDebugSettings> = debugSettingsFlow
 
     override suspend fun getRepositoryDebugSettings(): RepositoryDebugSettings = debugSettingsFlow.value

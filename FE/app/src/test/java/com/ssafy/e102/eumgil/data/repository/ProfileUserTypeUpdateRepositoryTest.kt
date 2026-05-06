@@ -309,6 +309,10 @@ private class RecordingProfileSettingsRepository(
             )
     }
 
+    override suspend fun clearInitSettings() {
+        initSettings = InitSettings()
+    }
+
     override fun observeRepositoryDebugSettings(): Flow<RepositoryDebugSettings> = emptyFlow()
 
     override suspend fun getRepositoryDebugSettings(): RepositoryDebugSettings =

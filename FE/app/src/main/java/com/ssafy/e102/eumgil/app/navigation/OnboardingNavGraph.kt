@@ -11,6 +11,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
+import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateRepository
+import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateResult
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LowVisionFollowUpRoute
@@ -25,6 +27,7 @@ fun NavGraphBuilder.onboardingNavGraph(
     navController: NavHostController,
     settingsRepository: SettingsRepository,
     authSignupRepository: AuthSignupRepository,
+    profileUserTypeUpdateRepository: ProfileUserTypeUpdateRepository,
     initialSettings: InitSettings,
 ) {
     composable(route = OnboardingRoute.UserTypePrimary.route) {
@@ -42,25 +45,28 @@ fun NavGraphBuilder.onboardingNavGraph(
 
     composable(route = OnboardingRoute.ProfileUserTypePrimary.route) {
         val coroutineScope = rememberCoroutineScope()
+        val context = LocalContext.current
 
         PrimaryUserTypeRoute(
             onTypeSelected = { primaryUserType ->
                 coroutineScope.launch {
-                    settingsRepository.savePrimaryUserType(primaryUserType.routeValue)
                     when (primaryUserType) {
-                        PrimaryUserType.LOW_VISION -> {
-                            settingsRepository.saveLowVisionFollowUpCompleted(isCompleted = true)
-                            navController.navigateToLowVisionHomeAfterProfileEdit()
-                        }
+                        PrimaryUserType.LOW_VISION ->
+                            completeProfileEditAndNavigate(
+                                navController = navController,
+                                context = context,
+                                profileUserTypeUpdateRepository = profileUserTypeUpdateRepository,
+                                selectedPrimaryUserType = primaryUserType.routeValue,
+                                selectedMobilitySubtype = null,
+                            )
 
-                        PrimaryUserType.MOBILITY_IMPAIRED -> {
+                        PrimaryUserType.MOBILITY_IMPAIRED ->
                             navController.navigate(
                                 resolvePrimaryUserTypeNextRoute(
                                     primaryUserType = primaryUserType,
                                     entryPoint = OnboardingEntryPoint.PROFILE_EDIT,
                                 ),
                             )
-                        }
                     }
                 }
             },
@@ -95,12 +101,18 @@ fun NavGraphBuilder.onboardingNavGraph(
 
     composable(route = OnboardingRoute.ProfileMobilityTypeSecondary.route) {
         val coroutineScope = rememberCoroutineScope()
+        val context = LocalContext.current
 
         MobilityTypeSecondaryRoute(
             onNavigateNext = { mobilitySubtype ->
                 coroutineScope.launch {
-                    settingsRepository.saveMobilitySubtype(mobilitySubtype.routeValue)
-                    navController.navigateToMyPageAfterProfileEdit()
+                    completeProfileEditAndNavigate(
+                        navController = navController,
+                        context = context,
+                        profileUserTypeUpdateRepository = profileUserTypeUpdateRepository,
+                        selectedPrimaryUserType = PrimaryUserType.MOBILITY_IMPAIRED.routeValue,
+                        selectedMobilitySubtype = mobilitySubtype.routeValue,
+                    )
                 }
             },
         )
@@ -224,6 +236,13 @@ internal fun resolveOnboardingCompletedRoute(selectedPrimaryUserType: String?): 
         TopLevelRoute.Map.route
     }
 
+internal fun resolveProfileEditCompletedRoute(selectedPrimaryUserType: String?): String =
+    if (selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {
+        LowVisionRoute.Home.route
+    } else {
+        TopLevelRoute.MyPage.route
+    }
+
 private fun NavHostController.navigateToCompletedOnboarding(route: String) {
     navigate(route) {
         launchSingleTop = true
@@ -256,5 +275,63 @@ private fun NavHostController.navigateToLowVisionHomeAfterProfileEdit() {
     }
 }
 
+private suspend fun completeProfileEditAndNavigate(
+    navController: NavHostController,
+    context: android.content.Context,
+    profileUserTypeUpdateRepository: ProfileUserTypeUpdateRepository,
+    selectedPrimaryUserType: String,
+    selectedMobilitySubtype: String?,
+) {
+    when (
+        val result =
+            profileUserTypeUpdateRepository.completeProfileEdit(
+                selectedPrimaryUserType = selectedPrimaryUserType,
+                selectedMobilitySubtype = selectedMobilitySubtype,
+            )
+    ) {
+        is ProfileUserTypeUpdateResult.Success -> {
+            when (resolveProfileEditCompletedRoute(result.selectedPrimaryUserType)) {
+                LowVisionRoute.Home.route -> navController.navigateToLowVisionHomeAfterProfileEdit()
+                else -> navController.navigateToMyPageAfterProfileEdit()
+            }
+        }
+
+        ProfileUserTypeUpdateResult.MissingSession,
+        ProfileUserTypeUpdateResult.AuthenticationFailed,
+        -> {
+            Toast
+                .makeText(
+                    context,
+                    PROFILE_EDIT_AUTHENTICATION_ERROR_MESSAGE,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            navController.navigateToLoginAfterAuthenticationFailure()
+        }
+
+        is ProfileUserTypeUpdateResult.Failure ->
+            Toast
+                .makeText(
+                    context,
+                    result.message.ifBlank { DEFAULT_PROFILE_EDIT_COMPLETION_ERROR_MESSAGE },
+                    Toast.LENGTH_SHORT,
+                ).show()
+    }
+}
+
+private fun NavHostController.navigateToLoginAfterAuthenticationFailure() {
+    navigate(AuthRoute.Login.route) {
+        launchSingleTop = true
+        popUpTo(graph.findStartDestination().id) {
+            inclusive = true
+        }
+    }
+}
+
 private const val DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE: String =
     "온보딩 완료 처리에 실패했습니다. 다시 시도해주세요."
+
+private const val DEFAULT_PROFILE_EDIT_COMPLETION_ERROR_MESSAGE: String =
+    "프로필 변경에 실패했습니다. 다시 시도해주세요."
+
+private const val PROFILE_EDIT_AUTHENTICATION_ERROR_MESSAGE: String =
+    "로그인 정보가 만료되었습니다. 다시 로그인해주세요."

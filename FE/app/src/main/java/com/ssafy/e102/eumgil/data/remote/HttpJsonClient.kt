@@ -51,6 +51,26 @@ class HttpJsonClient(
             connection.toHttpJsonResponse()
         }
 
+    suspend fun patchJson(
+        path: String,
+        body: String,
+        headers: Map<String, String> = emptyMap(),
+    ): HttpJsonResponse =
+        withContext(Dispatchers.IO) {
+            val connection = openConnection(path)
+            connection.requestMethod = "PATCH"
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Accept", "application/json")
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+
+            connection.outputStream.use { outputStream ->
+                outputStream.write(body.toByteArray(Charsets.UTF_8))
+            }
+
+            connection.toHttpJsonResponse()
+        }
+
     private fun openConnection(path: String): HttpURLConnection =
         URL(normalizeUrl(path)).openConnection().let { connection ->
             (connection as HttpURLConnection).apply {

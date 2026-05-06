@@ -69,4 +69,20 @@ class OnboardingNavGraphRoutingTest {
             resolveOnboardingCompletedRoute(PrimaryUserType.MOBILITY_IMPAIRED.routeValue),
         )
     }
+
+    @Test
+    fun `profile edit completion navigates low vision users to low vision home`() {
+        assertEquals(
+            LowVisionRoute.Home.route,
+            resolveProfileEditCompletedRoute(PrimaryUserType.LOW_VISION.routeValue),
+        )
+    }
+
+    @Test
+    fun `profile edit completion returns mobility users to my page`() {
+        assertEquals(
+            TopLevelRoute.MyPage.route,
+            resolveProfileEditCompletedRoute(PrimaryUserType.MOBILITY_IMPAIRED.routeValue),
+        )
+    }
 }

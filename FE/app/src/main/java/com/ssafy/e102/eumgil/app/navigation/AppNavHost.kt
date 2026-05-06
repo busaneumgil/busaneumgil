@@ -24,7 +24,6 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
-import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.provideProfileUserTypeUpdateRepository
 
 internal val AppNavHostContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
@@ -46,12 +45,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
         }
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
-    var initialSettings by remember { mutableStateOf<InitSettings?>(null) }
 
     LaunchedEffect(authSessionRepository, settingsRepository) {
         val authGateState = authSessionRepository.getAuthGateState()
         val savedSettings = settingsRepository.getInitSettings()
-        initialSettings = savedSettings
         appStartDestination =
             resolveAppStartDestination(
                 authGateState = authGateState,
@@ -60,13 +57,12 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
     }
 
-    if (appStartDestination == null || initialSettings == null) {
+    if (appStartDestination == null) {
         AppEntryLoadingScreen(modifier = modifier)
         return
     }
 
     val startDestination = appStartDestination ?: return
-    val restoredSettings = initialSettings ?: return
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
@@ -102,7 +98,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 settingsRepository = settingsRepository,
                 authSignupRepository = authSignupRepository,
                 profileUserTypeUpdateRepository = profileUserTypeUpdateRepository,
-                initialSettings = restoredSettings,
             )
             lowVisionNavGraph(navController = navController)
             mainNavGraph(navController = navController)

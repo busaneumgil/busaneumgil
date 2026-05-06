@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -28,7 +30,6 @@ fun NavGraphBuilder.onboardingNavGraph(
     settingsRepository: SettingsRepository,
     authSignupRepository: AuthSignupRepository,
     profileUserTypeUpdateRepository: ProfileUserTypeUpdateRepository,
-    initialSettings: InitSettings,
 ) {
     composable(route = OnboardingRoute.UserTypePrimary.route) {
         val coroutineScope = rememberCoroutineScope()
@@ -121,10 +122,14 @@ fun NavGraphBuilder.onboardingNavGraph(
     composable(route = OnboardingRoute.Terms.route) {
         val coroutineScope = rememberCoroutineScope()
         val context = LocalContext.current
+        val initSettings by
+            settingsRepository
+                .observeInitSettings()
+                .collectAsStateWithLifecycle(initialValue = InitSettings())
 
         LocationTermsRoute(
-            initialLocationTermsChecked = initialSettings.isLocationTermsAgreed,
-            initialPrivacyPolicyChecked = initialSettings.isPrivacyPolicyAgreed,
+            initialLocationTermsChecked = initSettings.isLocationTermsAgreed,
+            initialPrivacyPolicyChecked = initSettings.isPrivacyPolicyAgreed,
             onConsentCompleted = { agreement ->
                 coroutineScope.launch {
                     runCatching {

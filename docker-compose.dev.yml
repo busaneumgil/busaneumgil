@@ -28,6 +28,8 @@ services:
       context: .
       dockerfile: INF/graphhopper/Dockerfile
     entrypoint: ["graphhopper-build-entrypoint.sh"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/e102}
       DB_USERNAME: ${DB_USERNAME:-e102}

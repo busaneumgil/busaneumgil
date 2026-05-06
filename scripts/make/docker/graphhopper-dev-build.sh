@@ -2,6 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-source "$ROOT_DIR/scripts/make/lib/common.sh"
+source "$ROOT_DIR/scripts/make/lib/be-dev.sh"
 
-"${DEV_COMPOSE[@]}" --profile graphhopper-build run --rm graphhopper-build
+ensure_env_file
+ensure_docker_daemon
+ensure_dev_tunnel
+
+db_name="$(dev_db_name)"
+
+DB_URL="jdbc:postgresql://host.docker.internal:$BE_DEV_DB_LOCAL_PORT/$db_name" \
+"${DEV_COMPOSE[@]}" --profile graphhopper-build run --rm --no-deps graphhopper-build

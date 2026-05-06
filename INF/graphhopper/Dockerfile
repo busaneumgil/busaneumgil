@@ -15,6 +15,7 @@ RUN curl -fsSL -o graphhopper-web.jar "https://repo1.maven.org/maven2/com/graphh
 COPY INF/graphhopper/config-local.yml /opt/graphhopper/config-local.yml
 COPY INF/graphhopper/config-runtime.yml /opt/graphhopper/config-runtime.yml
 COPY INF/graphhopper/config-build.yml /opt/graphhopper/config-build.yml
+COPY INF/graphhopper/custom_models /opt/graphhopper/custom_models
 COPY scripts/docker/entrypoints/graphhopper.sh /usr/local/bin/graphhopper-entrypoint.sh
 COPY scripts/docker/entrypoints/graphhopper-build.sh /usr/local/bin/graphhopper-build-entrypoint.sh
 COPY scripts/graphhopper/export_postgis_to_osm.py /usr/local/bin/export-postgis-to-osm.py

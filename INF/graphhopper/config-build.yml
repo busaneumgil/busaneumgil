@@ -3,14 +3,22 @@ graphhopper:
   graph.location: graph-cache
 
   profiles:
-    - name: foot
-      custom_model:
-        speed:
-          - if: "true"
-            limit_to: 5
-        priority:
-          - if: "true"
-            multiply_by: 1
+    - name: pedestrian_safe
+      custom_model_files: [/opt/graphhopper/custom_models/pedestrian_safe.json]
+    - name: pedestrian_fast
+      custom_model_files: [/opt/graphhopper/custom_models/pedestrian_fast.json]
+    - name: visual_safe
+      custom_model_files: [/opt/graphhopper/custom_models/visual_safe.json]
+    - name: visual_fast
+      custom_model_files: [/opt/graphhopper/custom_models/visual_fast.json]
+    - name: wheelchair_manual_safe
+      custom_model_files: [/opt/graphhopper/custom_models/wheelchair_manual_safe.json]
+    - name: wheelchair_manual_fast
+      custom_model_files: [/opt/graphhopper/custom_models/wheelchair_manual_fast.json]
+    - name: wheelchair_auto_safe
+      custom_model_files: [/opt/graphhopper/custom_models/wheelchair_auto_safe.json]
+    - name: wheelchair_auto_fast
+      custom_model_files: [/opt/graphhopper/custom_models/wheelchair_auto_fast.json]
 
   profiles_ch: []
   profiles_lm: []

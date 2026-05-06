@@ -8,15 +8,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -28,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -35,8 +37,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+
+internal data class ReportHistoryLayoutSpec(
+    val cardCornerRadiusDp: Int,
+    val thumbnailCornerRadiusDp: Int,
+    val buttonCornerRadiusDp: Int,
+    val buttonMinHeightDp: Int,
+    val cardShadowElevationDp: Int,
+)
+
+internal fun reportHistoryLayoutSpec(): ReportHistoryLayoutSpec =
+    ReportHistoryLayoutSpec(
+        cardCornerRadiusDp = 12,
+        thumbnailCornerRadiusDp = 12,
+        buttonCornerRadiusDp = 12,
+        buttonMinHeightDp = 48,
+        cardShadowElevationDp = 0,
+    )
 
 @Composable
 fun MyPageReportHistoryScreen(
@@ -139,35 +158,12 @@ internal fun shouldShowReportHistoryCreateCta(screenState: MyPageReportHistorySc
 
 @Composable
 private fun MyPageReportHistoryTopBar(onBackClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.xSmall, vertical = EumSpacing.xxSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_action_back),
-                    contentDescription = "뒤로가기",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Text(
-                text = "제보 내역",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
+    EumCenteredTopBar(
+        title = "제보 내역",
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(id = R.string.my_page_back),
+        titleFontWeight = FontWeight.Bold,
+    )
 }
 
 @Composable
@@ -175,6 +171,7 @@ private fun ReportHistoryCard(
     report: MyPageReportHistoryUiModel,
     onClick: () -> Unit,
 ) {
+    val spec = reportHistoryLayoutSpec()
     val accessibilityDescription =
         "제보 내역, ${report.title}, ${report.address}, ${report.submittedAtText}"
 
@@ -189,17 +186,17 @@ private fun ReportHistoryCard(
                 .semantics {
                     contentDescription = accessibilityDescription
                 },
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(spec.cardCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
+        shadowElevation = spec.cardShadowElevationDp.dp,
     ) {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(EumSpacing.small),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    .padding(EumSpacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
@@ -236,9 +233,11 @@ private fun ReportHistoryCard(
 
 @Composable
 private fun ReportHistoryThumbnail(hasPhoto: Boolean) {
+    val spec = reportHistoryLayoutSpec()
+
     Surface(
         modifier = Modifier.size(width = 88.dp, height = 76.dp),
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(spec.thumbnailCornerRadiusDp.dp),
         color =
             if (hasPhoto) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
@@ -278,9 +277,11 @@ private fun ReportHistoryStateCard(
     isLoading: Boolean = false,
     isError: Boolean = false,
 ) {
+    val spec = reportHistoryLayoutSpec()
+
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(spec.cardCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.surface,
         border =
             BorderStroke(
@@ -292,7 +293,7 @@ private fun ReportHistoryStateCard(
                         MaterialTheme.colorScheme.outlineVariant
                     },
             ),
-        shadowElevation = 1.dp,
+        shadowElevation = spec.cardShadowElevationDp.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
@@ -325,16 +326,42 @@ private fun ReportHistoryStateCard(
                 ) {
                     Button(
                         onClick = onPrimaryActionClick,
-                        modifier = Modifier.weight(1f),
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = spec.buttonMinHeightDp.dp),
+                        shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
+                        elevation =
+                            ButtonDefaults.buttonElevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp,
+                                focusedElevation = 0.dp,
+                                hoveredElevation = 0.dp,
+                                disabledElevation = 0.dp,
+                            ),
                     ) {
-                        Text(text = primaryActionLabel)
+                        Text(
+                            text = primaryActionLabel,
+                            modifier = Modifier.padding(vertical = EumSpacing.xSmall),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                     if (secondaryActionLabel != null && onSecondaryActionClick != null) {
                         OutlinedButton(
                             onClick = onSecondaryActionClick,
-                            modifier = Modifier.weight(1f),
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .heightIn(min = spec.buttonMinHeightDp.dp),
+                            shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
                         ) {
-                            Text(text = secondaryActionLabel)
+                            Text(
+                                text = secondaryActionLabel,
+                                modifier = Modifier.padding(vertical = EumSpacing.xSmall),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                         }
                     }
                 }

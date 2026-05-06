@@ -5,7 +5,9 @@ import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.core.model.RepositoryDebugSettings
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.UserMeResponseDto
 import kotlinx.coroutines.flow.Flow
@@ -59,6 +61,7 @@ class UserProfileRepositoryTest {
             val repository =
                 ServerUserProfileRepository(
                     userRemoteDataSource = remoteDataSource,
+                    authRemoteDataSource = FakeUserProfileAuthRemoteDataSource(),
                     authSessionRepository = authSessionRepository,
                     settingsRepository = settingsRepository,
                 )
@@ -95,6 +98,7 @@ class UserProfileRepositoryTest {
                                     selectedMobilitySubtype = null,
                                 ),
                         ),
+                    authRemoteDataSource = FakeUserProfileAuthRemoteDataSource(),
                     authSessionRepository =
                         RecordingUserProfileAuthSessionRepository(
                             authGateState = AuthGateState(),
@@ -146,6 +150,7 @@ class UserProfileRepositoryTest {
                                     message = "unauthorized",
                                 ),
                         ),
+                    authRemoteDataSource = FakeUserProfileAuthRemoteDataSource(),
                     authSessionRepository = authSessionRepository,
                     settingsRepository = settingsRepository,
                 )
@@ -156,6 +161,80 @@ class UserProfileRepositoryTest {
             assertNull(authSessionRepository.savedAuthSession)
             assertNull(settingsRepository.savedPrimaryUserType)
             assertNull(settingsRepository.savedMobilitySubtype)
+        }
+
+    @Test
+    fun `sync my profile retries once after reissue success and stores rotated tokens`() =
+        runTest {
+            val authSessionRepository =
+                RecordingUserProfileAuthSessionRepository(
+                    authGateState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "expired-access-token",
+                                    refreshToken = "refresh-token",
+                                    userId = "local-user-id",
+                                    selectedPrimaryUserType = "LOW_VISION",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val settingsRepository =
+                RecordingUserProfileSettingsRepository(
+                    initialInitSettings =
+                        InitSettings(
+                            selectedPrimaryUserType = ROUTE_PRIMARY_USER_TYPE_LOW_VISION,
+                            isLowVisionFollowUpCompleted = true,
+                        ),
+                )
+            val userRemoteDataSource =
+                FakeUserRemoteDataSource(
+                    queuedResults =
+                        listOf(
+                            Result.failure(
+                                UserApiException(
+                                    httpStatusCode = 401,
+                                    status = "A4010",
+                                    message = "expired",
+                                ),
+                            ),
+                            Result.success(
+                                UserMeResponseDto(
+                                    userId = "018f7f6c-2b7e-7c3a-9f4a-8b4e3b7c9a01",
+                                    socialProvider = "KAKAO",
+                                    selectedPrimaryUserType = "MOBILITY_IMPAIRED",
+                                    selectedMobilitySubtype = "MANUAL_WHEELCHAIR",
+                                ),
+                            ),
+                        ),
+                )
+            val authRemoteDataSource =
+                FakeUserProfileAuthRemoteDataSource(
+                    reissueResponse =
+                        ReissueResponseDto(
+                            accessToken = "new-access-token",
+                            refreshToken = "new-refresh-token",
+                        ),
+                )
+            val repository =
+                ServerUserProfileRepository(
+                    userRemoteDataSource = userRemoteDataSource,
+                    authRemoteDataSource = authRemoteDataSource,
+                    authSessionRepository = authSessionRepository,
+                    settingsRepository = settingsRepository,
+                )
+
+            val result = repository.syncMyProfile()
+
+            assertTrue(result is UserProfileSyncResult.Success)
+            assertEquals(
+                listOf("expired-access-token", "new-access-token"),
+                userRemoteDataSource.requestedAccessTokens,
+            )
+            assertEquals("refresh-token", authRemoteDataSource.latestRefreshToken)
+            assertEquals("new-access-token", authSessionRepository.savedAuthSession?.accessToken)
+            assertEquals("new-refresh-token", authSessionRepository.savedAuthSession?.refreshToken)
         }
 
     @Test
@@ -196,6 +275,7 @@ class UserProfileRepositoryTest {
                                     selectedMobilitySubtype = null,
                                 ),
                         ),
+                    authRemoteDataSource = FakeUserProfileAuthRemoteDataSource(),
                     authSessionRepository = authSessionRepository,
                     settingsRepository = settingsRepository,
                 )
@@ -213,14 +293,37 @@ class UserProfileRepositoryTest {
 private class FakeUserRemoteDataSource(
     private val userMeResponse: UserMeResponseDto? = null,
     private val failure: Throwable? = null,
+    private val queuedResults: List<Result<UserMeResponseDto>> = emptyList(),
 ) : UserRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
     var latestAccessToken: String? = null
         private set
+    val requestedAccessTokens = mutableListOf<String>()
 
     override suspend fun getMe(accessToken: String): UserMeResponseDto {
         latestAccessToken = accessToken
+        requestedAccessTokens += accessToken
+        if (queuedResults.isNotEmpty()) {
+            val result = queuedResults[requestedAccessTokens.lastIndex]
+            return result.getOrThrow()
+        }
         failure?.let { throw it }
         return checkNotNull(userMeResponse)
+    }
+}
+
+private class FakeUserProfileAuthRemoteDataSource(
+    private val reissueResponse: ReissueResponseDto =
+        ReissueResponseDto(
+            accessToken = "unused-access-token",
+            refreshToken = "unused-refresh-token",
+        ),
+) : AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
+    var latestRefreshToken: String? = null
+        private set
+
+    override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+        latestRefreshToken = refreshToken
+        return reissueResponse
     }
 }
 

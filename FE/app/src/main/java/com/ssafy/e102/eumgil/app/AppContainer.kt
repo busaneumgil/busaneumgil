@@ -163,6 +163,7 @@ class AppContainer(
             initialBookmarks =
                 if (AppEnvironment.isDebugBuild) {
                     MockBookmarkFixtures.defaultBookmarks
+            authRemoteDataSource = authRemoteDataSource,
                 } else {
                     emptyList()
                 },

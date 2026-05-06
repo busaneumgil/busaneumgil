@@ -108,6 +108,7 @@ object RepositoryModule {
                 settingsRepository = settingsRepository,
             )
         }
+        authRemoteDataSource: AuthRemoteDataSource,
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,
@@ -116,6 +117,7 @@ object RepositoryModule {
         DefaultBookmarkRepository(
             bookmarkDao = bookmarkDao,
             initialBookmarks = initialBookmarks,
+                authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideRouteBookmarkRepository(): RouteBookmarkRepository = FakeRouteBookmarkRepository()

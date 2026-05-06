@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserTypeRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserTypeUpdateApiException
 import com.ssafy.e102.eumgil.data.remote.dto.UserTypeResponseDto
@@ -42,6 +43,7 @@ fun provideProfileUserTypeUpdateRepository(
     } else {
         ServerProfileUserTypeUpdateRepository(
             userTypeRemoteDataSource = UserTypeRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = baseUrl)),
+            authRemoteDataSource = AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = baseUrl)),
             authSessionRepository = authSessionRepository,
             settingsRepository = settingsRepository,
         )
@@ -104,58 +106,68 @@ class LocalOnlyProfileUserTypeUpdateRepository(
 
 class ServerProfileUserTypeUpdateRepository(
     private val userTypeRemoteDataSource: UserTypeRemoteDataSource,
+    authRemoteDataSource: AuthRemoteDataSource,
     private val authSessionRepository: AuthSessionRepository,
     private val settingsRepository: SettingsRepository,
 ) : ProfileUserTypeUpdateRepository {
+    private val authenticatedRequestRunner =
+        AuthenticatedRequestRunner(
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
+        )
+
     override suspend fun completeProfileEdit(
         selectedPrimaryUserType: String,
         selectedMobilitySubtype: String?,
-    ): ProfileUserTypeUpdateResult {
-        val authGateState = authSessionRepository.getAuthGateState()
-        val authSession = authGateState.authSession ?: return ProfileUserTypeUpdateResult.MissingSession
+    ): ProfileUserTypeUpdateResult =
+        try {
+            when (
+                val result =
+                    authenticatedRequestRunner.run(
+                        execute = { authSession ->
+                            val request = selectedPrimaryUserType.toUserTypeUpdateRequest(selectedMobilitySubtype)
+                            val response =
+                                userTypeRemoteDataSource.updateUserType(
+                                    accessToken = authSession.accessToken,
+                                    selectedPrimaryUserType = request.selectedPrimaryUserType,
+                                    selectedMobilitySubtype = request.selectedMobilitySubtype,
+                                )
 
-        return try {
-            val request = selectedPrimaryUserType.toUserTypeUpdateRequest(selectedMobilitySubtype)
-            val response =
-                userTypeRemoteDataSource.updateUserType(
-                    accessToken = authSession.accessToken,
-                    selectedPrimaryUserType = request.selectedPrimaryUserType,
-                    selectedMobilitySubtype = request.selectedMobilitySubtype,
-                )
+                            val synchronizedSession =
+                                authSession.copy(
+                                    userId = response.userId ?: authSession.userId,
+                                    selectedPrimaryUserType = response.selectedPrimaryUserType,
+                                    selectedMobilitySubtype = response.selectedMobilitySubtype,
+                                )
 
-            val synchronizedSession =
-                authSession.copy(
-                    userId = response.userId ?: authSession.userId,
-                    selectedPrimaryUserType = response.selectedPrimaryUserType,
-                    selectedMobilitySubtype = response.selectedMobilitySubtype,
-                )
+                            authSessionRepository.saveAuthSession(
+                                authSession = synchronizedSession,
+                                isProfileCompleted = true,
+                            )
+                            settingsRepository.syncOnboardingStateFromServer(
+                                selectedPrimaryUserType = response.selectedPrimaryUserType,
+                                selectedMobilitySubtype = response.selectedMobilitySubtype,
+                            )
 
-            authSessionRepository.saveAuthSession(
-                authSession = synchronizedSession,
-                isProfileCompleted = true,
-            )
-            settingsRepository.syncOnboardingStateFromServer(
-                selectedPrimaryUserType = response.selectedPrimaryUserType,
-                selectedMobilitySubtype = response.selectedMobilitySubtype,
-            )
-
-            ProfileUserTypeUpdateResult.Success(
-                selectedPrimaryUserType = response.selectedPrimaryUserType.toPrimaryUserTypeRouteValue(),
-                selectedMobilitySubtype = response.selectedMobilitySubtype?.toMobilitySubtypeRouteValue(),
-            )
-        } catch (exception: UserTypeUpdateApiException) {
-            if (exception.httpStatusCode == HTTP_UNAUTHORIZED || exception.httpStatusCode == HTTP_FORBIDDEN) {
-                authSessionRepository.clearAuthSession()
-                ProfileUserTypeUpdateResult.AuthenticationFailed
-            } else {
-                ProfileUserTypeUpdateResult.Failure(message = exception.message)
+                            ProfileUserTypeUpdateResult.Success(
+                                selectedPrimaryUserType = response.selectedPrimaryUserType.toPrimaryUserTypeRouteValue(),
+                                selectedMobilitySubtype = response.selectedMobilitySubtype?.toMobilitySubtypeRouteValue(),
+                            )
+                        },
+                        isAuthenticationFailure = ::isAuthenticationFailure,
+                    )
+            ) {
+                AuthenticatedRequestResult.MissingSession -> ProfileUserTypeUpdateResult.MissingSession
+                AuthenticatedRequestResult.AuthenticationFailed -> ProfileUserTypeUpdateResult.AuthenticationFailed
+                is AuthenticatedRequestResult.Success -> result.value
             }
+        } catch (exception: UserTypeUpdateApiException) {
+            ProfileUserTypeUpdateResult.Failure(message = exception.message)
         } catch (exception: Exception) {
             ProfileUserTypeUpdateResult.Failure(
                 message = exception.message ?: DEFAULT_PROFILE_USER_TYPE_UPDATE_ERROR_MESSAGE,
             )
         }
-    }
 }
 
 private data class UserTypeUpdateRequest(
@@ -185,3 +197,7 @@ private fun String.toUserTypeUpdateRequest(selectedMobilitySubtype: String?): Us
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
 private const val DEFAULT_PROFILE_USER_TYPE_UPDATE_ERROR_MESSAGE = "프로필 변경에 실패했습니다. 다시 시도해주세요."
+
+private fun isAuthenticationFailure(throwable: Throwable): Boolean =
+    throwable is UserTypeUpdateApiException &&
+        (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)

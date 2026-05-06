@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.AuthSession
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 
@@ -44,49 +45,60 @@ class LocalOnlyUserProfileRepository : UserProfileRepository {
 
 class ServerUserProfileRepository(
     private val userRemoteDataSource: UserRemoteDataSource,
+    authRemoteDataSource: AuthRemoteDataSource,
     private val authSessionRepository: AuthSessionRepository,
     private val settingsRepository: SettingsRepository,
 ) : UserProfileRepository {
+    private val authenticatedRequestRunner =
+        AuthenticatedRequestRunner(
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
+        )
+
     override suspend fun syncMyProfile(): UserProfileSyncResult {
-        val authGateState = authSessionRepository.getAuthGateState()
-        val authSession = authGateState.authSession ?: return UserProfileSyncResult.MissingSession
-
         return try {
-            val response = userRemoteDataSource.getMe(accessToken = authSession.accessToken)
-            val synchronizedSession =
-                authSession.mergeUserProfile(
-                    userId = response.userId,
-                    selectedPrimaryUserType = response.selectedPrimaryUserType,
-                    selectedMobilitySubtype = response.selectedMobilitySubtype,
-                )
+            when (
+                val result =
+                    authenticatedRequestRunner.run(
+                        execute = { authSession ->
+                            val response = userRemoteDataSource.getMe(accessToken = authSession.accessToken)
+                            val synchronizedSession =
+                                authSession.mergeUserProfile(
+                                    userId = response.userId,
+                                    selectedPrimaryUserType = response.selectedPrimaryUserType,
+                                    selectedMobilitySubtype = response.selectedMobilitySubtype,
+                                )
 
-            authSessionRepository.saveAuthSession(
-                authSession = synchronizedSession,
-                isProfileCompleted =
-                    authGateState.isProfileCompleted || response.selectedPrimaryUserType != null,
-            )
-            response.selectedPrimaryUserType?.let { selectedPrimaryUserType ->
-                settingsRepository.syncOnboardingStateFromServer(
-                    selectedPrimaryUserType = selectedPrimaryUserType,
-                    selectedMobilitySubtype = response.selectedMobilitySubtype,
-                )
+                            authSessionRepository.saveAuthSession(
+                                authSession = synchronizedSession,
+                                isProfileCompleted = synchronizedSession.selectedPrimaryUserType != null,
+                            )
+                            response.selectedPrimaryUserType?.let { selectedPrimaryUserType ->
+                                settingsRepository.syncOnboardingStateFromServer(
+                                    selectedPrimaryUserType = selectedPrimaryUserType,
+                                    selectedMobilitySubtype = response.selectedMobilitySubtype,
+                                )
+                            }
+
+                            UserProfileSyncResult.Success(
+                                profile =
+                                    UserProfile(
+                                        userId = synchronizedSession.userId,
+                                        socialProvider = response.socialProvider,
+                                        selectedPrimaryUserType = synchronizedSession.selectedPrimaryUserType,
+                                        selectedMobilitySubtype = synchronizedSession.selectedMobilitySubtype,
+                                    ),
+                            )
+                        },
+                        isAuthenticationFailure = ::isAuthenticationFailure,
+                    )
+            ) {
+                AuthenticatedRequestResult.MissingSession -> UserProfileSyncResult.MissingSession
+                AuthenticatedRequestResult.AuthenticationFailed -> UserProfileSyncResult.AuthenticationFailed
+                is AuthenticatedRequestResult.Success -> result.value
             }
-
-            UserProfileSyncResult.Success(
-                profile =
-                    UserProfile(
-                        userId = synchronizedSession.userId,
-                        socialProvider = response.socialProvider,
-                        selectedPrimaryUserType = synchronizedSession.selectedPrimaryUserType,
-                        selectedMobilitySubtype = synchronizedSession.selectedMobilitySubtype,
-                    ),
-            )
         } catch (exception: UserApiException) {
-            if (exception.httpStatusCode == HTTP_UNAUTHORIZED || exception.httpStatusCode == HTTP_FORBIDDEN) {
-                UserProfileSyncResult.AuthenticationFailed
-            } else {
-                UserProfileSyncResult.Failure(message = exception.message)
-            }
+            UserProfileSyncResult.Failure(message = exception.message)
         } catch (exception: Exception) {
             UserProfileSyncResult.Failure(
                 message = exception.message ?: DEFAULT_USER_PROFILE_SYNC_ERROR_MESSAGE,
@@ -119,4 +131,8 @@ class ServerUserProfileRepository(
         private const val HTTP_FORBIDDEN = 403
         private const val DEFAULT_USER_PROFILE_SYNC_ERROR_MESSAGE = "Failed to synchronize user profile."
     }
+
+    private fun isAuthenticationFailure(throwable: Throwable): Boolean =
+        throwable is UserApiException &&
+            (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)
 }

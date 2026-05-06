@@ -6,8 +6,10 @@ import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
@@ -41,6 +43,7 @@ class AccountWithdrawalRepositoryTest {
             val repository =
                 ServerAccountWithdrawalRepository(
                     userRemoteDataSource = remoteDataSource,
+                    authRemoteDataSource = FakeWithdrawalAuthRemoteDataSource(),
                     authSessionRepository = authSessionRepository,
                     localDataCleaner = localDataCleaner,
                 )
@@ -85,6 +88,7 @@ class AccountWithdrawalRepositoryTest {
             val repository =
                 ServerAccountWithdrawalRepository(
                     userRemoteDataSource = remoteDataSource,
+                    authRemoteDataSource = FakeWithdrawalAuthRemoteDataSource(),
                     authSessionRepository = authSessionRepository,
                     localDataCleaner = localDataCleaner,
                 )
@@ -128,6 +132,7 @@ class AccountWithdrawalRepositoryTest {
             val repository =
                 ServerAccountWithdrawalRepository(
                     userRemoteDataSource = remoteDataSource,
+                    authRemoteDataSource = FakeWithdrawalAuthRemoteDataSource(),
                     authSessionRepository = authSessionRepository,
                     localDataCleaner = localDataCleaner,
                 )
@@ -137,6 +142,68 @@ class AccountWithdrawalRepositoryTest {
             assertEquals(AccountWithdrawalResult.AuthenticationFailed, result)
             assertTrue(authSessionRepository.clearAuthSessionCalled)
             assertFalse(localDataCleaner.clearCalled)
+        }
+
+    @Test
+    fun `withdraw retries once after reissue success and completes with refreshed token`() =
+        runTest {
+            val authSessionRepository =
+                RecordingWithdrawalAuthSessionRepository(
+                    authGateState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "expired-access-token",
+                                    refreshToken = "refresh-token",
+                                    userId = "existing-user-id",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val localDataCleaner = RecordingAccountWithdrawalLocalDataCleaner()
+            val userRemoteDataSource =
+                FakeWithdrawUserRemoteDataSource(
+                    queuedResults =
+                        listOf(
+                            Result.failure(
+                                UserApiException(
+                                    httpStatusCode = 401,
+                                    status = "A4010",
+                                    message = "expired",
+                                ),
+                            ),
+                            Result.success("회원탈퇴가 완료되었습니다."),
+                        ),
+                )
+            val authRemoteDataSource =
+                FakeWithdrawalAuthRemoteDataSource(
+                    reissueResponse =
+                        ReissueResponseDto(
+                            accessToken = "new-access-token",
+                            refreshToken = "new-refresh-token",
+                        ),
+                )
+            val repository =
+                ServerAccountWithdrawalRepository(
+                    userRemoteDataSource = userRemoteDataSource,
+                    authRemoteDataSource = authRemoteDataSource,
+                    authSessionRepository = authSessionRepository,
+                    localDataCleaner = localDataCleaner,
+                )
+
+            val result = repository.withdraw()
+
+            assertEquals(
+                listOf("expired-access-token", "new-access-token"),
+                userRemoteDataSource.requestedAccessTokens,
+            )
+            assertEquals("refresh-token", authRemoteDataSource.latestRefreshToken)
+            assertTrue(localDataCleaner.clearCalled)
+            assertTrue(authSessionRepository.clearAuthSessionCalled)
+            assertEquals(
+                AccountWithdrawalResult.Success(message = "회원탈퇴가 완료되었습니다."),
+                result,
+            )
         }
 
     @Test
@@ -160,14 +227,37 @@ class AccountWithdrawalRepositoryTest {
 private class FakeWithdrawUserRemoteDataSource(
     private val withdrawMessage: String? = null,
     private val exception: Throwable? = null,
+    private val queuedResults: List<Result<String>> = emptyList(),
 ) : UserRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
     var latestWithdrawAccessToken: String? = null
         private set
+    val requestedAccessTokens = mutableListOf<String>()
 
     override suspend fun withdraw(accessToken: String): String {
         latestWithdrawAccessToken = accessToken
+        requestedAccessTokens += accessToken
+        if (queuedResults.isNotEmpty()) {
+            val result = queuedResults[requestedAccessTokens.lastIndex]
+            return result.getOrThrow()
+        }
         exception?.let { throw it }
         return checkNotNull(withdrawMessage)
+    }
+}
+
+private class FakeWithdrawalAuthRemoteDataSource(
+    private val reissueResponse: ReissueResponseDto =
+        ReissueResponseDto(
+            accessToken = "unused-access-token",
+            refreshToken = "unused-refresh-token",
+        ),
+) : AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
+    var latestRefreshToken: String? = null
+        private set
+
+    override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+        latestRefreshToken = refreshToken
+        return reissueResponse
     }
 }
 

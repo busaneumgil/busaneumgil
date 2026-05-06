@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 
@@ -48,6 +49,7 @@ fun provideAccountWithdrawalRepository(
     } else {
         ServerAccountWithdrawalRepository(
             userRemoteDataSource = UserRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = baseUrl)),
+            authRemoteDataSource = AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = baseUrl)),
             authSessionRepository = authSessionRepository,
             localDataCleaner = localDataCleaner,
         )
@@ -82,33 +84,48 @@ class LocalOnlyAccountWithdrawalRepository(
 
 class ServerAccountWithdrawalRepository(
     private val userRemoteDataSource: UserRemoteDataSource,
+    authRemoteDataSource: AuthRemoteDataSource,
     private val authSessionRepository: AuthSessionRepository,
     private val localDataCleaner: AccountWithdrawalLocalDataCleaner,
 ) : AccountWithdrawalRepository {
-    override suspend fun withdraw(): AccountWithdrawalResult {
-        val authSession = authSessionRepository.getAuthGateState().authSession ?: return AccountWithdrawalResult.MissingSession
+    private val authenticatedRequestRunner =
+        AuthenticatedRequestRunner(
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
+        )
 
-        return try {
-            val message = userRemoteDataSource.withdraw(accessToken = authSession.accessToken)
-            runCatching { localDataCleaner.clearAfterWithdrawal() }
-            authSessionRepository.clearAuthSession()
-            AccountWithdrawalResult.Success(message = message)
-        } catch (exception: UserApiException) {
-            if (exception.httpStatusCode == HTTP_UNAUTHORIZED || exception.httpStatusCode == HTTP_FORBIDDEN) {
-                authSessionRepository.clearAuthSession()
-                AccountWithdrawalResult.AuthenticationFailed
-            } else {
-                AccountWithdrawalResult.Failure(message = exception.message)
+    override suspend fun withdraw(): AccountWithdrawalResult =
+        try {
+            when (
+                val result =
+                    authenticatedRequestRunner.run(
+                        execute = { authSession ->
+                            val message = userRemoteDataSource.withdraw(accessToken = authSession.accessToken)
+                            runCatching { localDataCleaner.clearAfterWithdrawal() }
+                            authSessionRepository.clearAuthSession()
+                            AccountWithdrawalResult.Success(message = message)
+                        },
+                        isAuthenticationFailure = ::isAuthenticationFailure,
+                    )
+            ) {
+                AuthenticatedRequestResult.MissingSession -> AccountWithdrawalResult.MissingSession
+                AuthenticatedRequestResult.AuthenticationFailed -> AccountWithdrawalResult.AuthenticationFailed
+                is AuthenticatedRequestResult.Success -> result.value
             }
+        } catch (exception: UserApiException) {
+            AccountWithdrawalResult.Failure(message = exception.message)
         } catch (exception: Exception) {
             AccountWithdrawalResult.Failure(
                 message = exception.message ?: DEFAULT_WITHDRAW_ERROR_MESSAGE,
             )
         }
-    }
 }
 
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
 private const val DEFAULT_WITHDRAW_SUCCESS_MESSAGE = "회원탈퇴가 완료되었습니다."
 private const val DEFAULT_WITHDRAW_ERROR_MESSAGE = "회원탈퇴 처리에 실패했습니다. 다시 시도해주세요."
+
+private fun isAuthenticationFailure(throwable: Throwable): Boolean =
+    throwable is UserApiException &&
+        (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)

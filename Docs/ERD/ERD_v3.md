@@ -1,9 +1,9 @@
-# 📋 ERD v3 — SHP 기반 보행 네트워크 및 편의시설 카테고리 최신화
+# 📋 ERD v3 — SHP 기반 보행 네트워크, 편의시설 카테고리, 경로 안내 세션 최신화
 
 > **작성일:** 2026-04-23
 > **기준 문서:** `docs/erd.md` (원본 OSM 기반)
-> **최종 수정일:** 2026-04-29
-> **변경 사유:** canonical source를 `busan.osm.pbf`에서 `N3L_A0020000_26` SHP(국토교통부 도로 중심선)로 전환함에 따라 `road_nodes`와 `road_segments`의 source identity 컬럼을 재정의하고, 편의시설 PoC 채택본 기준으로 장소 카테고리를 최신화
+> **최종 수정일:** 2026-05-06
+> **변경 사유:** canonical source를 `busan.osm.pbf`에서 `N3L_A0020000_26` SHP(국토교통부 도로 중심선)로 전환함에 따라 `road_nodes`와 `road_segments`의 source identity 컬럼을 재정의하고, 편의시설 PoC 채택본 기준으로 장소 카테고리를 최신화했으며, 선택된 경로 안내 세션 복구를 위한 `route_sessions`를 추가
 > **참조 계획:** `.ai/PLANS/current-sprint/02-osm-schema-and-network-load.md`
 
 ---
@@ -20,8 +20,9 @@
 | `road_segments` | `curbRampState`, `elevatorState`, 넓은 `surfaceState` 후보 | `slopeState`, `elevatorState` 제거, 단순화한 `surfaceState`/`crossingState` |
 | `route_logs`, `route_log_points` | 실제 이동 로그 수집 | MVP ERD에서 제외 |
 | `route_ratings` | - | 도착 직후 별점 평가 저장 |
+| `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
 
-장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.featureType`으로 둔다.
+장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.featureType`으로 둔다.
 
 ---
 
@@ -40,6 +41,8 @@
 - `roadSegments`의 접근성/보행 상태처럼 라우팅 로직에서 사용하는 고정된 폐쇄 집합 값은 ENUM 사용을 허용하되, `surfaceState`처럼 분류 기준이 확장될 수 있는 필드는 `VARCHAR`를 사용한다.
 - 지도/장소 검색 API는 MVP 기준 카카오 단일 사용을 전제로 한다.
 - 대중교통 경로 후보는 ODsay 같은 외부 대중교통 길찾기 API를 우선 사용하고, 버스/저상버스 정보는 부산광역시_부산버스정보시스템 OpenAPI를 실시간 조회한다.
+- 사용자가 실제 선택해 안내를 시작한 route만 `route_sessions`에 영속 저장한다. 검색 후보 묶음은 Redis `routeSearch:{searchId}`에만 저장한다.
+- 실시간 도착정보는 DB에 저장하지 않고 Redis TTL cache 또는 외부 API 재조회로 처리한다.
 
 ---
 
@@ -53,6 +56,7 @@
 - `hazard_reports`
 - `hazard_report_images`
 - `route_ratings`
+- `route_sessions`
 
 ### 장소 도메인
 
@@ -68,6 +72,9 @@
 ### 대중교통 도메인
 
 - `subway_station_elevators`
+- Redis `routeSearch:{searchId}`는 검색 후보 묶음 임시 저장소로 사용
+- Redis `route:{routeId}`는 선택 경로 hot cache로 사용
+- Redis `arrival:{stopId}:{transitRouteId}`는 실시간 도착정보 TTL cache로 사용
 - ODsay 등 외부 대중교통 길찾기 API로 경로 후보 조회
 - 부산광역시_부산버스정보시스템 OpenAPI로 버스 실시간 도착/저상버스 여부 조회
 - 부산교통공사 공공데이터로 지하철 시간표/역 접근성 정보 보강
@@ -83,6 +90,7 @@ erDiagram
     USERS ||--o{ FAVORITE_ROUTES : saves
     USERS ||--o{ HAZARD_REPORTS : reports
     USERS ||--o{ ROUTE_RATINGS : rates
+    USERS ||--o{ ROUTE_SESSIONS : starts
 
     HAZARD_REPORTS ||--o{ HAZARD_REPORT_IMAGES : has
 
@@ -108,7 +116,7 @@ erDiagram
     }
 
     FAVORITE_ROUTES {
-        INT favRouteId PK
+        BIGINT favRouteId PK
         VARCHAR routeName
         VARCHAR startLabel
         VARCHAR endLabel
@@ -189,6 +197,16 @@ erDiagram
         GEOMETRY startPoint
         GEOMETRY endPoint
         SMALLINT score
+    }
+
+    ROUTE_SESSIONS {
+        UUID sessionId PK
+        UUID userId FK
+        VARCHAR routeId
+        GEOMETRY startPoint
+        GEOMETRY endPoint
+        JSONB routeSnapshotJson
+        ENUM status
     }
 
     SUBWAY_STATION_ELEVATORS {
@@ -277,8 +295,8 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 자주 가는 길 ID | favRouteId | INT | NOT NULL |  |
-| 경로명 | routeName | VARCHAR(100) | NOT NULL |  |
+| 자주 가는 길 ID | favRouteId | BIGINT | NOT NULL |  |
+| 경로명 | routeName | VARCHAR(511) | NOT NULL |  |
 | 출발지명 | startLabel | VARCHAR(255) | NOT NULL |  |
 | 도착지명 | endLabel | VARCHAR(255) | NOT NULL |  |
 | 출발지 좌표 | startPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
@@ -584,51 +602,54 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 5. 관계 명세
+## 12) route_sessions
 
-### users - bookmarks
+### 역할
 
-- `users 1 : N bookmarks`
+사용자가 선택한 경로 안내 세션을 저장한다.
 
-### users - favorite_routes
+검색 후보 전체가 아니라, 사용자가 실제로 선택해 안내를 시작한 route만 영속 저장한다. Redis route cache가 만료되거나 유실되어도 reroute, rating, 장애 분석, CS 대응이 가능하도록 최소 복구 가능한 경로 snapshot을 보관한다.
 
-- `users 1 : N favorite_routes`
+실시간 도착정보는 저장하지 않는다. 버스/지하철 도착정보는 `arrival:{stopId}:{transitRouteId}` Redis TTL cache 또는 외부 API 재조회로 처리한다.
 
-### users - hazard_reports
+### 컬럼 명세
 
-- `users 1 : N hazard_reports`
-- 회원 탈퇴 후에도 제보 내역은 보관하되 사용자 식별 처리 정책은 별도 운영 정책을 따른다.
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 세션 ID | sessionId | UUID | NOT NULL |  |
+| 사용자 ID | userId | UUID | NOT NULL |  |
+| 대표 경로 ID | routeId | VARCHAR(80) | NOT NULL |  |
+| 출발지 좌표 | startPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 도착지 좌표 | endPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 경로 스냅샷 JSON | routeSnapshotJson | JSONB | NOT NULL |  |
+| 세션 상태 | status | ENUM | NOT NULL | ACTIVE |
 
-### users - route_ratings
+### enum 값
 
-- `users 1 : N route_ratings`
-- 회원 탈퇴 시 별점 평가 내역은 삭제한다.
+- `status`: `ACTIVE`, `COMPLETED`
 
-### hazard_reports - hazard_report_images
+### 비고
 
-- `hazard_reports 1 : N hazard_report_images`
-
-### places - bookmarks
-
-- `places 1 : N bookmarks`
-
-### places - place_accessibility_features
-
-- `places 1 : N place_accessibility_features`
-
-### road_nodes - road_segments
-
-- `road_nodes 1 : N road_segments`
-- 시작 노드(`fromNodeId`)와 종료 노드(`toNodeId`)를 기준으로 간선이 연결된다.
-
-### road_segments - segment_features
-
-- `road_segments 1 : N segment_features`
-- 하나의 보행 segment는 0개 이상의 개별 feature를 가질 수 있다.
+- `sessionId`는 실제 안내 세션의 식별자다.
+- `routeId`는 프론트와 API에서 참조하는 대표 경로 ID다.
+- `routeSnapshotJson`은 선택 당시 경로를 복구하기 위한 JSON이다.
+- `routeSnapshotJson`에는 프론트 응답용 route/leg/step 정보와 백엔드 전용 transit 식별자를 함께 저장한다.
+- 백엔드 전용 transit 식별자는 `transitRouteId`, `boardingStopId`, `alightingStopId`, `odsayRouteId`, `odsayStationId` 등을 포함할 수 있다.
+- `routeSnapshotJson`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
+- 실시간 도착정보는 외부 API 또는 Redis TTL cache에서만 관리한다.
+- `status=ACTIVE`는 현재 안내 중이거나 재탐색 가능한 세션이다.
+- `status=COMPLETED`는 사용자가 도착 또는 안내 종료를 명시한 세션이다.
+- `EXPIRED`는 `status`로 두지 않는다. 만료는 JPA auditing의 수정일시 또는 별도 정책으로 판단한다.
+- 생성/수정/삭제 시간은 공통 JPA auditing 필드에서 관리하므로 이 테이블 명세에는 포함하지 않는다.
+- route search 후보 묶음은 이 테이블에 저장하지 않는다. 검색 후보는 Redis `routeSearch:{searchId}`에만 저장한다.
+- Redis `route:{routeId}`는 이 테이블의 hot cache 역할을 한다.
+- Redis route cache miss가 발생하면 `route_sessions.routeSnapshotJson`에서 복구해 Redis에 다시 적재할 수 있다.
+- `userId + routeId` 또는 `sessionId` 기준으로 소유권을 검증한다.
+- 운영에서는 `ACTIVE` 세션이 무한히 남지 않도록 보관 정책이 필요하다. 예: 마지막 수정 후 24시간이 지나면 재탐색 불가 처리 또는 배치 정리.
 
 ---
 
-## 12) subway_station_elevators
+## 13) subway_station_elevators
 
 ### 역할
 
@@ -663,3 +684,52 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - 별도 `station` 테이블과 FK 관계를 두지 않는다.
 - `stationId`는 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
+
+---
+
+## 5. 관계 명세
+
+### users - bookmarks
+
+- `users 1 : N bookmarks`
+
+### users - favorite_routes
+
+- `users 1 : N favorite_routes`
+
+### users - hazard_reports
+
+- `users 1 : N hazard_reports`
+- 회원 탈퇴 후에도 제보 내역은 보관하되 사용자 식별 처리 정책은 별도 운영 정책을 따른다.
+
+### users - route_ratings
+
+- `users 1 : N route_ratings`
+- 회원 탈퇴 시 별점 평가 내역은 삭제한다.
+
+### users - route_sessions
+
+- `users 1 : N route_sessions`
+- `route_sessions.userId`와 `route_sessions.routeId` 또는 `route_sessions.sessionId` 기준으로 경로 세션 소유권을 검증한다.
+
+### hazard_reports - hazard_report_images
+
+- `hazard_reports 1 : N hazard_report_images`
+
+### places - bookmarks
+
+- `places 1 : N bookmarks`
+
+### places - place_accessibility_features
+
+- `places 1 : N place_accessibility_features`
+
+### road_nodes - road_segments
+
+- `road_nodes 1 : N road_segments`
+- 시작 노드(`fromNodeId`)와 종료 노드(`toNodeId`)를 기준으로 간선이 연결된다.
+
+### road_segments - segment_features
+
+- `road_segments 1 : N segment_features`
+- 하나의 보행 segment는 0개 이상의 개별 feature를 가질 수 있다.

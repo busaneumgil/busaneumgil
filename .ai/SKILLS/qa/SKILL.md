@@ -29,10 +29,13 @@ Validate that the implemented change works in the way a user experiences it, not
 1. Load `.ai/DOCS.md` and read the user flow, acceptance, API, data, FE, and runtime assumptions relevant to the change.
 2. For FE changes, validate against FE screen inventory, route map, design convention, accessibility labels, and available mockups.
 3. Start from the plan artifact's test and validation matrix instead of inventing QA scope from scratch.
-4. Execute the flows and note failures, confusing states, API contract mismatches, data issues, stale-document assumptions, and hidden operational risks.
-5. Produce a bug and risk report in `.ai/LOCAL/PLANS/current-sprint.md`.
-6. Update `.ai/EVALS/scorecard.md` if the test outcome changes release readiness.
-7. Feed repeatable gaps into `.ai/EVALS/failure-patterns.md` or memory files.
+4. For BE changes, execute or explicitly block each Backend Verification Harness item from the plan: compile, unit tests, integration tests, API response validation, DB migration validation, security validation, performance validation, and log/metric validation.
+5. For Spring Boot backends, prefer `./gradlew clean test`, `./gradlew check`, and `./gradlew bootJar` when those commands exist. For cross-functional work that includes FE, also run or explicitly block `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build` when those commands exist.
+6. Exercise the planned failure scenarios, especially duplicate requests, partial persistence, response-time crash assumptions, expiry during processing, and multi-instance concurrency where credible locally or in the target environment.
+7. Execute the flows and note failures, confusing states, API contract mismatches, data issues, stale-document assumptions, and hidden operational risks.
+8. Produce a bug and risk report in `.ai/LOCAL/PLANS/current-sprint.md`.
+9. Update `.ai/EVALS/scorecard.md` if the test outcome changes release readiness.
+10. Feed repeatable gaps into `.ai/EVALS/failure-patterns.md` or memory files.
 
 ## outputs
 
@@ -40,6 +43,8 @@ Validate that the implemented change works in the way a user experiences it, not
 - Bug list
 - Risk list
 - Updated readiness notes
+- Backend verification status table when backend behavior changed
+- Failure scenario execution notes when backend behavior changed
 
 ## escalation rules
 

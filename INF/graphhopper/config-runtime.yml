@@ -15,7 +15,9 @@ graphhopper:
   profiles_lm: []
 
   graph.encoded_values: |
-    foot_access, foot_average_speed, foot_priority, foot_road_access, hike_rating, country, road_class, mtb_rating
+    foot_access, foot_average_speed, foot_priority, foot_road_access, hike_rating, country, road_class, mtb_rating,
+    walk_access, avg_slope_percent, width_meter, braille_block_state, audio_signal_state, slope_state,
+    width_state, surface_state, stairs_state, signal_state, segment_type
   prepare.min_network_size: 2
   prepare.subnetworks.threads: 1
   import.osm.ignored_highways: []

@@ -74,7 +74,8 @@ set +e
 timeout "$IMPORT_TIMEOUT_SECONDS" java ${JAVA_OPTS:-} \
   -Ddw.graphhopper.datareader.file="$PBF_IMPORT_FILE" \
   -Ddw.graphhopper.graph.location="$BUILD_LOCATION" \
-  -jar /opt/graphhopper/graphhopper-web.jar \
+  -cp /opt/graphhopper/plugin/ieum-graphhopper-plugin.jar:/opt/graphhopper/graphhopper-web.jar \
+  com.ssafy.e102.graphhopper.IeumGraphHopperApplication \
   server "$CONFIG_FILE" &
 java_pid="$!"
 

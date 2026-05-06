@@ -1,6 +1,6 @@
 ARG GRAPHHOPPER_VERSION=11.0
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jdk
 
 ARG GRAPHHOPPER_VERSION
 
@@ -19,6 +19,14 @@ COPY scripts/docker/entrypoints/graphhopper.sh /usr/local/bin/graphhopper-entryp
 COPY scripts/docker/entrypoints/graphhopper-build.sh /usr/local/bin/graphhopper-build-entrypoint.sh
 COPY scripts/graphhopper/export_postgis_to_osm.py /usr/local/bin/export-postgis-to-osm.py
 COPY scripts/graphhopper/smoke_postgis_export.py /usr/local/bin/smoke-postgis-export.py
+COPY INF/graphhopper/plugin/src /opt/graphhopper/plugin/src
+
+RUN mkdir -p /opt/graphhopper/plugin/classes \
+    && javac -cp /opt/graphhopper/graphhopper-web.jar \
+      -d /opt/graphhopper/plugin/classes \
+      $(find /opt/graphhopper/plugin/src -name '*.java' | sort) \
+    && jar --create --file /opt/graphhopper/plugin/ieum-graphhopper-plugin.jar \
+      -C /opt/graphhopper/plugin/classes .
 
 RUN chmod +x /usr/local/bin/graphhopper-entrypoint.sh \
     && chmod +x /usr/local/bin/graphhopper-build-entrypoint.sh \

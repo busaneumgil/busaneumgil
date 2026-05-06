@@ -49,26 +49,62 @@ class LowVisionCategoryScreenTest {
     }
 
     @Test
-    fun `category options remove braille block and parking while keeping wheelchair charging below fold`() {
+    fun `category options expose only approved parser categories`() {
         assertEquals(
-            listOf("화장실", "음식점", "승강기", "관광지"),
-            lowVisionCategoryOptions.take(4).map { option -> option.label },
-        )
-        assertEquals(
-            listOf("휠체어 충전"),
-            lowVisionCategoryOptions.drop(4).map { option -> option.label },
+            listOf("음식점", "관광지", "숙박시설", "병원", "복지관", "관공서"),
+            lowVisionCategoryOptions.map { option -> option.label },
         )
     }
 
     @Test
     fun `category card accessibility hint announces result guidance`() {
         assertEquals(
-            "승강기, 엘리베이터에 대한 결과를 안내합니다.",
-            lowVisionCategoryOptions.first { option -> option.label == "승강기" }.resultA11yHint,
+            "선택 안 됨, 이용할 수 있는 음식점과 카페를 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "음식점" }.resultA11yHint(isSelected = false),
         )
         assertEquals(
-            "무장애 관광지. 편하게 즐길 수 있는 관광지를 안내합니다.",
-            lowVisionCategoryOptions.first { option -> option.label == "관광지" }.resultA11yHint,
+            "선택됨, 이용할 수 있는 음식점과 카페를 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "음식점" }.resultA11yHint(isSelected = true),
+        )
+        assertEquals(
+            "선택 안 됨, 이용할 수 있는 관광지를 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "관광지" }.resultA11yHint(isSelected = false),
+        )
+        assertEquals(
+            "선택됨, 이용할 수 있는 관광지를 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "관광지" }.resultA11yHint(isSelected = true),
+        )
+        assertEquals(
+            "선택 안 됨, 이용할 수 있는 숙박시설을 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "숙박시설" }.resultA11yHint(isSelected = false),
+        )
+        assertEquals(
+            "선택됨, 이용할 수 있는 숙박시설을 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "숙박시설" }.resultA11yHint(isSelected = true),
+        )
+        assertEquals(
+            "선택 안 됨, 이용할 수 있는 병원과 의료시설을 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "병원" }.resultA11yHint(isSelected = false),
+        )
+        assertEquals(
+            "선택됨, 이용할 수 있는 병원과 의료시설을 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "병원" }.resultA11yHint(isSelected = true),
+        )
+        assertEquals(
+            "선택 안 됨, 이용할 수 있는 복지시설을 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "복지관" }.resultA11yHint(isSelected = false),
+        )
+        assertEquals(
+            "선택됨, 이용할 수 있는 복지시설을 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "복지관" }.resultA11yHint(isSelected = true),
+        )
+        assertEquals(
+            "선택 안 됨, 이용할 수 있는 관공서를 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "관공서" }.resultA11yHint(isSelected = false),
+        )
+        assertEquals(
+            "선택됨, 이용할 수 있는 관공서를 안내합니다",
+            lowVisionCategoryOptions.first { option -> option.label == "관공서" }.resultA11yHint(isSelected = true),
         )
     }
 
@@ -76,11 +112,12 @@ class LowVisionCategoryScreenTest {
     fun `category options use low vision optimized line icons`() {
         assertEquals(
             listOf(
-                R.drawable.ic_lowvision_category_restroom,
                 R.drawable.ic_lowvision_category_restaurant,
-                R.drawable.ic_lowvision_category_elevator,
                 R.drawable.ic_lowvision_category_tourism,
-                R.drawable.ic_lowvision_category_charging,
+                R.drawable.ic_place_accommodation,
+                R.drawable.ic_place_healthcare,
+                R.drawable.ic_place_welfare,
+                R.drawable.ic_place_public_office,
             ),
             lowVisionCategoryOptions.map { option -> option.iconRes },
         )

@@ -21,20 +21,44 @@ services:
       file: docker-compose.shared.yml
       service: minio-init
 
+  graphhopper-build:
+    profiles:
+      - graphhopper-build
+    build:
+      context: .
+      dockerfile: INF/graphhopper/Dockerfile
+    entrypoint: ["graphhopper-build-entrypoint.sh"]
+    environment:
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/e102}
+      DB_USERNAME: ${DB_USERNAME:-e102}
+      DB_PASSWORD: ${DB_PASSWORD:-e102}
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
+      GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
+      GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS: ${GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS:-1800}
+      GRAPHHOPPER_ROAD_NODES_SQL: ${GRAPHHOPPER_ROAD_NODES_SQL:-}
+      GRAPHHOPPER_ROAD_SEGMENTS_SQL: ${GRAPHHOPPER_ROAD_SEGMENTS_SQL:-}
+    volumes:
+      - graphhopper-dev-data:/graphhopper/data
+      - graphhopper-dev-build:/graphhopper/build-cache
+      - graphhopper-dev-import:/graphhopper/import
+      - graphhopper-dev-previous:/graphhopper/previous-cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   graphhopper:
     build:
       context: .
       dockerfile: INF/graphhopper/Dockerfile
     restart: unless-stopped
     environment:
-      GRAPHHOPPER_DATA_FILE: ${GRAPHHOPPER_DATA_FILE:-/data/raw/busan.osm.pbf}
       GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
     ports:
       - "${GRAPHHOPPER_PORT:-8989}:8989"
       - "${GRAPHHOPPER_ADMIN_PORT:-8990}:8990"
     volumes:
-      - ${GRAPHHOPPER_DATA_DIR:-/opt/e102/graphhopper/raw}:/data/raw:ro
       - graphhopper-dev-data:/graphhopper/data
+      - graphhopper-dev-previous:/graphhopper/previous-cache
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8990/healthcheck >/dev/null"]
       interval: 15s
@@ -110,3 +134,6 @@ volumes:
   redis-shared-data:
   minio-shared-data:
   graphhopper-dev-data:
+  graphhopper-dev-build:
+  graphhopper-dev-import:
+  graphhopper-dev-previous:

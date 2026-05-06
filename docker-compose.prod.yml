@@ -25,19 +25,45 @@ name: s14p31e102-prod
 #   docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d
 
 services:
+  graphhopper-build:
+    profiles:
+      - graphhopper-build
+    image: s14p31e102-prod-graphhopper:${GRAPHHOPPER_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: INF/graphhopper/Dockerfile
+    entrypoint: ["graphhopper-build-entrypoint.sh"]
+    environment:
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSLMODE: ${DB_SSLMODE:-require}
+      GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
+      GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS: ${GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS:-1800}
+      GRAPHHOPPER_ROAD_NODES_SQL: ${GRAPHHOPPER_ROAD_NODES_SQL:-}
+      GRAPHHOPPER_ROAD_SEGMENTS_SQL: ${GRAPHHOPPER_ROAD_SEGMENTS_SQL:-}
+    volumes:
+      - graphhopper-prod-data:/graphhopper/data
+      - graphhopper-prod-build:/graphhopper/build-cache
+      - graphhopper-prod-import:/graphhopper/import
+      - graphhopper-prod-previous:/graphhopper/previous-cache
+
   graphhopper:
     profiles:
       - graphhopper
+    image: s14p31e102-prod-graphhopper:${GRAPHHOPPER_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: INF/graphhopper/Dockerfile
     restart: unless-stopped
     environment:
-      GRAPHHOPPER_DATA_FILE: ${GRAPHHOPPER_DATA_FILE:-/data/raw/busan.osm.pbf}
       GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
     volumes:
-      - ${GRAPHHOPPER_DATA_DIR:-/opt/e102/graphhopper/raw}:/data/raw:ro
       - graphhopper-prod-data:/graphhopper/data
+      - graphhopper-prod-previous:/graphhopper/previous-cache
+    ports:
+      - "127.0.0.1:${GRAPHHOPPER_PORT:-8989}:8989"
+      - "127.0.0.1:${GRAPHHOPPER_ADMIN_PORT:-8990}:8990"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8990/healthcheck >/dev/null"]
       interval: 15s
@@ -46,6 +72,7 @@ services:
       start_period: 3m
 
   ai:
+    image: s14p31e102-prod-ai:${APP_IMAGE_TAG:-latest}
     build:
       context: ./AI
     restart: unless-stopped
@@ -64,6 +91,7 @@ services:
       retries: 10
 
   backend:
+    image: s14p31e102-prod-backend:${APP_IMAGE_TAG:-latest}
     build:
       context: ./BE
     restart: unless-stopped
@@ -98,3 +126,6 @@ services:
 
 volumes:
   graphhopper-prod-data:
+  graphhopper-prod-build:
+  graphhopper-prod-import:
+  graphhopper-prod-previous:

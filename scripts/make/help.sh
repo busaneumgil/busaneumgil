@@ -35,6 +35,7 @@ Dev DB data
   road-network-dev-load        LOCAL nodes/segments CSV를 dev DB road 테이블에 적재한다
 
 GraphHopper
+  graphhopper-dev-export-smoke dev DB export query와 validation sample을 빠르게 검증한다
   graphhopper-local-build      local DB에서 graph-cache를 생성한다
   graphhopper-dev-build        dev DB에서 graph-cache를 생성한다
   graphhopper-prod-build       prod DB에서 graph-cache를 생성한다

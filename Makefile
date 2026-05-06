@@ -17,7 +17,7 @@ ifeq ($(OS),Windows_NT)
 BASH := $(patsubst %/mingw64/libexec/git-core,%/bin/bash.exe,$(GIT_EXEC_PATH))
 endif
 
-.PHONY: help init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs prod-config prod-up prod-up-graphhopper be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs road-network-dev-load graphhopper-local-build graphhopper-dev-build graphhopper-prod-build portainer-tunnel terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan
+.PHONY: help init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs prod-config prod-up prod-up-graphhopper be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs road-network-dev-load graphhopper-dev-export-smoke graphhopper-local-build graphhopper-dev-build graphhopper-prod-build portainer-tunnel terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan
 
 # 사용 가능한 make 타깃과 간단한 설명을 보여준다.
 help:
@@ -57,6 +57,9 @@ be-local-up ai-local-up:
 	@"$(BASH)" $(MAKE_DOCKER_SCRIPT_DIR)/$@.sh
 
 # GraphHopper graph-cache build jobs
+graphhopper-dev-export-smoke:
+	@"$(BASH)" $(MAKE_DOCKER_SCRIPT_DIR)/$@.sh
+
 graphhopper-local-build graphhopper-dev-build graphhopper-prod-build:
 	@"$(BASH)" $(MAKE_DOCKER_SCRIPT_DIR)/$@.sh
 

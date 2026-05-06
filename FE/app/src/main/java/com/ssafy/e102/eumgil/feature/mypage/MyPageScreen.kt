@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.mypage
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -94,6 +96,7 @@ fun MyPageScreen(
 
             Button(
                 onClick = { onAction(MyPageUiAction.LogoutClicked) },
+                enabled = !uiState.isLogoutLoading,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -106,7 +109,15 @@ fun MyPageScreen(
                     ),
             ) {
                 Text(
-                    text = stringResource(id = R.string.my_page_logout),
+                    text =
+                        stringResource(
+                            id =
+                                if (uiState.isLogoutLoading) {
+                                    R.string.my_page_logout_loading
+                                } else {
+                                    R.string.my_page_logout
+                                },
+                        ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -138,6 +149,8 @@ private fun ProfileCard(
     onUserTypeChangeClick: () -> Unit,
 ) {
     val avatarDescription = stringResource(id = R.string.my_page_profile_avatar_description)
+    val avatarRes = resolveProfileAvatarRes(uiState)
+    val headlineTextRes = resolveHeadlineTextRes(uiState)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -166,12 +179,21 @@ private fun ProfileCard(
                         .semantics { contentDescription = avatarDescription },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_nav_mypage),
-                    contentDescription = null,
-                    modifier = Modifier.size(38.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+                if (avatarRes == R.drawable.ic_nav_mypage) {
+                    Icon(
+                        painter = painterResource(id = avatarRes),
+                        contentDescription = null,
+                        modifier = Modifier.size(38.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = avatarRes),
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                }
             }
 
             Column(
@@ -179,14 +201,9 @@ private fun ProfileCard(
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
             ) {
                 Text(
-                    text = uiState.displayName ?: stringResource(id = R.string.my_page_default_user_name),
+                    text = stringResource(id = headlineTextRes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = stringResource(id = uiState.userMode.labelRes),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f),
                 )
                 uiState.mobilitySubtype?.let { subtype ->
                     Text(
@@ -423,3 +440,19 @@ private val MyPageMobilitySubtype.labelRes: Int
             MyPageMobilitySubtype.MANUAL_WHEELCHAIR -> R.string.my_page_mobility_subtype_manual
             MyPageMobilitySubtype.OTHER -> R.string.my_page_mobility_subtype_other
         }
+
+@StringRes
+internal fun resolveHeadlineTextRes(uiState: MyPageUiState): Int = uiState.userMode.labelRes
+
+@DrawableRes
+internal fun resolveProfileAvatarRes(uiState: MyPageUiState): Int =
+    if (uiState.userMode != MyPageUserMode.MOBILITY_IMPAIRED) {
+        R.drawable.ic_nav_mypage
+    } else {
+        when (uiState.mobilitySubtype) {
+            MyPageMobilitySubtype.MANUAL_WHEELCHAIR -> R.drawable.manual_galmaegi
+            MyPageMobilitySubtype.ELECTRIC_WHEELCHAIR -> R.drawable.auto_galmaegi
+            MyPageMobilitySubtype.OTHER -> R.drawable.crutch_galmaegi
+            null -> R.drawable.ic_nav_mypage
+        }
+    }

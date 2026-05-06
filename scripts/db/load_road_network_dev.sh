@@ -240,10 +240,33 @@ load_into_dev_db() {
     -p "$BE_DEV_DB_LOCAL_PORT" \
     -U "$db_user" \
     -d "$db_name" \
-    -v ON_ERROR_STOP=1 \
-    -v nodes_csv="$nodes_csv_literal" \
-    -v segments_csv="$segments_csv_literal" <<'SQL'
+    -v ON_ERROR_STOP=1 <<SQL
 CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE TABLE IF NOT EXISTS road_nodes (
+  "vertexId" bigint PRIMARY KEY,
+  "sourceNodeKey" varchar(100) NOT NULL UNIQUE,
+  "point" geometry(Point, 4326) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS road_segments (
+  "edgeId" bigint PRIMARY KEY,
+  "fromNodeId" bigint NOT NULL,
+  "toNodeId" bigint NOT NULL,
+  "geom" geometry(LineString, 4326) NOT NULL,
+  "lengthMeter" numeric(10, 2) NOT NULL,
+  "walkAccess" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "avgSlopePercent" numeric(6, 2),
+  "widthMeter" numeric(6, 2),
+  "brailleBlockState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "audioSignalState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "slopeState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "widthState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "surfaceState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "stairsState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "signalState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  "segmentType" varchar(30) NOT NULL DEFAULT 'SIDE_LINE'
+);
 
 CREATE TEMP TABLE staging_road_nodes (
   "vertexId" text,
@@ -270,12 +293,18 @@ CREATE TEMP TABLE staging_road_segments (
   "segmentType" text
 );
 
-\copy staging_road_nodes FROM :nodes_csv WITH (FORMAT csv, HEADER true)
-\copy staging_road_segments FROM :segments_csv WITH (FORMAT csv, HEADER true)
+\copy staging_road_nodes FROM ${nodes_csv_literal} WITH (FORMAT csv, HEADER true)
+\copy staging_road_segments FROM ${segments_csv_literal} WITH (FORMAT csv, HEADER true)
+
+CREATE INDEX staging_road_nodes_vertex_id_idx ON staging_road_nodes ("vertexId");
+CREATE INDEX staging_road_segments_from_node_id_idx ON staging_road_segments ("fromNodeId");
+CREATE INDEX staging_road_segments_to_node_id_idx ON staging_road_segments ("toNodeId");
+ANALYZE staging_road_nodes;
+ANALYZE staging_road_segments;
 
 BEGIN;
 
-DO $$
+DO \$validate_staging\$
 BEGIN
   IF EXISTS (
     SELECT 1
@@ -295,7 +324,7 @@ BEGIN
     RAISE EXCEPTION 'staging_road_segments contains invalid segmentType';
   END IF;
 END
-$$;
+\$validate_staging\$;
 
 TRUNCATE TABLE road_segments, road_nodes;
 
@@ -347,7 +376,7 @@ SELECT
   "segmentType"
 FROM staging_road_segments;
 
-DO $$
+DO \$validate_loaded\$
 DECLARE
   staging_node_count bigint;
   staging_segment_count bigint;
@@ -391,7 +420,7 @@ BEGIN
 
   RAISE NOTICE 'road network load ok: nodes %, segments %', loaded_node_count, loaded_segment_count;
 END
-$$;
+\$validate_loaded\$;
 
 COMMIT;
 

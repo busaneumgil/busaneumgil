@@ -11,7 +11,7 @@ Use this repository as a structured AI harness, not as a loose prompt sandbox.
 - Treat `.ai/.claude/skills/` and root `.claude/skills` as generated adapter output.
 - Treat `.ai/.claude/settings.json` and root `.claude/settings.json` as generated from `.ai/ADAPTERS/claude/settings.json`.
 - Use `.ai/LOCAL/PLANS/progress.json` and `.ai/LOCAL/EVALS/metrics.json` when summarizing local status.
-- If the repository only copied `.ai/`, run `.ai/scripts/install-root-entrypoints.sh` so Claude can discover root `CLAUDE.md`.
+- If the repository only copied `.ai/`, run `.ai/scripts/install-root-entrypoints.sh` so Claude guidance is included in root `AGENTS.md`.
 
 ## Skills
 

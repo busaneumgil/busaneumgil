@@ -7,7 +7,6 @@ harness_ensure_local_state
 
 required_files=(
   "AGENTS.md"
-  "CLAUDE.md"
   ".gitignore"
   ".ai/README.md"
   ".ai/AGENTS.md"

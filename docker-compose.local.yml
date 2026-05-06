@@ -25,20 +25,44 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-e102-e102}
       MINIO_BUCKET: ${MINIO_BUCKET:-e102-local}
 
+  graphhopper-build:
+    profiles:
+      - graphhopper-build
+    build:
+      context: .
+      dockerfile: INF/graphhopper/Dockerfile
+    entrypoint: ["graphhopper-build-entrypoint.sh"]
+    environment:
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/e102}
+      DB_USERNAME: ${DB_USERNAME:-e102}
+      DB_PASSWORD: ${DB_PASSWORD:-e102}
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
+      GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
+      GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS: ${GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS:-1800}
+      GRAPHHOPPER_ROAD_NODES_SQL: ${GRAPHHOPPER_ROAD_NODES_SQL:-}
+      GRAPHHOPPER_ROAD_SEGMENTS_SQL: ${GRAPHHOPPER_ROAD_SEGMENTS_SQL:-}
+    volumes:
+      - graphhopper-local-data:/graphhopper/data
+      - graphhopper-local-build:/graphhopper/build-cache
+      - graphhopper-local-import:/graphhopper/import
+      - graphhopper-local-previous:/graphhopper/previous-cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   graphhopper:
     build:
       context: .
       dockerfile: INF/graphhopper/Dockerfile
     restart: unless-stopped
     environment:
-      GRAPHHOPPER_DATA_FILE: ${GRAPHHOPPER_DATA_FILE:-/data/raw/busan.osm.pbf}
       GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
     ports:
       - "${GRAPHHOPPER_PORT:-8989}:8989"
       - "${GRAPHHOPPER_ADMIN_PORT:-8990}:8990"
     volumes:
-      - ${GRAPHHOPPER_DATA_DIR:-./.tmp/ieumgil-poc/ieumgil-osm-etl-poc/data/raw}:/data/raw:ro
       - graphhopper-local-data:/graphhopper/data
+      - graphhopper-local-previous:/graphhopper/previous-cache
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8990/healthcheck >/dev/null"]
       interval: 15s
@@ -115,3 +139,6 @@ volumes:
   redis-shared-data:
   minio-shared-data:
   graphhopper-local-data:
+  graphhopper-local-build:
+  graphhopper-local-import:
+  graphhopper-local-previous:

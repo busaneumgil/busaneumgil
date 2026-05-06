@@ -67,12 +67,15 @@ PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는�
 1. GitLab `develop` checkout
 2. Jenkins credential의 `.env.dev`, S1 override compose 복사
 3. `docker compose config --quiet`
-4. `PostGIS`, `Redis`, `MinIO`, `GraphHopper` 기동
-5. backend image build 및 컨테이너 재생성
-6. `/v3/api-docs` smoke test
-7. compose 상태 출력
+4. `PostGIS`, `Redis`, `MinIO`, `AI` 기동
+5. GraphHopper graph-cache volume 확인
+6. cache가 비어 있으면 `graphhopper-build` profile로 PostgreSQL LineString 기반 cache 생성
+7. GraphHopper runtime 기동
+8. backend image build 및 컨테이너 재생성
+9. backend `/v3/api-docs`, GraphHopper `/healthcheck` smoke test
+10. compose 상태 출력
 
-GraphHopper는 S1 dev stack에 포함한다. 현재 dev runtime은 GraphHopper graph-cache serve 구조로 운영하고, PostgreSQL LineString 원천 데이터 기반 graph-cache build job은 `S14P31E102-94`에서 별도 진행한다.
+GraphHopper는 S1 dev stack에 포함한다. runtime은 graph-cache serve only 구조이며, Jenkins dev pipeline은 cache가 비어 있을 때만 build job을 실행한다.
 
 ## Credentials
 
@@ -82,11 +85,36 @@ Jenkins job에서 사용하는 secret은 Jenkins Credentials로 관리한다.
 |---|---|---|---|
 | `gitlab-pat` | Username/Password 또는 Secret text | GitLab repository checkout | 적용 완료 |
 | `e102-dev-env-file` | Secret file | S1 dev 배포용 `.env.dev` | 적용 완료 |
-| `e102-prod-env-file` | Secret file | prod 배포용 `.env.prod` | `.env.prod` 생성 후 적용 |
+| `e102-prod-env-file` | Secret file | prod 배포용 `.env.prod` | 적용 완료 |
+| `e102-s2-host` | Secret text | S2 SSH host 또는 IP | 적용 완료 |
+| `e102-s2-ssh-key` | SSH Username with private key | S2 배포 SSH 접속 | 적용 완료 |
 
 `e102-dev-env-file`은 서버의 `/home/ubuntu/e102/.env.dev`를 기준으로 생성한다. Jenkins 컨테이너 재시작 시 `/var/jenkins_home/init.groovy.d/02-e102-env-credentials.groovy`가 credential을 다시 동기화한다.
 
-prod 배포를 시작할 때는 서버에 `/home/ubuntu/e102/.env.prod`를 만들고 Jenkins 컨테이너를 재시작하면 `e102-prod-env-file`도 같은 방식으로 생성된다.
+prod 배포용 secret 원본은 S1 `/home/ubuntu/e102/prod-secrets` 하위에서 관리한다. Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`가 `e102-prod-env-file`, `e102-s2-host`, `e102-s2-ssh-key`를 동기화한다.
+
+## `e102-prod-deploy`
+
+prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Jenkinsfile`이다.
+
+처리 순서:
+
+1. 지정 브랜치 checkout
+2. workspace를 archive로 패키징
+3. S2 `/home/ubuntu/e102/prod`로 코드와 `.env.prod` 업로드
+4. `scripts/deploy/prod-deploy.sh` 또는 `scripts/deploy/prod-rollback.sh` 실행
+5. `scripts/deploy/prod-smoke.sh`로 backend/AI/GraphHopper 상태 확인
+
+파라미터:
+
+| 파라미터 | 기본값 | 설명 |
+|---|---:|---|
+| `DEPLOY_BRANCH` | `master` | S2 prod에 배포할 브랜치 |
+| `BUILD_GRAPHHOPPER` | `false` | PostgreSQL LineString에서 graph-cache를 새로 생성 |
+| `DEPLOY_GRAPHHOPPER` | `false` | GraphHopper runtime까지 기동 |
+| `ROLLBACK` | `false` | 이전 app image tag와 이전 graph-cache로 rollback |
+
+초기 운영에서는 `BUILD_GRAPHHOPPER=false`, `DEPLOY_GRAPHHOPPER=false`로 backend/AI 배포만 먼저 안정화한다. `road_nodes`, `road_segments` 데이터 적재가 준비되면 GraphHopper 파라미터를 켠다.
 
 ## Webhook
 

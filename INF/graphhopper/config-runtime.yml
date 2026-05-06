@@ -1,5 +1,4 @@
 graphhopper:
-  datareader.file: ""
   graph.location: graph-cache
 
   profiles:

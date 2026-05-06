@@ -20,6 +20,7 @@ COPY scripts/docker/entrypoints/graphhopper.sh /usr/local/bin/graphhopper-entryp
 COPY scripts/docker/entrypoints/graphhopper-build.sh /usr/local/bin/graphhopper-build-entrypoint.sh
 COPY scripts/graphhopper/export_postgis_to_osm.py /usr/local/bin/export-postgis-to-osm.py
 COPY scripts/graphhopper/smoke_postgis_export.py /usr/local/bin/smoke-postgis-export.py
+COPY scripts/graphhopper/smoke_graphhopper_profiles.py /usr/local/bin/smoke-graphhopper-profiles.py
 COPY INF/graphhopper/plugin/src /opt/graphhopper/plugin/src
 
 RUN mkdir -p /opt/graphhopper/plugin/classes \
@@ -32,7 +33,8 @@ RUN mkdir -p /opt/graphhopper/plugin/classes \
 RUN chmod +x /usr/local/bin/graphhopper-entrypoint.sh \
     && chmod +x /usr/local/bin/graphhopper-build-entrypoint.sh \
     && chmod +x /usr/local/bin/export-postgis-to-osm.py \
-    && chmod +x /usr/local/bin/smoke-postgis-export.py
+    && chmod +x /usr/local/bin/smoke-postgis-export.py \
+    && chmod +x /usr/local/bin/smoke-graphhopper-profiles.py
 
 EXPOSE 8989 8990
 

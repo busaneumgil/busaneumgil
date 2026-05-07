@@ -17,7 +17,7 @@ ifeq ($(OS),Windows_NT)
 BASH := $(patsubst %/mingw64/libexec/git-core,%/bin/bash.exe,$(GIT_EXEC_PATH))
 endif
 
-.PHONY: help init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs prod-config prod-up prod-up-graphhopper prod-schema-update be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs road-network-dev-load graphhopper-dev-export-smoke graphhopper-dev-profile-smoke graphhopper-dev-up graphhopper-local-build graphhopper-dev-build graphhopper-prod-build portainer-tunnel terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan
+.PHONY: help init test-git-jira local-config local-up local-down local-logs dev-config dev-up dev-down dev-logs prod-config prod-up prod-up-graphhopper prod-schema-update be-local-up ai-local-up be-dev-config be-dev-up be-dev-down be-dev-logs road-network-dev-load road-network-prod-load graphhopper-dev-export-smoke graphhopper-dev-profile-smoke graphhopper-dev-up graphhopper-local-build graphhopper-dev-build graphhopper-prod-build portainer-tunnel terraform-bootstrap-init terraform-bootstrap-fmt terraform-bootstrap-validate terraform-bootstrap-plan terraform-prod-init terraform-prod-fmt terraform-prod-validate terraform-prod-plan
 
 # 사용 가능한 make 타깃과 간단한 설명을 보여준다.
 help:
@@ -54,6 +54,9 @@ be-dev-config be-dev-up be-dev-down be-dev-logs:
 # Dev DB data load
 road-network-dev-load:
 	@"$(BASH)" $(MAKE_DB_SCRIPT_DIR)/load_road_network_dev.sh
+
+road-network-prod-load:
+	@"$(BASH)" $(MAKE_DB_SCRIPT_DIR)/load_road_network_prod.sh
 
 # Partial local stacks
 be-local-up ai-local-up:

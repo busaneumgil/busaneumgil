@@ -36,6 +36,8 @@ Docker host scripts
 Dev DB data
   road-network-dev-load        LOCAL nodes/segments CSV를 dev DB road 테이블에 적재한다
   road-network-prod-load       LOCAL nodes/segments CSV를 prod DB road 테이블에 적재한다
+  accessibility-features-dev-load  LOCAL 접근성 CSV를 dev DB segment_features/road_segments에 반영한다
+  accessibility-features-prod-load LOCAL 접근성 CSV를 prod DB에 dry-run report로 먼저 검증한다
 
 GraphHopper
   graphhopper-dev-export-smoke dev DB export query와 validation sample을 빠르게 검증한다

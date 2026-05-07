@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.lowvision
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -124,12 +125,32 @@ class LowVisionCategoryScreenTest {
             listOf(
                 R.drawable.ic_lowvision_category_restaurant,
                 R.drawable.ic_lowvision_category_tourism,
-                R.drawable.ic_place_accommodation,
-                R.drawable.ic_place_healthcare,
-                R.drawable.ic_place_welfare,
-                R.drawable.ic_place_public_office,
+                R.drawable.ic_lowvision_category_accommodation,
+                R.drawable.ic_lowvision_category_healthcare,
+                R.drawable.ic_lowvision_category_welfare,
+                R.drawable.ic_lowvision_category_public_office,
             ),
             lowVisionCategoryOptions.map { option -> option.iconRes },
         )
+    }
+
+    @Test
+    fun `category line icons share the same stroke width`() {
+        val drawableDir = File("src/main/res/drawable")
+        val iconFileNames =
+            listOf(
+                "ic_lowvision_category_restaurant.xml",
+                "ic_lowvision_category_tourism.xml",
+                "ic_lowvision_category_accommodation.xml",
+                "ic_lowvision_category_healthcare.xml",
+                "ic_lowvision_category_welfare.xml",
+                "ic_lowvision_category_public_office.xml",
+            )
+
+        iconFileNames.forEach { fileName ->
+            val iconXml = File(drawableDir, fileName).readText()
+
+            assertTrue("$fileName should be a stroked line icon", "android:strokeWidth=\"2\"".toRegex() in iconXml)
+        }
     }
 }

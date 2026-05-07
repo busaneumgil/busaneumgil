@@ -1,7 +1,11 @@
 package com.ssafy.e102.global.external.graphhopper;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * GraphHopper paths[] 원소 중 도보 route payload에 필요한 거리, 시간, geometry를 받는다.
@@ -11,7 +15,8 @@ import java.util.List;
 public record GraphHopperPathResponse(
 	BigDecimal distance,
 	long time,
-	GraphHopperPointsResponse points) {
+	GraphHopperPointsResponse points,
+	Map<String, List<List<JsonNode>>> details) {
 
 	List<GraphHopperCoordinate> coordinates() {
 		if (points == null || points.coordinates() == null) {
@@ -22,5 +27,21 @@ public record GraphHopperPathResponse(
 			.stream()
 			.map(GraphHopperCoordinate::from)
 			.toList();
+	}
+
+	Map<String, List<GraphHopperPathDetail>> pathDetails() {
+		if (details == null || details.isEmpty()) {
+			return Map.of();
+		}
+		Map<String, List<GraphHopperPathDetail>> parsed = new LinkedHashMap<>();
+		details.forEach((name, ranges) -> parsed.put(name, ranges.stream()
+			.filter(range -> range.size() >= 3)
+			.map(this::toPathDetail)
+			.toList()));
+		return parsed;
+	}
+
+	private GraphHopperPathDetail toPathDetail(List<JsonNode> range) {
+		return new GraphHopperPathDetail(range.get(0).asInt(), range.get(1).asInt(), range.get(2).asText());
 	}
 }

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -113,6 +114,7 @@ class WalkRouteGraphHopperSearchServiceTest {
 		return new GraphHopperRoutePath(
 			new BigDecimal(distanceMeter),
 			60000,
-			List.of(new GraphHopperCoordinate(new BigDecimal("128.936"), new BigDecimal("35.12"))));
+			List.of(new GraphHopperCoordinate(new BigDecimal("128.936"), new BigDecimal("35.12"))),
+			Map.of());
 	}
 }

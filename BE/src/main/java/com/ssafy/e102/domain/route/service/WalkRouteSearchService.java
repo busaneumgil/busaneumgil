@@ -1,29 +1,20 @@
 package com.ssafy.e102.domain.route.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
-import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
-import com.ssafy.e102.domain.route.type.RouteLegRole;
-import com.ssafy.e102.domain.route.type.RouteOption;
-import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.exception.UserErrorCode;
 import com.ssafy.e102.domain.user.exception.UserException;
 import com.ssafy.e102.domain.user.repository.UserRepository;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperCoordinate;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 /**
@@ -42,16 +33,18 @@ public class WalkRouteSearchService {
 	private static final double BUSAN_MAX_LNG = 129.40;
 	private static final double START_END_MIN_DISTANCE_METER = 20.0;
 	private static final double EARTH_RADIUS_METER = 6_371_000.0;
-	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
 
 	private final UserRepository userRepository;
 	private final WalkRouteGraphHopperSearchService graphHopperSearchService;
+	private final WalkRoutePayloadService walkRoutePayloadService;
 
 	public WalkRouteSearchService(
 		UserRepository userRepository,
-		WalkRouteGraphHopperSearchService graphHopperSearchService) {
+		WalkRouteGraphHopperSearchService graphHopperSearchService,
+		WalkRoutePayloadService walkRoutePayloadService) {
 		this.userRepository = userRepository;
 		this.graphHopperSearchService = graphHopperSearchService;
+		this.walkRoutePayloadService = walkRoutePayloadService;
 	}
 
 	public WalkRouteSearchResponse search(UUID userId, WalkRouteSearchRequest request) {
@@ -107,70 +100,7 @@ public class WalkRouteSearchService {
 
 	private List<RouteSummaryResponse> toRouteSummaries(String searchId, List<WalkRouteCandidate> candidates) {
 		return candidates.stream()
-			.map(candidate -> toRouteSummary(searchId, candidate))
+			.map(candidate -> walkRoutePayloadService.toRouteSummary(searchId, candidate))
 			.toList();
-	}
-
-	private RouteSummaryResponse toRouteSummary(String searchId, WalkRouteCandidate candidate) {
-		GraphHopperRoutePath path = candidate.path();
-		String geometry = toLineString(path.coordinates());
-		int durationSecond = durationSecond(path.timeMs());
-		int estimatedTimeMinute = estimatedTimeMinute(durationSecond);
-		BigDecimal distanceMeter = path.distanceMeter().setScale(2, RoundingMode.HALF_UP);
-
-		return new RouteSummaryResponse(
-			routeId(searchId, candidate.routeOption()),
-			TransportMode.WALK,
-			candidate.routeOption(),
-			title(candidate.routeOption()),
-			distanceMeter,
-			durationSecond,
-			estimatedTimeMinute,
-			List.of(),
-			geometry,
-			List.of(toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry)));
-	}
-
-	private RouteLegResponse toWalkOnlyLeg(
-		BigDecimal distanceMeter,
-		int durationSecond,
-		int estimatedTimeMinute,
-		String geometry) {
-		return new RouteLegResponse(
-			1,
-			TransportMode.WALK,
-			RouteLegRole.WALK_ONLY,
-			WALK_LEG_INSTRUCTION,
-			distanceMeter,
-			durationSecond,
-			estimatedTimeMinute,
-			geometry,
-			List.of());
-	}
-
-	private String routeId(String searchId, RouteOption routeOption) {
-		return searchId + "_" + routeOption.name().toLowerCase();
-	}
-
-	private String title(RouteOption routeOption) {
-		return switch (routeOption) {
-			case SAFE -> "안전 경로";
-			case SHORTEST -> "최단 경로";
-		};
-	}
-
-	private int durationSecond(long timeMs) {
-		return Math.max(1, (int)Math.ceil(timeMs / 1000.0));
-	}
-
-	private int estimatedTimeMinute(int durationSecond) {
-		return Math.max(1, durationSecond / 60);
-	}
-
-	private String toLineString(List<GraphHopperCoordinate> coordinates) {
-		String points = coordinates.stream()
-			.map(coordinate -> coordinate.lng().toPlainString() + " " + coordinate.lat().toPlainString())
-			.collect(Collectors.joining(", "));
-		return "LINESTRING(" + points + ")";
 	}
 }

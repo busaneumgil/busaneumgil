@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -47,7 +48,7 @@ class WalkRouteSearchServiceTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		service = new WalkRouteSearchService(userRepository, graphHopperSearchService);
+		service = new WalkRouteSearchService(userRepository, graphHopperSearchService, new WalkRoutePayloadService());
 	}
 
 	@Test
@@ -77,6 +78,7 @@ class WalkRouteSearchServiceTest {
 		assertThat(response.routes().get(0).estimatedTimeMinute()).isEqualTo(1);
 		assertThat(response.routes().get(0).geometry())
 			.isEqualTo("LINESTRING(128.936 35.12, 128.8823 35.1315)");
+		assertThat(response.routes().get(0).legs().get(0).steps()).hasSize(1);
 		verify(graphHopperSearchService).searchCandidates(
 			startPoint,
 			endPoint,
@@ -133,7 +135,8 @@ class WalkRouteSearchServiceTest {
 				90_000,
 				List.of(
 					new GraphHopperCoordinate(new BigDecimal("128.936"), new BigDecimal("35.12")),
-					new GraphHopperCoordinate(new BigDecimal("128.8823"), new BigDecimal("35.1315")))));
+					new GraphHopperCoordinate(new BigDecimal("128.8823"), new BigDecimal("35.1315"))),
+				Map.of()));
 	}
 
 	private User user(UUID userId, PrimaryUserType primaryUserType, MobilitySubtype mobilitySubtype) {

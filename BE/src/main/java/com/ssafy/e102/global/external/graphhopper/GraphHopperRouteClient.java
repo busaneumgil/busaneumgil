@@ -29,6 +29,16 @@ import com.ssafy.e102.domain.route.exception.RouteException;
 @Component
 public class GraphHopperRouteClient {
 
+	private static final List<String> WALK_PATH_DETAILS = List.of(
+		"edge_id",
+		"segment_type",
+		"signal_state",
+		"slope_state",
+		"avg_slope_percent",
+		"width_state",
+		"surface_state",
+		"stairs_state");
+
 	private final RestTemplate restTemplate;
 	private final GraphHopperProperties properties;
 
@@ -83,6 +93,7 @@ public class GraphHopperRouteClient {
 			.queryParam("point", point(request.endPoint()))
 			.queryParam("points_encoded", "false")
 			.queryParam("locale", "ko-KR")
+			.queryParam("details", WALK_PATH_DETAILS.toArray())
 			.build()
 			.toUri();
 	}
@@ -101,7 +112,7 @@ public class GraphHopperRouteClient {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		// 이후 step/payload service는 GraphHopper 원본 JSON이 아니라 이 정제된 path만 사용한다.
-		return new GraphHopperRoutePath(path.distance(), path.time(), coordinates);
+		return new GraphHopperRoutePath(path.distance(), path.time(), coordinates, path.pathDetails());
 	}
 
 	private boolean hasTimeoutCause(Throwable throwable) {

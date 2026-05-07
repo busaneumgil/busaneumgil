@@ -44,7 +44,9 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper route API를 profile과 좌표 query로 호출하고 첫 path를 반환한다")
 	void routeCallsGraphHopperAndParsesFirstPath() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=visual_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR"))
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "details=segment_type&details=signal_state&details=slope_state&details=avg_slope_percent&"
+			+ "details=width_state&details=surface_state&details=stairs_state"))
 			.andExpect(method(HttpMethod.GET))
 			.andExpect(queryParam("profile", "visual_safe"))
 			.andExpect(queryParam("points_encoded", "false"))
@@ -57,6 +59,10 @@ class GraphHopperRouteClientTest {
 				      "points": {
 				        "type": "LineString",
 				        "coordinates": [[128.936,35.12],[128.8823,35.1315]]
+				      },
+				      "details": {
+				        "segment_type": [[0,1,"CROSS_WALK"]],
+				        "avg_slope_percent": [[0,1,6.5]]
 				      }
 				    }
 				  ]
@@ -72,6 +78,8 @@ class GraphHopperRouteClientTest {
 		assertThat(path.timeMs()).isEqualTo(960000);
 		assertThat(path.coordinates()).hasSize(2);
 		assertThat(path.coordinates().get(0).lng()).isEqualByComparingTo("128.936");
+		assertThat(path.details().get("segment_type").get(0).value()).isEqualTo("CROSS_WALK");
+		assertThat(path.details().get("avg_slope_percent").get(0).value()).isEqualTo("6.5");
 		server.verify();
 	}
 
@@ -79,7 +87,9 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper 응답에 path가 없으면 RT4040으로 매핑한다")
 	void routeMapsEmptyPathsToRouteNotFound() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR"))
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "details=segment_type&details=signal_state&details=slope_state&details=avg_slope_percent&"
+			+ "details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withSuccess("{\"paths\":[]}", MediaType.APPLICATION_JSON));
 
 		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
@@ -95,7 +105,9 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper HTTP 실패는 EX5020으로 매핑한다")
 	void routeMapsHttpFailureToExternalRouteApiFailed() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR"))
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "details=segment_type&details=signal_state&details=slope_state&details=avg_slope_percent&"
+			+ "details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withServerError());
 
 		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(

@@ -22,6 +22,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,29 +78,40 @@ internal fun lowVisionCategoryDisplayLabel(label: String): String =
 internal fun lowVisionCategoryResultA11yHint(label: String): String =
     "${label.trim()}에 대한 결과를 안내합니다."
 
+internal fun lowVisionCategorySelectionStateText(isSelected: Boolean): String =
+    if (isSelected) "선택됨" else "선택 안 됨"
+
 internal val lowVisionCategoryOptions =
     listOf(
         LowVisionCategoryOption(
-            label = "\uD654\uC7A5\uC2E4",
-            iconRes = R.drawable.ic_lowvision_category_restroom,
-        ),
-        LowVisionCategoryOption(
             label = "\uC74C\uC2DD\uC810",
+            selectionA11yDescription = "이용할 수 있는 음식점과 카페를 안내합니다",
             iconRes = R.drawable.ic_lowvision_category_restaurant,
         ),
         LowVisionCategoryOption(
-            label = "\uC2B9\uAC15\uAE30",
-            talkBackLabel = "\uC2B9\uAC15\uAE30, \uC5D8\uB9AC\uBCA0\uC774\uD130",
-            iconRes = R.drawable.ic_lowvision_category_elevator,
-        ),
-        LowVisionCategoryOption(
             label = "\uAD00\uAD11\uC9C0",
-            resultA11yHintOverride = "\uBB34\uC7A5\uC560 \uAD00\uAD11\uC9C0. \uD3B8\uD558\uAC8C \uC990\uAE38 \uC218 \uC788\uB294 \uAD00\uAD11\uC9C0\uB97C \uC548\uB0B4\uD569\uB2C8\uB2E4.",
+            selectionA11yDescription = "이용할 수 있는 관광지를 안내합니다",
             iconRes = R.drawable.ic_lowvision_category_tourism,
         ),
         LowVisionCategoryOption(
-            label = "\uD720\uCCB4\uC5B4 \uCDA9\uC804",
-            iconRes = R.drawable.ic_lowvision_category_charging,
+            label = "\uC219\uBC15\uC2DC\uC124",
+            selectionA11yDescription = "이용할 수 있는 숙박시설을 안내합니다",
+            iconRes = R.drawable.ic_place_accommodation,
+        ),
+        LowVisionCategoryOption(
+            label = "\uBCD1\uC6D0",
+            selectionA11yDescription = "이용할 수 있는 병원과 의료시설을 안내합니다",
+            iconRes = R.drawable.ic_place_healthcare,
+        ),
+        LowVisionCategoryOption(
+            label = "\uBCF5\uC9C0\uAD00",
+            selectionA11yDescription = "이용할 수 있는 복지시설을 안내합니다",
+            iconRes = R.drawable.ic_place_welfare,
+        ),
+        LowVisionCategoryOption(
+            label = "\uAD00\uACF5\uC11C",
+            selectionA11yDescription = "이용할 수 있는 관공서를 안내합니다",
+            iconRes = R.drawable.ic_place_public_office,
         ),
     )
 
@@ -107,6 +122,8 @@ fun LowVisionCategoryScreen(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var selectedCategoryLabel by rememberSaveable { mutableStateOf<String?>(null) }
+
     Column(
         modifier =
             modifier
@@ -126,7 +143,11 @@ fun LowVisionCategoryScreen(
         ) {
             LowVisionCategoryHeader(onBackClick = onBackClick)
             LowVisionCategoryGrid(
-                onCategorySelected = onCategorySelected,
+                selectedCategoryLabel = selectedCategoryLabel,
+                onCategorySelected = { categoryLabel ->
+                    selectedCategoryLabel = categoryLabel
+                    onCategorySelected(categoryLabel)
+                },
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -179,6 +200,7 @@ private fun LowVisionCategoryHeader(onBackClick: () -> Unit) {
 
 @Composable
 private fun LowVisionCategoryGrid(
+    selectedCategoryLabel: String?,
     onCategorySelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -204,6 +226,7 @@ private fun LowVisionCategoryGrid(
                         rowOptions.forEach { option ->
                             LowVisionCategoryCard(
                                 option = option,
+                                isSelected = option.label == selectedCategoryLabel,
                                 onClick = { onCategorySelected(option.label) },
                                 modifier =
                                     Modifier
@@ -221,6 +244,7 @@ private fun LowVisionCategoryGrid(
 @Composable
 private fun LowVisionCategoryCard(
     option: LowVisionCategoryOption,
+    isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -236,7 +260,7 @@ private fun LowVisionCategoryCard(
                 .background(LowVisionCategoryBackground)
                 .clearAndSetSemantics {
                     role = Role.Button
-                    contentDescription = option.resultA11yHint
+                    contentDescription = option.resultA11yHint(isSelected = isSelected)
                 }
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(
@@ -270,9 +294,12 @@ private fun LowVisionCategoryCard(
 internal data class LowVisionCategoryOption(
     val label: String,
     val talkBackLabel: String = label,
+    val selectionA11yDescription: String? = null,
     val resultA11yHintOverride: String? = null,
     @DrawableRes val iconRes: Int,
 ) {
-    val resultA11yHint: String
-        get() = resultA11yHintOverride ?: lowVisionCategoryResultA11yHint(talkBackLabel)
+    fun resultA11yHint(isSelected: Boolean): String =
+        selectionA11yDescription?.let { description ->
+            "${lowVisionCategorySelectionStateText(isSelected)}, $description"
+        } ?: resultA11yHintOverride ?: lowVisionCategoryResultA11yHint(talkBackLabel)
 }

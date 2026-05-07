@@ -21,7 +21,8 @@ USER jenkins
 ENV JENKINS_UC=https://updates.jenkins.io/stable
 ENV JENKINS_UC_DOWNLOAD=https://updates.jenkins.io/download
 
-COPY --chown=jenkins:jenkins plugins.txt /usr/share/jenkins/ref/plugins.txt
+COPY --chown=jenkins:jenkins s1/plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
-COPY --chown=jenkins:jenkins init.groovy.d/*.groovy /usr/share/jenkins/ref/init.groovy.d/
+COPY --chown=jenkins:jenkins pipelines /usr/share/jenkins/ref/pipelines
+COPY --chown=jenkins:jenkins s1/init.groovy.d/*.groovy /usr/share/jenkins/ref/init.groovy.d/

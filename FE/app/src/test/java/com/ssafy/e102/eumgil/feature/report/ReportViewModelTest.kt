@@ -142,7 +142,7 @@ class ReportViewModelTest {
                     latestDraft =
                         ReportDraftData(
                             draftId = "draft-1",
-                            reportCategory = ReportType.CONSTRUCTION.apiValue,
+                            reportCategory = ReportType.OTHER_OBSTACLE.apiValue,
                             description = "삭제할 draft",
                             address = null,
                             latitude = null,
@@ -160,7 +160,7 @@ class ReportViewModelTest {
 
             viewModel.onAction(ReportUiAction.DraftResumeClicked)
             advanceUntilIdle()
-            assertEquals(ReportType.CONSTRUCTION, viewModel.uiState.value.reportType.value)
+            assertEquals(ReportType.OTHER_OBSTACLE, viewModel.uiState.value.reportType.value)
 
             viewModel.onAction(ReportUiAction.DraftDiscardClicked)
             advanceUntilIdle()
@@ -218,7 +218,7 @@ class ReportViewModelTest {
                     }
                 }
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.TACTILE_BLOCK))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =
@@ -238,7 +238,7 @@ class ReportViewModelTest {
             val uiState = viewModel.uiState.value
             val completeEvent = event.await() as ReportUiEvent.NavigateToReportComplete
 
-            assertEquals(ReportType.TACTILE_BLOCK.apiValue, savedOutbox.reportCategory)
+            assertEquals(ReportType.BRAILLE_BLOCK.apiValue, savedOutbox.reportCategory)
             assertEquals("점자블록 파손", savedOutbox.description)
             assertEquals(35.1796, savedOutbox.latitude, 0.0)
             assertEquals(129.0756, savedOutbox.longitude, 0.0)
@@ -340,11 +340,11 @@ class ReportViewModelTest {
 
             assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             advanceUntilIdle()
 
             assertEquals(ReportStep.LocationConfirm, viewModel.uiState.value.currentStep)
-            assertEquals(ReportType.STAIRS, viewModel.uiState.value.reportType.value)
+            assertEquals(ReportType.STAIRS_STEP, viewModel.uiState.value.reportType.value)
         }
 
     @Test
@@ -353,7 +353,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = ReportViewModel(reportRepository = repository)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.SLOPE))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =
@@ -377,7 +377,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = ReportViewModel(reportRepository = repository)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.ELEVATOR))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(ReportUiAction.NextStepClicked)
             advanceUntilIdle()
 
@@ -390,7 +390,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = ReportViewModel(reportRepository = repository)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.GUIDANCE_BLOCK))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
             assertEquals(ReportStep.LocationConfirm, viewModel.uiState.value.currentStep)
 
             viewModel.onAction(ReportUiAction.BackClicked)
@@ -419,7 +419,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = ReportViewModel(reportRepository = repository)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.FACILITY_DAMAGE))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =
@@ -449,7 +449,7 @@ class ReportViewModelTest {
                     }
                 }
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.FACILITY_DAMAGE))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =
@@ -480,7 +480,7 @@ class ReportViewModelTest {
                     latestDraft =
                         ReportDraftData(
                             draftId = "draft-1",
-                            reportCategory = ReportType.STAIRS.apiValue,
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
                             description = "복원할 설명",
                             address = "부산역 인근",
                             latitude = 35.1151,
@@ -564,7 +564,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = ReportViewModel(reportRepository = repository)
 
-            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
                     location =

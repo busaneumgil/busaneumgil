@@ -121,7 +121,9 @@ erDiagram
         VARCHAR endLabel
         GEOMETRY startPoint
         GEOMETRY endPoint
+        VARCHAR transportMode
         VARCHAR routeOption
+        JSONB routeSnapshotJson
         UUID userId FK
     }
 
@@ -286,9 +288,9 @@ erDiagram
 
 사용자가 저장한 자주 가는 길 데이터를 관리한다.
 
-출발지/도착지/경로 옵션을 기반으로 재탐색 가능한 입력값 저장 구조다.
+안내 종료 후 사용자가 자주 가는 길 저장을 선택하면 `route_sessions`의 좌표와 route snapshot을 복사해 장기 저장한다.
 
-실제 edge 목록이나 안내 경로 상세를 저장하지 않는다.
+북마크는 route session row를 직접 참조하지 않는다. 세션 정리, 상태 변경, 재탐색 정책과 독립적으로 유지하기 위해 저장 시점의 필요한 값을 복사한다.
 
 ### 컬럼 명세
 
@@ -300,17 +302,31 @@ erDiagram
 | 도착지명 | endLabel | VARCHAR(255) | NOT NULL |  |
 | 출발지 좌표 | startPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 도착지 좌표 | endPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 이동 수단 | transportMode | VARCHAR(30) | NOT NULL |  |
 | 경로 종류 | routeOption | VARCHAR(30) | NOT NULL | SAFE |
+| 경로 스냅샷 JSON | routeSnapshotJson | JSONB | NOT NULL |  |
 | 사용자 PK | userId | UUID | NOT NULL |  |
 
 ### routeOption 후보값
 
 - `SAFE`
 - `SHORTEST`
+- `RECOMMENDED`
+- `MIN_TRANSFER`
+- `MIN_WALK`
+
+### transportMode 후보값
+
+- `WALK`
+- `PUBLIC_TRANSIT`
 
 ### 비고
 
 - `routeName`은 사용자가 직접 입력하지 않고 `startLabel`과 `endLabel`을 기준으로 자동 생성한다.
+- `startLabel`, `endLabel`은 화면 표시명이다. 프론트는 장소명, 도로명주소, 지번주소 순으로 값을 정해 저장 요청에 전달한다.
+- `startPoint`, `endPoint`, `transportMode`, `routeOption`, `routeSnapshotJson`은 저장 요청의 `routeId`로 찾은 `route_sessions`에서 복사한다.
+- `routeSnapshotJson`은 저장 당시 선택 경로 상세를 다시 보여주기 위한 route payload다.
+- 저장된 경로를 최신 조건으로 다시 탐색할 때는 `startPoint`, `endPoint`, `routeOption`을 재탐색 입력값으로 사용할 수 있다.
 - 목록 정렬은 최신 저장순을 기본으로 한다.
 
 ---

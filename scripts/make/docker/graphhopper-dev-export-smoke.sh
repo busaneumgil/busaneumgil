@@ -14,6 +14,7 @@ if [ "$DEV_GRAPHHOPPER_BUILD_NO_DEPS" = "true" ]; then
 fi
 
 DB_URL="$DEV_GRAPHHOPPER_DB_URL" \
+MSYS_NO_PATHCONV=1 \
 "${DEV_COMPOSE[@]}" "${run_args[@]}" \
   graphhopper-build \
   /usr/local/bin/smoke-postgis-export.py \

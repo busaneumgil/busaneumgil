@@ -38,6 +38,7 @@ fi
 
 DB_URL="$DEV_GRAPHHOPPER_DB_URL" \
 GRAPHHOPPER_PROFILE_SMOKE_BASE_URL="http://host.docker.internal:$app_port" \
+MSYS_NO_PATHCONV=1 \
 "${DEV_COMPOSE[@]}" "${run_args[@]}" \
   graphhopper-build \
   /usr/local/bin/smoke-graphhopper-profiles.py \

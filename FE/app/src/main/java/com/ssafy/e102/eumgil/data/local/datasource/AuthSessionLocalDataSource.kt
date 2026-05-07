@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
+import com.ssafy.e102.eumgil.core.model.LOCAL_ONLY_AUTH_SESSION_MARKER
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.map
 
 class AuthSessionLocalDataSource(
     private val dataStore: DataStore<Preferences>,
+    private val allowLocalOnlySession: Boolean = true,
 ) {
     fun observeAuthGateState(): Flow<AuthGateState> =
         dataStore.data
@@ -27,11 +29,13 @@ class AuthSessionLocalDataSource(
                 }
             }.map { preferences ->
                 val accessToken = preferences[AuthSessionPreferenceKeys.accessToken]
+                val isLocalOnlySession = accessToken == LOCAL_ONLY_AUTH_SESSION_MARKER
+                val isAllowedSession = accessToken != null && (allowLocalOnlySession || !isLocalOnlySession)
                 AuthGateState(
                     authSession =
-                        accessToken?.let {
+                        if (isAllowedSession) {
                             AuthSession(
-                                accessToken = it,
+                                accessToken = checkNotNull(accessToken),
                                 refreshToken = preferences[AuthSessionPreferenceKeys.refreshToken],
                                 userId = preferences[AuthSessionPreferenceKeys.userId],
                                 selectedPrimaryUserType =
@@ -39,9 +43,11 @@ class AuthSessionLocalDataSource(
                                 selectedMobilitySubtype =
                                     preferences[AuthSessionPreferenceKeys.selectedMobilitySubtype],
                             )
+                        } else {
+                            null
                         },
                     isProfileCompleted =
-                        accessToken != null &&
+                        isAllowedSession &&
                             (preferences[AuthSessionPreferenceKeys.isProfileCompleted] ?: false),
                     signupToken = preferences[AuthSessionPreferenceKeys.signupToken],
                 )

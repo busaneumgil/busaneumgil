@@ -71,9 +71,6 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
     composable(route = LowVisionRoute.CategorySearch.route) {
         LowVisionCategoryRoute(
-            onBackClick = {
-                navController.navigateToLowVisionBottomTab(LowVisionBottomTab.HOME)
-            },
             onCategorySelected = { category ->
                 navController.navigate(LowVisionRoute.CategoryResult.createRoute(category))
             },

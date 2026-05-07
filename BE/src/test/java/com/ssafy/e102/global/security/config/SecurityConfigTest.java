@@ -25,7 +25,7 @@ import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.auth.token.AuthTokenStore;
-import com.ssafy.e102.domain.route.service.FavoriteRouteService;
+import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
 import com.ssafy.e102.domain.user.service.UserService;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;

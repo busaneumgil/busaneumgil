@@ -7,6 +7,7 @@ import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 
 data class RouteSettingUiState(
     val isLoading: Boolean = true,
@@ -204,6 +205,10 @@ enum class RouteOptionBadge {
 sealed interface RouteSettingUiAction {
     data object BackClicked : RouteSettingUiAction
 
+    data class WaypointClicked(
+        val editingTarget: RouteEditingTarget,
+    ) : RouteSettingUiAction
+
     data class TravelModeSelected(
         val mode: RouteTravelMode,
     ) : RouteSettingUiAction
@@ -223,6 +228,10 @@ sealed interface RouteSettingUiAction {
 
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
+
+    data class NavigateToSearch(
+        val editingTarget: RouteEditingTarget,
+    ) : RouteSettingUiEvent
 
     data class NavigateToRouteDetail(
         val routeOption: RouteOption,

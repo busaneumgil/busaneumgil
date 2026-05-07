@@ -17,6 +17,7 @@ import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
@@ -317,15 +318,28 @@ class MapViewModel(
 
     private fun observeSelectionRequests() {
         viewModelScope.launch {
-            destinationSelectionRepository.selectionRequests.collectLatest { destination ->
+            destinationSelectionRepository.selectionRequests.collectLatest { request ->
+                if (
+                    request.reason != RouteSelectionRequestReason.DESTINATION_UPDATED &&
+                    request.reason != RouteSelectionRequestReason.DESTINATION_CLEARED &&
+                    request.reason != RouteSelectionRequestReason.SWAPPED
+                ) {
+                    return@collectLatest
+                }
+
                 // Any destination handoff should close stale facility detail state before the map recenters.
                 if (clearSelectedFacilitySelection()) {
                     renderSelectedFacilityState()
                 }
-                syncCameraToSelectedDestination(
-                    destination = destination,
-                    incrementRequestId = true,
-                )
+                val destination = request.state.selectedDestination
+                if (destination == null) {
+                    applyFallbackCameraTarget()
+                } else {
+                    syncCameraToSelectedDestination(
+                        destination = destination,
+                        incrementRequestId = true,
+                    )
+                }
                 renderUiState()
             }
         }

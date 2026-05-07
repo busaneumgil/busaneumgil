@@ -23,6 +23,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,11 +42,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import com.test.sherpatest.MainViewModel
+import com.test.sherpatest.audio.NoiseCancelMode
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
+    val currentMode by viewModel.noiseCancelMode.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -109,7 +120,14 @@ fun MainScreen(viewModel: MainViewModel) {
                 onValueChange = { viewModel.setReferenceText(it) },
                 label = { Text("정답 텍스트 (WER 계산용)") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { focusManager.clearFocus() }
+                )
             )
 
             // 성능 지표 카드 그리드
@@ -173,6 +191,26 @@ fun MainScreen(viewModel: MainViewModel) {
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // 노이즈 캔슬링 모드 선택
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                NoiseCancelMode.entries.forEach { mode ->
+                    val label = when (mode) {
+                        NoiseCancelMode.NOISE_SUPPRESSOR_ONLY -> "NS만"
+                        NoiseCancelMode.GTCRN_ONLY -> "GTCRN만"
+                    }
+                    FilterChip(
+                        selected = currentMode == mode,
+                        onClick = { viewModel.setNoiseCancelMode(mode) },
+                        label = { Text(label, fontSize = 12.sp) },
+                        enabled = !uiState.isRecording,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }

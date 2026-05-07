@@ -6,9 +6,12 @@ import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.data.domain.PageRequest;
@@ -106,11 +109,12 @@ public class TransitRouteSearchService {
 		if (candidates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
+		List<TransitRouteCandidate> selectedCandidates = selectCandidates(candidates);
 		WalkRouteSearchResponse response = new WalkRouteSearchResponse(searchId,
-			candidates.stream().map(TransitRouteCandidate::route).toList());
+			selectedCandidates.stream().map(TransitRouteCandidate::route).toList());
 		routeSearchCacheService.save(response);
 		routeSearchCacheService.saveTransitMetadata(searchId,
-			candidates.stream().map(TransitRouteCandidate::snapshot).toList());
+			selectedCandidates.stream().map(TransitRouteCandidate::snapshot).toList());
 		return response;
 	}
 
@@ -140,8 +144,129 @@ public class TransitRouteSearchService {
 			List.of(),
 			mergeGeometry(legs),
 			legs);
-		return java.util.Optional.of(
-			new TransitRouteCandidate(route, new TransitRouteSnapshot(routeId, path.mapObj(), snapshotLegs(path))));
+		return java.util.Optional.of(new TransitRouteCandidate(
+			route,
+			new TransitRouteSnapshot(routeId, path.mapObj(), snapshotLegs(path)),
+			path.totalWalkMeter()));
+	}
+
+	private List<TransitRouteCandidate> selectCandidates(List<TransitRouteCandidate> candidates) {
+		Map<String, SelectedTransitRoute> selectedByRoute = new LinkedHashMap<>();
+		selectBy(candidates, this::recommendedComparator)
+			.ifPresent(candidate -> addSelected(selectedByRoute, candidate, RouteOption.RECOMMENDED));
+		selectBy(candidates, this::minTransferComparator)
+			.ifPresent(candidate -> addSelected(selectedByRoute, candidate, RouteOption.MIN_TRANSFER));
+		selectBy(candidates, this::minWalkComparator)
+			.ifPresent(candidate -> addSelected(selectedByRoute, candidate, RouteOption.MIN_WALK));
+		if (selectedByRoute.size() < 3) {
+			for (TransitRouteCandidate candidate : candidates) {
+				addSelected(selectedByRoute, candidate, RouteOption.RECOMMENDED);
+				if (selectedByRoute.size() == 3) {
+					break;
+				}
+			}
+		}
+		return selectedByRoute.values()
+			.stream()
+			.limit(3)
+			.map(SelectedTransitRoute::toCandidate)
+			.toList();
+	}
+
+	private java.util.Optional<TransitRouteCandidate> selectBy(
+		List<TransitRouteCandidate> candidates,
+		java.util.function.Supplier<Comparator<TransitRouteCandidate>> comparatorSupplier) {
+		return candidates.stream().min(comparatorSupplier.get());
+	}
+
+	private Comparator<TransitRouteCandidate> recommendedComparator() {
+		return Comparator.comparing(this::hasLowFloorBus).reversed()
+			.thenComparing(candidate -> candidate.route().durationSecond())
+			.thenComparing(candidate -> candidate.route().transferCount())
+			.thenComparing(TransitRouteCandidate::totalWalkMeter);
+	}
+
+	private Comparator<TransitRouteCandidate> minTransferComparator() {
+		return Comparator.comparingInt((TransitRouteCandidate candidate) -> candidate.route().transferCount())
+			.thenComparing(candidate -> candidate.route().durationSecond())
+			.thenComparing(TransitRouteCandidate::totalWalkMeter);
+	}
+
+	private Comparator<TransitRouteCandidate> minWalkComparator() {
+		return Comparator.comparingInt(TransitRouteCandidate::totalWalkMeter)
+			.thenComparing(candidate -> candidate.route().durationSecond())
+			.thenComparing(candidate -> candidate.route().transferCount());
+	}
+
+	private void addSelected(
+		Map<String, SelectedTransitRoute> selectedByRoute,
+		TransitRouteCandidate candidate,
+		RouteOption routeOption) {
+		selectedByRoute.computeIfAbsent(routeKey(candidate.route()), key -> new SelectedTransitRoute(candidate))
+			.add(routeOption);
+	}
+
+	private String routeKey(RouteSummaryResponse route) {
+		List<String> transitLegKeys = route.legs()
+			.stream()
+			.filter(leg -> leg.type() == TransportMode.BUS || leg.type() == TransportMode.SUBWAY)
+			.map(leg -> "%s:%s:%s:%s".formatted(
+				leg.type(),
+				leg.routeNo(),
+				stopKey(leg.boardingStop()),
+				stopKey(leg.alightingStop())))
+			.toList();
+		if (transitLegKeys.isEmpty()) {
+			return route.routeId();
+		}
+		return String.join("|", transitLegKeys);
+	}
+
+	private String stopKey(RouteStopResponse stop) {
+		if (stop == null) {
+			return "";
+		}
+		return "%s:%s:%s".formatted(stop.name(), stop.lat(), stop.lng());
+	}
+
+	private boolean hasLowFloorBus(TransitRouteCandidate candidate) {
+		return candidate.route()
+			.legs()
+			.stream()
+			.flatMap(leg -> leg.laneOptions().stream())
+			.anyMatch(option -> Boolean.TRUE.equals(option.isLowFloor()));
+	}
+
+	private record SelectedTransitRoute(
+		TransitRouteCandidate candidate,
+		Set<RouteOption> routeOptions) {
+
+		private SelectedTransitRoute(TransitRouteCandidate candidate) {
+			this(candidate, new LinkedHashSet<>());
+		}
+
+		private void add(RouteOption routeOption) {
+			routeOptions.add(routeOption);
+		}
+
+		private TransitRouteCandidate toCandidate() {
+			List<RouteOption> options = List.copyOf(routeOptions);
+			RouteSummaryResponse route = candidate.route();
+			RouteSummaryResponse routeWithOptions = new RouteSummaryResponse(
+				route.routeId(),
+				route.transportMode(),
+				options.get(0),
+				options,
+				route.title(),
+				route.distanceMeter(),
+				route.durationSecond(),
+				route.estimatedTimeMinute(),
+				route.transferCount(),
+				route.badges(),
+				route.geometry(),
+				route.legs());
+			return new TransitRouteCandidate(routeWithOptions, candidate.snapshot(), candidate.totalWalkMeter());
+		}
 	}
 
 	private List<RouteLegResponse> toLegs(

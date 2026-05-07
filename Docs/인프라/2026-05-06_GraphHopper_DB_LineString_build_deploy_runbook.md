@@ -60,6 +60,21 @@ docker compose --env-file .env.prod \
   run --rm graphhopper-build
 ```
 
+### cache 호환성 규칙
+
+- `graph-cache` 볼륨이 비어있지 않더라도, 현재 코드/설정 fingerprint와 다르면 재사용하지 않는다.
+- 아래 입력이 바뀌면 fingerprint가 달라지고 dev/prod 배포는 graph-cache를 다시 생성한다.
+  - `INF/graphhopper/Dockerfile`
+  - `INF/graphhopper/config-build.yml`
+  - `INF/graphhopper/config-runtime.yml`
+  - `INF/graphhopper/custom_models/`
+  - `INF/graphhopper/plugin/src/`
+  - `scripts/graphhopper/export_postgis_to_osm.py`
+- build 완료 후 runtime 볼륨 루트에 다음 메타 파일을 기록한다.
+  - `.ieum-graphhopper-cache-fingerprint`
+  - `.ieum-graphhopper-cache-built-at`
+- 오래된 cache가 남아 있어도 fingerprint mismatch면 자동 rebuild가 우선이다.
+
 ## 4. 입력 변수
 
 | 변수 | 설명 |

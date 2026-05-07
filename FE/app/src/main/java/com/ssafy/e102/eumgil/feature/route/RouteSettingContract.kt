@@ -121,7 +121,7 @@ data class RouteDetailStepUiState(
     val metaLabel: String? = null,
     val badgeLabel: String? = null,
     val badgeTone: RouteDetailTone? = null,
-    val kind: RouteDetailStepKind = RouteDetailStepKind.WALK,
+    val kind: RouteDetailStepKind = RouteDetailStepKind.STRAIGHT,
     val tone: RouteDetailTone = RouteDetailTone.NEUTRAL,
 )
 
@@ -178,7 +178,9 @@ enum class RouteDetailChipKind {
 
 enum class RouteDetailStepKind {
     START,
-    WALK,
+    STRAIGHT,
+    TURN_LEFT,
+    TURN_RIGHT,
     TACTILE_GUIDE,
     CROSSWALK,
     ELEVATOR,

@@ -37,14 +37,17 @@ public class WalkRouteSearchService {
 	private final UserRepository userRepository;
 	private final WalkRouteGraphHopperSearchService graphHopperSearchService;
 	private final WalkRoutePayloadService walkRoutePayloadService;
+	private final RouteSearchCacheService routeSearchCacheService;
 
 	public WalkRouteSearchService(
 		UserRepository userRepository,
 		WalkRouteGraphHopperSearchService graphHopperSearchService,
-		WalkRoutePayloadService walkRoutePayloadService) {
+		WalkRoutePayloadService walkRoutePayloadService,
+		RouteSearchCacheService routeSearchCacheService) {
 		this.userRepository = userRepository;
 		this.graphHopperSearchService = graphHopperSearchService;
 		this.walkRoutePayloadService = walkRoutePayloadService;
+		this.routeSearchCacheService = routeSearchCacheService;
 	}
 
 	public WalkRouteSearchResponse search(UUID userId, WalkRouteSearchRequest request) {
@@ -60,7 +63,10 @@ public class WalkRouteSearchService {
 			user.getSelectedPrimaryUserType(),
 			user.getSelectedMobilitySubtype());
 		String searchId = "rs_walk_" + UUID.randomUUID();
-		return new WalkRouteSearchResponse(searchId, toRouteSummaries(searchId, candidates));
+		WalkRouteSearchResponse response = new WalkRouteSearchResponse(searchId,
+			toRouteSummaries(searchId, candidates));
+		routeSearchCacheService.save(response);
+		return response;
 	}
 
 	private User getUser(UUID userId) {

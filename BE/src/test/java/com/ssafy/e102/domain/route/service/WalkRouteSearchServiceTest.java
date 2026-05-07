@@ -43,6 +43,9 @@ class WalkRouteSearchServiceTest {
 	@Mock
 	private WalkRouteGraphHopperSearchService graphHopperSearchService;
 
+	@Mock
+	private RouteSearchCacheService routeSearchCacheService;
+
 	private WalkRouteSearchService service;
 
 	@BeforeEach
@@ -51,7 +54,8 @@ class WalkRouteSearchServiceTest {
 		service = new WalkRouteSearchService(
 			userRepository,
 			graphHopperSearchService,
-			new WalkRoutePayloadService(new RouteTurnInstructionService()));
+			new WalkRoutePayloadService(new RouteTurnInstructionService()),
+			routeSearchCacheService);
 	}
 
 	@Test
@@ -82,6 +86,7 @@ class WalkRouteSearchServiceTest {
 		assertThat(response.routes().get(0).geometry())
 			.isEqualTo("LINESTRING(128.936 35.12, 128.8823 35.1315)");
 		assertThat(response.routes().get(0).legs().get(0).steps()).hasSize(1);
+		verify(routeSearchCacheService).save(response);
 		verify(graphHopperSearchService).searchCandidates(
 			startPoint,
 			endPoint,

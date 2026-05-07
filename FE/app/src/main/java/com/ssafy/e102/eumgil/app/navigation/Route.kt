@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.app.navigation
 
 import android.net.Uri
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -138,15 +139,47 @@ sealed interface LowVisionRoute : AppRoute {
 
 sealed interface SearchRoute : AppRoute {
     data object Entry : SearchRoute {
-        override val route: String = "search"
+        const val ARG_EDITING_TARGET: String = "editingTarget"
+
+        override val route: String = "search?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}"
+
+        fun createRoute(editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION): String =
+            if (editingTarget == RouteEditingTarget.DESTINATION) {
+                "search"
+            } else {
+                "search?$ARG_EDITING_TARGET=${editingTarget.name.navArgEncode()}"
+            }
+    }
+
+    data object VoiceInput : SearchRoute {
+        const val ARG_EDITING_TARGET: String = Entry.ARG_EDITING_TARGET
+
+        override val route: String = "search/voice?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}"
+
+        fun createRoute(editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION): String =
+            if (editingTarget == RouteEditingTarget.DESTINATION) {
+                "search/voice"
+            } else {
+                "search/voice?$ARG_EDITING_TARGET=${editingTarget.name.navArgEncode()}"
+            }
     }
 
     data object Results : SearchRoute {
         const val ARG_QUERY: String = "query"
+        const val ARG_EDITING_TARGET: String = Entry.ARG_EDITING_TARGET
 
-        override val route: String = "search/results/{$ARG_QUERY}"
+        override val route: String = "search/results/{$ARG_QUERY}?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}"
 
-        fun createRoute(query: String): String = "search/results/${Uri.encode(query)}"
+        fun createRoute(
+            query: String,
+            editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+        ): String =
+            buildString {
+                append("search/results/${Uri.encode(query)}")
+                if (editingTarget != RouteEditingTarget.DESTINATION) {
+                    append("?$ARG_EDITING_TARGET=${editingTarget.name.navArgEncode()}")
+                }
+            }
     }
 }
 

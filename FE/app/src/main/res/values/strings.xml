@@ -317,6 +317,16 @@
     <string name="search_screen_query_placeholder">장소를 검색하거나 말해주세요</string>
     <string name="search_screen_voice_input">음성으로 장소 검색</string>
     <string name="search_screen_clear_query">지우기</string>
+    <string name="search_voice_input_title">음성 검색</string>
+    <string name="search_voice_input_close">닫기</string>
+    <string name="search_voice_input_headline">이렇게 말해보세요</string>
+    <string name="search_voice_input_description">말씀하신 장소를 텍스트로 바꿔 검색 결과로 보여드릴 예정입니다.</string>
+    <string name="search_voice_input_example_phrase">"부산역 찾아줘"</string>
+    <string name="search_voice_input_status_idle_title">마이크를 눌러 시작하세요</string>
+    <string name="search_voice_input_status_idle_description">버튼을 누르면 STT 연결을 시작하고 음성을 텍스트로 바꿉니다.</string>
+    <string name="search_voice_input_status_listening_title">듣고 있어요</string>
+    <string name="search_voice_input_status_listening_description">말씀을 마치면 인식된 문장으로 바로 검색 결과를 보여드릴게요.</string>
+    <string name="search_voice_input_transcript_title">인식된 문장</string>
     <string name="search_screen_submit">검색</string>
     <string name="search_screen_result_section_title">검색 결과</string>
     <string name="search_screen_initial_title">검색을 시작해 주세요</string>

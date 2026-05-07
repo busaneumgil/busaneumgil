@@ -44,8 +44,14 @@ class SearchViewModel(
     fun onAction(action: SearchUiAction) {
         when (action) {
             SearchUiAction.BackClicked -> emitUiEvent(SearchUiEvent.NavigateBack)
+            is SearchUiAction.EditingTargetConfigured -> configureEditingTarget(action.editingTarget)
+            SearchUiAction.VoiceInputClicked -> emitUiEvent(SearchUiEvent.NavigateToVoiceInput)
+            SearchUiAction.VoiceRouteEntered -> enterVoiceRoute()
+            SearchUiAction.VoiceCaptureButtonClicked -> startVoiceCapture()
+            SearchUiAction.VoiceInputDismissed -> dismissVoiceInput()
             SearchUiAction.ClearQueryClicked -> clearQuery()
             SearchUiAction.SearchSubmitted -> submitSearch()
+            is SearchUiAction.VoiceTranscriptReceived -> handleVoiceTranscript(action.transcript)
             is SearchUiAction.QueryChanged -> updateQuery(action.query)
             is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
@@ -68,6 +74,10 @@ class SearchViewModel(
         emitUiEvent(SearchUiEvent.NavigateToRouteBriefing)
     }
 
+    private fun configureEditingTarget(editingTarget: com.ssafy.e102.eumgil.data.repository.RouteEditingTarget) {
+        destinationSelectionRepository.setEditingTarget(editingTarget)
+    }
+
     private fun handoffSearchResult(result: SearchResult): Boolean {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
@@ -83,7 +93,7 @@ class SearchViewModel(
             return false
         }
 
-        destinationSelectionRepository.updateSelectedDestination(destination)
+        destinationSelectionRepository.updateSelectionForEditingTarget(destination)
         persistRecentDestination(result = result, destination = destination)
         return true
     }
@@ -226,6 +236,65 @@ class SearchViewModel(
         renderInputState()
     }
 
+    private fun enterVoiceRoute() {
+        mutableUiState.update { state ->
+            state.copy(
+                voiceInputState =
+                    SearchVoiceInputUiState(
+                        isActive = true,
+                        transcript = "",
+                        status = SearchVoiceInputStatus.Idle,
+                    ),
+            )
+        }
+    }
+
+    private fun startVoiceCapture() {
+        mutableUiState.update { state ->
+            state.copy(
+                voiceInputState =
+                    state.voiceInputState.copy(
+                        isActive = true,
+                        transcript = "",
+                        status = SearchVoiceInputStatus.Listening,
+                    ),
+            )
+        }
+        emitUiEvent(SearchUiEvent.StartVoiceCapture)
+    }
+
+    private fun dismissVoiceInput() {
+        val shouldStopCapture = mutableUiState.value.voiceInputState.status == SearchVoiceInputStatus.Listening
+        mutableUiState.update { state ->
+            state.copy(voiceInputState = SearchVoiceInputUiState())
+        }
+        if (shouldStopCapture) {
+            emitUiEvent(SearchUiEvent.StopVoiceCapture)
+        }
+        emitUiEvent(SearchUiEvent.NavigateBack)
+    }
+
+    private fun handleVoiceTranscript(transcript: String) {
+        val normalizedTranscript = transcript.trim()
+        if (normalizedTranscript.isEmpty()) return
+        val shouldStopCapture = mutableUiState.value.voiceInputState.status == SearchVoiceInputStatus.Listening
+
+        mutableUiState.update { state ->
+            state.copy(
+                voiceInputState =
+                    SearchVoiceInputUiState(
+                        isActive = false,
+                        transcript = normalizedTranscript,
+                        status = SearchVoiceInputStatus.Idle,
+                    ),
+            )
+        }
+        if (shouldStopCapture) {
+            emitUiEvent(SearchUiEvent.StopVoiceCapture)
+        }
+        submitSearch(keyword = normalizedTranscript)
+    }
+
     private fun renderInputState() {
         val currentState = mutableUiState.value
         val normalizedQuery = currentState.query.trim()
@@ -288,7 +357,12 @@ class SearchViewModel(
             )
         }
         if (navigateToResults) {
-            emitUiEvent(SearchUiEvent.NavigateToResults(query = normalizedQuery))
+            emitUiEvent(
+                SearchUiEvent.NavigateToResults(
+                    query = normalizedQuery,
+                    editingTarget = destinationSelectionRepository.editingTarget.value,
+                ),
+            )
         }
         searchJob =
             viewModelScope.launch {

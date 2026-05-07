@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.search.SearchUiAction
 import com.ssafy.e102.eumgil.feature.search.SearchUiEvent
 import com.ssafy.e102.eumgil.feature.search.SearchViewModel
@@ -50,6 +51,7 @@ fun LowVisionSearchRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel, initialQuery) {
+        viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = RouteEditingTarget.DESTINATION))
         viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
     }
 
@@ -61,6 +63,9 @@ fun LowVisionSearchRoute(
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToLowVisionBookmark -> onNavigateToBookmark()
+                SearchUiEvent.NavigateToVoiceInput -> Unit
+                SearchUiEvent.StartVoiceCapture -> Unit
+                SearchUiEvent.StopVoiceCapture -> Unit
             }
         }
     }

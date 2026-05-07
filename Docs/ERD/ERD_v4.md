@@ -111,7 +111,7 @@ erDiagram
     BOOKMARKS {
         INT bookmarkId PK
         UUID userId FK
-        INT placeId FK
+        BIGINT placeId FK
     }
 
     FAVORITE_ROUTES {
@@ -142,7 +142,7 @@ erDiagram
     }
 
     PLACES {
-        INT placeId PK
+        BIGINT placeId PK
         VARCHAR name
         VARCHAR category
         VARCHAR address
@@ -153,7 +153,7 @@ erDiagram
 
     PLACE_ACCESSIBILITY_FEATURES {
         INT id PK
-        INT placeId FK
+        BIGINT placeId FK
         VARCHAR featureType
         BOOLEAN isAvailable
     }
@@ -272,7 +272,7 @@ erDiagram
 | --- | --- | --- | --- | --- |
 | 북마크 ID | bookmarkId | INT | NOT NULL |  |
 | 사용자 PK | userId | UUID | NOT NULL |  |
-| 장소 ID | placeId | INT | NOT NULL |  |
+| 장소 ID | placeId | BIGINT | NOT NULL |  |
 
 ### 비고
 
@@ -386,7 +386,7 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 장소 ID | placeId | INT | NOT NULL |  |
+| 장소 ID | placeId | BIGINT | NOT NULL |  |
 | 장소명 | name | VARCHAR(255) | NOT NULL |  |
 | 카테고리 | category | VARCHAR(50) | NOT NULL |  |
 | 주소 | address | VARCHAR(255) | NULL |  |
@@ -442,7 +442,7 @@ erDiagram
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 접근성 속성 ID | id | INT | NOT NULL |  |
-| 장소 ID | placeId | INT | NOT NULL |  |
+| 장소 ID | placeId | BIGINT | NOT NULL |  |
 | 속성 유형 | featureType | VARCHAR(50) | NOT NULL |  |
 | 제공 여부 | isAvailable | BOOLEAN | NOT NULL | false |
 

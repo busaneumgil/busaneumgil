@@ -26,7 +26,7 @@ Strengthen confidence around a behavior, regression, or boundary.
 
 1. Load `.ai/DOCS.md` and the source documents for the target behavior.
 2. Define the exact behavior or risk the test must cover from the plan, docs, and actual code contract.
-3. For FE tests, confirm the route/screen/state expectation against `FE/docs` and current `FE/app` code. For BE tests, confirm API, ERD, response, and exception expectations against `Docs/API`, `Docs/ARD`, and backend conventions.
+3. For FE tests, confirm the route/screen/state expectation against `FE/docs` and current `FE/app` code. For BE tests, confirm API, ERD, response, and exception expectations against `Docs/API`, `Docs/ERD`, and backend conventions.
 4. Prefer the smallest test that still exercises the real contract.
 5. Cover happy path, edge case, or regression as required by the task.
 6. Record important uncovered gaps, stale-doc assumptions, or contract conflicts in `.ai/LOCAL/PLANS/current-sprint.md` if they remain.

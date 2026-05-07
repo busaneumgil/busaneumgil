@@ -4,9 +4,8 @@ import java.util.List;
 
 public record PlaceSearchResponse(
 	List<PlaceSearchItemResponse> places,
-	int page,
+	String nextCursor,
 	int size,
 	long totalElements,
-	int totalPages,
 	boolean hasNext) {
 }

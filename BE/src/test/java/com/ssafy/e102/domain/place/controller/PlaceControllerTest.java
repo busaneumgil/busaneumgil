@@ -47,19 +47,19 @@ class PlaceControllerTest {
 	@Test
 	@DisplayName("장소 검색은 query parameter를 서비스에 전달한다")
 	void searchPlaces() throws Exception {
-		when(placeService.searchPlaces("부산시민공원", "35.1686", "129.0576", "1000", "0", "10"))
-			.thenReturn(new PlaceSearchResponse(List.of(), 0, 10, 0, 0, false));
+		when(placeService.searchPlaces("부산시민공원", "35.1686", "129.0576", "1000", "next-cursor", "10"))
+			.thenReturn(new PlaceSearchResponse(List.of(), null, 10, 0, false));
 
 		mockMvc.perform(get("/places/search")
 			.param("keyword", "부산시민공원")
 			.param("lat", "35.1686")
 			.param("lng", "129.0576")
 			.param("radius", "1000")
-			.param("page", "0")
+			.param("cursor", "next-cursor")
 			.param("size", "10"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
-			.andExpect(jsonPath("$.data.page").value(0))
+			.andExpect(jsonPath("$.data.nextCursor").doesNotExist())
 			.andExpect(jsonPath("$.data.hasNext").value(false));
 	}
 

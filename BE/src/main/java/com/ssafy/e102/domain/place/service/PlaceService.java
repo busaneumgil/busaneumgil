@@ -1,6 +1,8 @@
 package com.ssafy.e102.domain.place.service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,10 +37,10 @@ import com.ssafy.e102.global.geo.GeoPointConverter;
 @Transactional(readOnly = true)
 public class PlaceService {
 
-	private static final int DEFAULT_SEARCH_PAGE = 0;
+	private static final int DEFAULT_KAKAO_SEARCH_PAGE = 1;
 	private static final int DEFAULT_SEARCH_SIZE = 10;
-	private static final int MIN_PAGE = 0;
 	private static final int MAX_SEARCH_SIZE = 15;
+	private static final String SEARCH_CURSOR_PREFIX = "kakao:";
 	private static final String EMPTY_FILTER_SENTINEL = "__EMPTY_FILTER__";
 	private final PlaceRepository placeRepository;
 	private final BookmarkRepository bookmarkRepository;
@@ -61,14 +63,14 @@ public class PlaceService {
 		String lat,
 		String lng,
 		String radius,
-		String page,
+		String cursor,
 		String size) {
 		String normalizedKeyword = normalizeKeyword(keyword);
 		Double parsedLat = parseOptionalDouble(lat);
 		Double parsedLng = parseOptionalDouble(lng);
 		Integer parsedRadius = parseOptionalPositiveInteger(radius);
 		validateSearchCoordinateCondition(parsedLat, parsedLng, parsedRadius);
-		int parsedPage = parsePositiveIntegerOrDefault(page, DEFAULT_SEARCH_PAGE);
+		int kakaoPage = parseSearchCursor(cursor);
 		int parsedSize = parseIntegerOrDefault(size, DEFAULT_SEARCH_SIZE);
 		validateSearchSize(parsedSize);
 
@@ -78,19 +80,19 @@ public class PlaceService {
 				parsedLat,
 				parsedLng,
 				parsedRadius,
-				parsedPage + 1,
+				kakaoPage,
 				parsedSize));
 			Map<String, Place> matchedPlaces = getMatchedPlaces(kakaoResult.documents());
+			boolean hasNext = !kakaoResult.isEnd();
 			return new PlaceSearchResponse(
 				kakaoResult.documents()
 					.stream()
 					.map(place -> PlaceSearchItemResponse.of(place, matchedPlaces))
 					.toList(),
-				parsedPage,
+				hasNext ? encodeSearchCursor(kakaoPage + 1) : null,
 				parsedSize,
 				kakaoResult.totalElements(),
-				calculateTotalPages(kakaoResult.totalElements(), parsedSize),
-				!kakaoResult.isEnd());
+				hasNext);
 		} catch (RestClientException | IllegalArgumentException exception) {
 			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED);
 		}
@@ -153,6 +155,31 @@ public class PlaceService {
 		return bookmarkRepository.findBookmarkedPlaceIds(userId, placeIds);
 	}
 
+	private int parseSearchCursor(String cursor) {
+		if (!StringUtils.hasText(cursor)) {
+			return DEFAULT_KAKAO_SEARCH_PAGE;
+		}
+		try {
+			String decodedCursor = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
+			if (!decodedCursor.startsWith(SEARCH_CURSOR_PREFIX)) {
+				throw new NumberFormatException("invalid search cursor prefix.");
+			}
+			int kakaoPage = Integer.parseInt(decodedCursor.substring(SEARCH_CURSOR_PREFIX.length()));
+			if (kakaoPage < DEFAULT_KAKAO_SEARCH_PAGE) {
+				throw new NumberFormatException("search cursor must be positive.");
+			}
+			return kakaoPage;
+		} catch (IllegalArgumentException exception) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
+		}
+	}
+
+	private String encodeSearchCursor(int kakaoPage) {
+		return Base64.getUrlEncoder()
+			.withoutPadding()
+			.encodeToString((SEARCH_CURSOR_PREFIX + kakaoPage).getBytes(StandardCharsets.UTF_8));
+	}
+
 	private String normalizeKeyword(String keyword) {
 		if (!StringUtils.hasText(keyword)) {
 			throw new PlaceException(PlaceErrorCode.PLACE_KEYWORD_REQUIRED);
@@ -197,14 +224,6 @@ public class PlaceService {
 		}
 		int parsedValue = parseInteger(value);
 		if (parsedValue <= 0) {
-			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
-		}
-		return parsedValue;
-	}
-
-	private int parsePositiveIntegerOrDefault(String value, int defaultValue) {
-		int parsedValue = parseIntegerOrDefault(value, defaultValue);
-		if (parsedValue < MIN_PAGE) {
 			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
 		}
 		return parsedValue;
@@ -265,9 +284,5 @@ public class PlaceService {
 		return values.stream()
 			.map(Enum::name)
 			.collect(Collectors.toSet());
-	}
-
-	private int calculateTotalPages(long totalElements, int size) {
-		return (int)Math.ceil((double)totalElements / size);
 	}
 }

@@ -93,10 +93,10 @@ class PlaceServiceTest {
 			"35.1686",
 			"129.0576",
 			"1000",
-			"0",
+			null,
 			"10");
 
-		assertThat(response.page()).isEqualTo(0);
+		assertThat(response.nextCursor()).isNull();
 		assertThat(response.totalElements()).isEqualTo(1);
 		assertThat(response.hasNext()).isFalse();
 		assertThat(response.places()).hasSize(1);
@@ -104,6 +104,43 @@ class PlaceServiceTest {
 		assertThat(response.places().get(0).matched()).isTrue();
 		assertThat(response.places().get(0).category()).isEqualTo(PlaceCategory.TOURIST_SPOT);
 		assertThat(response.places().get(0).accessibilityFeatures()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("장소 검색은 다음 cursor로 카카오 다음 페이지를 조회한다")
+	void searchPlacesWithCursor() {
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"부산시민공원",
+			null,
+			null,
+			null,
+			1,
+			10)))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(), 30, false));
+
+		PlaceSearchResponse firstResponse = placeService.searchPlaces("부산시민공원", null, null, null, null, "10");
+
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"부산시민공원",
+			null,
+			null,
+			null,
+			2,
+			10)))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(), 30, true));
+
+		PlaceSearchResponse secondResponse = placeService.searchPlaces(
+			"부산시민공원",
+			null,
+			null,
+			null,
+			firstResponse.nextCursor(),
+			"10");
+
+		assertThat(firstResponse.hasNext()).isTrue();
+		assertThat(firstResponse.nextCursor()).isNotBlank();
+		assertThat(secondResponse.hasNext()).isFalse();
+		assertThat(secondResponse.nextCursor()).isNull();
 	}
 
 	@Test

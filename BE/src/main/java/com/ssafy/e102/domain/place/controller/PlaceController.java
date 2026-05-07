@@ -34,10 +34,10 @@ public class PlaceController {
 		@RequestParam(required = false)
 		String radius,
 		@RequestParam(required = false)
-		String page,
+		String cursor,
 		@RequestParam(required = false)
 		String size) {
-		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, page, size));
+		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, cursor, size));
 	}
 
 	@GetMapping

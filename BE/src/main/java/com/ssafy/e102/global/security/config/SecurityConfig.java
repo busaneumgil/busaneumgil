@@ -60,6 +60,8 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/places", "/places/**")
 				.authenticated()
+				.requestMatchers("/hazard-reports", "/hazard-reports/**")
+				.authenticated()
 				.anyRequest()
 				.permitAll())
 			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

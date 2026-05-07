@@ -128,7 +128,7 @@ erDiagram
     }
 
     HAZARD_REPORTS {
-        INT report_id PK
+        BIGINT report_id PK
         UUID user_id FK
         VARCHAR report_type
         TEXT description
@@ -137,10 +137,10 @@ erDiagram
     }
 
     HAZARD_REPORT_IMAGES {
-        INT report_img_id PK
+        BIGINT report_img_id PK
         TEXT image_url
         SMALLINT display_order
-        INT report_id FK
+        BIGINT report_id FK
     }
 
     PLACES {
@@ -342,7 +342,7 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 사용자 제보 ID | report_id | INT | NOT NULL |  |
+| 사용자 제보 ID | report_id | BIGINT | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
 | 제보 유형 | report_type | VARCHAR(30) | NOT NULL |  |
 | 설명 | description | TEXT | NULL |  |
@@ -357,7 +357,7 @@ erDiagram
 ### 비고
 
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
-- `APPROVED`, `REJECTED` 상태 변경은 Slack 제보 검토 콜백 API에서 처리한다.
+- `APPROVED`, `REJECTED` 상태 변경은 후속 관리자 API에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
 - 제보 위치의 기준 데이터는 `report_point`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
 - 사용자별 제보 목록은 최신순으로 제공한다.
@@ -376,10 +376,10 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 제보 이미지 ID | report_img_id | INT | NOT NULL |  |
+| 제보 이미지 ID | report_img_id | BIGINT | NOT NULL |  |
 | 이미지 URL | image_url | TEXT | NOT NULL |  |
 | 표시 순서 | display_order | SMALLINT | NOT NULL | 0 |
-| 사용자 제보 ID | report_id | INT | NOT NULL |  |
+| 사용자 제보 ID | report_id | BIGINT | NOT NULL |  |
 
 ### 비고
 

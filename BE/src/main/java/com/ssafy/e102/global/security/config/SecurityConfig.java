@@ -62,6 +62,8 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/routes/**", "/route-ratings/**")
 				.authenticated()
+				.requestMatchers("/hazard-reports", "/hazard-reports/**")
+				.authenticated()
 				.anyRequest()
 				.permitAll())
 			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

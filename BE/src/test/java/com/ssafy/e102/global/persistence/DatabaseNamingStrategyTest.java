@@ -25,6 +25,8 @@ import com.ssafy.e102.domain.bookmark.entity.FavoriteRoute;
 import com.ssafy.e102.domain.place.entity.Bookmark;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
+import com.ssafy.e102.domain.report.entity.HazardReport;
+import com.ssafy.e102.domain.report.entity.HazardReportImage;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RouteSession;
@@ -47,6 +49,8 @@ class DatabaseNamingStrategyTest {
 		Bookmark.class,
 		Place.class,
 		PlaceAccessibilityFeature.class,
+		HazardReport.class,
+		HazardReportImage.class,
 		RoadNode.class,
 		RoadSegment.class,
 		RouteSession.class);
@@ -140,6 +144,23 @@ class DatabaseNamingStrategyTest {
 	}
 
 	@Test
+	@DisplayName("제보 관련 엔티티의 물리 컬럼명은 snake_case다")
+	void hazardReportColumnsUseSnakeCase() {
+		assertThat(physicalColumnName(HazardReport.class, "reportId")).isEqualTo("report_id");
+		assertThat(joinColumnName(HazardReport.class, "user")).isEqualTo("user_id");
+		assertThat(physicalColumnName(HazardReport.class, "reportType")).isEqualTo("report_type");
+		assertThat(physicalColumnName(HazardReport.class, "description")).isEqualTo("description");
+		assertThat(physicalColumnName(HazardReport.class, "reportPoint")).isEqualTo("report_point");
+		assertThat(physicalColumnName(HazardReport.class, "status")).isEqualTo("status");
+
+		assertThat(physicalColumnName(HazardReportImage.class, "reportImgId")).isEqualTo("report_img_id");
+		assertThat(physicalColumnName(HazardReportImage.class, "imageUrl")).isEqualTo("image_url");
+		assertThat(physicalColumnName(HazardReportImage.class, "displayOrder")).isEqualTo("display_order");
+		assertThat(joinColumnName(HazardReportImage.class, "hazardReport")).isEqualTo("report_id");
+		assertThat(uniqueColumnNames(HazardReportImage.class)).contains("report_id", "display_order");
+	}
+
+	@Test
 	@DisplayName("보행 네트워크 엔티티의 물리 컬럼명은 snake_case다")
 	void roadNetworkColumnsUseSnakeCase() {
 		assertThat(physicalColumnName(RoadNode.class, "vertexId")).isEqualTo("vertex_id");
@@ -198,6 +219,8 @@ class DatabaseNamingStrategyTest {
 			Bookmark.class,
 			Place.class,
 			PlaceAccessibilityFeature.class,
+			HazardReport.class,
+			HazardReportImage.class,
 			RoadNode.class,
 			RoadSegment.class,
 			RouteSession.class);

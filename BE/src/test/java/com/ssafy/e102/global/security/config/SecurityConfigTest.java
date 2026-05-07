@@ -26,6 +26,7 @@ import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.auth.token.AuthTokenStore;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
+import com.ssafy.e102.domain.report.service.HazardReportService;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
 import com.ssafy.e102.domain.user.service.UserService;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
@@ -53,6 +54,9 @@ class SecurityConfigTest {
 
 	@MockitoBean
 	private FavoriteRouteService favoriteRouteService;
+
+	@MockitoBean
+	private HazardReportService hazardReportService;
 
 	@Test
 	@DisplayName("소셜 로그인은 인증 없이 접근할 수 있다")
@@ -108,6 +112,16 @@ class SecurityConfigTest {
 	@DisplayName("경로 북마크 API는 인증이 필요하다")
 	void favoriteRoutesRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/favorite-routes"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("도로 상태 제보 API는 인증이 필요하다")
+	void hazardReportsRequireAuthentication() throws Exception {
+		mockMvc.perform(get("/hazard-reports/me"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(jsonPath("$.status").value("A4010"))

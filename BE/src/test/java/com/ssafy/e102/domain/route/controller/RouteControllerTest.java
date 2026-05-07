@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,8 +28,21 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteStepAlertResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteStepAlertType;
+import com.ssafy.e102.domain.route.dto.response.RouteStepResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
+import com.ssafy.e102.domain.route.exception.RouteErrorCode;
+import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
+import com.ssafy.e102.domain.route.type.RouteBadge;
+import com.ssafy.e102.domain.route.type.RouteLegRole;
+import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.TransportMode;
+import com.ssafy.e102.domain.route.type.WidthState;
+import com.ssafy.e102.global.exception.GlobalExceptionHandler;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 class RouteControllerTest {
@@ -41,6 +55,7 @@ class RouteControllerTest {
 		walkRouteSearchService = Mockito.mock(WalkRouteSearchService.class);
 		mockMvc = MockMvcBuilders.standaloneSetup(new RouteController(walkRouteSearchService))
 			.setCustomArgumentResolvers(new AuthPrincipalArgumentResolver())
+			.setControllerAdvice(new GlobalExceptionHandler())
 			.build();
 	}
 
@@ -67,6 +82,113 @@ class RouteControllerTest {
 
 		verify(walkRouteSearchService).search(eq(userId), any(WalkRouteSearchRequest.class));
 		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("도보 search 성공 응답은 경로 API 명세의 핵심 필드를 반환한다")
+	void searchWalkRoutesReturnsApiContractFields() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(walkRouteSearchService.search(eq(userId), any(WalkRouteSearchRequest.class)))
+			.thenReturn(walkRouteSearchResponse());
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/search/walk")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "startPoint": {"lat": 35.12, "lng": 128.936},
+				  "endPoint": {"lat": 35.1315, "lng": 128.8823}
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.searchId").value("rs_walk_test"))
+			.andExpect(jsonPath("$.data.routes[0].routeId").value("rs_walk_test_safe"))
+			.andExpect(jsonPath("$.data.routes[0].transportMode").value("WALK"))
+			.andExpect(jsonPath("$.data.routes[0].routeOption").value("SAFE"))
+			.andExpect(jsonPath("$.data.routes[0].estimatedTimeMinute").value(16))
+			.andExpect(jsonPath("$.data.routes[0].badges[0]").value("CROSSWALK"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].alert.type").value("CROSSWALK"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].widthState").value("ADEQUATE_150"));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("추천 경로 없음은 RT4040 에러 응답으로 매핑한다")
+	void searchWalkRoutesMapsRouteNotFoundError() throws Exception {
+		assertRouteError(RouteErrorCode.ROUTE_NOT_FOUND, 404, "RT4040", "탐색 가능한 경로가 없습니다.");
+	}
+
+	@Test
+	@DisplayName("GraphHopper 실패는 EX5020 에러 응답으로 매핑한다")
+	void searchWalkRoutesMapsExternalRouteApiFailed() throws Exception {
+		assertRouteError(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, 502, "EX5020", "외부 경로 정보를 불러오지 못했습니다.");
+	}
+
+	@Test
+	@DisplayName("GraphHopper timeout은 EX5040 에러 응답으로 매핑한다")
+	void searchWalkRoutesMapsExternalRouteApiTimeout() throws Exception {
+		assertRouteError(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT, 504, "EX5040", "외부 경로 정보 응답이 지연되고 있습니다.");
+	}
+
+	private void assertRouteError(RouteErrorCode errorCode, int httpStatus, String status, String message)
+		throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(walkRouteSearchService.search(eq(userId), any(WalkRouteSearchRequest.class)))
+			.thenThrow(new RouteException(errorCode));
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/search/walk")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "startPoint": {"lat": 35.12, "lng": 128.936},
+				  "endPoint": {"lat": 35.1315, "lng": 128.8823}
+				}
+				"""))
+			.andExpect(status().is(httpStatus))
+			.andExpect(jsonPath("$.status").value(status))
+			.andExpect(jsonPath("$.message").value(message))
+			.andExpect(jsonPath("$.data").doesNotExist());
+
+		SecurityContextHolder.clearContext();
+	}
+
+	private WalkRouteSearchResponse walkRouteSearchResponse() {
+		return new WalkRouteSearchResponse(
+			"rs_walk_test",
+			List.of(new RouteSummaryResponse(
+				"rs_walk_test_safe",
+				TransportMode.WALK,
+				RouteOption.SAFE,
+				"안전 경로",
+				BigDecimal.valueOf(950),
+				960,
+				16,
+				List.of(RouteBadge.CROSSWALK),
+				"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
+				List.of(new RouteLegResponse(
+					1,
+					TransportMode.WALK,
+					RouteLegRole.WALK_ONLY,
+					"목적지까지 도보로 이동하세요.",
+					BigDecimal.valueOf(950),
+					960,
+					16,
+					"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
+					List.of(new RouteStepResponse(
+						1,
+						"횡단보도를 건너세요.",
+						BigDecimal.valueOf(30),
+						35,
+						"LINESTRING(128.9360 35.1200, 128.9361 35.1201)",
+						List.of(RouteBadge.CROSSWALK),
+						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK, BigDecimal.ZERO),
+						BigDecimal.valueOf(2.1),
+						WidthState.ADEQUATE_150)))))));
 	}
 
 	private UsernamePasswordAuthenticationToken authentication(UUID userId) {

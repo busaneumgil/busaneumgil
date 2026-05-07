@@ -23,15 +23,15 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 	List<Place> findAllByPlaceIdIn(Collection<Long> placeIds);
 
 	@Query(value = """
-		select p.placeId
+		select p.place_id
 		from places p
 		where (:categoriesEmpty = true or p.category in (:categories))
 			and (:featureTypesEmpty = true or exists (
 				select 1
 				from place_accessibility_features ef
-				where ef.placeId = p.placeId
-					and ef.isAvailable = true
-					and ef.featureType in (:featureTypes)
+				where ef.place_id = p.place_id
+					and ef.is_available = true
+					and ef.feature_type in (:featureTypes)
 			))
 			and ST_DWithin(
 				CAST(p.point AS geography),

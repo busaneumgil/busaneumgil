@@ -6,7 +6,7 @@ spring:
   jpa:
     hibernate:
       naming:
-        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
         implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl
 
 server:
@@ -20,6 +20,12 @@ social:
       user-info-uri: ${NAVER_USER_INFO_URI:https://openapi.naver.com/v1/nid/me}
     google:
       user-info-uri: ${GOOGLE_USER_INFO_URI:https://openidconnect.googleapis.com/v1/userinfo}
+
+external:
+  kakao:
+    local:
+      base-url: ${KAKAO_LOCAL_BASE_URL:https://dapi.kakao.com}
+      api-key: ${KAKAO_REST_API_KEY:}
 
 auth:
   test:

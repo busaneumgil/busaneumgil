@@ -19,7 +19,7 @@ groups = {
     "제품/PRD": ["Docs/PRD/*.md", "Docs/기획/*기획서*.md", "Docs/기획/*기능명세서*.md"],
     "화면/FE": ["FE/docs/*.md", "FE/docs/sprint_backlog/*.md", "Docs/기획/*화면명세서*.md"],
     "API": ["Docs/API/**/*.md"],
-    "ERD/데이터": ["Docs/ARD/*.md", "Docs/PoC/*.md"],
+    "ERD/데이터": ["Docs/ERD/*.md", "Docs/PoC/*.md"],
     "인프라": ["Docs/인프라/*.md"],
     "컨벤션": ["Docs/컨벤션/*.md", "Docs/skills/**/*.md", "FE/docs/*컨벤션*.md"],
 }

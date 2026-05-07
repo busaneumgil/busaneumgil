@@ -19,32 +19,32 @@ from urllib.parse import parse_qs, urlparse
 
 DEFAULT_NODES_SQL = '''
 SELECT
-  vertex_id,
+  "vertexId" AS vertex_id,
   ST_X("point"::geometry) AS lon,
   ST_Y("point"::geometry) AS lat
 FROM road_nodes
-ORDER BY vertex_id
+ORDER BY "vertexId"
 '''
 
 DEFAULT_SEGMENTS_SQL = '''
 SELECT
-  edge_id,
-  from_node_id,
-  to_node_id,
+  "edgeId" AS edge_id,
+  "fromNodeId" AS from_node_id,
+  "toNodeId" AS to_node_id,
   ST_AsText("geom"::geometry) AS geom_wkt,
-  COALESCE(walk_access::text, 'UNKNOWN') AS walk_access,
-  COALESCE(avg_slope_percent, 0.0) AS avg_slope_percent,
-  COALESCE(width_meter, 0.0) AS width_meter,
-  COALESCE(braille_block_state::text, 'UNKNOWN') AS braille_block_state,
-  COALESCE(audio_signal_state::text, 'UNKNOWN') AS audio_signal_state,
-  COALESCE(slope_state::text, 'UNKNOWN') AS slope_state,
-  COALESCE(width_state::text, 'UNKNOWN') AS width_state,
-  COALESCE(surface_state::text, 'UNKNOWN') AS surface_state,
-  COALESCE(stairs_state::text, 'UNKNOWN') AS stairs_state,
-  COALESCE(signal_state::text, 'UNKNOWN') AS signal_state,
-  COALESCE(segment_type::text, 'SIDE_LINE') AS segment_type
+  COALESCE("walkAccess"::text, 'UNKNOWN') AS walk_access,
+  COALESCE("avgSlopePercent", 0.0) AS avg_slope_percent,
+  COALESCE("widthMeter", 0.0) AS width_meter,
+  COALESCE("brailleBlockState"::text, 'UNKNOWN') AS braille_block_state,
+  COALESCE("audioSignalState"::text, 'UNKNOWN') AS audio_signal_state,
+  COALESCE("slopeState"::text, 'UNKNOWN') AS slope_state,
+  COALESCE("widthState"::text, 'UNKNOWN') AS width_state,
+  COALESCE("surfaceState"::text, 'UNKNOWN') AS surface_state,
+  COALESCE("stairsState"::text, 'UNKNOWN') AS stairs_state,
+  COALESCE("signalState"::text, 'UNKNOWN') AS signal_state,
+  COALESCE("segmentType"::text, 'SIDE_LINE') AS segment_type
 FROM road_segments
-ORDER BY edge_id
+ORDER BY "edgeId"
 '''
 
 # `segment_features`는 선택적 보강 입력이다. 최종 라우팅 비용은 여전히
@@ -52,14 +52,14 @@ ORDER BY edge_id
 # 상태값 덮어쓰기만 결정한다.
 DEFAULT_FEATURES_SQL = '''
 SELECT
-  feature_id,
-  edge_id,
-  feature_type::text AS feature_type,
+  "featureId" AS feature_id,
+  "edgeId" AS edge_id,
+  "featureType"::text AS feature_type,
   ST_AsText("geom"::geometry) AS geom_wkt,
   NULL::text AS state,
   NULL::numeric AS value_number
 FROM segment_features
-ORDER BY edge_id, feature_id
+ORDER BY "edgeId", "featureId"
 '''
 
 REQUIRED_NODE_FIELDS = {"vertex_id", "lon", "lat"}

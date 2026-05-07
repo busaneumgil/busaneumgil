@@ -8,7 +8,7 @@
 
 - `Docs/API/2026-04-12_API_전체_목록.md`
 - `Docs/API/{도메인}/..._API_명세.md`
-- `Docs/ARD/2026-04-12_ERD_초안.md`
+- `Docs/ERD/ERD_v4.md`
 
 ## 문서 사용 순서
 

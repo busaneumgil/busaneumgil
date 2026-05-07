@@ -2,21 +2,26 @@ package com.ssafy.e102.domain.bookmark.service;
 
 import java.util.UUID;
 
-import org.locationtech.jts.geom.Point;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.ssafy.e102.domain.bookmark.dto.request.CreateFavoriteRouteRequest;
 import com.ssafy.e102.domain.bookmark.dto.request.UpdateFavoriteRouteRequest;
+import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteDetailResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteIdResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteListResponse;
 import com.ssafy.e102.domain.bookmark.entity.FavoriteRoute;
 import com.ssafy.e102.domain.bookmark.exception.FavoriteRouteErrorCode;
 import com.ssafy.e102.domain.bookmark.exception.FavoriteRouteException;
 import com.ssafy.e102.domain.bookmark.repository.FavoriteRouteRepository;
+import com.ssafy.e102.domain.bookmark.type.RouteOption;
+import com.ssafy.e102.domain.route.entity.RouteSession;
+import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
+import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.exception.UserErrorCode;
 import com.ssafy.e102.domain.user.exception.UserException;
@@ -30,14 +35,17 @@ public class FavoriteRouteService {
 	private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "favRouteId");
 
 	private final FavoriteRouteRepository favoriteRouteRepository;
+	private final RouteSessionRepository routeSessionRepository;
 	private final UserRepository userRepository;
 	private final GeoPointConverter geoPointConverter;
 
 	public FavoriteRouteService(
 		FavoriteRouteRepository favoriteRouteRepository,
+		RouteSessionRepository routeSessionRepository,
 		UserRepository userRepository,
 		GeoPointConverter geoPointConverter) {
 		this.favoriteRouteRepository = favoriteRouteRepository;
+		this.routeSessionRepository = routeSessionRepository;
 		this.userRepository = userRepository;
 		this.geoPointConverter = geoPointConverter;
 	}
@@ -54,16 +62,27 @@ public class FavoriteRouteService {
 			geoPointConverter);
 	}
 
+	public FavoriteRouteDetailResponse getFavoriteRouteDetail(UUID userId, Long favRouteId) {
+		FavoriteRoute favoriteRoute = getFavoriteRoute(favRouteId);
+		validateOwner(favoriteRoute, userId);
+		return FavoriteRouteDetailResponse.of(favoriteRoute, geoPointConverter);
+	}
+
 	@Transactional
 	public FavoriteRouteIdResponse createFavoriteRoute(UUID userId, CreateFavoriteRouteRequest request) {
 		User user = getUser(userId);
+		RouteSession routeSession = getRouteSession(userId, request.routeId());
+		JsonNode routeSnapshotJson = requireRouteSnapshot(routeSession.getRouteSnapshotJson());
+
 		FavoriteRoute favoriteRoute = FavoriteRoute.create(
 			user,
 			request.startLabel(),
 			request.endLabel(),
-			geoPointConverter.toPoint(request.startPoint()),
-			geoPointConverter.toPoint(request.endPoint()),
-			request.routeOption());
+			routeSession.getStartPoint(),
+			routeSession.getEndPoint(),
+			extractEnum(routeSnapshotJson, "transportMode", TransportMode.class),
+			extractEnum(routeSnapshotJson, "routeOption", RouteOption.class),
+			routeSnapshotJson);
 		FavoriteRoute savedFavoriteRoute = favoriteRouteRepository.save(favoriteRoute);
 		return new FavoriteRouteIdResponse(savedFavoriteRoute.getFavRouteId());
 	}
@@ -76,17 +95,12 @@ public class FavoriteRouteService {
 		if (!request.hasAnyField()) {
 			throw new FavoriteRouteException(
 				FavoriteRouteErrorCode.INVALID_FAVORITE_ROUTE_UPDATE_REQUEST,
-				"수정할 경로 북마크 필드가 필요합니다.");
+				"수정할 경로 북마크 표시명이 필요합니다.");
 		}
 
 		FavoriteRoute favoriteRoute = getFavoriteRoute(favRouteId);
 		validateOwner(favoriteRoute, userId);
-		favoriteRoute.changeRoute(
-			valueOrDefault(request.startLabel(), favoriteRoute.getStartLabel()),
-			valueOrDefault(request.endLabel(), favoriteRoute.getEndLabel()),
-			pointOrDefault(request.startPoint(), favoriteRoute.getStartPoint()),
-			pointOrDefault(request.endPoint(), favoriteRoute.getEndPoint()),
-			valueOrDefault(request.routeOption(), favoriteRoute.getRouteOption()));
+		favoriteRoute.changeLabels(request.startLabel(), request.endLabel());
 		return new FavoriteRouteIdResponse(favoriteRoute.getFavRouteId());
 	}
 
@@ -107,23 +121,33 @@ public class FavoriteRouteService {
 			.orElseThrow(() -> new FavoriteRouteException(FavoriteRouteErrorCode.FAVORITE_ROUTE_NOT_FOUND));
 	}
 
+	private RouteSession getRouteSession(UUID userId, String routeId) {
+		return routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, routeId)
+			.orElseThrow(() -> new FavoriteRouteException(FavoriteRouteErrorCode.ROUTE_SESSION_NOT_FOUND));
+	}
+
 	private void validateOwner(FavoriteRoute favoriteRoute, UUID userId) {
 		if (!favoriteRoute.isOwner(userId)) {
 			throw new FavoriteRouteException(FavoriteRouteErrorCode.FAVORITE_ROUTE_FORBIDDEN);
 		}
 	}
 
-	private Point pointOrDefault(com.ssafy.e102.global.geo.dto.GeoPointRequest point, Point defaultValue) {
-		if (point == null) {
-			return defaultValue;
+	private static JsonNode requireRouteSnapshot(JsonNode routeSnapshotJson) {
+		if (routeSnapshotJson == null || routeSnapshotJson.isNull()) {
+			throw new FavoriteRouteException(FavoriteRouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 		}
-		return geoPointConverter.toPoint(point);
+		return routeSnapshotJson;
 	}
 
-	private static <T> T valueOrDefault(T value, T defaultValue) {
-		if (value == null) {
-			return defaultValue;
+	private static <E extends Enum<E>> E extractEnum(JsonNode routeSnapshotJson, String fieldName, Class<E> enumType) {
+		JsonNode valueNode = routeSnapshotJson.get(fieldName);
+		if (valueNode == null || !valueNode.isTextual() || valueNode.asText().isBlank()) {
+			throw new FavoriteRouteException(FavoriteRouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 		}
-		return value;
+		try {
+			return Enum.valueOf(enumType, valueNode.asText());
+		} catch (IllegalArgumentException exception) {
+			throw new FavoriteRouteException(FavoriteRouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+		}
 	}
 }

@@ -2,7 +2,7 @@
 
 > 작성일: 2026-05-06
 > 기준 이슈: `S14P31E102-547`
-> 기준 문서: `Docs/ERD/ERD_v3.md`, `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md`
+> 기준 문서: `Docs/ERD/ERD_v4.md`, `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md`
 
 ## 1. 운영 원칙
 
@@ -88,9 +88,9 @@ docker compose --env-file .env.prod \
 | `GRAPHHOPPER_ROAD_NODES_SQL` | 기본 `road_nodes` 조회 SQL override |
 | `GRAPHHOPPER_ROAD_SEGMENTS_SQL` | 기본 `road_segments` 조회 SQL override |
 
-기본 SQL은 ERD v3의 camelCase 컬럼명을 기준으로 한다. 실제 DB 스키마가 snake_case로 생성된 경우에는 `GRAPHHOPPER_ROAD_NODES_SQL`, `GRAPHHOPPER_ROAD_SEGMENTS_SQL`을 env로 override한다.
+기본 SQL은 ERD v4의 camelCase 컬럼명을 기준으로 한다. 실제 DB 스키마가 snake_case로 생성된 경우에는 `GRAPHHOPPER_ROAD_NODES_SQL`, `GRAPHHOPPER_ROAD_SEGMENTS_SQL`을 env로 override한다.
 
-2026-05-06 develop 기준 ERD는 `Docs/ARD`가 아니라 `Docs/ERD` 하위가 canonical이다. `route_sessions` 추가는 선택 경로 복구용 DB 계약이며, GraphHopper graph-cache build 입력은 여전히 `road_nodes`, `road_segments`다.
+2026-05-06 develop 기준 ERD는 `Docs/ERD` 하위가 canonical이다. `route_sessions` 추가는 선택 경로 복구용 DB 계약이며, GraphHopper graph-cache build 입력은 여전히 `road_nodes`, `road_segments`다.
 
 ## 5. 실패 기준
 

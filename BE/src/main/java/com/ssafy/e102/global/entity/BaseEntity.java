@@ -15,11 +15,11 @@ import jakarta.persistence.MappedSuperclass;
 public abstract class BaseEntity {
 
 	@CreatedDate
-	@Column(name = "created_at", nullable = false, updatable = false)
+	@Column(nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
 	@LastModifiedDate
-	@Column(name = "updated_at", nullable = false)
+	@Column(nullable = false)
 	private LocalDateTime updatedAt;
 
 	public LocalDateTime getCreatedAt() {

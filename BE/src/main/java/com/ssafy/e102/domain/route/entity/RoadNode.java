@@ -14,16 +14,16 @@ import lombok.NoArgsConstructor;
 @Getter
 @Entity
 @Table(name = "road_nodes", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_road_nodes_source_node_key", columnNames = "source_node_key")
+	@UniqueConstraint(name = "uk_road_nodes_source_node_key", columnNames = "sourceNodeKey")
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoadNode {
 
 	@Id
-	@Column(name = "vertex_id", nullable = false, updatable = false)
+	@Column(name = "vertexId", nullable = false, updatable = false)
 	private Long vertexId;
 
-	@Column(name = "source_node_key", nullable = false, length = 100)
+	@Column(name = "sourceNodeKey", nullable = false, length = 100)
 	private String sourceNodeKey;
 
 	@Column(name = "point", nullable = false, columnDefinition = "geometry(Point, 4326)")

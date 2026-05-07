@@ -26,8 +26,8 @@ import lombok.NoArgsConstructor;
 @Getter
 @Entity
 @Table(name = "users", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_users_social_provider_user_id", columnNames = {"social_provider",
-		"social_provider_user_id"})
+	@UniqueConstraint(name = "uk_users_social_provider_user_id", columnNames = {"socialProvider",
+		"socialProviderUserId"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseEntity {
@@ -35,22 +35,22 @@ public class User extends BaseEntity {
 	@Id
 	@GeneratedValue
 	@UuidGenerator
-	@Column(name = "user_id", nullable = false, updatable = false)
+	@Column(nullable = false, updatable = false)
 	private UUID userId;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "social_provider", nullable = false, length = 30)
+	@Column(nullable = false, length = 30)
 	private SocialProvider socialProvider;
 
-	@Column(name = "social_provider_user_id", nullable = false, length = 100)
+	@Column(nullable = false, length = 100)
 	private String socialProviderUserId;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "selected_primary_user_type", nullable = false, length = 30)
+	@Column(nullable = false, length = 30)
 	private PrimaryUserType selectedPrimaryUserType;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "selected_mobility_subtype", length = 30)
+	@Column(length = 30)
 	private MobilitySubtype selectedMobilitySubtype;
 
 	public static User create(

@@ -16,6 +16,8 @@ BE_DEV_MINIO_LOCAL_PORT="${BE_DEV_MINIO_LOCAL_PORT:-19000}"
 BE_DEV_GRAPHHOPPER_LOCAL_PORT="${BE_DEV_GRAPHHOPPER_LOCAL_PORT:-18989}"
 BE_DEV_GRAPHHOPPER_REMOTE_PORT="${BE_DEV_GRAPHHOPPER_REMOTE_PORT:-8998}"
 BE_DEV_TUNNEL_PID_FILE="${BE_DEV_TUNNEL_PID_FILE:-$ROOT_DIR/.tmp/be-dev-tunnel.pid}"
+DEV_GRAPHHOPPER_DB_URL=""
+DEV_GRAPHHOPPER_BUILD_NO_DEPS="true"
 
 server_port() {
   if [ -f "$ENV_FILE" ]; then
@@ -62,6 +64,31 @@ dev_db_name() {
   local db_name
   db_name="$(env_value POSTGRES_DB)"
   echo "${db_name:-e102}"
+}
+
+resolve_dev_graphhopper_db_url() {
+  local configured_db_url
+  configured_db_url="$(env_value DB_URL)"
+
+  if [ "$BE_DEV_TUNNEL_AUTO" = "true" ] && [ -f "$BE_DEV_SSH_KEY" ]; then
+    ensure_dev_tunnel
+    DEV_GRAPHHOPPER_DB_URL="jdbc:postgresql://host.docker.internal:$BE_DEV_DB_LOCAL_PORT/$(dev_db_name)"
+    DEV_GRAPHHOPPER_BUILD_NO_DEPS="true"
+    return
+  fi
+
+  if [ -n "$configured_db_url" ]; then
+    if [ "$BE_DEV_TUNNEL_AUTO" = "true" ]; then
+      echo "dev SSH key is unavailable; using configured DB_URL for GraphHopper build." >&2
+    fi
+    DEV_GRAPHHOPPER_DB_URL="$configured_db_url"
+    DEV_GRAPHHOPPER_BUILD_NO_DEPS="false"
+    return
+  fi
+
+  ensure_dev_tunnel
+  DEV_GRAPHHOPPER_DB_URL="jdbc:postgresql://host.docker.internal:$BE_DEV_DB_LOCAL_PORT/$(dev_db_name)"
+  DEV_GRAPHHOPPER_BUILD_NO_DEPS="true"
 }
 
 port_open() {

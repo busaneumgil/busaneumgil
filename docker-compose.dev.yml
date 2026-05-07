@@ -28,15 +28,22 @@ services:
       context: .
       dockerfile: INF/graphhopper/Dockerfile
     entrypoint: ["graphhopper-build-entrypoint.sh"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/e102}
       DB_USERNAME: ${DB_USERNAME:-e102}
       DB_PASSWORD: ${DB_PASSWORD:-e102}
       DB_SSLMODE: ${DB_SSLMODE:-prefer}
       GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
+      GRAPHHOPPER_OSM_IMPORT_FILE: ${GRAPHHOPPER_OSM_IMPORT_FILE:-/graphhopper/import/road-network.osm}
+      GRAPHHOPPER_PBF_IMPORT_FILE: ${GRAPHHOPPER_PBF_IMPORT_FILE:-/graphhopper/import/road-network.osm.pbf}
+      GRAPHHOPPER_VALIDATION_REPORT_FILE: ${GRAPHHOPPER_VALIDATION_REPORT_FILE:-/graphhopper/import/road-network-validation-report.json}
+      GRAPHHOPPER_PBF_REPORT_FILE: ${GRAPHHOPPER_PBF_REPORT_FILE:-/graphhopper/import/road-network-pbf-report.json}
       GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS: ${GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS:-1800}
       GRAPHHOPPER_ROAD_NODES_SQL: ${GRAPHHOPPER_ROAD_NODES_SQL:-}
       GRAPHHOPPER_ROAD_SEGMENTS_SQL: ${GRAPHHOPPER_ROAD_SEGMENTS_SQL:-}
+      OSMIUM_BIN: ${OSMIUM_BIN:-osmium}
     volumes:
       - graphhopper-dev-data:/graphhopper/data
       - graphhopper-dev-build:/graphhopper/build-cache

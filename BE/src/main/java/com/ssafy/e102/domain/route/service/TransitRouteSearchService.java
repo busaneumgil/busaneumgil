@@ -22,6 +22,8 @@ import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
+import com.ssafy.e102.global.external.bims.BusanBimsArrival;
+import com.ssafy.e102.global.external.bims.BusanBimsClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteRequest;
@@ -48,6 +50,7 @@ public class TransitRouteSearchService {
 	private final WalkRouteProfileService walkRouteProfileService;
 	private final WalkRoutePayloadService walkRoutePayloadService;
 	private final GraphHopperRouteClient graphHopperRouteClient;
+	private final BusanBimsClient busanBimsClient;
 	private final OdsayClient odsayClient;
 	private final RouteSearchCacheService routeSearchCacheService;
 
@@ -56,12 +59,14 @@ public class TransitRouteSearchService {
 		WalkRouteProfileService walkRouteProfileService,
 		WalkRoutePayloadService walkRoutePayloadService,
 		GraphHopperRouteClient graphHopperRouteClient,
+		BusanBimsClient busanBimsClient,
 		OdsayClient odsayClient,
 		RouteSearchCacheService routeSearchCacheService) {
 		this.userProfileQueryService = userProfileQueryService;
 		this.walkRouteProfileService = walkRouteProfileService;
 		this.walkRoutePayloadService = walkRoutePayloadService;
 		this.graphHopperRouteClient = graphHopperRouteClient;
+		this.busanBimsClient = busanBimsClient;
 		this.odsayClient = odsayClient;
 		this.routeSearchCacheService = routeSearchCacheService;
 	}
@@ -211,18 +216,19 @@ public class TransitRouteSearchService {
 	private RouteLegResponse toTransitLeg(int sequence, OdsayTransitLeg odsayLeg, String geometry) {
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
 		List<TransitLaneOptionResponse> laneOptions = laneOptions(odsayLeg);
+		String routeNo = routeNo(odsayLeg, laneOptions);
 		return new RouteLegResponse(
 			sequence,
 			odsayLeg.type(),
 			RouteLegRole.TRANSIT,
-			instruction(odsayLeg),
+			instruction(odsayLeg, routeNo),
 			scale(odsayLeg.distanceMeter()),
 			durationSecond,
 			estimatedMinute(durationSecond),
 			geometry != null ? geometry
 				: lineString(odsayLeg.startLng(), odsayLeg.startLat(), odsayLeg.endLng(), odsayLeg.endLat()),
 			List.of(),
-			routeNo(odsayLeg),
+			routeNo,
 			laneOptions,
 			stop(odsayLeg.startName(), odsayLeg.startLat(), odsayLeg.startLng()),
 			stop(odsayLeg.endName(), odsayLeg.endLat(), odsayLeg.endLng()),
@@ -265,13 +271,29 @@ public class TransitRouteSearchService {
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
 		return odsayLeg.lanes()
 			.stream()
-			.map(lane -> new TransitLaneOptionResponse(
-				lane.busNo(),
-				null,
-				durationSecond,
-				estimatedMinute(durationSecond),
-				null))
+			.map(lane -> laneOption(odsayLeg, lane, durationSecond))
+			.sorted((left, right) -> Boolean.compare(
+				Boolean.TRUE.equals(right.isLowFloor()),
+				Boolean.TRUE.equals(left.isLowFloor())))
 			.toList();
+	}
+
+	private TransitLaneOptionResponse laneOption(OdsayTransitLeg odsayLeg, OdsayTransitLane lane, int durationSecond) {
+		String stopId = boardingStopId(odsayLeg);
+		BusanBimsArrival arrival = busanBimsClient.findArrival(stopId, lane.busLocalBlId(), lane.busNo());
+		return new TransitLaneOptionResponse(
+			lane.busNo(),
+			arrival.remainingMinute(),
+			durationSecond,
+			estimatedMinute(durationSecond),
+			arrival.isLowFloor());
+	}
+
+	private String boardingStopId(OdsayTransitLeg leg) {
+		if (!leg.passStops().isEmpty() && leg.passStops().get(0).localStationId() != null) {
+			return leg.passStops().get(0).localStationId();
+		}
+		return leg.startLocalStationId();
 	}
 
 	private RouteStopResponse stop(String name, BigDecimal lat, BigDecimal lng) {
@@ -281,11 +303,11 @@ public class TransitRouteSearchService {
 		return new RouteStopResponse(name, lat, lng);
 	}
 
-	private String instruction(OdsayTransitLeg leg) {
+	private String instruction(OdsayTransitLeg leg, String routeNo) {
 		if (leg.type() == TransportMode.BUS) {
-			return routeNo(leg) + "번 버스를 탑승하세요.";
+			return routeNo + "번 버스를 탑승하세요.";
 		}
-		return routeNo(leg) + "을/를 탑승하세요.";
+		return routeNo + "을/를 탑승하세요.";
 	}
 
 	private String routeNo(OdsayTransitLeg leg) {
@@ -295,6 +317,13 @@ public class TransitRouteSearchService {
 			.filter(value -> value != null && !value.isBlank())
 			.findFirst()
 			.orElse(leg.type().name());
+	}
+
+	private String routeNo(OdsayTransitLeg leg, List<TransitLaneOptionResponse> laneOptions) {
+		if (leg.type() == TransportMode.BUS && !laneOptions.isEmpty()) {
+			return laneOptions.get(0).routeNo();
+		}
+		return routeNo(leg);
 	}
 
 	private String title(List<OdsayTransitLeg> legs) {

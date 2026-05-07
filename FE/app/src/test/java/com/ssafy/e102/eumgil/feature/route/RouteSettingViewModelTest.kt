@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteSearchResult
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
@@ -128,12 +129,12 @@ class RouteSettingViewModelTest {
             assertEquals(
                 listOf(
                     RouteDetailStepKind.START,
-                    RouteDetailStepKind.WALK,
+                    RouteDetailStepKind.STRAIGHT,
                     RouteDetailStepKind.ELEVATOR,
                     RouteDetailStepKind.CONSTRUCTION,
                     RouteDetailStepKind.CROSSWALK,
                     RouteDetailStepKind.CURB_GAP,
-                    RouteDetailStepKind.WALK,
+                    RouteDetailStepKind.STRAIGHT,
                     RouteDetailStepKind.ARRIVAL,
                 ),
                 uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::kind),
@@ -423,6 +424,40 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `detail steps classify straight left crosswalk and right guidance separately`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = directionalRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val detailSteps = viewModel.uiState.value.selectedRoute?.detailSteps.orEmpty()
+
+            assertEquals(
+                listOf("출발", "직진 이동", "좌회전", "횡단보도 건너기", "우회전", "도착"),
+                detailSteps.map(RouteDetailStepUiState::title),
+            )
+            assertEquals(
+                listOf(
+                    RouteDetailStepKind.START,
+                    RouteDetailStepKind.STRAIGHT,
+                    RouteDetailStepKind.TURN_LEFT,
+                    RouteDetailStepKind.CROSSWALK,
+                    RouteDetailStepKind.TURN_RIGHT,
+                    RouteDetailStepKind.ARRIVAL,
+                ),
+                detailSteps.map(RouteDetailStepUiState::kind),
+            )
+        }
+
+    @Test
     fun `waypoint swap action swaps displayed endpoints and preview direction`() =
         runTest {
             val destinationSelectionRepository =
@@ -650,6 +685,77 @@ private fun failingRouteRepository(): RouteRepository =
     object : RouteRepository {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
             error("fixture load failed")
+    }
+
+private fun directionalRouteRepository(): RouteRepository =
+    object : RouteRepository {
+        override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            RouteSearchData(
+                query = query,
+                result =
+                    RouteSearchResult(
+                        origin = query.origin,
+                        destination = query.destination,
+                        routes =
+                            listOf(
+                                RouteCandidate(
+                                    routeOption = RouteOption.SAFE,
+                                    title = "Directional Route",
+                                    summary =
+                                        RouteSummary(
+                                            distanceMeters = 410,
+                                            estimatedTimeMinutes = 8,
+                                            riskLevel = RouteRiskLevel.LOW,
+                                        ),
+                                    preview =
+                                        RoutePreviewModel(
+                                            polyline =
+                                                RoutePolyline(
+                                                    points =
+                                                        listOf(
+                                                            query.origin.coordinate,
+                                                            GeoCoordinate(35.17965, 129.07555),
+                                                            GeoCoordinate(35.17982, 129.07572),
+                                                            query.destination.coordinate,
+                                                        ),
+                                                ),
+                                            segmentCount = 4,
+                                            renderableSegmentCount = 4,
+                                            fallbackSegmentCount = 0,
+                                        ),
+                                    segments =
+                                        listOf(
+                                            RouteSegment(
+                                                sequence = 1,
+                                                distanceMeters = 120,
+                                                guidanceMessage = "직진 120m 구간입니다.",
+                                            ),
+                                            RouteSegment(
+                                                sequence = 2,
+                                                distanceMeters = 80,
+                                                guidanceMessage = "좌회전 후 80m 이동하세요.",
+                                            ),
+                                            RouteSegment(
+                                                sequence = 3,
+                                                distanceMeters = 60,
+                                                safetyFlags = RouteSegmentSafetyFlags(hasCrosswalk = true),
+                                                guidanceMessage = "횡단보도로 이동하세요.",
+                                            ),
+                                            RouteSegment(
+                                                sequence = 4,
+                                                distanceMeters = 150,
+                                                guidanceMessage = "우회전 후 목적지 방향으로 이동하세요.",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                source =
+                    RouteSearchSource.mockFixture(
+                        fixtureId = "directional-fixture",
+                        label = "Directional route fixture",
+                    ),
+            )
     }
 
 private class CountingRouteRepository : RouteRepository {

@@ -798,7 +798,12 @@ private fun RouteDetailStepLeadingIcon(
                     Icon(
                         painter = painterResource(id = routeDetailStepIconRes(kind = kind)),
                         contentDescription = null,
-                        tint = iconTint,
+                        tint =
+                            if (kind.usesDirectionalStepIcon()) {
+                                Color.Unspecified
+                            } else {
+                                iconTint
+                            },
                     )
                 }
             }
@@ -2448,18 +2453,29 @@ private fun routeDetailToneColors(tone: RouteDetailTone): Pair<Color, Color> =
 private fun routeDetailStepIconRes(kind: RouteDetailStepKind): Int =
     when (kind) {
         RouteDetailStepKind.START,
-        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.STRAIGHT,
         RouteDetailStepKind.FALLBACK,
-            -> R.drawable.ic_route_sidewalk
+            -> R.drawable.ic_direction_straight
+
+        RouteDetailStepKind.TURN_LEFT -> R.drawable.ic_direction_turn_left
+        RouteDetailStepKind.TURN_RIGHT -> R.drawable.ic_direction_turn_right
 
         RouteDetailStepKind.TACTILE_GUIDE -> R.drawable.ic_route_tactile_blocks
-        RouteDetailStepKind.CROSSWALK -> R.drawable.ic_route_crosswalk
+        RouteDetailStepKind.CROSSWALK -> R.drawable.ic_direction_crosswalk
         RouteDetailStepKind.ELEVATOR -> R.drawable.ic_route_elevator
         RouteDetailStepKind.CONSTRUCTION -> R.drawable.ic_route_construction
         RouteDetailStepKind.CURB_GAP -> R.drawable.ic_status_warning
         RouteDetailStepKind.STAIRS -> R.drawable.ic_route_stairs
         RouteDetailStepKind.ARRIVAL -> R.drawable.ic_status_check
     }
+
+private fun RouteDetailStepKind.usesDirectionalStepIcon(): Boolean =
+    this == RouteDetailStepKind.START ||
+        this == RouteDetailStepKind.STRAIGHT ||
+        this == RouteDetailStepKind.TURN_LEFT ||
+        this == RouteDetailStepKind.CROSSWALK ||
+        this == RouteDetailStepKind.TURN_RIGHT ||
+        this == RouteDetailStepKind.FALLBACK
 
 private fun routeDetailChipIconRes(kind: RouteDetailChipKind): Int =
     when (kind) {

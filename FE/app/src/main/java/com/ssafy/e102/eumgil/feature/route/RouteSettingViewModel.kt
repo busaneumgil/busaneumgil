@@ -848,15 +848,21 @@ private fun RouteSegment.detailStepKind(): RouteDetailStepKind {
         normalizedGuidance.containsAnyKeyword("공사", "construction", "우회", "narrow path") ->
             RouteDetailStepKind.CONSTRUCTION
         safetyFlags.hasCrosswalk -> RouteDetailStepKind.CROSSWALK
+        normalizedGuidance.containsAnyKeyword("좌회전", "왼쪽", "turn left", "left turn") ->
+            RouteDetailStepKind.TURN_LEFT
+        normalizedGuidance.containsAnyKeyword("우회전", "오른쪽", "turn right", "right turn") ->
+            RouteDetailStepKind.TURN_RIGHT
         safetyFlags.hasBrailleBlock -> RouteDetailStepKind.TACTILE_GUIDE
-        else -> RouteDetailStepKind.WALK
+        else -> RouteDetailStepKind.STRAIGHT
     }
 }
 
 private fun RouteSegment.detailStepTitle(kind: RouteDetailStepKind): String =
     when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_TITLE
-        RouteDetailStepKind.WALK -> DETAIL_STEP_WALK_TITLE
+        RouteDetailStepKind.STRAIGHT -> DETAIL_STEP_WALK_TITLE
+        RouteDetailStepKind.TURN_LEFT -> "좌회전"
+        RouteDetailStepKind.TURN_RIGHT -> "우회전"
         RouteDetailStepKind.TACTILE_GUIDE -> DETAIL_STEP_TACTILE_GUIDE_TITLE
         RouteDetailStepKind.CROSSWALK -> DETAIL_STEP_CROSSWALK_TITLE
         RouteDetailStepKind.ELEVATOR -> DETAIL_STEP_ELEVATOR_TITLE
@@ -877,11 +883,25 @@ private fun RouteSegment.detailStepDescription(kind: RouteDetailStepKind): Strin
 
     return when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_DESCRIPTION
-        RouteDetailStepKind.WALK ->
+        RouteDetailStepKind.STRAIGHT ->
             if (distanceMeters > 0) {
                 "$distanceLabel 정도 직진으로 이동하세요."
             } else {
                 DETAIL_STEP_GENERIC_DESCRIPTION
+            }
+
+        RouteDetailStepKind.TURN_LEFT ->
+            if (distanceMeters > 0) {
+                "$distanceLabel 정도 이동 후 왼쪽 방향으로 이동하세요."
+            } else {
+                "왼쪽 방향으로 이동하세요."
+            }
+
+        RouteDetailStepKind.TURN_RIGHT ->
+            if (distanceMeters > 0) {
+                "$distanceLabel 정도 이동 후 오른쪽 방향으로 이동하세요."
+            } else {
+                "오른쪽 방향으로 이동하세요."
             }
 
         RouteDetailStepKind.TACTILE_GUIDE ->
@@ -921,7 +941,9 @@ private fun RouteSegment.detailStepMetaLabel(kind: RouteDetailStepKind): String?
 private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String? =
     when (kind) {
         RouteDetailStepKind.START,
-        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.STRAIGHT,
+        RouteDetailStepKind.TURN_LEFT,
+        RouteDetailStepKind.TURN_RIGHT,
         RouteDetailStepKind.ARRIVAL,
         RouteDetailStepKind.FALLBACK,
             -> null
@@ -943,7 +965,9 @@ private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String
 private fun RouteSegment.detailStepBadgeTone(kind: RouteDetailStepKind): RouteDetailTone? =
     when (kind) {
         RouteDetailStepKind.START,
-        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.STRAIGHT,
+        RouteDetailStepKind.TURN_LEFT,
+        RouteDetailStepKind.TURN_RIGHT,
         RouteDetailStepKind.ARRIVAL,
         RouteDetailStepKind.FALLBACK,
             -> null
@@ -979,7 +1003,9 @@ private fun RouteSegment.detailStepTone(kind: RouteDetailStepKind): RouteDetailT
         RouteDetailStepKind.STAIRS,
             -> RouteDetailTone.WARNING
 
-        RouteDetailStepKind.WALK,
+        RouteDetailStepKind.STRAIGHT,
+        RouteDetailStepKind.TURN_LEFT,
+        RouteDetailStepKind.TURN_RIGHT,
         RouteDetailStepKind.FALLBACK,
             -> RouteDetailTone.NEUTRAL
     }

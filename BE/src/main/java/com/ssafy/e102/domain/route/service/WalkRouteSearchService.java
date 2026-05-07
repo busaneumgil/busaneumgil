@@ -4,17 +4,12 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
-import com.ssafy.e102.domain.user.entity.User;
-import com.ssafy.e102.domain.user.exception.UserErrorCode;
-import com.ssafy.e102.domain.user.exception.UserException;
-import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 /**
@@ -24,7 +19,6 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
  * 부산 서비스 영역/20m 근접 검증을 먼저 수행한 뒤 {@link WalkRouteGraphHopperSearchService}에 후보 조회를 맡긴다.
  */
 @Service
-@Transactional(readOnly = true)
 public class WalkRouteSearchService {
 
 	private static final double BUSAN_MIN_LAT = 34.85;
@@ -34,24 +28,24 @@ public class WalkRouteSearchService {
 	private static final double START_END_MIN_DISTANCE_METER = 20.0;
 	private static final double EARTH_RADIUS_METER = 6_371_000.0;
 
-	private final UserRepository userRepository;
+	private final WalkRouteUserProfileQueryService userProfileQueryService;
 	private final WalkRouteGraphHopperSearchService graphHopperSearchService;
 	private final WalkRoutePayloadService walkRoutePayloadService;
 	private final RouteSearchCacheService routeSearchCacheService;
 
 	public WalkRouteSearchService(
-		UserRepository userRepository,
+		WalkRouteUserProfileQueryService userProfileQueryService,
 		WalkRouteGraphHopperSearchService graphHopperSearchService,
 		WalkRoutePayloadService walkRoutePayloadService,
 		RouteSearchCacheService routeSearchCacheService) {
-		this.userRepository = userRepository;
+		this.userProfileQueryService = userProfileQueryService;
 		this.graphHopperSearchService = graphHopperSearchService;
 		this.walkRoutePayloadService = walkRoutePayloadService;
 		this.routeSearchCacheService = routeSearchCacheService;
 	}
 
 	public WalkRouteSearchResponse search(UUID userId, WalkRouteSearchRequest request) {
-		User user = getUser(userId);
+		WalkRouteUserProfile profile = userProfileQueryService.getProfile(userId);
 		GeoPointRequest startPoint = request.startPoint();
 		GeoPointRequest endPoint = request.endPoint();
 		validateServiceArea(startPoint, endPoint);
@@ -60,18 +54,13 @@ public class WalkRouteSearchService {
 		List<WalkRouteCandidate> candidates = graphHopperSearchService.searchCandidates(
 			startPoint,
 			endPoint,
-			user.getSelectedPrimaryUserType(),
-			user.getSelectedMobilitySubtype());
+			profile.primaryUserType(),
+			profile.mobilitySubtype());
 		String searchId = "rs_walk_" + UUID.randomUUID();
 		WalkRouteSearchResponse response = new WalkRouteSearchResponse(searchId,
 			toRouteSummaries(searchId, candidates));
 		routeSearchCacheService.save(response);
 		return response;
-	}
-
-	private User getUser(UUID userId) {
-		return userRepository.findById(userId)
-			.orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));
 	}
 
 	private void validateServiceArea(GeoPointRequest startPoint, GeoPointRequest endPoint) {
@@ -98,10 +87,10 @@ public class WalkRouteSearchService {
 		double endLat = Math.toRadians(endPoint.lat());
 		double deltaLat = Math.toRadians(endPoint.lat() - startPoint.lat());
 		double deltaLng = Math.toRadians(endPoint.lng() - startPoint.lng());
-		double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
+		double haversine = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
 			+ Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
-		double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-		return EARTH_RADIUS_METER * c;
+		double angularDistance = 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+		return EARTH_RADIUS_METER * angularDistance;
 	}
 
 	private List<RouteSummaryResponse> toRouteSummaries(String searchId, List<WalkRouteCandidate> candidates) {

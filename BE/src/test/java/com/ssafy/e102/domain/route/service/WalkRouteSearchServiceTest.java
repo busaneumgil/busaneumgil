@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,20 +16,16 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.type.RouteOption;
-import com.ssafy.e102.domain.route.type.WalkRouteProfile;
 import com.ssafy.e102.domain.route.type.TransportMode;
-import com.ssafy.e102.domain.user.entity.User;
-import com.ssafy.e102.domain.user.repository.UserRepository;
+import com.ssafy.e102.domain.route.type.WalkRouteProfile;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
-import com.ssafy.e102.domain.user.type.SocialProvider;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperCoordinate;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
@@ -38,7 +33,7 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 class WalkRouteSearchServiceTest {
 
 	@Mock
-	private UserRepository userRepository;
+	private WalkRouteUserProfileQueryService userProfileQueryService;
 
 	@Mock
 	private WalkRouteGraphHopperSearchService graphHopperSearchService;
@@ -52,7 +47,7 @@ class WalkRouteSearchServiceTest {
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
 		service = new WalkRouteSearchService(
-			userRepository,
+			userProfileQueryService,
 			graphHopperSearchService,
 			new WalkRoutePayloadService(new RouteTurnInstructionService()),
 			routeSearchCacheService);
@@ -64,8 +59,8 @@ class WalkRouteSearchServiceTest {
 		UUID userId = UUID.randomUUID();
 		GeoPointRequest startPoint = new GeoPointRequest(35.12, 128.936);
 		GeoPointRequest endPoint = new GeoPointRequest(35.1315, 128.8823);
-		User user = user(userId, PrimaryUserType.MOBILITY_IMPAIRED, MobilitySubtype.POWER_WHEELCHAIR);
-		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(userProfileQueryService.getProfile(userId))
+			.thenReturn(new WalkRouteUserProfile(PrimaryUserType.MOBILITY_IMPAIRED, MobilitySubtype.POWER_WHEELCHAIR));
 		when(graphHopperSearchService.searchCandidates(
 			startPoint,
 			endPoint,
@@ -98,8 +93,8 @@ class WalkRouteSearchServiceTest {
 	@DisplayName("부산 서비스 영역 밖 좌표는 GraphHopper 호출 전에 RT4003으로 차단한다")
 	void rejectOutOfServiceAreaBeforeGraphHopper() {
 		UUID userId = UUID.randomUUID();
-		when(userRepository.findById(userId)).thenReturn(Optional.of(
-			user(userId, PrimaryUserType.LOW_VISION, null)));
+		when(userProfileQueryService.getProfile(userId))
+			.thenReturn(new WalkRouteUserProfile(PrimaryUserType.LOW_VISION, null));
 
 		assertThatThrownBy(() -> service.search(userId, new WalkRouteSearchRequest(
 			new GeoPointRequest(37.5665, 126.9780),
@@ -118,8 +113,8 @@ class WalkRouteSearchServiceTest {
 	@DisplayName("출발지와 도착지가 20m 이하면 RT4004로 차단한다")
 	void rejectTooCloseStartAndEnd() {
 		UUID userId = UUID.randomUUID();
-		when(userRepository.findById(userId)).thenReturn(Optional.of(
-			user(userId, PrimaryUserType.LOW_VISION, null)));
+		when(userProfileQueryService.getProfile(userId))
+			.thenReturn(new WalkRouteUserProfile(PrimaryUserType.LOW_VISION, null));
 
 		assertThatThrownBy(() -> service.search(userId, new WalkRouteSearchRequest(
 			new GeoPointRequest(35.120000, 128.936000),
@@ -147,9 +142,4 @@ class WalkRouteSearchServiceTest {
 				Map.of()));
 	}
 
-	private User user(UUID userId, PrimaryUserType primaryUserType, MobilitySubtype mobilitySubtype) {
-		User user = User.create(SocialProvider.KAKAO, "kakao-user-id", primaryUserType, mobilitySubtype);
-		ReflectionTestUtils.setField(user, "userId", userId);
-		return user;
-	}
 }

@@ -23,6 +23,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -46,10 +48,13 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.test.sherpatest.MainViewModel
+import com.test.sherpatest.audio.NoiseCancelMode
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
+    val currentMode by viewModel.noiseCancelMode.collectAsState()
     val focusManager = LocalFocusManager.current
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -186,6 +191,26 @@ fun MainScreen(viewModel: MainViewModel) {
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // 노이즈 캔슬링 모드 선택
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                NoiseCancelMode.entries.forEach { mode ->
+                    val label = when (mode) {
+                        NoiseCancelMode.NOISE_SUPPRESSOR_ONLY -> "NS만"
+                        NoiseCancelMode.GTCRN_ONLY -> "GTCRN만"
+                    }
+                    FilterChip(
+                        selected = currentMode == mode,
+                        onClick = { viewModel.setNoiseCancelMode(mode) },
+                        label = { Text(label, fontSize = 12.sp) },
+                        enabled = !uiState.isRecording,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }

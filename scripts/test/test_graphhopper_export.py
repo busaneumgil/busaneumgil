@@ -136,6 +136,128 @@ class GraphhopperExportTest(unittest.TestCase):
 
         self.assertEqual(parsed["status"], "PASS")
 
+    def test_segment_features_split_source_segment_and_set_child_states(self):
+        module = load_export_module()
+        nodes = [
+            {"vertex_id": 1, "lon": 0.0, "lat": 0.0},
+            {"vertex_id": 2, "lon": 10.0, "lat": 0.0},
+        ]
+        segments = [
+            {
+                "edge_id": 100,
+                "from_node_id": 1,
+                "to_node_id": 2,
+                "geom_wkt": "LINESTRING(0 0, 10 0)",
+                "walk_access": "YES",
+                "avg_slope_percent": "0.0",
+                "width_meter": "2.0",
+                "braille_block_state": "UNKNOWN",
+                "audio_signal_state": "UNKNOWN",
+                "slope_state": "FLAT",
+                "width_state": "ADEQUATE_150",
+                "surface_state": "PAVED",
+                "stairs_state": "NO",
+                "signal_state": "UNKNOWN",
+                "segment_type": "SIDE_LINE",
+            }
+        ]
+        features = [
+            {
+                "feature_id": 1,
+                "edge_id": 100,
+                "feature_type": "STAIRS",
+                "geom_wkt": "LINESTRING(2 0, 4 0)",
+                "state": "YES",
+                "value_number": None,
+            },
+            {
+                "feature_id": 2,
+                "edge_id": 100,
+                "feature_type": "SLOPE",
+                "geom_wkt": "LINESTRING(6 0, 10 0)",
+                "state": None,
+                "value_number": "13.0",
+            },
+        ]
+
+        output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
+
+        self.assertEqual(len(output_nodes), 5)
+        self.assertEqual(len(output_segments), 4)
+        self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3, 4, 5])
+        self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 4, 5, 2])
+        self.assertEqual(output_segments[1]["stairs_state"], "YES")
+        self.assertEqual(output_segments[2]["slope_state"], "FLAT")
+        self.assertEqual(output_segments[3]["slope_state"], "RISK")
+        self.assertEqual(output_segments[3]["avg_slope_percent"], "13.00")
+
+        report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
+        self.assertEqual(report["status"], "PASS")
+
+    def test_segment_features_can_set_crosswalk_width_and_audio_states_without_split(self):
+        module = load_export_module()
+        nodes = [
+            {"vertex_id": 1, "lon": 0.0, "lat": 0.0},
+            {"vertex_id": 2, "lon": 10.0, "lat": 0.0},
+        ]
+        segments = [
+            {
+                "edge_id": 200,
+                "from_node_id": 1,
+                "to_node_id": 2,
+                "geom_wkt": "LINESTRING(0 0, 10 0)",
+                "walk_access": "YES",
+                "avg_slope_percent": "0.0",
+                "width_meter": "0.0",
+                "braille_block_state": "UNKNOWN",
+                "audio_signal_state": "UNKNOWN",
+                "slope_state": "FLAT",
+                "width_state": "UNKNOWN",
+                "surface_state": "PAVED",
+                "stairs_state": "NO",
+                "signal_state": "UNKNOWN",
+                "segment_type": "SIDE_LINE",
+            }
+        ]
+        features = [
+            {
+                "feature_id": 1,
+                "edge_id": 200,
+                "feature_type": "CROSSWALK",
+                "geom_wkt": "LINESTRING(0 0, 10 0)",
+                "state": "YES",
+                "value_number": None,
+            },
+            {
+                "feature_id": 2,
+                "edge_id": 200,
+                "feature_type": "WIDTH",
+                "geom_wkt": "LINESTRING(0 0, 10 0)",
+                "state": None,
+                "value_number": "1.25",
+            },
+            {
+                "feature_id": 3,
+                "edge_id": 200,
+                "feature_type": "AUDIO_SIGNAL",
+                "geom_wkt": "POINT(5 0)",
+                "state": "YES",
+                "value_number": None,
+            },
+        ]
+
+        output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
+
+        self.assertEqual(len(output_nodes), 3)
+        self.assertEqual(len(output_segments), 2)
+        for segment in output_segments:
+            self.assertEqual(segment["segment_type"], "CROSS_WALK")
+            self.assertEqual(segment["signal_state"], "YES")
+            self.assertEqual(segment["width_meter"], "1.25")
+            self.assertEqual(segment["width_state"], "ADEQUATE_120")
+        self.assertEqual(output_segments[0]["audio_signal_state"], "UNKNOWN")
+        self.assertEqual(output_segments[1]["audio_signal_state"], "YES")
+
     def test_custom_models_use_canonical_accessibility_enums(self):
         allowed_width_conditions = {
             "width_state == ADEQUATE_120",

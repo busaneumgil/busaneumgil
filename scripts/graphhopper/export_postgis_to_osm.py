@@ -40,6 +40,18 @@ FROM road_segments
 ORDER BY "edgeId"
 '''
 
+DEFAULT_FEATURES_SQL = '''
+SELECT
+  "featureId" AS feature_id,
+  "edgeId" AS edge_id,
+  "featureType"::text AS feature_type,
+  ST_AsText("geom"::geometry) AS geom_wkt,
+  NULL::text AS state,
+  NULL::numeric AS value_number
+FROM segment_features
+ORDER BY "edgeId", "featureId"
+'''
+
 REQUIRED_NODE_FIELDS = {"vertex_id", "lon", "lat"}
 REQUIRED_SEGMENT_FIELDS = {
     "edge_id",
@@ -73,6 +85,7 @@ ENUM_VALUES = {
 
 UNKNOWN_WARNING_THRESHOLD = 0.90
 ENDPOINT_TOLERANCE = 0.000001
+SPLIT_FRACTION_TOLERANCE = 0.000000001
 
 
 def jdbc_to_dsn(jdbc_url: str) -> dict:
@@ -125,6 +138,8 @@ def parse_linestring_wkt(value):
     if not value:
         return []
     text = value.strip()
+    if text.upper().startswith("SRID="):
+        text = text.split(";", 1)[1].strip()
     upper = text.upper()
     if not upper.startswith("LINESTRING"):
         return []
@@ -137,6 +152,32 @@ def parse_linestring_wkt(value):
         lon, lat = float(parts[0]), float(parts[1])
         points.append((lon, lat))
     return points
+
+
+def parse_point_wkt(value):
+    if not value:
+        return None
+    text = value.strip()
+    if text.upper().startswith("SRID="):
+        text = text.split(";", 1)[1].strip()
+    upper = text.upper()
+    if not upper.startswith("POINT"):
+        return None
+    body = text[text.find("(") + 1 : text.rfind(")")]
+    parts = body.strip().split()
+    if len(parts) < 2:
+        return None
+    return (float(parts[0]), float(parts[1]))
+
+
+def parse_feature_geometry_wkt(value):
+    point = parse_point_wkt(value)
+    if point:
+        return "POINT", [point]
+    linestring = parse_linestring_wkt(value)
+    if linestring:
+        return "LINESTRING", linestring
+    return None, []
 
 
 def is_finite_coordinate(value):
@@ -169,6 +210,49 @@ def normalize_export_value(value, fallback):
     return text
 
 
+def normalize_feature_type(value):
+    return normalize_export_value(value, "").strip().upper()
+
+
+def normalize_feature_state(value):
+    state = normalize_export_value(value, "").strip().upper()
+    return state or None
+
+
+def parse_feature_number(value):
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def derive_slope_state(avg_slope_percent):
+    number = parse_feature_number(avg_slope_percent)
+    if number is None:
+        return "UNKNOWN"
+    if number < 5.56:
+        return "FLAT"
+    if number < 8.33:
+        return "MODERATE"
+    if number < 12.0:
+        return "STEEP"
+    return "RISK"
+
+
+def derive_width_state(width_meter):
+    number = parse_feature_number(width_meter)
+    if number is None:
+        return "UNKNOWN"
+    if number >= 1.50:
+        return "ADEQUATE_150"
+    if number >= 1.20:
+        return "ADEQUATE_120"
+    return "NARROW"
+
+
 def new_issue(kind, level, message, samples=None):
     issue = {"kind": kind, "level": level, "message": message}
     if samples:
@@ -178,6 +262,230 @@ def new_issue(kind, level, message, samples=None):
 
 def add_issue(target, kind, level, message, samples=None):
     target.append(new_issue(kind, level, message, samples))
+
+
+def coordinate_distance(left, right):
+    return math.hypot(float(right[0]) - float(left[0]), float(right[1]) - float(left[1]))
+
+
+def linestring_lengths(coords):
+    cumulative = [0.0]
+    for index in range(1, len(coords)):
+        cumulative.append(cumulative[-1] + coordinate_distance(coords[index - 1], coords[index]))
+    return cumulative
+
+
+def point_at_fraction(coords, fraction):
+    if not coords:
+        return None
+    fraction = max(0.0, min(1.0, float(fraction)))
+    cumulative = linestring_lengths(coords)
+    total = cumulative[-1]
+    if total == 0.0:
+        return coords[0]
+    target = total * fraction
+    for index in range(1, len(coords)):
+        start_distance = cumulative[index - 1]
+        end_distance = cumulative[index]
+        if target <= end_distance or index == len(coords) - 1:
+            segment_length = end_distance - start_distance
+            if segment_length == 0.0:
+                return coords[index]
+            ratio = (target - start_distance) / segment_length
+            start = coords[index - 1]
+            end = coords[index]
+            return (
+                start[0] + (end[0] - start[0]) * ratio,
+                start[1] + (end[1] - start[1]) * ratio,
+            )
+    return coords[-1]
+
+
+def project_point_fraction(coords, point):
+    cumulative = linestring_lengths(coords)
+    total = cumulative[-1] if cumulative else 0.0
+    if total == 0.0:
+        return 0.0
+
+    best_distance = None
+    best_along = 0.0
+    px, py = float(point[0]), float(point[1])
+    for index in range(1, len(coords)):
+        start = coords[index - 1]
+        end = coords[index]
+        sx, sy = float(start[0]), float(start[1])
+        ex, ey = float(end[0]), float(end[1])
+        dx, dy = ex - sx, ey - sy
+        length_sq = dx * dx + dy * dy
+        if length_sq == 0.0:
+            continue
+        ratio = ((px - sx) * dx + (py - sy) * dy) / length_sq
+        ratio = max(0.0, min(1.0, ratio))
+        projected = (sx + dx * ratio, sy + dy * ratio)
+        distance = coordinate_distance(projected, point)
+        along = cumulative[index - 1] + math.sqrt(length_sq) * ratio
+        if best_distance is None or distance < best_distance:
+            best_distance = distance
+            best_along = along
+    return best_along / total
+
+
+def linestring_between_fractions(coords, start_fraction, end_fraction):
+    if end_fraction <= start_fraction:
+        return []
+    result = [point_at_fraction(coords, start_fraction)]
+    cumulative = linestring_lengths(coords)
+    total = cumulative[-1] if cumulative else 0.0
+    if total > 0.0:
+        start_distance = total * start_fraction
+        end_distance = total * end_fraction
+        for index in range(1, len(coords) - 1):
+            if start_distance + SPLIT_FRACTION_TOLERANCE < cumulative[index] < end_distance - SPLIT_FRACTION_TOLERANCE:
+                result.append(coords[index])
+    result.append(point_at_fraction(coords, end_fraction))
+    return result
+
+
+def format_linestring_wkt(coords):
+    formatted = []
+    for lon, lat in coords:
+        formatted.append(f"{float(lon):.8f} {float(lat):.8f}")
+    return f'LINESTRING({", ".join(formatted)})'
+
+
+def feature_fraction_range(segment_coords, feature):
+    geometry_type, feature_coords = parse_feature_geometry_wkt(feature.get("geom_wkt"))
+    if not feature_coords:
+        return None
+    fractions = [project_point_fraction(segment_coords, point) for point in feature_coords]
+    start = max(0.0, min(fractions))
+    end = min(1.0, max(fractions))
+    return (start, end, geometry_type)
+
+
+def ranges_overlap(left_start, left_end, right_start, right_end):
+    if right_start == right_end:
+        if right_start == 1.0:
+            return abs(left_end - 1.0) <= SPLIT_FRACTION_TOLERANCE
+        return left_start - SPLIT_FRACTION_TOLERANCE <= right_start < left_end - SPLIT_FRACTION_TOLERANCE
+    return max(left_start, right_start) < min(left_end, right_end) - SPLIT_FRACTION_TOLERANCE
+
+
+def apply_feature_state(segment, feature):
+    feature_type = normalize_feature_type(feature.get("feature_type"))
+    state = normalize_feature_state(feature.get("state"))
+    value_number = parse_feature_number(feature.get("value_number"))
+
+    if feature_type == "CROSSWALK":
+        segment["segment_type"] = "CROSS_WALK"
+        if state in ENUM_VALUES["signal_state"]:
+            segment["signal_state"] = state
+        return
+    if feature_type == "AUDIO_SIGNAL":
+        segment["audio_signal_state"] = state if state in ENUM_VALUES["audio_signal_state"] else "YES"
+        return
+    if feature_type == "BRAILLE_BLOCK":
+        segment["braille_block_state"] = state if state in ENUM_VALUES["braille_block_state"] else "YES"
+        return
+    if feature_type == "STAIRS":
+        segment["stairs_state"] = state if state in ENUM_VALUES["stairs_state"] else "YES"
+        return
+    if feature_type == "SLOPE":
+        if value_number is not None:
+            segment["avg_slope_percent"] = f"{value_number:.2f}"
+        segment["slope_state"] = state if state in ENUM_VALUES["slope_state"] else derive_slope_state(value_number)
+        return
+    if feature_type in {"WIDTH", "SIDEWALK_WIDTH"}:
+        if value_number is not None:
+            segment["width_meter"] = f"{value_number:.2f}"
+        segment["width_state"] = state if state in ENUM_VALUES["width_state"] else derive_width_state(value_number)
+        return
+    if feature_type == "SURFACE" and state in ENUM_VALUES["surface_state"]:
+        segment["surface_state"] = state
+        return
+    if feature_type == "WALK_ACCESS" and state in ENUM_VALUES["walk_access"]:
+        segment["walk_access"] = state
+
+
+def apply_segment_features_to_export(nodes, segments, features):
+    if not features:
+        return nodes, segments
+
+    features_by_edge = defaultdict(list)
+    for feature in features:
+        features_by_edge[str(feature.get("edge_id"))].append(feature)
+
+    output_nodes = [dict(node) for node in nodes]
+    output_segments = []
+    existing_node_ids = [int(node["vertex_id"]) for node in output_nodes if str(node.get("vertex_id", "")).lstrip("-").isdigit()]
+    existing_edge_ids = [int(segment["edge_id"]) for segment in segments if str(segment.get("edge_id", "")).lstrip("-").isdigit()]
+    next_synthetic_node_id = (max(existing_node_ids) + 1) if existing_node_ids else 1
+    next_synthetic_edge_id = (min(existing_edge_ids) - 1) if existing_edge_ids else -1
+
+    for segment in segments:
+        segment_features = features_by_edge.get(str(segment.get("edge_id")), [])
+        coords = parse_linestring_wkt(segment.get("geom_wkt"))
+        if len(coords) < 2 or not segment_features:
+            patched_segment = dict(segment)
+            for feature in segment_features:
+                feature_range = feature_fraction_range(coords, feature) if coords else None
+                if feature_range and ranges_overlap(0.0, 1.0, feature_range[0], feature_range[1]):
+                    apply_feature_state(patched_segment, feature)
+            output_segments.append(patched_segment)
+            continue
+
+        feature_ranges = []
+        split_fractions = {0.0, 1.0}
+        for feature in segment_features:
+            feature_range = feature_fraction_range(coords, feature)
+            if not feature_range:
+                continue
+            start_fraction, end_fraction, _ = feature_range
+            feature_ranges.append((feature, start_fraction, end_fraction))
+            for fraction in (start_fraction, end_fraction):
+                if SPLIT_FRACTION_TOLERANCE < fraction < 1.0 - SPLIT_FRACTION_TOLERANCE:
+                    split_fractions.add(round(fraction, 12))
+
+        ordered_fractions = sorted(split_fractions)
+        if len(ordered_fractions) <= 2:
+            patched_segment = dict(segment)
+            for feature, start_fraction, end_fraction in feature_ranges:
+                if ranges_overlap(0.0, 1.0, start_fraction, end_fraction):
+                    apply_feature_state(patched_segment, feature)
+            output_segments.append(patched_segment)
+            continue
+
+        boundary_nodes = {0.0: segment["from_node_id"], 1.0: segment["to_node_id"]}
+        for fraction in ordered_fractions[1:-1]:
+            point = point_at_fraction(coords, fraction)
+            synthetic_node = {
+                "vertex_id": next_synthetic_node_id,
+                "lon": point[0],
+                "lat": point[1],
+            }
+            output_nodes.append(synthetic_node)
+            boundary_nodes[fraction] = next_synthetic_node_id
+            next_synthetic_node_id += 1
+
+        for index in range(1, len(ordered_fractions)):
+            start_fraction = ordered_fractions[index - 1]
+            end_fraction = ordered_fractions[index]
+            child_coords = linestring_between_fractions(coords, start_fraction, end_fraction)
+            if len(child_coords) < 2:
+                continue
+            child = dict(segment)
+            child["edge_id"] = next_synthetic_edge_id
+            child["source_edge_id"] = segment["edge_id"]
+            child["from_node_id"] = boundary_nodes[start_fraction]
+            child["to_node_id"] = boundary_nodes[end_fraction]
+            child["geom_wkt"] = format_linestring_wkt(child_coords)
+            next_synthetic_edge_id -= 1
+            for feature, feature_start, feature_end in feature_ranges:
+                if ranges_overlap(start_fraction, end_fraction, feature_start, feature_end):
+                    apply_feature_state(child, feature)
+            output_segments.append(child)
+
+    return output_nodes, output_segments
 
 
 def count_components(segments):
@@ -439,6 +747,21 @@ def fetch_dicts(conn, sql):
         return [dict(zip(columns, row)) for row in cur.fetchall()]
 
 
+def table_exists(conn, table_name):
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
+        return cur.fetchone()[0] is not None
+
+
+def fetch_segment_features(conn):
+    features_sql = os.getenv("GRAPHHOPPER_SEGMENT_FEATURES_SQL")
+    if features_sql:
+        return fetch_dicts(conn, features_sql)
+    if not table_exists(conn, "segment_features"):
+        return []
+    return fetch_dicts(conn, DEFAULT_FEATURES_SQL)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
@@ -451,6 +774,7 @@ def main():
     with connect() as conn:
         nodes = fetch_dicts(conn, nodes_sql)
         segments = fetch_dicts(conn, segments_sql)
+        features = fetch_segment_features(conn)
 
     if not nodes:
         print("No road_nodes rows found for GraphHopper export.", file=sys.stderr)
@@ -459,6 +783,7 @@ def main():
         print("No road_segments rows found for GraphHopper export.", file=sys.stderr)
         return 1
 
+    nodes, segments = apply_segment_features_to_export(nodes, segments, features)
     report = validate_graph(nodes, segments, args.output)
     write_json_report(args.report_json, report)
     if report["blockers"]:

@@ -90,6 +90,20 @@ SOURCE_DEFINITIONS = [
     SourceDefinition("점자블록.csv", Decimal("20"), True, "braille_block"),
 ]
 
+REQUIRED_HEADER_GROUPS = {
+    "sidewalk_width": [("wkt", "geom", "geometryWkt")],
+    "shared_local_road": [("geometryWkt", "wkt", "geom")],
+    "slope_surface": [("geometryWkt", "wkt", "geom")],
+    "crosswalk_signal": [("point", "geom", "geometryWkt", "wkt")],
+    "audio_signal": [("point", "geom", "geometryWkt", "wkt", "lat", "latitude", "위도", "y", "Y")],
+    "stairs": [("geometryWkt", "geom", "wkt")],
+    "braille_block": [("geom", "point", "geometryWkt", "wkt")],
+}
+
+
+def position_event_feature_type_sql() -> str:
+    return ", ".join(f"'{feature_type}'" for feature_type in sorted(POSITION_EVENT_FEATURE_TYPES))
+
 
 def blank_to_none(value: Any) -> str | None:
     if value is None:
@@ -209,6 +223,25 @@ def geometry_kind(ewkt: str) -> str:
 
 def source_id_from_row(row: dict[str, str], line_no: int) -> str:
     return first_value(row, "sourceId", "segmentId", "ufid", "handoffEdgeId", "id", "ID") or f"line:{line_no}"
+
+
+def validate_csv_headers(definition: SourceDefinition, fieldnames: list[str] | None) -> list[ParseIssue]:
+    if not fieldnames:
+        return [ParseIssue(definition.file_name, 1, "", "CSV header not found")]
+
+    present_headers = {header.strip() for header in fieldnames if header and header.strip()}
+    issues: list[ParseIssue] = []
+    for header_group in REQUIRED_HEADER_GROUPS[definition.parser_name]:
+        if not any(header in present_headers for header in header_group):
+            issues.append(
+                ParseIssue(
+                    definition.file_name,
+                    1,
+                    "",
+                    "required CSV header missing: one of " + ", ".join(header_group),
+                )
+            )
+    return issues
 
 
 def width_threshold(width_meter: Decimal | None) -> Decimal:
@@ -594,6 +627,11 @@ def parse_source_features(source_dir: Path, require_files: bool = True) -> tuple
         row_count = 0
         with path.open(newline="", encoding="utf-8-sig") as file:
             reader = csv.DictReader(file)
+            header_issues = validate_csv_headers(definition, reader.fieldnames)
+            if header_issues:
+                issues.extend(header_issues)
+                source_counts[definition.file_name] = 0
+                continue
             for line_no, row in enumerate(reader, start=2):
                 row_count += 1
                 parsed_rows, issue = parser(definition, row, line_no, builder)
@@ -913,10 +951,10 @@ def collect_samples(cursor) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
 
 def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
     cursor.execute(
-        """
+        f"""
         SELECT count(*)
         FROM accessibility_feature_matches
-        WHERE feature_type IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
+        WHERE feature_type IN ({position_event_feature_type_sql()})
         """
     )
     insert_count = int(cursor.fetchone()[0])
@@ -927,7 +965,7 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
         return insert_count, update_candidate_count
 
     cursor.execute(
-        """
+        f"""
         TRUNCATE TABLE segment_features;
 
         INSERT INTO segment_features (feature_id, edge_id, feature_type, "geom", state, value_number)
@@ -939,7 +977,7 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
           state,
           value_number
         FROM accessibility_feature_matches
-        WHERE feature_type IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
+        WHERE feature_type IN ({position_event_feature_type_sql()})
         ORDER BY source_row_id, edge_id;
 
         CREATE TEMP TABLE accessibility_edge_updates AS
@@ -1014,14 +1052,48 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
 
 def post_load_checks(cursor, dry_run: bool) -> dict[str, int]:
     if dry_run:
-        cursor.execute("SELECT count(*) FROM accessibility_feature_matches WHERE NOT ST_IsValid(geom)")
+        cursor.execute("SELECT count(*) FROM accessibility_feature_source WHERE NOT ST_IsValid(geom)")
+        invalid_geom = int(cursor.fetchone()[0])
+        cursor.execute(
+            f"""
+            SELECT count(*)
+            FROM accessibility_feature_matches
+            WHERE feature_type IS NOT NULL
+              AND feature_type NOT IN ({position_event_feature_type_sql()}, 'SLOPE', 'SURFACE', 'WIDTH')
+            """
+        )
+        unsupported_feature_rows = int(cursor.fetchone()[0])
         return {
-            "invalidSegmentFeatureGeometry": int(cursor.fetchone()[0]),
+            "duplicateSegmentFeatureIds": 0,
+            "invalidSourceGeometry": invalid_geom,
+            "invalidSegmentFeatureGeometry": 0,
+            "nonPositionSegmentFeatureRows": 0,
             "orphanSegmentFeatureEdges": 0,
+            "unsupportedMatchedFeatureRows": unsupported_feature_rows,
         }
 
+    cursor.execute(
+        """
+        SELECT count(*)
+        FROM (
+          SELECT feature_id
+          FROM segment_features
+          GROUP BY feature_id
+          HAVING count(*) > 1
+        ) duplicate_ids
+        """
+    )
+    duplicate_ids = int(cursor.fetchone()[0])
     cursor.execute("SELECT count(*) FROM segment_features WHERE NOT ST_IsValid(\"geom\")")
     invalid_geom = int(cursor.fetchone()[0])
+    cursor.execute(
+        f"""
+        SELECT count(*)
+        FROM segment_features
+        WHERE feature_type NOT IN ({position_event_feature_type_sql()})
+        """
+    )
+    non_position_rows = int(cursor.fetchone()[0])
     cursor.execute(
         """
         SELECT count(*)
@@ -1032,13 +1104,18 @@ def post_load_checks(cursor, dry_run: bool) -> dict[str, int]:
         """
     )
     orphan_edges = int(cursor.fetchone()[0])
-    if invalid_geom or orphan_edges:
+    if duplicate_ids or invalid_geom or non_position_rows or orphan_edges:
         raise RuntimeError(
             "post load validation failed: "
-            f"invalidSegmentFeatureGeometry={invalid_geom}, orphanSegmentFeatureEdges={orphan_edges}"
+            f"duplicateSegmentFeatureIds={duplicate_ids}, "
+            f"invalidSegmentFeatureGeometry={invalid_geom}, "
+            f"nonPositionSegmentFeatureRows={non_position_rows}, "
+            f"orphanSegmentFeatureEdges={orphan_edges}"
         )
     return {
+        "duplicateSegmentFeatureIds": duplicate_ids,
         "invalidSegmentFeatureGeometry": invalid_geom,
+        "nonPositionSegmentFeatureRows": non_position_rows,
         "orphanSegmentFeatureEdges": orphan_edges,
     }
 

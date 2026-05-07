@@ -100,6 +100,35 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
         )
         self.assertTrue({"SLOPE", "SURFACE", "WIDTH"}.isdisjoint(loader.POSITION_EVENT_FEATURE_TYPES))
 
+    def test_reports_missing_required_csv_header_before_row_parsing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            self.write_csv(
+                source_dir / "횡단보도_신호등.csv",
+                ["sourceId", "wrongGeometry"],
+                [["cross-1", "POINT(129.1 35.1)"]],
+            )
+
+            rows, issues, report = loader.parse_source_features(source_dir, require_files=False)
+
+        self.assertFalse(rows)
+        self.assertIn(
+            {
+                "source_file": "횡단보도_신호등.csv",
+                "csv_line_no": 1,
+                "source_id": "",
+                "reason": "required CSV header missing: one of point, geom, geometryWkt, wkt",
+            },
+            report["parseIssueSamples"],
+        )
+        self.assertTrue(any(issue.csv_line_no == 1 for issue in issues))
+
+    def test_position_event_segment_feature_sql_filter_is_centralized(self):
+        self.assertEqual(
+            loader.position_event_feature_type_sql(),
+            "'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'CROSSWALK', 'STAIRS'",
+        )
+
     @staticmethod
     def write_csv(path, headers, rows):
         with path.open("w", newline="", encoding="utf-8") as file:

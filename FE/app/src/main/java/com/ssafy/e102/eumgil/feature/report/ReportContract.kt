@@ -101,17 +101,15 @@ data class ReportPhoto(
     val sizeBytes: Long? = null,
 )
 
-// apiValue codes are FE candidates pending BE enum confirmation (BE 연동 요청사항 §5.2).
+// apiValue codes match server `ReportType` enum defined in 제보 API 명세 (2026-04-29).
 enum class ReportType(
     val apiValue: String,
 ) {
-    CONSTRUCTION("CONSTRUCTION"),
-    STAIRS("STAIRS"),
-    SLOPE("SLOPE"),
-    ELEVATOR("ELEVATOR"),
-    TACTILE_BLOCK("TACTILE_BLOCK"),
-    GUIDANCE_BLOCK("GUIDANCE_BLOCK"),
-    FACILITY_DAMAGE("FACILITY_DAMAGE"),
+    STAIRS_STEP("STAIRS_STEP"),
+    BRAILLE_BLOCK("BRAILLE_BLOCK"),
+    SIDEWALK_MISSING("SIDEWALK_MISSING"),
+    RAMP("RAMP"),
+    SIDEWALK_WIDTH("SIDEWALK_WIDTH"),
     OTHER_OBSTACLE("OTHER_OBSTACLE"),
 }
 

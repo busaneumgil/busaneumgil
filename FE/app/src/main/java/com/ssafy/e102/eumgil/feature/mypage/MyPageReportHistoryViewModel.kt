@@ -125,19 +125,18 @@ private fun ReportOutboxData.toReportHistoryUiModel(): MyPageReportHistoryUiMode
 
 private fun String.toReportHistoryTitle(): String =
     when (this) {
-        "CONSTRUCTION" -> "공사 구간"
-        "STAIRS",
-        "STAIRS_STEP" -> "보도 턱 단차"
-        "SLOPE",
-        "RAMP" -> "경사로 경사 과다"
-        "ELEVATOR" -> "엘리베이터 고장"
-        "TACTILE_BLOCK",
-        "BRAILLE_BLOCK" -> "점자블록 손상"
-        "GUIDANCE_BLOCK" -> "유도블록 문제"
-        "FACILITY_DAMAGE" -> "시설물 파손"
+        // 서버 명세 6종 (제보 API 명세 2026-04-29 기준)
+        "STAIRS_STEP" -> "계단·단차 있음"
+        "BRAILLE_BLOCK" -> "점자블록 문제"
         "SIDEWALK_MISSING" -> "인도 없음"
+        "RAMP" -> "경사로 문제"
         "SIDEWALK_WIDTH" -> "인도폭 문제"
         "OTHER_OBSTACLE" -> "기타 장애물"
+        // legacy 값 backward compatibility (저장된 구 데이터 표시용)
+        "STAIRS" -> "계단·단차 있음"
+        "TACTILE_BLOCK", "GUIDANCE_BLOCK" -> "점자블록 문제"
+        "SLOPE" -> "경사로 문제"
+        "CONSTRUCTION", "ELEVATOR", "FACILITY_DAMAGE" -> "기타 장애물"
         else -> "제보 내역"
     }
 

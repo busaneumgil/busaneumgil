@@ -1,0 +1,51 @@
+{
+  "priority": [
+    {
+      "if": "walk_access == NO",
+      "multiply_by": "0"
+    },
+    {
+      "if": "walk_access == UNKNOWN",
+      "multiply_by": "0.95"
+    },
+    {
+      "if": "stairs_state == YES",
+      "multiply_by": "0.75"
+    },
+    {
+      "if": "stairs_state == UNKNOWN",
+      "multiply_by": "0.95"
+    },
+    {
+      "if": "slope_state == MODERATE",
+      "multiply_by": "0.95"
+    },
+    {
+      "if": "slope_state == STEEP",
+      "multiply_by": "0.85"
+    },
+    {
+      "if": "slope_state == RISK",
+      "multiply_by": "0.70"
+    },
+    {
+      "if": "width_state == NARROW",
+      "multiply_by": "0.95"
+    },
+    {
+      "if": "surface_state == UNPAVED",
+      "multiply_by": "0.85"
+    },
+    {
+      "if": "surface_state == UNKNOWN",
+      "multiply_by": "0.95"
+    }
+  ],
+  "speed": [
+    {
+      "if": "true",
+      "limit_to": "4.68"
+    }
+  ],
+  "distance_influence": 35
+}

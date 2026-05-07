@@ -20,7 +20,6 @@ import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
-import com.ssafy.e102.domain.route.type.WidthState;
 
 class RouteDtoJsonTest {
 
@@ -52,14 +51,11 @@ class RouteDtoJsonTest {
 					"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
 					List.of(new RouteStepResponse(
 						1,
-						"횡단보도를 건너세요.",
+						"직진하세요.",
 						BigDecimal.valueOf(30),
 						35,
 						"LINESTRING(128.9360 35.1200, 128.9361 35.1201)",
-						List.of(RouteBadge.CROSSWALK),
-						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK, BigDecimal.valueOf(12)),
-						BigDecimal.valueOf(2.1),
-						WidthState.ADEQUATE_150)))))));
+						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK, BigDecimal.valueOf(12)))))))));
 
 		JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(response));
 
@@ -73,16 +69,19 @@ class RouteDtoJsonTest {
 		assertThat(leg.get("type").asText()).isEqualTo("WALK");
 		assertThat(leg.get("role").asText()).isEqualTo("WALK_ONLY");
 		JsonNode step = leg.get("steps").get(0);
+		assertThat(step.get("instruction").asText()).isEqualTo("직진하세요.");
 		assertThat(step.get("alert").get("type").asText()).isEqualTo("CROSSWALK");
-		assertThat(step.get("widthState").asText()).isEqualTo("ADEQUATE_150");
+		assertThat(step.has("badges")).isFalse();
+		assertThat(step.has("slopePercent")).isFalse();
+		assertThat(step.has("widthState")).isFalse();
 	}
 
 	@Test
-	@DisplayName("route step alert enum은 API 계약에 없는 NONE/CURB를 노출하지 않는다")
+	@DisplayName("route step alert enum은 API 계약에 없는 NONE/CURB/TURN_LEFT/TURN_RIGHT를 노출하지 않는다")
 	void routeStepAlertTypeDoesNotExposeRemovedContractValues() {
 		assertThat(RouteStepAlertType.values())
 			.extracting(Enum::name)
-			.contains("CROSSWALK", "TURN_LEFT", "TURN_RIGHT")
-			.doesNotContain("NONE", "CURB");
+			.contains("CROSSWALK", "STAIR", "NARROW_SIDEWALK", "UNPAVED", "MIDDLE_SLOPE")
+			.doesNotContain("NONE", "CURB", "TURN_LEFT", "TURN_RIGHT");
 	}
 }

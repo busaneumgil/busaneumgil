@@ -6,24 +6,22 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.LineString;
 import org.springframework.stereotype.Service;
 
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertType;
-
 /**
- * route geometry만으로 회전 안내를 계산하는 서비스다.
+ * route geometry만으로 step 방향 안내를 계산하는 서비스다.
  *
  * <p>이 서비스는 {@code segment_features}에 의존하지 않는다. Feature row는 road segment 분할/export에만
- * 사용하고, {@code TURN_LEFT}/{@code TURN_RIGHT} 안내는 연속 route 좌표의 signed heading 변화에서 계산한다.
+ * 사용하고, 좌/우회전 instruction은 연속 route 좌표의 signed heading 변화에서 계산한다.
  */
 @Service
 public class RouteTurnInstructionService {
 
 	private static final double DEFAULT_MIN_TURN_DEGREES = 35.0;
 
-	public Optional<RouteStepAlertType> resolve(Coordinate previous, Coordinate pivot, Coordinate next) {
+	public Optional<RouteTurnDirection> resolve(Coordinate previous, Coordinate pivot, Coordinate next) {
 		return resolve(previous, pivot, next, DEFAULT_MIN_TURN_DEGREES);
 	}
 
-	public Optional<RouteStepAlertType> resolve(
+	public Optional<RouteTurnDirection> resolve(
 		Coordinate previous,
 		Coordinate pivot,
 		Coordinate next,
@@ -48,10 +46,10 @@ public class RouteTurnInstructionService {
 		if (Math.abs(signedDegrees) < minTurnDegrees) {
 			return Optional.empty();
 		}
-		return Optional.of(signedDegrees > 0.0 ? RouteStepAlertType.TURN_LEFT : RouteStepAlertType.TURN_RIGHT);
+		return Optional.of(signedDegrees > 0.0 ? RouteTurnDirection.LEFT : RouteTurnDirection.RIGHT);
 	}
 
-	public Optional<RouteStepAlertType> resolve(LineString routeGeometry, int pivotCoordinateIndex) {
+	public Optional<RouteTurnDirection> resolve(LineString routeGeometry, int pivotCoordinateIndex) {
 		if (routeGeometry == null || pivotCoordinateIndex <= 0
 			|| pivotCoordinateIndex >= routeGeometry.getNumPoints() - 1) {
 			return Optional.empty();

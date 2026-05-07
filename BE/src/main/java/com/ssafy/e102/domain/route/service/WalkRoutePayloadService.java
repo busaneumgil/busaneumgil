@@ -23,7 +23,6 @@ import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
-import com.ssafy.e102.domain.route.type.WidthState;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperCoordinate;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperPathDetail;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
@@ -116,34 +115,23 @@ public class WalkRoutePayloadService {
 		BigDecimal distanceMeter,
 		int durationSecond) {
 		GraphHopperRoutePath stepPath = slice(path, fromIndex, toIndex);
+		Optional<RouteTurnDirection> turnDirection = turnDirection(path, fromIndex);
 		RouteStepAlertResponse alert = representativeAlert(stepPath)
-			.or(() -> turnAlert(path, fromIndex))
 			.map(type -> new RouteStepAlertResponse(type, BigDecimal.ZERO.setScale(2)))
 			.orElse(null);
 		return new RouteStepResponse(
 			sequence,
-			instruction(alert),
+			instruction(turnDirection),
 			distanceMeter,
 			durationSecond,
 			toLineString(stepPath.coordinates()),
-			badges(stepPath),
-			alert,
-			averageDecimalDetail(stepPath, "avg_slope_percent").orElse(null),
-			widthState(stepPath).orElse(null));
+			alert);
 	}
 
-	private String instruction(RouteStepAlertResponse alert) {
-		if (alert == null) {
-			return "경로를 따라 이동하세요.";
-		}
-		return switch (alert.type()) {
-			case CROSSWALK -> "횡단보도를 건너세요.";
-			case MIDDLE_SLOPE -> "경사 구간을 이동하세요.";
-			case STAIR -> "계단 구간을 이동하세요.";
-			case NARROW_SIDEWALK -> "좁은 보도 구간을 이동하세요.";
-			case UNPAVED -> "포장되지 않은 구간을 이동하세요.";
-			default -> "경로를 따라 이동하세요.";
-		};
+	private String instruction(Optional<RouteTurnDirection> turnDirection) {
+		return turnDirection
+			.map(RouteTurnDirection::instruction)
+			.orElse("직진하세요.");
 	}
 
 	private List<Integer> splitPoints(GraphHopperRoutePath path) {
@@ -159,7 +147,7 @@ public class WalkRoutePayloadService {
 				addSplitPoint(splitPoints, detail.toIndex(), lastCoordinateIndex);
 			});
 		for (int index = 1; index < lastCoordinateIndex; index++) {
-			if (turnAlert(path, index).isPresent()) {
+			if (turnDirection(path, index).isPresent()) {
 				splitPoints.add(index);
 			}
 		}
@@ -197,7 +185,7 @@ public class WalkRoutePayloadService {
 			.toList();
 	}
 
-	private Optional<RouteStepAlertType> turnAlert(GraphHopperRoutePath path, int pivotIndex) {
+	private Optional<RouteTurnDirection> turnDirection(GraphHopperRoutePath path, int pivotIndex) {
 		if (pivotIndex <= 0 || pivotIndex >= path.coordinates().size() - 1) {
 			return Optional.empty();
 		}
@@ -280,36 +268,6 @@ public class WalkRoutePayloadService {
 		return Optional.empty();
 	}
 
-	private Optional<BigDecimal> averageDecimalDetail(GraphHopperRoutePath path, String detailName) {
-		List<BigDecimal> values = detailValues(path, detailName)
-			.stream()
-			.map(this::parseDecimal)
-			.flatMap(Optional::stream)
-			.toList();
-		if (values.isEmpty()) {
-			return Optional.empty();
-		}
-		BigDecimal sum = values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-		return Optional.of(sum.divide(BigDecimal.valueOf(values.size()), 2, RoundingMode.HALF_UP));
-	}
-
-	private Optional<WidthState> widthState(GraphHopperRoutePath path) {
-		List<String> values = detailValues(path, "width_state");
-		if (values.contains("NARROW")) {
-			return Optional.of(WidthState.NARROW);
-		}
-		if (values.contains("ADEQUATE_120")) {
-			return Optional.of(WidthState.ADEQUATE_120);
-		}
-		if (values.contains("ADEQUATE_150")) {
-			return Optional.of(WidthState.ADEQUATE_150);
-		}
-		if (values.contains("UNKNOWN")) {
-			return Optional.of(WidthState.UNKNOWN);
-		}
-		return Optional.empty();
-	}
-
 	private boolean hasAny(GraphHopperRoutePath path, String detailName, String... expectedValues) {
 		Set<String> expected = Set.of(expectedValues);
 		return detailValues(path, detailName)
@@ -323,14 +281,6 @@ public class WalkRoutePayloadService {
 			.stream()
 			.map(GraphHopperPathDetail::value)
 			.toList();
-	}
-
-	private Optional<BigDecimal> parseDecimal(String value) {
-		try {
-			return Optional.of(new BigDecimal(value));
-		} catch (NumberFormatException exception) {
-			return Optional.empty();
-		}
 	}
 
 	private String routeId(String searchId, RouteOption routeOption) {

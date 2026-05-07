@@ -14,7 +14,6 @@ import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.route.type.WalkRouteProfile;
-import com.ssafy.e102.domain.route.type.WidthState;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperCoordinate;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperPathDetail;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
@@ -58,9 +57,8 @@ class WalkRoutePayloadServiceTest {
 				RouteBadge.UNPAVED);
 		assertThat(route.legs()).hasSize(1);
 		assertThat(route.legs().get(0).steps()).hasSize(2);
+		assertThat(route.legs().get(0).steps().get(0).instruction()).isEqualTo("직진하세요.");
 		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
-		assertThat(route.legs().get(0).steps().get(0).slopePercent()).isEqualByComparingTo("6.25");
-		assertThat(route.legs().get(0).steps().get(0).widthState()).isEqualTo(WidthState.NARROW);
 	}
 
 	@Test
@@ -82,9 +80,11 @@ class WalkRoutePayloadServiceTest {
 			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
 
 		assertThat(route.legs().get(0).steps()).hasSize(2);
+		assertThat(route.legs().get(0).steps().get(0).instruction()).isEqualTo("직진하세요.");
 		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
 		assertThat(route.legs().get(0).steps().get(0).geometry()).isEqualTo("LINESTRING(0.0 0.0, 1.0 0.0)");
-		assertThat(route.legs().get(0).steps().get(1).alert().type()).isEqualTo(RouteStepAlertType.TURN_LEFT);
+		assertThat(route.legs().get(0).steps().get(1).instruction()).isEqualTo("좌회전하세요.");
+		assertThat(route.legs().get(0).steps().get(1).alert()).isNull();
 		assertThat(route.legs().get(0).steps().get(1).geometry()).isEqualTo("LINESTRING(1.0 0.0, 1.0 1.0)");
 	}
 }

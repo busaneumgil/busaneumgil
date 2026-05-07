@@ -41,7 +41,6 @@ import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
-import com.ssafy.e102.domain.route.type.WidthState;
 import com.ssafy.e102.global.exception.GlobalExceptionHandler;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
@@ -109,8 +108,11 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.data.routes[0].routeOption").value("SAFE"))
 			.andExpect(jsonPath("$.data.routes[0].estimatedTimeMinute").value(16))
 			.andExpect(jsonPath("$.data.routes[0].badges[0]").value("CROSSWALK"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].instruction").value("직진하세요."))
 			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].alert.type").value("CROSSWALK"))
-			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].widthState").value("ADEQUATE_150"));
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].badges").doesNotExist())
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].slopePercent").doesNotExist())
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].widthState").doesNotExist());
 
 		SecurityContextHolder.clearContext();
 	}
@@ -181,14 +183,11 @@ class RouteControllerTest {
 					"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
 					List.of(new RouteStepResponse(
 						1,
-						"횡단보도를 건너세요.",
+						"직진하세요.",
 						BigDecimal.valueOf(30),
 						35,
 						"LINESTRING(128.9360 35.1200, 128.9361 35.1201)",
-						List.of(RouteBadge.CROSSWALK),
-						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK, BigDecimal.ZERO),
-						BigDecimal.valueOf(2.1),
-						WidthState.ADEQUATE_150)))))));
+						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK, BigDecimal.ZERO))))))));
 	}
 
 	private UsernamePasswordAuthenticationToken authentication(UUID userId) {

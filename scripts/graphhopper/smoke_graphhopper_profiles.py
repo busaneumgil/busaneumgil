@@ -3,7 +3,8 @@
 
 이 스크립트는 DB 기반 routeable road segment 후보를 고르고 각 profile로
 GraphHopper `/route` API를 호출한다. import된 graph, custom encoded value,
-custom model 파일이 함께 최소 하나의 경로를 만들 수 있는지 확인한다.
+custom model 파일이 함께 최소 하나의 경로를 만들 수 있는지 확인하고,
+path details로 hard policy 위반이 없는지도 검증한다.
 """
 import argparse
 import importlib.util
@@ -26,6 +27,15 @@ DEFAULT_PROFILES = [
     "wheelchair_manual_fast",
     "wheelchair_auto_safe",
     "wheelchair_auto_fast",
+]
+POLICY_DETAILS = [
+    "walk_access",
+    "stairs_state",
+    "slope_state",
+    "width_state",
+    "surface_state",
+    "signal_state",
+    "segment_type",
 ]
 
 
@@ -74,23 +84,81 @@ def request_json(url, timeout):
         return response.status, json.loads(body)
 
 
-def route_url(base_url, candidate, profile):
+def route_url(base_url, candidate, profile, details=None):
     """후보 segment endpoint를 사용해 GraphHopper route URL을 만든다."""
-    query = urlencode(
-        [
-            ("profile", profile),
-            ("point", f'{candidate["from_lat"]},{candidate["from_lon"]}'),
-            ("point", f'{candidate["to_lat"]},{candidate["to_lon"]}'),
-            ("points_encoded", "false"),
-            ("locale", "ko-KR"),
-        ]
-    )
+    query_items = [
+        ("profile", profile),
+        ("point", f'{candidate["from_lat"]},{candidate["from_lon"]}'),
+        ("point", f'{candidate["to_lat"]},{candidate["to_lon"]}'),
+        ("points_encoded", "false"),
+        ("locale", "ko-KR"),
+    ]
+    for detail in details or []:
+        query_items.append(("details", detail))
+    query = urlencode(query_items)
     return f"{base_url.rstrip('/')}/route?{query}"
 
 
-def smoke_profile(base_url, candidate, profile, timeout):
+def path_detail_values(path, detail_name):
+    """GraphHopper path details 배열에서 value 목록만 추출한다."""
+    details = path.get("details") or {}
+    values = []
+    for row in details.get(detail_name) or []:
+        if len(row) >= 3:
+            values.append(str(row[2]))
+    return values
+
+
+def summarize_policy_details(path):
+    """report에 남길 접근성 detail 값 분포를 만든다."""
+    summary = {}
+    for detail in POLICY_DETAILS:
+        values = path_detail_values(path, detail)
+        if not values:
+            continue
+        counts = {}
+        for value in values:
+            counts[value] = counts.get(value, 0) + 1
+        summary[detail] = counts
+    return summary
+
+
+def validate_policy_details(profile, path, require_details=True):
+    """runtime route가 custom encoded value와 hard policy를 실제로 반영하는지 검증한다."""
+    violations = []
+    details = path.get("details") or {}
+
+    if require_details:
+        missing = [detail for detail in POLICY_DETAILS if detail not in details]
+        if missing:
+            violations.append({
+                "kind": "missing_policy_detail",
+                "details": missing,
+            })
+
+    walk_access_values = set(path_detail_values(path, "walk_access"))
+    if "NO" in walk_access_values:
+        violations.append({
+            "kind": "blocked_walk_access_used",
+            "detail": "walk_access",
+            "blockedValue": "NO",
+        })
+
+    if profile.startswith("wheelchair_"):
+        stairs_values = set(path_detail_values(path, "stairs_state"))
+        if "YES" in stairs_values:
+            violations.append({
+                "kind": "wheelchair_stairs_used",
+                "detail": "stairs_state",
+                "blockedValue": "YES",
+            })
+
+    return violations
+
+
+def smoke_profile(base_url, candidate, profile, timeout, require_policy_details=True):
     """`/route` 요청 하나를 실행하고 HTTP/runtime 실패를 report row로 변환한다."""
-    url = route_url(base_url, candidate, profile)
+    url = route_url(base_url, candidate, profile, POLICY_DETAILS)
     started = time.monotonic()
     try:
         status, payload = request_json(url, timeout)
@@ -124,6 +192,20 @@ def smoke_profile(base_url, candidate, profile, timeout):
         }
 
     path = paths[0]
+    policy_violations = validate_policy_details(profile, path, require_policy_details)
+    policy_details = summarize_policy_details(path)
+    if policy_violations:
+        return {
+            "profile": profile,
+            "status": "FAIL",
+            "httpStatus": status,
+            "elapsedMs": elapsed_ms,
+            "error": "route violates GraphHopper accessibility policy smoke checks",
+            "policyViolations": policy_violations,
+            "policyDetails": policy_details,
+            "url": url,
+        }
+
     return {
         "profile": profile,
         "status": "PASS",
@@ -131,6 +213,7 @@ def smoke_profile(base_url, candidate, profile, timeout):
         "elapsedMs": elapsed_ms,
         "distanceMeter": round(float(path.get("distance", 0.0)), 3),
         "timeMs": int(path.get("time", 0)),
+        "policyDetails": policy_details,
         "url": url,
     }
 
@@ -157,6 +240,12 @@ def main():
     parser.add_argument("--timeout-seconds", type=int, default=int(os.getenv("GRAPHHOPPER_PROFILE_SMOKE_TIMEOUT_SECONDS", "10")))
     parser.add_argument("--profiles", default=os.getenv("GRAPHHOPPER_PROFILE_SMOKE_PROFILES", ",".join(DEFAULT_PROFILES)))
     parser.add_argument("--report-json", default=os.getenv("GRAPHHOPPER_PROFILE_SMOKE_REPORT_FILE"))
+    parser.add_argument(
+        "--skip-policy-details",
+        action="store_true",
+        default=os.getenv("GRAPHHOPPER_PROFILE_SMOKE_SKIP_POLICY_DETAILS", "false").lower() == "true",
+        help="path details 기반 접근성 hard policy 검증을 건너뛴다.",
+    )
     args = parser.parse_args()
 
     exporter = load_exporter()
@@ -180,7 +269,16 @@ def main():
     for candidate in candidates:
         # 개별 segment는 profile별 custom model 규칙 적용 후에도 고립되거나
         # unroutable할 수 있으므로 여러 후보를 순서대로 시도한다.
-        results = [smoke_profile(args.base_url, candidate, profile, args.timeout_seconds) for profile in profiles]
+        results = [
+            smoke_profile(
+                args.base_url,
+                candidate,
+                profile,
+                args.timeout_seconds,
+                require_policy_details=not args.skip_policy_details,
+            )
+            for profile in profiles
+        ]
         attempt = {
             "candidate": candidate,
             "results": results,

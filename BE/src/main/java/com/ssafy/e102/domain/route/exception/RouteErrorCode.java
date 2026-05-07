@@ -4,6 +4,11 @@ import org.springframework.http.HttpStatus;
 
 import com.ssafy.e102.global.exception.ErrorCode;
 
+/**
+ * route 도메인에서 API 명세와 맞춰 반환하는 에러 코드다.
+ *
+ * <p>service와 external client에서 발생한 실패를 GlobalExceptionHandler가 공통 에러 응답으로 변환할 때 사용한다.
+ */
 public enum RouteErrorCode implements ErrorCode {
 
 	INVALID_ROUTE_REQUEST(HttpStatus.BAD_REQUEST, "RT4000", "경로 요청값이 올바르지 않습니다."),

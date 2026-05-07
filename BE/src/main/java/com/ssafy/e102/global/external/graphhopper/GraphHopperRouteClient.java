@@ -20,6 +20,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 
+/**
+ * Backend route service에서 GraphHopper runtime의 `/route` API로 나가는 단일 통로다.
+ *
+ * <p>호출 흐름은 route service -> GraphHopperRouteClient -> GraphHopper `/route` -> 정제된
+ * {@link GraphHopperRoutePath} 반환 순서다. HTTP 실패와 timeout은 route 도메인 에러 코드로 변환한다.
+ */
 @Component
 public class GraphHopperRouteClient {
 
@@ -41,6 +47,7 @@ public class GraphHopperRouteClient {
 
 	public GraphHopperRoutePath route(GraphHopperRouteRequest request) {
 		try {
+			// GraphHopper는 GET query 기반 API라 profile과 두 point를 URI에 직접 싣는다.
 			GraphHopperRouteResponse response = restTemplate.exchange(
 				RequestEntity
 					.method(HttpMethod.GET, routeUri(request))
@@ -93,6 +100,7 @@ public class GraphHopperRouteClient {
 		if (coordinates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
+		// 이후 step/payload service는 GraphHopper 원본 JSON이 아니라 이 정제된 path만 사용한다.
 		return new GraphHopperRoutePath(path.distance(), path.time(), coordinates);
 	}
 

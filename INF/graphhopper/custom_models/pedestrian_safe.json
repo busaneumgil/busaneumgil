@@ -25,11 +25,15 @@
       "multiply_by": "0.60"
     },
     {
+      "if": "slope_state == RISK",
+      "multiply_by": "0.30"
+    },
+    {
       "if": "slope_state == UNKNOWN",
       "multiply_by": "0.90"
     },
     {
-      "if": "width_state == NARROW_90",
+      "if": "width_state == NARROW",
       "multiply_by": "0.90"
     },
     {

@@ -14,13 +14,14 @@ public final class IeumEnum {
         FLAT,
         MODERATE,
         STEEP,
+        RISK,
         UNKNOWN
     }
 
     public enum WidthState {
         ADEQUATE_150,
-        NARROW_120,
-        NARROW_90,
+        ADEQUATE_120,
+        NARROW,
         UNKNOWN
     }
 

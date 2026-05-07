@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 EXPORT_SCRIPT = ROOT_DIR / "scripts" / "graphhopper" / "export_postgis_to_osm.py"
+CUSTOM_MODEL_DIR = ROOT_DIR / "INF" / "graphhopper" / "custom_models"
 
 
 def load_export_module():
@@ -56,8 +57,8 @@ class GraphhopperExportTest(unittest.TestCase):
                 "width_meter": "3.0",
                 "braille_block_state": "UNKNOWN",
                 "audio_signal_state": "UNKNOWN",
-                "slope_state": "FLAT",
-                "width_state": "ADEQUATE_150",
+                "slope_state": "RISK",
+                "width_state": "ADEQUATE_120",
                 "surface_state": "PAVED",
                 "stairs_state": "NO",
                 "signal_state": "YES",
@@ -88,6 +89,8 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual(first_way_tags["ieum:width_meter"], "0.0")
         self.assertEqual(first_way_tags["ieum:segment_type"], "SIDE_LINE")
         self.assertEqual(second_way_tags["ieum:segment_type"], "CROSS_WALK")
+        self.assertEqual(second_way_tags["ieum:slope_state"], "RISK")
+        self.assertEqual(second_way_tags["ieum:width_state"], "ADEQUATE_120")
         self.assertEqual(second_way_tags["ieum:surface_state"], "PAVED")
         self.assertNotIn("e102:edge_id", first_way_tags)
         self.assertNotIn("ieum:crossing_state", first_way_tags)
@@ -132,6 +135,31 @@ class GraphhopperExportTest(unittest.TestCase):
             parsed = json.loads(report_path.read_text(encoding="utf-8"))
 
         self.assertEqual(parsed["status"], "PASS")
+
+    def test_custom_models_use_canonical_accessibility_enums(self):
+        allowed_width_conditions = {
+            "width_state == ADEQUATE_120",
+            "width_state == NARROW",
+            "width_state == UNKNOWN",
+        }
+        for model_path in CUSTOM_MODEL_DIR.glob("*.json"):
+            model = json.loads(model_path.read_text(encoding="utf-8"))
+            conditions = [
+                priority_rule.get("if", "")
+                for priority_rule in model.get("priority", [])
+            ]
+            joined_conditions = "\n".join(conditions)
+
+            self.assertIn("slope_state == RISK", joined_conditions, model_path.name)
+            width_conditions = {
+                condition for condition in conditions
+                if condition.startswith("width_state == ")
+            }
+            self.assertTrue(width_conditions <= allowed_width_conditions, model_path.name)
+
+            if "wheelchair" in model_path.name or "visual_safe" in model_path.name:
+                self.assertIn("width_state == ADEQUATE_120", joined_conditions, model_path.name)
+            self.assertIn("width_state == NARROW", joined_conditions, model_path.name)
 
 
 if __name__ == "__main__":

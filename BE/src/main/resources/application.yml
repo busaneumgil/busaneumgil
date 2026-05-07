@@ -26,6 +26,8 @@ external:
     local:
       base-url: ${KAKAO_LOCAL_BASE_URL:https://dapi.kakao.com}
       api-key: ${KAKAO_REST_API_KEY:}
+  ai:
+    base-url: ${AI_BASE_URL:http://localhost:5000}
 
 auth:
   test:
@@ -33,7 +35,3 @@ auth:
     kakao-javascript-key: ${AUTH_TEST_KAKAO_JAVASCRIPT_KEY:}
     naver-client-id: ${AUTH_TEST_NAVER_CLIENT_ID:}
     google-client-id: ${AUTH_TEST_GOOGLE_CLIENT_ID:}
-
-external:
-  ai:
-    base-url: ${AI_BASE_URL:http://localhost:5000}

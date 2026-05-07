@@ -13,8 +13,15 @@ public record VoiceAnalyzeResponse(
 		String confirmationMessage) {
 		return new VoiceAnalyzeResponse(
 			result.intent(),
-			result.placeName(),
+			placeNameOrNull(result),
 			confirmed,
 			confirmationMessage);
+	}
+
+	private static String placeNameOrNull(AiVoiceAnalyzeResult result) {
+		if (result.intent() == VoiceIntent.UNKNOWN) {
+			return null;
+		}
+		return result.placeName();
 	}
 }

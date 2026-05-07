@@ -99,4 +99,25 @@ class PlaceVoiceAnalysisServiceTest {
 			.extracting("errorCode")
 			.isEqualTo(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
 	}
+
+	@Test
+	@DisplayName("의도 미확인 응답은 AI가 장소명을 내려줘도 비워서 반환한다")
+	void clearPlaceNameForUnknownIntent() {
+		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.UNKNOWN,
+				"부산역",
+				false,
+				"찾으시는 장소를 다시 말씀해 주세요"));
+
+		VoiceAnalyzeResponse response = placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
+			"어딘지 모르겠어",
+			VoiceAnalysisMode.LOW_VISION,
+			List.of()));
+
+		assertThat(response.intent()).isEqualTo(VoiceIntent.UNKNOWN);
+		assertThat(response.placeName()).isNull();
+		assertThat(response.confirmed()).isFalse();
+		assertThat(response.confirmationMessage()).isEqualTo("찾으시는 장소를 다시 말씀해 주세요");
+	}
 }

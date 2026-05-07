@@ -33,6 +33,9 @@ import com.ssafy.e102.global.external.kakao.KakaoPlaceSearchRequest;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceSearchResult;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class PlaceService {
@@ -40,6 +43,9 @@ public class PlaceService {
 	private static final int DEFAULT_KAKAO_SEARCH_PAGE = 1;
 	private static final int DEFAULT_SEARCH_SIZE = 10;
 	private static final int MAX_SEARCH_SIZE = 15;
+	private static final int DEFAULT_PLACE_RADIUS_METER = 1000;
+	private static final int MAX_PLACE_RADIUS_METER = 3000;
+	private static final int PLACE_MARKER_LIMIT = 200;
 	private static final String SEARCH_CURSOR_PREFIX = "kakao:";
 	private static final String EMPTY_FILTER_SENTINEL = "__EMPTY_FILTER__";
 	private final PlaceRepository placeRepository;
@@ -94,7 +100,12 @@ public class PlaceService {
 				kakaoResult.totalElements(),
 				hasNext);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED);
+			log.warn("Place search external API failed. keyword={}, kakaoPage={}, size={}",
+				normalizedKeyword,
+				kakaoPage,
+				parsedSize,
+				exception);
+			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED, exception);
 		}
 	}
 
@@ -107,18 +118,23 @@ public class PlaceService {
 		String featureType) {
 		double parsedLat = parseRequiredDouble(lat);
 		double parsedLng = parseRequiredDouble(lng);
-		Integer parsedRadius = parseOptionalPositiveInteger(radius);
+		int parsedRadius = parsePlaceRadius(radius);
 		Set<PlaceCategory> categories = parseCsvEnums(category, PlaceCategory.class);
 		Set<AccessibilityFeatureType> featureTypes = parseCsvEnums(featureType, AccessibilityFeatureType.class);
 
-		List<Place> places = placeRepository.findPlaceMarkers(
+		List<Long> placeIds = placeRepository.findPlaceMarkerIds(
 			parsedLat,
 			parsedLng,
 			parsedRadius,
 			toEnumNames(categories),
 			categories.isEmpty(),
 			toEnumNames(featureTypes),
-			featureTypes.isEmpty());
+			featureTypes.isEmpty(),
+			PLACE_MARKER_LIMIT);
+		if (placeIds.isEmpty()) {
+			return new PlaceListResponse(List.of());
+		}
+		List<Place> places = findPlacesWithAccessibilityFeatures(placeIds);
 		Set<Long> bookmarkedPlaceIds = getBookmarkedPlaceIds(userId, places);
 		return new PlaceListResponse(places.stream()
 			.map(place -> PlaceMarkerResponse.of(place, bookmarkedPlaceIds, geoPointConverter))
@@ -143,6 +159,16 @@ public class PlaceService {
 		return placeRepository.findAllByProviderPlaceIdIn(providerPlaceIds)
 			.stream()
 			.collect(Collectors.toMap(Place::getProviderPlaceId, Function.identity(), (first, second) -> first));
+	}
+
+	private List<Place> findPlacesWithAccessibilityFeatures(List<Long> placeIds) {
+		Map<Long, Place> placesById = placeRepository.findAllByPlaceIdIn(placeIds)
+			.stream()
+			.collect(Collectors.toMap(Place::getPlaceId, Function.identity(), (first, second) -> first));
+		return placeIds.stream()
+			.map(placesById::get)
+			.filter(place -> place != null)
+			.toList();
 	}
 
 	private Set<Long> getBookmarkedPlaceIds(UUID userId, List<Place> places) {
@@ -227,6 +253,17 @@ public class PlaceService {
 			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
 		}
 		return parsedValue;
+	}
+
+	private int parsePlaceRadius(String value) {
+		if (!StringUtils.hasText(value)) {
+			return DEFAULT_PLACE_RADIUS_METER;
+		}
+		int parsedRadius = parseOptionalPositiveInteger(value);
+		if (parsedRadius > MAX_PLACE_RADIUS_METER) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
+		}
+		return parsedRadius;
 	}
 
 	private int parseIntegerOrDefault(String value, int defaultValue) {

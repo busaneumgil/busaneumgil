@@ -11,4 +11,8 @@ public class PlaceException extends BusinessException {
 	public PlaceException(PlaceErrorCode errorCode, String message) {
 		super(errorCode, message);
 	}
+
+	public PlaceException(PlaceErrorCode errorCode, Throwable cause) {
+		super(errorCode, errorCode.getMessage(), cause);
+	}
 }

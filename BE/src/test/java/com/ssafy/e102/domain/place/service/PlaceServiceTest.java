@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestClientException;
 
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
@@ -155,23 +156,17 @@ class PlaceServiceTest {
 			35.1686,
 			129.0576,
 			AccessibilityFeatureType.accessibleToilet);
-		Place filteredPlace = place(
-			11L,
-			"부산역",
-			PlaceCategory.PUBLIC_OFFICE,
-			null,
-			35.1152,
-			129.0422,
-			AccessibilityFeatureType.elevator);
-		when(placeRepository.findPlaceMarkers(
+		when(placeRepository.findPlaceMarkerIds(
 			35.1686,
 			129.0576,
 			500,
 			Set.of("TOURIST_SPOT"),
 			false,
 			Set.of("accessibleToilet"),
-			false))
-			.thenReturn(List.of(matchedPlace));
+			false,
+			200))
+			.thenReturn(List.of(10L));
+		when(placeRepository.findAllByPlaceIdIn(List.of(10L))).thenReturn(List.of(matchedPlace));
 		when(bookmarkRepository.findBookmarkedPlaceIds(userId, List.of(10L))).thenReturn(Set.of(10L));
 
 		PlaceListResponse response = placeService.getPlaces(
@@ -185,6 +180,27 @@ class PlaceServiceTest {
 		assertThat(response.places()).hasSize(1);
 		assertThat(response.places().get(0).placeId()).isEqualTo(10L);
 		assertThat(response.places().get(0).isBookmarked()).isTrue();
+	}
+
+	@Test
+	@DisplayName("주변 장소 조회는 반경이 없으면 기본 반경과 최대 개수로 조회한다")
+	void getPlacesWithDefaultRadiusAndLimit() {
+		when(placeRepository.findPlaceMarkerIds(
+			35.1686,
+			129.0576,
+			1000,
+			Set.of("__EMPTY_FILTER__"),
+			true,
+			Set.of("__EMPTY_FILTER__"),
+			true,
+			200))
+			.thenReturn(List.of());
+
+		PlaceListResponse response = placeService.getPlaces(UUID.randomUUID(), "35.1686", "129.0576", null, null, null);
+
+		assertThat(response.places()).isEmpty();
+		verify(placeRepository, never()).findAllByPlaceIdIn(anyCollection());
+		verify(bookmarkRepository, never()).findBookmarkedPlaceIds(org.mockito.ArgumentMatchers.any(), anyCollection());
 	}
 
 	@Test
@@ -221,6 +237,45 @@ class PlaceServiceTest {
 	}
 
 	@Test
+	@DisplayName("카카오 API 실패는 원인 예외를 유지한다")
+	void preserveExternalApiFailureCause() {
+		RestClientException cause = new RestClientException("timeout");
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"부산시민공원",
+			null,
+			null,
+			null,
+			1,
+			10)))
+			.thenThrow(cause);
+
+		assertThatThrownBy(() -> placeService.searchPlaces("부산시민공원", null, null, null, null, null))
+			.isInstanceOf(PlaceException.class)
+			.hasCause(cause)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED);
+	}
+
+	@Test
+	@DisplayName("주변 장소 조회 반경이 최대 반경을 넘으면 도메인 에러를 반환한다")
+	void rejectTooLargePlaceRadius() {
+		assertThatThrownBy(() -> placeService.getPlaces(UUID.randomUUID(), "35.1686", "129.0576", "3001", null, null))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.INVALID_PLACE_REQUEST);
+
+		verify(placeRepository, never()).findPlaceMarkerIds(
+			org.mockito.ArgumentMatchers.anyDouble(),
+			org.mockito.ArgumentMatchers.anyDouble(),
+			org.mockito.ArgumentMatchers.anyInt(),
+			anyCollection(),
+			org.mockito.ArgumentMatchers.anyBoolean(),
+			anyCollection(),
+			org.mockito.ArgumentMatchers.anyBoolean(),
+			org.mockito.ArgumentMatchers.anyInt());
+	}
+
+	@Test
 	@DisplayName("잘못된 placeId는 장소 조회 도메인 에러를 반환한다")
 	void rejectInvalidPlaceId() {
 		assertThatThrownBy(() -> placeService.getPlace(UUID.randomUUID(), "abc"))
@@ -234,14 +289,15 @@ class PlaceServiceTest {
 	@Test
 	@DisplayName("주변 장소 조회 결과가 없으면 북마크 조회를 생략한다")
 	void skipBookmarkLookupWhenEmpty() {
-		when(placeRepository.findPlaceMarkers(
+		when(placeRepository.findPlaceMarkerIds(
 			35.1686,
 			129.0576,
-			null,
+			1000,
 			Set.of("__EMPTY_FILTER__"),
 			true,
 			Set.of("__EMPTY_FILTER__"),
-			true))
+			true,
+			200))
 			.thenReturn(List.of());
 
 		PlaceListResponse response = placeService.getPlaces(UUID.randomUUID(), "35.1686", "129.0576", null, null, null);

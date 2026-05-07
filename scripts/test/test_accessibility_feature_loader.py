@@ -93,6 +93,13 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
         crosswalk = next(row for row in rows if row.feature_type == "CROSSWALK")
         self.assertTrue(crosswalk.prefer_crosswalk)
 
+    def test_position_event_feature_types_exclude_segment_attributes(self):
+        self.assertEqual(
+            loader.POSITION_EVENT_FEATURE_TYPES,
+            {"CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"},
+        )
+        self.assertTrue({"SLOPE", "SURFACE", "WIDTH"}.isdisjoint(loader.POSITION_EVENT_FEATURE_TYPES))
+
     @staticmethod
     def write_csv(path, headers, rows):
         with path.open("w", newline="", encoding="utf-8") as file:

@@ -35,6 +35,12 @@ FEATURE_TYPES = {
     "SURFACE",
     "WIDTH",
 }
+POSITION_EVENT_FEATURE_TYPES = {
+    "CROSSWALK",
+    "AUDIO_SIGNAL",
+    "BRAILLE_BLOCK",
+    "STAIRS",
+}
 
 YES_NO_UNKNOWN = {"YES", "NO", "UNKNOWN"}
 SLOPE_STATES = {"FLAT", "MODERATE", "STEEP", "RISK", "UNKNOWN"}
@@ -906,7 +912,13 @@ def collect_samples(cursor) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
 
 
 def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
-    cursor.execute("SELECT count(*) FROM accessibility_feature_matches WHERE feature_type IS NOT NULL")
+    cursor.execute(
+        """
+        SELECT count(*)
+        FROM accessibility_feature_matches
+        WHERE feature_type IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
+        """
+    )
     insert_count = int(cursor.fetchone()[0])
     cursor.execute("SELECT count(DISTINCT edge_id) FROM accessibility_feature_matches")
     update_candidate_count = int(cursor.fetchone()[0])
@@ -927,7 +939,7 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
           state,
           value_number
         FROM accessibility_feature_matches
-        WHERE feature_type IS NOT NULL
+        WHERE feature_type IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
         ORDER BY source_row_id, edge_id;
 
         CREATE TEMP TABLE accessibility_edge_updates AS

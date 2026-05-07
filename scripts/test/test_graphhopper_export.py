@@ -178,6 +178,7 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertIn('"feature_type"::text AS feature_type', features_sql)
         self.assertIn('"state"::text AS state', features_sql)
         self.assertIn('"value_number" AS value_number', features_sql)
+        self.assertIn("WHERE \"feature_type\"::text IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')", features_sql)
         self.assertIn('ORDER BY "edge_id", "feature_id"', features_sql)
 
     def test_default_feature_sql_falls_back_to_legacy_camel_case_columns(self):
@@ -197,6 +198,7 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertIn('"featureType"::text AS feature_type', features_sql)
         self.assertIn('"state"::text AS state', features_sql)
         self.assertIn('"valueNumber" AS value_number', features_sql)
+        self.assertIn("WHERE \"featureType\"::text IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')", features_sql)
         self.assertIn('ORDER BY "edgeId", "featureId"', features_sql)
 
     def test_default_feature_sql_allows_old_minimal_feature_table_without_state_columns(self):
@@ -248,9 +250,9 @@ class GraphhopperExportTest(unittest.TestCase):
 
         self.assertEqual(parsed["status"], "PASS")
 
-    def test_segment_features_split_source_segment_and_set_child_states(self):
-        # 계단과 경사 feature가 부분적으로 있는 원천 edge는 여러 최종 segment가 되어야 한다.
-        # child segment마다 하나의 안정적인 접근성 상태 집합이 필요하기 때문이다.
+    def test_segment_features_split_source_segment_only_for_position_events(self):
+        # 계단 같은 위치 이벤트는 분할 기준이 되지만, 경사 같은 구간 속성은
+        # road_segments 집계 컬럼에서만 읽고 segment_features에서는 무시한다.
         module = load_export_module()
         nodes = [
             {"vertex_id": 1, "lon": 0.0, "lat": 0.0},
@@ -296,19 +298,18 @@ class GraphhopperExportTest(unittest.TestCase):
 
         output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
 
-        self.assertEqual(len(output_nodes), 5)
-        self.assertEqual(len(output_segments), 4)
-        self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3, 4, 5])
-        self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 4, 5, 2])
+        self.assertEqual(len(output_nodes), 4)
+        self.assertEqual(len(output_segments), 3)
+        self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3, 4])
+        self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 4, 2])
         self.assertEqual(output_segments[1]["stairs_state"], "YES")
-        self.assertEqual(output_segments[2]["slope_state"], "FLAT")
-        self.assertEqual(output_segments[3]["slope_state"], "RISK")
-        self.assertEqual(output_segments[3]["avg_slope_percent"], "13.00")
+        self.assertTrue(all(segment["slope_state"] == "FLAT" for segment in output_segments))
+        self.assertTrue(all(segment["avg_slope_percent"] == "0.0" for segment in output_segments))
 
         report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
         self.assertEqual(report["status"], "PASS")
 
-    def test_segment_features_can_set_crosswalk_width_and_audio_states_without_split(self):
+    def test_segment_features_can_set_crosswalk_and_audio_states_without_width_override(self):
         # segment 전체를 덮는 feature는 상태값만 덮어쓴다.
         # point feature는 뒤쪽 child에만 영향을 주므로 분할 경계를 만든다.
         module = load_export_module()
@@ -369,8 +370,8 @@ class GraphhopperExportTest(unittest.TestCase):
         for segment in output_segments:
             self.assertEqual(segment["segment_type"], "CROSS_WALK")
             self.assertEqual(segment["signal_state"], "YES")
-            self.assertEqual(segment["width_meter"], "1.25")
-            self.assertEqual(segment["width_state"], "ADEQUATE_120")
+            self.assertEqual(segment["width_meter"], "0.0")
+            self.assertEqual(segment["width_state"], "UNKNOWN")
         self.assertEqual(output_segments[0]["audio_signal_state"], "UNKNOWN")
         self.assertEqual(output_segments[1]["audio_signal_state"], "YES")
 

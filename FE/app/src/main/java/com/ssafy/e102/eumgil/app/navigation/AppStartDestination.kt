@@ -28,7 +28,7 @@ sealed interface AppStartDestination {
     }
 
     data object LowVisionHome : AppStartDestination {
-        override val route: String = LowVisionRoute.Home.route
+        override val route: String = LOW_VISION_GRAPH_ROUTE
     }
 }
 

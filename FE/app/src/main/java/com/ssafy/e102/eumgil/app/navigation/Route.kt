@@ -134,6 +134,16 @@ sealed interface LowVisionRoute : AppRoute {
     data object AppInfo : LowVisionRoute {
         override val route: String = "low_vision/app_info"
     }
+
+    /** 음성 인식 결과로 진입하는 검색 화면. [query]는 URL 인코딩된 STT 결과. */
+    data object VoiceSearch : LowVisionRoute {
+        const val ARG_QUERY: String = "query"
+
+        override val route: String = "low_vision/voice_search/{$ARG_QUERY}"
+
+        fun createRoute(query: String): String =
+            "low_vision/voice_search/${Uri.encode(query.ifBlank { " " })}"
+    }
 }
 
 sealed interface SearchRoute : AppRoute {

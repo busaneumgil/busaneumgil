@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""PostGIS 보행 네트워크 row를 GraphHopper가 읽을 수 있는 OSM XML로 내보낸다.
+
+이 스크립트는 GraphHopper export 경계를 담당한다.
+- 표준 `road_nodes`, `road_segments`, 선택적 `segment_features`를 읽는다.
+- export 전에 feature geometry 경계 기준으로 원천 segment를 분할한다.
+- `ieum:*` OSM tag를 쓰기 전에 topology와 접근성 enum 값을 검증한다.
+"""
 import argparse
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timezone
@@ -40,6 +47,9 @@ FROM road_segments
 ORDER BY "edgeId"
 '''
 
+# `segment_features`는 선택적 보강 입력이다. 최종 라우팅 비용은 여전히
+# `road_segments` 기준이며, feature row는 OSM export 전에 분할 지점과
+# 상태값 덮어쓰기만 결정한다.
 DEFAULT_FEATURES_SQL = '''
 SELECT
   "featureId" AS feature_id,
@@ -171,6 +181,7 @@ def parse_point_wkt(value):
 
 
 def parse_feature_geometry_wkt(value):
+    """segment 위로 투영할 수 있게 feature geometry 형태를 정규화한다."""
     point = parse_point_wkt(value)
     if point:
         return "POINT", [point]
@@ -230,6 +241,7 @@ def parse_feature_number(value):
 
 
 def derive_slope_state(avg_slope_percent):
+    """원천 경사율을 GraphHopper 표준 slope enum으로 변환한다."""
     number = parse_feature_number(avg_slope_percent)
     if number is None:
         return "UNKNOWN"
@@ -243,6 +255,7 @@ def derive_slope_state(avg_slope_percent):
 
 
 def derive_width_state(width_meter):
+    """원천 보도 폭을 GraphHopper 표준 width enum으로 변환한다."""
     number = parse_feature_number(width_meter)
     if number is None:
         return "UNKNOWN"
@@ -276,6 +289,7 @@ def linestring_lengths(coords):
 
 
 def point_at_fraction(coords, fraction):
+    """segment linestring의 0..1 위치에 해당하는 좌표를 보간한다."""
     if not coords:
         return None
     fraction = max(0.0, min(1.0, float(fraction)))
@@ -302,6 +316,12 @@ def point_at_fraction(coords, fraction):
 
 
 def project_point_fraction(coords, point):
+    """feature 좌표를 segment 위에 투영하고 0..1 위치값을 반환한다.
+
+    Feature geometry는 원천 segment vertex와 정확히 맞지 않는 점 또는 짧은 선일 수 있다.
+    투영을 사용하면 좌표가 완전히 일치하지 않아도 segment 위 가장 가까운 위치에서
+    export 분할을 수행할 수 있다.
+    """
     cumulative = linestring_lengths(coords)
     total = cumulative[-1] if cumulative else 0.0
     if total == 0.0:
@@ -331,6 +351,7 @@ def project_point_fraction(coords, point):
 
 
 def linestring_between_fractions(coords, start_fraction, end_fraction):
+    """두 분할 위치 사이의 child segment geometry를 만든다."""
     if end_fraction <= start_fraction:
         return []
     result = [point_at_fraction(coords, start_fraction)]
@@ -354,6 +375,7 @@ def format_linestring_wkt(coords):
 
 
 def feature_fraction_range(segment_coords, feature):
+    """feature geometry가 영향을 주는 segment 위치 범위로 변환한다."""
     geometry_type, feature_coords = parse_feature_geometry_wkt(feature.get("geom_wkt"))
     if not feature_coords:
         return None
@@ -364,6 +386,7 @@ def feature_fraction_range(segment_coords, feature):
 
 
 def ranges_overlap(left_start, left_end, right_start, right_end):
+    """child segment 구간에 feature 상태값을 적용해야 하는지 판단한다."""
     if right_start == right_end:
         if right_start == 1.0:
             return abs(left_end - 1.0) <= SPLIT_FRACTION_TOLERANCE
@@ -372,6 +395,7 @@ def ranges_overlap(left_start, left_end, right_start, right_end):
 
 
 def apply_feature_state(segment, feature):
+    """하나의 segment feature를 child segment의 최종 export 상태값에 반영한다."""
     feature_type = normalize_feature_type(feature.get("feature_type"))
     state = normalize_feature_state(feature.get("state"))
     value_number = parse_feature_number(feature.get("value_number"))
@@ -408,6 +432,12 @@ def apply_feature_state(segment, feature):
 
 
 def apply_segment_features_to_export(nodes, segments, features):
+    """feature geometry 기준으로 원천 segment를 분할하고 export 가능한 row를 반환한다.
+
+    모든 분할 경계에 synthetic node를 만들어 기존 topology validator가 생성된
+    child segment endpoint까지 검증할 수 있게 한다. Synthetic edge id는 DB가
+    소유한 edge id와 충돌하지 않도록 음수로 둔다.
+    """
     if not features:
         return nodes, segments
 
@@ -446,6 +476,8 @@ def apply_segment_features_to_export(nodes, segments, features):
                 if SPLIT_FRACTION_TOLERANCE < fraction < 1.0 - SPLIT_FRACTION_TOLERANCE:
                     split_fractions.add(round(fraction, 12))
 
+        # 모든 feature가 segment 전체를 덮으면 topology 분할은 필요 없고,
+        # 접근성 상태값 덮어쓰기만 적용한다.
         ordered_fractions = sorted(split_fractions)
         if len(ordered_fractions) <= 2:
             patched_segment = dict(segment)
@@ -468,6 +500,8 @@ def apply_segment_features_to_export(nodes, segments, features):
             next_synthetic_node_id += 1
 
         for index in range(1, len(ordered_fractions)):
+            # 인접한 두 분할 위치는 각각 독립 접근성 상태를 가진
+            # 최종 GraphHopper way 하나가 된다.
             start_fraction = ordered_fractions[index - 1]
             end_fraction = ordered_fractions[index]
             child_coords = linestring_between_fractions(coords, start_fraction, end_fraction)
@@ -675,8 +709,8 @@ def write_json_report(path, report):
 
 
 def write_osm(nodes, segments, output):
-    # The exporter is the boundary between PostGIS camelCase columns and the GraphHopper
-    # custom parser. Keep tag names aligned with Graphhopper_pipeline.md's ieum:* contract.
+    # exporter는 PostGIS camelCase 컬럼과 GraphHopper custom parser 사이의 경계다.
+    # tag 이름은 Graphhopper_pipeline.md의 `ieum:*` 계약과 맞춰야 한다.
     root = ET.Element("osm", {"version": "0.6", "generator": "e102-postgis-graphhopper-export"})
     node_id_map = {int(node["vertex_id"]): index + 1 for index, node in enumerate(nodes)}
     next_synthetic_node_id = len(node_id_map) + 1

@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""GraphHopper build pipeline을 위한 빠른 DB/export 검증 smoke다.
+
+전체 graph-cache build는 오래 걸리고 실행 환경 의존성이 크다. 이 smoke는
+PostGIS에서 작은 road segment 샘플만 읽고 exporter validation 로직을 재사용해,
+DB row가 OSM export 계약을 깨는 경우 build 전에 빠르게 실패시킨다.
+"""
 import argparse
 import importlib.util
 import json
@@ -10,6 +16,7 @@ EXPORTER_PATH = "/usr/local/bin/export-postgis-to-osm.py"
 
 
 def load_exporter():
+    """graphhopper-build 컨테이너가 사용하는 exporter 모듈을 그대로 읽는다."""
     spec = importlib.util.spec_from_file_location("export_postgis_to_osm", EXPORTER_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -17,6 +24,7 @@ def load_exporter():
 
 
 def strip_sql(sql):
+    """설정 SQL을 subquery로 감쌀 수 있게 정규화한다."""
     return sql.strip().rstrip(";")
 
 
@@ -47,6 +55,8 @@ def main():
         node_count = fetch_scalar(conn, 'SELECT COUNT(*) FROM road_nodes')
         segment_count = fetch_scalar(conn, 'SELECT COUNT(*) FROM road_segments')
         segments = fetch_dicts(conn, f"SELECT * FROM ({segments_sql}) segments LIMIT %s", [args.sample_size])
+        # validator는 샘플 segment마다 endpoint node가 필요하다.
+        # 큰 graph에서도 smoke가 가볍게 유지되도록 참조된 node만 읽는다.
         referenced_nodes = sorted(
             {
                 int(segment["from_node_id"])

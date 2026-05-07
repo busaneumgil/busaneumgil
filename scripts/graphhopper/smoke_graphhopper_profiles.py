@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""모든 GraphHopper 접근성 profile을 확인하는 runtime smoke다.
+
+이 스크립트는 DB 기반 routeable road segment 후보를 고르고 각 profile로
+GraphHopper `/route` API를 호출한다. import된 graph, custom encoded value,
+custom model 파일이 함께 최소 하나의 경로를 만들 수 있는지 확인한다.
+"""
 import argparse
 import importlib.util
 import json
@@ -24,6 +30,7 @@ DEFAULT_PROFILES = [
 
 
 def load_exporter():
+    """GraphHopper 컨테이너 안에서 exporter의 DB 연결 설정을 재사용한다."""
     spec = importlib.util.spec_from_file_location("export_postgis_to_osm", EXPORTER_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -31,6 +38,7 @@ def load_exporter():
 
 
 def fetch_candidates(conn, limit):
+    """smoke 경로 endpoint로 쓸 길고 routeable한 정상 segment 후보를 찾는다."""
     sql = """
 SELECT
   "edgeId" AS edge_id,
@@ -67,6 +75,7 @@ def request_json(url, timeout):
 
 
 def route_url(base_url, candidate, profile):
+    """후보 segment endpoint를 사용해 GraphHopper route URL을 만든다."""
     query = urlencode(
         [
             ("profile", profile),
@@ -80,6 +89,7 @@ def route_url(base_url, candidate, profile):
 
 
 def smoke_profile(base_url, candidate, profile, timeout):
+    """`/route` 요청 하나를 실행하고 HTTP/runtime 실패를 report row로 변환한다."""
     url = route_url(base_url, candidate, profile)
     started = time.monotonic()
     try:
@@ -168,6 +178,8 @@ def main():
     attempts = []
     selected = None
     for candidate in candidates:
+        # 개별 segment는 profile별 custom model 규칙 적용 후에도 고립되거나
+        # unroutable할 수 있으므로 여러 후보를 순서대로 시도한다.
         results = [smoke_profile(args.base_url, candidate, profile, args.timeout_seconds) for profile in profiles]
         attempt = {
             "candidate": candidate,

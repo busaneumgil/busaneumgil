@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""PostGIS-to-OSM GraphHopper exporter 단위 테스트다.
+
+이 테스트는 PostGIS나 GraphHopper 없이 exporter 계약을 실행 가능하게 유지한다.
+OSM tag 출력, validation, enum 계약, `segment_features` 기반 분할/상태 반영을
+검증한다.
+"""
 import importlib.util
 import json
 import tempfile
@@ -20,6 +26,7 @@ def load_export_module():
 
 
 class GraphhopperExportTest(unittest.TestCase):
+    """export row, validation report, feature 분할 회귀 테스트다."""
 
     def sample_nodes(self):
         return [
@@ -137,6 +144,8 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual(parsed["status"], "PASS")
 
     def test_segment_features_split_source_segment_and_set_child_states(self):
+        # 계단과 경사 feature가 부분적으로 있는 원천 edge는 여러 최종 segment가 되어야 한다.
+        # child segment마다 하나의 안정적인 접근성 상태 집합이 필요하기 때문이다.
         module = load_export_module()
         nodes = [
             {"vertex_id": 1, "lon": 0.0, "lat": 0.0},
@@ -195,6 +204,8 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual(report["status"], "PASS")
 
     def test_segment_features_can_set_crosswalk_width_and_audio_states_without_split(self):
+        # segment 전체를 덮는 feature는 상태값만 덮어쓴다.
+        # point feature는 뒤쪽 child에만 영향을 주므로 분할 경계를 만든다.
         module = load_export_module()
         nodes = [
             {"vertex_id": 1, "lon": 0.0, "lat": 0.0},

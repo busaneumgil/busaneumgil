@@ -16,6 +16,13 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+/**
+ * IEUM 접근성 값을 GraphHopper edge flag에 저장하기 위한 목록표다.
+ *
+ * <p>registry가 `walk_access` 같은 이름을 물어보면 이 클래스가 "enum으로 저장할지, 숫자로 저장할지"와
+ * "어떤 `ieum:*` OSM tag에서 값을 읽을지"를 한 번에 돌려준다. 그 결과 exporter가 만든 OSM tag가
+ * tag parser를 거쳐 encoded value로 저장되고, custom model은 그 값을 조건식에서 사용할 수 있다.
+ */
 public final class IeumEncodedValues {
     private static final String IEUM_TAG_PREFIX = "ieum:";
 
@@ -31,6 +38,8 @@ public final class IeumEncodedValues {
     public static final String SIGNAL_STATE = "signal_state";
     public static final String SEGMENT_TYPE = "segment_type";
 
+    // 이 이름이 계약의 중심이다. config/custom model의 encoded value 이름,
+    // exporter가 쓰는 `ieum:*` tag 이름, 아래 parser 연결이 모두 같은 이름을 공유해야 한다.
     private static final Map<String, Function<PMap, ?>> ENCODED_VALUE_FACTORIES = Map.ofEntries(
         Map.entry(WALK_ACCESS, ignored -> new EnumEncodedValue<>(WALK_ACCESS, YesNoUnknown.class)),
         Map.entry(AVG_SLOPE_PERCENT, ignored -> new DecimalEncodedValueImpl(AVG_SLOPE_PERCENT, 12, 0.1, false)),
@@ -62,6 +71,7 @@ public final class IeumEncodedValues {
 
     private static BiFunction<EncodedValueLookup, PMap, TagParser> createTagParser(String name) {
         return (lookup, properties) -> {
+            // 폭/경사처럼 계산에 쓰는 값은 decimal EV로, 상태값은 enum EV로 읽는다.
             if (AVG_SLOPE_PERCENT.equals(name)) {
                 return new IeumDecimalTagParser(lookup.getDecimalEncodedValue(name), tagName(name), 0.0);
             }
@@ -75,18 +85,38 @@ public final class IeumEncodedValues {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static TagParser createEnumTagParser(String name, EncodedValueLookup lookup) {
         if (SLOPE_STATE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SlopeState.class), tagName(name), SlopeState.UNKNOWN);
+            return new IeumEnumTagParser(
+                lookup.getEnumEncodedValue(name, SlopeState.class),
+                tagName(name),
+                SlopeState.UNKNOWN
+            );
         }
         if (WIDTH_STATE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, WidthState.class), tagName(name), WidthState.UNKNOWN);
+            return new IeumEnumTagParser(
+                lookup.getEnumEncodedValue(name, WidthState.class),
+                tagName(name),
+                WidthState.UNKNOWN
+            );
         }
         if (SURFACE_STATE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SurfaceState.class), tagName(name), SurfaceState.UNKNOWN);
+            return new IeumEnumTagParser(
+                lookup.getEnumEncodedValue(name, SurfaceState.class),
+                tagName(name),
+                SurfaceState.UNKNOWN
+            );
         }
         if (SEGMENT_TYPE.equals(name)) {
-            return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, SegmentType.class), tagName(name), SegmentType.SIDE_LINE);
+            return new IeumEnumTagParser(
+                lookup.getEnumEncodedValue(name, SegmentType.class),
+                tagName(name),
+                SegmentType.SIDE_LINE
+            );
         }
-        return new IeumEnumTagParser(lookup.getEnumEncodedValue(name, YesNoUnknown.class), tagName(name), YesNoUnknown.UNKNOWN);
+        return new IeumEnumTagParser(
+            lookup.getEnumEncodedValue(name, YesNoUnknown.class),
+            tagName(name),
+            YesNoUnknown.UNKNOWN
+        );
     }
 
     private static String tagName(String name) {

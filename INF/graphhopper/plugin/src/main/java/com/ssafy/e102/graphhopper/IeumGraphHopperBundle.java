@@ -32,6 +32,13 @@ import jakarta.inject.Named;
 import org.glassfish.hk2.api.Factory;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 
+/**
+ * GraphHopper instance를 HTTP API, health check, web resource에 연결하는 Dropwizard bundle이다.
+ *
+ * <p>application이 서버 껍데기라면 bundle은 배선판이다. {@link IeumGraphHopperManaged}가 만든
+ * GraphHopper instance를 `/route`, `/nearest`, `/info`, health check가 주입받을 수 있게 등록한다.
+ * 덕분에 IEUM import registry를 쓰면서도 GraphHopper 기본 API는 그대로 동작한다.
+ */
 public class IeumGraphHopperBundle implements ConfiguredBundle<GraphHopperBundleConfiguration> {
 
     public static class TranslationMapFactory implements Factory<TranslationMap> {
@@ -104,6 +111,8 @@ public class IeumGraphHopperBundle implements ConfiguredBundle<GraphHopperBundle
         environment.lifecycle().manage(managed);
         GraphHopper graphHopper = managed.getGraphHopper();
 
+        // GraphHopper resource는 HK2 injection으로 GraphHopper 내부 객체를 찾는다.
+        // 여기서 managed instance 하나를 기본 web app이 기대하는 dependency graph에 꽂아 준다.
         environment.jersey().register(new AbstractBinder() {
             @Override
             protected void configure() {

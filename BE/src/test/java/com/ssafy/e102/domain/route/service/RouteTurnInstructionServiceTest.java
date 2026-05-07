@@ -7,12 +7,15 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 
-import com.ssafy.e102.domain.route.type.RouteStepAlertType;
+import com.ssafy.e102.domain.route.dto.response.RouteStepAlertType;
 
-class RouteTurnInstructionResolverTest {
+/**
+ * route 회전 alert가 geometry 방향 변화에서 파생되는지 검증한다.
+ */
+class RouteTurnInstructionServiceTest {
 
 	private final GeometryFactory geometryFactory = new GeometryFactory();
-	private final RouteTurnInstructionResolver resolver = new RouteTurnInstructionResolver();
+	private final RouteTurnInstructionService routeTurnInstructionService = new RouteTurnInstructionService();
 
 	@Test
 	void resolveReturnsTurnLeftFromRouteGeometryDirectionChange() {
@@ -22,14 +25,14 @@ class RouteTurnInstructionResolverTest {
 			new Coordinate(1.0, 1.0)
 		});
 
-		RouteStepAlertType alertType = resolver.resolve(routeGeometry, 1);
+		RouteStepAlertType alertType = routeTurnInstructionService.resolve(routeGeometry, 1);
 
 		assertThat(alertType).isEqualTo(RouteStepAlertType.TURN_LEFT);
 	}
 
 	@Test
 	void resolveReturnsTurnRightFromContinuousSegmentDirectionChange() {
-		RouteStepAlertType alertType = resolver.resolve(
+		RouteStepAlertType alertType = routeTurnInstructionService.resolve(
 			new Coordinate(0.0, 0.0),
 			new Coordinate(0.0, 1.0),
 			new Coordinate(1.0, 1.0));
@@ -39,7 +42,7 @@ class RouteTurnInstructionResolverTest {
 
 	@Test
 	void resolveIgnoresSmallHeadingChange() {
-		RouteStepAlertType alertType = resolver.resolve(
+		RouteStepAlertType alertType = routeTurnInstructionService.resolve(
 			new Coordinate(0.0, 0.0),
 			new Coordinate(1.0, 0.0),
 			new Coordinate(2.0, 0.2));
@@ -49,7 +52,7 @@ class RouteTurnInstructionResolverTest {
 
 	@Test
 	void resolveDoesNotDependOnSegmentFeatureType() {
-		RouteStepAlertType alertType = resolver.resolve(
+		RouteStepAlertType alertType = routeTurnInstructionService.resolve(
 			new Coordinate(0.0, 0.0),
 			new Coordinate(1.0, 0.0),
 			new Coordinate(1.0, -1.0));

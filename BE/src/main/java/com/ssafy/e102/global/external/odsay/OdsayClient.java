@@ -76,6 +76,38 @@ public class OdsayClient {
 		}
 	}
 
+	public List<OdsayLaneGeometry> loadLane(String mapObj) {
+		if (!StringUtils.hasText(mapObj)) {
+			return List.of();
+		}
+		if (!StringUtils.hasText(properties.apiKey())) {
+			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "ODsay API key가 설정되지 않았습니다.");
+		}
+		try {
+			JsonNode body = restTemplate.exchange(
+				RequestEntity
+					.method(HttpMethod.GET, UriComponentsBuilder
+						.fromUriString(properties.baseUrl())
+						.path("/loadLane")
+						.queryParam("mapObject", "0:0@" + mapObj)
+						.queryParam("apiKey", properties.apiKey())
+						.build()
+						.toUri())
+					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+					.build(),
+				JsonNode.class)
+				.getBody();
+			return parseLaneGeometries(body);
+		} catch (HttpStatusCodeException exception) {
+			throw externalFailure(exception);
+		} catch (ResourceAccessException exception) {
+			throw new RouteException(timeoutOrFailure(exception), timeoutOrFailure(exception).getMessage(), exception);
+		} catch (RestClientException exception) {
+			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
+		}
+	}
+
 	private OdsayTransitSearchResult parseSearchResult(JsonNode body) {
 		JsonNode pathNodes = body == null ? null : body.path("result").path("path");
 		if (pathNodes == null || !pathNodes.isArray() || pathNodes.isEmpty()) {
@@ -110,6 +142,22 @@ public class OdsayClient {
 				"mapObj", text(info, "mapObj"),
 				"pathType", pathNode.path("pathType").asInt(),
 				"info", info));
+	}
+
+	private List<OdsayLaneGeometry> parseLaneGeometries(JsonNode body) {
+		JsonNode laneNodes = body == null ? null : body.path("result").path("lane");
+		if (laneNodes == null || !laneNodes.isArray()) {
+			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
+		}
+		List<OdsayLaneGeometry> geometries = new ArrayList<>();
+		for (JsonNode laneNode : laneNodes) {
+			TransportMode type = laneClassToTransportMode(laneNode.path("class").asInt());
+			String geometry = toLineString(laneNode.path("section"));
+			if (geometry != null) {
+				geometries.add(new OdsayLaneGeometry(type, geometry));
+			}
+		}
+		return List.copyOf(geometries);
 	}
 
 	private OdsayTransitLeg parseLeg(TransportMode type, JsonNode legNode) {
@@ -181,6 +229,38 @@ public class OdsayClient {
 			default ->
 				throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "알 수 없는 ODsay trafficType입니다.");
 		};
+	}
+
+	private TransportMode laneClassToTransportMode(int laneClass) {
+		return switch (laneClass) {
+			case 1 -> TransportMode.BUS;
+			case 2 -> TransportMode.SUBWAY;
+			default ->
+				throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "알 수 없는 ODsay lane class입니다.");
+		};
+	}
+
+	private String toLineString(JsonNode sectionNodes) {
+		if (!sectionNodes.isArray()) {
+			return null;
+		}
+		List<String> coordinates = new ArrayList<>();
+		for (JsonNode sectionNode : sectionNodes) {
+			for (JsonNode graphPos : sectionNode.path("graphPos")) {
+				BigDecimal lng = decimal(graphPos, "x");
+				BigDecimal lat = decimal(graphPos, "y");
+				if (lng != null && lat != null) {
+					String coordinate = lng + " " + lat;
+					if (coordinates.isEmpty() || !coordinates.get(coordinates.size() - 1).equals(coordinate)) {
+						coordinates.add(coordinate);
+					}
+				}
+			}
+		}
+		if (coordinates.size() < 2) {
+			return null;
+		}
+		return "LINESTRING(" + String.join(", ", coordinates) + ")";
 	}
 
 	private String text(JsonNode node, String fieldName) {

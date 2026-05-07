@@ -23,6 +23,7 @@ import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.external.odsay.OdsayPassStop;
+import com.ssafy.e102.global.external.odsay.OdsayLaneGeometry;
 import com.ssafy.e102.global.external.odsay.OdsayTransitLane;
 import com.ssafy.e102.global.external.odsay.OdsayTransitLeg;
 import com.ssafy.e102.global.external.odsay.OdsayTransitPath;
@@ -64,7 +65,9 @@ public class TransitRouteSearchService {
 		String searchId = "rs_transit_" + UUID.randomUUID();
 		List<TransitRouteCandidate> candidates = new ArrayList<>();
 		for (int index = 0; index < searchResult.paths().size(); index++) {
-			candidates.add(toCandidate(searchId, index + 1, startPoint, endPoint, searchResult.paths().get(index)));
+			OdsayTransitPath path = searchResult.paths().get(index);
+			List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(path.mapObj());
+			candidates.add(toCandidate(searchId, index + 1, startPoint, endPoint, path, laneGeometries));
 		}
 		if (candidates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
@@ -82,9 +85,10 @@ public class TransitRouteSearchService {
 		int routeIndex,
 		GeoPointRequest startPoint,
 		GeoPointRequest endPoint,
-		OdsayTransitPath path) {
+		OdsayTransitPath path,
+		List<OdsayLaneGeometry> laneGeometries) {
 		String routeId = "%s_%03d".formatted(searchId, routeIndex);
-		List<RouteLegResponse> legs = toLegs(startPoint, endPoint, path.legs());
+		List<RouteLegResponse> legs = toLegs(startPoint, endPoint, path.legs(), laneGeometries);
 		RouteSummaryResponse route = new RouteSummaryResponse(
 			routeId,
 			TransportMode.PUBLIC_TRANSIT,
@@ -104,9 +108,11 @@ public class TransitRouteSearchService {
 	private List<RouteLegResponse> toLegs(
 		GeoPointRequest startPoint,
 		GeoPointRequest endPoint,
-		List<OdsayTransitLeg> odsayLegs) {
+		List<OdsayTransitLeg> odsayLegs,
+		List<OdsayLaneGeometry> laneGeometries) {
 		List<RouteLegResponse> legs = new ArrayList<>();
 		GeoPointRequest cursor = startPoint;
+		int[] geometryIndex = {0};
 		for (OdsayTransitLeg odsayLeg : odsayLegs) {
 			if (odsayLeg.type() == TransportMode.WALK) {
 				GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayLeg, endPoint);
@@ -114,7 +120,10 @@ public class TransitRouteSearchService {
 				cursor = nextPoint;
 				continue;
 			}
-			RouteLegResponse transitLeg = toTransitLeg(legs.size() + 1, odsayLeg);
+			RouteLegResponse transitLeg = toTransitLeg(
+				legs.size() + 1,
+				odsayLeg,
+				nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex));
 			legs.add(transitLeg);
 			if (odsayLeg.endLat() != null && odsayLeg.endLng() != null) {
 				cursor = new GeoPointRequest(odsayLeg.endLat().doubleValue(), odsayLeg.endLng().doubleValue());
@@ -158,7 +167,7 @@ public class TransitRouteSearchService {
 			List.of());
 	}
 
-	private RouteLegResponse toTransitLeg(int sequence, OdsayTransitLeg odsayLeg) {
+	private RouteLegResponse toTransitLeg(int sequence, OdsayTransitLeg odsayLeg, String geometry) {
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
 		List<TransitLaneOptionResponse> laneOptions = laneOptions(odsayLeg);
 		return new RouteLegResponse(
@@ -169,7 +178,8 @@ public class TransitRouteSearchService {
 			scale(odsayLeg.distanceMeter()),
 			durationSecond,
 			estimatedMinute(durationSecond),
-			lineString(odsayLeg.startLng(), odsayLeg.startLat(), odsayLeg.endLng(), odsayLeg.endLat()),
+			geometry != null ? geometry
+				: lineString(odsayLeg.startLng(), odsayLeg.startLat(), odsayLeg.endLng(), odsayLeg.endLat()),
 			List.of(),
 			routeNo(odsayLeg),
 			laneOptions,
@@ -177,6 +187,20 @@ public class TransitRouteSearchService {
 			stop(odsayLeg.endName(), odsayLeg.endLat(), odsayLeg.endLng()),
 			null,
 			odsayLeg.type() == TransportMode.SUBWAY ? List.of(RouteBadge.ELEVATOR) : List.of());
+	}
+
+	private String nextGeometry(
+		TransportMode type,
+		List<OdsayLaneGeometry> laneGeometries,
+		int[] geometryIndex) {
+		for (int index = geometryIndex[0]; index < laneGeometries.size(); index++) {
+			OdsayLaneGeometry geometry = laneGeometries.get(index);
+			geometryIndex[0] = index + 1;
+			if (geometry.type() == type) {
+				return geometry.geometry();
+			}
+		}
+		return null;
 	}
 
 	private RouteLegRole walkRole(int sequence, GeoPointRequest to) {

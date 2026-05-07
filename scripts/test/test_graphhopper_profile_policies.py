@@ -68,6 +68,27 @@ class GraphhopperProfilePolicyTest(unittest.TestCase):
                         priority_multiplier_number(models[fast_profile], condition),
                     )
 
+    def test_safe_profiles_prefer_signalized_crosswalk_over_unsignalized_crosswalk(self):
+        models = load_custom_models()
+        safe_profiles = [
+            "pedestrian_safe",
+            "visual_safe",
+            "wheelchair_auto_safe",
+            "wheelchair_manual_safe",
+        ]
+
+        for profile_name in safe_profiles:
+            with self.subTest(profile=profile_name):
+                signalized = priority_multiplier_number(
+                    models[profile_name],
+                    "segment_type == CROSS_WALK && signal_state == YES",
+                )
+                unsignalized = priority_multiplier_number(
+                    models[profile_name],
+                    "segment_type == CROSS_WALK && signal_state == NO",
+                )
+                self.assertGreater(signalized, unsignalized)
+
 
 if __name__ == "__main__":
     unittest.main()

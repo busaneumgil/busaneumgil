@@ -88,7 +88,7 @@ docker compose --env-file .env.prod \
 | `GRAPHHOPPER_ROAD_NODES_SQL` | 기본 `road_nodes` 조회 SQL override |
 | `GRAPHHOPPER_ROAD_SEGMENTS_SQL` | 기본 `road_segments` 조회 SQL override |
 
-기본 SQL은 ERD v4의 camelCase 컬럼명을 기준으로 한다. 실제 DB 스키마가 snake_case로 생성된 경우에는 `GRAPHHOPPER_ROAD_NODES_SQL`, `GRAPHHOPPER_ROAD_SEGMENTS_SQL`을 env로 override한다.
+기본 SQL은 ERD v3/v4의 snake_case 물리 컬럼명을 기준으로 한다. Java/API 필드명은 camelCase를 유지하지만, GraphHopper export SQL과 운영 DB 스키마는 `vertex_id`, `source_node_key`, `from_node_id`, `length_meter` 같은 snake_case 컬럼을 사용한다.
 
 2026-05-06 develop 기준 ERD는 `Docs/ERD` 하위가 canonical이다. `route_sessions` 추가는 선택 경로 복구용 DB 계약이며, GraphHopper graph-cache build 입력은 여전히 `road_nodes`, `road_segments`다.
 

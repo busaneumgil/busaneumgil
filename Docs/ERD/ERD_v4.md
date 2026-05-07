@@ -12,33 +12,33 @@
 
 | 테이블 | 변경 전 | 변경 후 |
 |--------|----------------------|----------------------|
-| `road_nodes` | `osmNodeId BIGINT` | `sourceNodeKey VARCHAR(100)` |
-| `road_segments` | `sourceWayId`, `sourceOsmFromNodeId`, `sourceOsmToNodeId`, `segmentOrdinal` | - |
-| `users` | `disabilityGrade`, `phoneNumber`, `pushEnabled`, `profileCompleted`, `nickname`, 온보딩/약관/설정 boolean | 가입 완료 사용자 계정과 `selectedPrimaryUserType`, 조건부 `selectedMobilitySubtype`만 저장 |
+| `road_nodes` | `osm_node_id BIGINT` | `source_node_key VARCHAR(100)` |
+| `road_segments` | `source_way_id`, `source_osm_from_node_id`, `source_osm_to_node_id`, `segment_ordinal` | - |
+| `users` | `disability_grade`, `phone_number`, `push_enabled`, `profile_completed`, `nickname`, 온보딩/약관/설정 boolean | 가입 완료 사용자 계정과 `selected_primary_user_type`, 조건부 `selected_mobility_subtype`만 저장 |
 | `places` | `BUS_STATION`, `ELEVATOR`, `BARRIER_FREE_FACILITY`, `TOILET`, `RESTAURANT`, `CHARGING_STATION` 카테고리 | `FOOD_CAFE`, `HEALTHCARE`, `WELFARE`, `PUBLIC_OFFICE`, `ETC` 카테고리 |
 | `hazard_reports` | 익명 제보, 주소 저장, 8개 제보 유형 | 사용자 계정 연결, 좌표 중심 저장, 6개 제보 유형 |
-| `road_segments` | `curbRampState`, `elevatorState`, 넓은 `surfaceState` 후보 | `elevatorState` 제거, 단순화한 `surfaceState`/`signalState`, `segmentType` 추가 |
+| `road_segments` | `curb_ramp_state`, `elevator_state`, 넓은 `surface_state` 후보 | `elevator_state` 제거, 단순화한 `surface_state`/`signal_state`, `segment_type` 추가 |
 | `route_logs`, `route_log_points` | 실제 이동 로그 수집 | MVP ERD에서 제외 |
 | `route_ratings` | - | 도착 직후 별점 평가 저장 |
 | `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
 
-장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.featureType`으로 둔다.
+장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
 
 ---
 
 ## 1. 설계 기준
 
 - 기준 문서: `2026-04-10 최종_프로젝트_기획서.md`, `2026-04-11_MVP_화면명세서.md`, `2026-04-09_기능명세서.md`, `2026-04-16_ACCESSIBLE_ROUTING_POC_RESTART_BLUEPRINT.md`
-- `createdAt`, `updatedAt`은 JPA Auditing 기반 `BaseEntity` 공통 컬럼으로 관리하므로 테이블별 상세 명세에서는 생략한다.
+- `created_at`, `updated_at`은 JPA Auditing 기반 `BaseEntity` 공통 컬럼으로 관리하므로 테이블별 상세 명세에서는 생략한다.
 - 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 필요 시 `deletedAt`을 공통 컬럼으로 관리한다.
-- 모든 컬럼 네이밍은 `camelCase`를 사용한다.
+- 모든 물리 DB 컬럼 네이밍은 `snake_case`를 사용한다. Java 엔티티 필드와 API 응답 필드는 `camelCase`를 유지한다.
 - 숫자 ID를 참조하는 외래키 컬럼은 자동 증가 컬럼이 아니므로 `SERIAL/BIGSERIAL`이 아니라 `INT/BIGINT`로 표기한다.
 - PK는 테이블별 데이터 증가량 기준으로 구분한다. 대량 적재 또는 로그성 테이블은 `BIGINT`, 일반 관리성 테이블은 `INT`를 우선 검토한다.
-- 사용자 식별자인 `users.userId`는 API 응답, JWT subject, FK에서 모두 UUID를 사용한다.
+- 사용자 식별자인 `users.user_id`는 Java/API에서 `userId`로 노출하고 JWT subject에도 동일한 UUID를 사용한다.
 - 소셜 OAuth 인증은 서비스 회원가입과 분리한다. `users` row는 필수 약관 동의와 온보딩 선택값이 모두 확정된 뒤 생성하므로, 가입 완료 사용자만 저장한다.
 - 시간 데이터는 DB에 표시용 문자열 형식으로 저장하며, `VARCHAR` 컬럼에 ISO 8601 기반 문자열을 저장하는 것을 기본 원칙으로 한다.
 - 변경 가능성이 있거나 운영 중 값 집합이 늘어날 수 있는 비즈니스 필드는 DB ENUM 대신 `VARCHAR`를 사용한다.
-- `roadSegments`의 접근성/보행 상태처럼 라우팅 로직에서 사용하는 고정된 폐쇄 집합 값은 ENUM 사용을 허용하되, `surfaceState`처럼 분류 기준이 확장될 수 있는 필드는 `VARCHAR`를 사용한다.
+- `road_segments`의 접근성/보행 상태처럼 라우팅 로직에서 사용하는 고정된 폐쇄 집합 값은 ENUM 사용을 허용하되, `surface_state`처럼 분류 기준이 확장될 수 있는 필드는 `VARCHAR`를 사용한다.
 - 지도/장소 검색 API는 MVP 기준 카카오 단일 사용을 전제로 한다.
 - 대중교통 경로 후보는 ODsay 같은 외부 대중교통 길찾기 API를 우선 사용하고, 버스/저상버스 정보는 부산광역시_부산버스정보시스템 OpenAPI를 실시간 조회한다.
 - 사용자가 실제 선택해 안내를 시작한 route만 `route_sessions`에 영속 저장한다. 검색 후보 묶음은 Redis `routeSearch:{searchId}`에만 저장한다.
@@ -101,120 +101,120 @@ erDiagram
     ROAD_SEGMENTS ||--o{ SEGMENT_FEATURES : has
 
     USERS {
-        UUID userId PK
-        VARCHAR socialProvider
-        VARCHAR socialProviderUserId
-        VARCHAR selectedPrimaryUserType
-        VARCHAR selectedMobilitySubtype
+        UUID user_id PK
+        VARCHAR social_provider
+        VARCHAR social_provider_user_id
+        VARCHAR selected_primary_user_type
+        VARCHAR selected_mobility_subtype
     }
 
     BOOKMARKS {
-        INT bookmarkId PK
-        UUID userId FK
-        BIGINT placeId FK
+        INT bookmark_id PK
+        UUID user_id FK
+        BIGINT place_id FK
     }
 
     FAVORITE_ROUTES {
-        BIGINT favRouteId PK
-        VARCHAR(511) routeName
-        VARCHAR startLabel
-        VARCHAR endLabel
-        GEOMETRY startPoint
-        GEOMETRY endPoint
-        VARCHAR transportMode
-        VARCHAR routeOption
-        JSONB routeSnapshotJson
-        UUID userId FK
+        BIGINT fav_route_id PK
+        VARCHAR(511) route_name
+        VARCHAR start_label
+        VARCHAR end_label
+        GEOMETRY start_point
+        GEOMETRY end_point
+        VARCHAR transport_mode
+        VARCHAR route_option
+        JSONB route_snapshot_json
+        UUID user_id FK
     }
 
     HAZARD_REPORTS {
-        INT reportId PK
-        UUID userId FK
-        VARCHAR reportType
+        INT report_id PK
+        UUID user_id FK
+        VARCHAR report_type
         TEXT description
-        GEOMETRY reportPoint
+        GEOMETRY report_point
         VARCHAR status
     }
 
     HAZARD_REPORT_IMAGES {
-        INT reportImgId PK
-        TEXT imageUrl
-        SMALLINT displayOrder
-        INT reportId FK
+        INT report_img_id PK
+        TEXT image_url
+        SMALLINT display_order
+        INT report_id FK
     }
 
     PLACES {
-        BIGINT placeId PK
+        BIGINT place_id PK
         VARCHAR name
         VARCHAR category
         VARCHAR address
         GEOMETRY point
-        VARCHAR providerPlaceId
+        VARCHAR provider_place_id
     }
 
     PLACE_ACCESSIBILITY_FEATURES {
         INT id PK
-        BIGINT placeId FK
-        VARCHAR featureType
-        BOOLEAN isAvailable
+        BIGINT place_id FK
+        VARCHAR feature_type
+        BOOLEAN is_available
     }
 
     ROAD_NODES {
-        BIGINT vertexId PK
-        VARCHAR sourceNodeKey
+        BIGINT vertex_id PK
+        VARCHAR source_node_key
         GEOMETRY point
     }
 
     ROAD_SEGMENTS {
-        BIGINT edgeId PK
-        BIGINT fromNodeId FK
-        BIGINT toNodeId FK
+        BIGINT edge_id PK
+        BIGINT from_node_id FK
+        BIGINT to_node_id FK
         GEOMETRY geom
-        NUMERIC lengthMeter
-        NUMERIC avgSlopePercent
-        NUMERIC widthMeter
-        ENUM walkAccess
-        ENUM brailleBlockState
-        ENUM audioSignalState
-        ENUM slopeState
-        ENUM widthState
-        VARCHAR surfaceState
-        ENUM stairsState
-        ENUM signalState
-        VARCHAR segmentType
+        NUMERIC length_meter
+        NUMERIC avg_slope_percent
+        NUMERIC width_meter
+        ENUM walk_access
+        ENUM braille_block_state
+        ENUM audio_signal_state
+        ENUM slope_state
+        ENUM width_state
+        VARCHAR surface_state
+        ENUM stairs_state
+        ENUM signal_state
+        VARCHAR segment_type
     }
 
     SEGMENT_FEATURES {
-        BIGINT featureId PK
-        BIGINT edgeId FK
-        VARCHAR featureType
+        BIGINT feature_id PK
+        BIGINT edge_id FK
+        VARCHAR feature_type
         GEOMETRY geom
     }
 
     ROUTE_RATINGS {
-        BIGINT ratingId PK
-        UUID userId FK
-        VARCHAR routeId
+        BIGINT rating_id PK
+        UUID user_id FK
+        VARCHAR route_id
         SMALLINT score
-        JSONB routeContextJson
+        JSONB route_context_json
     }
 
     ROUTE_SESSIONS {
-        UUID sessionId PK
-        UUID userId FK
-        VARCHAR routeId
-        GEOMETRY startPoint
-        GEOMETRY endPoint
-        JSONB routeSnapshotJson
+        UUID session_id PK
+        UUID user_id FK
+        VARCHAR route_id
+        GEOMETRY start_point
+        GEOMETRY end_point
+        JSONB route_snapshot_json
         ENUM status
     }
 
     SUBWAY_STATION_ELEVATORS {
-        INT elevatorId PK
-        VARCHAR stationId
-        VARCHAR stationName
-        VARCHAR lineName
-        VARCHAR entranceNo
+        INT elevator_id PK
+        VARCHAR station_id
+        VARCHAR station_name
+        VARCHAR line_name
+        VARCHAR entrance_no
         GEOMETRY point
     }
 ```
@@ -235,29 +235,29 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 사용자 PK | userId | UUID | NOT NULL |  |
-| 소셜 제공자 | socialProvider | VARCHAR(30) | NOT NULL |  |
-| 소셜 사용자 ID | socialProviderUserId | VARCHAR(100) | NOT NULL |  |
-| 1차 사용자 유형 | selectedPrimaryUserType | VARCHAR(30) | NOT NULL |  |
-| 보행약자 세부 유형 | selectedMobilitySubtype | VARCHAR(30) | NULL |  |
+| 사용자 PK | user_id | UUID | NOT NULL |  |
+| 소셜 제공자 | social_provider | VARCHAR(30) | NOT NULL |  |
+| 소셜 사용자 ID | social_provider_user_id | VARCHAR(100) | NOT NULL |  |
+| 1차 사용자 유형 | selected_primary_user_type | VARCHAR(30) | NOT NULL |  |
+| 보행약자 세부 유형 | selected_mobility_subtype | VARCHAR(30) | NULL |  |
 
 ### 제약
 
-- `UNIQUE (socialProvider, socialProviderUserId)`
+- `UNIQUE (social_provider, social_provider_user_id)`
 
 ### 비고
 
 - 소셜 OAuth 인증만 완료된 상태는 아직 서비스 회원이 아니다. 필수 약관 동의와 온보딩 선택값을 받은 뒤 `users` row를 생성한다.
-- 따라서 `selectedPrimaryUserType`은 `NOT NULL`이다. 온보딩 미완료 상태를 나타내는 별도 완료 필드는 두지 않는다.
+- 따라서 `selected_primary_user_type`은 `NOT NULL`이다. 온보딩 미완료 상태를 나타내는 별도 완료 필드는 두지 않는다.
 - `nickname`은 MVP 사용자 테이블에 저장하지 않는다. 마이페이지 표시명이 필요하면 소셜 프로필 응답 또는 후속 프로필 정책에서 별도로 정한다.
-- `selectedPrimaryUserType` 후보값은 `LOW_VISION`, `MOBILITY_IMPAIRED`다.
-- `selectedPrimaryUserType=LOW_VISION`이면 `selectedMobilitySubtype`은 `NULL`이어야 한다.
-- `selectedPrimaryUserType=MOBILITY_IMPAIRED`이면 `selectedMobilitySubtype`은 한 개만 저장한다.
-- `selectedMobilitySubtype` 후보값은 `POWER_WHEELCHAIR`, `MANUAL_WHEELCHAIR`, `OTHER_MOBILITY`다.
+- `selected_primary_user_type` 후보값은 `LOW_VISION`, `MOBILITY_IMPAIRED`다.
+- `selected_primary_user_type=LOW_VISION`이면 `selected_mobility_subtype`은 `NULL`이어야 한다.
+- `selected_primary_user_type=MOBILITY_IMPAIRED`이면 `selected_mobility_subtype`은 한 개만 저장한다.
+- `selected_mobility_subtype` 후보값은 `POWER_WHEELCHAIR`, `MANUAL_WHEELCHAIR`, `OTHER_MOBILITY`다.
 - 필수 약관 동의는 가입 완료 조건으로 검증하지만, `users` 테이블에 별도 동의 여부 필드를 저장하지 않는다.
 - 푸시 알림, 진동 알림, TTS, 경로 데이터 수집 설정은 서버에 저장하지 않고 앱 내부 설정 또는 후순위 정책으로 관리한다.
 - 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 동일 사용자 재가입 시 기존 계정 복구 또는 재활성화 정책을 별도로 둔다.
-- `userId`는 외부 응답과 JWT subject에도 사용되는 UUID다.
+- `user_id`는 외부 응답과 JWT subject에서 `userId`로 노출되는 UUID다.
 
 ---
 
@@ -271,13 +271,13 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 북마크 ID | bookmarkId | INT | NOT NULL |  |
-| 사용자 PK | userId | UUID | NOT NULL |  |
-| 장소 ID | placeId | BIGINT | NOT NULL |  |
+| 북마크 ID | bookmark_id | INT | NOT NULL |  |
+| 사용자 PK | user_id | UUID | NOT NULL |  |
+| 장소 ID | place_id | BIGINT | NOT NULL |  |
 
 ### 비고
 
-- `UNIQUE (userId, placeId)` 제약을 둔다.
+- `UNIQUE (user_id, place_id)` 제약을 둔다.
 
 ---
 
@@ -295,18 +295,18 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 자주 가는 길 ID | favRouteId | BIGINT | NOT NULL |  |
-| 경로명 | routeName | VARCHAR(511) | NOT NULL |  |
-| 출발지명 | startLabel | VARCHAR(255) | NOT NULL |  |
-| 도착지명 | endLabel | VARCHAR(255) | NOT NULL |  |
-| 출발지 좌표 | startPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
-| 도착지 좌표 | endPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
-| 이동 수단 | transportMode | VARCHAR(30) | NOT NULL |  |
-| 경로 종류 | routeOption | VARCHAR(30) | NOT NULL | SAFE |
-| 경로 스냅샷 JSON | routeSnapshotJson | JSONB | NOT NULL |  |
-| 사용자 PK | userId | UUID | NOT NULL |  |
+| 자주 가는 길 ID | fav_route_id | BIGINT | NOT NULL |  |
+| 경로명 | route_name | VARCHAR(511) | NOT NULL |  |
+| 출발지명 | start_label | VARCHAR(255) | NOT NULL |  |
+| 도착지명 | end_label | VARCHAR(255) | NOT NULL |  |
+| 출발지 좌표 | start_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 도착지 좌표 | end_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 이동 수단 | transport_mode | VARCHAR(30) | NOT NULL |  |
+| 경로 종류 | route_option | VARCHAR(30) | NOT NULL | SAFE |
+| 경로 스냅샷 JSON | route_snapshot_json | JSONB | NOT NULL |  |
+| 사용자 PK | user_id | UUID | NOT NULL |  |
 
-### routeOption 후보값
+### route_option 후보값
 
 - `SAFE`
 - `SHORTEST`
@@ -314,18 +314,18 @@ erDiagram
 - `MIN_TRANSFER`
 - `MIN_WALK`
 
-### transportMode 후보값
+### transport_mode 후보값
 
 - `WALK`
 - `PUBLIC_TRANSIT`
 
 ### 비고
 
-- `routeName`은 사용자가 직접 입력하지 않고 `startLabel`과 `endLabel`을 기준으로 자동 생성한다.
-- `startLabel`, `endLabel`은 화면 표시명이다. 프론트는 장소명, 도로명주소, 지번주소 순으로 값을 정해 저장 요청에 전달한다.
-- `startPoint`, `endPoint`, `transportMode`, `routeOption`, `routeSnapshotJson`은 저장 요청의 `routeId`로 찾은 `route_sessions`에서 복사한다.
-- `routeSnapshotJson`은 저장 당시 선택 경로 상세를 다시 보여주기 위한 route payload다.
-- 저장된 경로를 최신 조건으로 다시 탐색할 때는 `startPoint`, `endPoint`, `routeOption`을 재탐색 입력값으로 사용할 수 있다.
+- `route_name`은 사용자가 직접 입력하지 않고 `start_label`과 `end_label`을 기준으로 자동 생성한다.
+- Java/API의 `startLabel`, `endLabel`은 화면 표시명이다. 프론트는 장소명, 도로명주소, 지번주소 순으로 값을 정해 저장 요청에 전달한다.
+- `start_point`, `end_point`, `transport_mode`, `route_option`, `route_snapshot_json`은 저장 요청의 `routeId`로 찾은 `route_sessions`에서 복사한다.
+- `route_snapshot_json`은 저장 당시 선택 경로 상세를 다시 보여주기 위한 route payload다.
+- 저장된 경로를 최신 조건으로 다시 탐색할 때는 `start_point`, `end_point`, `route_option`을 재탐색 입력값으로 사용할 수 있다.
 - 목록 정렬은 최신 저장순을 기본으로 한다.
 
 ---
@@ -342,16 +342,16 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 사용자 제보 ID | reportId | INT | NOT NULL |  |
-| 사용자 PK | userId | UUID | NOT NULL |  |
-| 제보 유형 | reportType | VARCHAR(30) | NOT NULL |  |
+| 사용자 제보 ID | report_id | INT | NOT NULL |  |
+| 사용자 PK | user_id | UUID | NOT NULL |  |
+| 제보 유형 | report_type | VARCHAR(30) | NOT NULL |  |
 | 설명 | description | TEXT | NULL |  |
-| 제보 위치 | reportPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 제보 위치 | report_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 상태 | status | VARCHAR(30) | NOT NULL | PENDING |
 
 ### 후보값
 
-- `reportType`: `STAIRS_STEP`, `BRAILLE_BLOCK`, `SIDEWALK_MISSING`, `RAMP`, `SIDEWALK_WIDTH`, `OTHER_OBSTACLE`
+- `report_type`: `STAIRS_STEP`, `BRAILLE_BLOCK`, `SIDEWALK_MISSING`, `RAMP`, `SIDEWALK_WIDTH`, `OTHER_OBSTACLE`
 - `status`: `PENDING`, `APPROVED`, `REJECTED`
 
 ### 비고
@@ -359,7 +359,7 @@ erDiagram
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
 - `APPROVED`, `REJECTED` 상태 변경은 Slack 제보 검토 콜백 API에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
-- 제보 위치의 기준 데이터는 `reportPoint`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
+- 제보 위치의 기준 데이터는 `report_point`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
 - 사용자별 제보 목록은 최신순으로 제공한다.
 
 ---
@@ -376,16 +376,16 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 제보 이미지 ID | reportImgId | INT | NOT NULL |  |
-| 이미지 URL | imageUrl | TEXT | NOT NULL |  |
-| 표시 순서 | displayOrder | SMALLINT | NOT NULL | 0 |
-| 사용자 제보 ID | reportId | INT | NOT NULL |  |
+| 제보 이미지 ID | report_img_id | INT | NOT NULL |  |
+| 이미지 URL | image_url | TEXT | NOT NULL |  |
+| 표시 순서 | display_order | SMALLINT | NOT NULL | 0 |
+| 사용자 제보 ID | report_id | INT | NOT NULL |  |
 
 ### 비고
 
-- `UNIQUE (reportId, displayOrder)` 제약을 둔다.
+- `UNIQUE (report_id, display_order)` 제약을 둔다.
 - 제보 사진은 선택 입력이며 최대 5장까지 허용한다.
-- 목록 응답에서는 `displayOrder=0` 이미지를 대표 사진으로 사용하고, 상세 응답에서 전체 사진을 제공한다.
+- 목록 응답에서는 DB `display_order=0` 이미지를 대표 사진으로 사용하고, API에서는 `displayOrder`로 노출한다.
 
 ---
 
@@ -401,12 +401,12 @@ erDiagram
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 장소 ID | placeId | BIGINT | NOT NULL |  |
+| 장소 ID | place_id | BIGINT | NOT NULL |  |
 | 장소명 | name | VARCHAR(255) | NOT NULL |  |
 | 카테고리 | category | VARCHAR(50) | NOT NULL |  |
 | 주소 | address | VARCHAR(255) | NULL |  |
 | 좌표 | point | GEOMETRY(POINT, 4326) | NOT NULL |  |
-| 카카오 장소 ID | providerPlaceId | VARCHAR(100) | NULL |  |
+| 제공자 장소 ID | provider_place_id | VARCHAR(100) | NULL |  |
 
 ### category 후보값
 
@@ -432,15 +432,15 @@ erDiagram
 
 ### 비고
 
-- 카카오 장소 ID를 내부 장소와 매칭 근거로 채택한 경우에만 `providerPlaceId`에 저장한다. DB 기본키인 `placeId`는 내부 자동 증가 ID로 유지한다.
-- `providerPlaceId`는 카카오 장소 ID 전용 필드다. POI ID나 공공데이터 원천 ID를 저장하지 않는다.
-- `providerPlaceId`에는 유니크 제약을 둔다. 단, 카카오 검색 결과를 북마크했다는 이유만으로 `places`를 자동 생성하지 않는다.
+- 카카오 장소 ID를 내부 장소와 매칭 근거로 채택한 경우에만 `provider_place_id`에 저장한다. DB 기본키인 `place_id`는 내부 자동 증가 ID로 유지한다.
+- Java/API에서는 `providerPlaceId`로 노출하지만 DB 물리 컬럼은 `provider_place_id`다.
+- `provider_place_id`에는 유니크 제약을 둔다. 단, 카카오 검색 결과를 북마크했다는 이유만으로 `places`를 자동 생성하지 않는다.
 - 카카오 `category_name`과 공공데이터 원천 분류명은 MVP 장소 테이블 컬럼으로 저장하지 않는다. 서비스 필터 기준은 항상 `category`다.
 - `BARRIER_FREE_FACILITY`는 최종 카테고리로 사용하지 않는다. 원천 장애인편의시설 데이터는 실제 시설 성격에 따라 `FOOD_CAFE`, `TOURIST_SPOT`, `ACCOMMODATION`, `HEALTHCARE`, `WELFARE`, `PUBLIC_OFFICE`, `ETC` 중 하나로 분류한다.
 - `BUS_STATION`은 장소 도메인 최종 카테고리에서 제외한다. 대중교통 정류소는 대중교통 도메인에서 별도로 관리한다.
-- `ELEVATOR`는 장소 카테고리로 사용하지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 일반 장소의 엘리베이터 보유 여부는 `place_accessibility_features.featureType = elevator`로 관리한다.
-- `TOILET`은 장소 카테고리로 사용하지 않는다. 장애인 이용 가능 화장실은 `place_accessibility_features.featureType = accessibleToilet`로 관리한다.
-- `CHARGING_STATION`은 장소 카테고리로 사용하지 않는다. 전동보장구 충전소 장소는 `category=ETC`로 저장하고 반드시 `featureType=chargingStation`, `isAvailable=true`를 가진다.
+- `ELEVATOR`는 장소 카테고리로 사용하지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 일반 장소의 엘리베이터 보유 여부는 `place_accessibility_features.feature_type = elevator`로 관리한다.
+- `TOILET`은 장소 카테고리로 사용하지 않는다. 장애인 이용 가능 화장실은 `place_accessibility_features.feature_type = accessibleToilet`로 관리한다.
+- `CHARGING_STATION`은 장소 카테고리로 사용하지 않는다. 전동보장구 충전소 장소는 `category=ETC`로 저장하고 반드시 `feature_type=chargingStation`, `is_available=true`를 가진다.
 - 최종 정제 산출물은 `place/erd_ready/place_merged_broad_category_final.csv` 기준 13,564개 장소이며, `TOILET`, `CHARGING_STATION`, `MOBILITY`, `FOOD`, `PUBLIC`, `MEDICAL_WELFARE` 구 카테고리는 남기지 않는다.
 
 ---
@@ -456,11 +456,11 @@ erDiagram
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 접근성 속성 ID | id | INT | NOT NULL |  |
-| 장소 ID | placeId | BIGINT | NOT NULL |  |
-| 속성 유형 | featureType | VARCHAR(50) | NOT NULL |  |
-| 제공 여부 | isAvailable | BOOLEAN | NOT NULL | false |
+| 장소 ID | place_id | BIGINT | NOT NULL |  |
+| 속성 유형 | feature_type | VARCHAR(50) | NOT NULL |  |
+| 제공 여부 | is_available | BOOLEAN | NOT NULL | false |
 
-### featureType 후보값
+### feature_type 후보값
 
 - `accessibleEntrance`
 - `elevator`
@@ -472,7 +472,7 @@ erDiagram
 
 ### 비고
 
-- `UNIQUE (placeId, featureType)` 제약을 둔다.
+- `UNIQUE (place_id, feature_type)` 제약을 둔다.
 - `accessibleEntrance`는 주출입구 접근 가능, 무단차 진입, 경사로형 접근로를 통합한 접근성 속성이다. 기존 `ramp`, `stepFree`는 별도 featureType으로 분리하지 않는다.
 - 지도 홈 상단 빠른 필터는 장소 카테고리가 아니라 `accessibleToilet`, `elevator`, `chargingStation` 접근성 속성을 기준으로 조회한다.
 - `chargingStation`은 전동보장구 충전 가능 여부를 뜻한다. 전동보장구 충전소 원천 장소는 `places.category=ETC`와 `chargingStation=true`를 함께 가져야 한다.
@@ -491,21 +491,21 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 정점 ID | vertexId | BIGINT | NOT NULL |  |
-| 소스 노드 키 | sourceNodeKey | VARCHAR(100) | NOT NULL |  |
+| 정점 ID | vertex_id | BIGINT | NOT NULL |  |
+| 소스 노드 키 | source_node_key | VARCHAR(100) | NOT NULL |  |
 | 노드 좌표 | point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 
 ### 제약
 
-- `UNIQUE (sourceNodeKey)`
+- `UNIQUE (source_node_key)`
 
 ### 비고
 
-- `sourceNodeKey`는 endpoint 좌표를 tolerance-normalized한 결정론적 키다.
+- `source_node_key`는 endpoint 좌표를 tolerance-normalized한 결정론적 키다.
   - 생성 규칙: `f"{round(lng, 6)}:{round(lat, 6)}"` (EPSG:4326 변환 후, 0.00001° tolerance snap 적용)
   - 예시: `"129.083214:35.179032"`
-- OSM 전용 `osmNodeId`는 이 버전에서 제거됐다. `vertexId`가 유일한 PK이며 `sourceNodeKey`가 natural key 역할을 한다.
-- `roadSegments`의 시작/종료점으로 사용된 anchor node만 저장한다.
+- OSM 전용 `osm_node_id`는 이 버전에서 제거됐다. `vertex_id`가 유일한 PK이며 `source_node_key`가 natural key 역할을 한다.
+- `road_segments`의 시작/종료점으로 사용된 anchor node만 저장한다.
 
 ---
 
@@ -521,45 +521,45 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 간선 ID | edgeId | BIGINT | NOT NULL |  |
-| 시작 노드 ID | fromNodeId | BIGINT | NOT NULL |  |
-| 종료 노드 ID | toNodeId | BIGINT | NOT NULL |  |
+| 간선 ID | edge_id | BIGINT | NOT NULL |  |
+| 시작 노드 ID | from_node_id | BIGINT | NOT NULL |  |
+| 종료 노드 ID | to_node_id | BIGINT | NOT NULL |  |
 | 선형 좌표 | geom | GEOMETRY(LINESTRING, 4326) | NOT NULL |  |
-| 길이(미터) | lengthMeter | NUMERIC(10,2) | NOT NULL |  |
-| 보행 가능 상태 | walkAccess | ENUM | NOT NULL | UNKNOWN |
-| 평균 경사도(%) | avgSlopePercent | NUMERIC(6,2) | NULL |  |
-| 보행 폭(미터) | widthMeter | NUMERIC(6,2) | NULL |  |
-| 점자블록 상태 | brailleBlockState | ENUM | NOT NULL | UNKNOWN |
-| 음향신호기 상태 | audioSignalState | ENUM | NOT NULL | UNKNOWN |
-| 경사 상태 | slopeState | ENUM | NOT NULL | UNKNOWN |
-| 폭 상태 | widthState | ENUM | NOT NULL | UNKNOWN |
-| 노면 상태 | surfaceState | VARCHAR(30) | NOT NULL | UNKNOWN |
-| 계단 상태 | stairsState | ENUM | NOT NULL | UNKNOWN |
-| 신호 상태 | signalState | ENUM | NOT NULL | UNKNOWN |
-| 구간 유형 | segmentType | VARCHAR(30) | NOT NULL | SIDE_LINE |
+| 길이(미터) | length_meter | NUMERIC(10,2) | NOT NULL |  |
+| 보행 가능 상태 | walk_access | ENUM | NOT NULL | UNKNOWN |
+| 평균 경사도(%) | avg_slope_percent | NUMERIC(6,2) | NULL |  |
+| 보행 폭(미터) | width_meter | NUMERIC(6,2) | NULL |  |
+| 점자블록 상태 | braille_block_state | ENUM | NOT NULL | UNKNOWN |
+| 음향신호기 상태 | audio_signal_state | ENUM | NOT NULL | UNKNOWN |
+| 경사 상태 | slope_state | ENUM | NOT NULL | UNKNOWN |
+| 폭 상태 | width_state | ENUM | NOT NULL | UNKNOWN |
+| 노면 상태 | surface_state | VARCHAR(30) | NOT NULL | UNKNOWN |
+| 계단 상태 | stairs_state | ENUM | NOT NULL | UNKNOWN |
+| 신호 상태 | signal_state | ENUM | NOT NULL | UNKNOWN |
+| 구간 유형 | segment_type | VARCHAR(30) | NOT NULL | SIDE_LINE |
 
 ### enum 값
 
-- `walkAccess`, `brailleBlockState`, `audioSignalState`, `stairsState`, `signalState`: `YES`, `NO`, `UNKNOWN`
-- `slopeState`: `FLAT`, `MODERATE`, `STEEP`, `RISK`, `UNKNOWN`
-- `widthState`: `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN`
-- `surfaceState` 후보값: `PAVED`, `UNPAVED`, `UNKNOWN`
-- `segmentType` 후보값: `CROSS_WALK`, `SIDE_LINE`
+- `walk_access`, `braille_block_state`, `audio_signal_state`, `stairs_state`, `signal_state`: `YES`, `NO`, `UNKNOWN`
+- `slope_state`: `FLAT`, `MODERATE`, `STEEP`, `RISK`, `UNKNOWN`
+- `width_state`: `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN`
+- `surface_state` 후보값: `PAVED`, `UNPAVED`, `UNKNOWN`
+- `segment_type` 후보값: `CROSS_WALK`, `SIDE_LINE`
 
 ### 비고
 
-- `edgeId`가 downstream(CSV ETL, GraphHopper)에서 사용하는 유일한 surrogate key다.
-- `walkAccess` 기본값은 SHP 소스에서 보행 전용 의미를 확정할 수 없으므로 `UNKNOWN`으로 시작한다. `NO`는 모든 프로필에서 통행 차단, `UNKNOWN`은 차단하지 않고 penalty로 처리한다.
-- `avgSlopePercent`, `widthMeter`는 CSV ETL(`slope_analysis_staging.csv`) 보강값으로 채워진다.
-- `slopeState`는 경사 난이도 기반 경로 비용 계산에 사용하며, `avgSlopePercent` 또는 경사 관련 보강 데이터에서 파생한다.
-- `slopeState=RISK`는 `avgSlopePercent >= 12.00%` 구간을 의미하며, 경로 비용 계산에서 강한 회피 또는 차단 후보로 사용한다.
-- `surfaceState`는 분류 기준이 확장될 수 있으므로 ENUM 대신 `VARCHAR`로 관리한다.
-- `crossingState`는 별도 저장 컬럼으로 두지 않고 `segmentType`과 `signalState`에서 파생한다.
-  - `segmentType != CROSS_WALK`이면 `crossingState=NONE`
-  - `segmentType = CROSS_WALK`이고 `signalState=YES`이면 `crossingState=SIGNALIZED`
-  - `segmentType = CROSS_WALK`이고 `signalState=NO`이면 `crossingState=UNSIGNALIZED`
-  - `segmentType = CROSS_WALK`이고 `signalState=UNKNOWN`이면 `crossingState=UNKNOWN`
-- 엘리베이터는 보행 segment 상태값으로 두지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 장소 내부 엘리베이터는 `place_accessibility_features.featureType=elevator`로 관리한다.
+- `edge_id`가 downstream(CSV ETL, GraphHopper)에서 사용하는 유일한 surrogate key다.
+- `walk_access` 기본값은 SHP 소스에서 보행 전용 의미를 확정할 수 없으므로 `UNKNOWN`으로 시작한다. `NO`는 모든 프로필에서 통행 차단, `UNKNOWN`은 차단하지 않고 penalty로 처리한다.
+- `avg_slope_percent`, `width_meter`는 CSV ETL(`slope_analysis_staging.csv`) 보강값으로 채워진다.
+- `slope_state`는 경사 난이도 기반 경로 비용 계산에 사용하며, `avg_slope_percent` 또는 경사 관련 보강 데이터에서 파생한다.
+- `slope_state=RISK`는 `avg_slope_percent >= 12.00%` 구간을 의미하며, 경로 비용 계산에서 강한 회피 또는 차단 후보로 사용한다.
+- `surface_state`는 분류 기준이 확장될 수 있으므로 ENUM 대신 `VARCHAR`로 관리한다.
+- `crossing_state`는 별도 저장 컬럼으로 두지 않고 `segment_type`과 `signal_state`에서 파생한다.
+  - `segment_type != CROSS_WALK`이면 `crossing_state=NONE`
+  - `segment_type = CROSS_WALK`이고 `signal_state=YES`이면 `crossing_state=SIGNALIZED`
+  - `segment_type = CROSS_WALK`이고 `signal_state=NO`이면 `crossing_state=UNSIGNALIZED`
+  - `segment_type = CROSS_WALK`이고 `signal_state=UNKNOWN`이면 `crossing_state=UNKNOWN`
+- 엘리베이터는 보행 segment 상태값으로 두지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 장소 내부 엘리베이터는 `place_accessibility_features.feature_type=elevator`로 관리한다.
 - 상세 feature 객체(음향신호기, 횡단보도 등)는 `segment_features`에 저장하고, `road_segments`에는 최종 상태값만 반영한다.
 
 ---
@@ -568,7 +568,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ### 역할
 
-`roadSegments`에 매칭된 개별 feature 객체를 저장한다.
+`road_segments`에 매칭된 개별 feature 객체를 저장한다.
 
 횡단보도, 점자블록, 음향신호기, 경사 구간, 계단처럼 특정 edge에 귀속되는 원천 feature를 추적하거나 지도에 표시할 때 사용한다.
 
@@ -576,16 +576,16 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| feature 식별자 | featureId | BIGINT | NOT NULL |  |
-| 소속 edge | edgeId | BIGINT | NOT NULL |  |
-| feature 종류 | featureType | VARCHAR(50) | NOT NULL |  |
+| feature 식별자 | feature_id | BIGINT | NOT NULL |  |
+| 소속 edge | edge_id | BIGINT | NOT NULL |  |
+| feature 종류 | feature_type | VARCHAR(50) | NOT NULL |  |
 | 표시 위치/구간 | geom | GEOMETRY(GEOMETRY, 4326) | NOT NULL |  |
 
 ### 비고
 
-- `roadSegments 1 : N segmentFeatures` 관계를 가진다.
+- `road_segments 1 : N segment_features` 관계를 가진다.
 - `geom`은 feature 성격에 따라 `POINT`, `LINESTRING` 등으로 저장할 수 있도록 범용 geometry 타입을 사용한다.
-- `featureType` 후보값: `CROSSWALK`, `AUDIO_SIGNAL`, `BRAILLE_BLOCK`, `SLOPE`, `STAIRS`.
+- `feature_type` 후보값: `CROSSWALK`, `AUDIO_SIGNAL`, `BRAILLE_BLOCK`, `SLOPE`, `STAIRS`.
 
 ---
 
@@ -601,11 +601,11 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 경로 평가 ID | ratingId | BIGINT | NOT NULL |  |
-| 사용자 PK | userId | UUID | NOT NULL |  |
-| 경로 ID | routeId | VARCHAR(120) | NOT NULL |  |
+| 경로 평가 ID | rating_id | BIGINT | NOT NULL |  |
+| 사용자 PK | user_id | UUID | NOT NULL |  |
+| 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
 | 별점 | score | SMALLINT | NOT NULL |  |
-| 경로 문맥 JSON | routeContextJson | JSONB | NULL |  |
+| 경로 문맥 JSON | route_context_json | JSONB | NULL |  |
 
 ### 후보값
 
@@ -613,17 +613,17 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ### 제약
 
-- `ratingId` PK
-- `UNIQUE (userId, routeId)`
+- `rating_id` PK
+- `UNIQUE (user_id, route_id)`
 
 ### 비고
 
 - 경로 평가에는 별점만 저장한다.
 - 평가 대상은 사용자가 방금 안내받은 경로다.
-- `routeId`는 `POST /route-ratings` 요청의 평가 대상 경로 ID다.
-- `routeContextJson`은 평가 시점에 route session이 있으면 `route_sessions.routeSnapshotJson`을 복사해 저장한다.
-- `routeContextJson`이 `NULL`이어도 rating 자체는 저장할 수 있다.
-- 평가 생성 시각은 `createdAt` 공통 감사 컬럼으로 관리한다.
+- `route_id`는 `POST /route-ratings` 요청의 평가 대상 경로 ID다.
+- `route_context_json`은 평가 시점에 route session이 있으면 `route_sessions.route_snapshot_json`을 복사해 저장한다.
+- `route_context_json`이 `NULL`이어도 rating 자체는 저장할 수 있다.
+- 평가 생성 시각은 DB `created_at` 공통 감사 컬럼으로 관리하고, Java/API에서는 `createdAt`으로 노출할 수 있다.
 - 회원 탈퇴 시 경로 평가는 삭제한다.
 
 ---
@@ -642,12 +642,12 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 세션 ID | sessionId | UUID | NOT NULL |  |
-| 사용자 ID | userId | UUID | NOT NULL |  |
-| 대표 경로 ID | routeId | VARCHAR(120) | NOT NULL |  |
-| 출발지 좌표 | startPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
-| 도착지 좌표 | endPoint | GEOMETRY(POINT, 4326) | NOT NULL |  |
-| 경로 스냅샷 JSON | routeSnapshotJson | JSONB | NOT NULL |  |
+| 세션 ID | session_id | UUID | NOT NULL |  |
+| 사용자 ID | user_id | UUID | NOT NULL |  |
+| 대표 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
+| 출발지 좌표 | start_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 도착지 좌표 | end_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 경로 스냅샷 JSON | route_snapshot_json | JSONB | NOT NULL |  |
 | 세션 상태 | status | ENUM | NOT NULL | ACTIVE |
 
 ### enum 값
@@ -656,27 +656,27 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ### 비고
 
-- `sessionId`는 실제 안내 세션의 식별자다.
-- `routeId`는 프론트와 API에서 참조하는 대표 경로 ID다.
-- `routeSnapshotJson`은 선택 당시 경로를 복구하기 위한 JSON이다.
-- `routeSnapshotJson`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
+- `session_id`는 실제 안내 세션의 식별자다.
+- `route_id`는 프론트와 API에서 참조하는 대표 경로 ID다.
+- `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
+- `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
   - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `alightingStop`, `isLowFloor`, `badges`
   - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
-- `routeSnapshotJson`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
+- `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
   - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
   - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
   - SUBWAY metadata: ODsay `startID`, ODsay `endID`, 내부 지하철역 식별자, 선택된 승차/하차 엘리베이터 식별자와 좌표
   - reroute/refresh 판단용 metadata: leg별 geometry, BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표
-- `routeSnapshotJson`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
+- `route_snapshot_json`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
 - 실시간 도착정보는 외부 API 또는 Redis TTL cache에서만 관리한다.
 - `status=ACTIVE`는 현재 안내 중이거나 재탐색 가능한 세션이다.
 - `status=COMPLETED`는 사용자가 도착 또는 안내 종료를 명시한 세션이다.
 - `EXPIRED`는 `status`로 두지 않는다. 만료는 JPA auditing의 수정일시 또는 별도 정책으로 판단한다.
 - 생성/수정/삭제 시간은 공통 JPA auditing 필드에서 관리하므로 이 테이블 명세에는 포함하지 않는다.
 - route search 후보 묶음은 이 테이블에 저장하지 않는다. 검색 후보는 Redis `routeSearch:{searchId}`에만 저장한다.
-- `userId + routeId` 또는 `sessionId` 기준으로 소유권을 검증한다.
+- `user_id + route_id` 또는 `session_id` 기준으로 소유권을 검증한다.
 - 운영에서는 `ACTIVE` 세션이 무한히 남지 않도록 보관 정책이 필요하다. 예: 마지막 수정 후 24시간이 지나면 재탐색 불가 처리 또는 배치 정리.
 
 ---
@@ -693,33 +693,33 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 엘리베이터 ID | elevatorId | INT | NOT NULL |  |
-| 역 식별자 (부산교통공사 기준) | stationId | VARCHAR(20) | NOT NULL |  |
-| ODsay 역 식별자 | odsayStationId | VARCHAR(30) | NULL |  |
-| 역명 | stationName | VARCHAR(100) | NOT NULL |  |
-| 호선명 | lineName | VARCHAR(50) | NOT NULL |  |
-| 출입구 번호 | entranceNo | VARCHAR(10) | NULL |  |
+| 엘리베이터 ID | elevator_id | INT | NOT NULL |  |
+| 역 식별자 (부산교통공사 기준) | station_id | VARCHAR(20) | NOT NULL |  |
+| ODsay 역 식별자 | odsay_station_id | VARCHAR(30) | NULL |  |
+| 역명 | station_name | VARCHAR(100) | NOT NULL |  |
+| 호선명 | line_name | VARCHAR(50) | NOT NULL |  |
+| 출입구 번호 | entrance_no | VARCHAR(10) | NULL |  |
 | 엘리베이터 위치 좌표 | point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 
 ### 제약
 
-- `elevatorId` PK
-- `INDEX (stationId)`
-- `INDEX (odsayStationId)`
+- `elevator_id` PK
+- `INDEX (station_id)`
+- `INDEX (odsay_station_id)`
 
 ### 비고
 
 - 하나의 역에 여러 레코드가 존재할 수 있다 (출입구별).
-- ODsay SUBWAY leg의 `startID`, `endID`는 `odsayStationId`로 매핑한다.
-- WALK leg 목적지 override 시 `odsayStationId`로 우선 조회하고, 없으면 `stationName + lineName`으로 fallback 조회한다.
+- ODsay SUBWAY leg의 `startID`, `endID`는 `odsay_station_id`로 매핑한다.
+- WALK leg 목적지 override 시 `odsay_station_id`로 우선 조회하고, 없으면 `station_name + line_name`으로 fallback 조회한다.
 - 같은 역에 엘리베이터가 여러 개면 origin 또는 직전 WALK endpoint에서 가장 가까운 엘리베이터를 선택한다.
-- 환승역의 경우 환승 동선 엘리베이터도 동일 테이블에 `entranceNo`로 구분하여 저장한다.
+- 환승역의 경우 환승 동선 엘리베이터도 동일 테이블에 `entrance_no`로 구분하여 저장한다.
 - 초기값은 한국승강기안전공단 공공데이터와 부산교통공사 역 시설 현황을 기반으로 적재한다.
 
 ### 관계
 
 - 별도 `station` 테이블과 FK 관계를 두지 않는다.
-- `stationId`는 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
+- `station_id`는 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
 
 ---
 
@@ -746,7 +746,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### users - route_sessions
 
 - `users 1 : N route_sessions`
-- `route_sessions.userId`와 `route_sessions.routeId` 또는 `route_sessions.sessionId` 기준으로 경로 세션 소유권을 검증한다.
+- `route_sessions.user_id`와 `route_sessions.route_id` 또는 `route_sessions.session_id` 기준으로 경로 세션 소유권을 검증한다.
 
 ### hazard_reports - hazard_report_images
 
@@ -763,7 +763,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### road_nodes - road_segments
 
 - `road_nodes 1 : N road_segments`
-- 시작 노드(`fromNodeId`)와 종료 노드(`toNodeId`)를 기준으로 간선이 연결된다.
+- 시작 노드(`from_node_id`)와 종료 노드(`to_node_id`)를 기준으로 간선이 연결된다.
 
 ### road_segments - segment_features
 

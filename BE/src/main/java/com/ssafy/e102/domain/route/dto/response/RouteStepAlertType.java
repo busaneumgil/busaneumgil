@@ -7,11 +7,9 @@ package com.ssafy.e102.domain.route.dto.response;
  * 계산한다.
  */
 public enum RouteStepAlertType {
-	NONE,
 	CROSSWALK,
 	MIDDLE_SLOPE,
 	STAIR,
-	CURB,
 	NARROW_SIDEWALK,
 	UNPAVED,
 	ELEVATOR,

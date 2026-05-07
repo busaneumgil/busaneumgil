@@ -76,4 +76,13 @@ class RouteDtoJsonTest {
 		assertThat(step.get("alert").get("type").asText()).isEqualTo("CROSSWALK");
 		assertThat(step.get("widthState").asText()).isEqualTo("ADEQUATE_150");
 	}
+
+	@Test
+	@DisplayName("route step alert enum은 API 계약에 없는 NONE/CURB를 노출하지 않는다")
+	void routeStepAlertTypeDoesNotExposeRemovedContractValues() {
+		assertThat(RouteStepAlertType.values())
+			.extracting(Enum::name)
+			.contains("CROSSWALK", "TURN_LEFT", "TURN_RIGHT")
+			.doesNotContain("NONE", "CURB");
+	}
 }

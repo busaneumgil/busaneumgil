@@ -22,16 +22,26 @@ class SegmentFeatureTest {
 		SegmentFeature feature = SegmentFeature.create(
 			1L,
 			100L,
-			SegmentFeatureType.WIDTH,
+			SegmentFeatureType.CROSSWALK,
 			geom,
-			"ADEQUATE_120",
+			"YES",
 			BigDecimal.valueOf(1.25));
 
 		assertThat(feature.getFeatureId()).isEqualTo(1L);
 		assertThat(feature.getEdgeId()).isEqualTo(100L);
-		assertThat(feature.getFeatureType()).isEqualTo(SegmentFeatureType.WIDTH);
+		assertThat(feature.getFeatureType()).isEqualTo(SegmentFeatureType.CROSSWALK);
 		assertThat(feature.getGeom()).isSameAs(geom);
-		assertThat(feature.getState()).isEqualTo("ADEQUATE_120");
+		assertThat(feature.getState()).isEqualTo("YES");
 		assertThat(feature.getValueNumber()).isEqualByComparingTo("1.25");
+	}
+
+	@Test
+	void featureTypeKeepsOnlyPositionEventCandidatesForMvp() {
+		assertThat(SegmentFeatureType.values())
+			.containsExactly(
+				SegmentFeatureType.CROSSWALK,
+				SegmentFeatureType.AUDIO_SIGNAL,
+				SegmentFeatureType.BRAILLE_BLOCK,
+				SegmentFeatureType.STAIRS);
 	}
 }

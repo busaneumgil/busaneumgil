@@ -17,7 +17,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * GraphHopper export 전에 road segment를 feature 위치 기준으로 분할하고 접근성 상태를 덮어쓰기 위한 원천 feature다.
+ * 횡단보도, 음향신호기, 점자블록, 계단처럼 실제 위치 안내가 필요한 원천 feature다.
+ *
+ * <p>경사, 노면, 폭은 위치 이벤트가 아니라 {@code road_segments} 집계 컬럼으로만 관리하므로 이 Entity의
+ * {@code featureType} 후보에 포함하지 않는다.
  */
 @Getter
 @Entity

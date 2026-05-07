@@ -6,12 +6,15 @@ source "$ROOT_DIR/scripts/make/lib/be-dev.sh"
 
 ensure_env_file
 ensure_docker_daemon
-ensure_dev_tunnel
+resolve_dev_graphhopper_db_url
 
-db_name="$(dev_db_name)"
+run_args=(--profile graphhopper-build run --rm --build --entrypoint python3)
+if [ "$DEV_GRAPHHOPPER_BUILD_NO_DEPS" = "true" ]; then
+  run_args+=(--no-deps)
+fi
 
-DB_URL="jdbc:postgresql://host.docker.internal:$BE_DEV_DB_LOCAL_PORT/$db_name" \
-"${DEV_COMPOSE[@]}" --profile graphhopper-build run --rm --no-deps --build --entrypoint python3 \
+DB_URL="$DEV_GRAPHHOPPER_DB_URL" \
+"${DEV_COMPOSE[@]}" "${run_args[@]}" \
   graphhopper-build \
   /usr/local/bin/smoke-postgis-export.py \
     --report-json /graphhopper/import/road-network-export-smoke-report.json

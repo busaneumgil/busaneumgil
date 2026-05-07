@@ -6,15 +6,14 @@ source "$ROOT_DIR/scripts/make/lib/be-dev.sh"
 
 ensure_env_file
 ensure_docker_daemon
-ensure_dev_tunnel
+resolve_dev_graphhopper_db_url
 
-db_name="$(dev_db_name)"
 app_port="$(env_value GRAPHHOPPER_PORT)"
 admin_port="$(env_value GRAPHHOPPER_ADMIN_PORT)"
 app_port="${app_port:-8998}"
 admin_port="${admin_port:-8999}"
 
-DB_URL="jdbc:postgresql://host.docker.internal:$BE_DEV_DB_LOCAL_PORT/$db_name" \
+DB_URL="$DEV_GRAPHHOPPER_DB_URL" \
 "${DEV_COMPOSE[@]}" up -d --build graphhopper
 
 echo "waiting for dev GraphHopper healthcheck: http://127.0.0.1:$admin_port/healthcheck"
@@ -32,9 +31,14 @@ if [ "$ready" -ne 1 ]; then
   exit 1
 fi
 
-DB_URL="jdbc:postgresql://host.docker.internal:$BE_DEV_DB_LOCAL_PORT/$db_name" \
+run_args=(--profile graphhopper-build run --rm --build --entrypoint python3)
+if [ "$DEV_GRAPHHOPPER_BUILD_NO_DEPS" = "true" ]; then
+  run_args+=(--no-deps)
+fi
+
+DB_URL="$DEV_GRAPHHOPPER_DB_URL" \
 GRAPHHOPPER_PROFILE_SMOKE_BASE_URL="http://host.docker.internal:$app_port" \
-"${DEV_COMPOSE[@]}" --profile graphhopper-build run --rm --no-deps --build --entrypoint python3 \
+"${DEV_COMPOSE[@]}" "${run_args[@]}" \
   graphhopper-build \
   /usr/local/bin/smoke-graphhopper-profiles.py \
     --report-json /graphhopper/import/road-network-profile-smoke-report.json

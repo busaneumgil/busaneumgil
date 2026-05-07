@@ -5,9 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -30,6 +32,7 @@ import com.ssafy.e102.eumgil.feature.lowvision.lowVisionButtonSemantics
 object LowVisionBottomNavDefaults {
     const val itemCount = 4
     const val itemWeight = 1f
+    const val reservesNavigationBarSafeZone = true
     val height = 80.dp
 }
 
@@ -78,40 +81,50 @@ fun LowVisionBottomNav(
         ),
     )
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .height(LowVisionBottomNavDefaults.height)
             .background(Color.Black),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        items.forEach { (tab, item) ->
-            val tint = if (tab == selectedTab) LowVisionScreenDefaults.brandYellow else Color(0xFF777777)
-            val label = stringResource(id = item.labelRes)
-            Column(
-                modifier = Modifier
-                    .weight(LowVisionBottomNavDefaults.itemWeight)
-                    .fillMaxHeight()
-                    .lowVisionButtonSemantics(label)
-                    .clickable(role = Role.Button) { onTabSelected(tab) }
-                    .padding(vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Icon(
-                    painter = painterResource(id = item.iconRes),
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(24.dp),
-                )
-                Text(
-                    text = label,
-                    color = tint,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Normal,
-                )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(LowVisionBottomNavDefaults.height),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items.forEach { (tab, item) ->
+                val tint = if (tab == selectedTab) LowVisionScreenDefaults.brandYellow else Color(0xFF777777)
+                val label = stringResource(id = item.labelRes)
+                Column(
+                    modifier = Modifier
+                        .weight(LowVisionBottomNavDefaults.itemWeight)
+                        .fillMaxHeight()
+                        .lowVisionButtonSemantics(label)
+                        .clickable(role = Role.Button) { onTabSelected(tab) }
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(id = item.iconRes),
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Text(
+                        text = label,
+                        color = tint,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Normal,
+                    )
+                }
             }
         }
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+        )
     }
 }
 

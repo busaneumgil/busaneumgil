@@ -102,6 +102,75 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertNotIn("e102:edge_id", first_way_tags)
         self.assertNotIn("ieum:crossing_state", first_way_tags)
 
+    def test_default_export_sql_uses_snake_case_columns_when_available(self):
+        module = load_export_module()
+
+        nodes_sql = module.build_road_nodes_sql({"vertex_id", "point"})
+        segments_sql = module.build_road_segments_sql({
+            "edge_id",
+            "from_node_id",
+            "to_node_id",
+            "geom",
+            "length_meter",
+            "walk_access",
+            "avg_slope_percent",
+            "width_meter",
+            "braille_block_state",
+            "audio_signal_state",
+            "slope_state",
+            "width_state",
+            "surface_state",
+            "stairs_state",
+            "signal_state",
+            "segment_type",
+        })
+
+        self.assertIn('"vertex_id" AS vertex_id', nodes_sql)
+        self.assertIn('ORDER BY "vertex_id"', nodes_sql)
+        self.assertIn('"edge_id" AS edge_id', segments_sql)
+        self.assertIn('COALESCE("walk_access"::text', segments_sql)
+        self.assertIn('ORDER BY "edge_id"', segments_sql)
+
+    def test_default_export_sql_falls_back_to_legacy_camel_case_columns(self):
+        module = load_export_module()
+
+        nodes_sql = module.build_road_nodes_sql({"vertexId", "point"})
+        segments_sql = module.build_road_segments_sql({
+            "edgeId",
+            "fromNodeId",
+            "toNodeId",
+            "geom",
+            "lengthMeter",
+            "walkAccess",
+            "avgSlopePercent",
+            "widthMeter",
+            "brailleBlockState",
+            "audioSignalState",
+            "slopeState",
+            "widthState",
+            "surfaceState",
+            "stairsState",
+            "signalState",
+            "segmentType",
+        })
+
+        self.assertIn('"vertexId" AS vertex_id', nodes_sql)
+        self.assertIn('ORDER BY "vertexId"', nodes_sql)
+        self.assertIn('"edgeId" AS edge_id', segments_sql)
+        self.assertIn('"fromNodeId" AS from_node_id', segments_sql)
+        self.assertIn('COALESCE("walkAccess"::text', segments_sql)
+        self.assertIn('ORDER BY "edgeId"', segments_sql)
+
+    def test_default_feature_sql_falls_back_to_legacy_camel_case_columns(self):
+        module = load_export_module()
+
+        features_sql = module.build_segment_features_sql({"featureId", "edgeId", "featureType", "geom"})
+
+        self.assertIn('"featureId" AS feature_id', features_sql)
+        self.assertIn('"edgeId" AS edge_id', features_sql)
+        self.assertIn('"featureType"::text AS feature_type', features_sql)
+        self.assertIn('ORDER BY "edgeId", "featureId"', features_sql)
+
     def test_validate_graph_reports_pass_with_unknown_warnings(self):
         module = load_export_module()
 

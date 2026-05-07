@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,13 +49,13 @@ internal object LowVisionCategoryLayoutDefaults {
     const val rowCount = 2
     const val cardColumnWeight = 1f
     const val cardContentBudgetHeightDp = 240f
-    val headerGridGap = 28.dp
+    const val centersHeaderText = true
+    const val showsBackButton = false
+    val headerGridGap = LowVisionScreenDefaults.headerGap
     val gridGap = 24.dp
     val cardMinHeight = 286.dp
-    val backButtonSize = 64.dp
-    val backIconSize = 52.dp
-    val headerFontSize = 52.sp
-    val headerLineHeight = 60.sp
+    val headerFontSize = LowVisionScreenDefaults.headerFontSize
+    val headerLineHeight = LowVisionScreenDefaults.headerLineHeight
     val scrollBottomSpacer = 112.dp
     val cardCornerRadius = 18.dp
     val cardBorderWidth = 3.dp
@@ -117,7 +116,6 @@ internal val lowVisionCategoryOptions =
 
 @Composable
 fun LowVisionCategoryScreen(
-    onBackClick: () -> Unit,
     onCategorySelected: (String) -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
@@ -141,7 +139,7 @@ fun LowVisionCategoryScreen(
                     ),
             verticalArrangement = Arrangement.spacedBy(LowVisionCategoryLayoutDefaults.headerGridGap),
         ) {
-            LowVisionCategoryHeader(onBackClick = onBackClick)
+            LowVisionCategoryHeader()
             LowVisionCategoryGrid(
                 selectedCategoryLabel = selectedCategoryLabel,
                 onCategorySelected = { categoryLabel ->
@@ -163,41 +161,18 @@ fun LowVisionCategoryScreen(
 }
 
 @Composable
-private fun LowVisionCategoryHeader(onBackClick: () -> Unit) {
-    Row(
+private fun LowVisionCategoryHeader() {
+    Text(
+        text = "\uCE74\uD14C\uACE0\uB9AC",
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(LowVisionCategoryLayoutDefaults.backButtonSize)
-                    .lowVisionButtonSemantics(
-                        label = "뒤로",
-                        actionHint = "두 번 탭하면 홈으로 이동합니다.",
-                    )
-                    .clickable(role = Role.Button, onClick = onBackClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_action_back),
-                contentDescription = null,
-                tint = LowVisionCategoryYellow,
-                modifier = Modifier.size(LowVisionCategoryLayoutDefaults.backIconSize),
-            )
-        }
-        Text(
-            text = "카테고리",
-            color = LowVisionCategoryYellow,
-            fontSize = LowVisionCategoryLayoutDefaults.headerFontSize,
-            lineHeight = LowVisionCategoryLayoutDefaults.headerLineHeight,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 0.sp,
-        )
-    }
+        color = LowVisionCategoryYellow,
+        fontSize = LowVisionCategoryLayoutDefaults.headerFontSize,
+        lineHeight = LowVisionCategoryLayoutDefaults.headerLineHeight,
+        fontWeight = FontWeight.Black,
+        letterSpacing = 0.sp,
+        textAlign = TextAlign.Center,
+    )
 }
-
 @Composable
 private fun LowVisionCategoryGrid(
     selectedCategoryLabel: String?,

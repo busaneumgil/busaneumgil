@@ -27,10 +27,10 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 class WalkRouteGraphHopperSearchServiceTest {
 
-	private final WalkRouteProfileResolver profileResolver = new WalkRouteProfileResolver();
+	private final WalkRouteProfileService profileService = new WalkRouteProfileService();
 	private final GraphHopperRouteClient graphHopperRouteClient = Mockito.mock(GraphHopperRouteClient.class);
 	private final WalkRouteGraphHopperSearchService service = new WalkRouteGraphHopperSearchService(
-		profileResolver,
+		profileService,
 		graphHopperRouteClient);
 
 	@Test

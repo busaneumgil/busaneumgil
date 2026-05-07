@@ -19,13 +19,13 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 @Service
 public class WalkRouteGraphHopperSearchService {
 
-	private final WalkRouteProfileResolver profileResolver;
+	private final WalkRouteProfileService profileService;
 	private final GraphHopperRouteClient graphHopperRouteClient;
 
 	public WalkRouteGraphHopperSearchService(
-		WalkRouteProfileResolver profileResolver,
+		WalkRouteProfileService profileService,
 		GraphHopperRouteClient graphHopperRouteClient) {
-		this.profileResolver = profileResolver;
+		this.profileService = profileService;
 		this.graphHopperRouteClient = graphHopperRouteClient;
 	}
 
@@ -51,7 +51,7 @@ public class WalkRouteGraphHopperSearchService {
 		MobilitySubtype mobilitySubtype,
 		RouteOption routeOption,
 		List<WalkRouteCandidate> candidates) {
-		WalkRouteProfile profile = profileResolver.resolve(primaryUserType, mobilitySubtype, routeOption);
+		WalkRouteProfile profile = profileService.resolve(primaryUserType, mobilitySubtype, routeOption);
 		try {
 			GraphHopperRoutePath path = graphHopperRouteClient.route(
 				new GraphHopperRouteRequest(startPoint, endPoint, profile));

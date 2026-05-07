@@ -1,6 +1,6 @@
 package com.ssafy.e102.domain.route.service;
 
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
@@ -9,8 +9,8 @@ import com.ssafy.e102.domain.route.type.WalkRouteProfile;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 
-@Component
-public class WalkRouteProfileResolver {
+@Service
+public class WalkRouteProfileService {
 
 	public WalkRouteProfile resolve(
 		PrimaryUserType primaryUserType,

@@ -8,6 +8,16 @@ package com.ssafy.e102.domain.route.dto.response;
  */
 public enum RouteStepAlertType {
 	NONE,
+	CROSSWALK,
+	MIDDLE_SLOPE,
+	STAIR,
+	CURB,
+	NARROW_SIDEWALK,
+	UNPAVED,
+	ELEVATOR,
+	BUS_STOP,
+	SUBWAY_ELEVATOR,
+	ALIGHTING_POINT,
 	TURN_LEFT,
 	TURN_RIGHT
 }

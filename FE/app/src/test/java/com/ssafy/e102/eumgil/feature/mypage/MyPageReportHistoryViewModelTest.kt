@@ -33,13 +33,13 @@ class MyPageReportHistoryViewModelTest {
                 listOf(
                     reportOutbox(
                         outboxId = "old",
-                        reportCategory = ReportType.STAIRS.apiValue,
+                        reportCategory = ReportType.STAIRS_STEP.apiValue,
                         address = "부산진구 가야대로 772 앞",
                         updatedAtMillis = 1_714_097_400_000L,
                     ),
                     reportOutbox(
                         outboxId = "new",
-                        reportCategory = ReportType.ELEVATOR.apiValue,
+                        reportCategory = ReportType.OTHER_OBSTACLE.apiValue,
                         address = "부산역 1번 출구 엘리베이터",
                         updatedAtMillis = 1_714_104_000_000L,
                         photoUri = "content://reports/elevator.jpg",
@@ -52,7 +52,7 @@ class MyPageReportHistoryViewModelTest {
 
             assertEquals(MyPageReportHistoryScreenState.CONTENT, uiState.screenState)
             assertEquals(listOf("new", "old"), uiState.reports.map { it.outboxId })
-            assertEquals("엘리베이터 고장", uiState.reports.first().title)
+            assertEquals("기타 장애물", uiState.reports.first().title)
             assertEquals("부산역 1번 출구 엘리베이터", uiState.reports.first().address)
             assertEquals("content://reports/elevator.jpg", uiState.reports.first().photoUri)
             assertTrue(uiState.reports.first().submittedAtText.contains("2024.04"))

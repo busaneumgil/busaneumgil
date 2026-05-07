@@ -44,12 +44,37 @@ pipeline {
       steps {
         sh '''
           set -eu
-          if docker volume inspect s14p31e102-dev_graphhopper-dev-data >/dev/null 2>&1 \
-            && docker run --rm -v s14p31e102-dev_graphhopper-dev-data:/graphhopper/data alpine:3.20 sh -c 'test -n "$(find /graphhopper/data -mindepth 1 -maxdepth 1 2>/dev/null)"'; then
-            echo "GraphHopper graph-cache already exists. Skipping build."
+          CACHE_VOLUME="s14p31e102-dev_graphhopper-dev-data"
+          CACHE_FINGERPRINT="$({
+            sha256sum INF/graphhopper/Dockerfile
+            sha256sum INF/graphhopper/config-build.yml
+            sha256sum INF/graphhopper/config-runtime.yml
+            find INF/graphhopper/custom_models -type f | LC_ALL=C sort | while read -r file; do sha256sum "$file"; done
+            find INF/graphhopper/plugin/src -type f | LC_ALL=C sort | while read -r file; do sha256sum "$file"; done
+            sha256sum scripts/graphhopper/export_postgis_to_osm.py
+          } | sha256sum | awk '{print $1}')"
+
+          docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml build graphhopper
+
+          if docker volume inspect "$CACHE_VOLUME" >/dev/null 2>&1 \
+            && docker run --rm -e EXPECTED_FINGERPRINT="$CACHE_FINGERPRINT" -v "$CACHE_VOLUME:/graphhopper/data" alpine:3.20 sh -ceu '
+              [ -s /graphhopper/data/.ieum-graphhopper-cache-fingerprint ]
+              [ "$(cat /graphhopper/data/.ieum-graphhopper-cache-fingerprint)" = "$EXPECTED_FINGERPRINT" ]
+              test -n "$(find /graphhopper/data -mindepth 1 -maxdepth 1 ! -name .ieum-graphhopper-cache-fingerprint ! -name .ieum-graphhopper-cache-built-at 2>/dev/null)"
+            '; then
+            echo "GraphHopper graph-cache fingerprint matches current image/config. Skipping rebuild."
           else
             docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml --profile graphhopper-build build graphhopper-build
-            docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml --profile graphhopper-build run --rm graphhopper-build
+            docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml --profile graphhopper-build run --rm \
+              -e GRAPHHOPPER_CACHE_FINGERPRINT="$CACHE_FINGERPRINT" \
+              graphhopper-build
+            docker run --rm \
+              -e CACHE_FINGERPRINT="$CACHE_FINGERPRINT" \
+              -e CACHE_BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+              -v "$CACHE_VOLUME:/graphhopper/data" alpine:3.20 sh -ceu '
+                printf "%s\n" "$CACHE_FINGERPRINT" > /graphhopper/data/.ieum-graphhopper-cache-fingerprint
+                printf "%s\n" "$CACHE_BUILT_AT" > /graphhopper/data/.ieum-graphhopper-cache-built-at
+              '
           fi
           docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml up -d graphhopper
         '''

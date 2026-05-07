@@ -10,6 +10,9 @@ BUILD_LOCATION="${GRAPHHOPPER_BUILD_LOCATION:-/graphhopper/build-cache}"
 GRAPH_LOCATION="${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}"
 IMPORT_TIMEOUT_SECONDS="${GRAPHHOPPER_IMPORT_TIMEOUT_SECONDS:-1800}"
 OSMIUM_BIN="${OSMIUM_BIN:-osmium}"
+CACHE_FINGERPRINT="${GRAPHHOPPER_CACHE_FINGERPRINT:-}"
+CACHE_FINGERPRINT_FILE="${GRAPHHOPPER_CACHE_FINGERPRINT_FILE:-$GRAPH_LOCATION/.ieum-graphhopper-cache-fingerprint}"
+CACHE_TIMESTAMP_FILE="${GRAPHHOPPER_CACHE_TIMESTAMP_FILE:-$GRAPH_LOCATION/.ieum-graphhopper-cache-built-at}"
 
 write_pbf_report() {
   python3 - "$PBF_REPORT_FILE" "$OSM_IMPORT_FILE" "$PBF_IMPORT_FILE" "$OSMIUM_BIN" <<'PY'
@@ -115,5 +118,10 @@ if [ -d "$GRAPH_LOCATION" ] && [ -n "$(find "$GRAPH_LOCATION" -mindepth 1 -maxde
 fi
 find "$GRAPH_LOCATION" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 cp -a "$BUILD_LOCATION"/. "$GRAPH_LOCATION"/
+
+if [ -n "$CACHE_FINGERPRINT" ]; then
+  printf '%s\n' "$CACHE_FINGERPRINT" > "$CACHE_FINGERPRINT_FILE"
+fi
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$CACHE_TIMESTAMP_FILE"
 
 echo "GraphHopper graph-cache build completed."

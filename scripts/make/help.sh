@@ -24,6 +24,7 @@ Docker Compose: prod server
   prod-config                  prod compose 설정을 렌더링한다
   prod-up                      prod backend/ai runtime을 실행한다
   prod-up-graphhopper          prod GraphHopper runtime까지 실행한다
+  prod-schema-update           prod DB에 JPA 기반 schema를 생성하고 road table을 검증한다
 
 Docker host scripts
   be-dev-config                백엔드 dev host 설정을 렌더링한다

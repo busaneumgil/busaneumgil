@@ -29,6 +29,18 @@ class GraphhopperProfilePolicyTest(unittest.TestCase):
             with self.subTest(profile=profile_name):
                 self.assertEqual(priority_multiplier(model, "walk_access == NO"), "0")
 
+    def test_wheelchair_profiles_block_stairs(self):
+        models = load_custom_models()
+        wheelchair_profiles = [
+            "wheelchair_auto_fast",
+            "wheelchair_auto_safe",
+            "wheelchair_manual_fast",
+            "wheelchair_manual_safe",
+        ]
+        for profile_name in wheelchair_profiles:
+            with self.subTest(profile=profile_name):
+                self.assertEqual(priority_multiplier(models[profile_name], "stairs_state == YES"), "0.00")
+
 
 if __name__ == "__main__":
     unittest.main()

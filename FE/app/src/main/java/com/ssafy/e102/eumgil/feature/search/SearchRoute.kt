@@ -12,20 +12,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.collect
 
 @Composable
 fun SearchEntryRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     modifier: Modifier = Modifier,
 ) {
     SearchRouteContent(
         destination = SearchScreenDestination.Entry,
         initialQuery = null,
+        initialEditingTarget = initialEditingTarget,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
+        onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
         modifier = modifier,
     )
@@ -35,16 +40,43 @@ fun SearchEntryRoute(
 fun SearchResultsRoute(
     initialQuery: String,
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     modifier: Modifier = Modifier,
 ) {
     SearchRouteContent(
         destination = SearchScreenDestination.Results,
         initialQuery = initialQuery,
+        initialEditingTarget = initialEditingTarget,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
+        onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun SearchVoiceInputRoute(
+    onNavigateBack: () -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    onStartVoiceCapture: () -> Unit = {},
+    onStopVoiceCapture: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    SearchRouteContent(
+        destination = SearchScreenDestination.VoiceInput,
+        initialQuery = null,
+        initialEditingTarget = initialEditingTarget,
+        onNavigateBack = onNavigateBack,
+        onNavigateToResults = onNavigateToResults,
+        onNavigateToVoiceInput = {},
+        onNavigateToRouteSetting = {},
+        onStartVoiceCapture = onStartVoiceCapture,
+        onStopVoiceCapture = onStopVoiceCapture,
         modifier = modifier,
     )
 }
@@ -53,9 +85,13 @@ fun SearchResultsRoute(
 private fun SearchRouteContent(
     destination: SearchScreenDestination,
     initialQuery: String?,
+    initialEditingTarget: RouteEditingTarget,
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onStartVoiceCapture: () -> Unit = {},
+    onStopVoiceCapture: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -77,8 +113,12 @@ private fun SearchRouteContent(
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "SearchRoute requires a ComponentActivity host." }
             ViewModelProvider(owner, viewModelFactory)[SearchViewModel::class.java]
-    }
+        }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel, initialEditingTarget) {
+        viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = initialEditingTarget))
+    }
 
     LaunchedEffect(viewModel, initialQuery) {
         if (initialQuery != null) {
@@ -86,11 +126,28 @@ private fun SearchRouteContent(
         }
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToResults, onNavigateToRouteSetting) {
+    LaunchedEffect(viewModel, destination) {
+        if (destination == SearchScreenDestination.VoiceInput) {
+            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
+        }
+    }
+
+    LaunchedEffect(
+        viewModel,
+        onNavigateBack,
+        onNavigateToResults,
+        onNavigateToVoiceInput,
+        onNavigateToRouteSetting,
+        onStartVoiceCapture,
+        onStopVoiceCapture,
+    ) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 SearchUiEvent.NavigateBack -> onNavigateBack()
-                is SearchUiEvent.NavigateToResults -> onNavigateToResults(event.query)
+                SearchUiEvent.NavigateToVoiceInput -> onNavigateToVoiceInput()
+                is SearchUiEvent.NavigateToResults -> onNavigateToResults(event.query, event.editingTarget)
+                SearchUiEvent.StartVoiceCapture -> onStartVoiceCapture()
+                SearchUiEvent.StopVoiceCapture -> onStopVoiceCapture()
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 SearchUiEvent.NavigateToRouteBriefing,
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit

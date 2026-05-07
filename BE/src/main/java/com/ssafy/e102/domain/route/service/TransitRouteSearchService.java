@@ -2,12 +2,16 @@ package com.ssafy.e102.domain.route.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
@@ -16,11 +20,16 @@ import com.ssafy.e102.domain.route.dto.response.RouteStopResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitLaneOptionResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
+import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
+import com.ssafy.e102.domain.route.repository.SubwayStationRepository;
+import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
@@ -45,8 +54,11 @@ public class TransitRouteSearchService {
 	private static final double BUSAN_MIN_LNG = 128.70;
 	private static final double BUSAN_MAX_LNG = 129.40;
 	private static final double START_END_MIN_DISTANCE_METER = 20.0;
+	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 
 	private final WalkRouteUserProfileQueryService userProfileQueryService;
+	private final SubwayStationRepository subwayStationRepository;
+	private final SubwayTimetableRepository subwayTimetableRepository;
 	private final WalkRouteProfileService walkRouteProfileService;
 	private final WalkRoutePayloadService walkRoutePayloadService;
 	private final GraphHopperRouteClient graphHopperRouteClient;
@@ -56,6 +68,8 @@ public class TransitRouteSearchService {
 
 	public TransitRouteSearchService(
 		WalkRouteUserProfileQueryService userProfileQueryService,
+		SubwayStationRepository subwayStationRepository,
+		SubwayTimetableRepository subwayTimetableRepository,
 		WalkRouteProfileService walkRouteProfileService,
 		WalkRoutePayloadService walkRoutePayloadService,
 		GraphHopperRouteClient graphHopperRouteClient,
@@ -63,6 +77,8 @@ public class TransitRouteSearchService {
 		OdsayClient odsayClient,
 		RouteSearchCacheService routeSearchCacheService) {
 		this.userProfileQueryService = userProfileQueryService;
+		this.subwayStationRepository = subwayStationRepository;
+		this.subwayTimetableRepository = subwayTimetableRepository;
 		this.walkRouteProfileService = walkRouteProfileService;
 		this.walkRoutePayloadService = walkRoutePayloadService;
 		this.graphHopperRouteClient = graphHopperRouteClient;
@@ -153,8 +169,10 @@ public class TransitRouteSearchService {
 				odsayLeg,
 				nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex));
 			legs.add(transitLeg);
-			if (odsayLeg.endLat() != null && odsayLeg.endLng() != null) {
-				cursor = new GeoPointRequest(odsayLeg.endLat().doubleValue(), odsayLeg.endLng().doubleValue());
+			if (transitLeg.alightingStop() != null) {
+				cursor = new GeoPointRequest(
+					transitLeg.alightingStop().lat().doubleValue(),
+					transitLeg.alightingStop().lng().doubleValue());
 			}
 		}
 		return List.copyOf(legs);
@@ -167,8 +185,11 @@ public class TransitRouteSearchService {
 		int currentIndex = odsayLegs.indexOf(currentLeg);
 		for (int index = currentIndex + 1; index < odsayLegs.size(); index++) {
 			OdsayTransitLeg next = odsayLegs.get(index);
-			if (next.type() != TransportMode.WALK && next.startLat() != null && next.startLng() != null) {
-				return new GeoPointRequest(next.startLat().doubleValue(), next.startLng().doubleValue());
+			if (next.type() != TransportMode.WALK) {
+				RouteStopResponse stop = boardingStop(next);
+				if (stop != null) {
+					return new GeoPointRequest(stop.lat().doubleValue(), stop.lng().doubleValue());
+				}
 			}
 		}
 		return endPoint;
@@ -217,6 +238,8 @@ public class TransitRouteSearchService {
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
 		List<TransitLaneOptionResponse> laneOptions = laneOptions(odsayLeg);
 		String routeNo = routeNo(odsayLeg, laneOptions);
+		RouteStopResponse boardingStop = boardingStop(odsayLeg);
+		RouteStopResponse alightingStop = alightingStop(odsayLeg);
 		return new RouteLegResponse(
 			sequence,
 			odsayLeg.type(),
@@ -230,10 +253,39 @@ public class TransitRouteSearchService {
 			List.of(),
 			routeNo,
 			laneOptions,
-			stop(odsayLeg.startName(), odsayLeg.startLat(), odsayLeg.startLng()),
-			stop(odsayLeg.endName(), odsayLeg.endLat(), odsayLeg.endLng()),
+			boardingStop,
+			alightingStop,
 			null,
 			odsayLeg.type() == TransportMode.SUBWAY ? List.of(RouteBadge.ELEVATOR) : List.of());
+	}
+
+	private RouteStopResponse boardingStop(OdsayTransitLeg leg) {
+		if (leg.type() == TransportMode.SUBWAY) {
+			return subwayStop(leg.startName(), leg.startId(), leg.startExitLat(), leg.startExitLng());
+		}
+		return stop(leg.startName(), leg.startLat(), leg.startLng());
+	}
+
+	private RouteStopResponse alightingStop(OdsayTransitLeg leg) {
+		if (leg.type() == TransportMode.SUBWAY) {
+			return subwayStop(leg.endName(), leg.endId(), leg.endExitLat(), leg.endExitLng());
+		}
+		return stop(leg.endName(), leg.endLat(), leg.endLng());
+	}
+
+	private RouteStopResponse subwayStop(String name, String odsayStationId, BigDecimal fallbackLat,
+		BigDecimal fallbackLng) {
+		return subwayStationRepository.findByOdsayStationId(odsayStationId)
+			.filter(station -> station.getPoint() != null)
+			.map(station -> stop(station.getStationName() + " 엘리베이터", station))
+			.orElseGet(() -> stop(name + " 엘리베이터", fallbackLat, fallbackLng));
+	}
+
+	private RouteStopResponse stop(String name, SubwayStation station) {
+		return new RouteStopResponse(
+			name,
+			BigDecimal.valueOf(station.getPoint().getY()),
+			BigDecimal.valueOf(station.getPoint().getX()));
 	}
 
 	private String nextGeometry(
@@ -404,6 +456,17 @@ public class TransitRouteSearchService {
 		snapshot.put("type", leg.type());
 		snapshot.put("lanes", leg.lanes().stream().map(this::snapshotLane).toList());
 		snapshot.put("passStops", leg.passStops().stream().map(this::snapshotStop).toList());
+		if (leg.type() == TransportMode.SUBWAY) {
+			RouteStopResponse boardingStop = boardingStop(leg);
+			RouteStopResponse alightingStop = alightingStop(leg);
+			snapshot.put("odsayStationId", leg.startId());
+			snapshot.put("endOdsayStationId", leg.endId());
+			snapshot.put("lineName", routeNo(leg));
+			snapshot.put("wayCode", leg.wayCode());
+			snapshot.put("boardingElevator", snapshotStop(boardingStop));
+			snapshot.put("alightingElevator", snapshotStop(alightingStop));
+			snapshot.put("nextDeparture", nextDepartureSnapshot(leg));
+		}
 		return snapshot;
 	}
 
@@ -425,6 +488,63 @@ public class TransitRouteSearchService {
 		snapshot.put("lat", stop.lat());
 		snapshot.put("lng", stop.lng());
 		return snapshot;
+	}
+
+	private Map<String, Object> snapshotStop(RouteStopResponse stop) {
+		if (stop == null) {
+			return Map.of();
+		}
+		Map<String, Object> snapshot = new LinkedHashMap<>();
+		snapshot.put("name", stop.name());
+		snapshot.put("lat", stop.lat());
+		snapshot.put("lng", stop.lng());
+		return snapshot;
+	}
+
+	private Map<String, Object> nextDepartureSnapshot(OdsayTransitLeg leg) {
+		SubwayTimetable nextDeparture = nextDeparture(leg);
+		if (nextDeparture == null) {
+			return Map.of();
+		}
+		Map<String, Object> snapshot = new LinkedHashMap<>();
+		snapshot.put("departureTimeText", nextDeparture.getDepartureTimeText());
+		snapshot.put("departureSecondOfDay", nextDeparture.getDepartureSecondOfDay());
+		snapshot.put("endStationName", nextDeparture.getEndStationName());
+		return snapshot;
+	}
+
+	private SubwayTimetable nextDeparture(OdsayTransitLeg leg) {
+		if (leg.wayCode() == null) {
+			return null;
+		}
+		LocalDateTime now = LocalDateTime.now(SEOUL_ZONE_ID);
+		int secondOfDay = now.toLocalTime().toSecondOfDay();
+		SubwayServiceDayType serviceDayType = serviceDayType(now.getDayOfWeek());
+		List<SubwayTimetable> departures = subwayTimetableRepository.findNextDepartures(
+			leg.startId(),
+			serviceDayType,
+			leg.wayCode(),
+			secondOfDay,
+			PageRequest.of(0, 1));
+		if (!departures.isEmpty()) {
+			return departures.get(0);
+		}
+		List<SubwayTimetable> firstDepartures = subwayTimetableRepository.findFirstDepartures(
+			leg.startId(),
+			serviceDayType,
+			leg.wayCode(),
+			PageRequest.of(0, 1));
+		return firstDepartures.isEmpty() ? null : firstDepartures.get(0);
+	}
+
+	private SubwayServiceDayType serviceDayType(DayOfWeek dayOfWeek) {
+		if (dayOfWeek == DayOfWeek.SATURDAY) {
+			return SubwayServiceDayType.SATURDAY;
+		}
+		if (dayOfWeek == DayOfWeek.SUNDAY) {
+			return SubwayServiceDayType.HOLIDAY;
+		}
+		return SubwayServiceDayType.WEEKDAY;
 	}
 
 	private void validateServiceArea(GeoPointRequest startPoint, GeoPointRequest endPoint) {

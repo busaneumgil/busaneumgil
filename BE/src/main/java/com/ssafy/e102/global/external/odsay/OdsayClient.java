@@ -171,12 +171,18 @@ public class OdsayClient {
 			text(legNode, "startID"),
 			text(legNode, "startLocalStationID"),
 			text(legNode, "startArsID"),
+			decimal(legNode, "startExitY"),
+			decimal(legNode, "startExitX"),
 			text(legNode, "endName"),
 			decimal(legNode, "endY"),
 			decimal(legNode, "endX"),
 			text(legNode, "endID"),
 			text(legNode, "endLocalStationID"),
 			text(legNode, "endArsID"),
+			decimal(legNode, "endExitY"),
+			decimal(legNode, "endExitX"),
+			integer(legNode, "wayCode"),
+			text(legNode, "way"),
 			parseLanes(legNode.path("lane")),
 			parsePassStops(legNode.path("passStopList").path("stations")),
 			snapshot(
@@ -186,7 +192,9 @@ public class OdsayClient {
 				"startLocalStationID", text(legNode, "startLocalStationID"),
 				"endLocalStationID", text(legNode, "endLocalStationID"),
 				"startArsID", text(legNode, "startArsID"),
-				"endArsID", text(legNode, "endArsID")));
+				"endArsID", text(legNode, "endArsID"),
+				"wayCode", integer(legNode, "wayCode"),
+				"way", text(legNode, "way")));
 	}
 
 	private List<OdsayTransitLane> parseLanes(JsonNode laneNodes) {
@@ -278,6 +286,14 @@ public class OdsayClient {
 			return null;
 		}
 		return new BigDecimal(value.asText());
+	}
+
+	private Integer integer(JsonNode node, String fieldName) {
+		JsonNode value = node.path(fieldName);
+		if (value.isMissingNode() || value.isNull() || !StringUtils.hasText(value.asText())) {
+			return null;
+		}
+		return value.asInt();
 	}
 
 	private RouteException externalFailure(HttpStatusCodeException exception) {

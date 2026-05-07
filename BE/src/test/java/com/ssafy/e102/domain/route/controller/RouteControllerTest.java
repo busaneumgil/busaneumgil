@@ -110,7 +110,7 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.data.routes[0].estimatedTimeMinute").value(16))
 			.andExpect(jsonPath("$.data.routes[0].badges[0]").value("CROSSWALK"))
 			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].instruction").value("직진하세요."))
-			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].alert.type").value("CROSSWALK"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].alert.type").value("CROSSWALK_AUDIO"))
 			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].badges").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].slopePercent").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].widthState").doesNotExist());
@@ -229,7 +229,7 @@ class RouteControllerTest {
 						BigDecimal.valueOf(30),
 						35,
 						"LINESTRING(128.9360 35.1200, 128.9361 35.1201)",
-						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK, BigDecimal.ZERO))))))));
+						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK_AUDIO, BigDecimal.ZERO))))))));
 	}
 
 	private UsernamePasswordAuthenticationToken authentication(UUID userId) {

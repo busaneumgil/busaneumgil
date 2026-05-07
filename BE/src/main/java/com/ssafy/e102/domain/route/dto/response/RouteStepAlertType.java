@@ -7,6 +7,8 @@ package com.ssafy.e102.domain.route.dto.response;
  */
 public enum RouteStepAlertType {
 	CROSSWALK,
+	CROSSWALK_SIGNAL,
+	CROSSWALK_AUDIO,
 	MIDDLE_SLOPE,
 	STAIR,
 	NARROW_SIDEWALK,

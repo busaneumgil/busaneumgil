@@ -40,11 +40,10 @@ public class WalkRoutePayloadService {
 
 	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
 	private static final List<AlertRule> ALERT_RULES = List.of(
-		new AlertRule(RouteStepAlertType.CROSSWALK, "segment_type", Set.of("CROSS_WALK"), 1),
-		new AlertRule(RouteStepAlertType.STAIR, "stairs_state", Set.of("YES"), 2),
-		new AlertRule(RouteStepAlertType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 3),
-		new AlertRule(RouteStepAlertType.UNPAVED, "surface_state", Set.of("UNPAVED"), 4),
-		new AlertRule(RouteStepAlertType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 5));
+		new AlertRule(RouteStepAlertType.STAIR, "stairs_state", Set.of("YES"), 4),
+		new AlertRule(RouteStepAlertType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 5),
+		new AlertRule(RouteStepAlertType.UNPAVED, "surface_state", Set.of("UNPAVED"), 6),
+		new AlertRule(RouteStepAlertType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 7));
 
 	private final RouteTurnInstructionService routeTurnInstructionService;
 
@@ -315,11 +314,76 @@ public class WalkRoutePayloadService {
 		int toIndex,
 		BigDecimal stepDistanceMeter) {
 		BigDecimal stepLength = routeLength(path.coordinates().subList(fromIndex, toIndex + 1));
-		return ALERT_RULES.stream()
-			.flatMap(rule -> alertCandidates(path, rule, fromIndex, toIndex, stepDistanceMeter, stepLength).stream())
+		return java.util.stream.Stream.concat(
+			crosswalkAlertCandidates(path, fromIndex, toIndex, stepDistanceMeter, stepLength).stream(),
+			ALERT_RULES.stream()
+				.flatMap(rule -> alertCandidates(path, rule, fromIndex, toIndex, stepDistanceMeter, stepLength)
+					.stream()))
 			.min(Comparator
 				.comparingInt(StepAlertCandidate::priority)
 				.thenComparing(StepAlertCandidate::distanceMeter));
+	}
+
+	private List<StepAlertCandidate> crosswalkAlertCandidates(
+		GraphHopperRoutePath path,
+		int fromIndex,
+		int toIndex,
+		BigDecimal stepDistanceMeter,
+		BigDecimal stepLength) {
+		return path.details()
+			.getOrDefault("segment_type", List.of())
+			.stream()
+			.filter(detail -> "CROSS_WALK".equals(detail.value()))
+			.filter(detail -> isOverlapping(detail, fromIndex, toIndex))
+			.map(detail -> new StepAlertCandidate(
+				crosswalkAlertType(path, detail, fromIndex, toIndex),
+				relativeDistanceMeter(path.coordinates(), fromIndex, toIndex, detail.fromIndex(), stepDistanceMeter,
+					stepLength),
+				crosswalkPriority(path, detail, fromIndex, toIndex)))
+			.toList();
+	}
+
+	private RouteStepAlertType crosswalkAlertType(
+		GraphHopperRoutePath path,
+		GraphHopperPathDetail crosswalkDetail,
+		int fromIndex,
+		int toIndex) {
+		if (hasOverlappingDetailValue(path, "audio_signal_state", "YES", crosswalkDetail, fromIndex, toIndex)) {
+			return RouteStepAlertType.CROSSWALK_AUDIO;
+		}
+		if (hasOverlappingDetailValue(path, "signal_state", "YES", crosswalkDetail, fromIndex, toIndex)) {
+			return RouteStepAlertType.CROSSWALK_SIGNAL;
+		}
+		return RouteStepAlertType.CROSSWALK;
+	}
+
+	private int crosswalkPriority(
+		GraphHopperRoutePath path,
+		GraphHopperPathDetail crosswalkDetail,
+		int fromIndex,
+		int toIndex) {
+		return switch (crosswalkAlertType(path, crosswalkDetail, fromIndex, toIndex)) {
+			case CROSSWALK_AUDIO -> 1;
+			case CROSSWALK_SIGNAL -> 2;
+			case CROSSWALK -> 3;
+			default -> throw new IllegalStateException("unexpected crosswalk alert type");
+		};
+	}
+
+	private boolean hasOverlappingDetailValue(
+		GraphHopperRoutePath path,
+		String detailName,
+		String expectedValue,
+		GraphHopperPathDetail baseDetail,
+		int fromIndex,
+		int toIndex) {
+		int overlapFrom = Math.max(baseDetail.fromIndex(), fromIndex);
+		int overlapTo = Math.min(baseDetail.toIndex(), toIndex);
+		return path.details()
+			.getOrDefault(detailName, List.of())
+			.stream()
+			.anyMatch(detail -> expectedValue.equals(detail.value()) && detail.fromIndex() < overlapTo
+				&& detail.toIndex() > overlapFrom);
 	}
 
 	private List<StepAlertCandidate> alertCandidates(

@@ -13,6 +13,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 fun RouteSearchQuery.toRequestDto(): RouteSearchRequestDto =
     RouteSearchRequestDto(
@@ -42,7 +43,11 @@ private fun RouteDto.toDomain(
     geometryParser: RouteGeometryParser,
 ): RouteCandidate {
     val resolvedOption = RouteOption.fromValue(routeOption) ?: defaultOption
-    val parsedSegments = segments.toParsedSegments(geometryParser = geometryParser)
+    val sourceSegments =
+        segments.ifEmpty {
+            legs.toSegmentDtos()
+        }
+    val parsedSegments = sourceSegments.toParsedSegments(geometryParser = geometryParser)
     val segmentDistanceTotal = parsedSegments.segments.sumOf(RouteSegment::distanceMeters)
     val distanceMeters = normalizedDistance(segmentDistanceTotal)
 
@@ -118,6 +123,26 @@ private fun RouteSegmentDto.normalizedGuidanceMessage(): String =
         .orEmpty()
         .ifEmpty { RouteDefaults.DEFAULT_GUIDANCE_MESSAGE }
 
+private fun List<RouteLegDto>.toSegmentDtos(): List<RouteSegmentDto> =
+    flatMap { leg -> leg.steps }
+        .mapIndexed { index, step -> step.toSegmentDto(fallbackSequence = index + 1) }
+
+private fun RouteStepDto.toSegmentDto(fallbackSequence: Int): RouteSegmentDto {
+    val alertType = RouteStepAlertType.fromValue(alert?.type)
+    return RouteSegmentDto(
+        sequence = sequence?.takeIf { candidateSequence -> candidateSequence > 0 } ?: fallbackSequence,
+        geometry = geometry,
+        distanceMeter = distanceMeter?.takeIf { distance -> distance >= 0.0 }?.roundToInt(),
+        hasStairs = alertType == RouteStepAlertType.STAIR,
+        hasCrosswalk = alertType?.isCrosswalk == true,
+        hasSignal = alertType == RouteStepAlertType.CROSSWALK_SIGNAL ||
+            alertType == RouteStepAlertType.CROSSWALK_AUDIO,
+        hasAudioSignal = alertType == RouteStepAlertType.CROSSWALK_AUDIO,
+        riskLevel = alertType?.riskLevel,
+        guidanceMessage = instruction,
+    )
+}
+
 private fun defaultTitle(routeOption: RouteOption): String =
     when (routeOption) {
         RouteOption.SAFE -> "Safe Route"
@@ -191,3 +216,28 @@ private data class ParsedRouteSegments(
 )
 
 private const val DEFAULT_WALKING_SPEED_METERS_PER_MINUTE: Double = 60.0
+
+private enum class RouteStepAlertType(
+    val isCrosswalk: Boolean = false,
+    val riskLevel: String? = null,
+) {
+    CROSSWALK(isCrosswalk = true),
+    CROSSWALK_SIGNAL(isCrosswalk = true),
+    CROSSWALK_AUDIO(isCrosswalk = true),
+    STAIR(riskLevel = "HIGH"),
+    NARROW_SIDEWALK(riskLevel = "HIGH"),
+    UNPAVED(riskLevel = "MEDIUM"),
+    MIDDLE_SLOPE(riskLevel = "MEDIUM"),
+    ELEVATOR,
+    BUS_STOP,
+    SUBWAY_ELEVATOR,
+    ALIGHTING_POINT,
+    ;
+
+    companion object {
+        fun fromValue(value: String?): RouteStepAlertType? =
+            entries.firstOrNull { type ->
+                type.name.equals(value?.trim(), ignoreCase = true)
+            }
+    }
+}

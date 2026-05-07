@@ -58,7 +58,7 @@ class WalkRoutePayloadServiceTest {
 		assertThat(route.legs()).hasSize(1);
 		assertThat(route.legs().get(0).steps()).hasSize(2);
 		assertThat(route.legs().get(0).steps().get(0).instruction()).isEqualTo("직진하세요.");
-		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
+		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_SIGNAL);
 		assertThat(route.legs().get(0).steps().get(0).alert().distanceMeter()).isEqualByComparingTo("0.00");
 	}
 
@@ -82,7 +82,7 @@ class WalkRoutePayloadServiceTest {
 
 		assertThat(route.legs().get(0).steps()).hasSize(2);
 		assertThat(route.legs().get(0).steps().get(0).instruction()).isEqualTo("직진하세요.");
-		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
+		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_SIGNAL);
 		assertThat(route.legs().get(0).steps().get(0).geometry()).isEqualTo("LINESTRING(0.0 0.0, 1.0 0.0)");
 		assertThat(route.legs().get(0).steps().get(1).instruction()).isEqualTo("좌회전하세요.");
 		assertThat(route.legs().get(0).steps().get(1).alert()).isNull();
@@ -140,5 +140,33 @@ class WalkRoutePayloadServiceTest {
 
 		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
 		assertThat(route.legs().get(0).steps().get(0).alert().distanceMeter()).isEqualByComparingTo("0.00");
+	}
+
+	@Test
+	void splitsCrosswalkAlertBySignalAndAudioSignalState() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("100.00"),
+			60_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0030"), new BigDecimal("35.0000"))),
+			Map.of(
+				"segment_type", List.of(
+					new GraphHopperPathDetail(0, 1, "CROSS_WALK"),
+					new GraphHopperPathDetail(1, 2, "CROSS_WALK"),
+					new GraphHopperPathDetail(2, 3, "CROSS_WALK")),
+				"signal_state", List.of(new GraphHopperPathDetail(1, 2, "YES")),
+				"audio_signal_state", List.of(new GraphHopperPathDetail(2, 3, "YES"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.legs().get(0).steps()).hasSize(3);
+		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
+		assertThat(route.legs().get(0).steps().get(1).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_SIGNAL);
+		assertThat(route.legs().get(0).steps().get(2).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_AUDIO);
 	}
 }

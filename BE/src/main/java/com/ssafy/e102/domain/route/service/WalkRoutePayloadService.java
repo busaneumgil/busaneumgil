@@ -7,8 +7,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import org.locationtech.jts.geom.Coordinate;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
@@ -36,6 +39,12 @@ public class WalkRoutePayloadService {
 
 	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
 
+	private final RouteTurnInstructionService routeTurnInstructionService;
+
+	public WalkRoutePayloadService(RouteTurnInstructionService routeTurnInstructionService) {
+		this.routeTurnInstructionService = routeTurnInstructionService;
+	}
+
 	public RouteSummaryResponse toRouteSummary(String searchId, WalkRouteCandidate candidate) {
 		GraphHopperRoutePath path = candidate.path();
 		String geometry = toLineString(path.coordinates());
@@ -43,7 +52,7 @@ public class WalkRoutePayloadService {
 		int estimatedTimeMinute = estimatedTimeMinute(durationSecond);
 		BigDecimal distanceMeter = scaleDistance(path.distanceMeter());
 		List<RouteBadge> badges = badges(path);
-		List<RouteStepResponse> steps = List.of(toSingleStep(path, distanceMeter, durationSecond, geometry, badges));
+		List<RouteStepResponse> steps = toSteps(path, distanceMeter, durationSecond);
 
 		return new RouteSummaryResponse(
 			routeId(searchId, candidate.routeOption()),
@@ -76,25 +85,51 @@ public class WalkRoutePayloadService {
 			steps);
 	}
 
-	private RouteStepResponse toSingleStep(
+	private List<RouteStepResponse> toSteps(GraphHopperRoutePath path, BigDecimal totalDistanceMeter,
+		int totalDurationSecond) {
+		List<GraphHopperCoordinate> coordinates = path.coordinates();
+		if (coordinates.size() < 2) {
+			return List.of(toStep(path, 1, 0, coordinates.size() - 1, totalDistanceMeter, totalDurationSecond));
+		}
+		List<Integer> splitPoints = splitPoints(path);
+		BigDecimal routeLength = routeLength(coordinates);
+		List<RouteStepResponse> steps = new ArrayList<>();
+		for (int index = 0; index < splitPoints.size() - 1; index++) {
+			int fromIndex = splitPoints.get(index);
+			int toIndex = splitPoints.get(index + 1);
+			BigDecimal ratio = stepLengthRatio(coordinates, fromIndex, toIndex, routeLength);
+			BigDecimal stepDistance = totalDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+			int stepDuration = Math.max(1, BigDecimal.valueOf(totalDurationSecond)
+				.multiply(ratio)
+				.setScale(0, RoundingMode.HALF_UP)
+				.intValue());
+			steps.add(toStep(path, index + 1, fromIndex, toIndex, stepDistance, stepDuration));
+		}
+		return steps;
+	}
+
+	private RouteStepResponse toStep(
 		GraphHopperRoutePath path,
+		int sequence,
+		int fromIndex,
+		int toIndex,
 		BigDecimal distanceMeter,
-		int durationSecond,
-		String geometry,
-		List<RouteBadge> badges) {
-		RouteStepAlertResponse alert = representativeAlert(path)
+		int durationSecond) {
+		GraphHopperRoutePath stepPath = slice(path, fromIndex, toIndex);
+		RouteStepAlertResponse alert = representativeAlert(stepPath)
+			.or(() -> turnAlert(path, fromIndex))
 			.map(type -> new RouteStepAlertResponse(type, BigDecimal.ZERO.setScale(2)))
 			.orElse(null);
 		return new RouteStepResponse(
-			1,
+			sequence,
 			instruction(alert),
 			distanceMeter,
 			durationSecond,
-			geometry,
-			badges,
+			toLineString(stepPath.coordinates()),
+			badges(stepPath),
 			alert,
-			averageDecimalDetail(path, "avg_slope_percent").orElse(null),
-			widthState(path).orElse(null));
+			averageDecimalDetail(stepPath, "avg_slope_percent").orElse(null),
+			widthState(stepPath).orElse(null));
 	}
 
 	private String instruction(RouteStepAlertResponse alert) {
@@ -109,6 +144,99 @@ public class WalkRoutePayloadService {
 			case UNPAVED -> "포장되지 않은 구간을 이동하세요.";
 			default -> "경로를 따라 이동하세요.";
 		};
+	}
+
+	private List<Integer> splitPoints(GraphHopperRoutePath path) {
+		int lastCoordinateIndex = path.coordinates().size() - 1;
+		SortedSet<Integer> splitPoints = new TreeSet<>();
+		splitPoints.add(0);
+		splitPoints.add(lastCoordinateIndex);
+		path.details().values()
+			.stream()
+			.flatMap(List::stream)
+			.forEach(detail -> {
+				addSplitPoint(splitPoints, detail.fromIndex(), lastCoordinateIndex);
+				addSplitPoint(splitPoints, detail.toIndex(), lastCoordinateIndex);
+			});
+		for (int index = 1; index < lastCoordinateIndex; index++) {
+			if (turnAlert(path, index).isPresent()) {
+				splitPoints.add(index);
+			}
+		}
+		return new ArrayList<>(splitPoints);
+	}
+
+	private void addSplitPoint(SortedSet<Integer> splitPoints, int index, int lastCoordinateIndex) {
+		if (index > 0 && index < lastCoordinateIndex) {
+			splitPoints.add(index);
+		}
+	}
+
+	private GraphHopperRoutePath slice(GraphHopperRoutePath path, int fromIndex, int toIndex) {
+		int normalizedFrom = Math.max(0, fromIndex);
+		int normalizedTo = Math.min(path.coordinates().size() - 1, Math.max(toIndex, normalizedFrom));
+		List<GraphHopperCoordinate> coordinates = path.coordinates().subList(normalizedFrom, normalizedTo + 1);
+		return new GraphHopperRoutePath(
+			BigDecimal.ZERO,
+			0,
+			coordinates,
+			path.details()
+				.entrySet()
+				.stream()
+				.collect(Collectors.toMap(
+					java.util.Map.Entry::getKey,
+					entry -> overlappingDetails(entry.getValue(), normalizedFrom, normalizedTo))));
+	}
+
+	private List<GraphHopperPathDetail> overlappingDetails(
+		List<GraphHopperPathDetail> details,
+		int fromIndex,
+		int toIndex) {
+		return details.stream()
+			.filter(detail -> detail.fromIndex() < toIndex && detail.toIndex() > fromIndex)
+			.toList();
+	}
+
+	private Optional<RouteStepAlertType> turnAlert(GraphHopperRoutePath path, int pivotIndex) {
+		if (pivotIndex <= 0 || pivotIndex >= path.coordinates().size() - 1) {
+			return Optional.empty();
+		}
+		return routeTurnInstructionService.resolve(
+			toCoordinate(path.coordinates().get(pivotIndex - 1)),
+			toCoordinate(path.coordinates().get(pivotIndex)),
+			toCoordinate(path.coordinates().get(pivotIndex + 1)));
+	}
+
+	private Coordinate toCoordinate(GraphHopperCoordinate coordinate) {
+		return new Coordinate(coordinate.lng().doubleValue(), coordinate.lat().doubleValue());
+	}
+
+	private BigDecimal stepLengthRatio(
+		List<GraphHopperCoordinate> coordinates,
+		int fromIndex,
+		int toIndex,
+		BigDecimal routeLength) {
+		if (routeLength.compareTo(BigDecimal.ZERO) == 0) {
+			return BigDecimal.ONE;
+		}
+		return routeLength(coordinates.subList(fromIndex, toIndex + 1)).divide(routeLength, 8, RoundingMode.HALF_UP);
+	}
+
+	private BigDecimal routeLength(List<GraphHopperCoordinate> coordinates) {
+		if (coordinates.size() < 2) {
+			return BigDecimal.ZERO;
+		}
+		BigDecimal length = BigDecimal.ZERO;
+		for (int index = 0; index < coordinates.size() - 1; index++) {
+			length = length.add(segmentLength(coordinates.get(index), coordinates.get(index + 1)));
+		}
+		return length;
+	}
+
+	private BigDecimal segmentLength(GraphHopperCoordinate from, GraphHopperCoordinate to) {
+		double deltaLng = to.lng().doubleValue() - from.lng().doubleValue();
+		double deltaLat = to.lat().doubleValue() - from.lat().doubleValue();
+		return BigDecimal.valueOf(Math.hypot(deltaLng, deltaLat));
 	}
 
 	private List<RouteBadge> badges(GraphHopperRoutePath path) {

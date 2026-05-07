@@ -48,7 +48,10 @@ class WalkRouteSearchServiceTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		service = new WalkRouteSearchService(userRepository, graphHopperSearchService, new WalkRoutePayloadService());
+		service = new WalkRouteSearchService(
+			userRepository,
+			graphHopperSearchService,
+			new WalkRoutePayloadService(new RouteTurnInstructionService()));
 	}
 
 	@Test

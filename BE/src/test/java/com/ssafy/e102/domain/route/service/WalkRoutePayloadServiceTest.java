@@ -21,7 +21,7 @@ import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
 
 class WalkRoutePayloadServiceTest {
 
-	private final WalkRoutePayloadService service = new WalkRoutePayloadService();
+	private final WalkRoutePayloadService service = new WalkRoutePayloadService(new RouteTurnInstructionService());
 
 	@Test
 	void mapsGraphHopperPathDetailsToWalkRoutePayload() {
@@ -57,9 +57,34 @@ class WalkRoutePayloadServiceTest {
 				RouteBadge.NARROW_SIDEWALK,
 				RouteBadge.UNPAVED);
 		assertThat(route.legs()).hasSize(1);
-		assertThat(route.legs().get(0).steps()).hasSize(1);
+		assertThat(route.legs().get(0).steps()).hasSize(2);
 		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
 		assertThat(route.legs().get(0).steps().get(0).slopePercent()).isEqualByComparingTo("6.25");
 		assertThat(route.legs().get(0).steps().get(0).widthState()).isEqualTo(WidthState.NARROW);
+	}
+
+	@Test
+	void splitsStepsByPositionEventDetailAndConnectsTurnAlert() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("200.00"),
+			120_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("0.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("1.0"))),
+			Map.of(
+				"segment_type", List.of(new GraphHopperPathDetail(0, 1, "CROSS_WALK")),
+				"signal_state", List.of(new GraphHopperPathDetail(0, 1, "YES")),
+				"width_state", List.of(new GraphHopperPathDetail(0, 2, "ADEQUATE_150"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.legs().get(0).steps()).hasSize(2);
+		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
+		assertThat(route.legs().get(0).steps().get(0).geometry()).isEqualTo("LINESTRING(0.0 0.0, 1.0 0.0)");
+		assertThat(route.legs().get(0).steps().get(1).alert().type()).isEqualTo(RouteStepAlertType.TURN_LEFT);
+		assertThat(route.legs().get(0).steps().get(1).geometry()).isEqualTo("LINESTRING(1.0 0.0, 1.0 1.0)");
 	}
 }

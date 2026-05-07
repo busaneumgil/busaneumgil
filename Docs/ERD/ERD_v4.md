@@ -147,7 +147,6 @@ erDiagram
         VARCHAR category
         VARCHAR address
         GEOMETRY point
-        VARCHAR provider
         VARCHAR providerPlaceId
     }
 
@@ -391,8 +390,7 @@ erDiagram
 | 카테고리 | category | VARCHAR(50) | NOT NULL |  |
 | 주소 | address | VARCHAR(255) | NULL |  |
 | 좌표 | point | GEOMETRY(POINT, 4326) | NOT NULL |  |
-| 제공자 | provider | VARCHAR(30) | NOT NULL | PUBLIC_DATA |
-| 제공자 장소 ID | providerPlaceId | VARCHAR(100) | NULL |  |
+| 카카오 장소 ID | providerPlaceId | VARCHAR(100) | NULL |  |
 
 ### category 후보값
 
@@ -418,9 +416,9 @@ erDiagram
 
 ### 비고
 
-- `provider` 후보값은 `KAKAO`, `PUBLIC_DATA`다. `ADMIN`, `INTERNAL`은 MVP 장소 원천 값으로 사용하지 않는다.
-- 카카오 장소 ID를 내부 장소와 매칭 근거로 채택한 경우 `provider=KAKAO`, `providerPlaceId`에 저장할 수 있다. DB 기본키인 `placeId`는 내부 자동 증가 ID로 유지한다.
-- `provider`, `providerPlaceId` 조합에 유니크 제약을 둔다. 단, 카카오 검색 결과를 북마크했다는 이유만으로 `places`를 자동 생성하지 않는다.
+- 카카오 장소 ID를 내부 장소와 매칭 근거로 채택한 경우에만 `providerPlaceId`에 저장한다. DB 기본키인 `placeId`는 내부 자동 증가 ID로 유지한다.
+- `providerPlaceId`는 카카오 장소 ID 전용 필드다. POI ID나 공공데이터 원천 ID를 저장하지 않는다.
+- `providerPlaceId`에는 유니크 제약을 둔다. 단, 카카오 검색 결과를 북마크했다는 이유만으로 `places`를 자동 생성하지 않는다.
 - 카카오 `category_name`과 공공데이터 원천 분류명은 MVP 장소 테이블 컬럼으로 저장하지 않는다. 서비스 필터 기준은 항상 `category`다.
 - `BARRIER_FREE_FACILITY`는 최종 카테고리로 사용하지 않는다. 원천 장애인편의시설 데이터는 실제 시설 성격에 따라 `FOOD_CAFE`, `TOURIST_SPOT`, `ACCOMMODATION`, `HEALTHCARE`, `WELFARE`, `PUBLIC_OFFICE`, `ETC` 중 하나로 분류한다.
 - `BUS_STATION`은 장소 도메인 최종 카테고리에서 제외한다. 대중교통 정류소는 대중교통 도메인에서 별도로 관리한다.

@@ -58,6 +58,8 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/favorite-routes/**")
 				.authenticated()
+				.requestMatchers("/places", "/places/**")
+				.authenticated()
 				.anyRequest()
 				.permitAll())
 			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

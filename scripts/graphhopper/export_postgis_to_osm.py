@@ -46,6 +46,8 @@ SEGMENT_FEATURE_COLUMNS = {
     "edge_id": ("edge_id", "edgeId"),
     "feature_type": ("feature_type", "featureType"),
     "geom": ("geom",),
+    "state": ("state",),
+    "value_number": ("value_number", "valueNumber"),
 }
 
 SNAKE_ROAD_NODE_COLUMNS = {aliases[0] for aliases in ROAD_NODE_COLUMNS.values()}
@@ -63,6 +65,13 @@ def resolve_column(available_columns, aliases, canonical_name):
             return quote_identifier(candidate)
     expected = ", ".join(aliases[canonical_name])
     raise ValueError(f"Missing {canonical_name} column. Expected one of: {expected}")
+
+
+def resolve_optional_column(available_columns, aliases, canonical_name):
+    for candidate in aliases[canonical_name]:
+        if candidate in available_columns:
+            return quote_identifier(candidate)
+    return None
 
 
 def build_road_nodes_sql(available_columns):
@@ -122,14 +131,18 @@ def build_segment_features_sql(available_columns):
     edge_id = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "edge_id")
     feature_type = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "feature_type")
     geom = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "geom")
+    state = resolve_optional_column(available_columns, SEGMENT_FEATURE_COLUMNS, "state")
+    value_number = resolve_optional_column(available_columns, SEGMENT_FEATURE_COLUMNS, "value_number")
+    state_select = f"{state}::text" if state else "NULL::text"
+    value_number_select = value_number if value_number else "NULL::numeric"
     return f'''
 SELECT
   {feature_id} AS feature_id,
   {edge_id} AS edge_id,
   {feature_type}::text AS feature_type,
   ST_AsText({geom}::geometry) AS geom_wkt,
-  NULL::text AS state,
-  NULL::numeric AS value_number
+  {state_select} AS state,
+  {value_number_select} AS value_number
 FROM segment_features
 ORDER BY {edge_id}, {feature_id}
 '''

@@ -321,6 +321,19 @@ def load_csv() -> None:
                 )
                 """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS segment_features (
+                  feature_id bigint PRIMARY KEY,
+                  edge_id bigint NOT NULL,
+                  feature_type varchar(50) NOT NULL,
+                  "geom" geometry(Geometry, 4326) NOT NULL,
+                  state varchar(50),
+                  value_number numeric(10, 2)
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS segment_features_edge_id_idx ON segment_features (edge_id)")
             # CSV header format stays camelCase for upstream compatibility.
             # Temp/staging columns and final tables use snake_case consistently.
             cursor.execute('CREATE TEMP TABLE staging_road_nodes (vertex_id text, source_node_key text, "point" text)')
@@ -378,7 +391,7 @@ def load_csv() -> None:
                 $validate_staging$;
                 """
             )
-            cursor.execute("TRUNCATE TABLE road_segments, road_nodes")
+            cursor.execute("TRUNCATE TABLE segment_features, road_segments, road_nodes")
             cursor.execute(
                 """
                 INSERT INTO road_nodes (vertex_id, source_node_key, "point")

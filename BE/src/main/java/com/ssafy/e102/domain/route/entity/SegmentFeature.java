@@ -26,14 +26,14 @@ import lombok.NoArgsConstructor;
 public class SegmentFeature {
 
 	@Id
-	@Column(name = "featureId", nullable = false, updatable = false)
+	@Column(name = "feature_id", nullable = false, updatable = false)
 	private Long featureId;
 
-	@Column(name = "edgeId", nullable = false)
+	@Column(name = "edge_id", nullable = false)
 	private Long edgeId;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "featureType", nullable = false, length = 50)
+	@Column(name = "feature_type", nullable = false, length = 50)
 	private SegmentFeatureType featureType;
 
 	@Column(name = "geom", nullable = false, columnDefinition = "geometry(Geometry, 4326)")
@@ -42,7 +42,7 @@ public class SegmentFeature {
 	@Column(name = "state", length = 50)
 	private String state;
 
-	@Column(name = "valueNumber", precision = 10, scale = 2)
+	@Column(name = "value_number", precision = 10, scale = 2)
 	private BigDecimal valueNumber;
 
 	public static SegmentFeature create(

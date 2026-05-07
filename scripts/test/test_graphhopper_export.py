@@ -161,15 +161,51 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertIn('COALESCE("walkAccess"::text', segments_sql)
         self.assertIn('ORDER BY "edgeId"', segments_sql)
 
+    def test_default_feature_sql_reads_snake_case_state_columns(self):
+        module = load_export_module()
+
+        features_sql = module.build_segment_features_sql({
+            "feature_id",
+            "edge_id",
+            "feature_type",
+            "geom",
+            "state",
+            "value_number",
+        })
+
+        self.assertIn('"feature_id" AS feature_id', features_sql)
+        self.assertIn('"edge_id" AS edge_id', features_sql)
+        self.assertIn('"feature_type"::text AS feature_type', features_sql)
+        self.assertIn('"state"::text AS state', features_sql)
+        self.assertIn('"value_number" AS value_number', features_sql)
+        self.assertIn('ORDER BY "edge_id", "feature_id"', features_sql)
+
     def test_default_feature_sql_falls_back_to_legacy_camel_case_columns(self):
         module = load_export_module()
 
-        features_sql = module.build_segment_features_sql({"featureId", "edgeId", "featureType", "geom"})
+        features_sql = module.build_segment_features_sql({
+            "featureId",
+            "edgeId",
+            "featureType",
+            "geom",
+            "state",
+            "valueNumber",
+        })
 
         self.assertIn('"featureId" AS feature_id', features_sql)
         self.assertIn('"edgeId" AS edge_id', features_sql)
         self.assertIn('"featureType"::text AS feature_type', features_sql)
+        self.assertIn('"state"::text AS state', features_sql)
+        self.assertIn('"valueNumber" AS value_number', features_sql)
         self.assertIn('ORDER BY "edgeId", "featureId"', features_sql)
+
+    def test_default_feature_sql_allows_old_minimal_feature_table_without_state_columns(self):
+        module = load_export_module()
+
+        features_sql = module.build_segment_features_sql({"feature_id", "edge_id", "feature_type", "geom"})
+
+        self.assertIn("NULL::text AS state", features_sql)
+        self.assertIn("NULL::numeric AS value_number", features_sql)
 
     def test_validate_graph_reports_pass_with_unknown_warnings(self):
         module = load_export_module()

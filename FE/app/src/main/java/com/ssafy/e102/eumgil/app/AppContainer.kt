@@ -70,7 +70,10 @@ class AppContainer(
     }
 
     private val authSessionLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        AuthSessionLocalDataSource(dataStore = authSessionDataStore)
+        AuthSessionLocalDataSource(
+            dataStore = authSessionDataStore,
+            allowLocalOnlySession = AppEnvironment.isMockMode,
+        )
     }
 
     private val debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {

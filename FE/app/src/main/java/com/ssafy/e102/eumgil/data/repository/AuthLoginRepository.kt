@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.AuthSession
+import com.ssafy.e102.eumgil.core.model.LOCAL_ONLY_AUTH_SESSION_MARKER
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.SocialLoginResponseDto
 import kotlinx.coroutines.delay
@@ -31,7 +32,6 @@ class LocalOnlyAuthLoginRepository(
 
     private companion object {
         private const val LOCAL_ONLY_LOGIN_DELAY_MILLIS = 450L
-        private const val LOCAL_ONLY_AUTH_SESSION_MARKER = "local-only-auth-session"
     }
 }
 

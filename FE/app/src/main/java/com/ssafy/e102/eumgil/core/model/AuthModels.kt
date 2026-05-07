@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.core.model
 
+const val LOCAL_ONLY_AUTH_SESSION_MARKER = "local-only-auth-session"
+
 data class AuthSession
     @JvmOverloads
     constructor(

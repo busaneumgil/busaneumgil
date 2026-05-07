@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.map
 
 class AuthSessionLocalDataSource(
     private val dataStore: DataStore<Preferences>,
-    private val allowLocalOnlySession: Boolean = true,
+    private val allowLocalOnlySession: Boolean = false,
 ) {
     fun observeAuthGateState(): Flow<AuthGateState> =
         dataStore.data

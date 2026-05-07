@@ -32,6 +32,32 @@ class AuthSessionLocalDataSourceTest {
             assertFalse(authGateState.isProfileCompleted)
         }
 
+    @Test
+    fun `local only auth session is blocked by default`() =
+        runTest {
+            val dataSource = createDataSource()
+            dataSource.saveAuthSession(
+                authSession = AuthSession(accessToken = "local-only-auth-session"),
+                isProfileCompleted = true,
+            )
+
+            val authGateState = dataSource.getAuthGateState()
+
+            assertNull(authGateState.authSession)
+            assertFalse(authGateState.isProfileCompleted)
+        }
+
+    private fun TestScope.createDataSource(): AuthSessionLocalDataSource {
+        val file = File(temporaryFolder.root, "auth_session_default.preferences_pb")
+        val dataStore =
+            PreferenceDataStoreFactory.create(
+                scope = backgroundScope,
+                produceFile = { file },
+            )
+
+        return AuthSessionLocalDataSource(dataStore = dataStore)
+    }
+
     private fun TestScope.createDataSource(allowLocalOnlySession: Boolean): AuthSessionLocalDataSource {
         val file = File(temporaryFolder.root, "auth_session.preferences_pb")
         val dataStore =

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.bookmark.dto.request.CreateFavoriteRouteRequest;
 import com.ssafy.e102.domain.bookmark.dto.request.UpdateFavoriteRouteRequest;
+import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteDetailResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteIdResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteListResponse;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
@@ -47,6 +48,15 @@ public class FavoriteRouteController {
 		@RequestParam(defaultValue = "10") @Min(1) @Max(100)
 		int size) {
 		return ApiResponse.success(favoriteRouteService.getFavoriteRoutes(principal.userId(), cursor, size));
+	}
+
+	@GetMapping("/{favRouteId}")
+	public ApiResponse<FavoriteRouteDetailResponse> getFavoriteRouteDetail(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@PathVariable @Positive
+		Long favRouteId) {
+		return ApiResponse.success(favoriteRouteService.getFavoriteRouteDetail(principal.userId(), favRouteId));
 	}
 
 	@PostMapping

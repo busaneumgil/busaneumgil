@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -28,6 +30,8 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 @Component
 public class OdsayClient {
+
+	private static final Logger log = LoggerFactory.getLogger(OdsayClient.class);
 
 	private static final int MAX_INTERNAL_CANDIDATES = 10;
 	private static final int SEARCH_TYPE_ALL = 0;
@@ -67,10 +71,17 @@ public class OdsayClient {
 				.getBody();
 			return parseSearchResult(body);
 		} catch (HttpStatusCodeException exception) {
-			throw externalFailure(exception);
+			throw externalFailure("searchPubTransPathT", exception);
 		} catch (ResourceAccessException exception) {
 			throw new RouteException(timeoutOrFailure(exception), timeoutOrFailure(exception).getMessage(), exception);
 		} catch (RestClientException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"odsay",
+				"searchPubTransPathT",
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+				exception.getMessage(),
+				exception);
 			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
 		}
@@ -99,10 +110,17 @@ public class OdsayClient {
 				.getBody();
 			return parseLaneGeometries(body);
 		} catch (HttpStatusCodeException exception) {
-			throw externalFailure(exception);
+			throw externalFailure("loadLane", exception);
 		} catch (ResourceAccessException exception) {
 			throw new RouteException(timeoutOrFailure(exception), timeoutOrFailure(exception).getMessage(), exception);
 		} catch (RestClientException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"odsay",
+				"loadLane",
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+				exception.getMessage(),
+				exception);
 			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
 		}
@@ -296,7 +314,14 @@ public class OdsayClient {
 		return value.asInt();
 	}
 
-	private RouteException externalFailure(HttpStatusCodeException exception) {
+	private RouteException externalFailure(String operation, HttpStatusCodeException exception) {
+		log.warn(
+			"external route call failed provider={} operation={} status={} body={}",
+			"odsay",
+			operation,
+			exception.getStatusCode(),
+			exception.getResponseBodyAsString(),
+			exception);
 		return new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 			RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
 	}

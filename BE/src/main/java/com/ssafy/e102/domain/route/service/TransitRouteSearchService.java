@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -53,6 +55,8 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 @Service
 public class TransitRouteSearchService {
+
+	private static final Logger log = LoggerFactory.getLogger(TransitRouteSearchService.class);
 
 	private static final double BUSAN_MIN_LAT = 34.85;
 	private static final double BUSAN_MAX_LAT = 35.45;
@@ -105,13 +109,38 @@ public class TransitRouteSearchService {
 		OdsayTransitSearchResult searchResult = odsayClient.searchPubTransPath(startPoint, endPoint);
 		String searchId = "rs_transit_" + UUID.randomUUID();
 		List<TransitRouteCandidate> candidates = new ArrayList<>();
+		RouteException firstExternalFailure = null;
 		for (int index = 0; index < searchResult.paths().size(); index++) {
 			OdsayTransitPath path = searchResult.paths().get(index);
-			List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(path.mapObj());
-			toCandidate(searchId, index + 1, startPoint, endPoint, path, laneGeometries, profile)
-				.ifPresent(candidates::add);
+			int routeIndex = index + 1;
+			try {
+				List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(path.mapObj());
+				toCandidate(searchId, routeIndex, startPoint, endPoint, path, laneGeometries, profile)
+					.ifPresent(candidates::add);
+			} catch (RouteException exception) {
+				if (exception.getErrorCode() == RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT) {
+					throw exception;
+				}
+				if (exception.getErrorCode() == RouteErrorCode.EXTERNAL_ROUTE_API_FAILED
+					&& firstExternalFailure == null) {
+					firstExternalFailure = exception;
+				}
+				log.warn(
+					"transit candidate skipped provider={} operation={} routeIndex={} legIndex={} mapObj={} status={} message={}",
+					"route",
+					"candidate",
+					routeIndex,
+					"-",
+					path.mapObj(),
+					exception.getErrorCode().getStatus(),
+					exception.getMessage(),
+					exception);
+			}
 		}
 		if (candidates.isEmpty()) {
+			if (firstExternalFailure != null) {
+				throw firstExternalFailure;
+			}
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		List<TransitRouteCandidate> selectedCandidates = selectCandidates(candidates);
@@ -132,7 +161,7 @@ public class TransitRouteSearchService {
 		List<OdsayLaneGeometry> laneGeometries,
 		WalkRouteUserProfile profile) {
 		String routeId = "%s_%03d".formatted(searchId, routeIndex);
-		List<RouteLegResponse> legs = toLegs(startPoint, endPoint, path.legs(), laneGeometries, profile);
+		List<RouteLegResponse> legs = toLegs(routeIndex, startPoint, endPoint, path.legs(), laneGeometries, profile);
 		if (legs.isEmpty()) {
 			return java.util.Optional.empty();
 		}
@@ -275,6 +304,7 @@ public class TransitRouteSearchService {
 	}
 
 	private List<RouteLegResponse> toLegs(
+		int routeIndex,
 		GeoPointRequest startPoint,
 		GeoPointRequest endPoint,
 		List<OdsayTransitLeg> odsayLegs,
@@ -284,26 +314,40 @@ public class TransitRouteSearchService {
 		GeoPointRequest cursor = startPoint;
 		int[] geometryIndex = {0};
 		for (OdsayTransitLeg odsayLeg : odsayLegs) {
-			if (odsayLeg.type() == TransportMode.WALK) {
-				GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayLeg, endPoint, cursor);
-				RouteLegResponse walkLeg = toWalkLeg(legs.size() + 1, cursor, nextPoint, odsayLeg, profile);
-				if (walkLeg == null) {
-					return List.of();
+			int legIndex = legs.size() + 1;
+			try {
+				if (odsayLeg.type() == TransportMode.WALK) {
+					GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayLeg, endPoint, cursor);
+					RouteLegResponse walkLeg = toWalkLeg(legIndex, cursor, nextPoint, odsayLeg, profile);
+					if (walkLeg == null) {
+						return List.of();
+					}
+					legs.add(walkLeg);
+					cursor = nextPoint;
+					continue;
 				}
-				legs.add(walkLeg);
-				cursor = nextPoint;
-				continue;
-			}
-			RouteLegResponse transitLeg = toTransitLeg(
-				legs.size() + 1,
-				odsayLeg,
-				cursor,
-				nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex));
-			legs.add(transitLeg);
-			if (transitLeg.alightingStop() != null) {
-				cursor = new GeoPointRequest(
-					transitLeg.alightingStop().lat().doubleValue(),
-					transitLeg.alightingStop().lng().doubleValue());
+				RouteLegResponse transitLeg = toTransitLeg(
+					legIndex,
+					routeIndex,
+					odsayLeg,
+					cursor,
+					nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex));
+				legs.add(transitLeg);
+				if (transitLeg.alightingStop() != null) {
+					cursor = new GeoPointRequest(
+						transitLeg.alightingStop().lat().doubleValue(),
+						transitLeg.alightingStop().lng().doubleValue());
+				}
+			} catch (RouteException exception) {
+				log.warn(
+					"transit leg failed provider={} operation={} routeIndex={} legIndex={} status={} message={}",
+					provider(odsayLeg),
+					operation(odsayLeg),
+					routeIndex,
+					legIndex,
+					exception.getErrorCode().getStatus(),
+					exception.getMessage());
+				throw exception;
 			}
 		}
 		return List.copyOf(legs);
@@ -368,11 +412,12 @@ public class TransitRouteSearchService {
 
 	private RouteLegResponse toTransitLeg(
 		int sequence,
+		int routeIndex,
 		OdsayTransitLeg odsayLeg,
 		GeoPointRequest referencePoint,
 		String geometry) {
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
-		List<TransitLaneOptionResponse> laneOptions = laneOptions(odsayLeg);
+		List<TransitLaneOptionResponse> laneOptions = laneOptions(routeIndex, sequence, odsayLeg);
 		String routeNo = routeNo(odsayLeg, laneOptions);
 		RouteStopResponse boardingStop = boardingStop(odsayLeg, referencePoint);
 		RouteStopResponse alightingStop = alightingStop(odsayLeg);
@@ -484,29 +529,67 @@ public class TransitRouteSearchService {
 		return "대중교통 탑승 지점까지 이동하세요.";
 	}
 
-	private List<TransitLaneOptionResponse> laneOptions(OdsayTransitLeg odsayLeg) {
+	private List<TransitLaneOptionResponse> laneOptions(int routeIndex, int legIndex, OdsayTransitLeg odsayLeg) {
 		if (odsayLeg.type() != TransportMode.BUS) {
 			return List.of();
 		}
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
 		return odsayLeg.lanes()
 			.stream()
-			.map(lane -> laneOption(odsayLeg, lane, durationSecond))
+			.map(lane -> laneOption(routeIndex, legIndex, odsayLeg, lane, durationSecond))
 			.sorted((left, right) -> Boolean.compare(
 				Boolean.TRUE.equals(right.isLowFloor()),
 				Boolean.TRUE.equals(left.isLowFloor())))
 			.toList();
 	}
 
-	private TransitLaneOptionResponse laneOption(OdsayTransitLeg odsayLeg, OdsayTransitLane lane, int durationSecond) {
+	private TransitLaneOptionResponse laneOption(
+		int routeIndex,
+		int legIndex,
+		OdsayTransitLeg odsayLeg,
+		OdsayTransitLane lane,
+		int durationSecond) {
 		String stopId = boardingStopId(odsayLeg);
-		BusanBimsArrival arrival = busanBimsClient.findArrival(stopId, lane.busLocalBlId(), lane.busNo());
-		return new TransitLaneOptionResponse(
-			lane.busNo(),
-			arrival.remainingMinute(),
-			durationSecond,
-			estimatedMinute(durationSecond),
-			arrival.isLowFloor());
+		try {
+			BusanBimsArrival arrival = busanBimsClient.findArrival(stopId, lane.busLocalBlId(), lane.busNo());
+			return new TransitLaneOptionResponse(
+				lane.busNo(),
+				arrival.remainingMinute(),
+				durationSecond,
+				estimatedMinute(durationSecond),
+				arrival.isLowFloor());
+		} catch (RouteException exception) {
+			log.warn(
+				"transit lane failed provider={} operation={} routeIndex={} legIndex={} stopId={} lineId={} routeNo={} status={} message={}",
+				"bims",
+				"arrival",
+				routeIndex,
+				legIndex,
+				stopId,
+				lane.busLocalBlId(),
+				lane.busNo(),
+				exception.getErrorCode().getStatus(),
+				exception.getMessage());
+			throw exception;
+		}
+	}
+
+	private String provider(OdsayTransitLeg odsayLeg) {
+		return switch (odsayLeg.type()) {
+			case WALK -> "graphhopper";
+			case BUS -> "bims";
+			case SUBWAY -> "route";
+			default -> "route";
+		};
+	}
+
+	private String operation(OdsayTransitLeg odsayLeg) {
+		return switch (odsayLeg.type()) {
+			case WALK -> "walkRoute";
+			case BUS -> "busArrival";
+			case SUBWAY -> "transitLeg";
+			default -> "transitLeg";
+		};
 	}
 
 	private String boardingStopId(OdsayTransitLeg leg) {

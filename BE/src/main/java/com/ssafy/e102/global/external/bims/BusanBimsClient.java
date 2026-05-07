@@ -2,6 +2,8 @@ package com.ssafy.e102.global.external.bims;
 
 import java.io.StringReader;
 import java.net.SocketTimeoutException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -9,6 +11,8 @@ import java.util.List;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -31,6 +35,8 @@ import com.ssafy.e102.domain.route.exception.RouteException;
 
 @Component
 public class BusanBimsClient {
+
+	private static final Logger log = LoggerFactory.getLogger(BusanBimsClient.class);
 
 	private final RestTemplate restTemplate;
 	private final BusanBimsProperties properties;
@@ -81,7 +87,7 @@ public class BusanBimsClient {
 			UriComponentsBuilder uriBuilder = UriComponentsBuilder
 				.fromUriString(properties.baseUrl())
 				.path("/" + endpoint)
-				.queryParam("serviceKey", properties.serviceKey())
+				.queryParam("serviceKey", encodedServiceKey())
 				.queryParam("bstopid", stopId)
 				.queryParam("pageNo", 1)
 				.queryParam("numOfRows", 20);
@@ -90,20 +96,47 @@ public class BusanBimsClient {
 			}
 			String body = restTemplate.exchange(
 				RequestEntity
-					.method(HttpMethod.GET, uriBuilder.build().toUri())
+					.method(HttpMethod.GET, uriBuilder.build(true).toUri())
 					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_XML_VALUE)
 					.build(),
 				String.class)
 				.getBody();
 			return parseItems(body);
 		} catch (HttpStatusCodeException exception) {
-			throw externalFailure(exception);
+			throw externalFailure(endpoint, exception);
 		} catch (ResourceAccessException exception) {
-			throw new RouteException(timeoutOrFailure(exception), timeoutOrFailure(exception).getMessage(), exception);
+			RouteErrorCode errorCode = timeoutOrFailure(exception);
+			log.warn(
+				"external route call failed provider={} operation={} status={} stopId={} lineId={} message={}",
+				"bims",
+				endpoint,
+				errorCode.getStatus(),
+				stopId,
+				lineId,
+				exception.getMessage(),
+				exception);
+			throw new RouteException(errorCode, errorCode.getMessage(), exception);
 		} catch (RestClientException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} stopId={} lineId={} message={}",
+				"bims",
+				endpoint,
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+				stopId,
+				lineId,
+				exception.getMessage(),
+				exception);
 			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
 		}
+	}
+
+	private String encodedServiceKey() {
+		String serviceKey = properties.serviceKey();
+		if (serviceKey.contains("%")) {
+			return serviceKey;
+		}
+		return URLEncoder.encode(serviceKey, StandardCharsets.UTF_8);
 	}
 
 	private List<Element> parseItems(String body) {
@@ -181,7 +214,14 @@ public class BusanBimsClient {
 		return StringUtils.hasText(value) ? value.trim() : defaultValue;
 	}
 
-	private RouteException externalFailure(HttpStatusCodeException exception) {
+	private RouteException externalFailure(String operation, HttpStatusCodeException exception) {
+		log.warn(
+			"external route call failed provider={} operation={} status={} body={}",
+			"bims",
+			operation,
+			exception.getStatusCode(),
+			exception.getResponseBodyAsString(),
+			exception);
 		return new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 			RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
 	}

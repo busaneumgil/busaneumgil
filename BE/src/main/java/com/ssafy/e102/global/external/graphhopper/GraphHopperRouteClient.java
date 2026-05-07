@@ -4,6 +4,8 @@ import java.net.URI;
 import java.net.SocketTimeoutException;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -28,6 +30,8 @@ import com.ssafy.e102.domain.route.exception.RouteException;
  */
 @Component
 public class GraphHopperRouteClient {
+
+	private static final Logger log = LoggerFactory.getLogger(GraphHopperRouteClient.class);
 
 	private static final List<String> WALK_PATH_DETAILS = List.of(
 		"edge_id",
@@ -67,6 +71,13 @@ public class GraphHopperRouteClient {
 				.getBody();
 			return extractFirstPath(response);
 		} catch (HttpStatusCodeException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} body={}",
+				"graphhopper",
+				"route",
+				exception.getStatusCode(),
+				exception.getResponseBodyAsString(),
+				exception);
 			throw new RouteException(
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(),
@@ -75,8 +86,22 @@ public class GraphHopperRouteClient {
 			RouteErrorCode errorCode = hasTimeoutCause(exception)
 				? RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT
 				: RouteErrorCode.EXTERNAL_ROUTE_API_FAILED;
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"graphhopper",
+				"route",
+				errorCode.getStatus(),
+				exception.getMessage(),
+				exception);
 			throw new RouteException(errorCode, errorCode.getMessage(), exception);
 		} catch (RestClientException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"graphhopper",
+				"route",
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+				exception.getMessage(),
+				exception);
 			throw new RouteException(
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(),

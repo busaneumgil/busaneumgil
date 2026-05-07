@@ -95,22 +95,22 @@ internal val lowVisionCategoryOptions =
         LowVisionCategoryOption(
             label = "\uC219\uBC15\uC2DC\uC124",
             selectionA11yDescription = "이용할 수 있는 숙박시설을 안내합니다",
-            iconRes = R.drawable.ic_lowvision_category_accommodation,
+            iconRes = R.drawable.ic_place_accommodation,
         ),
         LowVisionCategoryOption(
             label = "\uBCD1\uC6D0",
             selectionA11yDescription = "이용할 수 있는 병원과 의료시설을 안내합니다",
-            iconRes = R.drawable.ic_lowvision_category_healthcare,
+            iconRes = R.drawable.ic_place_healthcare,
         ),
         LowVisionCategoryOption(
             label = "\uBCF5\uC9C0\uAD00",
             selectionA11yDescription = "이용할 수 있는 복지시설을 안내합니다",
-            iconRes = R.drawable.ic_lowvision_category_welfare,
+            iconRes = R.drawable.ic_place_welfare,
         ),
         LowVisionCategoryOption(
             label = "\uAD00\uACF5\uC11C",
             selectionA11yDescription = "이용할 수 있는 관공서를 안내합니다",
-            iconRes = R.drawable.ic_lowvision_category_public_office,
+            iconRes = R.drawable.ic_place_public_office,
         ),
     )
 

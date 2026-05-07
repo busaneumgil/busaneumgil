@@ -22,13 +22,16 @@ import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
-import com.ssafy.e102.global.external.odsay.OdsayPassStop;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteClient;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteRequest;
+import com.ssafy.e102.global.external.odsay.OdsayClient;
 import com.ssafy.e102.global.external.odsay.OdsayLaneGeometry;
+import com.ssafy.e102.global.external.odsay.OdsayPassStop;
 import com.ssafy.e102.global.external.odsay.OdsayTransitLane;
 import com.ssafy.e102.global.external.odsay.OdsayTransitLeg;
 import com.ssafy.e102.global.external.odsay.OdsayTransitPath;
 import com.ssafy.e102.global.external.odsay.OdsayTransitSearchResult;
-import com.ssafy.e102.global.external.odsay.OdsayClient;
 import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
@@ -42,20 +45,29 @@ public class TransitRouteSearchService {
 	private static final double START_END_MIN_DISTANCE_METER = 20.0;
 
 	private final WalkRouteUserProfileQueryService userProfileQueryService;
+	private final WalkRouteProfileService walkRouteProfileService;
+	private final WalkRoutePayloadService walkRoutePayloadService;
+	private final GraphHopperRouteClient graphHopperRouteClient;
 	private final OdsayClient odsayClient;
 	private final RouteSearchCacheService routeSearchCacheService;
 
 	public TransitRouteSearchService(
 		WalkRouteUserProfileQueryService userProfileQueryService,
+		WalkRouteProfileService walkRouteProfileService,
+		WalkRoutePayloadService walkRoutePayloadService,
+		GraphHopperRouteClient graphHopperRouteClient,
 		OdsayClient odsayClient,
 		RouteSearchCacheService routeSearchCacheService) {
 		this.userProfileQueryService = userProfileQueryService;
+		this.walkRouteProfileService = walkRouteProfileService;
+		this.walkRoutePayloadService = walkRoutePayloadService;
+		this.graphHopperRouteClient = graphHopperRouteClient;
 		this.odsayClient = odsayClient;
 		this.routeSearchCacheService = routeSearchCacheService;
 	}
 
 	public WalkRouteSearchResponse search(UUID userId, WalkRouteSearchRequest request) {
-		userProfileQueryService.getProfile(userId);
+		WalkRouteUserProfile profile = userProfileQueryService.getProfile(userId);
 		GeoPointRequest startPoint = request.startPoint();
 		GeoPointRequest endPoint = request.endPoint();
 		validateServiceArea(startPoint, endPoint);
@@ -67,7 +79,8 @@ public class TransitRouteSearchService {
 		for (int index = 0; index < searchResult.paths().size(); index++) {
 			OdsayTransitPath path = searchResult.paths().get(index);
 			List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(path.mapObj());
-			candidates.add(toCandidate(searchId, index + 1, startPoint, endPoint, path, laneGeometries));
+			toCandidate(searchId, index + 1, startPoint, endPoint, path, laneGeometries, profile)
+				.ifPresent(candidates::add);
 		}
 		if (candidates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
@@ -80,15 +93,19 @@ public class TransitRouteSearchService {
 		return response;
 	}
 
-	private TransitRouteCandidate toCandidate(
+	private java.util.Optional<TransitRouteCandidate> toCandidate(
 		String searchId,
 		int routeIndex,
 		GeoPointRequest startPoint,
 		GeoPointRequest endPoint,
 		OdsayTransitPath path,
-		List<OdsayLaneGeometry> laneGeometries) {
+		List<OdsayLaneGeometry> laneGeometries,
+		WalkRouteUserProfile profile) {
 		String routeId = "%s_%03d".formatted(searchId, routeIndex);
-		List<RouteLegResponse> legs = toLegs(startPoint, endPoint, path.legs(), laneGeometries);
+		List<RouteLegResponse> legs = toLegs(startPoint, endPoint, path.legs(), laneGeometries, profile);
+		if (legs.isEmpty()) {
+			return java.util.Optional.empty();
+		}
 		RouteSummaryResponse route = new RouteSummaryResponse(
 			routeId,
 			TransportMode.PUBLIC_TRANSIT,
@@ -102,21 +119,27 @@ public class TransitRouteSearchService {
 			List.of(),
 			mergeGeometry(legs),
 			legs);
-		return new TransitRouteCandidate(route, new TransitRouteSnapshot(routeId, path.mapObj(), snapshotLegs(path)));
+		return java.util.Optional.of(
+			new TransitRouteCandidate(route, new TransitRouteSnapshot(routeId, path.mapObj(), snapshotLegs(path))));
 	}
 
 	private List<RouteLegResponse> toLegs(
 		GeoPointRequest startPoint,
 		GeoPointRequest endPoint,
 		List<OdsayTransitLeg> odsayLegs,
-		List<OdsayLaneGeometry> laneGeometries) {
+		List<OdsayLaneGeometry> laneGeometries,
+		WalkRouteUserProfile profile) {
 		List<RouteLegResponse> legs = new ArrayList<>();
 		GeoPointRequest cursor = startPoint;
 		int[] geometryIndex = {0};
 		for (OdsayTransitLeg odsayLeg : odsayLegs) {
 			if (odsayLeg.type() == TransportMode.WALK) {
 				GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayLeg, endPoint);
-				legs.add(toWalkLeg(legs.size() + 1, cursor, nextPoint, odsayLeg));
+				RouteLegResponse walkLeg = toWalkLeg(legs.size() + 1, cursor, nextPoint, odsayLeg, profile);
+				if (walkLeg == null) {
+					return List.of();
+				}
+				legs.add(walkLeg);
 				cursor = nextPoint;
 				continue;
 			}
@@ -150,21 +173,39 @@ public class TransitRouteSearchService {
 		int sequence,
 		GeoPointRequest from,
 		GeoPointRequest to,
-		OdsayTransitLeg odsayLeg) {
-		BigDecimal distance = odsayLeg.distanceMeter() != null
-			? scale(odsayLeg.distanceMeter())
-			: BigDecimal.valueOf(GeoDistanceCalculator.distanceMeter(from, to)).setScale(2, RoundingMode.HALF_UP);
-		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
-		return new RouteLegResponse(
-			sequence,
-			TransportMode.WALK,
-			walkRole(sequence, to),
-			"대중교통 탑승 지점까지 이동하세요.",
-			distance,
-			durationSecond,
-			estimatedMinute(durationSecond),
-			lineString(from, to),
-			List.of());
+		OdsayTransitLeg odsayLeg,
+		WalkRouteUserProfile profile) {
+		if (GeoDistanceCalculator.distanceMeter(from, to) < 1.0) {
+			return new RouteLegResponse(
+				sequence,
+				TransportMode.WALK,
+				walkRole(sequence, odsayLeg),
+				walkInstruction(sequence, odsayLeg),
+				BigDecimal.ZERO.setScale(2),
+				0,
+				0,
+				lineString(from, to),
+				List.of());
+		}
+		try {
+			GraphHopperRoutePath path = graphHopperRouteClient.route(new GraphHopperRouteRequest(
+				from,
+				to,
+				walkRouteProfileService.resolve(
+					profile.primaryUserType(),
+					profile.mobilitySubtype(),
+					RouteOption.SAFE)));
+			return walkRoutePayloadService.toWalkLeg(
+				sequence,
+				walkRole(sequence, odsayLeg),
+				walkInstruction(sequence, odsayLeg),
+				path);
+		} catch (RouteException exception) {
+			if (exception.getErrorCode() == RouteErrorCode.ROUTE_NOT_FOUND) {
+				return null;
+			}
+			throw exception;
+		}
 	}
 
 	private RouteLegResponse toTransitLeg(int sequence, OdsayTransitLeg odsayLeg, String geometry) {
@@ -203,8 +244,18 @@ public class TransitRouteSearchService {
 		return null;
 	}
 
-	private RouteLegRole walkRole(int sequence, GeoPointRequest to) {
-		return sequence == 1 && to != null ? RouteLegRole.WALK_TO_TRANSIT : RouteLegRole.WALK_TO_DESTINATION;
+	private RouteLegRole walkRole(int sequence, OdsayTransitLeg odsayLeg) {
+		if (sequence == 1 || odsayLeg.sectionTimeMinute() == 0) {
+			return RouteLegRole.WALK_TO_TRANSIT;
+		}
+		return RouteLegRole.WALK_TO_DESTINATION;
+	}
+
+	private String walkInstruction(int sequence, OdsayTransitLeg odsayLeg) {
+		if (walkRole(sequence, odsayLeg) == RouteLegRole.WALK_TO_DESTINATION) {
+			return "목적지까지 이동하세요.";
+		}
+		return "대중교통 탑승 지점까지 이동하세요.";
 	}
 
 	private List<TransitLaneOptionResponse> laneOptions(OdsayTransitLeg odsayLeg) {

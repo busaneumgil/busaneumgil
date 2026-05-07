@@ -74,6 +74,28 @@ public class WalkRoutePayloadService {
 			List.of(toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry, steps)));
 	}
 
+	public RouteLegResponse toWalkLeg(
+		int sequence,
+		RouteLegRole role,
+		String instruction,
+		GraphHopperRoutePath path) {
+		String geometry = toLineString(path.coordinates());
+		int durationSecond = durationSecond(path.timeMs());
+		int estimatedTimeMinute = estimatedTimeMinute(durationSecond);
+		BigDecimal distanceMeter = scaleDistance(path.distanceMeter());
+		List<RouteStepResponse> steps = toSteps(path, distanceMeter, durationSecond);
+		return new RouteLegResponse(
+			sequence,
+			TransportMode.WALK,
+			role,
+			instruction,
+			distanceMeter,
+			durationSecond,
+			estimatedTimeMinute,
+			geometry,
+			steps);
+	}
+
 	private RouteLegResponse toWalkOnlyLeg(
 		BigDecimal distanceMeter,
 		int durationSecond,

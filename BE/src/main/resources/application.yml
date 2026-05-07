@@ -40,3 +40,9 @@ graphhopper:
   base-url: ${GRAPHHOPPER_BASE_URL:http://localhost:8989}
   connect-timeout: ${GRAPHHOPPER_CONNECT_TIMEOUT:5s}
   read-timeout: ${GRAPHHOPPER_READ_TIMEOUT:5s}
+
+odsay:
+  base-url: ${ODSAY_API_BASE_URL:https://api.odsay.com/v1/api}
+  api-key: ${ODSAY_API_KEY:}
+  connect-timeout: ${ODSAY_CONNECT_TIMEOUT:5s}
+  read-timeout: ${ODSAY_READ_TIMEOUT:5s}

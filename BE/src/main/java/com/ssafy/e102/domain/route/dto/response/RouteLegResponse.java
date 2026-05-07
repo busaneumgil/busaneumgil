@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import com.ssafy.e102.domain.route.type.RouteLegRole;
+import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.TransportMode;
 
 /**
@@ -20,5 +21,39 @@ public record RouteLegResponse(
 	int durationSecond,
 	int estimatedTimeMinute,
 	String geometry,
-	List<RouteStepResponse> steps) {
+	List<RouteStepResponse> steps,
+	String routeNo,
+	List<TransitLaneOptionResponse> laneOptions,
+	RouteStopResponse boardingStop,
+	RouteStopResponse alightingStop,
+	Boolean isLowFloor,
+	List<RouteBadge> badges) {
+
+	public RouteLegResponse(
+		int sequence,
+		TransportMode type,
+		RouteLegRole role,
+		String instruction,
+		BigDecimal distanceMeter,
+		int durationSecond,
+		int estimatedTimeMinute,
+		String geometry,
+		List<RouteStepResponse> steps) {
+		this(
+			sequence,
+			type,
+			role,
+			instruction,
+			distanceMeter,
+			durationSecond,
+			estimatedTimeMinute,
+			geometry,
+			steps,
+			null,
+			List.of(),
+			null,
+			null,
+			null,
+			List.of());
+	}
 }

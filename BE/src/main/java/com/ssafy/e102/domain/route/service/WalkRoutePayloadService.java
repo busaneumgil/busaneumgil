@@ -385,6 +385,7 @@ public class WalkRoutePayloadService {
 		return switch (routeOption) {
 			case SAFE -> "안전 경로";
 			case SHORTEST -> "최단 경로";
+			default -> throw new IllegalArgumentException("Unsupported walk route option: " + routeOption);
 		};
 	}
 

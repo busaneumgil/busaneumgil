@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
+import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.global.response.ApiResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class RouteController {
 
 	private final WalkRouteSearchService walkRouteSearchService;
+	private final TransitRouteSearchService transitRouteSearchService;
 
 	@PostMapping("/search/walk")
 	public ApiResponse<WalkRouteSearchResponse> searchWalkRoutes(
@@ -35,5 +37,14 @@ public class RouteController {
 		@Valid @RequestBody
 		WalkRouteSearchRequest request) {
 		return ApiResponse.success(walkRouteSearchService.search(principal.userId(), request));
+	}
+
+	@PostMapping("/search/transit")
+	public ApiResponse<WalkRouteSearchResponse> searchTransitRoutes(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@Valid @RequestBody
+		WalkRouteSearchRequest request) {
+		return ApiResponse.success(transitRouteSearchService.search(principal.userId(), request));
 	}
 }

@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.route.service;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -24,6 +25,7 @@ import com.ssafy.e102.domain.route.exception.RouteException;
 public class RouteSearchCacheService {
 
 	private static final String ROUTE_SEARCH_KEY_PREFIX = "routeSearch:";
+	private static final String ROUTE_SEARCH_METADATA_KEY_PREFIX = "routeSearchMeta:";
 	private static final Duration ROUTE_SEARCH_TTL = Duration.ofMinutes(10);
 
 	private final StringRedisTemplate redisTemplate;
@@ -38,6 +40,14 @@ public class RouteSearchCacheService {
 		redisTemplate.opsForValue().set(
 			key(response.searchId()),
 			serialize(response),
+			ROUTE_SEARCH_TTL.toSeconds(),
+			TimeUnit.SECONDS);
+	}
+
+	public void saveTransitMetadata(String searchId, List<TransitRouteSnapshot> snapshots) {
+		redisTemplate.opsForValue().set(
+			metadataKey(searchId),
+			serialize(snapshots),
 			ROUTE_SEARCH_TTL.toSeconds(),
 			TimeUnit.SECONDS);
 	}
@@ -69,9 +79,13 @@ public class RouteSearchCacheService {
 		return ROUTE_SEARCH_KEY_PREFIX + searchId;
 	}
 
-	private String serialize(WalkRouteSearchResponse response) {
+	private String metadataKey(String searchId) {
+		return ROUTE_SEARCH_METADATA_KEY_PREFIX + searchId;
+	}
+
+	private String serialize(Object value) {
 		try {
-			return objectMapper.writeValueAsString(response);
+			return objectMapper.writeValueAsString(value);
 		} catch (JsonProcessingException exception) {
 			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "경로 검색 후보를 저장할 수 없습니다.", exception);
 		}

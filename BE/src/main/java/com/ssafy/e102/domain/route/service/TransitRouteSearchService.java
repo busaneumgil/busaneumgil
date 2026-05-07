@@ -24,9 +24,11 @@ import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitLaneOptionResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
+import com.ssafy.e102.domain.route.repository.SubwayStationElevatorRepository;
 import com.ssafy.e102.domain.route.repository.SubwayStationRepository;
 import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
@@ -60,6 +62,7 @@ public class TransitRouteSearchService {
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 
 	private final WalkRouteUserProfileQueryService userProfileQueryService;
+	private final SubwayStationElevatorRepository subwayStationElevatorRepository;
 	private final SubwayStationRepository subwayStationRepository;
 	private final SubwayTimetableRepository subwayTimetableRepository;
 	private final WalkRouteProfileService walkRouteProfileService;
@@ -71,6 +74,7 @@ public class TransitRouteSearchService {
 
 	public TransitRouteSearchService(
 		WalkRouteUserProfileQueryService userProfileQueryService,
+		SubwayStationElevatorRepository subwayStationElevatorRepository,
 		SubwayStationRepository subwayStationRepository,
 		SubwayTimetableRepository subwayTimetableRepository,
 		WalkRouteProfileService walkRouteProfileService,
@@ -80,6 +84,7 @@ public class TransitRouteSearchService {
 		OdsayClient odsayClient,
 		RouteSearchCacheService routeSearchCacheService) {
 		this.userProfileQueryService = userProfileQueryService;
+		this.subwayStationElevatorRepository = subwayStationElevatorRepository;
 		this.subwayStationRepository = subwayStationRepository;
 		this.subwayTimetableRepository = subwayTimetableRepository;
 		this.walkRouteProfileService = walkRouteProfileService;
@@ -280,7 +285,7 @@ public class TransitRouteSearchService {
 		int[] geometryIndex = {0};
 		for (OdsayTransitLeg odsayLeg : odsayLegs) {
 			if (odsayLeg.type() == TransportMode.WALK) {
-				GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayLeg, endPoint);
+				GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayLeg, endPoint, cursor);
 				RouteLegResponse walkLeg = toWalkLeg(legs.size() + 1, cursor, nextPoint, odsayLeg, profile);
 				if (walkLeg == null) {
 					return List.of();
@@ -292,6 +297,7 @@ public class TransitRouteSearchService {
 			RouteLegResponse transitLeg = toTransitLeg(
 				legs.size() + 1,
 				odsayLeg,
+				cursor,
 				nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex));
 			legs.add(transitLeg);
 			if (transitLeg.alightingStop() != null) {
@@ -306,12 +312,13 @@ public class TransitRouteSearchService {
 	private GeoPointRequest nextTransitStart(
 		List<OdsayTransitLeg> odsayLegs,
 		OdsayTransitLeg currentLeg,
-		GeoPointRequest endPoint) {
+		GeoPointRequest endPoint,
+		GeoPointRequest referencePoint) {
 		int currentIndex = odsayLegs.indexOf(currentLeg);
 		for (int index = currentIndex + 1; index < odsayLegs.size(); index++) {
 			OdsayTransitLeg next = odsayLegs.get(index);
 			if (next.type() != TransportMode.WALK) {
-				RouteStopResponse stop = boardingStop(next);
+				RouteStopResponse stop = boardingStop(next, referencePoint);
 				if (stop != null) {
 					return new GeoPointRequest(stop.lat().doubleValue(), stop.lng().doubleValue());
 				}
@@ -359,11 +366,15 @@ public class TransitRouteSearchService {
 		}
 	}
 
-	private RouteLegResponse toTransitLeg(int sequence, OdsayTransitLeg odsayLeg, String geometry) {
+	private RouteLegResponse toTransitLeg(
+		int sequence,
+		OdsayTransitLeg odsayLeg,
+		GeoPointRequest referencePoint,
+		String geometry) {
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
 		List<TransitLaneOptionResponse> laneOptions = laneOptions(odsayLeg);
 		String routeNo = routeNo(odsayLeg, laneOptions);
-		RouteStopResponse boardingStop = boardingStop(odsayLeg);
+		RouteStopResponse boardingStop = boardingStop(odsayLeg, referencePoint);
 		RouteStopResponse alightingStop = alightingStop(odsayLeg);
 		return new RouteLegResponse(
 			sequence,
@@ -384,26 +395,51 @@ public class TransitRouteSearchService {
 			odsayLeg.type() == TransportMode.SUBWAY ? List.of(RouteBadge.ELEVATOR) : List.of());
 	}
 
-	private RouteStopResponse boardingStop(OdsayTransitLeg leg) {
+	private RouteStopResponse boardingStop(OdsayTransitLeg leg, GeoPointRequest referencePoint) {
 		if (leg.type() == TransportMode.SUBWAY) {
-			return subwayStop(leg.startName(), leg.startId(), leg.startExitLat(), leg.startExitLng());
+			return subwayStop(leg.startName(), leg.startId(), leg.startExitLat(), leg.startExitLng(), referencePoint);
 		}
 		return stop(leg.startName(), leg.startLat(), leg.startLng());
 	}
 
 	private RouteStopResponse alightingStop(OdsayTransitLeg leg) {
 		if (leg.type() == TransportMode.SUBWAY) {
-			return subwayStop(leg.endName(), leg.endId(), leg.endExitLat(), leg.endExitLng());
+			return subwayStop(leg.endName(), leg.endId(), leg.endExitLat(), leg.endExitLng(),
+				referencePoint(leg.endLat(), leg.endLng()));
 		}
 		return stop(leg.endName(), leg.endLat(), leg.endLng());
 	}
 
 	private RouteStopResponse subwayStop(String name, String odsayStationId, BigDecimal fallbackLat,
-		BigDecimal fallbackLng) {
+		BigDecimal fallbackLng, GeoPointRequest referencePoint) {
+		List<SubwayStationElevator> elevators = subwayStationElevatorRepository.findByOdsayStationId(odsayStationId);
+		if (!elevators.isEmpty()) {
+			SubwayStationElevator elevator = nearestElevator(elevators, referencePoint);
+			return stop(elevator.getStationName() + " 엘리베이터", elevator);
+		}
 		return subwayStationRepository.findByOdsayStationId(odsayStationId)
 			.filter(station -> station.getPoint() != null)
 			.map(station -> stop(station.getStationName() + " 엘리베이터", station))
 			.orElseGet(() -> stop(name + " 엘리베이터", fallbackLat, fallbackLng));
+	}
+
+	private SubwayStationElevator nearestElevator(List<SubwayStationElevator> elevators,
+		GeoPointRequest referencePoint) {
+		if (referencePoint == null) {
+			return elevators.get(0);
+		}
+		return elevators.stream()
+			.min(Comparator.comparingDouble(elevator -> GeoDistanceCalculator.distanceMeter(
+				referencePoint,
+				new GeoPointRequest(elevator.getPoint().getY(), elevator.getPoint().getX()))))
+			.orElse(elevators.get(0));
+	}
+
+	private GeoPointRequest referencePoint(BigDecimal lat, BigDecimal lng) {
+		if (lat == null || lng == null) {
+			return null;
+		}
+		return new GeoPointRequest(lat.doubleValue(), lng.doubleValue());
 	}
 
 	private RouteStopResponse stop(String name, SubwayStation station) {
@@ -411,6 +447,13 @@ public class TransitRouteSearchService {
 			name,
 			BigDecimal.valueOf(station.getPoint().getY()),
 			BigDecimal.valueOf(station.getPoint().getX()));
+	}
+
+	private RouteStopResponse stop(String name, SubwayStationElevator elevator) {
+		return new RouteStopResponse(
+			name,
+			BigDecimal.valueOf(elevator.getPoint().getY()),
+			BigDecimal.valueOf(elevator.getPoint().getX()));
 	}
 
 	private String nextGeometry(
@@ -582,7 +625,7 @@ public class TransitRouteSearchService {
 		snapshot.put("lanes", leg.lanes().stream().map(this::snapshotLane).toList());
 		snapshot.put("passStops", leg.passStops().stream().map(this::snapshotStop).toList());
 		if (leg.type() == TransportMode.SUBWAY) {
-			RouteStopResponse boardingStop = boardingStop(leg);
+			RouteStopResponse boardingStop = boardingStop(leg, null);
 			RouteStopResponse alightingStop = alightingStop(leg);
 			snapshot.put("odsayStationId", leg.startId());
 			snapshot.put("endOdsayStationId", leg.endId());

@@ -32,6 +32,7 @@ import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.global.entity.BaseEntity;
@@ -59,6 +60,7 @@ class DatabaseNamingStrategyTest {
 		SegmentFeature.class,
 		RouteSession.class,
 		SubwayStation.class,
+		SubwayStationElevator.class,
 		SubwayTimetable.class);
 
 	@Test

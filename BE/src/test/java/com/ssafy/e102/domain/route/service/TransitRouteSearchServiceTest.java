@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -27,10 +26,11 @@ import org.springframework.data.domain.Pageable;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
-import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
+import com.ssafy.e102.domain.route.repository.SubwayStationElevatorRepository;
 import com.ssafy.e102.domain.route.repository.SubwayStationRepository;
 import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.type.RouteOption;
@@ -63,6 +63,9 @@ class TransitRouteSearchServiceTest {
 	private WalkRouteUserProfileQueryService userProfileQueryService;
 
 	@Mock
+	private SubwayStationElevatorRepository subwayStationElevatorRepository;
+
+	@Mock
 	private SubwayStationRepository subwayStationRepository;
 
 	@Mock
@@ -87,6 +90,7 @@ class TransitRouteSearchServiceTest {
 		MockitoAnnotations.openMocks(this);
 		service = new TransitRouteSearchService(
 			userProfileQueryService,
+			subwayStationElevatorRepository,
 			subwayStationRepository,
 			subwayTimetableRepository,
 			new WalkRouteProfileService(),
@@ -203,17 +207,19 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
-	@DisplayName("SUBWAY 승하차 좌표를 역 point로 보정하고 시간표 snapshot을 저장한다")
+	@DisplayName("SUBWAY 승하차 좌표를 엘리베이터 point로 보정하고 시간표 snapshot을 저장한다")
 	@SuppressWarnings("unchecked")
 	void adjustsSubwayStopsAndStoresTimetableSnapshot() {
 		when(odsayClient.searchPubTransPath(START, END))
 			.thenReturn(new OdsayTransitSearchResult(List.of(subwayPath("map-subway"))));
 		when(odsayClient.loadLane("map-subway"))
 			.thenReturn(List.of(new OdsayLaneGeometry(TransportMode.SUBWAY, "LINESTRING(129.061 35.161, 129.066 35.166)")));
-		when(subwayStationRepository.findByOdsayStationId("S1"))
-			.thenReturn(Optional.of(station("S1", "서면", "부산 1호선", 35.1580, 129.0580)));
-		when(subwayStationRepository.findByOdsayStationId("S2"))
-			.thenReturn(Optional.of(station("S2", "부산역", "부산 1호선", 35.1150, 129.0410)));
+		when(subwayStationElevatorRepository.findByOdsayStationId("S1"))
+			.thenReturn(List.of(
+				elevator("S1", "서면", "부산 1호선", 35.1580, 129.0580),
+				elevator("S1", "서면", "부산 1호선", 35.1590, 129.0590)));
+		when(subwayStationElevatorRepository.findByOdsayStationId("S2"))
+			.thenReturn(List.of(elevator("S2", "부산역", "부산 1호선", 35.1150, 129.0410)));
 		when(subwayTimetableRepository.findNextDepartures(
 			eq("S1"),
 			any(SubwayServiceDayType.class),
@@ -231,8 +237,8 @@ class TransitRouteSearchServiceTest {
 			.first()
 			.satisfies(leg -> {
 				assertThat(leg.boardingStop().name()).isEqualTo("서면 엘리베이터");
-				assertThat(leg.boardingStop().lat()).isEqualByComparingTo("35.158");
-				assertThat(leg.boardingStop().lng()).isEqualByComparingTo("129.058");
+				assertThat(leg.boardingStop().lat()).isEqualByComparingTo("35.159");
+				assertThat(leg.boardingStop().lng()).isEqualByComparingTo("129.059");
 			});
 
 		ArgumentCaptor<List<TransitRouteSnapshot>> snapshotCaptor = ArgumentCaptor.forClass(List.class);
@@ -405,8 +411,8 @@ class TransitRouteSearchServiceTest {
 			Map.of());
 	}
 
-	private SubwayStation station(String id, String name, String lineName, double lat, double lng) {
-		return SubwayStation.create(
+	private SubwayStationElevator elevator(String id, String name, String lineName, double lat, double lng) {
+		return SubwayStationElevator.create(
 			id,
 			name,
 			lineName,

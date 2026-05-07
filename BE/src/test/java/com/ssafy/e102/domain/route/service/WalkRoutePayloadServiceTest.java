@@ -59,6 +59,7 @@ class WalkRoutePayloadServiceTest {
 		assertThat(route.legs().get(0).steps()).hasSize(2);
 		assertThat(route.legs().get(0).steps().get(0).instruction()).isEqualTo("직진하세요.");
 		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
+		assertThat(route.legs().get(0).steps().get(0).alert().distanceMeter()).isEqualByComparingTo("0.00");
 	}
 
 	@Test
@@ -86,5 +87,58 @@ class WalkRoutePayloadServiceTest {
 		assertThat(route.legs().get(0).steps().get(1).instruction()).isEqualTo("좌회전하세요.");
 		assertThat(route.legs().get(0).steps().get(1).alert()).isNull();
 		assertThat(route.legs().get(0).steps().get(1).geometry()).isEqualTo("LINESTRING(1.0 0.0, 1.0 1.0)");
+	}
+
+	@Test
+	void allocatesStepDistanceAndDurationByHaversineGeometryLength() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("300.00"),
+			90_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0010"))),
+			Map.of("width_state", List.of(new GraphHopperPathDetail(2, 3, "NARROW"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		List<com.ssafy.e102.domain.route.dto.response.RouteStepResponse> steps = route.legs().get(0).steps();
+		assertThat(steps).hasSize(2);
+		assertThat(steps.get(0).distanceMeter()).isLessThan(new BigDecimal("200.00"));
+		assertThat(steps.get(1).distanceMeter()).isGreaterThan(new BigDecimal("100.00"));
+		assertThat(steps.stream()
+			.map(com.ssafy.e102.domain.route.dto.response.RouteStepResponse::distanceMeter)
+			.reduce(BigDecimal.ZERO, BigDecimal::add))
+			.isEqualByComparingTo("300.00");
+		assertThat(steps.stream()
+			.mapToInt(com.ssafy.e102.domain.route.dto.response.RouteStepResponse::durationSecond)
+			.sum())
+			.isEqualTo(90);
+	}
+
+	@Test
+	void choosesAlertByPriorityBeforeNearestDistance() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("100.00"),
+			60_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000"))),
+			Map.of(
+				"segment_type", List.of(new GraphHopperPathDetail(0, 1, "CROSS_WALK")),
+				"stairs_state", List.of(new GraphHopperPathDetail(0, 1, "YES")),
+				"width_state", List.of(new GraphHopperPathDetail(0, 1, "NARROW")),
+				"surface_state", List.of(new GraphHopperPathDetail(0, 1, "UNPAVED")),
+				"slope_state", List.of(new GraphHopperPathDetail(0, 1, "MODERATE"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
+		assertThat(route.legs().get(0).steps().get(0).alert().distanceMeter()).isEqualByComparingTo("0.00");
 	}
 }

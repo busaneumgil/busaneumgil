@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.route.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperCoordinate;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperPathDetail;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
+import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 
 /**
  * GraphHopper path를 경로 API 응답 DTO로 변환한다.
@@ -37,6 +39,12 @@ import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
 public class WalkRoutePayloadService {
 
 	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
+	private static final List<AlertRule> ALERT_RULES = List.of(
+		new AlertRule(RouteStepAlertType.CROSSWALK, "segment_type", Set.of("CROSS_WALK"), 1),
+		new AlertRule(RouteStepAlertType.STAIR, "stairs_state", Set.of("YES"), 2),
+		new AlertRule(RouteStepAlertType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 3),
+		new AlertRule(RouteStepAlertType.UNPAVED, "surface_state", Set.of("UNPAVED"), 4),
+		new AlertRule(RouteStepAlertType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 5));
 
 	private final RouteTurnInstructionService routeTurnInstructionService;
 
@@ -93,15 +101,30 @@ public class WalkRoutePayloadService {
 		List<Integer> splitPoints = splitPoints(path);
 		BigDecimal routeLength = routeLength(coordinates);
 		List<RouteStepResponse> steps = new ArrayList<>();
+		BigDecimal accumulatedDistance = BigDecimal.ZERO.setScale(2);
+		int accumulatedDuration = 0;
 		for (int index = 0; index < splitPoints.size() - 1; index++) {
 			int fromIndex = splitPoints.get(index);
 			int toIndex = splitPoints.get(index + 1);
-			BigDecimal ratio = stepLengthRatio(coordinates, fromIndex, toIndex, routeLength);
-			BigDecimal stepDistance = totalDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
-			int stepDuration = Math.max(1, BigDecimal.valueOf(totalDurationSecond)
-				.multiply(ratio)
-				.setScale(0, RoundingMode.HALF_UP)
-				.intValue());
+			boolean isLastStep = index == splitPoints.size() - 2;
+			BigDecimal stepDistance = stepDistance(
+				totalDistanceMeter,
+				coordinates,
+				fromIndex,
+				toIndex,
+				routeLength,
+				accumulatedDistance,
+				isLastStep);
+			int stepDuration = stepDuration(
+				totalDurationSecond,
+				coordinates,
+				fromIndex,
+				toIndex,
+				routeLength,
+				accumulatedDuration,
+				isLastStep);
+			accumulatedDistance = accumulatedDistance.add(stepDistance);
+			accumulatedDuration += stepDuration;
 			steps.add(toStep(path, index + 1, fromIndex, toIndex, stepDistance, stepDuration));
 		}
 		return steps;
@@ -116,8 +139,8 @@ public class WalkRoutePayloadService {
 		int durationSecond) {
 		GraphHopperRoutePath stepPath = slice(path, fromIndex, toIndex);
 		Optional<RouteTurnDirection> turnDirection = turnDirection(path, fromIndex);
-		RouteStepAlertResponse alert = representativeAlert(stepPath)
-			.map(type -> new RouteStepAlertResponse(type, BigDecimal.ZERO.setScale(2)))
+		RouteStepAlertResponse alert = representativeAlert(path, fromIndex, toIndex, distanceMeter)
+			.map(candidate -> new RouteStepAlertResponse(candidate.type(), candidate.distanceMeter()))
 			.orElse(null);
 		return new RouteStepResponse(
 			sequence,
@@ -199,6 +222,41 @@ public class WalkRoutePayloadService {
 		return new Coordinate(coordinate.lng().doubleValue(), coordinate.lat().doubleValue());
 	}
 
+	private BigDecimal stepDistance(
+		BigDecimal totalDistanceMeter,
+		List<GraphHopperCoordinate> coordinates,
+		int fromIndex,
+		int toIndex,
+		BigDecimal routeLength,
+		BigDecimal accumulatedDistance,
+		boolean isLastStep) {
+		if (isLastStep) {
+			return totalDistanceMeter.subtract(accumulatedDistance)
+				.max(BigDecimal.ZERO)
+				.setScale(2, RoundingMode.HALF_UP);
+		}
+		BigDecimal ratio = stepLengthRatio(coordinates, fromIndex, toIndex, routeLength);
+		return totalDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+	}
+
+	private int stepDuration(
+		int totalDurationSecond,
+		List<GraphHopperCoordinate> coordinates,
+		int fromIndex,
+		int toIndex,
+		BigDecimal routeLength,
+		int accumulatedDuration,
+		boolean isLastStep) {
+		if (isLastStep) {
+			return Math.max(1, totalDurationSecond - accumulatedDuration);
+		}
+		BigDecimal ratio = stepLengthRatio(coordinates, fromIndex, toIndex, routeLength);
+		return Math.max(1, BigDecimal.valueOf(totalDurationSecond)
+			.multiply(ratio)
+			.setScale(0, RoundingMode.HALF_UP)
+			.intValue());
+	}
+
 	private BigDecimal stepLengthRatio(
 		List<GraphHopperCoordinate> coordinates,
 		int fromIndex,
@@ -222,9 +280,11 @@ public class WalkRoutePayloadService {
 	}
 
 	private BigDecimal segmentLength(GraphHopperCoordinate from, GraphHopperCoordinate to) {
-		double deltaLng = to.lng().doubleValue() - from.lng().doubleValue();
-		double deltaLat = to.lat().doubleValue() - from.lat().doubleValue();
-		return BigDecimal.valueOf(Math.hypot(deltaLng, deltaLat));
+		return BigDecimal.valueOf(GeoDistanceCalculator.distanceMeter(
+			from.lat().doubleValue(),
+			from.lng().doubleValue(),
+			to.lat().doubleValue(),
+			to.lng().doubleValue()));
 	}
 
 	private List<RouteBadge> badges(GraphHopperRoutePath path) {
@@ -249,23 +309,57 @@ public class WalkRoutePayloadService {
 		return new ArrayList<>(badges);
 	}
 
-	private Optional<RouteStepAlertType> representativeAlert(GraphHopperRoutePath path) {
-		if (hasAny(path, "segment_type", "CROSS_WALK") && hasAny(path, "signal_state", "YES")) {
-			return Optional.of(RouteStepAlertType.CROSSWALK);
+	private Optional<StepAlertCandidate> representativeAlert(
+		GraphHopperRoutePath path,
+		int fromIndex,
+		int toIndex,
+		BigDecimal stepDistanceMeter) {
+		BigDecimal stepLength = routeLength(path.coordinates().subList(fromIndex, toIndex + 1));
+		return ALERT_RULES.stream()
+			.flatMap(rule -> alertCandidates(path, rule, fromIndex, toIndex, stepDistanceMeter, stepLength).stream())
+			.min(Comparator
+				.comparingInt(StepAlertCandidate::priority)
+				.thenComparing(StepAlertCandidate::distanceMeter));
+	}
+
+	private List<StepAlertCandidate> alertCandidates(
+		GraphHopperRoutePath path,
+		AlertRule rule,
+		int fromIndex,
+		int toIndex,
+		BigDecimal stepDistanceMeter,
+		BigDecimal stepLength) {
+		return path.details()
+			.getOrDefault(rule.detailName(), List.of())
+			.stream()
+			.filter(detail -> rule.expectedValues().contains(detail.value()))
+			.filter(detail -> isOverlapping(detail, fromIndex, toIndex))
+			.map(detail -> new StepAlertCandidate(
+				rule.type(),
+				relativeDistanceMeter(path.coordinates(), fromIndex, toIndex, detail.fromIndex(), stepDistanceMeter,
+					stepLength),
+				rule.priority()))
+			.toList();
+	}
+
+	private boolean isOverlapping(GraphHopperPathDetail detail, int fromIndex, int toIndex) {
+		return detail.fromIndex() < toIndex && detail.toIndex() > fromIndex;
+	}
+
+	private BigDecimal relativeDistanceMeter(
+		List<GraphHopperCoordinate> coordinates,
+		int stepFromIndex,
+		int stepToIndex,
+		int eventFromIndex,
+		BigDecimal stepDistanceMeter,
+		BigDecimal stepLength) {
+		int normalizedEventIndex = Math.min(Math.max(eventFromIndex, stepFromIndex), stepToIndex);
+		if (normalizedEventIndex <= stepFromIndex || stepLength.compareTo(BigDecimal.ZERO) == 0) {
+			return BigDecimal.ZERO.setScale(2);
 		}
-		if (hasAny(path, "stairs_state", "YES")) {
-			return Optional.of(RouteStepAlertType.STAIR);
-		}
-		if (hasAny(path, "slope_state", "MODERATE", "STEEP", "RISK")) {
-			return Optional.of(RouteStepAlertType.MIDDLE_SLOPE);
-		}
-		if (hasAny(path, "width_state", "NARROW")) {
-			return Optional.of(RouteStepAlertType.NARROW_SIDEWALK);
-		}
-		if (hasAny(path, "surface_state", "UNPAVED")) {
-			return Optional.of(RouteStepAlertType.UNPAVED);
-		}
-		return Optional.empty();
+		BigDecimal eventOffsetLength = routeLength(coordinates.subList(stepFromIndex, normalizedEventIndex + 1));
+		BigDecimal ratio = eventOffsetLength.divide(stepLength, 8, RoundingMode.HALF_UP);
+		return stepDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
 	}
 
 	private boolean hasAny(GraphHopperRoutePath path, String detailName, String... expectedValues) {
@@ -311,5 +405,18 @@ public class WalkRoutePayloadService {
 			.map(coordinate -> coordinate.lng().toPlainString() + " " + coordinate.lat().toPlainString())
 			.collect(Collectors.joining(", "));
 		return "LINESTRING(" + points + ")";
+	}
+
+	private record AlertRule(
+		RouteStepAlertType type,
+		String detailName,
+		Set<String> expectedValues,
+		int priority) {
+	}
+
+	private record StepAlertCandidate(
+		RouteStepAlertType type,
+		BigDecimal distanceMeter,
+		int priority) {
 	}
 }

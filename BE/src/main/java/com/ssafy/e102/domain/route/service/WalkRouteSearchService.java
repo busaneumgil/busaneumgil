@@ -10,6 +10,7 @@ import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
+import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 /**
@@ -26,7 +27,6 @@ public class WalkRouteSearchService {
 	private static final double BUSAN_MIN_LNG = 128.70;
 	private static final double BUSAN_MAX_LNG = 129.40;
 	private static final double START_END_MIN_DISTANCE_METER = 20.0;
-	private static final double EARTH_RADIUS_METER = 6_371_000.0;
 
 	private final WalkRouteUserProfileQueryService userProfileQueryService;
 	private final WalkRouteGraphHopperSearchService graphHopperSearchService;
@@ -77,20 +77,9 @@ public class WalkRouteSearchService {
 	}
 
 	private void validateStartEndDistance(GeoPointRequest startPoint, GeoPointRequest endPoint) {
-		if (distanceMeter(startPoint, endPoint) <= START_END_MIN_DISTANCE_METER) {
+		if (GeoDistanceCalculator.distanceMeter(startPoint, endPoint) <= START_END_MIN_DISTANCE_METER) {
 			throw new RouteException(RouteErrorCode.START_END_TOO_CLOSE);
 		}
-	}
-
-	private double distanceMeter(GeoPointRequest startPoint, GeoPointRequest endPoint) {
-		double startLat = Math.toRadians(startPoint.lat());
-		double endLat = Math.toRadians(endPoint.lat());
-		double deltaLat = Math.toRadians(endPoint.lat() - startPoint.lat());
-		double deltaLng = Math.toRadians(endPoint.lng() - startPoint.lng());
-		double haversine = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
-			+ Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
-		double angularDistance = 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-		return EARTH_RADIUS_METER * angularDistance;
 	}
 
 	private List<RouteSummaryResponse> toRouteSummaries(String searchId, List<WalkRouteCandidate> candidates) {

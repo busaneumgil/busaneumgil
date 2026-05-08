@@ -22,6 +22,8 @@ import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
+import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
+import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MIN_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
@@ -30,6 +32,8 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
+import com.ssafy.e102.eumgil.feature.map.model.defaultZoomLevel
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
@@ -131,6 +135,8 @@ class MapViewModel(
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
             MapUiAction.FacilitySetDestinationClicked -> handleFacilitySetDestinationClicked()
             MapUiAction.LocationActionClicked -> handleLocationAction()
+            MapUiAction.ZoomInClicked -> handleZoomAction(delta = 1)
+            MapUiAction.ZoomOutClicked -> handleZoomAction(delta = -1)
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
@@ -613,6 +619,26 @@ class MapViewModel(
         }
     }
 
+    private fun handleZoomAction(delta: Int) {
+        mutableUiState.update { state ->
+            val currentZoomLevel = state.cameraTarget.resolvedZoomLevel()
+            val nextZoomLevel =
+                (currentZoomLevel + delta)
+                    .coerceIn(KAKAO_MAP_MIN_ZOOM_LEVEL, KAKAO_MAP_MAX_ZOOM_LEVEL)
+            if (nextZoomLevel == currentZoomLevel) {
+                state
+            } else {
+                state.copy(
+                    cameraTarget =
+                        state.cameraTarget.copy(
+                            requestId = state.cameraTarget.requestId + 1L,
+                            zoomLevel = nextZoomLevel,
+                        ),
+                )
+            }
+        }
+    }
+
     private fun startLocationTracking(forceLookupRestart: Boolean) {
         if (!isRouteStarted) return
 
@@ -686,6 +712,12 @@ class MapViewModel(
                 } else {
                     state.cameraTarget.requestId
                 }
+            val nextZoomLevel =
+                if (shouldIncrement) {
+                    MapCameraSource.CURRENT_LOCATION.defaultZoomLevel()
+                } else {
+                    state.cameraTarget.zoomLevel
+                }
 
             state.copy(
                 cameraTarget =
@@ -693,6 +725,7 @@ class MapViewModel(
                         center = coordinate,
                         source = MapCameraSource.CURRENT_LOCATION,
                         requestId = nextRequestId,
+                        zoomLevel = nextZoomLevel,
                     ),
             )
         }
@@ -717,6 +750,12 @@ class MapViewModel(
                 } else {
                     state.cameraTarget.requestId
                 }
+            val nextZoomLevel =
+                if (shouldIncrement) {
+                    MapCameraSource.SEARCH_RESULT.defaultZoomLevel()
+                } else {
+                    state.cameraTarget.zoomLevel
+                }
 
             state.copy(
                 cameraTarget =
@@ -724,6 +763,7 @@ class MapViewModel(
                         center = coordinate,
                         source = MapCameraSource.SEARCH_RESULT,
                         requestId = nextRequestId,
+                        zoomLevel = nextZoomLevel,
                     ),
                 selectedDestination = destination,
             )
@@ -765,6 +805,7 @@ class MapViewModel(
                             center = MapDefaults.BUSAN_CENTER,
                             source = MapCameraSource.DEFAULT_BUSAN,
                             requestId = state.cameraTarget.requestId + 1L,
+                            zoomLevel = MapCameraSource.DEFAULT_BUSAN.defaultZoomLevel(),
                         ),
                 )
             }

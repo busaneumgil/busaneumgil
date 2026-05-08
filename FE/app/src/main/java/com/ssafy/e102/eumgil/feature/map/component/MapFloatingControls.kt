@@ -15,11 +15,15 @@ fun MapFloatingControls(
     recenterButtonState: MapRecenterButtonState,
     isRecenterButtonActive: Boolean,
     onRecenterClick: () -> Unit,
+    onZoomInClick: () -> Unit,
+    onZoomOutClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     EumMapFloatingControls(
         actionButtonState = recenterButtonStyle(recenterButtonState, isRecenterButtonActive),
         onActionClick = onRecenterClick,
+        onZoomInClick = onZoomInClick,
+        onZoomOutClick = onZoomOutClick,
         modifier = modifier,
     )
 }

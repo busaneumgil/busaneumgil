@@ -96,6 +96,22 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `explicit zoom level overrides source default zoom`() {
+        val cameraState =
+            createKakaoCameraRenderState(
+                MapCameraTarget(
+                    center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                    source = MapCameraSource.DEFAULT_BUSAN,
+                    requestId = 12L,
+                    zoomLevel = 19,
+                ),
+            )
+
+        assertEquals(19, cameraState.zoomLevel)
+        assertEquals(12L, cameraState.requestId)
+    }
+
+    @Test
     fun `lifecycle command resumes immediately after start when lifecycle is resumed`() {
         assertEquals(
             KakaoMapLifecycleCommand.NONE,

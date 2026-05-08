@@ -3,9 +3,9 @@ package com.ssafy.e102.eumgil.feature.map.component
 import androidx.annotation.DrawableRes
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
-import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import java.util.Locale
 
 internal const val KAKAO_MAP_PROVIDER_NAME = "Kakao Map"
@@ -31,12 +31,7 @@ internal fun createKakaoCameraRenderState(cameraTarget: MapCameraTarget): KakaoC
     KakaoCameraRenderState(
         latitude = cameraTarget.center.latitude,
         longitude = cameraTarget.center.longitude,
-        zoomLevel =
-            when (cameraTarget.source) {
-                MapCameraSource.CURRENT_LOCATION -> 17
-                MapCameraSource.SEARCH_RESULT -> 16
-                MapCameraSource.DEFAULT_BUSAN -> 15
-            },
+        zoomLevel = cameraTarget.resolvedZoomLevel(),
         requestId = cameraTarget.requestId,
     )
 

@@ -40,6 +40,10 @@ sealed interface MapUiAction {
 
     data object LocationActionClicked : MapUiAction
 
+    data object ZoomInClicked : MapUiAction
+
+    data object ZoomOutClicked : MapUiAction
+
     data object FacilityDetailDismissed : MapUiAction
 
     data object FacilitySetDestinationClicked : MapUiAction

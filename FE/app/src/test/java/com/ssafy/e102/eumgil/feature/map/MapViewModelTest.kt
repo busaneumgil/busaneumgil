@@ -33,6 +33,7 @@ import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.feature.map.component.createKakaoCameraRenderState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
@@ -210,6 +211,34 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.isRecenterButtonActive)
+        }
+
+    @Test
+    fun `zoom in action increases camera zoom level and request id`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val initialCamera = createKakaoCameraRenderState(viewModel.uiState.value.cameraTarget)
+
+            viewModel.onAction(MapUiAction.ZoomInClicked)
+            advanceUntilIdle()
+
+            val updatedCamera = createKakaoCameraRenderState(viewModel.uiState.value.cameraTarget)
+
+            assertEquals(initialCamera.zoomLevel + 1, updatedCamera.zoomLevel)
+            assertEquals(initialCamera.requestId + 1L, updatedCamera.requestId)
+            assertEquals(initialCamera.latitude, updatedCamera.latitude, 0.0)
+            assertEquals(initialCamera.longitude, updatedCamera.longitude, 0.0)
         }
 
     @Test

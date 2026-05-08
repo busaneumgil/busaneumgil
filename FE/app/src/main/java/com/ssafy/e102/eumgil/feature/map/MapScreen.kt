@@ -119,6 +119,8 @@ fun MapScreen(
                 recenterButtonState = uiState.recenterButtonState,
                 isRecenterButtonActive = uiState.isRecenterButtonActive,
                 onRecenterClick = { onAction(MapUiAction.LocationActionClicked) },
+                onZoomInClick = { onAction(MapUiAction.ZoomInClicked) },
+                onZoomOutClick = { onAction(MapUiAction.ZoomOutClicked) },
             )
         },
         bottomOverlay = {

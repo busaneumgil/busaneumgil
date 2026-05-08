@@ -322,6 +322,7 @@ select {
   display: flex;
   align-items: end;
   gap: 8px;
+  min-width: 0;
 }
 
 .topbar-actions label {
@@ -329,6 +330,24 @@ select {
   gap: 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.topbar-actions input {
+  width: 340px;
+  max-width: 36vw;
+}
+
+.topbar-actions button {
+  flex: 0 0 auto;
+  min-width: 72px;
+  height: 42px;
+  margin-top: 0;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.topbar-actions .primary {
+  width: auto;
 }
 
 .editor-layout {

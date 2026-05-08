@@ -47,9 +47,9 @@ if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
   docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d graphhopper
 fi
 
+bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"
+
 cp "$DEPLOY_STATE_DIR/previous-app-image" "$DEPLOY_STATE_DIR/current-app-image"
 if [ -f "$DEPLOY_STATE_DIR/previous-graphhopper-image" ]; then
   cp "$DEPLOY_STATE_DIR/previous-graphhopper-image" "$DEPLOY_STATE_DIR/current-graphhopper-image"
 fi
-
-bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"

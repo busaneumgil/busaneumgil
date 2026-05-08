@@ -88,7 +88,7 @@ GraphHopper는 S1 dev stack에 포함한다. runtime은 graph-cache serve only �
 Mattermost 알림:
 
 - 시작: 발송
-- 성공: 미발송
+- 성공: 발송
 - 실패: 발송
 
 ## Credentials

@@ -6,9 +6,9 @@ import org.junit.Test
 
 class LowVisionPlaceCardDefaultsTest {
     @Test
-    fun `place action icons use shared mobility impaired place list assets`() {
-        assertEquals(R.drawable.ic_action_favorite, LowVisionPlaceCardDefaults.saveIconRes)
-        assertEquals(R.drawable.ic_nav_route, LowVisionPlaceCardDefaults.routeIconRes)
+    fun `place action icons use bookmark and route navigation assets`() {
+        assertEquals(R.drawable.ic_nav_bookmark_outline, LowVisionPlaceCardDefaults.saveIconRes)
+        assertEquals(R.drawable.ic_route_start_navigation, LowVisionPlaceCardDefaults.routeIconRes)
     }
 
     @Test

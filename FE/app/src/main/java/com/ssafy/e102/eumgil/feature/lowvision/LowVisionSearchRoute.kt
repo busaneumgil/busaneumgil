@@ -74,12 +74,14 @@ fun LowVisionSearchRoute(
         }
     }
 
-    LowVisionSearchScreen(
-        uiState = uiState,
-        onAction = viewModel::onAction,
-        modifier = modifier,
-        categoryLabel = categoryLabel,
-    )
+    LowVisionFontTheme {
+        LowVisionSearchScreen(
+            uiState = uiState,
+            onAction = viewModel::onAction,
+            modifier = modifier,
+            categoryLabel = categoryLabel,
+        )
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

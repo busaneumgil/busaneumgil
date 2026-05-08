@@ -25,6 +25,14 @@ class OnboardingNavGraphRoutingTest {
     }
 
     @Test
+    fun `terms guide details resolves the step notion page`() {
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link",
+            resolveTermsGuideDetailUrl(TermsGuideStep.SENSITIVE),
+        )
+    }
+
+    @Test
     fun `completed low vision onboarding moves to low vision home`() {
         assertEquals(
             LowVisionRoute.Home.route,

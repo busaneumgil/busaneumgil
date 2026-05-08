@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.service.PlaceService;
 import com.ssafy.e102.global.response.ApiResponse;
@@ -38,6 +39,15 @@ public class PlaceController {
 		@RequestParam(required = false)
 		String size) {
 		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, cursor, size));
+	}
+
+	@GetMapping("/reverse-geocode")
+	public ApiResponse<PlaceReverseGeocodeResponse> reverseGeocode(
+		@RequestParam(required = false)
+		String lat,
+		@RequestParam(required = false)
+		String lng) {
+		return ApiResponse.success(placeService.reverseGeocode(lat, lng));
 	}
 
 	@GetMapping

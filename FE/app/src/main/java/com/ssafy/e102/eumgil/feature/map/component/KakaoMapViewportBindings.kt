@@ -118,7 +118,7 @@ internal fun createKakaoMarkerRenderStates(
                     markerId = marker.markerId,
                     latitude = marker.coordinate.latitude,
                     longitude = marker.coordinate.longitude,
-                    iconResId = categoryIconResId(marker.categoryType.category),
+                    iconResId = categoryMarkerIconResId(marker.categoryType.category),
                     rank = if (marker.markerId == selectedMarkerId) 1L else 0L,
                     clickTargetId = marker.markerId,
                 )
@@ -142,21 +142,22 @@ internal fun createKakaoMarkerDebugSummary(
         append(selectedMarkerId ?: "none")
     }
 
+// Kakao labels render raw drawable bounds, so map markers must use compact icon assets.
 @DrawableRes
-private fun categoryIconResId(category: FacilityCategory): Int =
+private fun categoryMarkerIconResId(category: FacilityCategory): Int =
     when (category) {
         FacilityCategory.TOILET -> R.drawable.ic_place_restroom
-        FacilityCategory.ELEVATOR -> R.drawable.ic_place_elevator
-        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging_station
-        FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe
-        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
-        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
-        FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
-        FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
+        FacilityCategory.ELEVATOR -> R.drawable.ic_lowvision_category_elevator
+        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_cafe
+        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
+        FacilityCategory.ACCOMMODATION -> R.drawable.ic_nav_facility
+        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_hospital
+        FacilityCategory.WELFARE -> R.drawable.ic_nav_facility
+        FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_nav_facility
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
-        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
         FacilityCategory.OTHER -> R.drawable.ic_nav_facility
     }
 

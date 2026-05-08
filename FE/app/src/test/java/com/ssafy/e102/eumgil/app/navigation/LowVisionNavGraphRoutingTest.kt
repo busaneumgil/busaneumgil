@@ -139,6 +139,11 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `low vision route changes use instant destination transitions`() {
+        assertEquals(true, shouldUseInstantLowVisionDestinationTransitions())
+    }
+
+    @Test
     fun `low vision my page actions resolve to concrete destinations`() {
         assertEquals(
             OnboardingRoute.ProfileUserTypePrimary.route,

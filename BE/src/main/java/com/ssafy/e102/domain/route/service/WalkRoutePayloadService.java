@@ -366,7 +366,7 @@ public class WalkRoutePayloadService {
 			case CROSSWALK_AUDIO -> 1;
 			case CROSSWALK_SIGNAL -> 2;
 			case CROSSWALK -> 3;
-			default -> throw new IllegalStateException("unexpected crosswalk alert type");
+			default -> throw new IllegalStateException("예상하지 못한 횡단보도 안내 유형입니다.");
 		};
 	}
 

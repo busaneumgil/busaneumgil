@@ -559,7 +559,7 @@ private fun SearchResultSection(
                     SearchResultItem(
                         result = result,
                         onClick = {
-                            onAction(SearchUiAction.SearchResultClicked(result = result))
+                            onAction(SearchUiAction.SearchResultBriefingClicked(result = result))
                         },
                     )
                 }

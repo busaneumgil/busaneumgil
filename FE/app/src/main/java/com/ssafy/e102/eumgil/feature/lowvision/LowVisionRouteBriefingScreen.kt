@@ -38,9 +38,17 @@ private val BriefingYellow = LowVisionScreenDefaults.brandYellow
 private val BriefingBlack = Color(0xFF000000)
 private val BriefingWhite = Color(0xFFFFFFFF)
 
+internal object LowVisionRouteBriefingLayoutDefaults {
+    val stepRowMinHeight = 118.dp
+    val stepInstructionFontSize = 34.sp
+    val stepInstructionLineHeight = 40.sp
+    const val stepInstructionMaxLines = 2
+}
+
 @Composable
 fun LowVisionRouteBriefingScreen(
     uiState: LowVisionRouteBriefingUiState,
+    visibleSteps: List<LowVisionRouteBriefingStepUiState> = uiState.steps.visibleBriefingSteps(0),
     isPlaying: Boolean,
     onPlaybackClick: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
@@ -87,7 +95,7 @@ fun LowVisionRouteBriefingScreen(
                         .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                uiState.steps.forEach { step ->
+                visibleSteps.forEach { step ->
                     BriefingStepRow(step = step)
                 }
             }
@@ -116,7 +124,7 @@ private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(92.dp)
+                .heightIn(min = LowVisionRouteBriefingLayoutDefaults.stepRowMinHeight)
                 .semantics {
                     contentDescription = "${step.sequence}번. ${step.instruction}"
                 },
@@ -127,7 +135,7 @@ private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(26.dp),
         ) {
@@ -141,11 +149,11 @@ private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
             Text(
                 text = step.instruction,
                 color = BriefingBlack,
-                fontSize = 38.sp,
-                lineHeight = 44.sp,
+                fontSize = LowVisionRouteBriefingLayoutDefaults.stepInstructionFontSize,
+                lineHeight = LowVisionRouteBriefingLayoutDefaults.stepInstructionLineHeight,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
-                maxLines = 1,
+                maxLines = LowVisionRouteBriefingLayoutDefaults.stepInstructionMaxLines,
                 modifier = Modifier.weight(1f),
             )
             Text(

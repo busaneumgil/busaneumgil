@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceMarkerResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.service.PlaceService;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
@@ -61,6 +62,29 @@ class PlaceControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.nextCursor").doesNotExist())
 			.andExpect(jsonPath("$.data.hasNext").value(false));
+	}
+
+	@Test
+	@DisplayName("좌표 주소 변환은 query parameter를 서비스에 전달한다")
+	void reverseGeocode() throws Exception {
+		when(placeService.reverseGeocode("35.1686", "129.0576"))
+			.thenReturn(new PlaceReverseGeocodeResponse(
+				"부산 부산진구 시민공원로 73",
+				"부산 부산진구 시민공원로 73",
+				"부산 부산진구 범전동 200",
+				"부산",
+				"부산진구",
+				"범전동"));
+
+		mockMvc.perform(get("/places/reverse-geocode")
+			.param("lat", "35.1686")
+			.param("lng", "129.0576"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.displayAddress").value("부산 부산진구 시민공원로 73"))
+			.andExpect(jsonPath("$.data.address").value("부산 부산진구 범전동 200"));
+
+		verify(placeService).reverseGeocode("35.1686", "129.0576");
 	}
 
 	@Test

@@ -208,6 +208,13 @@ pipeline {
       }
     }
     failure {
+      withCredentials([
+        sshUserPrivateKey(credentialsId: 'e102-s2-ssh-key', keyFileVariable: 'S2_KEY', usernameVariable: 'S2_USER')
+      ]) {
+        sh '''
+          ssh -i "$S2_KEY" -o StrictHostKeyChecking=accept-new "$S2_USER@$S2_HOST" "cd '$REMOTE_DIR' && docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=160 backend ai || true"
+        '''
+      }
       script {
         String message = """\
           ----

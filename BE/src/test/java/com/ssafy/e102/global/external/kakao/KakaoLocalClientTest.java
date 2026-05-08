@@ -1,0 +1,107 @@
+package com.ssafy.e102.global.external.kakao;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestTemplate;
+
+class KakaoLocalClientTest {
+
+	private MockRestServiceServer server;
+	private KakaoLocalClient client;
+
+	@BeforeEach
+	void setUp() {
+		client = new KakaoLocalClient(new RestTemplateBuilder(), new KakaoLocalProperties(
+			"https://dapi.kakao.com",
+			"test-rest-api-key"));
+		RestTemplate restTemplate = (RestTemplate)ReflectionTestUtils.getField(client, "restTemplate");
+		server = MockRestServiceServer.bindTo(restTemplate).build();
+	}
+
+	@Test
+	@DisplayName("카카오 좌표 주소 변환 API를 경도 x, 위도 y로 호출하고 도로명 주소를 우선 반환한다")
+	void reverseGeocodeCallsKakaoCoordToAddress() {
+		server.expect(requestTo("https://dapi.kakao.com/v2/local/geo/coord2address.json"
+			+ "?x=129.0576&y=35.1686&input_coord=WGS84"))
+			.andExpect(method(HttpMethod.GET))
+			.andExpect(header(HttpHeaders.AUTHORIZATION, "KakaoAK test-rest-api-key"))
+			.andRespond(withSuccess("""
+				{
+				  "meta": {
+				    "total_count": 1
+				  },
+				  "documents": [
+				    {
+				      "road_address": {
+				        "address_name": "부산 부산진구 시민공원로 73",
+				        "region_1depth_name": "부산",
+				        "region_2depth_name": "부산진구",
+				        "region_3depth_name": "범전동"
+				      },
+				      "address": {
+				        "address_name": "부산 부산진구 범전동 200",
+				        "region_1depth_name": "부산",
+				        "region_2depth_name": "부산진구",
+				        "region_3depth_name": "범전동"
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		Optional<KakaoAddressDocument> result = client.reverseGeocode(35.1686, 129.0576);
+
+		assertThat(result).contains(new KakaoAddressDocument(
+			"부산 부산진구 범전동 200",
+			"부산 부산진구 시민공원로 73",
+			"부산",
+			"부산진구",
+			"범전동"));
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("카카오 좌표 주소 변환 결과에 도로명 주소가 없으면 지번 주소를 표시 주소로 사용한다")
+	void reverseGeocodeFallbacksToAddress() {
+		server.expect(requestTo("https://dapi.kakao.com/v2/local/geo/coord2address.json"
+			+ "?x=129.0576&y=35.1686&input_coord=WGS84"))
+			.andRespond(withSuccess("""
+				{
+				  "meta": {
+				    "total_count": 1
+				  },
+				  "documents": [
+				    {
+				      "road_address": null,
+				      "address": {
+				        "address_name": "부산 부산진구 범전동 200",
+				        "region_1depth_name": "부산",
+				        "region_2depth_name": "부산진구",
+				        "region_3depth_name": "범전동"
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		KakaoAddressDocument result = client.reverseGeocode(35.1686, 129.0576).orElseThrow();
+
+		assertThat(result.displayAddress()).isEqualTo("부산 부산진구 범전동 200");
+		assertThat(result.roadAddress()).isNull();
+	}
+}

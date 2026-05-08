@@ -198,7 +198,7 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals(listOf("toilet", "elevator"), markerStates.map { it.markerId })
         assertEquals(R.drawable.ic_place_restroom, markerStates.first().iconResId)
-        assertEquals(R.drawable.ic_place_elevator, markerStates.last().iconResId)
+        assertEquals(R.drawable.ic_lowvision_category_elevator, markerStates.last().iconResId)
         assertEquals(0L, markerStates.first().rank)
         assertEquals(1L, markerStates.last().rank)
         assertTrue(markerStates.none { it.markerId == "hidden" })
@@ -230,6 +230,57 @@ class KakaoMapViewportBindingsTest {
         assertEquals(R.drawable.ic_place_restroom, markerStates.last().iconResId)
         assertEquals(0L, markerStates.last().rank)
         assertEquals("toilet", markerStates.last().clickTargetId)
+    }
+
+    @Test
+    fun `marker render state maps facility categories to compact map icons`() {
+        val markerStates =
+            createKakaoMarkerRenderStates(
+                markerOverlayState =
+                    MapMarkerOverlayState(
+                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
+                        markers =
+                            listOf(
+                                MapMarkerUiModel(
+                                    markerId = "restaurant",
+                                    name = "Restaurant",
+                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.2),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.RESTAURANT),
+                                ),
+                                MapMarkerUiModel(
+                                    markerId = "charging",
+                                    name = "Charging station",
+                                    coordinate = MapCoordinate(latitude = 35.21, longitude = 129.21),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.CHARGING_STATION),
+                                ),
+                                MapMarkerUiModel(
+                                    markerId = "healthcare",
+                                    name = "Healthcare",
+                                    coordinate = MapCoordinate(latitude = 35.22, longitude = 129.22),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.HEALTHCARE),
+                                ),
+                                MapMarkerUiModel(
+                                    markerId = "tourist",
+                                    name = "Tourist spot",
+                                    coordinate = MapCoordinate(latitude = 35.23, longitude = 129.23),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOURIST_SPOT),
+                                ),
+                            ),
+                        visibleMarkerCount = 4,
+                        totalMarkerCount = 4,
+                    ),
+                selectedMarkerId = null,
+            )
+
+        assertEquals(
+            listOf(
+                R.drawable.ic_place_restaurant,
+                R.drawable.ic_place_charging,
+                R.drawable.ic_place_hospital,
+                R.drawable.ic_nav_facility,
+            ),
+            markerStates.map { it.iconResId },
+        )
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -338,6 +339,7 @@ class SavedRouteViewModel(
             return
         }
 
+        destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
         destinationSelectionRepository.updateSelectedDestination(destination)
         emitUiEvent(event)
     }
@@ -345,8 +347,9 @@ class SavedRouteViewModel(
     private fun handoffRouteBookmark(bookmarkId: String) {
         val routeBookmark =
             latestRoutes.firstOrNull { savedRouteBookmark -> savedRouteBookmark.bookmarkId == bookmarkId } ?: return
-        val destination = routeBookmark.toPlaceDestination()
-        if (!destination.hasValidCoordinate()) {
+        val origin = routeBookmark.toOriginPlaceDestination()
+        val destination = routeBookmark.toDestinationPlaceDestination()
+        if (!origin.hasValidCoordinate() || !destination.hasValidCoordinate()) {
             mutableUiState.update { state ->
                 state.copy(
                     routeContent =
@@ -359,7 +362,8 @@ class SavedRouteViewModel(
             return
         }
 
-        destinationSelectionRepository.updateSelectedDestination(destination)
+        destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
+        destinationSelectionRepository.swapSelections(origin = origin, destination = destination)
         emitUiEvent(
             SavedRouteUiEvent.NavigateToRouteSetting(
                 initialRouteOption = routeBookmark.routeOption,
@@ -383,7 +387,7 @@ class SavedRouteViewModel(
         private const val ROUTE_BOOKMARK_REMOVE_SUCCESS_MESSAGE = "북마크한 경로를 삭제했습니다."
         private const val ROUTE_BOOKMARK_REMOVE_FAILURE_MESSAGE = "북마크한 경로를 삭제하지 못했습니다. 다시 시도해 주세요."
         private const val INVALID_PLACE_COORDINATE_MESSAGE = "북마크한 장소의 좌표가 올바르지 않습니다."
-        private const val INVALID_ROUTE_COORDINATE_MESSAGE = "북마크한 경로의 도착지 좌표가 올바르지 않습니다."
+        private const val INVALID_ROUTE_COORDINATE_MESSAGE = "저장한 경로의 좌표가 올바르지 않습니다."
 
         fun provideFactory(
             bookmarkRepository: BookmarkRepository,
@@ -442,7 +446,15 @@ private fun SavedPlaceUiModel.toPlaceDestination(): PlaceDestination =
         category = category.toPlaceCategoryOrNull(),
     )
 
-private fun SavedRouteBookmarkUiModel.toPlaceDestination(): PlaceDestination =
+private fun SavedRouteBookmarkUiModel.toOriginPlaceDestination(): PlaceDestination =
+    PlaceDestination(
+        placeId = "route-bookmark-origin:$bookmarkId",
+        name = startLabel,
+        latitude = startPoint.latitude,
+        longitude = startPoint.longitude,
+    )
+
+private fun SavedRouteBookmarkUiModel.toDestinationPlaceDestination(): PlaceDestination =
     PlaceDestination(
         placeId = "route-bookmark:$bookmarkId",
         name = endLabel,

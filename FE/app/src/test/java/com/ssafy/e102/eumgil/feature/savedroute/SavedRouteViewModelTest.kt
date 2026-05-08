@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -147,6 +148,72 @@ class SavedRouteViewModelTest {
             assertEquals("광안리해변", destination?.name)
             assertEquals(35.1532, destination?.latitude)
             assertEquals(129.1186, destination?.longitude)
+
+            val origin = destinationSelectionRepository.selectedOrigin.value
+            assertEquals("route-bookmark-origin:route-bookmark-1", origin?.placeId)
+            assertEquals("부산시청", origin?.name)
+            assertEquals(35.1798, origin?.latitude)
+            assertEquals(129.0750, origin?.longitude)
+            assertEquals(
+                RouteEditingTarget.DESTINATION,
+                destinationSelectionRepository.editingTarget.value,
+            )
+        }
+
+    @Test
+    fun `route guide click with invalid origin coordinate keeps user on saved route screen`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository =
+                        FakeRouteBookmarkRepository(
+                            routeBookmarks =
+                                listOf(testRouteBookmark(startPoint = GeoCoordinate(Double.NaN, 129.0750))),
+                        ),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
+            advanceUntilIdle()
+
+            assertEquals(
+                SavedRouteUiEvent.ShowSnackbar("저장한 경로의 좌표가 올바르지 않습니다."),
+                uiEvent.await(),
+            )
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertEquals(
+                "저장한 경로의 좌표가 올바르지 않습니다.",
+                viewModel.uiState.value.routeContent.errorMessage,
+            )
+        }
+
+    @Test
+    fun `place click resets editingTarget to DESTINATION on handoff`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            assertEquals(
+                RouteEditingTarget.DESTINATION,
+                destinationSelectionRepository.editingTarget.value,
+            )
         }
 
     @Test
@@ -170,12 +237,12 @@ class SavedRouteViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                SavedRouteUiEvent.ShowSnackbar("저장한 경로의 도착지 좌표가 올바르지 않습니다."),
+                SavedRouteUiEvent.ShowSnackbar("저장한 경로의 좌표가 올바르지 않습니다."),
                 uiEvent.await(),
             )
             assertNull(destinationSelectionRepository.selectedDestination.value)
             assertEquals(
-                "저장한 경로의 도착지 좌표가 올바르지 않습니다.",
+                "저장한 경로의 좌표가 올바르지 않습니다.",
                 viewModel.uiState.value.routeContent.errorMessage,
             )
         }
@@ -327,6 +394,7 @@ private fun testPlaceBookmark(
     )
 
 private fun testRouteBookmark(
+    startPoint: GeoCoordinate = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
     endPoint: GeoCoordinate = GeoCoordinate(latitude = 35.1532, longitude = 129.1186),
 ): RouteBookmark =
     RouteBookmark(
@@ -334,7 +402,7 @@ private fun testRouteBookmark(
         routeName = "부산시청-해운대해수욕장",
         startLabel = "부산시청",
         endLabel = "광안리해변",
-        startPoint = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
+        startPoint = startPoint,
         endPoint = endPoint,
         routeOption = RouteOption.SHORTEST,
         distanceMeters = 7_600,

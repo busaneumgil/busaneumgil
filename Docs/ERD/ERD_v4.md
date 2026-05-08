@@ -67,6 +67,7 @@
 
 - `road_nodes`
 - `road_segments`
+- `admin_areas`
 - `segment_features`
 
 ### 대중교통 도메인
@@ -183,6 +184,13 @@ erDiagram
         ENUM stairs_state
         ENUM signal_state
         VARCHAR segment_type
+    }
+
+    ADMIN_AREAS {
+        BIGINT area_id PK
+        VARCHAR gu
+        VARCHAR dong
+        GEOMETRY geom
     }
 
     SEGMENT_FEATURES {
@@ -360,7 +368,7 @@ erDiagram
 ### 비고
 
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
-- `APPROVED`, `REJECTED` 상태 변경은 후속 관리자 API에서 처리한다.
+- `APPROVED`, `REJECTED` 상태 변경은 `/admin/hazard-reports/{reportId}/approve`, `/admin/hazard-reports/{reportId}/reject`에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
 - 제보 위치의 기준 데이터는 `report_point`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
 - 사용자별 제보 목록은 최신순으로 제공한다.
@@ -444,7 +452,7 @@ erDiagram
 - `ELEVATOR`는 장소 카테고리로 사용하지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 일반 장소의 엘리베이터 보유 여부는 `place_accessibility_features.feature_type = elevator`로 관리한다.
 - `TOILET`은 장소 카테고리로 사용하지 않는다. 장애인 이용 가능 화장실은 `place_accessibility_features.feature_type = accessibleToilet`로 관리한다.
 - `CHARGING_STATION`은 장소 카테고리로 사용하지 않는다. 전동보장구 충전소 장소는 `category=ETC`로 저장하고 반드시 `feature_type=chargingStation`, `is_available=true`를 가진다.
-- 최종 정제 산출물은 `place/erd_ready/place_merged_broad_category_final.csv` 기준 13,564개 장소이며, `TOILET`, `CHARGING_STATION`, `MOBILITY`, `FOOD`, `PUBLIC`, `MEDICAL_WELFARE` 구 카테고리는 남기지 않는다.
+- 최종 정제 산출물은 `places_erd.csv` 기준 12,309개 장소이며, `TOILET`, `CHARGING_STATION`, `MOBILITY`, `FOOD`, `PUBLIC`, `MEDICAL_WELFARE` 구 카테고리는 남기지 않는다.
 
 ---
 
@@ -477,6 +485,7 @@ erDiagram
 
 - `UNIQUE (place_id, feature_type)` 제약을 둔다.
 - `accessibleEntrance`는 주출입구 접근 가능, 무단차 진입, 경사로형 접근로를 통합한 접근성 속성이다. 기존 `ramp`, `stepFree`는 별도 featureType으로 분리하지 않는다.
+- `place_accessibility_features_erd.csv` 원천은 42,565개 feature row이며, DB 적재 시 `ramp`, `stepFree`를 `accessibleEntrance`로 통합하고 `(place_id, feature_type)` 단위로 병합한다.
 - 지도 홈 상단 빠른 필터는 장소 카테고리가 아니라 `accessibleToilet`, `elevator`, `chargingStation` 접근성 속성을 기준으로 조회한다.
 - `chargingStation`은 전동보장구 충전 가능 여부를 뜻한다. 전동보장구 충전소 원천 장소는 `places.category=ETC`와 `chargingStation=true`를 함께 가져야 한다.
 
@@ -567,7 +576,32 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 10) segment_features
+## 10) admin_areas *(관리자 운영용)*
+
+### 역할
+
+관리자 보행 네트워크 검수 화면에서 사용할 구/동 경계를 저장한다.
+
+`road_segments`에 구/동 컬럼을 중복 저장하지 않고, `admin_areas.geom`과 `road_segments.geom`의 공간 관계로 특정 구/동의 보행 네트워크를 조회한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 행정구역 ID | area_id | BIGINT | NOT NULL |  |
+| 구 | gu | VARCHAR(50) | NOT NULL |  |
+| 동 | dong | VARCHAR(50) | NOT NULL |  |
+| 행정동 경계 | geom | GEOMETRY(GEOMETRY, 4326) | NOT NULL |  |
+
+### 비고
+
+- `gu`, `dong`은 관리자 화면 selector와 검수용 공간 필터에만 사용한다.
+- 보행 네트워크 라우팅 계약은 `road_segments`의 그래프 구조와 상태값을 기준으로 유지한다.
+- `road_segments`와의 연결은 FK가 아니라 `ST_Intersects` 같은 공간 연산으로 처리한다.
+
+---
+
+## 11) segment_features
 
 ### 역할
 
@@ -592,7 +626,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 11) route_ratings
+## 12) route_ratings
 
 ### 역할
 
@@ -631,7 +665,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 12) route_sessions
+## 13) route_sessions
 
 ### 역할
 
@@ -684,7 +718,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 13) subway_station_elevators
+## 14) subway_station_elevators
 
 ### 역할
 
@@ -772,3 +806,8 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `road_segments 1 : N segment_features`
 - 하나의 보행 segment는 0개 이상의 개별 feature를 가질 수 있다.
+
+### admin_areas - road_segments
+
+- FK 관계가 아니다.
+- 관리자 검수 화면에서 `admin_areas.geom`과 `road_segments.geom`의 공간 교차 여부로 구/동별 보행 네트워크를 조회한다.

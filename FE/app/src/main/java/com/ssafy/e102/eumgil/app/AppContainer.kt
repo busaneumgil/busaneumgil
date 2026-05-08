@@ -25,6 +25,7 @@ import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
@@ -93,6 +94,9 @@ class AppContainer(
     }
     private val bookmarksRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         BookmarksRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
+    private val favoriteRoutesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        FavoriteRoutesRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
@@ -194,7 +198,14 @@ class AppContainer(
     }
 
     val routeBookmarkRepository: RouteBookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
-        RepositoryModule.provideRouteBookmarkRepository()
+        RepositoryModule.provideRouteBookmarkRepository(
+            favoriteRouteDao = localDatabase.favoriteRouteDao(),
+            favoriteRoutesRemoteDataSource =
+                if (AppEnvironment.isMockMode) null else favoriteRoutesRemoteDataSource,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
     }
 
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {

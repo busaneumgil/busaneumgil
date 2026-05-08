@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteStopResponse;
@@ -418,7 +419,7 @@ public class TransitRouteSearchService {
 				0,
 				0,
 				lineString(from, to),
-				List.of(),
+				zeroDistanceGuidanceEvents(from, previousTransitType, nextTransitType),
 				null,
 				List.of(),
 				null,
@@ -450,6 +451,32 @@ public class TransitRouteSearchService {
 			}
 			throw exception;
 		}
+	}
+
+	private List<RouteGuidanceEventResponse> zeroDistanceGuidanceEvents(
+		GeoPointRequest point,
+		TransportMode previousTransitType,
+		TransportMode nextTransitType) {
+		List<RouteGuidanceEventType> eventTypes = new ArrayList<>();
+		if (previousTransitType != null) {
+			eventTypes.add(RouteGuidanceEventType.ARRIVING_POINT);
+		}
+		eventTypes.add(destinationEventType(nextTransitType));
+		List<RouteGuidanceEventResponse> events = new ArrayList<>();
+		for (int index = 0; index < eventTypes.size(); index++) {
+			events.add(new RouteGuidanceEventResponse(
+				index + 1,
+				eventTypes.get(index),
+				BigDecimal.ZERO.setScale(2),
+				0,
+				point(point)));
+		}
+		return List.copyOf(events);
+	}
+
+	private String point(GeoPointRequest point) {
+		return "POINT(" + BigDecimal.valueOf(point.lng()).toPlainString()
+			+ " " + BigDecimal.valueOf(point.lat()).toPlainString() + ")";
 	}
 
 	private RouteGuidanceEventType destinationEventType(TransportMode nextTransitType) {

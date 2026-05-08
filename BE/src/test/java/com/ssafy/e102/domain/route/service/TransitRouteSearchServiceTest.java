@@ -259,6 +259,9 @@ class TransitRouteSearchServiceTest {
 		assertThat(response.routes().get(0).legs()).hasSize(3);
 		assertThat(response.routes().get(0).legs().get(2).role()).isEqualTo(RouteLegRole.TRANSIT_TO_WALK);
 		assertThat(response.routes().get(0).legs().get(2).instruction()).isEqualTo("목적지까지 이동하세요.");
+		assertThat(response.routes().get(0).legs().get(2).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(RouteGuidanceEventType.ARRIVING_POINT, RouteGuidanceEventType.DESTINATION);
 	}
 
 	@Test

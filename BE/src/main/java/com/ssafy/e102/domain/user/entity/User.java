@@ -9,6 +9,7 @@ import com.ssafy.e102.domain.user.exception.UserException;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.domain.user.type.UserRole;
 import com.ssafy.e102.global.entity.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -53,6 +54,10 @@ public class User extends BaseEntity {
 	@Column(name = "selected_mobility_subtype", length = 30)
 	private MobilitySubtype selectedMobilitySubtype;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "role", nullable = false, length = 30, columnDefinition = "varchar(30) default 'USER'")
+	private UserRole role;
+
 	public static User create(
 		SocialProvider socialProvider,
 		String socialProviderUserId,
@@ -63,6 +68,7 @@ public class User extends BaseEntity {
 		User user = new User();
 		user.socialProvider = socialProvider;
 		user.socialProviderUserId = socialProviderUserId;
+		user.role = UserRole.USER;
 		user.changeUserType(selectedPrimaryUserType, selectedMobilitySubtype);
 		return user;
 	}

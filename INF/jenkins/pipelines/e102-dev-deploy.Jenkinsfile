@@ -212,6 +212,26 @@ pipeline {
   }
 
   post {
+    success {
+      script {
+        String message = """\
+          ----
+          ##### ✅ DEV 배포가 완료되었습니다.
+
+          - **대상 파이프라인:** `e102-dev-deploy`
+          - **브랜치:** `${safeValue(env.DEPLOY_BRANCH)}`
+          - **커밋:** `${safeValue(env.DEPLOY_COMMIT, 'unknown')}`
+          - **빌드 번호:** `#${safeValue(env.BUILD_NUMBER)}`
+          - **빌드 링크:** [Jenkins 빌드 바로가기](${safeValue(env.BUILD_URL)})
+
+          ----
+
+          dev 배포가 정상 완료되었습니다!
+          ----
+        """.stripIndent().trim()
+        sendMattermost(this, message)
+      }
+    }
     failure {
       script {
         String message = """\

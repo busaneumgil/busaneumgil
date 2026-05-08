@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.di
 
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
+import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
@@ -17,6 +18,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
@@ -28,6 +30,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultAuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.DefaultRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultPlacesRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultReportRepository
@@ -36,7 +39,6 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
-import com.ssafy.e102.eumgil.data.repository.FakeRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthSignupRepository
@@ -137,7 +139,16 @@ object RepositoryModule {
             initialBookmarks = initialBookmarks,
         )
 
-    fun provideRouteBookmarkRepository(): RouteBookmarkRepository = FakeRouteBookmarkRepository()
+    fun provideRouteBookmarkRepository(
+        favoriteRouteDao: FavoriteRouteDao,
+        favoriteRoutesRemoteDataSource: FavoriteRoutesRemoteDataSource? = null,
+        accessTokenProvider: suspend () -> String? = { null },
+    ): RouteBookmarkRepository =
+        DefaultRouteBookmarkRepository(
+            favoriteRouteDao = favoriteRouteDao,
+            favoriteRoutesRemoteDataSource = favoriteRoutesRemoteDataSource,
+            accessTokenProvider = accessTokenProvider,
+        )
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,

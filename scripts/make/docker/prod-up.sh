@@ -6,3 +6,5 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 docker compose --env-file "$ROOT_DIR/.env.prod" \
   -f "$ROOT_DIR/docker-compose.prod.yml" \
   up -d backend ai
+
+bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"

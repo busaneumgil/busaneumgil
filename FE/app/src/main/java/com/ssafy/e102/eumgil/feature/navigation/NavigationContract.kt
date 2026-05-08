@@ -3,6 +3,9 @@ package com.ssafy.e102.eumgil.feature.navigation
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.feature.route.RouteDetailStepKind
+import com.ssafy.e102.eumgil.feature.route.toRouteDetailStepKind
 
 data class NavigationUiState(
     val screenState: NavigationScreenState = NavigationScreenState.Loading,
@@ -10,8 +13,12 @@ data class NavigationUiState(
     val mapPlaceholderTitle: String = "Navigation map",
     val mapPlaceholderDescription: String = "Preparing route guidance.",
     val mapOverlay: NavigationMapOverlayUiState = NavigationMapOverlayUiState(),
+    val segmentSync: NavigationSegmentSyncUiState = NavigationSegmentSyncUiState(),
+    val focusedSegmentCard: NavigationFocusedSegmentCardUiState? = null,
+    val pendingActiveChangeLabel: String? = null,
     val stepCard: NavigationStepCardUiState = navigationLoadingStepCardUiState(),
     val exitCta: NavigationCtaUiState = navigationLoadingCtaUiState(),
+    val isExitConfirmDialogVisible: Boolean = false,
     val tts: NavigationTtsUiState = NavigationTtsUiState(),
 ) {
     val isExitEnabled: Boolean
@@ -36,13 +43,26 @@ enum class NavigationScreenState {
     Empty,
 }
 
+enum class NavigationGuidanceAction(
+    val label: String,
+) {
+    STRAIGHT("직진"),
+    TURN_LEFT("좌회전"),
+    TURN_RIGHT("우회전"),
+    CROSSWALK("횡단보도"),
+}
+
 data class NavigationMapOverlayUiState(
     val isDisplayable: Boolean = false,
     val currentLocation: NavigationMapPointUiState? = null,
     val origin: NavigationMapPointUiState? = null,
     val destination: NavigationMapPointUiState? = null,
     val selectedRoutePolyline: List<GeoCoordinate> = emptyList(),
+    val activeSegmentPolyline: List<GeoCoordinate> = emptyList(),
+    val focusedSegmentPolyline: List<GeoCoordinate> = emptyList(),
+    val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
+    val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
 ) {
     val shouldUsePlaceholder: Boolean
         get() = !isDisplayable
@@ -59,9 +79,49 @@ data class NavigationMapSegmentUiState(
     val distanceMeters: Int,
     val riskLevel: RouteRiskLevel,
     val guidanceMessage: String,
+    val isActive: Boolean = false,
+    val isFocused: Boolean = false,
+    val isCompleted: Boolean = false,
+    val isRiskUpcoming: Boolean = false,
 ) {
     val isRenderable: Boolean
         get() = polyline.size >= 2
+}
+
+data class NavigationSegmentSyncUiState(
+    val activeSegmentIndex: Int = 0,
+    val focusedSegmentIndex: Int = 0,
+    val isInspectingSegments: Boolean = false,
+    val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
+    val hasPendingActiveChange: Boolean = false,
+    val railItems: List<NavigationSegmentRailItemUiState> = emptyList(),
+)
+
+data class NavigationSegmentRailItemUiState(
+    val index: Int,
+    val sequence: Int,
+    val instruction: String,
+    val distanceLabel: String,
+    val riskLabel: String,
+    val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
+    val isActive: Boolean = false,
+    val isFocused: Boolean = false,
+    val isCompleted: Boolean = false,
+    val isRiskUpcoming: Boolean = false,
+)
+
+data class NavigationFocusedSegmentCardUiState(
+    val sequenceLabel: String,
+    val instruction: String,
+    val distanceLabel: String,
+    val riskLabel: String,
+    val supportingText: String,
+    val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
+)
+
+enum class NavigationMapFocusMode {
+    ACTIVE,
+    FOCUSED,
 }
 
 data class NavigationStepCardUiState(
@@ -71,6 +131,7 @@ data class NavigationStepCardUiState(
     val distanceLabel: String = "확인 중",
     val instruction: String = "경로 안내를 준비하고 있습니다",
     val supportingText: String = "현재 위치를 확인한 뒤 안내를 시작합니다.",
+    val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
     val metrics: List<NavigationStepMetricUiState> =
         listOf(
             NavigationStepMetricUiState(
@@ -108,9 +169,19 @@ sealed interface NavigationUiAction {
 
     data object ExitNavigationClicked : NavigationUiAction
 
+    data object ExitNavigationDismissed : NavigationUiAction
+
+    data object ConfirmExitNavigationClicked : NavigationUiAction
+
     data object SaveBookmarkClicked : NavigationUiAction
 
     data object NavigationCompleteClicked : NavigationUiAction
+
+    data class SegmentTapped(
+        val index: Int,
+    ) : NavigationUiAction
+
+    data object ReturnToActiveSegmentClicked : NavigationUiAction
 
     data class VoiceGuidanceToggled(
         val enabled: Boolean,
@@ -168,6 +239,17 @@ enum class NavigationTtsStatus {
     Ready,
     Unavailable,
 }
+
+internal fun RouteSegment.toNavigationGuidanceAction(): NavigationGuidanceAction =
+    toRouteDetailStepKind().toNavigationGuidanceAction()
+
+internal fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidanceAction =
+    when {
+        this == RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK
+        this == RouteDetailStepKind.TURN_LEFT -> NavigationGuidanceAction.TURN_LEFT
+        this == RouteDetailStepKind.TURN_RIGHT -> NavigationGuidanceAction.TURN_RIGHT
+        else -> NavigationGuidanceAction.STRAIGHT
+    }
 
 const val NAVIGATION_TTS_PREPARING_MESSAGE: String = "음성 안내를 준비하고 있습니다."
 const val NAVIGATION_TTS_UNAVAILABLE_MESSAGE: String = "이 기기에서는 음성 안내를 사용할 수 없습니다."

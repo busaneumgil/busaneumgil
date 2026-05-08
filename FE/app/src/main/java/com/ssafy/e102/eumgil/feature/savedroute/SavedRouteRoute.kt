@@ -47,6 +47,7 @@ fun SavedRouteRoute(
             when (event) {
                 SavedRouteUiEvent.NavigateToMap -> onNavigateToMap()
                 is SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting(event.initialRouteOption)
+                SavedRouteUiEvent.NavigateToRouteBriefing -> Unit
                 is SavedRouteUiEvent.ShowSnackbar -> Unit
             }
         }

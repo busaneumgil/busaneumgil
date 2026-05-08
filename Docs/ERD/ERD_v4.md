@@ -2,7 +2,7 @@
 
 > **작성일:** 2026-04-23
 > **기준 문서:** `docs/erd.md` (원본 OSM 기반)
-> **최종 수정일:** 2026-05-06
+> **최종 수정일:** 2026-05-07
 > **변경 사유:** canonical source를 `busan.osm.pbf`에서 `N3L_A0020000_26` SHP(국토교통부 도로 중심선)로 전환함에 따라 `road_nodes`와 `road_segments`의 source identity 컬럼을 재정의하고, 편의시설 PoC 채택본 기준으로 장소 카테고리를 최신화했으며, 선택된 경로 안내 세션 복구를 위한 `route_sessions`를 추가
 > **참조 계획:** `.ai/PLANS/current-sprint/02-osm-schema-and-network-load.md`
 
@@ -14,7 +14,7 @@
 |--------|----------------------|----------------------|
 | `road_nodes` | `osm_node_id BIGINT` | `source_node_key VARCHAR(100)` |
 | `road_segments` | `source_way_id`, `source_osm_from_node_id`, `source_osm_to_node_id`, `segment_ordinal` | - |
-| `users` | `disability_grade`, `phone_number`, `push_enabled`, `profile_completed`, `nickname`, 온보딩/약관/설정 boolean | 가입 완료 사용자 계정과 `selected_primary_user_type`, 조건부 `selected_mobility_subtype`만 저장 |
+| `users` | `disability_grade`, `phone_number`, `push_enabled`, `profile_completed`, `nickname`, 온보딩/약관/설정 boolean | 가입 완료 사용자 계정, `selected_primary_user_type`, 조건부 `selected_mobility_subtype`, `role`만 저장 |
 | `places` | `BUS_STATION`, `ELEVATOR`, `BARRIER_FREE_FACILITY`, `TOILET`, `RESTAURANT`, `CHARGING_STATION` 카테고리 | `FOOD_CAFE`, `HEALTHCARE`, `WELFARE`, `PUBLIC_OFFICE`, `ETC` 카테고리 |
 | `hazard_reports` | 익명 제보, 주소 저장, 8개 제보 유형 | 사용자 계정 연결, 좌표 중심 저장, 6개 제보 유형 |
 | `road_segments` | `curb_ramp_state`, `elevator_state`, 넓은 `surface_state` 후보 | `elevator_state` 제거, 단순화한 `surface_state`/`signal_state`, `segment_type` 추가 |
@@ -106,6 +106,7 @@ erDiagram
         VARCHAR social_provider_user_id
         VARCHAR selected_primary_user_type
         VARCHAR selected_mobility_subtype
+        VARCHAR role
     }
 
     BOOKMARKS {
@@ -240,6 +241,7 @@ erDiagram
 | 소셜 사용자 ID | social_provider_user_id | VARCHAR(100) | NOT NULL |  |
 | 1차 사용자 유형 | selected_primary_user_type | VARCHAR(30) | NOT NULL |  |
 | 보행약자 세부 유형 | selected_mobility_subtype | VARCHAR(30) | NULL |  |
+| 사용자 권한 | role | VARCHAR(30) | NOT NULL | USER |
 
 ### 제약
 
@@ -254,6 +256,7 @@ erDiagram
 - `selected_primary_user_type=LOW_VISION`이면 `selected_mobility_subtype`은 `NULL`이어야 한다.
 - `selected_primary_user_type=MOBILITY_IMPAIRED`이면 `selected_mobility_subtype`은 한 개만 저장한다.
 - `selected_mobility_subtype` 후보값은 `POWER_WHEELCHAIR`, `MANUAL_WHEELCHAIR`, `OTHER_MOBILITY`다.
+- `role` 후보값은 `USER`, `ADMIN`이다. 가입 시 기본값은 `USER`이며, 백엔드는 `users.role=ADMIN`인 사용자에게 Spring Security `ROLE_ADMIN`을 부여한다.
 - 필수 약관 동의는 가입 완료 조건으로 검증하지만, `users` 테이블에 별도 동의 여부 필드를 저장하지 않는다.
 - 푸시 알림, 진동 알림, TTS, 경로 데이터 수집 설정은 서버에 저장하지 않고 앱 내부 설정 또는 후순위 정책으로 관리한다.
 - 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 동일 사용자 재가입 시 기존 계정 복구 또는 재활성화 정책을 별도로 둔다.

@@ -18,6 +18,7 @@ import org.springframework.web.client.RestClientException;
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceMarkerResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchItemResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.entity.Place;
@@ -27,6 +28,7 @@ import com.ssafy.e102.domain.place.repository.BookmarkRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
+import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceDocument;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceSearchRequest;
@@ -46,6 +48,10 @@ public class PlaceService {
 	private static final int DEFAULT_PLACE_RADIUS_METER = 1000;
 	private static final int MAX_PLACE_RADIUS_METER = 3000;
 	private static final int PLACE_MARKER_LIMIT = 200;
+	private static final double MIN_LAT = -90.0;
+	private static final double MAX_LAT = 90.0;
+	private static final double MIN_LNG = -180.0;
+	private static final double MAX_LNG = 180.0;
 	private static final String SEARCH_CURSOR_PREFIX = "kakao:";
 	private static final String EMPTY_FILTER_SENTINEL = "__EMPTY_FILTER__";
 	private final PlaceRepository placeRepository;
@@ -100,12 +106,27 @@ public class PlaceService {
 				kakaoResult.totalElements(),
 				hasNext);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.warn("Place search external API failed. keyword={}, kakaoPage={}, size={}",
+			log.warn("장소 검색 외부 API 호출 실패. keyword={}, kakaoPage={}, size={}",
 				normalizedKeyword,
 				kakaoPage,
 				parsedSize,
 				exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED, exception);
+		}
+	}
+
+	public PlaceReverseGeocodeResponse reverseGeocode(String lat, String lng) {
+		double parsedLat = parseRequiredDouble(lat);
+		double parsedLng = parseRequiredDouble(lng);
+		validateCoordinateRange(parsedLat, parsedLng);
+
+		try {
+			KakaoAddressDocument addressDocument = kakaoLocalClient.reverseGeocode(parsedLat, parsedLng)
+				.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_ADDRESS_NOT_FOUND));
+			return PlaceReverseGeocodeResponse.from(addressDocument);
+		} catch (RestClientException | IllegalArgumentException exception) {
+			log.warn("좌표 주소 변환 외부 API 호출 실패. lat={}, lng={}", parsedLat, parsedLng, exception);
+			throw new PlaceException(PlaceErrorCode.PLACE_REVERSE_GEOCODE_EXTERNAL_API_FAILED, exception);
 		}
 	}
 
@@ -188,11 +209,11 @@ public class PlaceService {
 		try {
 			String decodedCursor = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
 			if (!decodedCursor.startsWith(SEARCH_CURSOR_PREFIX)) {
-				throw new NumberFormatException("invalid search cursor prefix.");
+				throw new NumberFormatException("장소 검색 cursor prefix가 올바르지 않습니다.");
 			}
 			int kakaoPage = Integer.parseInt(decodedCursor.substring(SEARCH_CURSOR_PREFIX.length()));
 			if (kakaoPage < DEFAULT_KAKAO_SEARCH_PAGE) {
-				throw new NumberFormatException("search cursor must be positive.");
+				throw new NumberFormatException("장소 검색 cursor는 양수여야 합니다.");
 			}
 			return kakaoPage;
 		} catch (IllegalArgumentException exception) {
@@ -227,6 +248,12 @@ public class PlaceService {
 			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
 		}
 		return parseDouble(value);
+	}
+
+	private void validateCoordinateRange(double lat, double lng) {
+		if (lat < MIN_LAT || lat > MAX_LAT || lng < MIN_LNG || lng > MAX_LNG) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
+		}
 	}
 
 	private Double parseOptionalDouble(String value) {
@@ -291,7 +318,7 @@ public class PlaceService {
 		try {
 			long parsedValue = Long.parseLong(value);
 			if (parsedValue <= 0) {
-				throw new NumberFormatException("placeId must be positive.");
+				throw new NumberFormatException("placeId는 양수여야 합니다.");
 			}
 			return parsedValue;
 		} catch (NumberFormatException exception) {

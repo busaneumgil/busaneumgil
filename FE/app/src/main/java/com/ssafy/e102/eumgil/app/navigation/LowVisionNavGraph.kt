@@ -1,11 +1,15 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -26,7 +30,7 @@ import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
 fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
-    composable(route = LowVisionRoute.Home.route) {
+    lowVisionComposable(route = LowVisionRoute.Home.route) {
         LowVisionHomeRoute(
             onVoiceInputClick = {
                 navController.navigate(LowVisionRoute.VoiceInput.route)
@@ -38,7 +42,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = LowVisionRoute.VoiceInput.route) {
+    lowVisionComposable(route = LowVisionRoute.VoiceInput.route) {
         LowVisionVoiceInputRoute(
             onCancelRecording = {
                 navController.navigate(resolveLowVisionVoiceInputCancelRoute()) {
@@ -52,16 +56,21 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = LowVisionRoute.Bookmark.route) {
+    lowVisionComposable(route = LowVisionRoute.Bookmark.route) {
         LowVisionBookmarkRoute(
             onNavigateToRouteSetting = {
                 navController.navigate(LowVisionRoute.Guidance.route)
+            },
+            onNavigateToRouteBriefing = {
+                navController.navigate(LowVisionRoute.RouteBriefing.route) {
+                    launchSingleTop = true
+                }
             },
             onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
     }
 
-    composable(route = LowVisionRoute.Search.route) {
+    lowVisionComposable(route = LowVisionRoute.Search.route) {
         LowVisionSearchResultShell(
             navController = navController,
             selectedTab = LowVisionBottomTab.HOME,
@@ -69,7 +78,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = LowVisionRoute.CategorySearch.route) {
+    lowVisionComposable(route = LowVisionRoute.CategorySearch.route) {
         LowVisionCategoryRoute(
             onCategorySelected = { category ->
                 navController.navigate(LowVisionRoute.CategoryResult.createRoute(category))
@@ -78,7 +87,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(
+    lowVisionComposable(
         route = LowVisionRoute.CategoryResult.route,
         arguments =
             listOf(
@@ -96,13 +105,13 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = LowVisionRoute.RouteBriefing.route) {
+    lowVisionComposable(route = LowVisionRoute.RouteBriefing.route) {
         LowVisionRouteBriefingRoute(
             onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
     }
 
-    composable(route = LowVisionRoute.Guidance.route) {
+    lowVisionComposable(route = LowVisionRoute.Guidance.route) {
         LowVisionNavigationRoute(
             onNavigateToComplete = {
                 navController.navigate(resolveLowVisionNavigationExitRoute()) {
@@ -124,7 +133,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = LowVisionRoute.NavigationComplete.route) {
+    lowVisionComposable(route = LowVisionRoute.NavigationComplete.route) {
         LowVisionNavigationCompleteRoute(
             onNavigateToBookmark = {
                 navController.navigate(LowVisionRoute.Bookmark.route) {
@@ -138,7 +147,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = LowVisionRoute.MyPage.route) {
+    lowVisionComposable(route = LowVisionRoute.MyPage.route) {
         LowVisionMyPageRoute(
             onModeChangeClick = {
                 navController.navigate(resolveLowVisionModeChangeRoute())
@@ -158,7 +167,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = LowVisionRoute.AppInfo.route) {
+    lowVisionComposable(route = LowVisionRoute.AppInfo.route) {
         LowVisionAppInfoRoute(
             onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
         )
@@ -271,6 +280,39 @@ internal fun shouldNavigateLowVisionBottomTab(
     currentRoute: String?,
     selectedTab: LowVisionBottomTab,
 ): Boolean = resolveLowVisionSelectedBottomTab(currentRoute) != selectedTab
+
+internal fun shouldUseInstantLowVisionDestinationTransitions(): Boolean = true
+
+private fun NavGraphBuilder.lowVisionComposable(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit,
+) {
+    composable(
+        route = route,
+        arguments = arguments,
+        enterTransition = { lowVisionEnterTransition() },
+        exitTransition = { lowVisionExitTransition() },
+        popEnterTransition = { lowVisionEnterTransition() },
+        popExitTransition = { lowVisionExitTransition() },
+    ) { backStackEntry ->
+        content(backStackEntry)
+    }
+}
+
+private fun lowVisionEnterTransition(): EnterTransition? =
+    if (shouldUseInstantLowVisionDestinationTransitions()) {
+        EnterTransition.None
+    } else {
+        null
+    }
+
+private fun lowVisionExitTransition(): ExitTransition? =
+    if (shouldUseInstantLowVisionDestinationTransitions()) {
+        ExitTransition.None
+    } else {
+        null
+    }
 
 private fun NavHostController.navigateToLowVisionBottomTab(tab: LowVisionBottomTab) {
     if (!shouldNavigateLowVisionBottomTab(currentBackStackEntry?.destination?.route, tab)) {

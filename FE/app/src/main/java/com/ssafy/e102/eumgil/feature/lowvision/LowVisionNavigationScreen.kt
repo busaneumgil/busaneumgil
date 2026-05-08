@@ -205,6 +205,7 @@ fun LowVisionNavigationScreen(
 
             LowVisionCurrentLocationCard(
                 card = lowVisionNavigationActionCards().first(),
+                display = lowVisionCurrentLocationDisplay(uiState.mapOverlay.currentLocation?.coordinate),
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -336,6 +337,7 @@ private fun LowVisionNavigationMetricValue(
 @Composable
 private fun LowVisionCurrentLocationCard(
     card: LowVisionNavigationActionCard,
+    display: LowVisionCurrentLocationDisplay,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -348,7 +350,7 @@ private fun LowVisionCurrentLocationCard(
                 Modifier
                     .fillMaxSize()
                     .clearAndSetSemantics {
-                        contentDescription = card.label
+                        contentDescription = display.talkBackText
                     }
                     .padding(
                         horizontal = 24.dp,
@@ -365,7 +367,7 @@ private fun LowVisionCurrentLocationCard(
             )
             Spacer(modifier = Modifier.height(LowVisionNavigationLayoutDefaults.currentLocationIconTextGap))
             Text(
-                text = card.label,
+                text = display.title,
                 color = Color.Black,
                 fontSize = LowVisionNavigationLayoutDefaults.currentLocationLabelFontSize,
                 lineHeight = LowVisionNavigationLayoutDefaults.currentLocationLabelLineHeight,
@@ -373,6 +375,15 @@ private fun LowVisionCurrentLocationCard(
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
+            )
+            Text(
+                text = display.supportingText,
+                color = Color.Black,
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.sp,
+                textAlign = TextAlign.Center,
             )
         }
     }

@@ -75,5 +75,5 @@
       "limit_to": "1.80"
     }
   ],
-  "distance_influence": 120
+  "distance_influence": 50
 }

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.service.PlaceService;
 import com.ssafy.e102.global.response.ApiResponse;
@@ -43,6 +44,16 @@ public class PlaceController {
 		@Parameter(description = "조회 개수") @RequestParam(required = false)
 		String size) {
 		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, cursor, size));
+	}
+
+	@Operation(summary = "좌표 주소 변환", description = "위도와 경도를 기준으로 주소 정보를 조회합니다.")
+	@GetMapping("/reverse-geocode")
+	public ApiResponse<PlaceReverseGeocodeResponse> reverseGeocode(
+		@Parameter(description = "위도") @RequestParam(required = false)
+		String lat,
+		@Parameter(description = "경도") @RequestParam(required = false)
+		String lng) {
+		return ApiResponse.success(placeService.reverseGeocode(lat, lng));
 	}
 
 	@Operation(summary = "장소 목록 조회", description = "위치, 카테고리, 접근성 속성 조건으로 내부 장소 목록을 조회합니다.")

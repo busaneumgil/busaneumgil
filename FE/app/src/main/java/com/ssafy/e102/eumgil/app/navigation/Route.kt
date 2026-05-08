@@ -63,6 +63,15 @@ sealed interface OnboardingRoute : AppRoute {
         fun createRoute(stepRouteValue: String = DEFAULT_STEP): String =
             "onboarding/terms_guide/$stepRouteValue"
     }
+
+    data object Permission : OnboardingRoute {
+        const val ARG_NEXT_ROUTE: String = "next_route"
+
+        override val route: String = "onboarding/permission/{$ARG_NEXT_ROUTE}"
+
+        fun createRoute(nextRoute: String): String =
+            "onboarding/permission/${Uri.encode(nextRoute)}"
+    }
 }
 
 sealed interface TopLevelRoute : AppRoute {

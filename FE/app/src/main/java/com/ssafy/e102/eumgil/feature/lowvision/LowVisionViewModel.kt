@@ -1,7 +1,10 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.stt.KeywordSpottingManager
@@ -46,6 +49,15 @@ class LowVisionViewModel(application: Application) : AndroidViewModel(applicatio
                 val context = getApplication<Application>()
                 SherpaManager.ensureKwsModelsExtracted(context)
 
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.RECORD_AUDIO,
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    Log.w(TAG, "RECORD_AUDIO 권한 없음 — 웨이크워드 감지 비활성화")
+                    return@launch
+                }
+
                 if (!SherpaManager.kwsModelsExist(context)) {
                     Log.e(TAG, "KWS 모델 없음 — 웨이크워드 감지 비활성화")
                     return@launch
@@ -84,6 +96,15 @@ class LowVisionViewModel(application: Application) : AndroidViewModel(applicatio
     fun resumeSpotting() {
         if (kwsJob?.isActive == true) return
         if (kwsManager == null) return
+        val context = getApplication<Application>()
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "RECORD_AUDIO 권한 없음 — KWS 재시작 스킵")
+            return
+        }
         Log.d(TAG, "KWS 재시작")
         startSpotting()
     }

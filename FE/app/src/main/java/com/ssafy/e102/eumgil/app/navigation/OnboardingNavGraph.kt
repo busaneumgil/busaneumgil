@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateResult
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LowVisionFollowUpRoute
+import com.ssafy.e102.eumgil.feature.onboarding.PermissionRoute
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
@@ -141,9 +142,13 @@ fun NavGraphBuilder.onboardingNavGraph(
                             requiredTermsAccepted = agreement.isLocationTermsAgreed,
                         )
                         val completedSettings = settingsRepository.getInitSettings()
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
-                        )
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
+                            ),
+                        ) {
+                            launchSingleTop = true
+                        }
                     }.onFailure { throwable ->
                         Toast
                             .makeText(
@@ -188,9 +193,13 @@ fun NavGraphBuilder.onboardingNavGraph(
                         )
                         authSignupRepository.completePendingSignup(requiredTermsAccepted = true)
                         val completedSettings = settingsRepository.getInitSettings()
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
-                        )
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
+                            ),
+                        ) {
+                            launchSingleTop = true
+                        }
                     }.onFailure { throwable ->
                         Toast
                             .makeText(
@@ -205,6 +214,25 @@ fun NavGraphBuilder.onboardingNavGraph(
                 // 모든 단계의 "자세히 보기"는 기존 정식 약관 화면을 재사용한다.
                 // 항목별 상세 화면이 별도로 생기면 step 분기로 라우팅을 갈라주면 됨.
                 navController.navigate(OnboardingRoute.Terms.route)
+            },
+        )
+    }
+
+    composable(
+        route = OnboardingRoute.Permission.route,
+        arguments = listOf(
+            navArgument(OnboardingRoute.Permission.ARG_NEXT_ROUTE) {
+                type = NavType.StringType
+            },
+        ),
+    ) { backStackEntry ->
+        val nextRoute = backStackEntry.arguments
+            ?.getString(OnboardingRoute.Permission.ARG_NEXT_ROUTE)
+            .orEmpty()
+
+        PermissionRoute(
+            onPermissionHandled = {
+                navController.navigateToCompletedOnboarding(route = nextRoute)
             },
         )
     }

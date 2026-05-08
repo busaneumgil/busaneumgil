@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.collect
@@ -63,10 +64,19 @@ fun SearchVoiceInputRoute(
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
-    onStartVoiceCapture: () -> Unit = {},
-    onStopVoiceCapture: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val sttViewModel: SearchVoiceInputViewModel = viewModel()
+
+    LaunchedEffect(sttViewModel) {
+        sttViewModel.uiEvent.collect { event ->
+            when (event) {
+                is SearchVoiceInputEvent.TranscriptReady -> onNavigateToResults(event.text, initialEditingTarget)
+                SearchVoiceInputEvent.TranscriptEmpty -> onNavigateBack()
+            }
+        }
+    }
+
     SearchRouteContent(
         destination = SearchScreenDestination.VoiceInput,
         initialQuery = null,
@@ -75,8 +85,8 @@ fun SearchVoiceInputRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = {},
         onNavigateToRouteSetting = {},
-        onStartVoiceCapture = onStartVoiceCapture,
-        onStopVoiceCapture = onStopVoiceCapture,
+        onStartVoiceCapture = { sttViewModel.startListening() },
+        onStopVoiceCapture = { sttViewModel.stopListening() },
         modifier = modifier,
     )
 }

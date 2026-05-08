@@ -23,6 +23,7 @@ import org.springframework.web.client.RestClientException;
 
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
@@ -32,6 +33,7 @@ import com.ssafy.e102.domain.place.repository.BookmarkRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
+import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceDocument;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceSearchRequest;
@@ -142,6 +144,61 @@ class PlaceServiceTest {
 		assertThat(firstResponse.nextCursor()).isNotBlank();
 		assertThat(secondResponse.hasNext()).isFalse();
 		assertThat(secondResponse.nextCursor()).isNull();
+	}
+
+	@Test
+	@DisplayName("좌표 주소 변환은 카카오 주소 결과를 응답으로 매핑한다")
+	void reverseGeocode() {
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 부산진구 범전동 200",
+				"부산 부산진구 시민공원로 73",
+				"부산",
+				"부산진구",
+				"범전동")));
+
+		PlaceReverseGeocodeResponse response = placeService.reverseGeocode("35.1686", "129.0576");
+
+		assertThat(response.displayAddress()).isEqualTo("부산 부산진구 시민공원로 73");
+		assertThat(response.roadAddress()).isEqualTo("부산 부산진구 시민공원로 73");
+		assertThat(response.address()).isEqualTo("부산 부산진구 범전동 200");
+	}
+
+	@Test
+	@DisplayName("좌표 주소 변환 결과가 없으면 장소 주소 없음 에러를 반환한다")
+	void reverseGeocodeNotFound() {
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> placeService.reverseGeocode("35.1686", "129.0576"))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.PLACE_ADDRESS_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("좌표 주소 변환 외부 API 실패는 원인 예외를 유지한다")
+	void preserveReverseGeocodeExternalApiFailureCause() {
+		RestClientException cause = new RestClientException("timeout");
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576)).thenThrow(cause);
+
+		assertThatThrownBy(() -> placeService.reverseGeocode("35.1686", "129.0576"))
+			.isInstanceOf(PlaceException.class)
+			.hasCause(cause)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.PLACE_REVERSE_GEOCODE_EXTERNAL_API_FAILED);
+	}
+
+	@Test
+	@DisplayName("좌표 주소 변환 좌표가 범위를 벗어나면 도메인 에러를 반환한다")
+	void rejectInvalidReverseGeocodeCoordinateRange() {
+		assertThatThrownBy(() -> placeService.reverseGeocode("91", "129.0576"))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.INVALID_PLACE_REQUEST);
+
+		verify(kakaoLocalClient, never()).reverseGeocode(
+			org.mockito.ArgumentMatchers.anyDouble(),
+			org.mockito.ArgumentMatchers.anyDouble());
 	}
 
 	@Test

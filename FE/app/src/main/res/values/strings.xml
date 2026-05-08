@@ -344,8 +344,10 @@
     <string name="search_screen_empty_result_description">다른 검색어로 다시 시도해 주세요.</string>
     <string name="search_screen_error_title">검색 결과를 불러오지 못했습니다</string>
     <string name="search_screen_error_description">잠시 후 다시 시도해 주세요.</string>
-    <string name="search_screen_recent_section_title">최근 방문지</string>
-    <string name="search_screen_recent_empty">아직 최근 방문지가 없습니다.</string>
+    <string name="search_screen_recent_section_title">최근 검색</string>
+    <string name="search_screen_recent_clear_all">전체 삭제</string>
+    <string name="search_screen_recent_empty">아직 최근 검색이 없습니다.</string>
+    <string name="search_screen_recent_delete">%1$s 삭제</string>
     <string name="search_screen_shell_slot_title">결과 슬롯 %1$d</string>
     <string name="search_screen_shell_item_description">%1$s 관련 결과가 이 영역에 채워질 예정입니다.</string>
     <string name="search_screen_shell_item_supporting">다음 작업에서 repository 연동과 선택 액션을 이어서 붙일 수 있도록 shell 상태를 먼저 구성했습니다.</string>

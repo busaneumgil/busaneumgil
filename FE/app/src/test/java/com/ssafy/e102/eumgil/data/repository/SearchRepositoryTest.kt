@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
+import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
@@ -216,6 +217,49 @@ class SearchRepositoryTest {
             val results = repository.getRecentDestinations()
 
             assertEquals(listOf("place-1", "place-2"), results.map { recentDestination -> recentDestination.placeId })
+        }
+
+    @Test
+    fun `recent searches delete selected keyword with normalized match`() =
+        runBlocking {
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource = SearchRemoteDataSource(baseUrl = "https://example.com"),
+                    localDataSource = SearchLocalDataSource(),
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy = SearchTestRepositorySourcePolicy(RepositoryReadPlan.localOnly()),
+                )
+
+            repository.saveRecentSearch("Busan City Hall")
+            repository.saveRecentSearch("Busan Station")
+            repository.deleteRecentSearch("  busan city hall ")
+
+            val results = repository.getRecentSearches()
+
+            assertEquals(
+                listOf(RecentSearch(keyword = "Busan Station", searchedAtMillis = results.single().searchedAtMillis)),
+                results,
+            )
+        }
+
+    @Test
+    fun `recent searches clear all removes every saved keyword`() =
+        runBlocking {
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource = SearchRemoteDataSource(baseUrl = "https://example.com"),
+                    localDataSource = SearchLocalDataSource(),
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy = SearchTestRepositorySourcePolicy(RepositoryReadPlan.localOnly()),
+                )
+
+            repository.saveRecentSearch("Busan City Hall")
+            repository.saveRecentSearch("Busan Station")
+            repository.clearRecentSearches()
+
+            val results = repository.getRecentSearches()
+
+            assertEquals(emptyList<RecentSearch>(), results)
         }
 }
 

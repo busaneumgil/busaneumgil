@@ -36,6 +36,10 @@ interface SearchRepository {
 
     suspend fun saveRecentSearch(keyword: String)
 
+    suspend fun deleteRecentSearch(keyword: String) = Unit
+
+    suspend fun clearRecentSearches() = Unit
+
     suspend fun getRecentDestinations(): List<RecentDestination>
 
     suspend fun saveRecentDestination(destination: RecentDestination)
@@ -105,6 +109,14 @@ class DefaultSearchRepository(
 
     override suspend fun saveRecentSearch(keyword: String) {
         localDataSource.saveRecentSearch(keyword)
+    }
+
+    override suspend fun deleteRecentSearch(keyword: String) {
+        localDataSource.deleteRecentSearch(keyword)
+    }
+
+    override suspend fun clearRecentSearches() {
+        localDataSource.clearRecentSearches()
     }
 
     override suspend fun getRecentDestinations(): List<RecentDestination> = localDataSource.getRecentDestinations()

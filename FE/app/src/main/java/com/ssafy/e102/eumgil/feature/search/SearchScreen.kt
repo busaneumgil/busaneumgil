@@ -600,6 +600,24 @@ private fun RecentVisitSection(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            if (recentSearches.isNotEmpty()) {
+                Box(
+                    modifier =
+                        Modifier
+                            .heightIn(min = 44.dp)
+                            .clickable(
+                                role = Role.Button,
+                                onClick = { onAction(SearchUiAction.RecentSearchClearAllClicked) },
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.search_screen_recent_clear_all),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         if (recentSearches.isEmpty()) {
@@ -618,6 +636,13 @@ private fun RecentVisitSection(
                             ),
                         )
                     },
+                    onDeleteClick = {
+                        onAction(
+                            SearchUiAction.RecentSearchDeleteClicked(
+                                keyword = recentSearch.keyword,
+                            ),
+                        )
+                    },
                 )
             }
         }
@@ -628,6 +653,7 @@ private fun RecentVisitSection(
 private fun RecentVisitItem(
     keyword: String,
     onClick: () -> Unit,
+    onDeleteClick: () -> Unit,
 ) {
     Surface(
         modifier =
@@ -641,15 +667,34 @@ private fun RecentVisitItem(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
     ) {
-        Text(
-            text = keyword,
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+                    .padding(start = EumSpacing.medium, end = EumSpacing.xSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = keyword,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(vertical = EumSpacing.medium),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            IconButton(onClick = onDeleteClick) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_close),
+                    contentDescription =
+                        stringResource(
+                            id = R.string.search_screen_recent_delete,
+                            keyword,
+                        ),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

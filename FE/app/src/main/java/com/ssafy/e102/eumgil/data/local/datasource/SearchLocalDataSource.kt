@@ -47,6 +47,21 @@ class SearchLocalDataSource {
         }
     }
 
+    suspend fun deleteRecentSearch(keyword: String) {
+        val normalizedKeyword = keyword.normalizedKeyword()
+        if (normalizedKeyword.isEmpty()) return
+
+        synchronized(recentSearchesByKeyword) {
+            recentSearchesByKeyword.remove(normalizedKeyword)
+        }
+    }
+
+    suspend fun clearRecentSearches() {
+        synchronized(recentSearchesByKeyword) {
+            recentSearchesByKeyword.clear()
+        }
+    }
+
     suspend fun getRecentDestinations(): List<RecentDestination> =
         synchronized(recentDestinationsByKey) {
             recentDestinationsByKey.values.sortedByDescending(RecentDestination::searchedAtMillis)

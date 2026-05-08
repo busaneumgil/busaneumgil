@@ -317,11 +317,12 @@ class MapViewModel(
 
     private fun observeSelectionRequests() {
         viewModelScope.launch {
-            destinationSelectionRepository.selectionRequests.collectLatest { destination ->
+            destinationSelectionRepository.selectionRequests.collectLatest { request ->
                 // Any destination handoff should close stale facility detail state before the map recenters.
                 if (clearSelectedFacilitySelection()) {
                     renderSelectedFacilityState()
                 }
+                val destination = request.state.selectedDestination ?: return@collectLatest
                 syncCameraToSelectedDestination(
                     destination = destination,
                     incrementRequestId = true,

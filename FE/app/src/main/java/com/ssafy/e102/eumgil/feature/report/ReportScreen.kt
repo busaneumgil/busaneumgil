@@ -195,7 +195,7 @@ private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.medium),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
     ) {
         Column(
@@ -680,7 +680,7 @@ private fun ReportPhotoSection(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.medium),
         border =
             BorderStroke(
                 width = 1.dp,
@@ -792,37 +792,57 @@ private fun ReportPhotoThumb(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Box(
         modifier =
             modifier
                 .heightIn(min = 96.dp)
-                .clickable(onClick = onRemoveClick)
                 .semantics {
-                    contentDescription = "첨부된 사진. 탭하여 제거합니다."
+                    contentDescription = "첨부된 사진"
                 },
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
     ) {
-        Column(
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(EumRadius.small),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "사진",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Surface(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .padding(EumSpacing.xSmall),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+                    .align(Alignment.TopEnd)
+                    .padding(EumSpacing.xSmall)
+                    .size(24.dp)
+                    .clickable(onClick = onRemoveClick)
+                    .semantics {
+                        contentDescription = "사진 제거"
+                    },
+            shape = RoundedCornerShape(percent = 50),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
         ) {
-            Text(
-                text = "사진",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "제거",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_close),
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
@@ -840,7 +860,7 @@ private fun ReportPhotoAddTile(
                 .semantics {
                     contentDescription = "사진을 추가합니다."
                 },
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(EumRadius.small),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
     ) {
@@ -852,13 +872,15 @@ private fun ReportPhotoAddTile(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "+",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
+            Icon(
+                painter = painterResource(id = R.drawable.ic_permission_camera),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.primary,
             )
+            Spacer(modifier = Modifier.height(EumSpacing.xSmall))
             Text(
-                text = "추가",
+                text = "사진 추가",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -877,7 +899,7 @@ private fun ReportDescriptionSection(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.medium),
         border =
             BorderStroke(
                 width = 1.dp,

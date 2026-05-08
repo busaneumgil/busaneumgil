@@ -4,6 +4,9 @@ import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
+import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
+import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
@@ -13,6 +16,21 @@ import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
 interface SearchRepository {
     suspend fun search(query: SearchQuery): List<SearchResult>
+
+    suspend fun analyzeVoiceSearch(
+        text: String,
+        mode: SearchVoiceMode = SearchVoiceMode.MOBILITY_IMPAIRED,
+    ): SearchVoiceAnalysis {
+        val normalizedText = text.trim()
+        return if (normalizedText.isEmpty()) {
+            SearchVoiceAnalysis(intent = SearchVoiceIntent.UNKNOWN)
+        } else {
+            SearchVoiceAnalysis(
+                intent = SearchVoiceIntent.PLACE_SEARCH,
+                placeName = normalizedText,
+            )
+        }
+    }
 
     suspend fun getRecentSearches(): List<RecentSearch>
 
@@ -58,6 +76,26 @@ class DefaultSearchRepository(
         }
 
         throw remoteFailure ?: IllegalStateException("No search data source matched the current policy.")
+    }
+
+    override suspend fun analyzeVoiceSearch(
+        text: String,
+        mode: SearchVoiceMode,
+    ): SearchVoiceAnalysis {
+        val normalizedText = text.trim()
+        if (normalizedText.isEmpty()) {
+            return super<SearchRepository>.analyzeVoiceSearch(text = normalizedText, mode = mode)
+        }
+
+        val readPlan = sourcePolicy.readPlan(RepositoryDomain.SEARCH)
+        return if (RepositorySource.REMOTE in readPlan.sources) {
+            remoteDataSource.analyzeVoiceSearch(
+                text = normalizedText,
+                mode = mode,
+            )
+        } else {
+            super<SearchRepository>.analyzeVoiceSearch(text = normalizedText, mode = mode)
+        }
     }
 
     override suspend fun getRecentSearches(): List<RecentSearch> = localDataSource.getRecentSearches()

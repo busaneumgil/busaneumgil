@@ -77,7 +77,15 @@ class SearchLocalDataSource {
         }
     }
 
-    private fun SearchQuery.normalizedKey(): String = keyword.normalizedKeyword()
+    private fun SearchQuery.normalizedKey(): String =
+        buildList {
+            add(keyword.normalizedKeyword())
+            add("size=$limit")
+            latitude?.let { latitude -> add("lat=$latitude") }
+            longitude?.let { longitude -> add("lng=$longitude") }
+            radiusMeters?.let { radiusMeters -> add("radius=$radiusMeters") }
+            cursor?.trim()?.takeIf(String::isNotEmpty)?.let { cursor -> add("cursor=$cursor") }
+        }.joinToString(separator = "|")
 
     private fun String.normalizedKeyword(): String = trim().lowercase()
 

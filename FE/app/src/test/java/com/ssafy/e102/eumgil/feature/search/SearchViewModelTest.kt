@@ -1,14 +1,19 @@
 package com.ssafy.e102.eumgil.feature.search
 
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
+import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
+import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
@@ -170,9 +175,18 @@ class SearchViewModelTest {
                     longitude = 129.0414,
                     category = PlaceCategory.PUBLIC_OFFICE,
                 )
+            val searchRepository =
+                FakeSearchRepository(
+                    searchResults = listOf(result),
+                    voiceAnalysis =
+                        SearchVoiceAnalysis(
+                            intent = SearchVoiceIntent.PLACE_SEARCH,
+                            placeName = "Busan Station",
+                        ),
+                )
             val viewModel =
                 SearchViewModel(
-                    searchRepository = FakeSearchRepository(searchResults = listOf(result)),
+                    searchRepository = searchRepository,
                     bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                 )
@@ -200,6 +214,10 @@ class SearchViewModelTest {
             assertEquals("Busan Station", (resultState as SearchResultUiState.Success).query)
             assertEquals(listOf(result), resultState.results)
             assertEquals("Busan Station", viewModel.uiState.value.voiceInputState.transcript)
+            assertEquals(
+                listOf("Busan Station" to SearchVoiceMode.MOBILITY_IMPAIRED),
+                searchRepository.voiceAnalysisRequests,
+            )
         }
 
     @Test
@@ -335,6 +353,108 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `matched search result click enriches recent destination from place detail`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val searchRepository = FakeSearchRepository()
+            val placesRepository =
+                FakePlacesRepository(
+                    placeDetailsById =
+                        mapOf(
+                            "10" to
+                                PlaceDetail(
+                                    placeId = "10",
+                                    name = "Busan Tower",
+                                    address = "1 Yongdusan-gil, Busan",
+                                    latitude = 35.1000,
+                                    longitude = 129.0320,
+                                    category = PlaceCategory.TOURIST_SPOT,
+                                    accessibilityTags = listOf("elevator", "accessible-toilet"),
+                                ),
+                        ),
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    placesRepository = placesRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "10",
+                    serverPlaceId = "10",
+                    providerPlaceId = "123456789",
+                    title = "Busan Tower",
+                    subtitle = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                    accessibilityTagKeys = listOf("step-free-entrance"),
+                    matched = true,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(listOf("10"), placesRepository.detailRequests)
+            assertEquals(
+                listOf("elevator", "accessible-toilet"),
+                searchRepository.savedRecentDestinations.single().accessibilityTagKeys,
+            )
+        }
+
+    @Test
+    fun `provider only search result click skips detail fetch and keeps search accessibility tags`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val searchRepository = FakeSearchRepository()
+            val placesRepository = FakePlacesRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    placesRepository = placesRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:kakao:987654321",
+                    serverPlaceId = null,
+                    providerPlaceId = "987654321",
+                    title = "Provider Only Cafe",
+                    subtitle = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    category = null,
+                    accessibilityTagKeys = listOf("step-free-entrance"),
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertTrue(placesRepository.detailRequests.isEmpty())
+            assertEquals(
+                RecentDestination(
+                    placeId = "provider:kakao:987654321",
+                    name = "Provider Only Cafe",
+                    address = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    category = null,
+                    accessibilityTagKeys = listOf("step-free-entrance"),
+                    searchedAtMillis = 0L,
+                ),
+                searchRepository.savedRecentDestinations.single().copy(searchedAtMillis = 0L),
+            )
+        }
+
+    @Test
     fun `bookmark toggle saves unbookmarked search result`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository()
@@ -456,10 +576,24 @@ class SearchViewModelTest {
 
 private class FakeSearchRepository(
     private val searchResults: List<SearchResult> = emptyList(),
+    private val voiceAnalysis: SearchVoiceAnalysis? = null,
 ) : SearchRepository {
     val savedRecentDestinations = mutableListOf<RecentDestination>()
+    val voiceAnalysisRequests = mutableListOf<Pair<String, SearchVoiceMode>>()
 
     override suspend fun search(query: SearchQuery): List<SearchResult> = searchResults
+
+    override suspend fun analyzeVoiceSearch(
+        text: String,
+        mode: SearchVoiceMode,
+    ): SearchVoiceAnalysis {
+        voiceAnalysisRequests += text to mode
+        return voiceAnalysis
+            ?: SearchVoiceAnalysis(
+                intent = SearchVoiceIntent.PLACE_SEARCH,
+                placeName = text.trim(),
+            )
+    }
 
     override suspend fun getRecentSearches(): List<RecentSearch> = emptyList()
 
@@ -469,6 +603,20 @@ private class FakeSearchRepository(
 
     override suspend fun saveRecentDestination(destination: RecentDestination) {
         savedRecentDestinations += destination
+    }
+}
+
+private class FakePlacesRepository(
+    private val placeDetailsById: Map<String, PlaceDetail> = emptyMap(),
+) : PlacesRepository {
+    val detailRequests = mutableListOf<String>()
+
+    override suspend fun getPlaces(query: com.ssafy.e102.eumgil.core.model.PlaceQuery) =
+        emptyList<com.ssafy.e102.eumgil.core.model.PlaceSummary>()
+
+    override suspend fun getPlaceDetail(placeId: String): PlaceDetail? {
+        detailRequests += placeId
+        return placeDetailsById[placeId]
     }
 }
 

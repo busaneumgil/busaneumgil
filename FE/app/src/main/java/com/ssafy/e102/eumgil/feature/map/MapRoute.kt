@@ -42,6 +42,7 @@ fun MapRoute(
                 facilitySeedRepository = appContainer.facilitySeedRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 searchRepository = appContainer.searchRepository,
+                placesRepository = appContainer.placesRepository,
             )
         }
     val viewModel =

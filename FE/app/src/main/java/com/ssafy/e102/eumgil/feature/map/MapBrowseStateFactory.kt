@@ -47,26 +47,25 @@ internal object MapBrowseStateFactory {
     ): MapMarkerFilterUiState {
         val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
         val allMarkers = browseData.allMarkers
-        val visibleMarkers =
-            overlayState.markers.filter { marker ->
-                marker.displayState == MapMarkerDisplayState.VISIBLE
-            }
         val totalMarkerCountByCategory =
-            allMarkers
-                .groupingBy { marker -> marker.category }
-                .eachCount()
+            browseData.availableCategories.associateWith { category ->
+                allMarkers.count { marker -> category in marker.filterCategories }
+            }
         val visibleMarkerCountByCategory =
-            visibleMarkers
-                .groupingBy { marker -> marker.categoryType.category }
-                .eachCount()
+            browseData.availableCategories.associateWith { category ->
+                allMarkers.count { marker ->
+                    category in marker.filterCategories && marker.matches(normalizedSelection)
+                }
+            }
         val totalBrailleBlockCountByType =
             browseData.brailleBlockMarkers
                 .mapNotNull { marker -> marker.brailleBlockType }
                 .groupingBy { brailleBlockType -> brailleBlockType }
                 .eachCount()
         val visibleBrailleBlockCountByType =
-            visibleMarkers
-                .mapNotNull { marker -> marker.categoryType.brailleBlockType }
+            browseData.brailleBlockMarkers
+                .filter { marker -> marker.matches(normalizedSelection) }
+                .mapNotNull { marker -> marker.brailleBlockType }
                 .groupingBy { brailleBlockType -> brailleBlockType }
                 .eachCount()
 
@@ -198,7 +197,7 @@ internal object MapBrowseStateFactory {
 
     private fun FacilityMarkerSeed.matches(selection: MapFilterSelectionState): Boolean {
         if (selection.isShowingAllCategories) return true
-        if (category !in selection.selectedFacilityCategories) return false
+        if (filterCategories.intersect(selection.selectedFacilityCategories).isEmpty()) return false
         if (category != FacilityCategory.BRAILLE_BLOCK) return true
         return selection.selectedBrailleBlockTypes.isEmpty() || brailleBlockType in selection.selectedBrailleBlockTypes
     }

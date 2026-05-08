@@ -6,6 +6,7 @@ import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
+import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryReadPlan
@@ -15,6 +16,80 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SearchRepositoryTest {
+    @Test
+    fun `search returns remote provider results and caches them for the same query`() =
+        runBlocking {
+            val query = SearchQuery(keyword = "Busan Tower", limit = 2)
+            val localDataSource = SearchLocalDataSource()
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource =
+                        SearchRemoteDataSource(
+                            getRequestExecutor = { _, _, _ ->
+                                HttpJsonResponse(
+                                    statusCode = 200,
+                                    body =
+                                        """
+                                        {
+                                          "status": "S2000",
+                                          "data": {
+                                            "places": [
+                                              {
+                                                "placeId": 10,
+                                                "provider": "KAKAO",
+                                                "providerPlaceId": "123456789",
+                                                "name": "Busan Tower",
+                                                "category": "TOURIST_SPOT",
+                                                "address": "1 Yongdusan-gil, Busan",
+                                                "distanceMeter": 350,
+                                                "point": {
+                                                  "lat": 35.1000,
+                                                  "lng": 129.0320
+                                                },
+                                                "accessibilityFeatures": [],
+                                                "matched": true
+                                              },
+                                              {
+                                                "placeId": null,
+                                                "provider": "KAKAO",
+                                                "providerPlaceId": "987654321",
+                                                "name": "Provider Only Cafe",
+                                                "category": null,
+                                                "address": "2 Gwangbok-ro, Busan",
+                                                "distanceMeter": 120,
+                                                "point": {
+                                                  "lat": 35.1010,
+                                                  "lng": 129.0330
+                                                },
+                                                "accessibilityFeatures": [],
+                                                "matched": false
+                                              }
+                                            ],
+                                            "nextCursor": null,
+                                            "size": 2,
+                                            "totalElements": 2,
+                                            "hasNext": false
+                                          },
+                                          "message": "ok"
+                                        }
+                                        """.trimIndent(),
+                                )
+                            },
+                            postRequestExecutor = { _, _, _ -> error("voice analyze should not run from search()") },
+                            accessTokenProvider = { "access-token" },
+                        ),
+                    localDataSource = localDataSource,
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy = SearchTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            val results = repository.search(query)
+
+            assertEquals(listOf("10", "provider:kakao:987654321"), results.map(SearchResult::placeId))
+            assertEquals(listOf("10", null), results.map(SearchResult::serverPlaceId))
+            assertEquals(results, localDataSource.getCachedResults(query))
+        }
+
     @Test
     fun `search returns mock data when policy forces mock`() =
         runBlocking {

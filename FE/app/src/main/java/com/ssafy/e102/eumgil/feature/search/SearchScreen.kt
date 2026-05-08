@@ -719,7 +719,7 @@ private fun SearchResultItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = stringResource(id = R.string.search_screen_result_id, result.placeId),
+                text = stringResource(id = R.string.search_screen_result_id, result.displayPlaceId),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )

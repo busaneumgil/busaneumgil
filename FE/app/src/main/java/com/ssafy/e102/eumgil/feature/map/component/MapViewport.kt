@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -48,10 +50,11 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
 
 @Immutable
-data class MapViewportUiState(
+internal data class MapViewportUiState(
     val integrationState: MapIntegrationState,
     val cameraTarget: MapCameraTarget,
     val markerOverlayState: MapMarkerOverlayState,
+    val overlayState: MapViewportOverlayState = MapViewportOverlayState(),
     val selectedMarkerId: String?,
     val regionLabel: String,
     val statusLabel: String,
@@ -70,17 +73,34 @@ sealed interface MapIntegrationState {
 }
 
 @Composable
-fun MapViewport(
+internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    LaunchedEffect(state.integrationState) {
+        when (val integrationState = state.integrationState) {
+            MapIntegrationState.Unbound -> {
+                Log.w(
+                    MAP_VIEWPORT_LOG_TAG,
+                    "Map integration unavailable; rendering fallback surface",
+                )
+            }
+
+            is MapIntegrationState.Bound -> {
+                Log.i(
+                    MAP_VIEWPORT_LOG_TAG,
+                    "Map integration bound provider=${integrationState.providerName}",
+                )
+            }
+        }
+    }
+
     when (val integrationState = state.integrationState) {
         MapIntegrationState.Unbound -> {
             MapFallbackSurface(
-                cameraTarget = state.cameraTarget,
                 markerOverlayState = state.markerOverlayState,
-                selectedMarkerId = state.selectedMarkerId,
+                overlayState = state.overlayState,
                 regionLabel = state.regionLabel,
                 statusLabel = state.statusLabel,
                 title = state.title,
@@ -109,26 +129,33 @@ private fun MapContainer(
     onMarkerClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Reuse the fallback surface until a provider-backed container is bound.
-    MapFallbackSurface(
-        cameraTarget = state.cameraTarget,
-        markerOverlayState = state.markerOverlayState,
-        selectedMarkerId = state.selectedMarkerId,
-        regionLabel = state.regionLabel,
-        statusLabel = integrationState.providerName,
-        title = state.title,
-        description = state.description,
-        supportingText = state.supportingText,
-        onMarkerClick = onMarkerClick,
-        modifier = modifier,
-    )
+    when (integrationState.providerName) {
+        KAKAO_MAP_PROVIDER_NAME ->
+            KakaoMapViewport(
+                state = state,
+                onMarkerClick = onMarkerClick,
+                modifier = modifier,
+            )
+
+        else ->
+            MapFallbackSurface(
+                markerOverlayState = state.markerOverlayState,
+                overlayState = state.overlayState,
+                regionLabel = state.regionLabel,
+                statusLabel = integrationState.providerName,
+                title = state.title,
+                description = state.description,
+                supportingText = state.supportingText,
+                onMarkerClick = onMarkerClick,
+                modifier = modifier,
+            )
+    }
 }
 
 @Composable
-private fun MapFallbackSurface(
-    cameraTarget: MapCameraTarget,
+internal fun MapFallbackSurface(
     markerOverlayState: MapMarkerOverlayState,
-    selectedMarkerId: String?,
+    overlayState: MapViewportOverlayState,
     regionLabel: String,
     statusLabel: String,
     title: String,
@@ -193,12 +220,10 @@ private fun MapFallbackSurface(
             )
         }
 
-        MapMarkerOverlay(
-            cameraTarget = cameraTarget,
-            markerOverlayState = markerOverlayState,
-            selectedMarkerId = selectedMarkerId,
-            onMarkerClick = onMarkerClick,
+        MapViewportOverlayBackdrop(
+            overlayState = overlayState,
             modifier = Modifier.fillMaxSize(),
+            onPointClick = onMarkerClick,
         )
 
         markerOverlayStatusMessage(markerOverlayState)?.let { message ->
@@ -271,6 +296,8 @@ private fun MapFallbackSurface(
         }
     }
 }
+
+private const val MAP_VIEWPORT_LOG_TAG = "MapViewport"
 
 @Composable
 private fun MapMarkerOverlay(

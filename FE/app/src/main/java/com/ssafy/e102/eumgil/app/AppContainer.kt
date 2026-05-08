@@ -99,10 +99,20 @@ class AppContainer(
         FavoriteRoutesRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+        PlacesRemoteDataSource(
+            baseUrl = AppEnvironment.baseUrl,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
     }
     private val searchRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        SearchRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+        SearchRemoteDataSource(
+            baseUrl = AppEnvironment.baseUrl,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
     }
     private val userRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         UserRemoteDataSource(httpJsonClient = httpJsonClient)

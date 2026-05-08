@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="map_viewport_status_renderer_error">지도 엔진 초기화 실패</string>
+    <string name="map_viewport_description_renderer_error">Kakao 지도 렌더러가 준비 상태로 전환되지 않았습니다.</string>
+    <string name="map_viewport_supporting_renderer_error">오류 원인: %1$s</string>
+</resources>

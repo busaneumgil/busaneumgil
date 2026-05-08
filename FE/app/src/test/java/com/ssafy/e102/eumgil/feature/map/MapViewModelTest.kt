@@ -6,6 +6,7 @@ import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.AccessibilityTag
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
@@ -15,7 +16,12 @@ import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
 import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
+import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
+import com.ssafy.e102.eumgil.core.model.PlaceQuery
+import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
@@ -25,6 +31,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
@@ -784,6 +791,155 @@ class MapViewModelTest {
             assertEquals(0, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
             assertTrue(viewModel.uiState.value.markerFilterState.categoryOptions.isEmpty())
         }
+
+    @Test
+    fun `places browse maps feature filter membership without changing facility detail category`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository =
+                        FakePlacesRepository(
+                            places =
+                                listOf(
+                                    PlaceSummary(
+                                        placeId = "place-cafe-1",
+                                        name = "Accessible Cafe",
+                                        address = "1 Jungang-daero, Busan",
+                                        latitude = 35.1796,
+                                        longitude = 129.0756,
+                                        category = PlaceCategory.FOOD_CAFE,
+                                        features =
+                                            listOf(
+                                                PlaceFeatureAvailability(
+                                                    featureType = PlaceFeatureType.ACCESSIBLE_TOILET,
+                                                    isAvailable = true,
+                                                ),
+                                                PlaceFeatureAvailability(
+                                                    featureType = PlaceFeatureType.ACCESSIBLE_PARKING,
+                                                    isAvailable = true,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                )
+
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.TOILET }
+                    .isEnabled,
+            )
+
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.TOILET))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("place-cafe-1"),
+                viewModel.uiState.value.markerOverlayState.visibleMarkers.map { marker -> marker.markerId },
+            )
+
+            viewModel.onAction(MapUiAction.MarkerTapped("place-cafe-1"))
+            advanceUntilIdle()
+
+            assertEquals(
+                FacilityCategory.FOOD_CAFE,
+                viewModel.uiState.value.facilityDetailSheetState.detail?.category,
+            )
+        }
+
+    @Test
+    fun `marker tap upgrades sheet detail from live place detail and keeps destination handoff`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "101",
+                                name = "Accessible Cafe",
+                                address = "1 Jungang-daero, Busan",
+                                latitude = 35.1796,
+                                longitude = 129.0756,
+                                category = PlaceCategory.FOOD_CAFE,
+                            ),
+                        ),
+                    placeDetailsById =
+                        mapOf(
+                            "101" to
+                                PlaceDetail(
+                                    placeId = "101",
+                                    name = "Accessible Cafe",
+                                    address = "1 Jungang-daero, Busan",
+                                    latitude = 35.1796,
+                                    longitude = 129.0756,
+                                    category = PlaceCategory.FOOD_CAFE,
+                                    features =
+                                        listOf(
+                                            PlaceFeatureAvailability(
+                                                featureType = PlaceFeatureType.ACCESSIBLE_ENTRANCE,
+                                                isAvailable = true,
+                                            ),
+                                            PlaceFeatureAvailability(
+                                                featureType = PlaceFeatureType.ACCESSIBLE_TOILET,
+                                                isAvailable = true,
+                                            ),
+                                        ),
+                                    isBookmarked = true,
+                                    accessibilityTags = listOf("step-free-entrance", "accessible-toilet"),
+                                    providerPlaceId = "kakao-101",
+                                    description = "East gate is step-free and the accessible toilet is inside.",
+                                ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MarkerTapped("101"))
+            advanceUntilIdle()
+
+            assertEquals(listOf("101"), placesRepository.detailRequests)
+            val detail = requireNotNull(viewModel.uiState.value.facilityDetailSheetState.detail)
+            assertEquals("101", detail.facilityId)
+            assertEquals(FacilityCategory.FOOD_CAFE, detail.category)
+            assertTrue(AccessibilityTag.STEP_FREE_ENTRANCE in detail.accessibilityTags)
+            assertTrue(AccessibilityTag.ACCESSIBLE_TOILET in detail.accessibilityTags)
+            assertEquals(
+                "East gate is step-free and the accessible toilet is inside.",
+                detail.description,
+            )
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isBookmarked)
+
+            viewModel.onAction(MapUiAction.FacilitySetDestinationClicked)
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals("101", destinationSelectionRepository.selectedDestination.value?.placeId)
+            assertEquals("Accessible Cafe", destinationSelectionRepository.selectedDestination.value?.name)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+        }
 }
 
 private fun testDestination(): PlaceDestination =
@@ -870,6 +1026,24 @@ private class FakeSearchRepository(
     override suspend fun getRecentDestinations(): List<RecentDestination> = recentDestinations
 
     override suspend fun saveRecentDestination(destination: RecentDestination) = Unit
+}
+
+private class FakePlacesRepository(
+    private val places: List<PlaceSummary> = emptyList(),
+    private val placeDetailsById: Map<String, PlaceDetail> = emptyMap(),
+) : PlacesRepository {
+    val queries = mutableListOf<PlaceQuery>()
+    val detailRequests = mutableListOf<String>()
+
+    override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+        queries += query
+        return places
+    }
+
+    override suspend fun getPlaceDetail(placeId: String): PlaceDetail? {
+        detailRequests += placeId
+        return placeDetailsById[placeId]
+    }
 }
 
 private fun testFacilitySeedRepository(): FacilitySeedRepository =

@@ -24,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -32,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -52,9 +54,11 @@ import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
 import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
 import com.ssafy.e102.eumgil.feature.map.component.MapViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportUiState
+import com.ssafy.e102.eumgil.feature.map.component.createMapMarkerViewportOverlayState
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetState
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationRowState
+import com.ssafy.e102.eumgil.feature.map.component.resolveMapIntegrationState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
@@ -130,6 +134,9 @@ fun MapScreen(
                         )
                     },
                     detailContent = {
+                        FacilityDetailGuideMessageSection(
+                            message = facilityDetailSheetUiState.guideMessage,
+                        )
                         FacilityDetailAccessibilityTagSection(
                             tags = facilityDetailSheetUiState.accessibilityTags,
                         )
@@ -207,6 +214,7 @@ private data class MapFacilityDetailSheetUiState(
     val metaLabel: String,
     val title: String,
     val address: String,
+    val guideMessage: String,
     val accessibilityTags: List<String>,
     val isBookmarked: Boolean,
     val isBookmarkUpdating: Boolean,
@@ -453,6 +461,21 @@ private fun FacilityDetailAccessibilityTagSection(
 }
 
 @Composable
+private fun FacilityDetailGuideMessageSection(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    if (message.isBlank()) return
+
+    Text(
+        text = message,
+        modifier = modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
 private fun FacilityDetailTagCard(
     label: String,
     modifier: Modifier = Modifier,
@@ -644,6 +667,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             metaLabel = "",
             title = "",
             address = "",
+            guideMessage = "",
             accessibilityTags = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = false,
@@ -660,6 +684,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                 ),
             title = detail.name,
             address = facilityDetailAddressLabel(detail),
+            guideMessage = facilityDetailGuideMessage(detail),
             accessibilityTags = facilityDetailAccessibilityLabels(detail),
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
@@ -671,6 +696,11 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
 @Composable
 private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     val cameraTarget = uiState.cameraTarget
+    val integrationState =
+        resolveMapIntegrationState(
+            hasNativeAppKey = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(),
+            isInspectionMode = LocalInspectionMode.current,
+        )
     val statusLabel =
         when (uiState.locationStatus) {
             MapLocationStatus.PermissionDenied ->
@@ -739,9 +769,15 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
         }
 
     return MapViewportUiState(
-        integrationState = MapIntegrationState.Unbound,
+        integrationState = integrationState,
         cameraTarget = cameraTarget,
         markerOverlayState = uiState.markerOverlayState,
+        overlayState =
+            createMapMarkerViewportOverlayState(
+                cameraTarget = cameraTarget,
+                markerOverlayState = uiState.markerOverlayState,
+                selectedMarkerId = uiState.selectedMarkerId,
+            ),
         selectedMarkerId = uiState.selectedMarkerId,
         regionLabel = regionLabel,
         statusLabel = statusLabel,
@@ -883,7 +919,7 @@ private fun facilityDetailAccessibilityLabels(detail: FacilityDetailSeed): List<
                 accessibilityTagLabel(tag)
             },
         )
-    }.distinct()
+    }.distinct().take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
 
 @Composable
 private fun facilityDetailGuideMessage(detail: FacilityDetailSeed): String =

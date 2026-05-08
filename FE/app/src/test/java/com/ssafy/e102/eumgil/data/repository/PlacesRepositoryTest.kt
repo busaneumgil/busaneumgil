@@ -1,10 +1,14 @@
 package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.PlaceDetail
+import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
+import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
 import com.ssafy.e102.eumgil.core.model.PlaceQuery
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
+import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryReadPlan
@@ -60,6 +64,149 @@ class PlacesRepositoryTest {
             val places = repository.getPlaces(query)
 
             assertEquals(listOf(cachedPlace), places)
+        }
+
+    @Test
+    fun `getPlaces returns remote data and caches it when remote succeeds`() =
+        runBlocking {
+            val query =
+                PlaceQuery(
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    radiusMeters = 1200,
+                )
+            val localDataSource = PlacesLocalDataSource()
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ ->
+                                HttpJsonResponse(
+                                    statusCode = 200,
+                                    body =
+                                        """
+                                        {
+                                          "status": "S2000",
+                                          "data": {
+                                            "places": [
+                                              {
+                                                "placeId": 88,
+                                                "name": "Remote Welfare Center",
+                                                "category": "WELFARE",
+                                                "address": "88 Welfare-ro, Busan",
+                                                "point": {
+                                                  "lat": 35.1801,
+                                                  "lng": 129.0722
+                                                },
+                                                "accessibilityFeatures": [
+                                                  {
+                                                    "featureType": "elevator",
+                                                    "isAvailable": true
+                                                  }
+                                                ],
+                                                "isBookmarked": false
+                                              }
+                                            ]
+                                          },
+                                          "message": "ok"
+                                        }
+                                        """.trimIndent(),
+                                )
+                            },
+                        ),
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            val places = repository.getPlaces(query)
+
+            assertEquals(1, places.size)
+            assertEquals("88", places.first().placeId)
+            assertEquals(PlaceCategory.WELFARE, places.first().category)
+            assertEquals(
+                listOf(
+                    PlaceFeatureAvailability(
+                        featureType = PlaceFeatureType.ELEVATOR,
+                        isAvailable = true,
+                    ),
+                ),
+                places.first().features,
+            )
+            assertEquals(places, localDataSource.getCachedPlaces(query))
+        }
+
+    @Test
+    fun `getPlaceDetail returns remote detail and caches it when remote succeeds`() =
+        runBlocking {
+            val localDataSource = PlacesLocalDataSource()
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ ->
+                                HttpJsonResponse(
+                                    statusCode = 200,
+                                    body =
+                                        """
+                                        {
+                                          "status": "S2000",
+                                          "data": {
+                                            "placeId": 88,
+                                            "name": "Remote Welfare Center",
+                                            "category": "WELFARE",
+                                            "address": "88 Welfare-ro, Busan",
+                                            "point": {
+                                              "lat": 35.1801,
+                                              "lng": 129.0722
+                                            },
+                                            "providerPlaceId": "kakao-88",
+                                            "accessibilityFeatures": [
+                                              {
+                                                "featureType": "elevator",
+                                                "isAvailable": true
+                                              }
+                                            ],
+                                            "isBookmarked": true
+                                          },
+                                          "message": "ok"
+                                        }
+                                        """.trimIndent(),
+                                )
+                            },
+                        ),
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            val detail = repository.getPlaceDetail("88")
+
+            assertEquals(
+                PlaceDetail(
+                    placeId = "88",
+                    name = "Remote Welfare Center",
+                    address = "88 Welfare-ro, Busan",
+                    latitude = 35.1801,
+                    longitude = 129.0722,
+                    category = PlaceCategory.WELFARE,
+                    features =
+                        listOf(
+                            PlaceFeatureAvailability(
+                                featureType = PlaceFeatureType.ELEVATOR,
+                                isAvailable = true,
+                            ),
+                        ),
+                    isBookmarked = true,
+                    accessibilityTags = listOf("elevator"),
+                    providerPlaceId = "kakao-88",
+                    description = null,
+                ),
+                detail,
+            )
+            assertEquals(detail, localDataSource.getCachedPlaceDetail("88"))
         }
 }
 

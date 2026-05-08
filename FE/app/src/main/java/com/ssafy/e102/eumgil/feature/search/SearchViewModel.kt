@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -104,9 +105,14 @@ class SearchViewModel(
     ) {
         viewModelScope.launch {
             val accessibilityTagKeys =
-                runCatching {
-                    placesRepository?.getPlaceDetail(result.placeId)?.accessibilityTags.orEmpty()
-                }.getOrDefault(emptyList())
+                if (result.serverPlaceId.isNullOrBlank()) {
+                    result.accessibilityTagKeys
+                } else {
+                    runCatching {
+                        placesRepository?.getPlaceDetail(result.serverPlaceId)?.accessibilityTags
+                            ?: result.accessibilityTagKeys
+                    }.getOrDefault(result.accessibilityTagKeys)
+                }
 
             runCatching {
                 searchRepository.saveRecentDestination(
@@ -292,7 +298,19 @@ class SearchViewModel(
         if (shouldStopCapture) {
             emitUiEvent(SearchUiEvent.StopVoiceCapture)
         }
-        submitSearch(keyword = normalizedTranscript)
+        viewModelScope.launch {
+            val resolvedKeyword =
+                runCatching {
+                    searchRepository.analyzeVoiceSearch(
+                        text = normalizedTranscript,
+                        mode = SearchVoiceMode.MOBILITY_IMPAIRED,
+                    ).placeName
+                }.getOrNull()
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: normalizedTranscript
+            submitSearch(keyword = resolvedKeyword)
+        }
     }
 
     private fun renderInputState() {

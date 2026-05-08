@@ -108,6 +108,8 @@ Jenkins job에서 사용하는 secret은 Jenkins Credentials로 관리한다.
 
 prod 배포용 secret 원본은 S1 `/home/ubuntu/e102/prod-secrets` 하위에서 관리한다. Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`가 `e102-prod-env-file`, `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url`를 동기화한다.
 
+현재 prod는 초기 환경 bootstrap 단계이므로 `.env.prod`의 `JPA_DDL_AUTO`를 `update`로 두고 테이블/컬럼을 먼저 생성한다. 운영 모드로 전환하기 전에는 반드시 `.env.prod` 값을 `validate`로 되돌리고 한 번 더 배포해 schema drift를 차단한다.
+
 ## `e102-prod-deploy`
 
 prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Jenkinsfile`이다.
@@ -125,6 +127,7 @@ prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Je
 - `.env.prod`는 기존 파일을 직접 overwrite하지 않고 `.env.prod.upload`로 먼저 올린 뒤 서버에서 rename한다. 기존 파일 소유권이 root로 꼬여 있어도 directory write 권한만 있으면 교체 가능하게 하기 위함이다.
 - workspace archive를 푼 직후 `chmod +x scripts/deploy/*.sh`를 적용한다. 현재 기준의 방어막은 내부 호출을 `bash scripts/deploy/*.sh` 형태로 고친 것이지만, master에 남아 있는 과거 스크립트가 직접 실행을 시도해도 같은 권한 오류를 한 번 더 막기 위함이다.
 - Jenkins boolean parameter는 raw `sh` 내부에서 빈 문자열로 들어갈 수 있으므로, `params.*.toString()` 값으로 원격 명령을 조합한다.
+- 현재 bootstrap 단계에서는 `.env.prod`의 `JPA_DDL_AUTO=update`를 기준으로 schema를 맞춘다. 사용자 유입 전 bootstrap이 끝나면 `JPA_DDL_AUTO=validate`로 복귀한 뒤 다시 배포해 운영 모드로 고정한다.
 
 파라미터:
 

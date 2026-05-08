@@ -155,6 +155,57 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `current location button stays visually inactive on initial auto location sync`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1500, longitude = 129.1500)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            assertEquals(MapRecenterButtonState.ENABLED, viewModel.uiState.value.recenterButtonState)
+            assertFalse(viewModel.uiState.value.isRecenterButtonActive)
+        }
+
+    @Test
+    fun `current location button becomes visually active after explicit recenter tap`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1500, longitude = 129.1500)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.LocationActionClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isRecenterButtonActive)
+        }
+
+    @Test
     fun `browse state initializes with all markers visible and category options ready`() =
         runTest {
             val viewModel =

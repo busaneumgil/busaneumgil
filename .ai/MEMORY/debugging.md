@@ -34,3 +34,9 @@ Capture recurring investigation patterns, sharp reproductions, and failure signa
 - Fastest reproduction path: run `export-postgis-to-osm.py --report-json ...` in the dev `graphhopper-build` container and inspect blocker samples such as synthetic edge `-27`; then trace its `source_edge_id` and compare nearby feature fractions.
 - Durable fix: serialize GraphHopper export geometry and OSM node coordinates with higher precision so close split boundaries survive round-tripping, and keep validation on the serialized geometry.
 - Regression test or alert that should exist: unit test with two nearly overlapping point features on one source edge that previously collapsed to the same 8-decimal coordinate after splitting.
+
+- Symptom: prod backend deploy stops after `JWT_SECRET` fix with `Schema-validation: missing table [bookmarks]`.
+- Root cause: prod environment is still in bootstrap stage, but `application-prod.yml` and `docker-compose.prod.yml` defaulted `JPA_DDL_AUTO` to `validate`, so backend refused to start before required tables such as `bookmarks` existed.
+- Fastest reproduction path: run `e102-prod-deploy` on `master` with a valid `.env.prod`, then inspect `s14p31e102-prod-backend-1` logs for `missing table [bookmarks]`.
+- Durable fix: treat early prod as bootstrap. Set `JPA_DDL_AUTO=update` in `.env.prod` and keep the repo default aligned until the initial schema is created, then explicitly switch `.env.prod` and the repo default back to `validate` before real 운영 모드.
+- Regression test or alert that should exist: deployment checklist item that records whether prod is still bootstrap or has switched to validate-mode operations.

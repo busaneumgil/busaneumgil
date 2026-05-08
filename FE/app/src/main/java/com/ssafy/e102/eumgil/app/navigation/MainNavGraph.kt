@@ -230,6 +230,11 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToSearch = { editingTarget ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget)) {
+                    launchSingleTop = true
+                }
+            },
             onNavigateToRouteDetail = { routeOption ->
                 navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
             },

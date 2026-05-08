@@ -204,6 +204,9 @@ private fun RouteBookmarkDraft.toUiState(): ArrivalRouteSaveDraftUiState =
             when (routeOption) {
                 RouteOption.SAFE -> "안전한 길"
                 RouteOption.SHORTEST -> "최단거리"
+                RouteOption.RECOMMENDED -> "추천 경로"
+                RouteOption.MIN_TRANSFER -> "최소 환승"
+                RouteOption.MIN_WALK -> "최소 도보"
             },
         distanceMeters = distanceMeters,
         durationMinutes = durationMinutes,

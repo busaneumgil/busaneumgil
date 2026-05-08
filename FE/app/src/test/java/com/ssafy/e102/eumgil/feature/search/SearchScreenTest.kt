@@ -67,6 +67,22 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `results screen suppresses duplicate empty query state card`() {
+        assertEquals(
+            false,
+            shouldShowSearchResultSection(
+                resultState = SearchResultUiState.EmptyQuery,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldShowSearchResultSection(
+                resultState = SearchResultUiState.Empty(query = "Busan Station"),
+            ),
+        )
+    }
+
+    @Test
     fun `voice input sheet uses fe bottom sheet radius and white background`() {
         assertEquals(EumRadius.scaleL, searchVoiceInputSheetTopCornerRadius())
         assertEquals(Color.White, searchVoiceInputSheetContainerColor())

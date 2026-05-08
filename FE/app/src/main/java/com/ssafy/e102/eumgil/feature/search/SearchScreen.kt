@@ -92,6 +92,9 @@ internal fun resolveSearchResultInteractionState(result: SearchResult): SearchRe
             },
     )
 
+internal fun shouldShowSearchResultSection(resultState: SearchResultUiState): Boolean =
+    resultState != SearchResultUiState.EmptyQuery
+
 internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiState): SearchScreenDestination =
     when (resultState) {
         SearchResultUiState.Initial,
@@ -264,10 +267,12 @@ private fun SearchResultsContent(
         onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
         onSearch = { onAction(SearchUiAction.SearchSubmitted) },
     )
-    SearchResultSection(
-        resultState = uiState.resultState,
-        onAction = onAction,
-    )
+    if (shouldShowSearchResultSection(uiState.resultState)) {
+        SearchResultSection(
+            resultState = uiState.resultState,
+            onAction = onAction,
+        )
+    }
 }
 
 @Composable

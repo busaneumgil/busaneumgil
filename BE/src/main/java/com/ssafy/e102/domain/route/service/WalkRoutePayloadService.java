@@ -39,6 +39,7 @@ import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 public class WalkRoutePayloadService {
 
 	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
+	private static final BigDecimal ALERT_LOOKAHEAD_METER = BigDecimal.valueOf(50);
 	private static final List<AlertRule> ALERT_RULES = List.of(
 		new AlertRule(RouteStepAlertType.STAIR, "stairs_state", Set.of("YES"), 4),
 		new AlertRule(RouteStepAlertType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 5),
@@ -70,7 +71,7 @@ public class WalkRoutePayloadService {
 			estimatedTimeMinute,
 			badges,
 			geometry,
-			List.of(toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry, steps)));
+			List.of(toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry, steps, badges)));
 	}
 
 	public RouteLegResponse toWalkLeg(
@@ -92,7 +93,13 @@ public class WalkRoutePayloadService {
 			durationSecond,
 			estimatedTimeMinute,
 			geometry,
-			steps);
+			steps,
+			null,
+			List.of(),
+			null,
+			null,
+			null,
+			badges(path));
 	}
 
 	private RouteLegResponse toWalkOnlyLeg(
@@ -100,7 +107,8 @@ public class WalkRoutePayloadService {
 		int durationSecond,
 		int estimatedTimeMinute,
 		String geometry,
-		List<RouteStepResponse> steps) {
+		List<RouteStepResponse> steps,
+		List<RouteBadge> badges) {
 		return new RouteLegResponse(
 			1,
 			TransportMode.WALK,
@@ -110,17 +118,31 @@ public class WalkRoutePayloadService {
 			durationSecond,
 			estimatedTimeMinute,
 			geometry,
-			steps);
+			steps,
+			null,
+			List.of(),
+			null,
+			null,
+			null,
+			badges);
 	}
 
 	private List<RouteStepResponse> toSteps(GraphHopperRoutePath path, BigDecimal totalDistanceMeter,
 		int totalDurationSecond) {
 		List<GraphHopperCoordinate> coordinates = path.coordinates();
+		BigDecimal routeLength = routeLength(coordinates);
 		if (coordinates.size() < 2) {
-			return List.of(toStep(path, 1, 0, coordinates.size() - 1, totalDistanceMeter, totalDurationSecond));
+			return List.of(toStep(
+				path,
+				1,
+				0,
+				coordinates.size() - 1,
+				totalDistanceMeter,
+				totalDistanceMeter,
+				routeLength,
+				totalDurationSecond));
 		}
 		List<Integer> splitPoints = splitPoints(path);
-		BigDecimal routeLength = routeLength(coordinates);
 		List<RouteStepResponse> steps = new ArrayList<>();
 		BigDecimal accumulatedDistance = BigDecimal.ZERO.setScale(2);
 		int accumulatedDuration = 0;
@@ -146,9 +168,17 @@ public class WalkRoutePayloadService {
 				isLastStep);
 			accumulatedDistance = accumulatedDistance.add(stepDistance);
 			accumulatedDuration += stepDuration;
-			steps.add(toStep(path, index + 1, fromIndex, toIndex, stepDistance, stepDuration));
+			steps.add(toStep(
+				path,
+				index + 1,
+				fromIndex,
+				toIndex,
+				totalDistanceMeter,
+				routeLength,
+				stepDistance,
+				stepDuration));
 		}
-		return steps;
+		return mergeConsecutiveSteps(steps);
 	}
 
 	private RouteStepResponse toStep(
@@ -156,11 +186,18 @@ public class WalkRoutePayloadService {
 		int sequence,
 		int fromIndex,
 		int toIndex,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength,
 		BigDecimal distanceMeter,
 		int durationSecond) {
 		GraphHopperRoutePath stepPath = slice(path, fromIndex, toIndex);
 		Optional<RouteTurnDirection> turnDirection = turnDirection(path, fromIndex);
-		RouteStepAlertResponse alert = representativeAlert(path, fromIndex, toIndex, distanceMeter)
+		RouteStepAlertResponse alert = representativeAlert(
+			path,
+			fromIndex,
+			toIndex,
+			totalDistanceMeter,
+			routeLength)
 			.map(candidate -> new RouteStepAlertResponse(candidate.type(), candidate.distanceMeter()))
 			.orElse(null);
 		return new RouteStepResponse(
@@ -176,6 +213,116 @@ public class WalkRoutePayloadService {
 		return turnDirection
 			.map(RouteTurnDirection::instruction)
 			.orElse("직진하세요.");
+	}
+
+	private List<RouteStepResponse> mergeConsecutiveSteps(List<RouteStepResponse> steps) {
+		return resequence(mergeNonConflictingInstructionSteps(mergeShortStepBeforeAlert(steps)));
+	}
+
+	private List<RouteStepResponse> mergeShortStepBeforeAlert(List<RouteStepResponse> steps) {
+		List<RouteStepResponse> merged = new ArrayList<>();
+		for (RouteStepResponse step : steps) {
+			if (!merged.isEmpty() && canMergeIntoUpcomingAlert(merged.get(merged.size() - 1), step)) {
+				RouteStepResponse previous = merged.remove(merged.size() - 1);
+				merged.add(mergeStep(previous, step));
+			} else {
+				merged.add(step);
+			}
+		}
+		return merged;
+	}
+
+	private List<RouteStepResponse> mergeNonConflictingInstructionSteps(List<RouteStepResponse> steps) {
+		List<RouteStepResponse> merged = new ArrayList<>();
+		for (RouteStepResponse step : steps) {
+			if (!merged.isEmpty() && canMerge(merged.get(merged.size() - 1), step)) {
+				RouteStepResponse previous = merged.remove(merged.size() - 1);
+				merged.add(mergeStep(previous, step));
+			} else {
+				merged.add(step);
+			}
+		}
+		return merged;
+	}
+
+	private boolean canMergeIntoUpcomingAlert(RouteStepResponse previous, RouteStepResponse current) {
+		if (!previous.instruction().equals(current.instruction())) {
+			return false;
+		}
+		if (previous.alert() != null || current.alert() == null) {
+			return false;
+		}
+		BigDecimal alertDistanceFromMergedStart = previous.distanceMeter().add(current.alert().distanceMeter());
+		return alertDistanceFromMergedStart.compareTo(ALERT_LOOKAHEAD_METER) <= 0;
+	}
+
+	private boolean canMerge(RouteStepResponse previous, RouteStepResponse current) {
+		if (!previous.instruction().equals(current.instruction())) {
+			return false;
+		}
+		if (previous.alert() == null && current.alert() != null) {
+			return false;
+		}
+		return previous.alert() == null || current.alert() == null;
+	}
+
+	private List<RouteStepResponse> resequence(List<RouteStepResponse> steps) {
+		List<RouteStepResponse> resequenced = new ArrayList<>();
+		for (int index = 0; index < steps.size(); index++) {
+			RouteStepResponse step = steps.get(index);
+			resequenced.add(new RouteStepResponse(
+				index + 1,
+				step.instruction(),
+				step.distanceMeter(),
+				step.durationSecond(),
+				step.geometry(),
+				step.alert()));
+		}
+		return resequenced;
+	}
+
+	private RouteStepResponse mergeStep(RouteStepResponse previous, RouteStepResponse current) {
+		BigDecimal previousDistance = previous.distanceMeter();
+		RouteStepAlertResponse alert = previous.alert() != null
+			? previous.alert()
+			: offsetAlert(current.alert(), previousDistance);
+		return new RouteStepResponse(
+			previous.sequence(),
+			previous.instruction(),
+			previousDistance.add(current.distanceMeter()).setScale(2, RoundingMode.HALF_UP),
+			previous.durationSecond() + current.durationSecond(),
+			mergeLineString(previous.geometry(), current.geometry()),
+			alert);
+	}
+
+	private RouteStepAlertResponse offsetAlert(RouteStepAlertResponse alert, BigDecimal distanceOffset) {
+		if (alert == null) {
+			return null;
+		}
+		return new RouteStepAlertResponse(
+			alert.type(),
+			distanceOffset.add(alert.distanceMeter()).setScale(2, RoundingMode.HALF_UP));
+	}
+
+	private String mergeLineString(String first, String second) {
+		List<String> coordinates = new ArrayList<>();
+		coordinates.addAll(extractCoordinates(first));
+		for (String coordinate : extractCoordinates(second)) {
+			if (coordinates.isEmpty() || !coordinates.get(coordinates.size() - 1).equals(coordinate)) {
+				coordinates.add(coordinate);
+			}
+		}
+		if (coordinates.size() < 2) {
+			return first != null ? first : second;
+		}
+		return "LINESTRING(" + String.join(", ", coordinates) + ")";
+	}
+
+	private List<String> extractCoordinates(String lineString) {
+		if (lineString == null || !lineString.startsWith("LINESTRING(")) {
+			return List.of();
+		}
+		return List.of(lineString.substring("LINESTRING(".length(), lineString.length() - 1).split(", "));
 	}
 
 	private List<Integer> splitPoints(GraphHopperRoutePath path) {
@@ -334,12 +481,19 @@ public class WalkRoutePayloadService {
 		GraphHopperRoutePath path,
 		int fromIndex,
 		int toIndex,
-		BigDecimal stepDistanceMeter) {
-		BigDecimal stepLength = routeLength(path.coordinates().subList(fromIndex, toIndex + 1));
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
 		return java.util.stream.Stream.concat(
-			crosswalkAlertCandidates(path, fromIndex, toIndex, stepDistanceMeter, stepLength).stream(),
+			crosswalkAlertCandidates(path, fromIndex, toIndex, totalDistanceMeter, routeLength)
+				.stream(),
 			ALERT_RULES.stream()
-				.flatMap(rule -> alertCandidates(path, rule, fromIndex, toIndex, stepDistanceMeter, stepLength)
+				.flatMap(rule -> alertCandidates(
+					path,
+					rule,
+					fromIndex,
+					toIndex,
+					totalDistanceMeter,
+					routeLength)
 					.stream()))
 			.min(Comparator
 				.comparingInt(StepAlertCandidate::priority)
@@ -350,30 +504,46 @@ public class WalkRoutePayloadService {
 		GraphHopperRoutePath path,
 		int fromIndex,
 		int toIndex,
-		BigDecimal stepDistanceMeter,
-		BigDecimal stepLength) {
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
 		return path.details()
 			.getOrDefault("segment_type", List.of())
 			.stream()
 			.filter(detail -> "CROSS_WALK".equals(detail.value()))
-			.filter(detail -> isOverlapping(detail, fromIndex, toIndex))
-			.map(detail -> new StepAlertCandidate(
-				crosswalkAlertType(path, detail, fromIndex, toIndex),
-				relativeDistanceMeter(path.coordinates(), fromIndex, toIndex, detail.fromIndex(), stepDistanceMeter,
-					stepLength),
-				crosswalkPriority(path, detail, fromIndex, toIndex)))
+			.flatMap(detail -> alertDistanceMeter(
+				path.coordinates(),
+				fromIndex,
+				toIndex,
+				detail.fromIndex(),
+				totalDistanceMeter,
+				routeLength)
+				.map(distanceMeter -> new StepAlertCandidate(
+					crosswalkAlertType(path, detail),
+					distanceMeter,
+					crosswalkPriority(path, detail)))
+				.stream())
 			.toList();
 	}
 
 	private RouteStepAlertType crosswalkAlertType(
 		GraphHopperRoutePath path,
-		GraphHopperPathDetail crosswalkDetail,
-		int fromIndex,
-		int toIndex) {
-		if (hasOverlappingDetailValue(path, "audio_signal_state", "YES", crosswalkDetail, fromIndex, toIndex)) {
+		GraphHopperPathDetail crosswalkDetail) {
+		if (hasOverlappingDetailValue(
+			path,
+			"audio_signal_state",
+			"YES",
+			crosswalkDetail,
+			crosswalkDetail.fromIndex(),
+			crosswalkDetail.toIndex())) {
 			return RouteStepAlertType.CROSSWALK_AUDIO;
 		}
-		if (hasOverlappingDetailValue(path, "signal_state", "YES", crosswalkDetail, fromIndex, toIndex)) {
+		if (hasOverlappingDetailValue(
+			path,
+			"signal_state",
+			"YES",
+			crosswalkDetail,
+			crosswalkDetail.fromIndex(),
+			crosswalkDetail.toIndex())) {
 			return RouteStepAlertType.CROSSWALK_SIGNAL;
 		}
 		return RouteStepAlertType.CROSSWALK;
@@ -381,10 +551,8 @@ public class WalkRoutePayloadService {
 
 	private int crosswalkPriority(
 		GraphHopperRoutePath path,
-		GraphHopperPathDetail crosswalkDetail,
-		int fromIndex,
-		int toIndex) {
-		return switch (crosswalkAlertType(path, crosswalkDetail, fromIndex, toIndex)) {
+		GraphHopperPathDetail crosswalkDetail) {
+		return switch (crosswalkAlertType(path, crosswalkDetail)) {
 			case CROSSWALK_AUDIO -> 1;
 			case CROSSWALK_SIGNAL -> 2;
 			case CROSSWALK -> 3;
@@ -413,39 +581,57 @@ public class WalkRoutePayloadService {
 		AlertRule rule,
 		int fromIndex,
 		int toIndex,
-		BigDecimal stepDistanceMeter,
-		BigDecimal stepLength) {
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
 		return path.details()
 			.getOrDefault(rule.detailName(), List.of())
 			.stream()
 			.filter(detail -> rule.expectedValues().contains(detail.value()))
-			.filter(detail -> isOverlapping(detail, fromIndex, toIndex))
-			.map(detail -> new StepAlertCandidate(
-				rule.type(),
-				relativeDistanceMeter(path.coordinates(), fromIndex, toIndex, detail.fromIndex(), stepDistanceMeter,
-					stepLength),
-				rule.priority()))
+			.flatMap(detail -> alertDistanceMeter(
+				path.coordinates(),
+				fromIndex,
+				toIndex,
+				detail.fromIndex(),
+				totalDistanceMeter,
+				routeLength)
+				.map(distanceMeter -> new StepAlertCandidate(rule.type(), distanceMeter, rule.priority()))
+				.stream())
 			.toList();
 	}
 
-	private boolean isOverlapping(GraphHopperPathDetail detail, int fromIndex, int toIndex) {
-		return detail.fromIndex() < toIndex && detail.toIndex() > fromIndex;
-	}
-
-	private BigDecimal relativeDistanceMeter(
+	private Optional<BigDecimal> alertDistanceMeter(
 		List<GraphHopperCoordinate> coordinates,
 		int stepFromIndex,
 		int stepToIndex,
 		int eventFromIndex,
-		BigDecimal stepDistanceMeter,
-		BigDecimal stepLength) {
-		int normalizedEventIndex = Math.min(Math.max(eventFromIndex, stepFromIndex), stepToIndex);
-		if (normalizedEventIndex <= stepFromIndex || stepLength.compareTo(BigDecimal.ZERO) == 0) {
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		if (eventFromIndex < stepFromIndex || eventFromIndex > stepToIndex || eventFromIndex >= coordinates.size()) {
+			return Optional.empty();
+		}
+		if (stepFromIndex > 0 && eventFromIndex == stepFromIndex) {
+			return Optional.empty();
+		}
+		return Optional.of(scaledDistanceBetween(
+			coordinates,
+			stepFromIndex,
+			eventFromIndex,
+			totalDistanceMeter,
+			routeLength));
+	}
+
+	private BigDecimal scaledDistanceBetween(
+		List<GraphHopperCoordinate> coordinates,
+		int fromIndex,
+		int toIndex,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		if (toIndex <= fromIndex || routeLength.compareTo(BigDecimal.ZERO) == 0) {
 			return BigDecimal.ZERO.setScale(2);
 		}
-		BigDecimal eventOffsetLength = routeLength(coordinates.subList(stepFromIndex, normalizedEventIndex + 1));
-		BigDecimal ratio = eventOffsetLength.divide(stepLength, 8, RoundingMode.HALF_UP);
-		return stepDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+		BigDecimal distance = routeLength(coordinates.subList(fromIndex, toIndex + 1));
+		BigDecimal ratio = distance.divide(routeLength, 8, RoundingMode.HALF_UP);
+		return totalDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
 	}
 
 	private boolean hasAny(GraphHopperRoutePath path, String detailName, String... expectedValues) {

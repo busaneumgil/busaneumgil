@@ -68,6 +68,12 @@ class RouteDtoJsonTest {
 		JsonNode leg = route.get("legs").get(0);
 		assertThat(leg.get("type").asText()).isEqualTo("WALK");
 		assertThat(leg.get("role").asText()).isEqualTo("WALK_ONLY");
+		assertThat(leg.has("routeNo")).isFalse();
+		assertThat(leg.has("laneOptions")).isFalse();
+		assertThat(leg.has("boardingStop")).isFalse();
+		assertThat(leg.has("alightingStop")).isFalse();
+		assertThat(leg.has("isLowFloor")).isFalse();
+		assertThat(leg.has("badges")).isFalse();
 		JsonNode step = leg.get("steps").get(0);
 		assertThat(step.get("instruction").asText()).isEqualTo("직진하세요.");
 		assertThat(step.get("alert").get("type").asText()).isEqualTo("CROSSWALK_AUDIO");

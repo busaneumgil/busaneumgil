@@ -9,5 +9,6 @@ public enum RouteLegRole {
 	WALK_ONLY,
 	WALK_TO_TRANSIT,
 	TRANSIT,
+	TRANSIT_TO_WALK,
 	WALK_TO_DESTINATION
 }

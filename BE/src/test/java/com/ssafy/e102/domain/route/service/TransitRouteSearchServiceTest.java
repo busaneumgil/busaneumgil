@@ -33,6 +33,8 @@ import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.SubwayStationElevatorRepository;
 import com.ssafy.e102.domain.route.repository.SubwayStationRepository;
 import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
+import com.ssafy.e102.domain.route.type.RouteBadge;
+import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
@@ -41,6 +43,7 @@ import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperCoordinate;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperPathDetail;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteRequest;
@@ -186,6 +189,68 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
+	@DisplayName("transit WALK leg는 walk payload의 steps/badges 구조를 유지하고 route badges로 집계한다")
+	void mapsWalkConnectionBadgesIntoTransitRouteAndLegs() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(busPath("map-1", "100", 20, 300))));
+		when(odsayClient.loadLane("map-1"))
+			.thenReturn(List.of(new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any()))
+			.thenAnswer(invocation -> walkPathWithDetails(
+				invocation.getArgument(0),
+				Map.of(
+					"slope_state", List.of(new GraphHopperPathDetail(0, 1, "MODERATE")),
+					"segment_type", List.of(new GraphHopperPathDetail(0, 1, "CROSS_WALK")))))
+			.thenAnswer(invocation -> walkPathWithDetails(
+				invocation.getArgument(0),
+				Map.of(
+					"stairs_state", List.of(new GraphHopperPathDetail(0, 1, "YES")),
+					"surface_state", List.of(new GraphHopperPathDetail(0, 1, "UNPAVED")))));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		assertThat(response.routes().get(0).badges())
+			.containsExactly(
+				RouteBadge.MIDDLE_SLOPE,
+				RouteBadge.CROSSWALK,
+				RouteBadge.STAIR,
+				RouteBadge.UNPAVED);
+		assertThat(response.routes().get(0).legs().get(0).role()).isEqualTo(RouteLegRole.WALK_TO_TRANSIT);
+		assertThat(response.routes().get(0).legs().get(0).badges())
+			.containsExactly(RouteBadge.MIDDLE_SLOPE, RouteBadge.CROSSWALK);
+		assertThat(response.routes().get(0).legs().get(2).role()).isEqualTo(RouteLegRole.TRANSIT_TO_WALK);
+		assertThat(response.routes().get(0).legs().get(2).badges())
+			.containsExactly(RouteBadge.STAIR, RouteBadge.UNPAVED);
+	}
+
+	@Test
+	@DisplayName("마지막 WALK leg의 ODSay 시간이 0분이어도 목적지 도보 역할로 반환한다")
+	void mapsZeroMinuteFinalWalkToTransitToWalkRole() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(busPathWithFinalWalk(
+				"map-1",
+				"100",
+				20,
+				300,
+				zeroMinuteWalkLeg()))));
+		when(odsayClient.loadLane("map-1"))
+			.thenReturn(List.of(new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		assertThat(response.routes().get(0).legs()).hasSize(3);
+		assertThat(response.routes().get(0).legs().get(2).role()).isEqualTo(RouteLegRole.TRANSIT_TO_WALK);
+		assertThat(response.routes().get(0).legs().get(2).instruction()).isEqualTo("목적지까지 이동하세요.");
+	}
+
+	@Test
 	@DisplayName("BIMS 도착정보가 없어도 후보를 실패 처리하지 않는다")
 	void keepsBusCandidateWhenBimsArrivalIsEmpty() {
 		when(odsayClient.searchPubTransPath(START, END))
@@ -283,6 +348,15 @@ class TransitRouteSearchServiceTest {
 	}
 
 	private OdsayTransitPath busPath(String mapObj, String busNo, int totalTimeMinute, int totalWalkMeter) {
+		return busPathWithFinalWalk(mapObj, busNo, totalTimeMinute, totalWalkMeter, walkLeg());
+	}
+
+	private OdsayTransitPath busPathWithFinalWalk(
+		String mapObj,
+		String busNo,
+		int totalTimeMinute,
+		int totalWalkMeter,
+		OdsayTransitLeg finalWalkLeg) {
 		return new OdsayTransitPath(
 			BigDecimal.valueOf(3000),
 			totalTimeMinute,
@@ -293,7 +367,7 @@ class TransitRouteSearchServiceTest {
 			List.of(
 				walkLeg(),
 				busLeg(busNo),
-				walkLeg()),
+				finalWalkLeg),
 			Map.of());
 	}
 
@@ -317,6 +391,34 @@ class TransitRouteSearchServiceTest {
 			TransportMode.WALK,
 			BigDecimal.valueOf(300),
 			5,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			List.of(),
+			List.of(),
+			Map.of());
+	}
+
+	private OdsayTransitLeg zeroMinuteWalkLeg() {
+		return new OdsayTransitLeg(
+			TransportMode.WALK,
+			BigDecimal.ZERO,
+			0,
 			null,
 			null,
 			null,
@@ -398,6 +500,12 @@ class TransitRouteSearchServiceTest {
 	}
 
 	private GraphHopperRoutePath walkPath(GraphHopperRouteRequest request) {
+		return walkPathWithDetails(request, Map.of());
+	}
+
+	private GraphHopperRoutePath walkPathWithDetails(
+		GraphHopperRouteRequest request,
+		Map<String, List<GraphHopperPathDetail>> details) {
 		return new GraphHopperRoutePath(
 			BigDecimal.valueOf(300),
 			300_000,
@@ -408,7 +516,7 @@ class TransitRouteSearchServiceTest {
 				new GraphHopperCoordinate(
 					BigDecimal.valueOf(request.endPoint().lng()),
 					BigDecimal.valueOf(request.endPoint().lat()))),
-			Map.of());
+			details);
 	}
 
 	private SubwayStationElevator elevator(String id, String name, String lineName, double lat, double lng) {

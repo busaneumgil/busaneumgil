@@ -56,7 +56,13 @@ class WalkRoutePayloadServiceTest {
 				RouteBadge.NARROW_SIDEWALK,
 				RouteBadge.UNPAVED);
 		assertThat(route.legs()).hasSize(1);
-		assertThat(route.legs().get(0).steps()).hasSize(2);
+		assertThat(route.legs().get(0).badges())
+			.containsExactly(
+				RouteBadge.MIDDLE_SLOPE,
+				RouteBadge.CROSSWALK,
+				RouteBadge.NARROW_SIDEWALK,
+				RouteBadge.UNPAVED);
+		assertThat(route.legs().get(0).steps()).hasSize(1);
 		assertThat(route.legs().get(0).steps().get(0).instruction()).isEqualTo("직진하세요.");
 		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_SIGNAL);
 		assertThat(route.legs().get(0).steps().get(0).alert().distanceMeter()).isEqualByComparingTo("0.00");
@@ -117,6 +123,9 @@ class WalkRoutePayloadServiceTest {
 			.mapToInt(com.ssafy.e102.domain.route.dto.response.RouteStepResponse::durationSecond)
 			.sum())
 			.isEqualTo(90);
+		assertThat(steps.get(0).alert().type()).isEqualTo(RouteStepAlertType.NARROW_SIDEWALK);
+		assertThat(steps.get(0).alert().distanceMeter()).isEqualByComparingTo(steps.get(0).distanceMeter());
+		assertThat(steps.get(1).alert()).isNull();
 	}
 
 	@Test
@@ -164,9 +173,36 @@ class WalkRoutePayloadServiceTest {
 			"rs_walk_test",
 			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
 
-		assertThat(route.legs().get(0).steps()).hasSize(3);
-		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK);
-		assertThat(route.legs().get(0).steps().get(1).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_SIGNAL);
-		assertThat(route.legs().get(0).steps().get(2).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_AUDIO);
+		assertThat(route.legs().get(0).steps()).hasSize(2);
+		assertThat(route.legs().get(0).steps().get(0).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_SIGNAL);
+		assertThat(route.legs().get(0).steps().get(0).alert().distanceMeter()).isGreaterThan(BigDecimal.ZERO);
+		assertThat(route.legs().get(0).steps().get(1).alert().type()).isEqualTo(RouteStepAlertType.CROSSWALK_AUDIO);
+		assertThat(route.legs().get(0).steps().get(1).alert().distanceMeter()).isGreaterThan(BigDecimal.ZERO);
+	}
+
+	@Test
+	void mergesShortSameInstructionStepIntoUpcomingAlertDistance() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("30.00"),
+			30_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0030"), new BigDecimal("35.0000"))),
+			Map.of(
+				"surface_state", List.of(new GraphHopperPathDetail(0, 1, "PAVED")),
+				"width_state", List.of(new GraphHopperPathDetail(2, 3, "NARROW"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		List<com.ssafy.e102.domain.route.dto.response.RouteStepResponse> steps = route.legs().get(0).steps();
+		assertThat(steps).hasSize(1);
+		assertThat(steps.get(0).instruction()).isEqualTo("직진하세요.");
+		assertThat(steps.get(0).distanceMeter()).isEqualByComparingTo("30.00");
+		assertThat(steps.get(0).alert().type()).isEqualTo(RouteStepAlertType.NARROW_SIDEWALK);
+		assertThat(steps.get(0).alert().distanceMeter()).isEqualByComparingTo("20.00");
 	}
 }

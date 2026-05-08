@@ -175,7 +175,7 @@ public class TransitRouteSearchService {
 			path.totalTimeMinute() * 60,
 			Math.max(1, path.totalTimeMinute()),
 			transferCount(path),
-			List.of(),
+			routeBadges(legs),
 			mergeGeometry(legs),
 			legs);
 		return java.util.Optional.of(new TransitRouteCandidate(
@@ -313,12 +313,14 @@ public class TransitRouteSearchService {
 		List<RouteLegResponse> legs = new ArrayList<>();
 		GeoPointRequest cursor = startPoint;
 		int[] geometryIndex = {0};
-		for (OdsayTransitLeg odsayLeg : odsayLegs) {
+		for (int odsayIndex = 0; odsayIndex < odsayLegs.size(); odsayIndex++) {
+			OdsayTransitLeg odsayLeg = odsayLegs.get(odsayIndex);
 			int legIndex = legs.size() + 1;
 			try {
 				if (odsayLeg.type() == TransportMode.WALK) {
-					GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayLeg, endPoint, cursor);
-					RouteLegResponse walkLeg = toWalkLeg(legIndex, cursor, nextPoint, odsayLeg, profile);
+					boolean hasNextTransit = hasNextTransit(odsayLegs, odsayIndex);
+					GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayIndex, endPoint, cursor);
+					RouteLegResponse walkLeg = toWalkLeg(legIndex, cursor, nextPoint, hasNextTransit, profile);
 					if (walkLeg == null) {
 						return List.of();
 					}
@@ -355,10 +357,9 @@ public class TransitRouteSearchService {
 
 	private GeoPointRequest nextTransitStart(
 		List<OdsayTransitLeg> odsayLegs,
-		OdsayTransitLeg currentLeg,
+		int currentIndex,
 		GeoPointRequest endPoint,
 		GeoPointRequest referencePoint) {
-		int currentIndex = odsayLegs.indexOf(currentLeg);
 		for (int index = currentIndex + 1; index < odsayLegs.size(); index++) {
 			OdsayTransitLeg next = odsayLegs.get(index);
 			if (next.type() != TransportMode.WALK) {
@@ -371,22 +372,37 @@ public class TransitRouteSearchService {
 		return endPoint;
 	}
 
+	private boolean hasNextTransit(List<OdsayTransitLeg> odsayLegs, int currentIndex) {
+		for (int index = currentIndex + 1; index < odsayLegs.size(); index++) {
+			if (odsayLegs.get(index).type() != TransportMode.WALK) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private RouteLegResponse toWalkLeg(
 		int sequence,
 		GeoPointRequest from,
 		GeoPointRequest to,
-		OdsayTransitLeg odsayLeg,
+		boolean hasNextTransit,
 		WalkRouteUserProfile profile) {
 		if (GeoDistanceCalculator.distanceMeter(from, to) < 1.0) {
 			return new RouteLegResponse(
 				sequence,
 				TransportMode.WALK,
-				walkRole(sequence, odsayLeg),
-				walkInstruction(sequence, odsayLeg),
+				walkRole(hasNextTransit),
+				walkInstruction(hasNextTransit),
 				BigDecimal.ZERO.setScale(2),
 				0,
 				0,
 				lineString(from, to),
+				List.of(),
+				null,
+				List.of(),
+				null,
+				null,
+				null,
 				List.of());
 		}
 		try {
@@ -399,8 +415,8 @@ public class TransitRouteSearchService {
 					RouteOption.SAFE)));
 			return walkRoutePayloadService.toWalkLeg(
 				sequence,
-				walkRole(sequence, odsayLeg),
-				walkInstruction(sequence, odsayLeg),
+				walkRole(hasNextTransit),
+				walkInstruction(hasNextTransit),
 				path);
 		} catch (RouteException exception) {
 			if (exception.getErrorCode() == RouteErrorCode.ROUTE_NOT_FOUND) {
@@ -515,18 +531,27 @@ public class TransitRouteSearchService {
 		return null;
 	}
 
-	private RouteLegRole walkRole(int sequence, OdsayTransitLeg odsayLeg) {
-		if (sequence == 1 || odsayLeg.sectionTimeMinute() == 0) {
+	private RouteLegRole walkRole(boolean hasNextTransit) {
+		if (hasNextTransit) {
 			return RouteLegRole.WALK_TO_TRANSIT;
 		}
-		return RouteLegRole.WALK_TO_DESTINATION;
+		return RouteLegRole.TRANSIT_TO_WALK;
 	}
 
-	private String walkInstruction(int sequence, OdsayTransitLeg odsayLeg) {
-		if (walkRole(sequence, odsayLeg) == RouteLegRole.WALK_TO_DESTINATION) {
+	private String walkInstruction(boolean hasNextTransit) {
+		RouteLegRole role = walkRole(hasNextTransit);
+		if (role == RouteLegRole.TRANSIT_TO_WALK || role == RouteLegRole.WALK_TO_DESTINATION) {
 			return "목적지까지 이동하세요.";
 		}
 		return "대중교통 탑승 지점까지 이동하세요.";
+	}
+
+	private List<RouteBadge> routeBadges(List<RouteLegResponse> legs) {
+		Set<RouteBadge> badges = new LinkedHashSet<>();
+		legs.stream()
+			.flatMap(leg -> (leg.badges() == null ? List.<RouteBadge>of() : leg.badges()).stream())
+			.forEach(badges::add);
+		return new ArrayList<>(badges);
 	}
 
 	private List<TransitLaneOptionResponse> laneOptions(int routeIndex, int legIndex, OdsayTransitLeg odsayLeg) {

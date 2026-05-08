@@ -3,8 +3,10 @@ package com.ssafy.e102.domain.route.dto.response;
 import java.math.BigDecimal;
 import java.util.List;
 
-import com.ssafy.e102.domain.route.type.RouteLegRole;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ssafy.e102.domain.route.type.RouteBadge;
+import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.TransportMode;
 
 /**
@@ -22,11 +24,17 @@ public record RouteLegResponse(
 	int estimatedTimeMinute,
 	String geometry,
 	List<RouteStepResponse> steps,
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	String routeNo,
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	List<TransitLaneOptionResponse> laneOptions,
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	RouteStopResponse boardingStop,
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	RouteStopResponse alightingStop,
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	Boolean isLowFloor,
+	@JsonIgnore
 	List<RouteBadge> badges) {
 
 	public RouteLegResponse(

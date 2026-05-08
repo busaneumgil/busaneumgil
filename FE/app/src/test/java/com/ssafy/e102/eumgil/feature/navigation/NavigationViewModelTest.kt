@@ -638,8 +638,7 @@ private fun testNavigationRequest(): RouteNavigationRequest =
                     ),
             ),
         source =
-            RouteSearchSource.mockFixture(
-                fixtureId = "navigation-test",
-                label = "Navigation test fixture",
+            RouteSearchSource.serverApi(
+                label = "Navigation test route",
             ),
     )

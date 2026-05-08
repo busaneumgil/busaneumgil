@@ -22,6 +22,7 @@ data class RouteDto(
     val routeOption: String? = null,
     val title: String? = null,
     val distanceMeter: Double? = null,
+    val durationSecond: Int? = null,
     val estimatedTimeMinute: Int? = null,
     val transferCount: Int? = null,
     val badges: List<String> = emptyList(),
@@ -38,6 +39,7 @@ data class RouteLegDto(
     val role: String? = null,
     val instruction: String? = null,
     val distanceMeter: Double? = null,
+    val durationSecond: Int? = null,
     val estimatedTimeMinute: Int? = null,
     val geometry: String? = null,
     val steps: List<RouteStepDto> = emptyList(),
@@ -53,6 +55,7 @@ data class RouteStepDto(
     val instruction: String? = null,
     val geometry: String? = null,
     val distanceMeter: Double? = null,
+    val durationSecond: Int? = null,
     // Legacy single-alert payloads still exist in tests and some mock fixtures.
     val alert: RouteStepAlertDto? = null,
     val badges: List<String> = emptyList(),

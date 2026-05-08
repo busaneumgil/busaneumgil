@@ -23,6 +23,8 @@ import com.ssafy.e102.eumgil.core.model.RouteTransitStop
 import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+import org.json.JSONArray
+import org.json.JSONObject
 
 fun RouteSearchQuery.toRequestDto(): RouteSearchRequestDto =
     RouteSearchRequestDto(
@@ -30,6 +32,20 @@ fun RouteSearchQuery.toRequestDto(): RouteSearchRequestDto =
         endPoint = destination.coordinate.toPointDto(),
         routeOptions = requestedOptions.map(RouteOption::name),
     )
+
+fun parseRouteSearchResponseDto(body: String): RouteSearchResponseDto {
+    val responseJson = JSONObject(body)
+    val dataJson = responseJson.optJSONObject("data") ?: error("route search response missing data object")
+    val routesJson = dataJson.optJSONArray("routes") ?: JSONArray()
+
+    return RouteSearchResponseDto(
+        searchId = dataJson.optNullableString("searchId"),
+        routes =
+            List(routesJson.length()) { index ->
+                routesJson.getJSONObject(index).toRouteDto()
+            },
+    )
+}
 
 fun RouteSearchResponseDto.toDomain(
     query: RouteSearchQuery,
@@ -127,7 +143,9 @@ private fun RouteDto.toDomainLegs(geometryParser: RouteGeometryParser): List<Rou
                     role = RouteLegRole.WALK_ONLY,
                     instruction = legacySegments.firstOrNull()?.guidanceMessage ?: RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
                     distanceMeters = legacySegments.sumOf(RouteSegment::distanceMeters),
-                    estimatedTimeMinutes = estimatedTimeMinute?.takeIf { value -> value >= 0 },
+                    estimatedTimeMinutes =
+                        estimatedTimeMinute?.takeIf { value -> value >= 0 }
+                            ?: durationSecond.toEstimatedMinutesOrNull(),
                     polyline =
                         geometryParser
                             .parse(geometry)
@@ -172,7 +190,9 @@ private fun RouteLegDto.toDomain(
         role = RouteLegRole.fromValue(role),
         instruction = normalizedInstruction(instruction),
         distanceMeters = distanceMeter.toRoundedMeters() ?: resolvedSteps.sumOf(RouteStep::distanceMeters),
-        estimatedTimeMinutes = estimatedTimeMinute?.takeIf { value -> value >= 0 },
+        estimatedTimeMinutes =
+            estimatedTimeMinute?.takeIf { value -> value >= 0 }
+                ?: durationSecond.toEstimatedMinutesOrNull(),
         polyline =
             if (parsedPolyline.isRenderable) {
                 parsedPolyline
@@ -326,6 +346,29 @@ private fun GeoCoordinate.toPointDto(): RoutePointDto =
         lng = longitude,
     )
 
+private fun JSONObject.toRouteDto(): RouteDto =
+    RouteDto(
+        routeId = optNullableString("routeId"),
+        transportMode = optNullableString("transportMode"),
+        routeOption = optNullableString("routeOption"),
+        title = optNullableString("title"),
+        distanceMeter = optNullableDouble("distanceMeter"),
+        durationSecond = optNullableInt("durationSecond"),
+        estimatedTimeMinute = optNullableInt("estimatedTimeMinute"),
+        transferCount = optNullableInt("transferCount"),
+        badges = optStringList("badges"),
+        geometry = optNullableString("geometry"),
+        riskLevel = optNullableString("riskLevel"),
+        segments =
+            optJSONArray("segments")
+                ?.toSegmentDtos()
+                .orEmpty(),
+        legs =
+            optJSONArray("legs")
+                ?.toLegDtos()
+                .orEmpty(),
+    )
+
 private fun RouteDto.normalizedTitle(): String = title?.trim().orEmpty()
 
 private fun RouteDto.normalizedRouteId(
@@ -371,6 +414,7 @@ private fun RouteDto.normalizedDistance(
 private fun RouteDto.normalizedEstimatedTime(distanceMeters: Int): Int =
     estimatedTimeMinute
         ?.takeIf { estimatedTime -> estimatedTime >= 0 }
+        ?: durationSecond.toEstimatedMinutesOrNull()
         ?: distanceMeters.toEstimatedMinutes()
 
 private fun RouteLegDto.normalizedSequence(fallbackSequence: Int): Int =
@@ -492,8 +536,148 @@ private fun Double?.toRoundedMeters(): Int? =
         ?.takeIf { value -> value >= 0.0 }
         ?.roundToInt()
 
+private fun Int?.toEstimatedMinutesOrNull(): Int? =
+    this
+        ?.takeIf { value -> value >= 0 }
+        ?.let { durationSeconds ->
+            if (durationSeconds == 0) {
+                0
+            } else {
+                ceil(durationSeconds / 60.0).toInt()
+            }
+        }
+
 private val RouteLeg.resolvedDistanceMeters: Int
     get() = distanceMeters ?: steps.sumOf(RouteStep::distanceMeters)
+
+private fun JSONArray.toLegDtos(): List<RouteLegDto> =
+    List(length()) { index ->
+        getJSONObject(index).toLegDto()
+    }
+
+private fun JSONObject.toLegDto(): RouteLegDto =
+    RouteLegDto(
+        sequence = optNullableInt("sequence"),
+        type = optNullableString("type"),
+        role = optNullableString("role"),
+        instruction = optNullableString("instruction"),
+        distanceMeter = optNullableDouble("distanceMeter"),
+        durationSecond = optNullableInt("durationSecond"),
+        estimatedTimeMinute = optNullableInt("estimatedTimeMinute"),
+        geometry = optNullableString("geometry"),
+        steps =
+            optJSONArray("steps")
+                ?.toStepDtos()
+                .orEmpty(),
+        routeNo = optNullableString("routeNo"),
+        boardingStop = optJSONObject("boardingStop")?.toTransitStopDto(),
+        alightingStop = optJSONObject("alightingStop")?.toTransitStopDto(),
+        isLowFloor = optNullableBoolean("isLowFloor"),
+        badges = optStringList("badges"),
+    )
+
+private fun JSONArray.toStepDtos(): List<RouteStepDto> =
+    List(length()) { index ->
+        getJSONObject(index).toStepDto()
+    }
+
+private fun JSONObject.toStepDto(): RouteStepDto =
+    RouteStepDto(
+        sequence = optNullableInt("sequence"),
+        instruction = optNullableString("instruction"),
+        geometry = optNullableString("geometry"),
+        distanceMeter = optNullableDouble("distanceMeter"),
+        durationSecond = optNullableInt("durationSecond"),
+        alert = optJSONObject("alert")?.toStepAlertDto(),
+        badges = optStringList("badges"),
+        alerts =
+            optJSONArray("alerts")
+                ?.toAlertDtos()
+                .orEmpty(),
+        slopePercent = optNullableDouble("slopePercent"),
+        widthState = optNullableString("widthState"),
+    )
+
+private fun JSONObject.toStepAlertDto(): RouteStepAlertDto =
+    RouteStepAlertDto(
+        type = optNullableString("type"),
+        distanceMeter = optNullableDouble("distanceMeter"),
+    )
+
+private fun JSONArray.toAlertDtos(): List<RouteAlertDto> =
+    List(length()) { index ->
+        getJSONObject(index).toAlertDto()
+    }
+
+private fun JSONObject.toAlertDto(): RouteAlertDto =
+    RouteAlertDto(
+        type = optNullableString("type"),
+        distanceMeter = optNullableDouble("distanceMeter"),
+    )
+
+private fun JSONObject.toTransitStopDto(): RouteTransitStopDto =
+    RouteTransitStopDto(
+        name = optNullableString("name"),
+        lat = optNullableDouble("lat"),
+        lng = optNullableDouble("lng"),
+    )
+
+private fun JSONArray.toSegmentDtos(): List<RouteSegmentDto> =
+    List(length()) { index ->
+        getJSONObject(index).toSegmentDto()
+    }
+
+private fun JSONObject.toSegmentDto(): RouteSegmentDto =
+    RouteSegmentDto(
+        sequence = optNullableInt("sequence"),
+        geometry = optNullableString("geometry"),
+        distanceMeter = optNullableInt("distanceMeter"),
+        hasStairs = optNullableBoolean("hasStairs"),
+        hasCurbGap = optNullableBoolean("hasCurbGap"),
+        hasCrosswalk = optNullableBoolean("hasCrosswalk"),
+        hasSignal = optNullableBoolean("hasSignal"),
+        hasAudioSignal = optNullableBoolean("hasAudioSignal"),
+        hasBrailleBlock = optNullableBoolean("hasBrailleBlock"),
+        riskLevel = optNullableString("riskLevel"),
+        guidanceMessage = optNullableString("guidanceMessage"),
+    )
+
+private fun JSONObject.optNullableBoolean(name: String): Boolean? =
+    if (isNull(name)) {
+        null
+    } else {
+        optBoolean(name)
+    }
+
+private fun JSONObject.optNullableDouble(name: String): Double? =
+    if (isNull(name)) {
+        null
+    } else {
+        optDouble(name)
+    }
+
+private fun JSONObject.optNullableInt(name: String): Int? =
+    if (isNull(name)) {
+        null
+    } else {
+        optInt(name)
+    }
+
+private fun JSONObject.optNullableString(name: String): String? =
+    if (isNull(name)) {
+        null
+    } else {
+        optString(name).takeIf(String::isNotBlank)
+    }
+
+private fun JSONObject.optStringList(name: String): List<String> =
+    optJSONArray(name)
+        ?.let { jsonArray ->
+            List(jsonArray.length()) { index ->
+                jsonArray.optString(index)
+            }.filter(String::isNotBlank)
+        }
+        .orEmpty()
 
 private fun RouteSegmentSafetyFlags.toSyntheticBadges(): List<RouteBadge> =
     buildList {

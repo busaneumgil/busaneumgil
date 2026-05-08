@@ -18,7 +18,6 @@ import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
-import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
@@ -26,6 +25,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
@@ -109,13 +109,20 @@ class AppContainer(
             },
         )
     }
+    private val routeRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        RouteRemoteDataSource(
+            baseUrl = AppEnvironment.baseUrl,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
+    }
     private val userRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         UserRemoteDataSource(httpJsonClient = httpJsonClient)
     }
 
     private val placesMockDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesMockDataSource() }
     private val facilitySeedMockDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedMockDataSource() }
-    private val routeMockDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteMockDataSource() }
     private val searchMockDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchMockDataSource() }
 
     private val repositorySourcePolicy: RepositorySourcePolicy by lazy(LazyThreadSafetyMode.NONE) {
@@ -236,7 +243,7 @@ class AppContainer(
     val routeRepository: RouteRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideRouteRepository(
             localDataSource = routeLocalDataSource,
-            mockDataSource = routeMockDataSource,
+            remoteDataSource = routeRemoteDataSource,
         )
     }
 

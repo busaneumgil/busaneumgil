@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryReadPlan
+import com.ssafy.e102.eumgil.data.repository.policy.RepositorySource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -135,6 +136,36 @@ class SearchRepositoryTest {
             val results = repository.search(query)
 
             assertEquals(listOf(cachedResult), results)
+        }
+
+    @Test
+    fun `search throws remote failure when live policy has no cached fallback`() =
+        runBlocking {
+            val query = SearchQuery(keyword = "custom")
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource =
+                        object : SearchRemoteDataSource(
+                            getRequestExecutor = { _, _, _ -> error("unused") },
+                            postRequestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                                throw IllegalStateException("remote search failed")
+                            }
+                        },
+                    localDataSource = SearchLocalDataSource(),
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy =
+                        SearchTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                )
+
+            val failure = runCatching { repository.search(query) }.exceptionOrNull()
+
+            assertEquals("remote search failed", failure?.message)
         }
 
     @Test

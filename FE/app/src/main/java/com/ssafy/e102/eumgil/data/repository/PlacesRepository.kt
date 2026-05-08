@@ -41,7 +41,10 @@ class DefaultPlacesRepository(
 
                 RepositorySource.LOCAL -> {
                     val cachedPlaces = localDataSource.getCachedPlaces(query)
-                    if (cachedPlaces.isNotEmpty() || source == lastSource) {
+                    if (cachedPlaces.isNotEmpty()) {
+                        return cachedPlaces
+                    }
+                    if (source == lastSource && remoteFailure == null) {
                         return cachedPlaces
                     }
                 }
@@ -74,7 +77,10 @@ class DefaultPlacesRepository(
 
                 RepositorySource.LOCAL -> {
                     val cachedPlaceDetail = localDataSource.getCachedPlaceDetail(placeId)
-                    if (cachedPlaceDetail != null || source == lastSource) {
+                    if (cachedPlaceDetail != null) {
+                        return cachedPlaceDetail
+                    }
+                    if (source == lastSource && remoteFailure == null) {
                         return cachedPlaceDetail
                     }
                 }

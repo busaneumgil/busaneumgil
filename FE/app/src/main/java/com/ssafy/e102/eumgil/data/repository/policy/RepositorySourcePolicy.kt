@@ -27,6 +27,11 @@ data class RepositoryReadPlan(
                 sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL, RepositorySource.MOCK),
             )
 
+        fun remoteLocalOnly(): RepositoryReadPlan =
+            RepositoryReadPlan(
+                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+            )
+
         fun localOnly(): RepositoryReadPlan =
             RepositoryReadPlan(
                 sources = listOf(RepositorySource.LOCAL),
@@ -52,7 +57,7 @@ class DefaultRepositorySourcePolicy : RepositorySourcePolicy {
                 if (AppEnvironment.isMockMode) {
                     RepositoryReadPlan.mockOnly()
                 } else {
-                    RepositoryReadPlan.remoteLocalMock()
+                    RepositoryReadPlan.remoteLocalOnly()
                 }
         }
 }

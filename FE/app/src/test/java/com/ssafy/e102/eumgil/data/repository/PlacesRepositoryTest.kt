@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryReadPlan
+import com.ssafy.e102.eumgil.data.repository.policy.RepositorySource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -63,6 +64,35 @@ class PlacesRepositoryTest {
             val places = repository.getPlaces(query)
 
             assertEquals(listOf(cachedPlace), places)
+        }
+
+    @Test
+    fun `getPlaces throws remote failure when live policy has no cached fallback`() =
+        runBlocking {
+            val query = PlaceQuery(keyword = "custom")
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+                                throw IllegalStateException("remote places failed")
+                            }
+                        },
+                    localDataSource = PlacesLocalDataSource(),
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                )
+
+            val failure = runCatching { repository.getPlaces(query) }.exceptionOrNull()
+
+            assertEquals("remote places failed", failure?.message)
         }
 
     @Test
@@ -209,6 +239,34 @@ class PlacesRepositoryTest {
             val detail = repository.getPlaceDetail("cached-place-1")
 
             assertEquals(cachedDetail, detail)
+        }
+
+    @Test
+    fun `getPlaceDetail throws remote failure when live policy has no cached fallback`() =
+        runBlocking {
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaceDetail(placeId: String): PlaceDetail? {
+                                throw IllegalStateException("remote place detail failed")
+                            }
+                        },
+                    localDataSource = PlacesLocalDataSource(),
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                )
+
+            val failure = runCatching { repository.getPlaceDetail("missing-place") }.exceptionOrNull()
+
+            assertEquals("remote place detail failed", failure?.message)
         }
 }
 

@@ -66,7 +66,10 @@ class DefaultSearchRepository(
 
                 RepositorySource.LOCAL -> {
                     val cachedResults = localDataSource.getCachedResults(query)
-                    if (cachedResults.isNotEmpty() || source == lastSource) {
+                    if (cachedResults.isNotEmpty()) {
+                        return cachedResults
+                    }
+                    if (source == lastSource && remoteFailure == null) {
                         return cachedResults
                     }
                 }

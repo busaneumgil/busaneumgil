@@ -25,7 +25,9 @@ class RepositorySourcePolicyTest {
                 if (AppEnvironment.isMockMode) {
                     RepositoryReadPlan.mockOnly()
                 } else {
-                    RepositoryReadPlan.remoteLocalMock()
+                    RepositoryReadPlan(
+                        sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                    )
                 }
 
             assertEquals(expectedPlan, policy.readPlan(RepositoryDomain.PLACES))

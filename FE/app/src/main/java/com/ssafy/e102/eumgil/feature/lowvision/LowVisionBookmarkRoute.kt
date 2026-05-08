@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteViewModel
 @Composable
 fun LowVisionBookmarkRoute(
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -46,6 +47,7 @@ fun LowVisionBookmarkRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 is SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                SavedRouteUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SavedRouteUiEvent.NavigateToMap,
                 is SavedRouteUiEvent.ShowSnackbar,
                 -> Unit

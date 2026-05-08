@@ -26,7 +26,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -158,6 +162,9 @@ fun LowVisionBookmarkScreen(
                 SavedBookmarkContentState.CONTENT -> {
                     LowVisionBookmarkPlaceList(
                         places = uiState.placeContent.places,
+                        onBriefingClick = { place ->
+                            onAction(SavedRouteUiAction.PlaceBriefingClicked(place.placeId))
+                        },
                         onNavigateClick = { place ->
                             onAction(SavedRouteUiAction.PlaceRouteGuideClicked(place.placeId))
                         },
@@ -179,6 +186,7 @@ fun LowVisionBookmarkScreen(
 @Composable
 private fun LowVisionBookmarkPlaceList(
     places: List<SavedPlaceUiModel>,
+    onBriefingClick: (SavedPlaceUiModel) -> Unit,
     onNavigateClick: (SavedPlaceUiModel) -> Unit,
     onRemoveClick: (SavedPlaceUiModel) -> Unit,
 ) {
@@ -203,6 +211,7 @@ private fun LowVisionBookmarkPlaceList(
                 LowVisionBookmarkPlaceCard(
                     index = index + 1,
                     place = place,
+                    onBriefingClick = { onBriefingClick(place) },
                     onNavigateClick = { onNavigateClick(place) },
                     onRemoveClick = { onRemoveClick(place) },
                     titleMaxLines = cardMetrics.titleMaxLines,
@@ -221,12 +230,25 @@ private fun LowVisionBookmarkPlaceList(
 private fun LowVisionBookmarkPlaceCard(
     index: Int,
     place: SavedPlaceUiModel,
+    onBriefingClick: () -> Unit,
     onNavigateClick: () -> Unit,
     onRemoveClick: () -> Unit,
     titleMaxLines: Int,
     addressMaxLines: Int,
     modifier: Modifier = Modifier,
 ) {
+    var showsDetailAddress by rememberSaveable(place.placeId) { mutableStateOf(false) }
+    val addressText =
+        if (showsDetailAddress) {
+            lowVisionDetailAddress(
+                address = place.address,
+                latitude = place.latitude,
+                longitude = place.longitude,
+            )
+        } else {
+            lowVisionBriefAddress(place.address)
+        }
+
     Column(
         modifier =
             modifier
@@ -274,6 +296,11 @@ private fun LowVisionBookmarkPlaceCard(
             ) {
                 Text(
                     text = place.name,
+                    modifier =
+                        Modifier.clickable(
+                            role = Role.Button,
+                            onClick = onBriefingClick,
+                        ),
                     color = Color.White,
                     fontSize = LowVisionBookmarkLayoutDefaults.titleFontSize,
                     fontWeight = FontWeight.Black,
@@ -282,7 +309,12 @@ private fun LowVisionBookmarkPlaceCard(
                     maxLines = titleMaxLines,
                 )
                 Text(
-                    text = place.address ?: stringResource(id = R.string.low_vision_bookmark_no_address),
+                    text = addressText,
+                    modifier =
+                        Modifier.clickable(
+                            role = Role.Button,
+                            onClick = { showsDetailAddress = !showsDetailAddress },
+                        ),
                     color = Color.White,
                     fontSize = LowVisionBookmarkLayoutDefaults.addressFontSize,
                     fontWeight = FontWeight.Bold,
@@ -298,12 +330,12 @@ private fun LowVisionBookmarkPlaceCard(
         ) {
             LowVisionBookmarkButton(
                 labelRes = R.string.low_vision_bookmark_navigate,
-                iconRes = R.drawable.ic_nav_route,
+                iconRes = LowVisionPlaceCardDefaults.routeIconRes,
                 onClick = onNavigateClick,
             )
             LowVisionBookmarkButton(
                 labelRes = R.string.low_vision_bookmark_remove,
-                iconRes = R.drawable.ic_action_favorite,
+                iconRes = LowVisionPlaceCardDefaults.saveIconRes,
                 onClick = onRemoveClick,
             )
         }

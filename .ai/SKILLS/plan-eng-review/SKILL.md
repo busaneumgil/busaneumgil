@@ -20,7 +20,7 @@ Turn product intent or an existing implementation plan into an execution-ready a
 - Existing project documents such as PRD, ERD, blueprint, and prior implementation notes
 - Feature requirements, domain description, expected traffic, data structures, and external dependency assumptions when backend behavior is involved
 - `.ai/DOCS.md`
-- Relevant `Docs/API/`, `Docs/ARD/`, `Docs/PoC/`, `Docs/인프라/`, `Docs/컨벤션/`, and `Docs/skills/backend/` documents
+- Relevant `Docs/API/`, `Docs/ERD/`, `Docs/PoC/`, `Docs/인프라/`, `Docs/컨벤션/`, and `Docs/skills/backend/` documents
 - `.ai/LOCAL/PLANS/current-sprint.md`
 - `.ai/PLANS/implementation-plan-template.md`
 - `.ai/ARCHITECTURE.md`

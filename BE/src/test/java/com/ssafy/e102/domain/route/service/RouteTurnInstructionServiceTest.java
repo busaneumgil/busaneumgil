@@ -2,15 +2,15 @@ package com.ssafy.e102.domain.route.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertType;
-
 /**
- * route 회전 alert가 geometry 방향 변화에서 파생되는지 검증한다.
+ * route 방향 instruction이 geometry 방향 변화에서 파생되는지 검증한다.
  */
 class RouteTurnInstructionServiceTest {
 
@@ -25,38 +25,38 @@ class RouteTurnInstructionServiceTest {
 			new Coordinate(1.0, 1.0)
 		});
 
-		RouteStepAlertType alertType = routeTurnInstructionService.resolve(routeGeometry, 1);
+		Optional<RouteTurnDirection> direction = routeTurnInstructionService.resolve(routeGeometry, 1);
 
-		assertThat(alertType).isEqualTo(RouteStepAlertType.TURN_LEFT);
+		assertThat(direction).contains(RouteTurnDirection.LEFT);
 	}
 
 	@Test
 	void resolveReturnsTurnRightFromContinuousSegmentDirectionChange() {
-		RouteStepAlertType alertType = routeTurnInstructionService.resolve(
+		Optional<RouteTurnDirection> direction = routeTurnInstructionService.resolve(
 			new Coordinate(0.0, 0.0),
 			new Coordinate(0.0, 1.0),
 			new Coordinate(1.0, 1.0));
 
-		assertThat(alertType).isEqualTo(RouteStepAlertType.TURN_RIGHT);
+		assertThat(direction).contains(RouteTurnDirection.RIGHT);
 	}
 
 	@Test
 	void resolveIgnoresSmallHeadingChange() {
-		RouteStepAlertType alertType = routeTurnInstructionService.resolve(
+		Optional<RouteTurnDirection> direction = routeTurnInstructionService.resolve(
 			new Coordinate(0.0, 0.0),
 			new Coordinate(1.0, 0.0),
 			new Coordinate(2.0, 0.2));
 
-		assertThat(alertType).isEqualTo(RouteStepAlertType.NONE);
+		assertThat(direction).isEmpty();
 	}
 
 	@Test
 	void resolveDoesNotDependOnSegmentFeatureType() {
-		RouteStepAlertType alertType = routeTurnInstructionService.resolve(
+		Optional<RouteTurnDirection> direction = routeTurnInstructionService.resolve(
 			new Coordinate(0.0, 0.0),
 			new Coordinate(1.0, 0.0),
 			new Coordinate(1.0, -1.0));
 
-		assertThat(alertType).isEqualTo(RouteStepAlertType.TURN_RIGHT);
+		assertThat(direction).contains(RouteTurnDirection.RIGHT);
 	}
 }

@@ -22,7 +22,7 @@ Base skill intent: Improve module structure, boundaries, or readability while pr
 - `.ai/LANES.md`
 - `.ai/DOCS.md`
 - `.ai/SKILLS/refactor-module/SKILL.md` for the base stage workflow
-- `Docs/API`, `Docs/ARD`, `Docs/skills/backend`, `Docs/컨벤션`, `Docs/인프라`, and actual `BE` code
+- `Docs/API`, `Docs/ERD`, `Docs/skills/backend`, `Docs/컨벤션`, `Docs/인프라`, and actual `BE` code
 - `.ai/LOCAL/PLANS/current-sprint.md` when a plan or handoff exists
 
 ## procedure
@@ -30,7 +30,7 @@ Base skill intent: Improve module structure, boundaries, or readability while pr
 1. Read `.ai/LANES.md` and apply the BE lane contract before reading implementation files.
 2. Read `.ai/DOCS.md`, then select only the source documents relevant to the BE request.
 3. Read `.ai/SKILLS/refactor-module/SKILL.md` and apply its procedure inside the BE lane boundary.
-4. Treat `BE` and `Docs/API`, `Docs/ARD`, `Docs/skills/backend`, or `Docs/인프라` as the primary editable surfaces for this command.
+4. Treat `BE` and `Docs/API`, `Docs/ERD`, `Docs/skills/backend`, or `Docs/인프라` as the primary editable surfaces for this command.
 5. Do not edit `FE/app` implementation files from this command. If the opposite lane must change, record a `## Cross-Lane Handoff` item and recommend `/fe-plan or /fe-start`.
 6. For documentation work, update the BE source documents first and record any stale or conflicting shared docs in the plan.
 7. Keep `.ai/LOCAL/PLANS/current-sprint.md` explicit about `## Work Lane`, source documents, checklist items, document conflicts, and cross-lane handoff.

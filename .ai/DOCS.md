@@ -10,7 +10,7 @@
   - 1차 FE 문서: 목표 계약 확인
 - `FE/mockup/`과 Figma handoff 같은 직접 산출물은 1차 FE 문서 다음 기준이다.
 - `Docs/PRD/`, `Docs/기획/`, 필요한 `Docs/API/`는 FE 계약을 보강할 때만 읽는다.
-- `FE/docs/2026-04-27_*`, `FE/docs/sprint_backlog/` 같은 2차 정리 문서는 1차 FE 문서나 직접 산출물을 덮어쓰지 않는다.
+- `FE/docs/archive/`, `FE/docs/debug-report/`, `FE/docs/todo/`, `FE/docs/sprint_backlog/` 같은 2차 정리 문서는 1차 FE 문서나 직접 산출물을 덮어쓰지 않는다.
 - FE가 API 계약을 볼 때는 실제로 소비하는 도메인 문서만 선택적으로 읽는다. 기본 후보는 `장소_도메인`, `사용자_도메인`, `길안내_도메인`, 필요 시 `음성_도메인`이다.
 - BE 작업은 `Docs/API/`, `Docs/ERD/`, `Docs/skills/backend/`, 실제 `BE/` 코드를 1차 기준으로 둔다.
 - 코드, FE 문서, Figma/mockup, PRD/API가 충돌하면 아래 네 항목을 분리해 기록한다.
@@ -46,7 +46,7 @@
 ## BE source-of-truth order
 
 1. 실제 `BE/` 구현 + `Docs/API/`
-2. `Docs/ERD/ERD_v3.md`, `Docs/skills/backend/`
+2. `Docs/ERD/ERD_v4.md`, `Docs/skills/backend/`
 3. `Docs/컨벤션/`, `Docs/인프라/`
 4. 공통 제품 문서: `Docs/PRD/`, `Docs/기획/`
 5. `.ai/PROJECT.md` 요약
@@ -72,7 +72,7 @@
 
 - `Docs/API/2026-04-12_API_전체_목록.md`
 - `Docs/API/*/*_API_명세.md`
-- `Docs/ERD/ERD_v3.md`
+- `Docs/ERD/ERD_v4.md`
 - `Docs/skills/backend/`
 - `Docs/컨벤션/2026-04-14_API_응답_코드_컨벤션.md`
 - `Docs/인프라/2026-04-20_AWS_인프라_설계안.md`
@@ -89,8 +89,8 @@
 | FE code structure | `FE/docs/2026-04-13_부산이음길_FE_코드_컨벤션.md`, actual `FE/app` structure | FE route map | Treat stale examples as background only. |
 | FE client API contract | Only the FE-consumed docs in `Docs/API/장소_도메인/`, `Docs/API/사용자_도메인/`, `Docs/API/길안내_도메인/`, optional `Docs/API/음성_도메인/` | `Docs/API/2026-04-12_API_전체_목록.md` | Pull in only what the touched FE flow actually needs. |
 | BE API / domain | `Docs/API/`, actual `BE/` code | PRD, planning docs | BE lane primary scope. |
-| Shared data / ERD | `Docs/ERD/ERD_v3.md` | API docs, actual entities | Use for shared model context, not as FE-first truth. |
-| Shared route / spatial context | `Docs/PoC/2026-04-21_부산_경사도_추출_정제_OSM_연계_통합_PoC.md`, `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md` | `Docs/ERD/ERD_v3.md`, infra docs | Pull only when FE route behavior depends on backend route semantics. |
+| Shared data / ERD | `Docs/ERD/ERD_v4.md` | API docs, actual entities | Use for shared model context, not as FE-first truth. |
+| Shared route / spatial context | `Docs/PoC/2026-04-21_부산_경사도_추출_정제_OSM_연계_통합_PoC.md`, `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md` | `Docs/ERD/ERD_v4.md`, infra docs | Pull only when FE route behavior depends on backend route semantics. |
 | Infra / release context | `Docs/인프라/` | actual ops config | Usually background for FE lane unless deployment behavior matters. |
 
 ## Common conventions
@@ -124,8 +124,8 @@
 ### Planning
 
 - FE planning loads the five primary FE docs, the representative navigation files, and only the product/API docs needed for the requested flow.
-- Cross-functional planning may add `Docs/ERD/ERD_v3.md`, route PoC, or infra docs, but only when the FE decision depends on them.
-- BE planning loads the touched API specs, `Docs/ERD/ERD_v3.md`, backend conventions, and relevant infra docs before fixing scope or contracts.
+- Cross-functional planning may add `Docs/ERD/ERD_v4.md`, route PoC, or infra docs, but only when the FE decision depends on them.
+- BE planning loads the touched API specs, `Docs/ERD/ERD_v4.md`, backend conventions, and relevant infra docs before fixing scope or contracts.
 
 ### Build / investigate
 
@@ -144,7 +144,7 @@
 - Validate BE changes separately against:
   - actual `BE/` implementation facts
   - `Docs/API/` contract
-  - `Docs/ERD/ERD_v3.md` and backend conventions where relevant
+  - `Docs/ERD/ERD_v4.md` and backend conventions where relevant
 
 ## Priority rule for FE claims
 
@@ -159,7 +159,7 @@
 
 1. Confirm current implementation facts in actual `BE/` code.
 2. Confirm contract in `Docs/API/`.
-3. Confirm shared model assumptions in `Docs/ERD/ERD_v3.md`.
+3. Confirm shared model assumptions in `Docs/ERD/ERD_v4.md`.
 4. Use backend conventions and infra docs for implementation and runtime rules.
 5. Use `Docs/PRD/` and `Docs/기획/` as product context only.
 6. Use `.ai/PROJECT.md` only as a shared summary.

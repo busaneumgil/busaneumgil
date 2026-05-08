@@ -41,10 +41,11 @@ FE lane의 기준은 `FE/docs` 전체가 아니라, 명시된 1차 FE 계약 문
 
 ### Supporting documents only
 
-- `FE/docs/2026-04-27_로그인_필수_전환_FE_정합성_및_구현_영향.md`
-- `FE/docs/2026-04-27_온보딩_디자인_화면_구성_분석.md`
-- `FE/docs/2026-04-27_FE_Docs_문서_정합성_재검토.md`
+- `FE/docs/debug-report/2026-04-27_로그인_필수_전환_FE_정합성_및_구현_영향.md`
+- `FE/docs/archive/2026-04-27_온보딩_디자인_화면_구성_분석.md`
+- `FE/docs/debug-report/2026-04-27_FE_Docs_문서_정합성_재검토.md`
 - `FE/docs/sprint_backlog/`
+- `FE/docs/todo/`
 
 ### FE interpretation rules
 
@@ -69,7 +70,7 @@ FE lane의 기준은 `FE/docs` 전체가 아니라, 명시된 1차 FE 계약 문
 - `Docs/API/사용자_도메인/`
 - `Docs/API/길안내_도메인/`
 - 필요 시 `Docs/API/음성_도메인/`
-- `Docs/ERD/ERD_v3.md`
+- `Docs/ERD/ERD_v4.md`
 
 FE lane은 위 문서를 읽을 수 있지만 `BE/` 구현 파일은 수정하지 않는다. API 계약 자체가 틀렸거나 미정이면 `/be-plan` 또는 `/be-start`로 넘긴다.
 
@@ -93,7 +94,7 @@ BE lane의 1차 기준은 `Docs/API`, `Docs/ERD`, `Docs/skills/backend`, 실제 
 ### Primary BE documents
 
 - `Docs/API/`
-- `Docs/ERD/ERD_v3.md`
+- `Docs/ERD/ERD_v4.md`
 - `Docs/skills/backend/`
 - `Docs/컨벤션/2026-04-14_API_응답_코드_컨벤션.md`
 - `Docs/인프라/`

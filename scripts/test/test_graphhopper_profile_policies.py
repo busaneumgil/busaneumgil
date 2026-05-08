@@ -101,6 +101,89 @@ class GraphhopperProfilePolicyTest(unittest.TestCase):
                 )
                 self.assertGreater(signalized, unsignalized)
 
+    def test_unknown_values_are_weak_non_blocking_penalties(self):
+        models = load_custom_models()
+
+        for profile_name, model in models.items():
+            unknown_rules = [
+                rule
+                for rule in model.get("priority", [])
+                if "UNKNOWN" in rule.get("if", "")
+            ]
+            self.assertTrue(unknown_rules, profile_name)
+
+            for rule in unknown_rules:
+                multiplier = float(rule["multiply_by"])
+                with self.subTest(profile=profile_name, condition=rule["if"]):
+                    self.assertGreater(multiplier, 0.0)
+                    self.assertLessEqual(multiplier, 1.0)
+                    self.assertGreaterEqual(multiplier, 0.60)
+
+    def test_safe_profiles_penalize_shared_unknown_values_more_than_fast_profiles(self):
+        # UNKNOWN은 경로를 끊지 않는 약한 penalty로 둔다. 다만 같은 사용자군에서는
+        # safe profile이 fast profile보다 불확실한 접근성 정보를 더 조심스럽게 본다.
+        models = load_custom_models()
+        profile_pairs = [
+            ("pedestrian_safe", "pedestrian_fast"),
+            ("visual_safe", "visual_fast"),
+            ("wheelchair_auto_safe", "wheelchair_auto_fast"),
+            ("wheelchair_manual_safe", "wheelchair_manual_fast"),
+        ]
+
+        for safe_profile, fast_profile in profile_pairs:
+            safe_unknown_conditions = {
+                rule["if"]
+                for rule in models[safe_profile].get("priority", [])
+                if "UNKNOWN" in rule.get("if", "")
+            }
+            fast_unknown_conditions = {
+                rule["if"]
+                for rule in models[fast_profile].get("priority", [])
+                if "UNKNOWN" in rule.get("if", "")
+            }
+
+            for condition in safe_unknown_conditions & fast_unknown_conditions:
+                with self.subTest(safe=safe_profile, fast=fast_profile, condition=condition):
+                    self.assertLess(
+                        priority_multiplier_number(models[safe_profile], condition),
+                        priority_multiplier_number(models[fast_profile], condition),
+                    )
+
+    def test_safe_profiles_allow_more_detour_than_fast_profiles(self):
+        # GraphHopper distance_influence가 낮을수록 더 긴 우회를 허용한다.
+        # safe profile은 접근성 위험 회피를 위해 같은 사용자군의 fast profile보다 낮아야 한다.
+        models = load_custom_models()
+        profile_pairs = [
+            ("pedestrian_safe", "pedestrian_fast"),
+            ("visual_safe", "visual_fast"),
+            ("wheelchair_auto_safe", "wheelchair_auto_fast"),
+            ("wheelchair_manual_safe", "wheelchair_manual_fast"),
+        ]
+
+        for safe_profile, fast_profile in profile_pairs:
+            with self.subTest(safe=safe_profile, fast=fast_profile):
+                self.assertLess(
+                    models[safe_profile]["distance_influence"],
+                    models[fast_profile]["distance_influence"],
+                )
+
+    def test_distance_influence_matches_initial_tuning_policy(self):
+        models = load_custom_models()
+        expected = {
+            "pedestrian_safe": 40,
+            "pedestrian_fast": 90,
+            "visual_safe": 35,
+            "visual_fast": 90,
+            "wheelchair_auto_safe": 45,
+            "wheelchair_auto_fast": 95,
+            "wheelchair_manual_safe": 50,
+            "wheelchair_manual_fast": 110,
+        }
+
+        for profile_name, distance_influence in expected.items():
+            with self.subTest(profile=profile_name):
+                self.assertEqual(models[profile_name]["distance_influence"], distance_influence)
+
 
 if __name__ == "__main__":
     unittest.main()

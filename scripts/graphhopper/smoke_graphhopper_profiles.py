@@ -51,16 +51,16 @@ def fetch_candidates(conn, limit):
     """smoke 경로 endpoint로 쓸 길고 routeable한 정상 segment 후보를 찾는다."""
     sql = """
 SELECT
-  "edgeId" AS edge_id,
-  "walkAccess"::text AS walk_access,
-  "stairsState"::text AS stairs_state,
-  COALESCE("lengthMeter", ST_Length("geom"::geography)) AS length_meter,
+  edge_id,
+  walk_access::text AS walk_access,
+  stairs_state::text AS stairs_state,
+  COALESCE(length_meter, ST_Length("geom"::geography)) AS length_meter,
   ST_X(ST_StartPoint("geom"::geometry)) AS from_lon,
   ST_Y(ST_StartPoint("geom"::geometry)) AS from_lat,
   ST_X(ST_EndPoint("geom"::geometry)) AS to_lon,
   ST_Y(ST_EndPoint("geom"::geometry)) AS to_lat
 FROM road_segments
-WHERE COALESCE("walkAccess"::text, 'UNKNOWN') <> 'NO'
+WHERE COALESCE(walk_access::text, 'UNKNOWN') <> 'NO'
   AND "geom" IS NOT NULL
   AND NOT ST_IsEmpty("geom"::geometry)
   AND ST_NPoints("geom"::geometry) >= 2
@@ -68,7 +68,7 @@ WHERE COALESCE("walkAccess"::text, 'UNKNOWN') <> 'NO'
     ST_X(ST_StartPoint("geom"::geometry)) = ST_X(ST_EndPoint("geom"::geometry))
     AND ST_Y(ST_StartPoint("geom"::geometry)) = ST_Y(ST_EndPoint("geom"::geometry))
   )
-ORDER BY COALESCE("lengthMeter", ST_Length("geom"::geography)) DESC
+ORDER BY COALESCE(length_meter, ST_Length("geom"::geography)) DESC
 LIMIT %s
 """
     with conn.cursor() as cur:

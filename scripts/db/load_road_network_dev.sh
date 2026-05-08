@@ -244,61 +244,74 @@ load_into_dev_db() {
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 CREATE TABLE IF NOT EXISTS road_nodes (
-  "vertexId" bigint PRIMARY KEY,
-  "sourceNodeKey" varchar(100) NOT NULL UNIQUE,
+  vertex_id bigint PRIMARY KEY,
+  source_node_key varchar(100) NOT NULL UNIQUE,
   "point" geometry(Point, 4326) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS road_segments (
-  "edgeId" bigint PRIMARY KEY,
-  "fromNodeId" bigint NOT NULL,
-  "toNodeId" bigint NOT NULL,
+  edge_id bigint PRIMARY KEY,
+  from_node_id bigint NOT NULL,
+  to_node_id bigint NOT NULL,
   "geom" geometry(LineString, 4326) NOT NULL,
-  "lengthMeter" numeric(10, 2) NOT NULL,
-  "walkAccess" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "avgSlopePercent" numeric(6, 2),
-  "widthMeter" numeric(6, 2),
-  "brailleBlockState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "audioSignalState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "slopeState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "widthState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "surfaceState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "stairsState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "signalState" varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-  "segmentType" varchar(30) NOT NULL DEFAULT 'SIDE_LINE'
+  length_meter numeric(10, 2) NOT NULL,
+  walk_access varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  avg_slope_percent numeric(6, 2),
+  width_meter numeric(6, 2),
+  braille_block_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  audio_signal_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  slope_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  width_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  surface_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  stairs_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  signal_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
+  segment_type varchar(30) NOT NULL DEFAULT 'SIDE_LINE'
 );
 
+CREATE TABLE IF NOT EXISTS segment_features (
+  feature_id bigint PRIMARY KEY,
+  edge_id bigint NOT NULL,
+  feature_type varchar(50) NOT NULL,
+  "geom" geometry(Geometry, 4326) NOT NULL,
+  state varchar(50),
+  value_number numeric(10, 2)
+);
+
+CREATE INDEX IF NOT EXISTS segment_features_edge_id_idx ON segment_features (edge_id);
+
+-- CSV header format stays camelCase for upstream compatibility.
+-- Temp/staging columns and final tables use snake_case consistently.
 CREATE TEMP TABLE staging_road_nodes (
-  "vertexId" text,
-  "sourceNodeKey" text,
+  vertex_id text,
+  source_node_key text,
   "point" text
 );
 
 CREATE TEMP TABLE staging_road_segments (
-  "edgeId" text,
-  "fromNodeId" text,
-  "toNodeId" text,
+  edge_id text,
+  from_node_id text,
+  to_node_id text,
   "geom" text,
-  "lengthMeter" text,
-  "walkAccess" text,
-  "avgSlopePercent" text,
-  "widthMeter" text,
-  "brailleBlockState" text,
-  "audioSignalState" text,
-  "slopeState" text,
-  "widthState" text,
-  "surfaceState" text,
-  "stairsState" text,
-  "signalState" text,
-  "segmentType" text
+  length_meter text,
+  walk_access text,
+  avg_slope_percent text,
+  width_meter text,
+  braille_block_state text,
+  audio_signal_state text,
+  slope_state text,
+  width_state text,
+  surface_state text,
+  stairs_state text,
+  signal_state text,
+  segment_type text
 );
 
 \copy staging_road_nodes FROM ${nodes_csv_literal} WITH (FORMAT csv, HEADER true)
 \copy staging_road_segments FROM ${segments_csv_literal} WITH (FORMAT csv, HEADER true)
 
-CREATE INDEX staging_road_nodes_vertex_id_idx ON staging_road_nodes ("vertexId");
-CREATE INDEX staging_road_segments_from_node_id_idx ON staging_road_segments ("fromNodeId");
-CREATE INDEX staging_road_segments_to_node_id_idx ON staging_road_segments ("toNodeId");
+CREATE INDEX staging_road_nodes_vertex_id_idx ON staging_road_nodes (vertex_id);
+CREATE INDEX staging_road_segments_from_node_id_idx ON staging_road_segments (from_node_id);
+CREATE INDEX staging_road_segments_to_node_id_idx ON staging_road_segments (to_node_id);
 ANALYZE staging_road_nodes;
 ANALYZE staging_road_segments;
 
@@ -309,9 +322,9 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM staging_road_segments s
-    LEFT JOIN staging_road_nodes nf ON nf."vertexId" = s."fromNodeId"
-    LEFT JOIN staging_road_nodes nt ON nt."vertexId" = s."toNodeId"
-    WHERE nf."vertexId" IS NULL OR nt."vertexId" IS NULL
+    LEFT JOIN staging_road_nodes nf ON nf.vertex_id = s.from_node_id
+    LEFT JOIN staging_road_nodes nt ON nt.vertex_id = s.to_node_id
+    WHERE nf.vertex_id IS NULL OR nt.vertex_id IS NULL
   ) THEN
     RAISE EXCEPTION 'staging_road_segments contains orphan node references';
   END IF;
@@ -319,61 +332,61 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM staging_road_segments
-    WHERE "segmentType" NOT IN ('CROSS_WALK', 'SIDE_LINE')
+    WHERE segment_type NOT IN ('CROSS_WALK', 'SIDE_LINE')
   ) THEN
     RAISE EXCEPTION 'staging_road_segments contains invalid segmentType';
   END IF;
 END
 \$validate_staging\$;
 
-TRUNCATE TABLE road_segments, road_nodes;
+TRUNCATE TABLE segment_features, road_segments, road_nodes;
 
 INSERT INTO road_nodes (
-  "vertexId",
-  "sourceNodeKey",
+  vertex_id,
+  source_node_key,
   "point"
 )
 SELECT
-  "vertexId"::bigint,
-  "sourceNodeKey",
+  vertex_id::bigint,
+  source_node_key,
   ST_GeomFromEWKT("point")::geometry(Point, 4326)
 FROM staging_road_nodes;
 
 INSERT INTO road_segments (
-  "edgeId",
-  "fromNodeId",
-  "toNodeId",
+  edge_id,
+  from_node_id,
+  to_node_id,
   "geom",
-  "lengthMeter",
-  "walkAccess",
-  "avgSlopePercent",
-  "widthMeter",
-  "brailleBlockState",
-  "audioSignalState",
-  "slopeState",
-  "widthState",
-  "surfaceState",
-  "stairsState",
-  "signalState",
-  "segmentType"
+  length_meter,
+  walk_access,
+  avg_slope_percent,
+  width_meter,
+  braille_block_state,
+  audio_signal_state,
+  slope_state,
+  width_state,
+  surface_state,
+  stairs_state,
+  signal_state,
+  segment_type
 )
 SELECT
-  "edgeId"::bigint,
-  "fromNodeId"::bigint,
-  "toNodeId"::bigint,
+  edge_id::bigint,
+  from_node_id::bigint,
+  to_node_id::bigint,
   ST_GeomFromEWKT("geom")::geometry(LineString, 4326),
-  "lengthMeter"::numeric(10, 2),
-  "walkAccess",
-  NULLIF("avgSlopePercent", '')::numeric(6, 2),
-  NULLIF("widthMeter", '')::numeric(6, 2),
-  "brailleBlockState",
-  "audioSignalState",
-  "slopeState",
-  "widthState",
-  "surfaceState",
-  "stairsState",
-  "signalState",
-  "segmentType"
+  length_meter::numeric(10, 2),
+  walk_access,
+  NULLIF(avg_slope_percent, '')::numeric(6, 2),
+  NULLIF(width_meter, '')::numeric(6, 2),
+  braille_block_state,
+  audio_signal_state,
+  slope_state,
+  width_state,
+  surface_state,
+  stairs_state,
+  signal_state,
+  segment_type
 FROM staging_road_segments;
 
 DO \$validate_loaded\$
@@ -401,9 +414,9 @@ BEGIN
   SELECT COUNT(*)
   INTO orphan_count
   FROM road_segments s
-  LEFT JOIN road_nodes nf ON nf."vertexId" = s."fromNodeId"
-  LEFT JOIN road_nodes nt ON nt."vertexId" = s."toNodeId"
-  WHERE nf."vertexId" IS NULL OR nt."vertexId" IS NULL;
+  LEFT JOIN road_nodes nf ON nf.vertex_id = s.from_node_id
+  LEFT JOIN road_nodes nt ON nt.vertex_id = s.to_node_id
+  WHERE nf.vertex_id IS NULL OR nt.vertex_id IS NULL;
 
   SELECT COUNT(*) INTO invalid_point_count FROM road_nodes WHERE NOT ST_IsValid("point");
   SELECT COUNT(*) INTO invalid_segment_count FROM road_segments WHERE NOT ST_IsValid("geom");
@@ -429,10 +442,10 @@ UNION ALL
 SELECT 'road_segments' AS table_name, COUNT(*) AS row_count FROM road_segments
 ORDER BY table_name;
 
-SELECT "segmentType", COUNT(*) AS row_count
+SELECT segment_type, COUNT(*) AS row_count
 FROM road_segments
-GROUP BY "segmentType"
-ORDER BY "segmentType";
+GROUP BY segment_type
+ORDER BY segment_type;
 SQL
 }
 

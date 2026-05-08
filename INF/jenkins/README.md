@@ -27,7 +27,15 @@ GitLab OAuth Application에는 아래 Redirect URI가 등록되어 있어야 한
 https://jenkins.busaneumgil.com/securityRealm/finishLogin
 ```
 
-Jenkins OAuth secret은 노션의 운영 env 기준을 확인한 뒤 S1 `/home/ubuntu/e102/jenkins/.env.jenkins`에 반영한다. GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_운영도구_secret_관리_기준.md`를 따른다.
+Jenkins OAuth secret은 노션의 운영 env 기준을 확인한 뒤 로컬 루트 `.env.ops`에 작성하고, S1 `/home/ubuntu/e102/INF/jenkins/s1/.env.jenkins`에 반영한다. GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_운영도구_secret_관리_기준.md`를 따른다.
+
+Mattermost 배포 알림 webhook도 같은 흐름으로 관리한다.
+
+```text
+MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
+```
+
+Jenkins container는 `.env.jenkins` 값을 환경변수로 읽고, init groovy가 `e102-mattermost-webhook-url` credential도 함께 동기화한다. Jenkinsfile은 현재 기준으로 환경변수를 직접 읽으며, webhook URL이 없으면 알림만 건너뛰고 배포 자체는 계속 진행한다.
 
 ## 2026-04-29 반영 상태
 
@@ -77,6 +85,12 @@ PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는�
 
 GraphHopper는 S1 dev stack에 포함한다. runtime은 graph-cache serve only 구조이며, Jenkins dev pipeline은 cache가 비어 있을 때만 build job을 실행한다.
 
+Mattermost 알림:
+
+- 시작: 발송
+- 성공: 미발송
+- 실패: 발송
+
 ## Credentials
 
 Jenkins job에서 사용하는 secret은 Jenkins Credentials로 관리한다.
@@ -88,10 +102,13 @@ Jenkins job에서 사용하는 secret은 Jenkins Credentials로 관리한다.
 | `e102-prod-env-file` | Secret file | prod 배포용 `.env.prod` | 적용 완료 |
 | `e102-s2-host` | Secret text | S2 SSH host 또는 IP | 적용 완료 |
 | `e102-s2-ssh-key` | SSH Username with private key | S2 배포 SSH 접속 | 적용 완료 |
+| `e102-mattermost-webhook-url` | Secret text | Jenkins/MM 배포 알림 webhook | 적용 예정 |
 
 `e102-dev-env-file`은 서버의 `/home/ubuntu/e102/.env.dev`를 기준으로 생성한다. Jenkins 컨테이너 재시작 시 `/var/jenkins_home/init.groovy.d/02-e102-env-credentials.groovy`가 credential을 다시 동기화한다.
 
-prod 배포용 secret 원본은 S1 `/home/ubuntu/e102/prod-secrets` 하위에서 관리한다. Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`가 `e102-prod-env-file`, `e102-s2-host`, `e102-s2-ssh-key`를 동기화한다.
+prod 배포용 secret 원본은 S1 `/home/ubuntu/e102/prod-secrets` 하위에서 관리한다. Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`가 `e102-prod-env-file`, `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url`를 동기화한다.
+
+현재 prod는 초기 환경 bootstrap 단계이므로 `.env.prod`의 `JPA_DDL_AUTO`를 `update`로 두고 테이블/컬럼을 먼저 생성한다. 운영 모드로 전환하기 전에는 반드시 `.env.prod` 값을 `validate`로 되돌리고 한 번 더 배포해 schema drift를 차단한다.
 
 ## `e102-prod-deploy`
 
@@ -105,6 +122,13 @@ prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Je
 4. `scripts/deploy/prod-deploy.sh` 또는 `scripts/deploy/prod-rollback.sh` 실행
 5. `scripts/deploy/prod-smoke.sh`로 backend/AI/GraphHopper 상태 확인
 
+운영 주의:
+
+- `.env.prod`는 기존 파일을 직접 overwrite하지 않고 `.env.prod.upload`로 먼저 올린 뒤 서버에서 rename한다. 기존 파일 소유권이 root로 꼬여 있어도 directory write 권한만 있으면 교체 가능하게 하기 위함이다.
+- workspace archive를 푼 직후 `chmod +x scripts/deploy/*.sh`를 적용한다. 현재 기준의 방어막은 내부 호출을 `bash scripts/deploy/*.sh` 형태로 고친 것이지만, master에 남아 있는 과거 스크립트가 직접 실행을 시도해도 같은 권한 오류를 한 번 더 막기 위함이다.
+- Jenkins boolean parameter는 raw `sh` 내부에서 빈 문자열로 들어갈 수 있으므로, `params.*.toString()` 값으로 원격 명령을 조합한다.
+- 현재 bootstrap 단계에서는 `.env.prod`의 `JPA_DDL_AUTO=update`를 기준으로 schema를 맞춘다. 사용자 유입 전 bootstrap이 끝나면 `JPA_DDL_AUTO=validate`로 복귀한 뒤 다시 배포해 운영 모드로 고정한다.
+
 파라미터:
 
 | 파라미터 | 기본값 | 설명 |
@@ -115,6 +139,14 @@ prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Je
 | `ROLLBACK` | `false` | 이전 app image tag와 이전 graph-cache로 rollback |
 
 초기 운영에서는 `BUILD_GRAPHHOPPER=false`, `DEPLOY_GRAPHHOPPER=false`로 backend/AI 배포만 먼저 안정화한다. `road_nodes`, `road_segments` 데이터 적재가 준비되면 GraphHopper 파라미터를 켠다.
+
+Mattermost 알림:
+
+- 시작: 발송
+- 성공: 발송
+- 실패: 발송
+
+메시지 포맷은 기존 GitLab/MR 알림 톤을 따라 Markdown block 형태로 맞춘다.
 
 ## Webhook
 

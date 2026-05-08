@@ -1,10 +1,13 @@
 package com.ssafy.e102.eumgil.data.mock.fixture
 
+import com.ssafy.e102.eumgil.data.route.RouteAlertDto
 import com.ssafy.e102.eumgil.data.route.RouteDto
+import com.ssafy.e102.eumgil.data.route.RouteLegDto
 import com.ssafy.e102.eumgil.data.route.RoutePointDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSegmentDto
+import com.ssafy.e102.eumgil.data.route.RouteStepDto
 import java.util.Locale
 
 object MockRouteFixtureCatalog {
@@ -12,9 +15,11 @@ object MockRouteFixtureCatalog {
         RouteFixtureTemplate(
             fixtureId = "busan-cityhall-to-station-demo",
             name = "Busan City Hall to Busan Station demo route",
+            searchId = "rs_walk_busan_demo",
             routes =
                 listOf(
                     RouteFixtureRouteTemplate(
+                        routeId = "walk_rt_safe_demo",
                         routeOption = "SAFE",
                         title = "Safe Route",
                         distanceMeter = 980,
@@ -73,7 +78,7 @@ object MockRouteFixtureCatalog {
                                         ),
                                     distanceMeter = 62,
                                     riskLevel = "MEDIUM",
-                                    guidanceMessage = "공사 구간입니다. 길이 좁으니 주변을 확인하며 천천히 지나가세요.",
+                                    guidanceMessage = "공사 구간입니다. 길이 좁으니 주변을 확인하고 천천히 지나가세요.",
                                 ),
                                 RouteFixtureSegmentTemplate(
                                     sequence = 4,
@@ -94,7 +99,7 @@ object MockRouteFixtureCatalog {
                                     hasCrosswalk = true,
                                     hasSignal = true,
                                     riskLevel = "MEDIUM",
-                                    guidanceMessage = "횡단보도 진입 전 신호를 확인한 뒤 곧바로 건너세요.",
+                                    guidanceMessage = "횡단보도 진입 전 신호를 확인하고 곧바로 건너세요.",
                                 ),
                                 RouteFixtureSegmentTemplate(
                                     sequence = 5,
@@ -114,7 +119,7 @@ object MockRouteFixtureCatalog {
                                     distanceMeter = 100,
                                     hasCurbGap = true,
                                     riskLevel = "MEDIUM",
-                                    guidanceMessage = "단차가 있는 보도 구간입니다. 바퀴 방향을 맞추며 조심해서 이동하세요.",
+                                    guidanceMessage = "턱이 있는 보도 구간입니다. 발판 방향을 맞춰 조심해서 이동하세요.",
                                 ),
                                 RouteFixtureSegmentTemplate(
                                     sequence = 6,
@@ -134,6 +139,7 @@ object MockRouteFixtureCatalog {
                             ),
                     ),
                     RouteFixtureRouteTemplate(
+                        routeId = "walk_rt_shortest_demo",
                         routeOption = "SHORTEST",
                         title = "Shortest Route",
                         distanceMeter = 820,
@@ -157,7 +163,7 @@ object MockRouteFixtureCatalog {
                                     hasSignal = false,
                                     hasAudioSignal = false,
                                     riskLevel = "MEDIUM",
-                                    guidanceMessage = "가장 짧은 횡단 구간이지만 무신호 횡단보도라 차량을 먼저 확인하세요.",
+                                    guidanceMessage = "가장 짧은 횡단 구간이지만 무신호 횡단보도여서 차량을 먼저 확인하세요.",
                                 ),
                                 RouteFixtureSegmentTemplate(
                                     sequence = 2,
@@ -175,7 +181,7 @@ object MockRouteFixtureCatalog {
                                     hasCrosswalk = false,
                                     hasBrailleBlock = false,
                                     riskLevel = "MEDIUM",
-                                    guidanceMessage = "연석 단차가 있는 직선 보도 구간이라 속도를 낮추고 이동하세요.",
+                                    guidanceMessage = "턱이 있는 직선 보도 구간이라 속도를 늦추고 이동하세요.",
                                 ),
                             ),
                     ),
@@ -186,11 +192,13 @@ object MockRouteFixtureCatalog {
 data class RouteFixtureTemplate(
     val fixtureId: String,
     val name: String,
+    val searchId: String,
     val routes: List<RouteFixtureRouteTemplate>,
 ) {
     init {
         require(fixtureId.isNotBlank()) { "Route fixture id must not be blank." }
         require(name.isNotBlank()) { "Route fixture name must not be blank." }
+        require(searchId.isNotBlank()) { "Route fixture search id must not be blank." }
         require(routes.isNotEmpty()) { "Route fixture requires at least one route template." }
         require(routes.map(RouteFixtureRouteTemplate::normalizedRouteOption).distinct().size == routes.size) {
             "Route fixture route options must be unique."
@@ -208,11 +216,15 @@ data class RouteFixtureTemplate(
                     route.toDto(request)
                 }
 
-        return RouteSearchResponseDto(routes = resolvedRoutes)
+        return RouteSearchResponseDto(
+            searchId = searchId,
+            routes = resolvedRoutes,
+        )
     }
 }
 
 data class RouteFixtureRouteTemplate(
+    val routeId: String,
     val routeOption: String,
     val title: String,
     val distanceMeter: Int,
@@ -221,6 +233,7 @@ data class RouteFixtureRouteTemplate(
     val segments: List<RouteFixtureSegmentTemplate>,
 ) {
     init {
+        require(routeId.isNotBlank()) { "Route fixture route id must not be blank." }
         require(routeOption.isNotBlank()) { "Route fixture route option must not be blank." }
         require(title.isNotBlank()) { "Route fixture route title must not be blank." }
         require(distanceMeter >= 0) { "Route fixture route distance must be non-negative." }
@@ -230,18 +243,38 @@ data class RouteFixtureRouteTemplate(
 
     fun normalizedRouteOption(): String = routeOption.trim().uppercase(Locale.US)
 
-    fun toDto(request: RouteSearchRequestDto): RouteDto =
-        RouteDto(
+    fun toDto(request: RouteSearchRequestDto): RouteDto {
+        val legacySegments = segments.map { segment -> segment.toLegacySegmentDto(request) }
+        val routeGeometry = segments.toLinestring(request)
+        val routeBadges = segments.toRouteBadges()
+
+        return RouteDto(
+            routeId = routeId,
+            transportMode = "WALK",
             routeOption = normalizedRouteOption(),
             title = title,
-            distanceMeter = distanceMeter,
+            distanceMeter = distanceMeter.toDouble(),
             estimatedTimeMinute = estimatedTimeMinute,
+            badges = routeBadges,
+            geometry = routeGeometry,
+            legs =
+                listOf(
+                    RouteLegDto(
+                        sequence = 1,
+                        type = "WALK",
+                        role = "WALK_ONLY",
+                        instruction = segments.first().guidanceMessage,
+                        distanceMeter = distanceMeter.toDouble(),
+                        estimatedTimeMinute = estimatedTimeMinute,
+                        geometry = routeGeometry,
+                        steps = segments.map { segment -> segment.toStepDto(request) },
+                        badges = routeBadges,
+                    ),
+                ),
             riskLevel = riskLevel,
-            segments =
-                segments.map { segment ->
-                    segment.toDto(request)
-                },
+            segments = legacySegments,
         )
+    }
 }
 
 data class RouteFixtureSegmentTemplate(
@@ -265,10 +298,10 @@ data class RouteFixtureSegmentTemplate(
         require(guidanceMessage.isNotBlank()) { "Route fixture segment guidance must not be blank." }
     }
 
-    fun toDto(request: RouteSearchRequestDto): RouteSegmentDto =
+    fun toLegacySegmentDto(request: RouteSearchRequestDto): RouteSegmentDto =
         RouteSegmentDto(
             sequence = sequence,
-            geometry = geometryPoints.toLinestring(start = request.startPoint, end = request.endPoint),
+            geometry = toLinestring(request),
             distanceMeter = distanceMeter,
             hasStairs = hasStairs,
             hasCurbGap = hasCurbGap,
@@ -279,6 +312,59 @@ data class RouteFixtureSegmentTemplate(
             riskLevel = riskLevel,
             guidanceMessage = guidanceMessage,
         )
+
+    fun toStepDto(request: RouteSearchRequestDto): RouteStepDto =
+        RouteStepDto(
+            sequence = sequence,
+            instruction = guidanceMessage,
+            distanceMeter = distanceMeter.toDouble(),
+            geometry = toLinestring(request),
+            badges = toBadgeCodes(),
+            alerts = toAlerts(),
+        )
+
+    fun toLinestring(request: RouteSearchRequestDto): String = resolvePoints(request).toLinestring()
+
+    fun resolvePoints(request: RouteSearchRequestDto): List<RoutePointDto> =
+        geometryPoints.map { point -> point.resolve(start = request.startPoint, end = request.endPoint) }
+
+    private fun toBadgeCodes(): List<String> =
+        buildList {
+            when (riskLevel.trim().uppercase(Locale.US)) {
+                "LOW" -> add("LOW_SLOPE")
+                "MEDIUM" -> add("MIDDLE_SLOPE")
+            }
+            if (hasStairs) add("STAIR")
+            if (hasCrosswalk) add("CROSSWALK")
+        }.distinct()
+
+    private fun toAlerts(): List<RouteAlertDto> =
+        buildList {
+            if (hasCrosswalk) {
+                add(
+                    RouteAlertDto(
+                        type = "CROSSWALK",
+                        distanceMeter = distanceMeter / 2.0,
+                    ),
+                )
+            }
+            if (hasStairs) {
+                add(
+                    RouteAlertDto(
+                        type = "STAIR",
+                        distanceMeter = distanceMeter / 2.0,
+                    ),
+                )
+            }
+            if (hasCurbGap) {
+                add(
+                    RouteAlertDto(
+                        type = "CURB",
+                        distanceMeter = distanceMeter / 2.0,
+                    ),
+                )
+            }
+        }
 }
 
 data class RouteFixtureGeometryPointTemplate(
@@ -307,16 +393,32 @@ private fun RouteSearchRequestDto.normalizedRouteOptions(): Set<String> =
         .map { routeOption -> routeOption.uppercase(Locale.US) }
         .toSet()
 
-private fun List<RouteFixtureGeometryPointTemplate>.toLinestring(
-    start: RoutePointDto,
-    end: RoutePointDto,
-): String =
+private fun List<RouteFixtureSegmentTemplate>.toRouteBadges(): List<String> =
+    flatMap(RouteFixtureSegmentTemplate::toStepBadgeCodes)
+        .distinct()
+        .ifEmpty { listOf("LOW_SLOPE") }
+
+private fun RouteFixtureSegmentTemplate.toStepBadgeCodes(): List<String> =
+    buildList {
+        when (riskLevel.trim().uppercase(Locale.US)) {
+            "LOW" -> add("LOW_SLOPE")
+            "MEDIUM" -> add("MIDDLE_SLOPE")
+        }
+        if (hasStairs) add("STAIR")
+        if (hasCrosswalk) add("CROSSWALK")
+    }.distinct()
+
+private fun List<RouteFixtureSegmentTemplate>.toLinestring(request: RouteSearchRequestDto): String =
+    flatMapIndexed { index, segment ->
+        segment.resolvePoints(request).drop(if (index == 0) 0 else 1)
+    }.toLinestring()
+
+private fun List<RoutePointDto>.toLinestring(): String =
     joinToString(
         prefix = "LINESTRING(",
         postfix = ")",
         separator = ", ",
-    ) { pointTemplate ->
-        val point = pointTemplate.resolve(start = start, end = end)
+    ) { point ->
         "${point.lng.toGeometryValue()} ${point.lat.toGeometryValue()}"
     }
 

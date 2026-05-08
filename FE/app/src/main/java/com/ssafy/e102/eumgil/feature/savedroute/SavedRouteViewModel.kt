@@ -431,6 +431,8 @@ private fun RouteBookmark.toSavedRouteBookmarkUiModel(): SavedRouteBookmarkUiMod
         startPoint = startPoint,
         endPoint = endPoint,
         routeOption = routeOption,
+        transportMode = transportMode,
+        routeOptionLabel = routeOptionLabel,
         distanceMeters = distanceMeters,
         durationMinutes = durationMinutes,
     )

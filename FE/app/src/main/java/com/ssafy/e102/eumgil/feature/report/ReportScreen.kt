@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -194,7 +195,7 @@ private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.medium),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
     ) {
         Column(
@@ -262,7 +263,7 @@ private fun ReportTypeStep(
                 rowItems.forEach { type ->
                     ReportTypeCard(
                         type = type,
-                        selected = input.value == type,
+                        selected = false,
                         onClick = { onAction(ReportUiAction.ReportTypeSelected(type)) },
                         modifier = Modifier.weight(1f),
                     )
@@ -294,12 +295,6 @@ private fun ReportTypeCard(
         } else {
             MaterialTheme.colorScheme.surface
         }
-    val iconTint =
-        if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        }
     val selectionLabel = if (selected) "선택됨" else "선택 안 됨"
 
     Surface(
@@ -313,7 +308,7 @@ private fun ReportTypeCard(
                 },
         shape = RoundedCornerShape(EumRadius.large),
         color = backgroundColor,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, borderColor),
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Column(
             modifier =
@@ -327,7 +322,7 @@ private fun ReportTypeCard(
                 painter = painterResource(id = type.iconRes),
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
-                tint = iconTint,
+                tint = Color.Unspecified,
             )
             Text(
                 text = type.label,
@@ -685,7 +680,7 @@ private fun ReportPhotoSection(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.medium),
         border =
             BorderStroke(
                 width = 1.dp,
@@ -797,37 +792,57 @@ private fun ReportPhotoThumb(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Box(
         modifier =
             modifier
                 .heightIn(min = 96.dp)
-                .clickable(onClick = onRemoveClick)
                 .semantics {
-                    contentDescription = "첨부된 사진. 탭하여 제거합니다."
+                    contentDescription = "첨부된 사진"
                 },
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
     ) {
-        Column(
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(EumRadius.small),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "사진",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Surface(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .padding(EumSpacing.xSmall),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+                    .align(Alignment.TopEnd)
+                    .padding(EumSpacing.xSmall)
+                    .size(24.dp)
+                    .clickable(onClick = onRemoveClick)
+                    .semantics {
+                        contentDescription = "사진 제거"
+                    },
+            shape = RoundedCornerShape(percent = 50),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
         ) {
-            Text(
-                text = "사진",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "제거",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_close),
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
@@ -845,7 +860,7 @@ private fun ReportPhotoAddTile(
                 .semantics {
                     contentDescription = "사진을 추가합니다."
                 },
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(EumRadius.small),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
     ) {
@@ -857,13 +872,15 @@ private fun ReportPhotoAddTile(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "+",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
+            Icon(
+                painter = painterResource(id = R.drawable.ic_permission_camera),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.primary,
             )
+            Spacer(modifier = Modifier.height(EumSpacing.xSmall))
             Text(
-                text = "추가",
+                text = "사진 추가",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -882,7 +899,7 @@ private fun ReportDescriptionSection(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.medium),
         border =
             BorderStroke(
                 width = 1.dp,
@@ -959,41 +976,35 @@ private fun reportStepTitle(step: ReportStep): String =
 private val ReportType.label: String
     get() =
         when (this) {
-            ReportType.CONSTRUCTION -> "공사/통제"
-            ReportType.STAIRS -> "계단/단차"
-            ReportType.SLOPE -> "경사 문제"
-            ReportType.ELEVATOR -> "엘리베이터 고장"
-            ReportType.TACTILE_BLOCK -> "점자블록 문제"
-            ReportType.GUIDANCE_BLOCK -> "유도블록 문제"
-            ReportType.FACILITY_DAMAGE -> "시설 파손/노후"
+            ReportType.STAIRS_STEP -> "계단·단차 있음"
+            ReportType.BRAILLE_BLOCK -> "점자블록 문제"
+            ReportType.SIDEWALK_MISSING -> "인도 없음"
+            ReportType.RAMP -> "경사로 문제"
+            ReportType.SIDEWALK_WIDTH -> "인도폭 문제"
             ReportType.OTHER_OBSTACLE -> "기타 장애물"
         }
 
 private val ReportType.description: String
     get() =
         when (this) {
-            ReportType.CONSTRUCTION -> "공사중이거나 통행 불가"
-            ReportType.STAIRS -> "이동에 불편한 단차"
-            ReportType.SLOPE -> "경사가 가파르거나 위험"
-            ReportType.ELEVATOR -> "사용 불가 또는 고장"
-            ReportType.TACTILE_BLOCK -> "손상, 미설치, 잘못된 설치"
-            ReportType.GUIDANCE_BLOCK -> "유도 목적에 잘못되었거나 단절"
-            ReportType.FACILITY_DAMAGE -> "파손되었거나 노후된 시설"
-            ReportType.OTHER_OBSTACLE -> "기타 불편한 상황"
+            ReportType.STAIRS_STEP -> "안내와 달리 계단이나 단차가 있어요"
+            ReportType.BRAILLE_BLOCK -> "손상, 미설치, 잘못된 설치"
+            ReportType.SIDEWALK_MISSING -> "안내와 달리 보행 가능한 인도가 없어요"
+            ReportType.RAMP -> "경사로 이용이 어렵거나 위험해요"
+            ReportType.SIDEWALK_WIDTH -> "인도가 좁아 통행이 어려워요"
+            ReportType.OTHER_OBSTACLE -> "위 항목에 없는 보행 불편 상황"
         }
 
 @get:DrawableRes
 private val ReportType.iconRes: Int
     get() =
         when (this) {
-            ReportType.CONSTRUCTION -> R.drawable.ic_report_construction
-            ReportType.STAIRS -> R.drawable.ic_report_stairs
-            ReportType.SLOPE -> R.drawable.ic_report_slope
-            ReportType.ELEVATOR -> R.drawable.ic_report_elevator
-            ReportType.TACTILE_BLOCK -> R.drawable.ic_report_tactile_damage
-            ReportType.GUIDANCE_BLOCK -> R.drawable.ic_report_guidance_block
-            ReportType.FACILITY_DAMAGE -> R.drawable.ic_report_facility_damage
-            ReportType.OTHER_OBSTACLE -> R.drawable.ic_report_obstacle
+            ReportType.STAIRS_STEP -> R.drawable.ic_report_stairs
+            ReportType.BRAILLE_BLOCK -> R.drawable.ic_report_tactile_damage
+            ReportType.SIDEWALK_MISSING -> R.drawable.ic_report_sidewalk
+            ReportType.RAMP -> R.drawable.ic_report_ramp
+            ReportType.SIDEWALK_WIDTH -> R.drawable.ic_report_roadway
+            ReportType.OTHER_OBSTACLE -> R.drawable.ic_report_other
         }
 
 private fun reportTypeErrorText(error: ReportTypeError?): String? =

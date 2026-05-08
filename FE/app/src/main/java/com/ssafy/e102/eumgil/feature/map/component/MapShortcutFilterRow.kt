@@ -21,8 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
@@ -58,13 +62,22 @@ private fun ShortcutFilterChip(
     onClick: () -> Unit,
 ) {
     val selected = chip.isSelected
+    val selectionStateDescription =
+        stringResource(
+            id =
+                if (selected) {
+                    R.string.a11y_option_selected
+                } else {
+                    R.string.a11y_option_unselected
+                },
+        )
     val containerColor =
         if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surface
         }
-    val contentColor =
+    val textColor =
         if (selected) {
             MaterialTheme.colorScheme.primary
         } else {
@@ -79,9 +92,14 @@ private fun ShortcutFilterChip(
 
     Surface(
         onClick = onClick,
-        modifier = Modifier.alpha(if (chip.isEnabled) 1f else 0.52f),
+        modifier =
+            Modifier
+                .alpha(if (chip.isEnabled) 1f else 0.52f)
+                .semantics(mergeDescendants = true) {
+                    stateDescription = selectionStateDescription
+                },
         enabled = chip.isEnabled,
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(EumRadius.scaleS),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),
         shadowElevation = if (selected) 4.dp else 2.dp,
@@ -98,12 +116,12 @@ private fun ShortcutFilterChip(
                 painter = painterResource(id = shortcutFilterIcon(chip.key)),
                 contentDescription = null,
                 modifier = Modifier.size(shortcutFilterIconSizeDp(chip.key).dp),
-                tint = contentColor,
+                tint = EumPrimary600,
             )
             Text(
                 text = shortcutFilterLabel(chip.key),
                 style = MaterialTheme.typography.labelLarge,
-                color = contentColor,
+                color = textColor,
             )
         }
     }
@@ -126,9 +144,9 @@ private fun shortcutFilterLabel(key: MapShortcutFilterKey): String =
 @DrawableRes
 private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
     when (key) {
-        MapShortcutFilterKey.TOILET -> R.drawable.ic_place_restroom
-        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
-        MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging
+        MapShortcutFilterKey.TOILET -> R.drawable.ic_user_wheelchair_compact
+        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_place_elevator
+        MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging_station
         MapShortcutFilterKey.FOOD_CAFE -> R.drawable.ic_place_food_cafe
         MapShortcutFilterKey.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
         MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_place_accommodation

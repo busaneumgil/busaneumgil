@@ -13,22 +13,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -37,6 +43,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
@@ -48,7 +55,38 @@ import com.ssafy.e102.eumgil.core.model.SearchResult
 enum class SearchScreenDestination {
     Entry,
     Results,
+    VoiceInput,
 }
+
+enum class SearchTrailingAction {
+    VoiceInput,
+    ClearQuery,
+}
+
+internal fun resolveSearchTrailingAction(query: String): SearchTrailingAction =
+    if (query.isEmpty()) {
+        SearchTrailingAction.VoiceInput
+    } else {
+        SearchTrailingAction.ClearQuery
+    }
+
+internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiState): SearchScreenDestination =
+    when (resultState) {
+        SearchResultUiState.Initial,
+        SearchResultUiState.EmptyQuery,
+        is SearchResultUiState.Typing,
+        -> SearchScreenDestination.Entry
+
+        is SearchResultUiState.Loading,
+        is SearchResultUiState.Success,
+        is SearchResultUiState.Empty,
+        is SearchResultUiState.Error,
+        -> SearchScreenDestination.Results
+    }
+
+internal fun searchVoiceInputSheetTopCornerRadius(): Dp = EumRadius.scaleL
+
+internal fun searchVoiceInputSheetContainerColor(): Color = Color.White
 
 internal data class DestinationPromoBannerModel(
     @DrawableRes val imageRes: Int,
@@ -68,42 +106,57 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     destination: SearchScreenDestination = SearchScreenDestination.Entry,
 ) {
+    when (destination) {
+        SearchScreenDestination.VoiceInput ->
+            SearchVoiceInputScreen(
+                uiState = uiState,
+                onAction = onAction,
+                modifier = modifier,
+            )
+
+        SearchScreenDestination.Entry,
+        SearchScreenDestination.Results,
+        -> SearchPrimaryScreen(
+            uiState = uiState,
+            onAction = onAction,
+            destination = destination,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun SearchPrimaryScreen(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+    destination: SearchScreenDestination,
+    modifier: Modifier = Modifier,
+) {
+    val titleRes =
+        when (destination) {
+            SearchScreenDestination.Entry -> R.string.search_screen_title
+            SearchScreenDestination.Results -> R.string.search_results_screen_title
+            SearchScreenDestination.VoiceInput -> R.string.search_voice_input_title
+        }
+
     Scaffold(
         modifier = modifier,
         topBar = {
             SearchTopBar(
-                titleRes =
-                    when (destination) {
-                        SearchScreenDestination.Entry -> R.string.search_screen_title
-                        SearchScreenDestination.Results -> R.string.search_results_screen_title
-                    },
+                titleRes = titleRes,
                 onBackClick = { onAction(SearchUiAction.BackClicked) },
             )
         },
     ) { innerPadding ->
-        Column(
+        SearchContentBody(
+            uiState = uiState,
+            onAction = onAction,
+            destination = destination,
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-        ) {
-            when (destination) {
-                SearchScreenDestination.Entry ->
-                    SearchEntryContent(
-                        uiState = uiState,
-                        onAction = onAction,
-                    )
-
-                SearchScreenDestination.Results ->
-                    SearchResultsContent(
-                        uiState = uiState,
-                        onAction = onAction,
-                    )
-            }
-        }
+                    .padding(innerPadding),
+        )
     }
 }
 
@@ -120,6 +173,38 @@ private fun SearchTopBar(
 }
 
 @Composable
+private fun SearchContentBody(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+    destination: SearchScreenDestination,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        when (destination) {
+            SearchScreenDestination.Entry ->
+                SearchEntryContent(
+                    uiState = uiState,
+                    onAction = onAction,
+                )
+
+            SearchScreenDestination.Results ->
+                SearchResultsContent(
+                    uiState = uiState,
+                    onAction = onAction,
+                )
+
+            SearchScreenDestination.VoiceInput -> Unit
+        }
+    }
+}
+
+@Composable
 private fun SearchEntryContent(
     uiState: SearchUiState,
     onAction: (SearchUiAction) -> Unit,
@@ -133,6 +218,8 @@ private fun SearchEntryContent(
         query = uiState.query,
         showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
         onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+        onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
+        onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
         onSearch = { onAction(SearchUiAction.SearchSubmitted) },
     )
     RecentVisitSection(
@@ -151,6 +238,8 @@ private fun SearchResultsContent(
         query = uiState.query,
         showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
         onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+        onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
+        onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
         onSearch = { onAction(SearchUiAction.SearchSubmitted) },
     )
     SearchResultSection(
@@ -164,8 +253,12 @@ private fun SearchInputField(
     query: String,
     showEmptyQueryError: Boolean,
     onQueryChanged: (String) -> Unit,
+    onVoiceInputClick: () -> Unit,
+    onClearQueryClick: () -> Unit,
     onSearch: () -> Unit,
 ) {
+    val trailingAction = resolveSearchTrailingAction(query = query)
+
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChanged,
@@ -179,11 +272,25 @@ private fun SearchInputField(
             )
         },
         trailingIcon = {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_permission_mic),
-                contentDescription = stringResource(id = R.string.search_screen_voice_input),
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            when (trailingAction) {
+                SearchTrailingAction.VoiceInput ->
+                    IconButton(onClick = onVoiceInputClick) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_search_voice_mic),
+                            contentDescription = stringResource(id = R.string.search_screen_voice_input),
+                            tint = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+
+                SearchTrailingAction.ClearQuery ->
+                    IconButton(onClick = onClearQueryClick) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_action_close),
+                            contentDescription = stringResource(id = R.string.search_screen_clear_query),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+            }
         },
         singleLine = true,
         isError = showEmptyQueryError,
@@ -211,6 +318,169 @@ private fun SearchInputField(
                 null
             },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchVoiceInputScreen(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val backgroundDestination = resolveVoiceInputBackgroundDestination(uiState.resultState)
+    val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    Box(modifier = modifier.fillMaxSize()) {
+        SearchPrimaryScreen(
+            uiState = uiState,
+            onAction = onAction,
+            destination = backgroundDestination,
+            modifier = Modifier.fillMaxSize(),
+        )
+        ModalBottomSheet(
+            onDismissRequest = { onAction(SearchUiAction.VoiceInputDismissed) },
+            sheetState = bottomSheetState,
+            dragHandle = null,
+            shape =
+                RoundedCornerShape(
+                    topStart = searchVoiceInputSheetTopCornerRadius(),
+                    topEnd = searchVoiceInputSheetTopCornerRadius(),
+                    bottomEnd = 0.dp,
+                    bottomStart = 0.dp,
+                ),
+            containerColor = searchVoiceInputSheetContainerColor(),
+            scrimColor = Color.Black.copy(alpha = 0.38f),
+        ) {
+            SearchVoiceInputContent(
+                uiState = uiState,
+                onAction = onAction,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchVoiceInputContent(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val statusTitleRes =
+        when (uiState.voiceInputState.status) {
+            SearchVoiceInputStatus.Idle -> R.string.search_voice_input_status_idle_title
+            SearchVoiceInputStatus.Listening -> R.string.search_voice_input_status_listening_title
+        }
+    val statusDescriptionRes =
+        when (uiState.voiceInputState.status) {
+            SearchVoiceInputStatus.Idle -> R.string.search_voice_input_status_idle_description
+            SearchVoiceInputStatus.Listening -> R.string.search_voice_input_status_listening_description
+        }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(id = R.string.search_voice_input_title),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            IconButton(onClick = { onAction(SearchUiAction.VoiceInputDismissed) }) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_close),
+                    contentDescription = stringResource(id = R.string.search_voice_input_close),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Text(
+            text = stringResource(id = R.string.search_voice_input_headline),
+            modifier = Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Surface(
+            modifier = Modifier.padding(top = EumSpacing.medium),
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+        ) {
+            Text(
+                text = stringResource(id = R.string.search_voice_input_example_phrase),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Box(
+            modifier =
+                Modifier
+                    .padding(top = 28.dp)
+                    .size(132.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            ) {}
+            Surface(
+                onClick = { onAction(SearchUiAction.VoiceCaptureButtonClicked) },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                shadowElevation = 6.dp,
+            ) {
+                Box(
+                    modifier = Modifier.size(108.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_search_voice_mic),
+                        contentDescription = stringResource(id = R.string.search_screen_voice_input),
+                        modifier = Modifier.size(40.dp),
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = stringResource(id = statusTitleRes),
+            modifier = Modifier.padding(top = 20.dp),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(id = statusDescriptionRes),
+            modifier = Modifier.padding(top = EumSpacing.xSmall),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (uiState.voiceInputState.transcript.isNotBlank()) {
+            SearchStateCard(
+                title = stringResource(id = R.string.search_voice_input_transcript_title),
+                description = uiState.voiceInputState.transcript,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
+                containerColor = MaterialTheme.colorScheme.surface,
+                borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.72f),
+            )
+        }
+    }
 }
 
 @Composable

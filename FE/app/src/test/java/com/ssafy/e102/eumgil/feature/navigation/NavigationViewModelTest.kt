@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -47,10 +48,18 @@ class NavigationViewModelTest {
             val viewModel = createViewModel()
 
             assertEquals(NavigationScreenState.Loading, viewModel.uiState.value.screenState)
+            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(0, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.segmentSync.mapFocusMode)
+            assertTrue(viewModel.uiState.value.segmentSync.railItems.isEmpty())
+            assertNull(viewModel.uiState.value.focusedSegmentCard)
+            assertNull(viewModel.uiState.value.pendingActiveChangeLabel)
             assertFalse(viewModel.uiState.value.mapOverlay.isDisplayable)
             assertTrue(viewModel.uiState.value.mapOverlay.shouldUsePlaceholder)
             assertNull(viewModel.uiState.value.mapOverlay.currentLocation)
             assertNull(viewModel.uiState.value.selectedRouteOption)
+            assertFalse(viewModel.uiState.value.isExitConfirmDialogVisible)
             assertEquals("다음 안내", viewModel.uiState.value.stepCard.sectionLabel)
             assertEquals("준비 중", viewModel.uiState.value.stepCard.statusLabel)
             assertEquals("확인 중", viewModel.uiState.value.stepCard.metrics[0].value)
@@ -62,13 +71,45 @@ class NavigationViewModelTest {
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel = createViewModel(locationManager = locationManager)
+            val request = testNavigationRequest()
 
-            viewModel.bindNavigationRequest(testNavigationRequest())
+            viewModel.bindNavigationRequest(request)
             advanceUntilIdle()
 
             assertTrue(locationManager.isUpdating)
             assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
             assertEquals(RouteOption.SAFE, viewModel.uiState.value.selectedRouteOption)
+            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(0, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.segmentSync.mapFocusMode)
+            assertEquals(request.selectedRoute.segments.size, viewModel.uiState.value.segmentSync.railItems.size)
+            assertTrue(viewModel.uiState.value.segmentSync.railItems.first().isActive)
+            assertTrue(viewModel.uiState.value.segmentSync.railItems.first().isFocused)
+            assertFalse(viewModel.uiState.value.segmentSync.railItems.last().isFocused)
+            assertEquals(
+                request.selectedRoute.segments.first().polyline.points,
+                viewModel.uiState.value.mapOverlay.activeSegmentPolyline,
+            )
+            assertEquals(
+                request.selectedRoute.segments.first().polyline.points,
+                viewModel.uiState.value.mapOverlay.focusedSegmentPolyline,
+            )
+            assertEquals(request.origin.coordinate, viewModel.uiState.value.mapOverlay.focusCoordinate)
+            assertNotNull(viewModel.uiState.value.focusedSegmentCard)
+            assertEquals(
+                request.selectedRoute.segments.first().guidanceMessage,
+                viewModel.uiState.value.focusedSegmentCard?.instruction,
+            )
+            assertEquals(NavigationGuidanceAction.TURN_RIGHT, viewModel.uiState.value.stepCard.guidanceAction)
+            assertEquals(
+                NavigationGuidanceAction.TURN_RIGHT,
+                viewModel.uiState.value.focusedSegmentCard?.guidanceAction,
+            )
+            assertEquals(
+                NavigationGuidanceAction.TURN_RIGHT,
+                viewModel.uiState.value.segmentSync.railItems.first().guidanceAction,
+            )
             assertTrue(viewModel.uiState.value.canOpenRouteDetail)
             assertEquals("안전한 길", viewModel.uiState.value.stepCard.statusLabel)
             assertEquals("350m", viewModel.uiState.value.stepCard.distanceLabel)
@@ -76,6 +117,141 @@ class NavigationViewModelTest {
             assertEquals("16분", viewModel.uiState.value.stepCard.metrics[1].value)
             assertEquals("길 안내 종료", viewModel.uiState.value.exitCta.label)
             assertTrue(viewModel.uiState.value.isExitEnabled)
+            assertFalse(viewModel.uiState.value.isExitConfirmDialogVisible)
+        }
+
+    @Test
+    fun `segment tap updates focused segment without changing active segment`() =
+        runTest {
+            val request = testNavigationRequest()
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(request)
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.segmentSync.mapFocusMode)
+            assertEquals(
+                request.selectedRoute.segments[1].guidanceMessage,
+                viewModel.uiState.value.focusedSegmentCard?.instruction,
+            )
+            assertEquals(
+                NavigationGuidanceAction.STRAIGHT,
+                viewModel.uiState.value.focusedSegmentCard?.guidanceAction,
+            )
+            assertEquals(
+                request.selectedRoute.segments[0].polyline.points,
+                viewModel.uiState.value.mapOverlay.activeSegmentPolyline,
+            )
+            assertEquals(
+                request.selectedRoute.segments[1].polyline.points,
+                viewModel.uiState.value.mapOverlay.focusedSegmentPolyline,
+            )
+            assertEquals(
+                GeoCoordinate(latitude = 35.14255, longitude = 129.0532),
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+            assertTrue(viewModel.uiState.value.mapOverlay.routeSegments[1].isFocused)
+            assertFalse(viewModel.uiState.value.mapOverlay.routeSegments[0].isFocused)
+        }
+
+    @Test
+    fun `location update during inspect mode keeps focused segment while active segment advances`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val request = testNavigationRequest()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(request)
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 0))
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1151,
+                    longitude = 129.0414,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(0, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertTrue(viewModel.uiState.value.segmentSync.hasPendingActiveChange)
+            assertNotNull(viewModel.uiState.value.pendingActiveChangeLabel)
+            assertEquals("2 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals(
+                request.selectedRoute.segments[1].polyline.points,
+                viewModel.uiState.value.mapOverlay.activeSegmentPolyline,
+            )
+            assertEquals(
+                request.selectedRoute.segments[0].polyline.points,
+                viewModel.uiState.value.mapOverlay.focusedSegmentPolyline,
+            )
+            assertEquals(
+                GeoCoordinate(latitude = 35.1748, longitude = 129.0703),
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertTrue(viewModel.uiState.value.mapOverlay.routeSegments[1].isActive)
+            assertTrue(viewModel.uiState.value.mapOverlay.routeSegments[0].isFocused)
+        }
+
+    @Test
+    fun `return to active action resets focus after inspect mode`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val request = testNavigationRequest()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(request)
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 0))
+            advanceUntilIdle()
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1151,
+                    longitude = 129.0414,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertFalse(viewModel.uiState.value.segmentSync.hasPendingActiveChange)
+            assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.segmentSync.mapFocusMode)
+            assertNull(viewModel.uiState.value.pendingActiveChangeLabel)
+            assertEquals(
+                request.selectedRoute.segments[1].guidanceMessage,
+                viewModel.uiState.value.focusedSegmentCard?.instruction,
+            )
+            assertEquals(
+                request.selectedRoute.segments[1].polyline.points,
+                viewModel.uiState.value.mapOverlay.activeSegmentPolyline,
+            )
+            assertEquals(
+                request.selectedRoute.segments[1].polyline.points,
+                viewModel.uiState.value.mapOverlay.focusedSegmentPolyline,
+            )
+            assertEquals(
+                GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+            assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.mapOverlay.mapFocusMode)
         }
 
     @Test
@@ -171,7 +347,46 @@ class NavigationViewModelTest {
     }
 
     @Test
-    fun `back and exit actions stop location updates and emit events`() =
+    fun `exit action opens confirmation dialog before emitting navigation events`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+            val eventDeferred =
+                async {
+                    withTimeoutOrNull(100) {
+                        viewModel.uiEvent.first()
+                    }
+                }
+
+            viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            advanceUntilIdle()
+
+            assertTrue(locationManager.isUpdating)
+            assertTrue(viewModel.uiState.value.isExitConfirmDialogVisible)
+            assertNull(eventDeferred.await())
+        }
+
+    @Test
+    fun `dismiss exit confirmation hides dialog without stopping guidance`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+            viewModel.bindNavigationRequest(testNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.ExitNavigationDismissed)
+            advanceUntilIdle()
+
+            assertTrue(locationManager.isUpdating)
+            assertFalse(viewModel.uiState.value.isExitConfirmDialogVisible)
+        }
+
+    @Test
+    fun `confirm exit action stops location updates and emits exit events`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel = createViewModel(locationManager = locationManager)
@@ -181,8 +396,11 @@ class NavigationViewModelTest {
 
             viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
             advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.ConfirmExitNavigationClicked)
+            advanceUntilIdle()
 
             assertFalse(locationManager.isUpdating)
+            assertFalse(viewModel.uiState.value.isExitConfirmDialogVisible)
             assertEquals(
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToMap),
                 eventsDeferred.await(),

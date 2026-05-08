@@ -17,50 +17,151 @@ import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs, urlparse
 
 
-DEFAULT_NODES_SQL = '''
+ROAD_NODE_COLUMNS = {
+    "vertex_id": ("vertex_id", "vertexId"),
+    "point": ("point",),
+}
+
+ROAD_SEGMENT_COLUMNS = {
+    "edge_id": ("edge_id", "edgeId"),
+    "from_node_id": ("from_node_id", "fromNodeId"),
+    "to_node_id": ("to_node_id", "toNodeId"),
+    "geom": ("geom",),
+    "length_meter": ("length_meter", "lengthMeter"),
+    "walk_access": ("walk_access", "walkAccess"),
+    "avg_slope_percent": ("avg_slope_percent", "avgSlopePercent"),
+    "width_meter": ("width_meter", "widthMeter"),
+    "braille_block_state": ("braille_block_state", "brailleBlockState"),
+    "audio_signal_state": ("audio_signal_state", "audioSignalState"),
+    "slope_state": ("slope_state", "slopeState"),
+    "width_state": ("width_state", "widthState"),
+    "surface_state": ("surface_state", "surfaceState"),
+    "stairs_state": ("stairs_state", "stairsState"),
+    "signal_state": ("signal_state", "signalState"),
+    "segment_type": ("segment_type", "segmentType"),
+}
+
+SEGMENT_FEATURE_COLUMNS = {
+    "feature_id": ("feature_id", "featureId"),
+    "edge_id": ("edge_id", "edgeId"),
+    "feature_type": ("feature_type", "featureType"),
+    "geom": ("geom",),
+    "state": ("state",),
+    "value_number": ("value_number", "valueNumber"),
+}
+POSITION_EVENT_FEATURE_TYPES = {
+    "CROSSWALK",
+    "AUDIO_SIGNAL",
+    "BRAILLE_BLOCK",
+    "STAIRS",
+}
+
+SNAKE_ROAD_NODE_COLUMNS = {aliases[0] for aliases in ROAD_NODE_COLUMNS.values()}
+SNAKE_ROAD_SEGMENT_COLUMNS = {aliases[0] for aliases in ROAD_SEGMENT_COLUMNS.values()}
+SNAKE_SEGMENT_FEATURE_COLUMNS = {aliases[0] for aliases in SEGMENT_FEATURE_COLUMNS.values()}
+
+
+def quote_identifier(identifier):
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def resolve_column(available_columns, aliases, canonical_name):
+    for candidate in aliases[canonical_name]:
+        if candidate in available_columns:
+            return quote_identifier(candidate)
+    expected = ", ".join(aliases[canonical_name])
+    raise ValueError(f"Missing {canonical_name} column. Expected one of: {expected}")
+
+
+def resolve_optional_column(available_columns, aliases, canonical_name):
+    for candidate in aliases[canonical_name]:
+        if candidate in available_columns:
+            return quote_identifier(candidate)
+    return None
+
+
+def build_road_nodes_sql(available_columns):
+    vertex_id = resolve_column(available_columns, ROAD_NODE_COLUMNS, "vertex_id")
+    point = resolve_column(available_columns, ROAD_NODE_COLUMNS, "point")
+    return f'''
 SELECT
-  "vertexId" AS vertex_id,
-  ST_X("point"::geometry) AS lon,
-  ST_Y("point"::geometry) AS lat
+  {vertex_id} AS vertex_id,
+  ST_X({point}::geometry) AS lon,
+  ST_Y({point}::geometry) AS lat
 FROM road_nodes
-ORDER BY "vertexId"
+ORDER BY {vertex_id}
 '''
 
-DEFAULT_SEGMENTS_SQL = '''
+
+def build_road_segments_sql(available_columns):
+    edge_id = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "edge_id")
+    from_node_id = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "from_node_id")
+    to_node_id = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "to_node_id")
+    geom = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "geom")
+    length_meter = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "length_meter")
+    walk_access = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "walk_access")
+    avg_slope_percent = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "avg_slope_percent")
+    width_meter = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "width_meter")
+    braille_block_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "braille_block_state")
+    audio_signal_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "audio_signal_state")
+    slope_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "slope_state")
+    width_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "width_state")
+    surface_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "surface_state")
+    stairs_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "stairs_state")
+    signal_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "signal_state")
+    segment_type = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "segment_type")
+    return f'''
 SELECT
-  "edgeId" AS edge_id,
-  "fromNodeId" AS from_node_id,
-  "toNodeId" AS to_node_id,
-  ST_AsText("geom"::geometry) AS geom_wkt,
-  COALESCE("walkAccess"::text, 'UNKNOWN') AS walk_access,
-  COALESCE("avgSlopePercent", 0.0) AS avg_slope_percent,
-  COALESCE("widthMeter", 0.0) AS width_meter,
-  COALESCE("brailleBlockState"::text, 'UNKNOWN') AS braille_block_state,
-  COALESCE("audioSignalState"::text, 'UNKNOWN') AS audio_signal_state,
-  COALESCE("slopeState"::text, 'UNKNOWN') AS slope_state,
-  COALESCE("widthState"::text, 'UNKNOWN') AS width_state,
-  COALESCE("surfaceState"::text, 'UNKNOWN') AS surface_state,
-  COALESCE("stairsState"::text, 'UNKNOWN') AS stairs_state,
-  COALESCE("signalState"::text, 'UNKNOWN') AS signal_state,
-  COALESCE("segmentType"::text, 'SIDE_LINE') AS segment_type
+  {edge_id} AS edge_id,
+  {from_node_id} AS from_node_id,
+  {to_node_id} AS to_node_id,
+  ST_AsText({geom}::geometry) AS geom_wkt,
+  COALESCE({walk_access}::text, 'UNKNOWN') AS walk_access,
+  COALESCE({avg_slope_percent}, 0.0) AS avg_slope_percent,
+  COALESCE({width_meter}, 0.0) AS width_meter,
+  COALESCE({braille_block_state}::text, 'UNKNOWN') AS braille_block_state,
+  COALESCE({audio_signal_state}::text, 'UNKNOWN') AS audio_signal_state,
+  COALESCE({slope_state}::text, 'UNKNOWN') AS slope_state,
+  COALESCE({width_state}::text, 'UNKNOWN') AS width_state,
+  COALESCE({surface_state}::text, 'UNKNOWN') AS surface_state,
+  COALESCE({stairs_state}::text, 'UNKNOWN') AS stairs_state,
+  COALESCE({signal_state}::text, 'UNKNOWN') AS signal_state,
+  COALESCE({segment_type}::text, 'SIDE_LINE') AS segment_type
 FROM road_segments
-ORDER BY "edgeId"
+ORDER BY {edge_id}
 '''
+
+
+def build_segment_features_sql(available_columns):
+    feature_id = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "feature_id")
+    edge_id = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "edge_id")
+    feature_type = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "feature_type")
+    geom = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "geom")
+    state = resolve_optional_column(available_columns, SEGMENT_FEATURE_COLUMNS, "state")
+    value_number = resolve_optional_column(available_columns, SEGMENT_FEATURE_COLUMNS, "value_number")
+    state_select = f"{state}::text" if state else "NULL::text"
+    value_number_select = value_number if value_number else "NULL::numeric"
+    return f'''
+SELECT
+  {feature_id} AS feature_id,
+  {edge_id} AS edge_id,
+  {feature_type}::text AS feature_type,
+  ST_AsText({geom}::geometry) AS geom_wkt,
+  {state_select} AS state,
+  {value_number_select} AS value_number
+FROM segment_features
+WHERE {feature_type}::text IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
+ORDER BY {edge_id}, {feature_id}
+'''
+
+
+DEFAULT_NODES_SQL = build_road_nodes_sql(SNAKE_ROAD_NODE_COLUMNS)
+DEFAULT_SEGMENTS_SQL = build_road_segments_sql(SNAKE_ROAD_SEGMENT_COLUMNS)
 
 # `segment_features`는 선택적 보강 입력이다. 최종 라우팅 비용은 여전히
 # `road_segments` 기준이며, feature row는 OSM export 전에 분할 지점과
 # 상태값 덮어쓰기만 결정한다.
-DEFAULT_FEATURES_SQL = '''
-SELECT
-  "featureId" AS feature_id,
-  "edgeId" AS edge_id,
-  "featureType"::text AS feature_type,
-  ST_AsText("geom"::geometry) AS geom_wkt,
-  NULL::text AS state,
-  NULL::numeric AS value_number
-FROM segment_features
-ORDER BY "edgeId", "featureId"
-'''
+DEFAULT_FEATURES_SQL = build_segment_features_sql(SNAKE_SEGMENT_FEATURE_COLUMNS)
 
 REQUIRED_NODE_FIELDS = {"vertex_id", "lon", "lat"}
 REQUIRED_SEGMENT_FIELDS = {
@@ -96,6 +197,7 @@ ENUM_VALUES = {
 UNKNOWN_WARNING_THRESHOLD = 0.90
 ENDPOINT_TOLERANCE = 0.000001
 SPLIT_FRACTION_TOLERANCE = 0.000000001
+GEOMETRY_DECIMAL_PLACES = 12
 
 
 def jdbc_to_dsn(jdbc_url: str) -> dict:
@@ -370,7 +472,7 @@ def linestring_between_fractions(coords, start_fraction, end_fraction):
 def format_linestring_wkt(coords):
     formatted = []
     for lon, lat in coords:
-        formatted.append(f"{float(lon):.8f} {float(lat):.8f}")
+        formatted.append(f"{float(lon):.{GEOMETRY_DECIMAL_PLACES}f} {float(lat):.{GEOMETRY_DECIMAL_PLACES}f}")
     return f'LINESTRING({", ".join(formatted)})'
 
 
@@ -398,7 +500,6 @@ def apply_feature_state(segment, feature):
     """하나의 segment feature를 child segment의 최종 export 상태값에 반영한다."""
     feature_type = normalize_feature_type(feature.get("feature_type"))
     state = normalize_feature_state(feature.get("state"))
-    value_number = parse_feature_number(feature.get("value_number"))
 
     if feature_type == "CROSSWALK":
         segment["segment_type"] = "CROSS_WALK"
@@ -414,21 +515,6 @@ def apply_feature_state(segment, feature):
     if feature_type == "STAIRS":
         segment["stairs_state"] = state if state in ENUM_VALUES["stairs_state"] else "YES"
         return
-    if feature_type == "SLOPE":
-        if value_number is not None:
-            segment["avg_slope_percent"] = f"{value_number:.2f}"
-        segment["slope_state"] = state if state in ENUM_VALUES["slope_state"] else derive_slope_state(value_number)
-        return
-    if feature_type in {"WIDTH", "SIDEWALK_WIDTH"}:
-        if value_number is not None:
-            segment["width_meter"] = f"{value_number:.2f}"
-        segment["width_state"] = state if state in ENUM_VALUES["width_state"] else derive_width_state(value_number)
-        return
-    if feature_type == "SURFACE" and state in ENUM_VALUES["surface_state"]:
-        segment["surface_state"] = state
-        return
-    if feature_type == "WALK_ACCESS" and state in ENUM_VALUES["walk_access"]:
-        segment["walk_access"] = state
 
 
 def apply_segment_features_to_export(nodes, segments, features):
@@ -443,6 +529,8 @@ def apply_segment_features_to_export(nodes, segments, features):
 
     features_by_edge = defaultdict(list)
     for feature in features:
+        if normalize_feature_type(feature.get("feature_type")) not in POSITION_EVENT_FEATURE_TYPES:
+            continue
         features_by_edge[str(feature.get("edge_id"))].append(feature)
 
     output_nodes = [dict(node) for node in nodes]
@@ -721,8 +809,8 @@ def write_osm(nodes, segments, output):
             "node",
             {
                 "id": str(node_id_map[int(node["vertex_id"])]),
-                "lat": f'{float(node["lat"]):.8f}',
-                "lon": f'{float(node["lon"]):.8f}',
+                "lat": f'{float(node["lat"]):.{GEOMETRY_DECIMAL_PLACES}f}',
+                "lon": f'{float(node["lon"]):.{GEOMETRY_DECIMAL_PLACES}f}',
             },
         )
         tag(osm_node, "ieum:vertex_id", node["vertex_id"])
@@ -741,8 +829,8 @@ def write_osm(nodes, segments, output):
                 "node",
                 {
                     "id": str(synthetic_id),
-                    "lat": f"{lat:.8f}",
-                    "lon": f"{lon:.8f}",
+                    "lat": f"{lat:.{GEOMETRY_DECIMAL_PLACES}f}",
+                    "lon": f"{lon:.{GEOMETRY_DECIMAL_PLACES}f}",
                 },
             )
             refs.append(synthetic_id)
@@ -787,13 +875,27 @@ def table_exists(conn, table_name):
         return cur.fetchone()[0] is not None
 
 
+def fetch_table_columns(conn, table_name):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+            """,
+            (table_name,),
+        )
+        return {row[0] for row in cur.fetchall()}
+
+
 def fetch_segment_features(conn):
     features_sql = os.getenv("GRAPHHOPPER_SEGMENT_FEATURES_SQL")
     if features_sql:
         return fetch_dicts(conn, features_sql)
     if not table_exists(conn, "segment_features"):
         return []
-    return fetch_dicts(conn, DEFAULT_FEATURES_SQL)
+    return fetch_dicts(conn, build_segment_features_sql(fetch_table_columns(conn, "segment_features")))
 
 
 def main():
@@ -802,10 +904,12 @@ def main():
     parser.add_argument("--report-json")
     args = parser.parse_args()
 
-    nodes_sql = os.getenv("GRAPHHOPPER_ROAD_NODES_SQL") or DEFAULT_NODES_SQL
-    segments_sql = os.getenv("GRAPHHOPPER_ROAD_SEGMENTS_SQL") or DEFAULT_SEGMENTS_SQL
+    nodes_sql_override = os.getenv("GRAPHHOPPER_ROAD_NODES_SQL")
+    segments_sql_override = os.getenv("GRAPHHOPPER_ROAD_SEGMENTS_SQL")
 
     with connect() as conn:
+        nodes_sql = nodes_sql_override or build_road_nodes_sql(fetch_table_columns(conn, "road_nodes"))
+        segments_sql = segments_sql_override or build_road_segments_sql(fetch_table_columns(conn, "road_segments"))
         nodes = fetch_dicts(conn, nodes_sql)
         segments = fetch_dicts(conn, segments_sql)
         features = fetch_segment_features(conn)

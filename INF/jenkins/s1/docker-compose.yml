@@ -3,7 +3,8 @@ name: e102-jenkins
 services:
   jenkins:
     build:
-      context: .
+      context: ..
+      dockerfile: s1/Dockerfile
       args:
         DOCKER_GID: ${DOCKER_GID:-999}
     image: e102-jenkins:lts-jdk21-docker

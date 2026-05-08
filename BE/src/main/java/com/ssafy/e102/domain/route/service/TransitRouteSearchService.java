@@ -321,13 +321,11 @@ public class TransitRouteSearchService {
 			try {
 				if (odsayLeg.type() == TransportMode.WALK) {
 					TransportMode nextTransitType = nextTransitType(odsayLegs, odsayIndex);
-					TransportMode previousTransitType = previousTransitType(odsayLegs, odsayIndex);
 					GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayIndex, endPoint, cursor);
 					RouteLegResponse walkLeg = toWalkLeg(
 						legIndex,
 						cursor,
 						nextPoint,
-						previousTransitType,
 						nextTransitType,
 						profile);
 					if (walkLeg == null) {
@@ -391,21 +389,10 @@ public class TransitRouteSearchService {
 		return null;
 	}
 
-	private TransportMode previousTransitType(List<OdsayTransitLeg> odsayLegs, int currentIndex) {
-		for (int index = currentIndex - 1; index >= 0; index--) {
-			TransportMode type = odsayLegs.get(index).type();
-			if (type != TransportMode.WALK) {
-				return type;
-			}
-		}
-		return null;
-	}
-
 	private RouteLegResponse toWalkLeg(
 		int sequence,
 		GeoPointRequest from,
 		GeoPointRequest to,
-		TransportMode previousTransitType,
 		TransportMode nextTransitType,
 		WalkRouteUserProfile profile) {
 		boolean hasNextTransit = nextTransitType != null;
@@ -419,7 +406,7 @@ public class TransitRouteSearchService {
 				0,
 				0,
 				lineString(from, to),
-				zeroDistanceGuidanceEvents(from, previousTransitType, nextTransitType),
+				zeroDistanceGuidanceEvents(from, nextTransitType),
 				null,
 				List.of(),
 				null,
@@ -428,9 +415,6 @@ public class TransitRouteSearchService {
 				List.of());
 		}
 		try {
-			RouteGuidanceEventType startEventType = previousTransitType == null
-				? null
-				: RouteGuidanceEventType.ARRIVING_POINT;
 			GraphHopperRoutePath path = graphHopperRouteClient.route(new GraphHopperRouteRequest(
 				from,
 				to,
@@ -443,7 +427,7 @@ public class TransitRouteSearchService {
 				walkRole(hasNextTransit),
 				walkInstruction(hasNextTransit),
 				path,
-				startEventType,
+				null,
 				destinationEventType(nextTransitType));
 		} catch (RouteException exception) {
 			if (exception.getErrorCode() == RouteErrorCode.ROUTE_NOT_FOUND) {
@@ -455,12 +439,8 @@ public class TransitRouteSearchService {
 
 	private List<RouteGuidanceEventResponse> zeroDistanceGuidanceEvents(
 		GeoPointRequest point,
-		TransportMode previousTransitType,
 		TransportMode nextTransitType) {
 		List<RouteGuidanceEventType> eventTypes = new ArrayList<>();
-		if (previousTransitType != null) {
-			eventTypes.add(RouteGuidanceEventType.ARRIVING_POINT);
-		}
 		eventTypes.add(destinationEventType(nextTransitType));
 		List<RouteGuidanceEventResponse> events = new ArrayList<>();
 		for (int index = 0; index < eventTypes.size(); index++) {
@@ -477,6 +457,10 @@ public class TransitRouteSearchService {
 	private String point(GeoPointRequest point) {
 		return "POINT(" + BigDecimal.valueOf(point.lng()).toPlainString()
 			+ " " + BigDecimal.valueOf(point.lat()).toPlainString() + ")";
+	}
+
+	private String point(RouteStopResponse stop) {
+		return "POINT(" + stop.lng().toPlainString() + " " + stop.lat().toPlainString() + ")";
 	}
 
 	private RouteGuidanceEventType destinationEventType(TransportMode nextTransitType) {
@@ -500,23 +484,39 @@ public class TransitRouteSearchService {
 		String routeNo = routeNo(odsayLeg, laneOptions);
 		RouteStopResponse boardingStop = boardingStop(odsayLeg, referencePoint);
 		RouteStopResponse alightingStop = alightingStop(odsayLeg);
+		BigDecimal distanceMeter = scale(odsayLeg.distanceMeter());
 		return new RouteLegResponse(
 			sequence,
 			odsayLeg.type(),
 			RouteLegRole.TRANSIT,
 			instruction(odsayLeg, routeNo),
-			scale(odsayLeg.distanceMeter()),
+			distanceMeter,
 			durationSecond,
 			estimatedMinute(durationSecond),
 			geometry != null ? geometry
 				: lineString(odsayLeg.startLng(), odsayLeg.startLat(), odsayLeg.endLng(), odsayLeg.endLat()),
-			List.of(),
+			arrivingPointEvents(alightingStop, distanceMeter, durationSecond),
 			routeNo,
 			laneOptions,
 			boardingStop,
 			alightingStop,
 			null,
 			odsayLeg.type() == TransportMode.SUBWAY ? List.of(RouteBadge.ELEVATOR) : List.of());
+	}
+
+	private List<RouteGuidanceEventResponse> arrivingPointEvents(
+		RouteStopResponse alightingStop,
+		BigDecimal distanceMeter,
+		int durationSecond) {
+		if (alightingStop == null) {
+			return List.of();
+		}
+		return List.of(new RouteGuidanceEventResponse(
+			1,
+			RouteGuidanceEventType.ARRIVING_POINT,
+			distanceMeter == null ? BigDecimal.ZERO.setScale(2) : distanceMeter,
+			durationSecond,
+			point(alightingStop)));
 	}
 
 	private RouteStopResponse boardingStop(OdsayTransitLeg leg, GeoPointRequest referencePoint) {

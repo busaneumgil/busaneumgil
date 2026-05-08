@@ -15,13 +15,25 @@ class MockRouteFixturesTest {
     fun `default fixture resolves requested routes into parsable linestring geometry`() {
         val response = MockRouteFixtures.searchRoutes(testRequest())
 
+        assertEquals("rs_walk_busan_demo", response.searchId)
         assertEquals(listOf("SAFE", "SHORTEST"), response.routes.mapNotNull { route -> route.routeOption })
         assertTrue(response.routes.isNotEmpty())
-        assertTrue(response.routes.all { route -> route.segments.isNotEmpty() })
+        assertTrue(response.routes.all { route -> route.routeId != null })
+        assertTrue(response.routes.all { route -> route.transportMode == "WALK" })
+        assertTrue(response.routes.all { route -> route.legs.isNotEmpty() })
         response.routes
-            .flatMap { route -> route.segments }
-            .forEach { segment ->
-                val geometry = requireNotNull(segment.geometry)
+            .flatMap { route -> route.legs }
+            .forEach { leg ->
+                val geometry = requireNotNull(leg.geometry)
+
+                assertTrue(geometry.startsWith("LINESTRING("))
+                assertEquals(RouteGeometryParseStatus.SUCCESS, parser.parse(geometry).status)
+            }
+        response.routes
+            .flatMap { route -> route.legs }
+            .flatMap { leg -> leg.steps }
+            .forEach { step ->
+                val geometry = requireNotNull(step.geometry)
 
                 assertTrue(geometry.startsWith("LINESTRING("))
                 assertEquals(RouteGeometryParseStatus.SUCCESS, parser.parse(geometry).status)
@@ -37,6 +49,7 @@ class MockRouteFixturesTest {
 
         assertEquals(1, response.routes.size)
         assertEquals("SAFE", response.routes.single().routeOption)
+        assertEquals("walk_rt_safe_demo", response.routes.single().routeId)
     }
 
     @Test
@@ -46,6 +59,7 @@ class MockRouteFixturesTest {
         assertEquals("busan-cityhall-to-station-demo", payload.fixtureId)
         assertEquals("Busan City Hall to Busan Station demo route", payload.fixtureName)
         assertEquals(payload.response, MockRouteFixtures.searchRoutes(payload.request))
+        assertEquals("rs_walk_busan_demo", payload.response.searchId)
     }
 
     @Test

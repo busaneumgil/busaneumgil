@@ -102,4 +102,10 @@ upsertSshKeyCredential(
     '/var/jenkins_home/prod-secrets/busan-eumgil-S2.pem'
 )
 
+upsertStringCredential(
+    'e102-mattermost-webhook-url',
+    'E102 Mattermost incoming webhook URL',
+    System.getenv('MATTERMOST_WEBHOOK_URL')
+)
+
 SystemCredentialsProvider.getInstance().save()

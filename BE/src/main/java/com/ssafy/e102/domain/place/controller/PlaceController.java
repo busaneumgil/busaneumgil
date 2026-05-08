@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.service.PlaceService;
 import com.ssafy.e102.global.response.ApiResponse;
@@ -43,6 +44,16 @@ public class PlaceController {
 		@Parameter(description = "조회 개수") @RequestParam(required = false)
 		String size) {
 		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, cursor, size));
+	}
+
+	@Operation(summary = "좌표 주소 변환", description = "위도와 경도를 기준으로 카카오 Local API 주소 변환 결과를 반환한다.")
+	@GetMapping("/reverse-geocode")
+	public ApiResponse<PlaceReverseGeocodeResponse> reverseGeocode(
+		@Parameter(description = "변환할 위도") @RequestParam(required = false)
+		String lat,
+		@Parameter(description = "변환할 경도") @RequestParam(required = false)
+		String lng) {
+		return ApiResponse.success(placeService.reverseGeocode(lat, lng));
 	}
 
 	@Operation(summary = "장소 목록 조회", description = "현재 위치, 카테고리, 접근성 feature 조건으로 내부 장소 목록을 조회하고 로그인 사용자 기준 북마크 여부를 함께 반환한다.")

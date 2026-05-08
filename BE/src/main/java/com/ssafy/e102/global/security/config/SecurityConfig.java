@@ -68,6 +68,8 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/places", "/places/**")
 				.authenticated()
+				.requestMatchers("/routes/**", "/route-ratings/**")
+				.authenticated()
 				.requestMatchers("/hazard-reports", "/hazard-reports/**")
 				.authenticated()
 				.requestMatchers("/admin", "/admin/**")

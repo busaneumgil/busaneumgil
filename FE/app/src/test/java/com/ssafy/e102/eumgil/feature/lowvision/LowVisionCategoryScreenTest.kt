@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.lowvision
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -131,5 +132,21 @@ class LowVisionCategoryScreenTest {
             ),
             lowVisionCategoryOptions.map { option -> option.iconRes },
         )
+    }
+
+    @Test
+    fun `vector category icons use stroke width matched to png category marks`() {
+        val drawableDir = File("src/main/res/drawable")
+        val iconFileNames =
+            listOf(
+                "ic_lowvision_category_restaurant.xml",
+                "ic_lowvision_category_tourism.xml",
+            )
+
+        iconFileNames.forEach { fileName ->
+            val iconXml = File(drawableDir, fileName).readText()
+
+            assertTrue("$fileName should be a stroked line icon", "android:strokeWidth=\"2\"".toRegex() in iconXml)
+        }
     }
 }

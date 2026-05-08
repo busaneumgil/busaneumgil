@@ -42,6 +42,8 @@ data class SavedRouteBookmarkUiModel(
     val startPoint: GeoCoordinate,
     val endPoint: GeoCoordinate,
     val routeOption: RouteOption,
+    val transportMode: String? = null,
+    val routeOptionLabel: String? = null,
     val distanceMeters: Int? = null,
     val durationMinutes: Int? = null,
 )
@@ -79,6 +81,10 @@ sealed interface SavedRouteUiAction {
         val placeId: String,
     ) : SavedRouteUiAction
 
+    data class PlaceBriefingClicked(
+        val placeId: String,
+    ) : SavedRouteUiAction
+
     data class PlaceDeleteClicked(
         val placeId: String,
     ) : SavedRouteUiAction
@@ -106,6 +112,8 @@ sealed interface SavedRouteUiEvent {
     data class NavigateToRouteSetting(
         val initialRouteOption: RouteOption? = null,
     ) : SavedRouteUiEvent
+
+    data object NavigateToRouteBriefing : SavedRouteUiEvent
 
     data class ShowSnackbar(
         val message: String,

@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -118,6 +119,30 @@ class SavedRouteViewModelTest {
         }
 
     @Test
+    fun `place briefing click stores destination and navigates to low vision route briefing`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.PlaceBriefingClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            val destination = destinationSelectionRepository.selectedDestination.value
+
+            assertEquals(SavedRouteUiEvent.NavigateToRouteBriefing, uiEvent.await())
+            assertEquals("bookmark-place-1", destination?.placeId)
+            assertEquals(PlaceCategory.ELEVATOR, destination?.category)
+        }
+
+    @Test
     fun `route guide click stores saved end point and navigates with saved route option`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -147,6 +172,72 @@ class SavedRouteViewModelTest {
             assertEquals("광안리해변", destination?.name)
             assertEquals(35.1532, destination?.latitude)
             assertEquals(129.1186, destination?.longitude)
+
+            val origin = destinationSelectionRepository.selectedOrigin.value
+            assertEquals("route-bookmark-origin:route-bookmark-1", origin?.placeId)
+            assertEquals("부산시청", origin?.name)
+            assertEquals(35.1798, origin?.latitude)
+            assertEquals(129.0750, origin?.longitude)
+            assertEquals(
+                RouteEditingTarget.DESTINATION,
+                destinationSelectionRepository.editingTarget.value,
+            )
+        }
+
+    @Test
+    fun `route guide click with invalid origin coordinate keeps user on saved route screen`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository =
+                        FakeRouteBookmarkRepository(
+                            routeBookmarks =
+                                listOf(testRouteBookmark(startPoint = GeoCoordinate(Double.NaN, 129.0750))),
+                        ),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
+            advanceUntilIdle()
+
+            assertEquals(
+                SavedRouteUiEvent.ShowSnackbar("저장한 경로의 좌표가 올바르지 않습니다."),
+                uiEvent.await(),
+            )
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertEquals(
+                "저장한 경로의 좌표가 올바르지 않습니다.",
+                viewModel.uiState.value.routeContent.errorMessage,
+            )
+        }
+
+    @Test
+    fun `place click resets editingTarget to DESTINATION on handoff`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            assertEquals(
+                RouteEditingTarget.DESTINATION,
+                destinationSelectionRepository.editingTarget.value,
+            )
         }
 
     @Test
@@ -170,13 +261,90 @@ class SavedRouteViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                SavedRouteUiEvent.ShowSnackbar("저장한 경로의 도착지 좌표가 올바르지 않습니다."),
+                SavedRouteUiEvent.ShowSnackbar("저장한 경로의 좌표가 올바르지 않습니다."),
                 uiEvent.await(),
             )
             assertNull(destinationSelectionRepository.selectedDestination.value)
             assertEquals(
-                "저장한 경로의 도착지 좌표가 올바르지 않습니다.",
+                "저장한 경로의 좌표가 올바르지 않습니다.",
                 viewModel.uiState.value.routeContent.errorMessage,
+            )
+        }
+
+    @Test
+    fun `place bookmark list renders empty state when bookmarks list is empty`() =
+        runTest {
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(SavedBookmarkContentState.EMPTY, viewModel.uiState.value.placeContent.screenState)
+            assertEquals(emptyList<SavedPlaceUiModel>(), viewModel.uiState.value.placeContent.places)
+        }
+
+    @Test
+    fun `place bookmark list renders error state when observe fails`() =
+        runTest {
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(failObserve = true),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(SavedBookmarkContentState.ERROR, viewModel.uiState.value.placeContent.screenState)
+            assertEquals(
+                "북마크한 장소를 불러오지 못했습니다.",
+                viewModel.uiState.value.placeContent.errorMessage,
+            )
+        }
+
+    @Test
+    fun `edit mode keeps failed bookmarks pending when partial deletion fails`() =
+        runTest {
+            val firstBookmark = testPlaceBookmark()
+            val secondBookmark =
+                testPlaceBookmark().copy(
+                    placeId = "bookmark-place-2",
+                    placeName = "광안리 해수욕장",
+                )
+            val bookmarkRepository =
+                FakeBookmarkRepository(
+                    bookmarks = listOf(firstBookmark, secondBookmark),
+                    failingPlaceIds = setOf("bookmark-place-2"),
+                )
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.EditClicked)
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-1"))
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-2"))
+            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isEditMode)
+            assertEquals(
+                setOf("bookmark-place-2"),
+                viewModel.uiState.value.pendingPlaceRemovalIds,
+            )
+            assertEquals(1, bookmarkRepository.bookmarks.value.size)
+            assertEquals("bookmark-place-2", bookmarkRepository.bookmarks.value.first().placeId)
+            assertEquals(
+                "북마크한 장소를 삭제하지 못했습니다. 다시 시도해 주세요.",
+                viewModel.uiState.value.placeContent.errorMessage,
             )
         }
 
@@ -249,6 +417,7 @@ private class FakeBookmarkRepository(
     bookmarks: List<BookmarkData> = emptyList(),
     private val failObserve: Boolean = false,
     private val failDelete: Boolean = false,
+    private val failingPlaceIds: Set<String> = emptySet(),
 ) : BookmarkRepository {
     val bookmarks = MutableStateFlow(bookmarks)
 
@@ -267,7 +436,7 @@ private class FakeBookmarkRepository(
     }
 
     override suspend fun deleteBookmark(placeId: String) {
-        if (failDelete) error("bookmark delete failed")
+        if (failDelete || placeId in failingPlaceIds) error("bookmark delete failed")
         bookmarks.value = bookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
     }
 }
@@ -327,6 +496,7 @@ private fun testPlaceBookmark(
     )
 
 private fun testRouteBookmark(
+    startPoint: GeoCoordinate = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
     endPoint: GeoCoordinate = GeoCoordinate(latitude = 35.1532, longitude = 129.1186),
 ): RouteBookmark =
     RouteBookmark(
@@ -334,7 +504,7 @@ private fun testRouteBookmark(
         routeName = "부산시청-해운대해수욕장",
         startLabel = "부산시청",
         endLabel = "광안리해변",
-        startPoint = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
+        startPoint = startPoint,
         endPoint = endPoint,
         routeOption = RouteOption.SHORTEST,
         distanceMeters = 7_600,

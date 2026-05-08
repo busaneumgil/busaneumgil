@@ -41,10 +41,11 @@ FE lane의 기준은 `FE/docs` 전체가 아니라, 명시된 1차 FE 계약 문
 
 ### Supporting documents only
 
-- `FE/docs/2026-04-27_로그인_필수_전환_FE_정합성_및_구현_영향.md`
-- `FE/docs/2026-04-27_온보딩_디자인_화면_구성_분석.md`
-- `FE/docs/2026-04-27_FE_Docs_문서_정합성_재검토.md`
+- `FE/docs/debug-report/2026-04-27_로그인_필수_전환_FE_정합성_및_구현_영향.md`
+- `FE/docs/archive/2026-04-27_온보딩_디자인_화면_구성_분석.md`
+- `FE/docs/debug-report/2026-04-27_FE_Docs_문서_정합성_재검토.md`
 - `FE/docs/sprint_backlog/`
+- `FE/docs/todo/`
 
 ### FE interpretation rules
 

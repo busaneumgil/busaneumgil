@@ -274,6 +274,17 @@ CREATE TABLE IF NOT EXISTS road_segments (
   segment_type varchar(30) NOT NULL DEFAULT 'SIDE_LINE'
 );
 
+CREATE TABLE IF NOT EXISTS segment_features (
+  feature_id bigint PRIMARY KEY,
+  edge_id bigint NOT NULL,
+  feature_type varchar(50) NOT NULL,
+  "geom" geometry(Geometry, 4326) NOT NULL,
+  state varchar(50),
+  value_number numeric(10, 2)
+);
+
+CREATE INDEX IF NOT EXISTS segment_features_edge_id_idx ON segment_features (edge_id);
+
 -- CSV header format stays camelCase for upstream compatibility.
 -- Temp/staging columns and final tables use snake_case consistently.
 CREATE TEMP TABLE staging_road_nodes (
@@ -334,7 +345,7 @@ BEGIN
 END
 \$validate_staging\$;
 
-TRUNCATE TABLE road_segments, road_nodes;
+TRUNCATE TABLE segment_features, road_segments, road_nodes;
 
 INSERT INTO road_nodes (
   vertex_id,

@@ -24,6 +24,9 @@ data class RouteSearchQuery(
 enum class RouteOption {
     SAFE,
     SHORTEST,
+    RECOMMENDED,
+    MIN_TRANSFER,
+    MIN_WALK,
     ;
 
     companion object {
@@ -33,6 +36,22 @@ enum class RouteOption {
             entries.firstOrNull { option ->
                 option.name.equals(value?.trim(), ignoreCase = true)
             }
+    }
+}
+
+enum class RouteTransportMode {
+    WALK,
+    PUBLIC_TRANSIT,
+    ;
+
+    companion object {
+        fun fromValue(
+            value: String?,
+            fallback: RouteTransportMode = WALK,
+        ): RouteTransportMode =
+            entries.firstOrNull { mode ->
+                mode.name.equals(value?.trim(), ignoreCase = true)
+            } ?: fallback
     }
 }
 
@@ -49,6 +68,83 @@ enum class RouteRiskLevel {
         ): RouteRiskLevel =
             entries.firstOrNull { level ->
                 level.name.equals(value?.trim(), ignoreCase = true)
+            } ?: fallback
+    }
+}
+
+enum class RouteBadge {
+    LOW_SLOPE,
+    MIDDLE_SLOPE,
+    STAIR,
+    CROSSWALK,
+    ELEVATOR,
+    NARROW_SIDEWALK,
+    UNPAVED,
+    ;
+
+    companion object {
+        fun fromCodes(codes: List<String>): List<RouteBadge> =
+            codes.mapNotNull(::fromValue)
+
+        fun fromValue(value: String?): RouteBadge? =
+            entries.firstOrNull { badge ->
+                badge.name.equals(value?.trim(), ignoreCase = true)
+            }
+    }
+}
+
+enum class RouteAlertType {
+    CROSSWALK,
+    MIDDLE_SLOPE,
+    STAIR,
+    CURB,
+    NARROW_SIDEWALK,
+    UNPAVED,
+    ELEVATOR,
+    BUS_STOP,
+    SUBWAY_ELEVATOR,
+    ALIGHTING_POINT,
+    ;
+
+    companion object {
+        fun fromValue(value: String?): RouteAlertType? =
+            entries.firstOrNull { type ->
+                type.name.equals(value?.trim(), ignoreCase = true)
+            }
+    }
+}
+
+enum class RouteLegType {
+    WALK,
+    BUS,
+    SUBWAY,
+    ;
+
+    companion object {
+        fun fromValue(
+            value: String?,
+            fallback: RouteLegType = WALK,
+        ): RouteLegType =
+            entries.firstOrNull { type ->
+                type.name.equals(value?.trim(), ignoreCase = true)
+            } ?: fallback
+    }
+}
+
+enum class RouteLegRole {
+    WALK_ONLY,
+    WALK_TO_TRANSIT,
+    TRANSIT,
+    WALK_TO_DESTINATION,
+    ;
+
+    companion object {
+        fun fromValue(
+            value: String?,
+            fallback: RouteLegRole = WALK_ONLY,
+        ): RouteLegRole =
+            entries.firstOrNull { role ->
+                role.name.equals(value?.trim(), ignoreCase = true)
             } ?: fallback
     }
 }
@@ -88,6 +184,49 @@ data class RoutePreviewModel(
         get() = (segmentCount - renderableSegmentCount).coerceAtLeast(0)
 }
 
+data class RouteAlert(
+    val type: RouteAlertType,
+    val distanceMeters: Int = 0,
+)
+
+data class RouteTransitStop(
+    val name: String,
+    val coordinate: GeoCoordinate,
+)
+
+data class RouteStep(
+    val sequence: Int,
+    val instruction: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
+    val distanceMeters: Int = 0,
+    val polyline: RoutePolyline = RoutePolyline(),
+    val badges: List<RouteBadge> = emptyList(),
+    val alerts: List<RouteAlert> = emptyList(),
+    val slopePercent: Double? = null,
+    val widthState: String? = null,
+) {
+    val hasRenderablePolyline: Boolean
+        get() = polyline.isRenderable
+}
+
+data class RouteLeg(
+    val sequence: Int,
+    val type: RouteLegType = RouteLegType.WALK,
+    val role: RouteLegRole = RouteLegRole.WALK_ONLY,
+    val instruction: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
+    val distanceMeters: Int? = null,
+    val estimatedTimeMinutes: Int? = null,
+    val polyline: RoutePolyline = RoutePolyline(),
+    val steps: List<RouteStep> = emptyList(),
+    val routeNo: String? = null,
+    val boardingStop: RouteTransitStop? = null,
+    val alightingStop: RouteTransitStop? = null,
+    val isLowFloor: Boolean? = null,
+    val badges: List<RouteBadge> = emptyList(),
+) {
+    val hasRenderablePolyline: Boolean
+        get() = polyline.isRenderable
+}
+
 data class RouteSegmentSafetyFlags(
     val hasStairs: Boolean = false,
     val hasCurbGap: Boolean = false,
@@ -104,23 +243,31 @@ data class RouteSegment(
     val safetyFlags: RouteSegmentSafetyFlags = RouteSegmentSafetyFlags(),
     val riskLevel: RouteRiskLevel = RouteRiskLevel.MEDIUM,
     val guidanceMessage: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
+    val sourceLegSequence: Int? = null,
+    val sourceStepSequence: Int? = null,
 ) {
     val hasRenderablePolyline: Boolean
         get() = polyline.isRenderable
 }
 
 data class RouteCandidate(
+    val routeId: String = "",
+    val transportMode: RouteTransportMode = RouteTransportMode.WALK,
     val routeOption: RouteOption,
     val title: String,
     val summary: RouteSummary,
+    val transferCount: Int? = null,
+    val badges: List<RouteBadge> = emptyList(),
+    val geometry: RoutePolyline = RoutePolyline(),
     val preview: RoutePreviewModel = RoutePreviewModel(),
+    val legs: List<RouteLeg> = emptyList(),
     val segments: List<RouteSegment> = emptyList(),
 ) {
     val previewPolyline: RoutePolyline
-        get() = preview.polyline
+        get() = if (preview.polyline.isRenderable) preview.polyline else geometry
 
     val hasRenderablePreview: Boolean
-        get() = preview.hasRenderableLine
+        get() = previewPolyline.isRenderable
 
     val renderableSegments: List<RouteSegment>
         get() = segments.filter(RouteSegment::hasRenderablePolyline)
@@ -132,6 +279,7 @@ data class RouteCandidate(
 data class RouteSearchResult(
     val origin: RouteWaypoint,
     val destination: RouteWaypoint,
+    val searchId: String? = null,
     val routes: List<RouteCandidate> = emptyList(),
 ) {
     val primaryRoute: RouteCandidate?
@@ -183,6 +331,9 @@ data class RouteSearchData(
     val result: RouteSearchResult,
     val source: RouteSearchSource,
 ) {
+    val searchId: String?
+        get() = result.searchId
+
     val routes: List<RouteCandidate>
         get() = result.routes
 

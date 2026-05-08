@@ -8,6 +8,8 @@ data class RouteBookmark(
     val startPoint: GeoCoordinate,
     val endPoint: GeoCoordinate,
     val routeOption: RouteOption,
+    val transportMode: String? = null,
+    val routeOptionLabel: String? = null,
     val distanceMeters: Int? = null,
     val durationMinutes: Int? = null,
     val createdAt: Long,

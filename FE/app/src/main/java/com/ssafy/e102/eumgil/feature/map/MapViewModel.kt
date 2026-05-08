@@ -326,7 +326,6 @@ class MapViewModel(
                 ) {
                     return@collectLatest
                 }
-
                 // Any destination handoff should close stale facility detail state before the map recenters.
                 if (clearSelectedFacilitySelection()) {
                     renderSelectedFacilityState()

@@ -39,7 +39,7 @@ abstract class AbstractSocialTokenVerifier implements SocialTokenVerifier {
 
 	@Override
 	public SocialUserInfo verify(String socialAccessToken) {
-		Assert.hasText(socialAccessToken, "소셜 access token은 필수입니다.");
+		Assert.hasText(socialAccessToken, "소셜 액세스 토큰은 필수입니다.");
 		try {
 			ResponseEntity<JsonNode> response = restTemplate.exchange(userInfoUri, HttpMethod.GET,
 				new HttpEntity<>(bearerHeaders(socialAccessToken)), JsonNode.class);
@@ -47,7 +47,7 @@ abstract class AbstractSocialTokenVerifier implements SocialTokenVerifier {
 			return new SocialUserInfo(socialProvider, socialProviderUserId);
 		} catch (HttpClientErrorException exception) {
 			throw new AuthException(AuthErrorCode.INVALID_SOCIAL_TOKEN,
-				"유효하지 않은 소셜 access token입니다.", exception);
+				"유효하지 않은 소셜 액세스 토큰입니다.", exception);
 		} catch (HttpServerErrorException exception) {
 			throw new AuthException(AuthErrorCode.SOCIAL_PROVIDER_API_FAILED,
 				"소셜 제공자 API 호출에 실패했습니다.", exception);

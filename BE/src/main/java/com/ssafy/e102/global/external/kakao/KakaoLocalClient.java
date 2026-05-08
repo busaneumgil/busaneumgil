@@ -37,7 +37,7 @@ public class KakaoLocalClient {
 
 	public KakaoPlaceSearchResult searchKeyword(KakaoPlaceSearchRequest request) {
 		if (!StringUtils.hasText(properties.apiKey())) {
-			throw new RestClientException("Kakao local REST API key is empty.");
+			throw new RestClientException("카카오 로컬 REST API 키가 비어 있습니다.");
 		}
 
 		UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.baseUrl() + KEYWORD_SEARCH_PATH)
@@ -63,7 +63,7 @@ public class KakaoLocalClient {
 			KakaoKeywordSearchResponse.class)
 			.getBody();
 		if (response == null || response.meta() == null || response.documents() == null) {
-			throw new RestClientException("Kakao local response body is empty.");
+			throw new RestClientException("카카오 로컬 API 응답 본문이 비어 있습니다.");
 		}
 		return new KakaoPlaceSearchResult(
 			response.documents()
@@ -78,7 +78,7 @@ public class KakaoLocalClient {
 
 	public Optional<KakaoAddressDocument> reverseGeocode(double lat, double lng) {
 		if (!StringUtils.hasText(properties.apiKey())) {
-			throw new RestClientException("Kakao local REST API key is empty.");
+			throw new RestClientException("카카오 로컬 REST API 키가 비어 있습니다.");
 		}
 
 		UriComponentsBuilder uriBuilder = UriComponentsBuilder
@@ -98,7 +98,7 @@ public class KakaoLocalClient {
 			KakaoCoordToAddressResponse.class)
 			.getBody();
 		if (response == null || response.meta() == null || response.documents() == null) {
-			throw new RestClientException("Kakao local response body is empty.");
+			throw new RestClientException("카카오 로컬 API 응답 본문이 비어 있습니다.");
 		}
 		return response.documents()
 			.stream()

@@ -106,7 +106,7 @@ public class PlaceService {
 				kakaoResult.totalElements(),
 				hasNext);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.warn("Place search external API failed. keyword={}, kakaoPage={}, size={}",
+			log.warn("장소 검색 외부 API 호출 실패. keyword={}, kakaoPage={}, size={}",
 				normalizedKeyword,
 				kakaoPage,
 				parsedSize,
@@ -125,7 +125,7 @@ public class PlaceService {
 				.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_ADDRESS_NOT_FOUND));
 			return PlaceReverseGeocodeResponse.from(addressDocument);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.warn("Place reverse geocode external API failed. lat={}, lng={}", parsedLat, parsedLng, exception);
+			log.warn("좌표 주소 변환 외부 API 호출 실패. lat={}, lng={}", parsedLat, parsedLng, exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_REVERSE_GEOCODE_EXTERNAL_API_FAILED, exception);
 		}
 	}
@@ -209,11 +209,11 @@ public class PlaceService {
 		try {
 			String decodedCursor = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
 			if (!decodedCursor.startsWith(SEARCH_CURSOR_PREFIX)) {
-				throw new NumberFormatException("invalid search cursor prefix.");
+				throw new NumberFormatException("장소 검색 cursor prefix가 올바르지 않습니다.");
 			}
 			int kakaoPage = Integer.parseInt(decodedCursor.substring(SEARCH_CURSOR_PREFIX.length()));
 			if (kakaoPage < DEFAULT_KAKAO_SEARCH_PAGE) {
-				throw new NumberFormatException("search cursor must be positive.");
+				throw new NumberFormatException("장소 검색 cursor는 양수여야 합니다.");
 			}
 			return kakaoPage;
 		} catch (IllegalArgumentException exception) {
@@ -318,7 +318,7 @@ public class PlaceService {
 		try {
 			long parsedValue = Long.parseLong(value);
 			if (parsedValue <= 0) {
-				throw new NumberFormatException("placeId must be positive.");
+				throw new NumberFormatException("placeId는 양수여야 합니다.");
 			}
 			return parsedValue;
 		} catch (NumberFormatException exception) {

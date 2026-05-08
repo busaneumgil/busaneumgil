@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -201,10 +203,8 @@ fun NavGraphBuilder.onboardingNavGraph(
                     }
                 }
             },
-            onRequestDetails = { _ ->
-                // 모든 단계의 "자세히 보기"는 기존 정식 약관 화면을 재사용한다.
-                // 항목별 상세 화면이 별도로 생기면 step 분기로 라우팅을 갈라주면 됨.
-                navController.navigate(OnboardingRoute.Terms.route)
+            onRequestDetails = { step ->
+                createTermsGuideDetailIntent(step)?.let(context::startActivity)
             },
         )
     }
@@ -330,6 +330,14 @@ private fun NavHostController.navigateToLoginAfterAuthenticationFailure() {
         }
     }
 }
+
+internal fun createTermsGuideDetailIntent(step: TermsGuideStep): Intent? =
+    resolveTermsGuideDetailUrl(step)?.let { url ->
+        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+internal fun resolveTermsGuideDetailUrl(step: TermsGuideStep): String? = step.detailUrl
 
 private const val DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE: String =
     "온보딩 완료 처리에 실패했습니다. 다시 시도해주세요."

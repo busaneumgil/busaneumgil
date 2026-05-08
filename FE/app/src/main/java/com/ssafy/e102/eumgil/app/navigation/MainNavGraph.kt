@@ -31,6 +31,8 @@ import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
 import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
+import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.map
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
@@ -46,7 +48,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(RouteSettingRoute.Setting.createRoute())
             },
             onNavigateToSearch = {
-                navController.navigate(SearchRoute.Entry.route)
+                navController.navigate(SearchRoute.Entry.createRoute())
             },
         )
     }
@@ -86,47 +88,30 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         )
     }
 
-    composable(route = SearchRoute.Entry.route) {
+    composable(
+        route = SearchRoute.Entry.route,
+        arguments =
+            listOf(
+                navArgument(SearchRoute.Entry.ARG_EDITING_TARGET) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
+        val initialEditingTarget =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
+                .toRouteEditingTargetOrDefault()
         SearchEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToResults = { query ->
-                navController.navigate(SearchRoute.Results.createRoute(query))
+            onNavigateToResults = { query, editingTarget ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget))
             },
-            onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
-                    popUpTo(SearchRoute.Entry.route) {
-                        inclusive = true
-                    }
-                }
-            },
-            onNavigateToRouteBriefing = {
-                navController.navigate(resolveSearchResultBriefingRoute()) {
-                    popUpTo(SearchRoute.Entry.route) {
-                        inclusive = true
-                    }
-                }
-            },
-        )
-    }
-
-    composable(
-        route = SearchRoute.Results.route,
-        arguments =
-            listOf(
-                navArgument(SearchRoute.Results.ARG_QUERY) {
-                    type = NavType.StringType
-                },
-            ),
-    ) { backStackEntry ->
-        SearchResultsRoute(
-            initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
-            onNavigateBack = {
-                navController.popBackStack()
-            },
-            onNavigateToResults = { query ->
-                navController.navigate(SearchRoute.Results.createRoute(query)) {
+            onNavigateToVoiceInput = {
+                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget)) {
                     launchSingleTop = true
                 }
             },
@@ -144,6 +129,89 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            initialEditingTarget = initialEditingTarget,
+        )
+    }
+
+    composable(
+        route = SearchRoute.Results.route,
+        arguments =
+            listOf(
+                navArgument(SearchRoute.Results.ARG_QUERY) {
+                    type = NavType.StringType
+                },
+                navArgument(SearchRoute.Results.ARG_EDITING_TARGET) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
+        val initialEditingTarget =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Results.ARG_EDITING_TARGET)
+                .toRouteEditingTargetOrDefault()
+        SearchResultsRoute(
+            initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToResults = { query, editingTarget ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+                    launchSingleTop = true
+                }
+            },
+            onNavigateToVoiceInput = {
+                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget)) {
+                    launchSingleTop = true
+                }
+            },
+            onNavigateToRouteSetting = {
+                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            onNavigateToRouteBriefing = {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            initialEditingTarget = initialEditingTarget,
+        )
+    }
+
+    composable(
+        route = SearchRoute.VoiceInput.route,
+        arguments =
+            listOf(
+                navArgument(SearchRoute.VoiceInput.ARG_EDITING_TARGET) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
+        val initialEditingTarget =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.VoiceInput.ARG_EDITING_TARGET)
+                .toRouteEditingTargetOrDefault()
+        SearchVoiceInputRoute(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToResults = { query, editingTarget ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+                    launchSingleTop = true
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = false
+                    }
+                }
+            },
+            initialEditingTarget = initialEditingTarget,
         )
     }
 
@@ -175,6 +243,11 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             initialRouteOption = initialRouteOption,
             onNavigateBack = {
                 navController.popBackStack()
+            },
+            onNavigateToSearch = { editingTarget ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget)) {
+                    launchSingleTop = true
+                }
             },
             onNavigateToRouteDetail = { routeOption ->
                 navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
@@ -282,7 +355,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
             onNavigateToSearch = {
-                navController.navigate(SearchRoute.Entry.route) {
+                navController.navigate(SearchRoute.Entry.createRoute()) {
                     launchSingleTop = true
                 }
             },
@@ -382,6 +455,11 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
 
 private fun String.toRouteOptionOrDefault(): RouteOption =
     runCatching { RouteOption.valueOf(this) }.getOrDefault(RouteOption.SAFE)
+
+private fun String?.toRouteEditingTargetOrDefault(): RouteEditingTarget =
+    this
+        ?.let { value -> runCatching { RouteEditingTarget.valueOf(value) }.getOrNull() }
+        ?: RouteEditingTarget.DESTINATION
 
 @androidx.compose.runtime.Composable
 private fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {

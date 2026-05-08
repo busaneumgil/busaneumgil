@@ -8,6 +8,20 @@ DEPLOY_STATE_DIR="${DEPLOY_STATE_DIR:-.deploy-state}"
 DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-false}"
 
 export DEPLOY_GRAPHHOPPER
+
+require_env_value() {
+  local key="$1"
+  local raw
+
+  raw="$(grep -E "^${key}=" .env.prod | tail -n1 || true)"
+  if [ -z "$raw" ] || [ "${raw#*=}" = "" ]; then
+    echo "${key} must be set in .env.prod" >&2
+    exit 1
+  fi
+}
+
+require_env_value JWT_SECRET
+
 if [ ! -f "$DEPLOY_STATE_DIR/previous-app-image" ]; then
   echo "No previous app image tag recorded in $DEPLOY_STATE_DIR/previous-app-image" >&2
   exit 1
@@ -38,4 +52,4 @@ if [ -f "$DEPLOY_STATE_DIR/previous-graphhopper-image" ]; then
   cp "$DEPLOY_STATE_DIR/previous-graphhopper-image" "$DEPLOY_STATE_DIR/current-graphhopper-image"
 fi
 
-"$ROOT_DIR/scripts/deploy/prod-smoke.sh"
+bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"

@@ -197,6 +197,7 @@ ENUM_VALUES = {
 UNKNOWN_WARNING_THRESHOLD = 0.90
 ENDPOINT_TOLERANCE = 0.000001
 SPLIT_FRACTION_TOLERANCE = 0.000000001
+GEOMETRY_DECIMAL_PLACES = 12
 
 
 def jdbc_to_dsn(jdbc_url: str) -> dict:
@@ -471,7 +472,7 @@ def linestring_between_fractions(coords, start_fraction, end_fraction):
 def format_linestring_wkt(coords):
     formatted = []
     for lon, lat in coords:
-        formatted.append(f"{float(lon):.8f} {float(lat):.8f}")
+        formatted.append(f"{float(lon):.{GEOMETRY_DECIMAL_PLACES}f} {float(lat):.{GEOMETRY_DECIMAL_PLACES}f}")
     return f'LINESTRING({", ".join(formatted)})'
 
 
@@ -808,8 +809,8 @@ def write_osm(nodes, segments, output):
             "node",
             {
                 "id": str(node_id_map[int(node["vertex_id"])]),
-                "lat": f'{float(node["lat"]):.8f}',
-                "lon": f'{float(node["lon"]):.8f}',
+                "lat": f'{float(node["lat"]):.{GEOMETRY_DECIMAL_PLACES}f}',
+                "lon": f'{float(node["lon"]):.{GEOMETRY_DECIMAL_PLACES}f}',
             },
         )
         tag(osm_node, "ieum:vertex_id", node["vertex_id"])
@@ -828,8 +829,8 @@ def write_osm(nodes, segments, output):
                 "node",
                 {
                     "id": str(synthetic_id),
-                    "lat": f"{lat:.8f}",
-                    "lon": f"{lon:.8f}",
+                    "lat": f"{lat:.{GEOMETRY_DECIMAL_PLACES}f}",
+                    "lon": f"{lon:.{GEOMETRY_DECIMAL_PLACES}f}",
                 },
             )
             refs.append(synthetic_id)

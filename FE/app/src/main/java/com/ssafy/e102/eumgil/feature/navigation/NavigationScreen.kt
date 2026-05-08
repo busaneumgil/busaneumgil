@@ -82,9 +82,15 @@ fun NavigationScreen(
                 )
             },
             bottomBar = {
+                val bottomBarLayoutPolicy =
+                    navigationBottomBarLayoutPolicy(
+                        showSegmentRail = screenPolicy.showSegmentRail,
+                        railWidth = railWidth,
+                    )
                 NavigationBottomBar(
                     uiState = uiState,
                     onAction = onAction,
+                    layoutPolicy = bottomBarLayoutPolicy,
                 )
             },
         ) { innerPadding ->
@@ -176,11 +182,36 @@ internal data class NavigationScreenPolicy(
     val showReturnToActiveAction: Boolean,
 )
 
+internal data class NavigationHeroLayoutPolicy(
+    val minHeight: Dp,
+    val maxHeight: Dp,
+    val showBottomDivider: Boolean,
+)
+
+internal data class NavigationBottomBarLayoutPolicy(
+    val topDividerStartInset: Dp,
+)
+
 internal fun navigationScreenPolicy(uiState: NavigationUiState): NavigationScreenPolicy =
     NavigationScreenPolicy(
         showSegmentRail = uiState.segmentSync.railItems.isNotEmpty() || uiState.canOpenRouteDetail,
         showFocusedSegmentCard = false,
         showReturnToActiveAction = uiState.segmentSync.isInspectingSegments,
+    )
+
+internal fun navigationHeroLayoutPolicy(screenHeight: Dp): NavigationHeroLayoutPolicy =
+    NavigationHeroLayoutPolicy(
+        minHeight = 116.dp,
+        maxHeight = (screenHeight * 0.24f).coerceAtLeast(132.dp),
+        showBottomDivider = false,
+    )
+
+internal fun navigationBottomBarLayoutPolicy(
+    showSegmentRail: Boolean,
+    railWidth: Dp,
+): NavigationBottomBarLayoutPolicy =
+    NavigationBottomBarLayoutPolicy(
+        topDividerStartInset = if (showSegmentRail) railWidth else 0.dp,
     )
 
 @Composable
@@ -190,13 +221,13 @@ private fun NavigationHeroCard(
 ) {
     val heroGuidanceAction = uiState.focusedSegmentCard?.guidanceAction ?: uiState.stepCard.guidanceAction
     val heroDistanceLabel = uiState.focusedSegmentCard?.distanceLabel ?: uiState.stepCard.distanceLabel
-    val maxHeroHeight = (LocalConfiguration.current.screenHeightDp.dp / 5).coerceAtLeast(96.dp)
+    val layoutPolicy = navigationHeroLayoutPolicy(LocalConfiguration.current.screenHeightDp.dp)
 
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 88.dp, max = maxHeroHeight),
+                .heightIn(min = layoutPolicy.minHeight, max = layoutPolicy.maxHeight),
         shape = RoundedCornerShape(0.dp),
         color = MaterialTheme.colorScheme.primary,
     ) {
@@ -241,9 +272,11 @@ private fun NavigationHeroCard(
                     onAction = onAction,
                 )
             }
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
-            )
+            if (layoutPolicy.showBottomDivider) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
+                )
+            }
         }
     }
 }
@@ -643,6 +676,7 @@ private fun NavigationMapControls(
 private fun NavigationBottomBar(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
+    layoutPolicy: NavigationBottomBarLayoutPolicy,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -656,6 +690,10 @@ private fun NavigationBottomBar(
                     .navigationBarsPadding(),
         ) {
             HorizontalDivider(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = layoutPolicy.topDividerStartInset),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
             )
             Box(

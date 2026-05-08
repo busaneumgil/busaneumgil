@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteStopResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
@@ -318,9 +319,16 @@ public class TransitRouteSearchService {
 			int legIndex = legs.size() + 1;
 			try {
 				if (odsayLeg.type() == TransportMode.WALK) {
-					boolean hasNextTransit = hasNextTransit(odsayLegs, odsayIndex);
+					TransportMode nextTransitType = nextTransitType(odsayLegs, odsayIndex);
+					TransportMode previousTransitType = previousTransitType(odsayLegs, odsayIndex);
 					GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayIndex, endPoint, cursor);
-					RouteLegResponse walkLeg = toWalkLeg(legIndex, cursor, nextPoint, hasNextTransit, profile);
+					RouteLegResponse walkLeg = toWalkLeg(
+						legIndex,
+						cursor,
+						nextPoint,
+						previousTransitType,
+						nextTransitType,
+						profile);
 					if (walkLeg == null) {
 						return List.of();
 					}
@@ -372,21 +380,34 @@ public class TransitRouteSearchService {
 		return endPoint;
 	}
 
-	private boolean hasNextTransit(List<OdsayTransitLeg> odsayLegs, int currentIndex) {
+	private TransportMode nextTransitType(List<OdsayTransitLeg> odsayLegs, int currentIndex) {
 		for (int index = currentIndex + 1; index < odsayLegs.size(); index++) {
-			if (odsayLegs.get(index).type() != TransportMode.WALK) {
-				return true;
+			TransportMode type = odsayLegs.get(index).type();
+			if (type != TransportMode.WALK) {
+				return type;
 			}
 		}
-		return false;
+		return null;
+	}
+
+	private TransportMode previousTransitType(List<OdsayTransitLeg> odsayLegs, int currentIndex) {
+		for (int index = currentIndex - 1; index >= 0; index--) {
+			TransportMode type = odsayLegs.get(index).type();
+			if (type != TransportMode.WALK) {
+				return type;
+			}
+		}
+		return null;
 	}
 
 	private RouteLegResponse toWalkLeg(
 		int sequence,
 		GeoPointRequest from,
 		GeoPointRequest to,
-		boolean hasNextTransit,
+		TransportMode previousTransitType,
+		TransportMode nextTransitType,
 		WalkRouteUserProfile profile) {
+		boolean hasNextTransit = nextTransitType != null;
 		if (GeoDistanceCalculator.distanceMeter(from, to) < 1.0) {
 			return new RouteLegResponse(
 				sequence,
@@ -406,6 +427,9 @@ public class TransitRouteSearchService {
 				List.of());
 		}
 		try {
+			RouteGuidanceEventType startEventType = previousTransitType == null
+				? null
+				: RouteGuidanceEventType.ARRIVING_POINT;
 			GraphHopperRoutePath path = graphHopperRouteClient.route(new GraphHopperRouteRequest(
 				from,
 				to,
@@ -417,13 +441,25 @@ public class TransitRouteSearchService {
 				sequence,
 				walkRole(hasNextTransit),
 				walkInstruction(hasNextTransit),
-				path);
+				path,
+				startEventType,
+				destinationEventType(nextTransitType));
 		} catch (RouteException exception) {
 			if (exception.getErrorCode() == RouteErrorCode.ROUTE_NOT_FOUND) {
 				return null;
 			}
 			throw exception;
 		}
+	}
+
+	private RouteGuidanceEventType destinationEventType(TransportMode nextTransitType) {
+		if (nextTransitType == TransportMode.BUS) {
+			return RouteGuidanceEventType.BUS_STOP;
+		}
+		if (nextTransitType == TransportMode.SUBWAY) {
+			return RouteGuidanceEventType.SUBWAY_ELEVATOR;
+		}
+		return RouteGuidanceEventType.DESTINATION;
 	}
 
 	private RouteLegResponse toTransitLeg(

@@ -9,7 +9,8 @@ import org.junit.Test
 
 class LowVisionHomeScreenTest {
     @Test
-    fun `home screen reserves the low vision title slot without visible text`() {
+    fun `home screen shows the low vision brand title in the reserved header slot`() {
+        assertEquals("\uBD80\uC0B0\uC774\uC74C\uAE38", LowVisionHomeLayoutDefaults.headerTitle)
         assertEquals(48.dp, LowVisionHomeLayoutDefaults.headerSlotHeight)
     }
 

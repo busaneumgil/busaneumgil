@@ -30,6 +30,10 @@ sealed interface SearchUiAction {
         val editingTarget: RouteEditingTarget,
     ) : SearchUiAction
 
+    data class EntryRouteEntered(
+        val preserveState: Boolean,
+    ) : SearchUiAction
+
     data object VoiceInputClicked : SearchUiAction
 
     data object VoiceRouteEntered : SearchUiAction
@@ -57,6 +61,12 @@ sealed interface SearchUiAction {
     data class RecentSearchClicked(
         val keyword: String,
     ) : SearchUiAction
+
+    data class RecentSearchDeleteClicked(
+        val keyword: String,
+    ) : SearchUiAction
+
+    data object RecentSearchClearAllClicked : SearchUiAction
 
     data class SearchResultClicked(
         val result: SearchResult,

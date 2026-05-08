@@ -103,6 +103,63 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `recent search delete removes keyword from ui state`() =
+        runTest {
+            val searchRepository =
+                FakeSearchRepository(
+                    recentSearches =
+                        listOf(
+                            RecentSearch(keyword = "Busan City Hall", searchedAtMillis = 2_000L),
+                            RecentSearch(keyword = "Busan Station", searchedAtMillis = 1_000L),
+                        ),
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.RecentSearchDeleteClicked(keyword = "Busan City Hall"))
+            advanceUntilIdle()
+
+            assertEquals(listOf("Busan City Hall"), searchRepository.deletedRecentSearchKeywords)
+            assertEquals(
+                listOf("Busan Station"),
+                viewModel.uiState.value.recentSearches.map(RecentSearch::keyword),
+            )
+        }
+
+    @Test
+    fun `recent search clear all removes every keyword from ui state`() =
+        runTest {
+            val searchRepository =
+                FakeSearchRepository(
+                    recentSearches =
+                        listOf(
+                            RecentSearch(keyword = "Busan City Hall", searchedAtMillis = 2_000L),
+                            RecentSearch(keyword = "Busan Station", searchedAtMillis = 1_000L),
+                        ),
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.RecentSearchClearAllClicked)
+            advanceUntilIdle()
+
+            assertEquals(1, searchRepository.clearRecentSearchesCallCount)
+            assertEquals(emptyList<String>(), viewModel.uiState.value.recentSearches.map(RecentSearch::keyword))
+        }
+
+    @Test
     fun `voice input click emits voice route navigation`() =
         runTest {
             val viewModel =
@@ -119,6 +176,67 @@ class SearchViewModelTest {
             advanceUntilIdle()
 
             assertEquals(SearchUiEvent.NavigateToVoiceInput, uiEvent.await())
+        }
+
+    @Test
+    fun `fresh search entry re-entry resets empty query warning to default state`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "   "))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+
+            assertEquals(SearchResultUiState.EmptyQuery, viewModel.uiState.value.resultState)
+
+            viewModel.onAction(SearchUiAction.EntryRouteEntered(preserveState = false))
+            advanceUntilIdle()
+
+            assertEquals("", viewModel.uiState.value.query)
+            assertFalse(viewModel.uiState.value.hasEditedQuery)
+            assertEquals(SearchResultUiState.Initial, viewModel.uiState.value.resultState)
+        }
+
+    @Test
+    fun `search flow re-entry preserves current query and result state`() =
+        runTest {
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(searchResults = listOf(result)),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "Busan City Hall"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+
+            val resultStateBeforeReentry = viewModel.uiState.value.resultState
+
+            viewModel.onAction(SearchUiAction.EntryRouteEntered(preserveState = true))
+            advanceUntilIdle()
+
+            assertEquals("Busan City Hall", viewModel.uiState.value.query)
+            assertTrue(viewModel.uiState.value.hasEditedQuery)
+            assertEquals(resultStateBeforeReentry, viewModel.uiState.value.resultState)
         }
 
     @Test
@@ -636,9 +754,13 @@ class SearchViewModelTest {
 private class FakeSearchRepository(
     private val searchResults: List<SearchResult> = emptyList(),
     private val voiceAnalysis: SearchVoiceAnalysis? = null,
+    recentSearches: List<RecentSearch> = emptyList(),
 ) : SearchRepository {
     val savedRecentDestinations = mutableListOf<RecentDestination>()
     val voiceAnalysisRequests = mutableListOf<Pair<String, SearchVoiceMode>>()
+    val deletedRecentSearchKeywords = mutableListOf<String>()
+    var clearRecentSearchesCallCount = 0
+    private val recentSearches = MutableStateFlow(recentSearches)
 
     override suspend fun search(query: SearchQuery): List<SearchResult> = searchResults
 
@@ -654,9 +776,22 @@ private class FakeSearchRepository(
             )
     }
 
-    override suspend fun getRecentSearches(): List<RecentSearch> = emptyList()
+    override suspend fun getRecentSearches(): List<RecentSearch> = recentSearches.value
 
     override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun deleteRecentSearch(keyword: String) {
+        deletedRecentSearchKeywords += keyword
+        recentSearches.value =
+            recentSearches.value.filterNot { recentSearch ->
+                recentSearch.keyword.equals(keyword, ignoreCase = true)
+            }
+    }
+
+    override suspend fun clearRecentSearches() {
+        clearRecentSearchesCallCount += 1
+        recentSearches.value = emptyList()
+    }
 
     override suspend fun getRecentDestinations(): List<RecentDestination> = emptyList()
 

@@ -22,12 +22,14 @@ fun SearchEntryRoute(
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    preserveEntryStateOnReentry: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     SearchRouteContent(
         destination = SearchScreenDestination.Entry,
         initialQuery = null,
         initialEditingTarget = initialEditingTarget,
+        preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
@@ -86,6 +88,7 @@ private fun SearchRouteContent(
     destination: SearchScreenDestination,
     initialQuery: String?,
     initialEditingTarget: RouteEditingTarget,
+    preserveEntryStateOnReentry: Boolean = false,
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
@@ -118,6 +121,16 @@ private fun SearchRouteContent(
 
     LaunchedEffect(viewModel, initialEditingTarget) {
         viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = initialEditingTarget))
+    }
+
+    LaunchedEffect(viewModel, destination, preserveEntryStateOnReentry) {
+        if (destination == SearchScreenDestination.Entry) {
+            viewModel.onAction(
+                SearchUiAction.EntryRouteEntered(
+                    preserveState = preserveEntryStateOnReentry,
+                ),
+            )
+        }
     }
 
     LaunchedEffect(viewModel, initialQuery) {

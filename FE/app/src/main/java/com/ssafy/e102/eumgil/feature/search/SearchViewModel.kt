@@ -46,6 +46,7 @@ class SearchViewModel(
         when (action) {
             SearchUiAction.BackClicked -> emitUiEvent(SearchUiEvent.NavigateBack)
             is SearchUiAction.EditingTargetConfigured -> configureEditingTarget(action.editingTarget)
+            is SearchUiAction.EntryRouteEntered -> enterEntryRoute(preserveState = action.preserveState)
             SearchUiAction.VoiceInputClicked -> emitUiEvent(SearchUiEvent.NavigateToVoiceInput)
             SearchUiAction.VoiceRouteEntered -> enterVoiceRoute()
             SearchUiAction.VoiceCaptureButtonClicked -> startVoiceCapture()
@@ -56,6 +57,8 @@ class SearchViewModel(
             is SearchUiAction.QueryChanged -> updateQuery(action.query)
             is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
+            is SearchUiAction.RecentSearchDeleteClicked -> deleteRecentSearch(action.keyword)
+            SearchUiAction.RecentSearchClearAllClicked -> clearRecentSearches()
             is SearchUiAction.SearchResultClicked -> selectSearchResult(action.result)
             is SearchUiAction.SearchResultBriefingClicked -> briefSearchResult(action.result)
             is SearchUiAction.BookmarkToggleClicked -> toggleBookmark(action.result)
@@ -214,6 +217,20 @@ class SearchViewModel(
             )
         }
         renderInputState()
+    }
+
+    private fun enterEntryRoute(preserveState: Boolean) {
+        if (preserveState) return
+
+        searchJob?.cancel()
+        mutableUiState.update { state ->
+            state.copy(
+                query = "",
+                hasEditedQuery = false,
+                resultState = SearchResultUiState.Initial,
+                voiceInputState = SearchVoiceInputUiState(),
+            )
+        }
     }
 
     private fun enterVoiceRoute() {
@@ -410,6 +427,43 @@ class SearchViewModel(
                 } catch (throwable: Throwable) {
                     if (throwable is CancellationException) throw throwable
                     emptyList()
+                }
+
+            mutableUiState.update { state ->
+                state.copy(recentSearches = recentSearches)
+            }
+        }
+    }
+
+    private fun deleteRecentSearch(keyword: String) {
+        val normalizedKeyword = keyword.trim()
+        if (normalizedKeyword.isEmpty()) return
+
+        viewModelScope.launch {
+            val recentSearches =
+                try {
+                    searchRepository.deleteRecentSearch(normalizedKeyword)
+                    searchRepository.getRecentSearches()
+                } catch (throwable: Throwable) {
+                    if (throwable is CancellationException) throw throwable
+                    mutableUiState.value.recentSearches
+                }
+
+            mutableUiState.update { state ->
+                state.copy(recentSearches = recentSearches)
+            }
+        }
+    }
+
+    private fun clearRecentSearches() {
+        viewModelScope.launch {
+            val recentSearches =
+                try {
+                    searchRepository.clearRecentSearches()
+                    searchRepository.getRecentSearches()
+                } catch (throwable: Throwable) {
+                    if (throwable is CancellationException) throw throwable
+                    mutableUiState.value.recentSearches
                 }
 
             mutableUiState.update { state ->

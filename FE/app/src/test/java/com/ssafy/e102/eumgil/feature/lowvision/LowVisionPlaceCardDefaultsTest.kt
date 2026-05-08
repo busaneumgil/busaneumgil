@@ -6,9 +6,17 @@ import org.junit.Test
 
 class LowVisionPlaceCardDefaultsTest {
     @Test
-    fun `place action icons use bookmark and route navigation assets`() {
-        assertEquals(R.drawable.ic_nav_bookmark_outline, LowVisionPlaceCardDefaults.saveIconRes)
+    fun `place action icons use filled bookmark and route navigation assets`() {
+        assertEquals(R.drawable.ic_nav_bookmark_selected, LowVisionPlaceCardDefaults.saveIconRes)
         assertEquals(R.drawable.ic_route_start_navigation, LowVisionPlaceCardDefaults.routeIconRes)
+    }
+
+    @Test
+    fun `place actions put navigation before bookmark actions`() {
+        assertEquals(
+            listOf(LowVisionPlaceCardAction.Navigate, LowVisionPlaceCardAction.Bookmark),
+            LowVisionPlaceCardDefaults.actionOrder,
+        )
     }
 
     @Test

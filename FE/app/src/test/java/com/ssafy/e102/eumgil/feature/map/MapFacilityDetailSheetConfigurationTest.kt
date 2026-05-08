@@ -1,0 +1,172 @@
+package com.ssafy.e102.eumgil.feature.map
+
+import java.io.File
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class MapFacilityDetailSheetConfigurationTest {
+    @Test
+    fun `facility detail sheet removes legacy section labels and guide copy`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertFalse(
+            "Accessibility tag title should be removed from the place detail sheet body.",
+            source.contains("map_facility_detail_accessibility_section_title"),
+        )
+        assertFalse(
+            "Guide section title should be removed from the place detail sheet body.",
+            source.contains("map_facility_detail_info_section_title"),
+        )
+        assertFalse(
+            "CTA supporting copy should be removed from the place detail action area.",
+            source.contains("map_facility_detail_action_supporting_route_setting"),
+        )
+        assertFalse(
+            "Legacy guide card should no longer be rendered in the place detail sheet.",
+            source.contains("FacilityDetailSlotCard("),
+        )
+    }
+
+    @Test
+    fun `facility detail bottom sheet shell removes divider chrome`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+
+        assertFalse(
+            "Detail sheet header/body/action sections should be separated by spacing rather than dividers.",
+            source.contains("HorizontalDivider"),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use dedicated public office icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Public office category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated public office place icon.",
+            source.contains("PlaceCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office"),
+        )
+        assertTrue(
+            "Dedicated public office drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_public_office.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use dedicated tourist icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Tourist spot category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot"),
+        )
+        assertTrue(
+            "Tourist attraction category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated tourist place icon for tourist spots.",
+            source.contains("PlaceCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated tourist place icon for tourist attractions.",
+            source.contains("PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot"),
+        )
+        assertTrue(
+            "Dedicated tourist place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_tourist_spot.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use dedicated accommodation icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Accommodation category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated accommodation place icon.",
+            source.contains("PlaceCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation"),
+        )
+        assertTrue(
+            "Dedicated accommodation place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_accommodation.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use dedicated healthcare icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Healthcare category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated healthcare place icon.",
+            source.contains("PlaceCategory.HEALTHCARE -> R.drawable.ic_place_healthcare"),
+        )
+        assertTrue(
+            "Dedicated healthcare place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_healthcare.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use dedicated welfare icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Welfare category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.WELFARE -> R.drawable.ic_place_welfare"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated welfare place icon.",
+            source.contains("PlaceCategory.WELFARE -> R.drawable.ic_place_welfare"),
+        )
+        assertTrue(
+            "Dedicated welfare place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_welfare.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use dedicated food cafe icon asset for food categories`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Food cafe category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
+        )
+        assertTrue(
+            "Restaurant category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated food cafe place icon for food cafes.",
+            source.contains("PlaceCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated food cafe place icon for restaurants.",
+            source.contains("PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+        )
+        assertTrue(
+            "Dedicated food cafe place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_food_cafe.png").exists(),
+        )
+    }
+}

@@ -34,4 +34,6 @@ data class LowVisionHomeUiState(
 data class LowVisionVoiceInputUiState(
     val isRecording: Boolean = true,
     val selectedTab: LowVisionBottomTab = LowVisionBottomTab.HOME,
+    /** AI 확인 요청 메시지 (TTS 재생용). null이면 대기 없음. */
+    val confirmationMessage: String? = null,
 )

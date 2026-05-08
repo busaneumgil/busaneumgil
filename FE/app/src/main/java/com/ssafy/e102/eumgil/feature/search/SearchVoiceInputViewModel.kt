@@ -4,10 +4,14 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeIntent
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeMode
 import com.ssafy.e102.eumgil.core.stt.AudioRecorder
 import com.ssafy.e102.eumgil.core.stt.SherpaManager
 import com.ssafy.e102.eumgil.core.stt.SttManager
 import com.ssafy.e102.eumgil.core.stt.VadManager
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -36,6 +40,10 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
     companion object {
         private const val TAG = "SearchVoiceInputVM"
         private const val SILENCE_FRAMES_FOR_STOP = 30
+    }
+
+    private val voiceAnalyzeRepository: VoiceAnalyzeRepository by lazy {
+        (getApplication<Application>() as BusanEumgilApp).appContainer.voiceAnalyzeRepository
     }
 
     private val _uiEvent = Channel<SearchVoiceInputEvent>(Channel.BUFFERED)
@@ -140,7 +148,7 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
                 if (text.isBlank()) {
                     _uiEvent.send(SearchVoiceInputEvent.TranscriptEmpty)
                 } else {
-                    _uiEvent.send(SearchVoiceInputEvent.TranscriptReady(text = text))
+                    dispatchAnalyze(text)
                 }
             } else {
                 Log.d(TAG, "발화 없음 또는 취소 — 뒤로 이동")
@@ -151,6 +159,25 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
             withContext(Dispatchers.Main) {
                 _uiEvent.send(SearchVoiceInputEvent.TranscriptEmpty)
             }
+        }
+    }
+
+    private suspend fun dispatchAnalyze(sttText: String) {
+        try {
+            Log.d(TAG, "=== 음성 분석 요청: '$sttText' ===")
+            val result = voiceAnalyzeRepository.analyze(
+                text = sttText,
+                mode = VoiceAnalyzeMode.MOBILITY_IMPAIRED,
+            )
+            Log.d(TAG, "=== 음성 분석 완료: intent=${result.intent}, placeName=${result.placeName} ===")
+            if (result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && !result.placeName.isNullOrBlank()) {
+                _uiEvent.send(SearchVoiceInputEvent.TranscriptReady(text = result.placeName))
+            } else {
+                Log.e(TAG, "음성 분석 API 호출 실패: intent=${result.intent}, placeName=${result.placeName}")
+                _uiEvent.send(SearchVoiceInputEvent.TranscriptEmpty)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "음성 분석 API 호출 실패: ${e.message}")
         }
     }
 

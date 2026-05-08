@@ -4,10 +4,16 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeHistoryItem
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeIntent
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeMode
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeResult
 import com.ssafy.e102.eumgil.core.stt.AudioRecorder
 import com.ssafy.e102.eumgil.core.stt.SherpaManager
 import com.ssafy.e102.eumgil.core.stt.SttManager
 import com.ssafy.e102.eumgil.core.stt.VadManager
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -18,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 sealed interface LowVisionVoiceInputEvent {
     /** VAD + STT 파이프라인 완료: [query]를 검색어로 결과 화면으로 이동. */
@@ -42,6 +49,12 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
     companion object {
         private const val TAG = "LowVisionVoiceInputVM"
         private const val SILENCE_FRAMES_FOR_STOP = 30
+        private const val ROLE_USER = "user"
+        private const val ROLE_ASSISTANT = "assistant"
+    }
+
+    private val voiceAnalyzeRepository: VoiceAnalyzeRepository by lazy {
+        (getApplication<Application>() as BusanEumgilApp).appContainer.voiceAnalyzeRepository
     }
 
     private val _uiState = MutableStateFlow(LowVisionVoiceInputUiState())
@@ -54,6 +67,9 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
     private var vadManager: VadManager? = null
     private var sttManager: SttManager? = null
     private var recordingJob: Job? = null
+
+    /** 멀티턴 대화 히스토리 (user/assistant 교번 구조). */
+    private val conversationHistory = mutableListOf<VoiceAnalyzeHistoryItem>()
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -153,7 +169,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                     if (text.isBlank()) {
                         _uiEvent.send(LowVisionVoiceInputEvent.RecordingCancelled)
                     } else {
-                        _uiEvent.send(LowVisionVoiceInputEvent.RecordingCompleted(query = text))
+                        handleSttResult(text)
                     }
                 } else {
                     Log.d(TAG, "발화 없음 또는 취소 — 홈으로 복귀")
@@ -167,6 +183,90 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
             }
         }
     }
+
+    /**
+     * STT 결과를 AI 분석 API에 전달하고 멀티턴 대화를 진행한다.
+     *
+     * - confirmed == null && confirmationMessage != null → TTS 확인 요청, 다음 발화 대기
+     * - confirmed == true → [LowVisionVoiceInputEvent.RecordingCompleted] 발행
+     * - confirmed == false / intent == UNKNOWN → 히스토리 초기화 후 재녹음
+     */
+    private suspend fun handleSttResult(sttText: String) {
+        // 사용자 발화를 히스토리에 추가
+        conversationHistory.add(VoiceAnalyzeHistoryItem(role = ROLE_USER, content = sttText))
+
+        try {
+            Log.d(TAG, "=== 음성 분석 요청 (history=${conversationHistory.size}턴): '$sttText' ===")
+            val result = voiceAnalyzeRepository.analyze(
+                text = sttText,
+                mode = VoiceAnalyzeMode.LOW_VISION,
+                history = conversationHistory.toList(),
+            )
+            Log.d(TAG, "=== 음성 분석 완료: intent=${result.intent}, confirmed=${result.confirmed}, placeName=${result.placeName} ===")
+
+            // 어시스턴트 응답을 JSON 직렬화하여 히스토리에 추가
+            conversationHistory.add(
+                VoiceAnalyzeHistoryItem(
+                    role = ROLE_ASSISTANT,
+                    content = result.toJsonString(),
+                ),
+            )
+
+            when {
+                result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == true -> {
+                    // 사용자 확인 완료 → 검색 결과 화면으로
+                    val placeName = result.placeName.orEmpty()
+                    Log.d(TAG, "=== 확인 완료 → '$placeName' 검색 ===")
+                    _uiEvent.send(LowVisionVoiceInputEvent.RecordingCompleted(query = placeName))
+                }
+
+                result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == null && !result.confirmationMessage.isNullOrBlank() -> {
+                    // AI 확인 요청 → TTS 메시지 표시 후 다음 발화 대기
+                    Log.d(TAG, "=== 확인 요청: '${result.confirmationMessage}' ===")
+                    _uiState.value = _uiState.value.copy(confirmationMessage = result.confirmationMessage)
+                    startRecording()
+                }
+
+                result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == false -> {
+                    // 장소 부정 → 새 장소로 전환, history 유지 + TTS 대기 (confirmed=null 브랜치와 동일)
+                    Log.d(TAG, "=== 장소 부정 → 새 장소 탐색 (confirmationMessage=${result.confirmationMessage}) ===")
+                    _uiState.value = _uiState.value.copy(confirmationMessage = result.confirmationMessage)
+                    startRecording()
+                }
+
+                result.intent == VoiceAnalyzeIntent.UNKNOWN -> {
+                    // confirmed 값 무관 — 의도 파악 실패 → 히스토리 초기화 후 재녹음
+                    Log.d(TAG, "=== 의도 미인식 → 히스토리 초기화 후 재녹음 ===")
+                    conversationHistory.clear()
+                    _uiState.value = _uiState.value.copy(confirmationMessage = null)
+                    startRecording()
+                }
+
+                else -> {
+                    // 예외 케이스 → 재녹음
+                    Log.d(TAG, "=== 예외 케이스 → 재녹음 ===")
+                    conversationHistory.clear()
+                    _uiState.value = _uiState.value.copy(confirmationMessage = null)
+                    startRecording()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "음성 분석 실패 — 재녹음: ${e.message}", e)
+            // 분석 실패 시 히스토리 초기화 후 재녹음
+            conversationHistory.clear()
+            _uiState.value = _uiState.value.copy(confirmationMessage = null)
+            withContext(Dispatchers.Main) { startRecording() }
+        }
+    }
+
+    /** [VoiceAnalyzeResult]를 히스토리용 JSON 문자열로 직렬화한다. */
+    private fun VoiceAnalyzeResult.toJsonString(): String =
+        JSONObject().apply {
+            put("intent", intent.name)
+            if (placeName != null) put("placeName", placeName) else put("placeName", JSONObject.NULL)
+            if (confirmed != null) put("confirmed", confirmed) else put("confirmed", JSONObject.NULL)
+            if (confirmationMessage != null) put("confirmationMessage", confirmationMessage) else put("confirmationMessage", JSONObject.NULL)
+        }.toString()
 
     override fun onCleared() {
         super.onCleared()

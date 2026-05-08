@@ -139,6 +139,11 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 onNavigateToRouteSetting = {
                     navController.navigate(LowVisionRoute.Guidance.route)
                 },
+                onNavigateToRouteBriefing = {
+                    navController.navigate(LowVisionRoute.RouteBriefing.route) {
+                        launchSingleTop = true
+                    }
+                },
                 onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
             )
         }

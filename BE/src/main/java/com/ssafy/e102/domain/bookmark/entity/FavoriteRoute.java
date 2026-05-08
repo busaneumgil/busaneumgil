@@ -38,22 +38,22 @@ public class FavoriteRoute extends BaseEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	@Column(nullable = false, updatable = false)
+	@Column(name = "fav_route_id", nullable = false, updatable = false)
 	private Long favRouteId;
 
-	@Column(nullable = false, length = 511)
+	@Column(name = "route_name", nullable = false, length = 511)
 	private String routeName;
 
-	@Column(nullable = false, length = 255)
+	@Column(name = "start_label", nullable = false, length = 255)
 	private String startLabel;
 
-	@Column(nullable = false, length = 255)
+	@Column(name = "end_label", nullable = false, length = 255)
 	private String endLabel;
 
-	@Column(nullable = false, columnDefinition = "geometry(Point, 4326)")
+	@Column(name = "start_point", nullable = false, columnDefinition = "geometry(Point, 4326)")
 	private Point startPoint;
 
-	@Column(nullable = false, columnDefinition = "geometry(Point, 4326)")
+	@Column(name = "end_point", nullable = false, columnDefinition = "geometry(Point, 4326)")
 	private Point endPoint;
 
 	@Enumerated(EnumType.STRING)
@@ -61,7 +61,7 @@ public class FavoriteRoute extends BaseEntity {
 	private TransportMode transportMode;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 30)
+	@Column(name = "route_option", nullable = false, length = 30)
 	private RouteOption routeOption;
 
 	@JdbcTypeCode(SqlTypes.JSON)
@@ -69,7 +69,7 @@ public class FavoriteRoute extends BaseEntity {
 	private JsonNode routeSnapshotJson;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "userId", nullable = false)
+	@JoinColumn(name = "user_id", nullable = false)
 	private User user;
 
 	public static FavoriteRoute create(

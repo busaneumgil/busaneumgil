@@ -13,13 +13,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Getter
 @Entity
-@Table(name = "place_accessibility_features")
+@Table(name = "place_accessibility_features", uniqueConstraints = {
+	@UniqueConstraint(name = "uk_place_accessibility_features_place_type", columnNames = {"place_id", "feature_type"})
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PlaceAccessibilityFeature {
 
@@ -29,7 +32,7 @@ public class PlaceAccessibilityFeature {
 	private Integer id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "placeId", nullable = false)
+	@JoinColumn(name = "place_id", nullable = false)
 	private Place place;
 
 	@Enumerated(EnumType.STRING)

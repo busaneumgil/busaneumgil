@@ -22,6 +22,24 @@ data class RouteDto(
     val estimatedTimeMinute: Int? = null,
     val riskLevel: String? = null,
     val segments: List<RouteSegmentDto> = emptyList(),
+    val legs: List<RouteLegDto> = emptyList(),
+)
+
+data class RouteLegDto(
+    val steps: List<RouteStepDto> = emptyList(),
+)
+
+data class RouteStepDto(
+    val sequence: Int? = null,
+    val instruction: String? = null,
+    val geometry: String? = null,
+    val distanceMeter: Double? = null,
+    val alert: RouteStepAlertDto? = null,
+)
+
+data class RouteStepAlertDto(
+    val type: String? = null,
+    val distanceMeter: Double? = null,
 )
 
 data class RouteSegmentDto(

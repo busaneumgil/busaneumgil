@@ -102,6 +102,113 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertNotIn("e102:edge_id", first_way_tags)
         self.assertNotIn("ieum:crossing_state", first_way_tags)
 
+    def test_default_export_sql_uses_snake_case_columns_when_available(self):
+        module = load_export_module()
+
+        nodes_sql = module.build_road_nodes_sql({"vertex_id", "point"})
+        segments_sql = module.build_road_segments_sql({
+            "edge_id",
+            "from_node_id",
+            "to_node_id",
+            "geom",
+            "length_meter",
+            "walk_access",
+            "avg_slope_percent",
+            "width_meter",
+            "braille_block_state",
+            "audio_signal_state",
+            "slope_state",
+            "width_state",
+            "surface_state",
+            "stairs_state",
+            "signal_state",
+            "segment_type",
+        })
+
+        self.assertIn('"vertex_id" AS vertex_id', nodes_sql)
+        self.assertIn('ORDER BY "vertex_id"', nodes_sql)
+        self.assertIn('"edge_id" AS edge_id', segments_sql)
+        self.assertIn('COALESCE("walk_access"::text', segments_sql)
+        self.assertIn('ORDER BY "edge_id"', segments_sql)
+
+    def test_default_export_sql_falls_back_to_legacy_camel_case_columns(self):
+        module = load_export_module()
+
+        nodes_sql = module.build_road_nodes_sql({"vertexId", "point"})
+        segments_sql = module.build_road_segments_sql({
+            "edgeId",
+            "fromNodeId",
+            "toNodeId",
+            "geom",
+            "lengthMeter",
+            "walkAccess",
+            "avgSlopePercent",
+            "widthMeter",
+            "brailleBlockState",
+            "audioSignalState",
+            "slopeState",
+            "widthState",
+            "surfaceState",
+            "stairsState",
+            "signalState",
+            "segmentType",
+        })
+
+        self.assertIn('"vertexId" AS vertex_id', nodes_sql)
+        self.assertIn('ORDER BY "vertexId"', nodes_sql)
+        self.assertIn('"edgeId" AS edge_id', segments_sql)
+        self.assertIn('"fromNodeId" AS from_node_id', segments_sql)
+        self.assertIn('COALESCE("walkAccess"::text', segments_sql)
+        self.assertIn('ORDER BY "edgeId"', segments_sql)
+
+    def test_default_feature_sql_reads_snake_case_state_columns(self):
+        module = load_export_module()
+
+        features_sql = module.build_segment_features_sql({
+            "feature_id",
+            "edge_id",
+            "feature_type",
+            "geom",
+            "state",
+            "value_number",
+        })
+
+        self.assertIn('"feature_id" AS feature_id', features_sql)
+        self.assertIn('"edge_id" AS edge_id', features_sql)
+        self.assertIn('"feature_type"::text AS feature_type', features_sql)
+        self.assertIn('"state"::text AS state', features_sql)
+        self.assertIn('"value_number" AS value_number', features_sql)
+        self.assertIn("WHERE \"feature_type\"::text IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')", features_sql)
+        self.assertIn('ORDER BY "edge_id", "feature_id"', features_sql)
+
+    def test_default_feature_sql_falls_back_to_legacy_camel_case_columns(self):
+        module = load_export_module()
+
+        features_sql = module.build_segment_features_sql({
+            "featureId",
+            "edgeId",
+            "featureType",
+            "geom",
+            "state",
+            "valueNumber",
+        })
+
+        self.assertIn('"featureId" AS feature_id', features_sql)
+        self.assertIn('"edgeId" AS edge_id', features_sql)
+        self.assertIn('"featureType"::text AS feature_type', features_sql)
+        self.assertIn('"state"::text AS state', features_sql)
+        self.assertIn('"valueNumber" AS value_number', features_sql)
+        self.assertIn("WHERE \"featureType\"::text IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')", features_sql)
+        self.assertIn('ORDER BY "edgeId", "featureId"', features_sql)
+
+    def test_default_feature_sql_allows_old_minimal_feature_table_without_state_columns(self):
+        module = load_export_module()
+
+        features_sql = module.build_segment_features_sql({"feature_id", "edge_id", "feature_type", "geom"})
+
+        self.assertIn("NULL::text AS state", features_sql)
+        self.assertIn("NULL::numeric AS value_number", features_sql)
+
     def test_validate_graph_reports_pass_with_unknown_warnings(self):
         module = load_export_module()
 
@@ -143,9 +250,9 @@ class GraphhopperExportTest(unittest.TestCase):
 
         self.assertEqual(parsed["status"], "PASS")
 
-    def test_segment_features_split_source_segment_and_set_child_states(self):
-        # 계단과 경사 feature가 부분적으로 있는 원천 edge는 여러 최종 segment가 되어야 한다.
-        # child segment마다 하나의 안정적인 접근성 상태 집합이 필요하기 때문이다.
+    def test_segment_features_split_source_segment_only_for_position_events(self):
+        # 계단 같은 위치 이벤트는 분할 기준이 되지만, 경사 같은 구간 속성은
+        # road_segments 집계 컬럼에서만 읽고 segment_features에서는 무시한다.
         module = load_export_module()
         nodes = [
             {"vertex_id": 1, "lon": 0.0, "lat": 0.0},
@@ -191,19 +298,18 @@ class GraphhopperExportTest(unittest.TestCase):
 
         output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
 
-        self.assertEqual(len(output_nodes), 5)
-        self.assertEqual(len(output_segments), 4)
-        self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3, 4, 5])
-        self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 4, 5, 2])
+        self.assertEqual(len(output_nodes), 4)
+        self.assertEqual(len(output_segments), 3)
+        self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3, 4])
+        self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 4, 2])
         self.assertEqual(output_segments[1]["stairs_state"], "YES")
-        self.assertEqual(output_segments[2]["slope_state"], "FLAT")
-        self.assertEqual(output_segments[3]["slope_state"], "RISK")
-        self.assertEqual(output_segments[3]["avg_slope_percent"], "13.00")
+        self.assertTrue(all(segment["slope_state"] == "FLAT" for segment in output_segments))
+        self.assertTrue(all(segment["avg_slope_percent"] == "0.0" for segment in output_segments))
 
         report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
         self.assertEqual(report["status"], "PASS")
 
-    def test_segment_features_can_set_crosswalk_width_and_audio_states_without_split(self):
+    def test_segment_features_can_set_crosswalk_and_audio_states_without_width_override(self):
         # segment 전체를 덮는 feature는 상태값만 덮어쓴다.
         # point feature는 뒤쪽 child에만 영향을 주므로 분할 경계를 만든다.
         module = load_export_module()
@@ -264,8 +370,8 @@ class GraphhopperExportTest(unittest.TestCase):
         for segment in output_segments:
             self.assertEqual(segment["segment_type"], "CROSS_WALK")
             self.assertEqual(segment["signal_state"], "YES")
-            self.assertEqual(segment["width_meter"], "1.25")
-            self.assertEqual(segment["width_state"], "ADEQUATE_120")
+            self.assertEqual(segment["width_meter"], "0.0")
+            self.assertEqual(segment["width_state"], "UNKNOWN")
         self.assertEqual(output_segments[0]["audio_signal_state"], "UNKNOWN")
         self.assertEqual(output_segments[1]["audio_signal_state"], "YES")
 

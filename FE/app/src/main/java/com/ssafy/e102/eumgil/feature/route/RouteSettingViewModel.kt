@@ -76,10 +76,10 @@ class RouteSettingViewModel(
 
         viewModelScope.launch {
             // This ViewModel is activity-scoped, so same-place reselection needs an explicit request flow.
-            destinationSelectionRepository.selectionRequests.collectLatest { selectedDestination ->
+            destinationSelectionRepository.selectionRequests.collectLatest { request ->
                 hasLoadedInitialDestination = true
                 loadRouteShell(
-                    destinationResolution = resolveDestination(selectedDestination),
+                    destinationResolution = resolveDestination(request.state.selectedDestination),
                     resetSelectedOption = true,
                 )
             }
@@ -877,9 +877,9 @@ private fun RouteSegment.detailStepDescription(kind: RouteDetailStepKind): Strin
     val distanceLabel = distanceMeters.toDistanceLabel()
     val guidanceFallback = guidanceMessage.takeIf { message -> message.hasVisibleHangul() }
 
-    if (guidanceFallback != null && guidanceFallback != DEFAULT_GUIDANCE_MESSAGE) {
-        return guidanceFallback
-    }
+	if (guidanceFallback != null && guidanceFallback != DEFAULT_GUIDANCE_MESSAGE && kind != RouteDetailStepKind.CROSSWALK) {
+		return guidanceFallback
+	}
 
     return when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_DESCRIPTION
@@ -908,10 +908,13 @@ private fun RouteSegment.detailStepDescription(kind: RouteDetailStepKind): Strin
             "점자블록 유도선을 따라 주변 보행 흐름을 유지하며 이동하세요."
 
         RouteDetailStepKind.CROSSWALK ->
-            if (safetyFlags.hasSignal) {
-                "신호를 확인한 뒤 횡단보도를 건너세요."
-            } else {
-                "주변 차량을 먼저 확인한 뒤 횡단보도를 조심해서 건너세요."
+            when {
+                safetyFlags.hasAudioSignal ->
+                    "음향신호기 안내를 확인한 뒤 횡단보도를 건너세요."
+                safetyFlags.hasSignal ->
+                    "신호를 확인한 뒤 횡단보도를 건너세요."
+                else ->
+                    "주변 차량을 먼저 확인한 뒤 횡단보도를 조심해서 건너세요."
             }
 
         RouteDetailStepKind.ELEVATOR -> "안내된 엘리베이터를 이용해 다음 구간으로 이동하세요."
@@ -951,8 +954,8 @@ private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String
         RouteDetailStepKind.TACTILE_GUIDE -> DETAIL_STEP_BADGE_TACTILE_GUIDE
         RouteDetailStepKind.CROSSWALK ->
             when {
-                !safetyFlags.hasSignal -> DETAIL_STEP_BADGE_WARNING
                 safetyFlags.hasAudioSignal -> DETAIL_STEP_BADGE_AUDIO_SIGNAL
+                !safetyFlags.hasSignal -> DETAIL_STEP_BADGE_WARNING
                 else -> DETAIL_STEP_BADGE_CROSSWALK
             }
 

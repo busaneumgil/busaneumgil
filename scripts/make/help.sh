@@ -25,7 +25,7 @@ Docker Compose: prod server
   prod-up                      prod backend/ai runtime을 실행한다
   prod-up-graphhopper          prod GraphHopper runtime까지 실행한다
   prod-graphhopper-bootstrap   prod schema/road CSV/graph-cache/runtime 최초 배포 절차를 순서대로 실행한다
-  prod-schema-update           prod DB에 JPA 기반 schema를 생성하고 road table을 검증한다
+  prod-schema-update           prod DB에 JPA 기반 road/segment_features schema를 생성하고 검증한다
 
 Docker host scripts
   be-dev-config                백엔드 dev host 설정을 렌더링한다
@@ -36,6 +36,8 @@ Docker host scripts
 Dev DB data
   road-network-dev-load        LOCAL nodes/segments CSV를 dev DB road 테이블에 적재한다
   road-network-prod-load       LOCAL nodes/segments CSV를 prod DB road 테이블에 적재한다
+  accessibility-features-dev-load  LOCAL 접근성 CSV를 dev DB segment_features/road_segments에 반영한다
+  accessibility-features-prod-load LOCAL 접근성 CSV를 prod DB에 dry-run report로 먼저 검증한다
 
 GraphHopper
   graphhopper-dev-export-smoke dev DB export query와 validation sample을 빠르게 검증한다

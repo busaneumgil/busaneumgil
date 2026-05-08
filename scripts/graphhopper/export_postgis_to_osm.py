@@ -197,6 +197,7 @@ ENUM_VALUES = {
 UNKNOWN_WARNING_THRESHOLD = 0.90
 ENDPOINT_TOLERANCE = 0.000001
 SPLIT_FRACTION_TOLERANCE = 0.000000001
+EXPORT_COORDINATE_DECIMALS = 8
 
 
 def jdbc_to_dsn(jdbc_url: str) -> dict:
@@ -471,8 +472,37 @@ def linestring_between_fractions(coords, start_fraction, end_fraction):
 def format_linestring_wkt(coords):
     formatted = []
     for lon, lat in coords:
-        formatted.append(f"{float(lon):.8f} {float(lat):.8f}")
+        formatted.append(f"{float(lon):.{EXPORT_COORDINATE_DECIMALS}f} {float(lat):.{EXPORT_COORDINATE_DECIMALS}f}")
     return f'LINESTRING({", ".join(formatted)})'
+
+
+def same_export_coordinate(left, right):
+    return (
+        round(float(left[0]), EXPORT_COORDINATE_DECIMALS)
+        == round(float(right[0]), EXPORT_COORDINATE_DECIMALS)
+        and round(float(left[1]), EXPORT_COORDINATE_DECIMALS)
+        == round(float(right[1]), EXPORT_COORDINATE_DECIMALS)
+    )
+
+
+def normalize_split_fractions(coords, split_fractions):
+    """Merge split boundaries that become the same exported OSM coordinate."""
+    ordered = sorted(split_fractions)
+    normalized = []
+    for fraction in ordered:
+        point = point_at_fraction(coords, fraction)
+        if point is None:
+            continue
+        if not normalized:
+            normalized.append(fraction)
+            continue
+        previous_point = point_at_fraction(coords, normalized[-1])
+        if same_export_coordinate(previous_point, point):
+            if abs(fraction - 1.0) <= SPLIT_FRACTION_TOLERANCE:
+                normalized[-1] = 1.0
+            continue
+        normalized.append(fraction)
+    return normalized
 
 
 def feature_fraction_range(segment_coords, feature):
@@ -565,7 +595,7 @@ def apply_segment_features_to_export(nodes, segments, features):
 
         # 모든 feature가 segment 전체를 덮으면 topology 분할은 필요 없고,
         # 접근성 상태값 덮어쓰기만 적용한다.
-        ordered_fractions = sorted(split_fractions)
+        ordered_fractions = normalize_split_fractions(coords, split_fractions)
         if len(ordered_fractions) <= 2:
             patched_segment = dict(segment)
             for feature, start_fraction, end_fraction in feature_ranges:

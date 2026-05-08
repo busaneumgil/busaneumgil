@@ -375,6 +375,59 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual(output_segments[0]["audio_signal_state"], "UNKNOWN")
         self.assertEqual(output_segments[1]["audio_signal_state"], "YES")
 
+    def test_near_duplicate_feature_points_do_not_create_zero_length_child_segment(self):
+        module = load_export_module()
+        nodes = [
+            {"vertex_id": 1, "lon": 0.0, "lat": 0.0},
+            {"vertex_id": 2, "lon": 10.0, "lat": 0.0},
+        ]
+        segments = [
+            {
+                "edge_id": 300,
+                "from_node_id": 1,
+                "to_node_id": 2,
+                "geom_wkt": "LINESTRING(0 0, 10 0)",
+                "walk_access": "YES",
+                "avg_slope_percent": "0.0",
+                "width_meter": "2.0",
+                "braille_block_state": "UNKNOWN",
+                "audio_signal_state": "UNKNOWN",
+                "slope_state": "FLAT",
+                "width_state": "ADEQUATE_150",
+                "surface_state": "PAVED",
+                "stairs_state": "NO",
+                "signal_state": "UNKNOWN",
+                "segment_type": "SIDE_LINE",
+            }
+        ]
+        features = [
+            {
+                "feature_id": 1,
+                "edge_id": 300,
+                "feature_type": "CROSSWALK",
+                "geom_wkt": "POINT(5.000000001 0)",
+                "state": "YES",
+                "value_number": None,
+            },
+            {
+                "feature_id": 2,
+                "edge_id": 300,
+                "feature_type": "BRAILLE_BLOCK",
+                "geom_wkt": "POINT(5.000000002 0)",
+                "state": "YES",
+                "value_number": None,
+            },
+        ]
+
+        output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
+
+        self.assertEqual(len(output_nodes), 3)
+        self.assertEqual(len(output_segments), 2)
+        self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3])
+        self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 2])
+        report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
+        self.assertEqual(report["status"], "PASS")
+
     def test_custom_models_use_canonical_accessibility_enums(self):
         allowed_width_conditions = {
             "width_state == ADEQUATE_120",

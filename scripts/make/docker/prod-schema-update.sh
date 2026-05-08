@@ -48,24 +48,32 @@ host_port, db_name = url.split("/", 1)
 host, port = host_port.split(":", 1)
 
 required_columns = {
-    "road_nodes": ("vertexId", "sourceNodeKey", "point"),
+    "road_nodes": ("vertex_id", "source_node_key", "point"),
     "road_segments": (
-        "edgeId",
-        "fromNodeId",
-        "toNodeId",
+        "edge_id",
+        "from_node_id",
+        "to_node_id",
         "geom",
-        "lengthMeter",
-        "walkAccess",
-        "avgSlopePercent",
-        "widthMeter",
-        "brailleBlockState",
-        "audioSignalState",
-        "slopeState",
-        "widthState",
-        "surfaceState",
-        "stairsState",
-        "signalState",
-        "segmentType",
+        "length_meter",
+        "walk_access",
+        "avg_slope_percent",
+        "width_meter",
+        "braille_block_state",
+        "audio_signal_state",
+        "slope_state",
+        "width_state",
+        "surface_state",
+        "stairs_state",
+        "signal_state",
+        "segment_type",
+    ),
+    "segment_features": (
+        "feature_id",
+        "edge_id",
+        "feature_type",
+        "geom",
+        "state",
+        "value_number",
     ),
 }
 
@@ -105,9 +113,14 @@ with psycopg2.connect(
                 incompatible.append(table)
 
         if incompatible:
-            cursor.execute('DROP TABLE IF EXISTS "road_segments"')
-            cursor.execute('DROP TABLE IF EXISTS "road_nodes"')
-            print("Dropped empty incompatible road schema tables for quoted JPA recreation.")
+            if "road_nodes" in incompatible or "road_segments" in incompatible:
+                cursor.execute('DROP TABLE IF EXISTS "segment_features"')
+                cursor.execute('DROP TABLE IF EXISTS "road_segments"')
+                cursor.execute('DROP TABLE IF EXISTS "road_nodes"')
+                print("Dropped empty incompatible road network schema tables for snake_case JPA recreation.")
+            elif "segment_features" in incompatible:
+                cursor.execute('DROP TABLE IF EXISTS "segment_features"')
+                print("Dropped empty incompatible segment_features table for snake_case JPA recreation.")
 PY
 }
 
@@ -155,26 +168,34 @@ url = os.environ["DB_URL"].replace("jdbc:postgresql://", "")
 host_port, db_name = url.split("/", 1)
 host, port = host_port.split(":", 1)
 
-required_tables = ("road_nodes", "road_segments")
+required_tables = ("road_nodes", "road_segments", "segment_features")
 required_columns = {
-    "road_nodes": ("vertexId", "sourceNodeKey", "point"),
+    "road_nodes": ("vertex_id", "source_node_key", "point"),
     "road_segments": (
-        "edgeId",
-        "fromNodeId",
-        "toNodeId",
+        "edge_id",
+        "from_node_id",
+        "to_node_id",
         "geom",
-        "lengthMeter",
-        "walkAccess",
-        "avgSlopePercent",
-        "widthMeter",
-        "brailleBlockState",
-        "audioSignalState",
-        "slopeState",
-        "widthState",
-        "surfaceState",
-        "stairsState",
-        "signalState",
-        "segmentType",
+        "length_meter",
+        "walk_access",
+        "avg_slope_percent",
+        "width_meter",
+        "braille_block_state",
+        "audio_signal_state",
+        "slope_state",
+        "width_state",
+        "surface_state",
+        "stairs_state",
+        "signal_state",
+        "segment_type",
+    ),
+    "segment_features": (
+        "feature_id",
+        "edge_id",
+        "feature_type",
+        "geom",
+        "state",
+        "value_number",
     ),
 }
 
@@ -187,7 +208,11 @@ with psycopg2.connect(
     sslmode=os.environ.get("DB_SSLMODE", "require"),
 ) as conn:
     with conn.cursor() as cursor:
-        cursor.execute("SELECT to_regclass('public.road_nodes'), to_regclass('public.road_segments')")
+        cursor.execute(
+            "SELECT to_regclass('public.road_nodes'), "
+            "to_regclass('public.road_segments'), "
+            "to_regclass('public.segment_features')"
+        )
         existing = cursor.fetchone()
         missing_tables = [table for table, regclass in zip(required_tables, existing) if regclass is None]
         if missing_tables:

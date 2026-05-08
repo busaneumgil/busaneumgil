@@ -2,7 +2,7 @@
 
 > 작성일: 2026-05-06
 > 기준 이슈: `S14P31E102-547`
-> 기준 문서: `Docs/ERD/ERD_v3.md`, `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md`
+> 기준 문서: `Docs/ERD/ERD_v4.md`, `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md`
 
 ## 1. 운영 원칙
 
@@ -60,6 +60,21 @@ docker compose --env-file .env.prod \
   run --rm graphhopper-build
 ```
 
+### cache 호환성 규칙
+
+- `graph-cache` 볼륨이 비어있지 않더라도, 현재 코드/설정 fingerprint와 다르면 재사용하지 않는다.
+- 아래 입력이 바뀌면 fingerprint가 달라지고 dev/prod 배포는 graph-cache를 다시 생성한다.
+  - `INF/graphhopper/Dockerfile`
+  - `INF/graphhopper/config-build.yml`
+  - `INF/graphhopper/config-runtime.yml`
+  - `INF/graphhopper/custom_models/`
+  - `INF/graphhopper/plugin/src/`
+  - `scripts/graphhopper/export_postgis_to_osm.py`
+- build 완료 후 runtime 볼륨 루트에 다음 메타 파일을 기록한다.
+  - `.ieum-graphhopper-cache-fingerprint`
+  - `.ieum-graphhopper-cache-built-at`
+- 오래된 cache가 남아 있어도 fingerprint mismatch면 자동 rebuild가 우선이다.
+
 ## 4. 입력 변수
 
 | 변수 | 설명 |
@@ -73,9 +88,9 @@ docker compose --env-file .env.prod \
 | `GRAPHHOPPER_ROAD_NODES_SQL` | 기본 `road_nodes` 조회 SQL override |
 | `GRAPHHOPPER_ROAD_SEGMENTS_SQL` | 기본 `road_segments` 조회 SQL override |
 
-기본 SQL은 ERD v3의 camelCase 컬럼명을 기준으로 한다. 실제 DB 스키마가 snake_case로 생성된 경우에는 `GRAPHHOPPER_ROAD_NODES_SQL`, `GRAPHHOPPER_ROAD_SEGMENTS_SQL`을 env로 override한다.
+기본 SQL은 ERD v3/v4의 snake_case 물리 컬럼명을 기준으로 한다. Java/API 필드명은 camelCase를 유지하지만, GraphHopper export SQL과 운영 DB 스키마는 `vertex_id`, `source_node_key`, `from_node_id`, `length_meter` 같은 snake_case 컬럼을 사용한다.
 
-2026-05-06 develop 기준 ERD는 `Docs/ARD`가 아니라 `Docs/ERD` 하위가 canonical이다. `route_sessions` 추가는 선택 경로 복구용 DB 계약이며, GraphHopper graph-cache build 입력은 여전히 `road_nodes`, `road_segments`다.
+2026-05-06 develop 기준 ERD는 `Docs/ERD` 하위가 canonical이다. `route_sessions` 추가는 선택 경로 복구용 DB 계약이며, GraphHopper graph-cache build 입력은 여전히 `road_nodes`, `road_segments`다.
 
 ## 5. 실패 기준
 

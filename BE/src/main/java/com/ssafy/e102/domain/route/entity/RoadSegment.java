@@ -27,61 +27,61 @@ import lombok.NoArgsConstructor;
 public class RoadSegment {
 
 	@Id
-	@Column(name = "edgeId", nullable = false, updatable = false)
+	@Column(name = "edge_id", nullable = false, updatable = false)
 	private Long edgeId;
 
-	@Column(name = "fromNodeId", nullable = false)
+	@Column(name = "from_node_id", nullable = false)
 	private Long fromNodeId;
 
-	@Column(name = "toNodeId", nullable = false)
+	@Column(name = "to_node_id", nullable = false)
 	private Long toNodeId;
 
 	@Column(name = "geom", nullable = false, columnDefinition = "geometry(LineString, 4326)")
 	private LineString geom;
 
-	@Column(name = "lengthMeter", nullable = false, precision = 10, scale = 2)
+	@Column(name = "length_meter", nullable = false, precision = 10, scale = 2)
 	private BigDecimal lengthMeter;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "walkAccess", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "walk_access", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private AccessibilityState walkAccess = AccessibilityState.UNKNOWN;
 
-	@Column(name = "avgSlopePercent", precision = 6, scale = 2)
+	@Column(name = "avg_slope_percent", precision = 6, scale = 2)
 	private BigDecimal avgSlopePercent;
 
-	@Column(name = "widthMeter", precision = 6, scale = 2)
+	@Column(name = "width_meter", precision = 6, scale = 2)
 	private BigDecimal widthMeter;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "brailleBlockState", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "braille_block_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private AccessibilityState brailleBlockState = AccessibilityState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "audioSignalState", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "audio_signal_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private AccessibilityState audioSignalState = AccessibilityState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "slopeState", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "slope_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private SlopeState slopeState = SlopeState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "widthState", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "width_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private WidthState widthState = WidthState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "surfaceState", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "surface_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private SurfaceState surfaceState = SurfaceState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "stairsState", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "stairs_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private AccessibilityState stairsState = AccessibilityState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "signalState", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
+	@Column(name = "signal_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private AccessibilityState signalState = AccessibilityState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "segmentType", nullable = false, length = 30, columnDefinition = "varchar(30) default 'SIDE_LINE'")
+	@Column(name = "segment_type", nullable = false, length = 30, columnDefinition = "varchar(30) default 'SIDE_LINE'")
 	private SegmentType segmentType = SegmentType.SIDE_LINE;
 
 	public static RoadSegment create(

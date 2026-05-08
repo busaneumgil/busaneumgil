@@ -26,17 +26,22 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.bookmark.dto.request.CreateFavoriteRouteRequest;
 import com.ssafy.e102.domain.bookmark.dto.request.UpdateFavoriteRouteRequest;
+import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteDetailResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteIdResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteListResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteResponse;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
 import com.ssafy.e102.domain.bookmark.type.RouteOption;
+import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 class FavoriteRouteControllerTest {
+
+	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 	@Mock
 	private FavoriteRouteService favoriteRouteService;
@@ -65,6 +70,7 @@ class FavoriteRouteControllerTest {
 					"부산역",
 					new GeoPointResponse(35.1686, 129.0576),
 					new GeoPointResponse(35.1152, 129.0422),
+					TransportMode.WALK,
 					RouteOption.SAFE)),
 				10,
 				null,
@@ -78,6 +84,7 @@ class FavoriteRouteControllerTest {
 			.andExpect(jsonPath("$.data.content[0].routeName").value("부산시민공원-부산역"))
 			.andExpect(jsonPath("$.data.content[0].startPoint.lat").value(35.1686))
 			.andExpect(jsonPath("$.data.content[0].startPoint.lng").value(129.0576))
+			.andExpect(jsonPath("$.data.content[0].transportMode").value("WALK"))
 			.andExpect(jsonPath("$.data.content[0].routeOption").value("SAFE"))
 			.andExpect(jsonPath("$.data.nextCursor").doesNotExist())
 			.andExpect(jsonPath("$.data.hasNext").value(false));
@@ -100,6 +107,7 @@ class FavoriteRouteControllerTest {
 					"부산역",
 					new GeoPointResponse(35.1577, 129.0592),
 					new GeoPointResponse(35.1152, 129.0422),
+					TransportMode.WALK,
 					RouteOption.SHORTEST)),
 				2,
 				3L,
@@ -120,7 +128,38 @@ class FavoriteRouteControllerTest {
 	}
 
 	@Test
-	@DisplayName("경로 북마크 저장은 생성 응답을 반환한다")
+	@DisplayName("경로 북마크 상세 조회는 저장된 route snapshot을 반환한다")
+	void getFavoriteRouteDetail() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(favoriteRouteService.getFavoriteRouteDetail(userId, 1L))
+			.thenReturn(new FavoriteRouteDetailResponse(
+				1L,
+				"부산시민공원-부산역",
+				"부산시민공원",
+				"부산역",
+				new GeoPointResponse(35.1686, 129.0576),
+				new GeoPointResponse(35.1152, 129.0422),
+				TransportMode.WALK,
+				RouteOption.SAFE,
+				OBJECT_MAPPER.createObjectNode()
+					.put("routeId", "walk_rt_safe_001")
+					.put("transportMode", "WALK")
+					.put("routeOption", "SAFE")));
+
+		mockMvc.perform(get("/favorite-routes/1")
+			.principal(authentication))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.favRouteId").value(1))
+			.andExpect(jsonPath("$.data.route.routeId").value("walk_rt_safe_001"));
+
+		verify(favoriteRouteService).getFavoriteRouteDetail(userId, 1L);
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("경로 북마크 저장은 routeId와 표시명을 받아 생성 응답을 반환한다")
 	void createFavoriteRoute() throws Exception {
 		UUID userId = UUID.randomUUID();
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
@@ -132,9 +171,7 @@ class FavoriteRouteControllerTest {
 		mockMvc.perform(post("/favorite-routes")
 			.principal(authentication)
 			.contentType(MediaType.APPLICATION_JSON)
-			.content("{\"startLabel\":\"부산시민공원\",\"endLabel\":\"부산역\","
-				+ "\"startPoint\":{\"lat\":35.1686,\"lng\":129.0576},"
-				+ "\"endPoint\":{\"lat\":35.1152,\"lng\":129.0422},\"routeOption\":\"SAFE\"}"))
+			.content("{\"routeId\":\"walk_rt_safe_001\",\"startLabel\":\"부산시민공원\",\"endLabel\":\"부산역\"}"))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("S2010"))
 			.andExpect(jsonPath("$.data.favRouteId").value(1));
@@ -156,7 +193,7 @@ class FavoriteRouteControllerTest {
 		mockMvc.perform(patch("/favorite-routes/1")
 			.principal(authentication)
 			.contentType(MediaType.APPLICATION_JSON)
-			.content("{\"routeOption\":\"SHORTEST\"}"))
+			.content("{\"startLabel\":\"서면역\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.favRouteId").value(1));

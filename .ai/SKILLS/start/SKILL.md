@@ -19,7 +19,7 @@ Execute planned feature work while keeping implementation tied to durable artifa
 - Approved plan in `.ai/LOCAL/PLANS/current-sprint.md`
 - `.ai/DOCS.md`
 - `.ai/ARCHITECTURE.md`
-- Relevant `Docs/API/`, `Docs/ARD/`, `Docs/skills/backend/`, `Docs/컨벤션/`, or UI/infra docs selected from `.ai/DOCS.md`
+- Relevant `Docs/API/`, `Docs/ERD/`, `Docs/skills/backend/`, `Docs/컨벤션/`, or UI/infra docs selected from `.ai/DOCS.md`
 - Relevant tests and runbooks
 
 ## procedure
@@ -27,7 +27,7 @@ Execute planned feature work while keeping implementation tied to durable artifa
 1. Load `.ai/DOCS.md` and read the source docs referenced by the approved plan.
 2. Restate the approved feature scope, non-goals, source documents, and document freshness/conflict decisions.
 3. For FE work, inspect the relevant `FE/docs` files and current `FE/app` route/screen/contract/ViewModel code before editing.
-4. For BE work, inspect the relevant `Docs/API`, `Docs/ARD`, `Docs/skills/backend`, and current `BE` code before editing.
+4. For BE work, inspect the relevant `Docs/API`, `Docs/ERD`, `Docs/skills/backend`, and current `BE` code before editing.
 5. Before editing code, write the Implementation Harness Preflight into the sprint artifact or implementation notes: predicted changed files, reason for each file, expected side effects, cases to test, and rollback trigger or path.
 6. Follow the implementation order strictly: predict changed files, analyze impact scope, write implementation order, write test plan, modify code, then self-review.
 7. For BE work, confirm that the plan already contains source-of-truth, idempotency or duplicate request handling, retry safety, transaction boundaries, concurrency consistency, failure scenarios, and metrics targets. If any are missing, update the plan before code changes.

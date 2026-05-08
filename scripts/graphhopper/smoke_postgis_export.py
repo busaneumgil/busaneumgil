@@ -54,7 +54,18 @@ def main():
     with exporter.connect() as conn:
         node_count = fetch_scalar(conn, 'SELECT COUNT(*) FROM road_nodes')
         segment_count = fetch_scalar(conn, 'SELECT COUNT(*) FROM road_segments')
+        segment_feature_table_exists = exporter.table_exists(conn, "segment_features")
+        segment_feature_count = fetch_scalar(conn, 'SELECT COUNT(*) FROM segment_features') if segment_feature_table_exists else 0
         segments = fetch_dicts(conn, f"SELECT * FROM ({segments_sql}) segments LIMIT %s", [args.sample_size])
+        sample_edge_ids = [int(segment["edge_id"]) for segment in segments]
+        features = []
+        if segment_feature_table_exists and sample_edge_ids:
+            features_sql = strip_sql(exporter.build_segment_features_sql(exporter.fetch_table_columns(conn, "segment_features")))
+            features = fetch_dicts(
+                conn,
+                f"SELECT * FROM ({features_sql}) features WHERE edge_id = ANY(%s)",
+                [list(sample_edge_ids)],
+            )
         # validator는 샘플 segment마다 endpoint node가 필요하다.
         # 큰 graph에서도 smoke가 가볍게 유지되도록 참조된 node만 읽는다.
         referenced_nodes = sorted(
@@ -75,15 +86,23 @@ def main():
                 [referenced_nodes],
             )
 
+    loaded_node_count = len(nodes)
+    loaded_segment_count = len(segments)
+    nodes, segments = exporter.apply_segment_features_to_export(nodes, segments, features)
     report = exporter.validate_graph(nodes, segments, "graphhopper-db-export-smoke")
     report["smoke"] = {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "sampleSize": args.sample_size,
         "databaseNodeCount": node_count,
         "databaseSegmentCount": segment_count,
+        "segmentFeatureTableExists": segment_feature_table_exists,
+        "databaseSegmentFeatureCount": segment_feature_count,
+        "sampleFeatureCount": len(features),
         "sampleReferencedNodeCount": len(referenced_nodes),
-        "sampleLoadedNodeCount": len(nodes),
-        "sampleSegmentCount": len(segments),
+        "sampleLoadedNodeCount": loaded_node_count,
+        "sampleSegmentCount": loaded_segment_count,
+        "exportedNodeCount": len(nodes),
+        "exportedSegmentCount": len(segments),
     }
     exporter.write_json_report(args.report_json, report)
 
@@ -95,6 +114,7 @@ def main():
     print(
         "GraphHopper DB export smoke ok: "
         f"nodes={node_count}, segments={segment_count}, sampleSegments={len(segments)}, "
+        f"segmentFeatures={segment_feature_count}, sampleFeatures={len(features)}, "
         f'warnings={report["summary"]["warningCount"]}'
     )
     return 0

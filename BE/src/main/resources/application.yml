@@ -6,7 +6,7 @@ spring:
   jpa:
     hibernate:
       naming:
-        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
         implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl
 
 server:
@@ -21,9 +21,22 @@ social:
     google:
       user-info-uri: ${GOOGLE_USER_INFO_URI:https://openidconnect.googleapis.com/v1/userinfo}
 
+external:
+  kakao:
+    local:
+      base-url: ${KAKAO_LOCAL_BASE_URL:https://dapi.kakao.com}
+      api-key: ${KAKAO_REST_API_KEY:}
+  ai:
+    base-url: ${AI_BASE_URL:http://localhost:5000}
+
 auth:
   test:
     enabled: ${AUTH_TEST_ENABLED:false}
     kakao-javascript-key: ${AUTH_TEST_KAKAO_JAVASCRIPT_KEY:}
     naver-client-id: ${AUTH_TEST_NAVER_CLIENT_ID:}
     google-client-id: ${AUTH_TEST_GOOGLE_CLIENT_ID:}
+
+graphhopper:
+  base-url: ${GRAPHHOPPER_BASE_URL:http://localhost:8989}
+  connect-timeout: ${GRAPHHOPPER_CONNECT_TIMEOUT:5s}
+  read-timeout: ${GRAPHHOPPER_READ_TIMEOUT:5s}

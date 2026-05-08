@@ -4,10 +4,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LowVisionCategoryScreenTest {
+    @Test
+    fun `category header matches shared low vision header layout`() {
+        assertEquals(LowVisionScreenDefaults.headerGap, LowVisionCategoryLayoutDefaults.headerGridGap)
+        assertEquals(LowVisionScreenDefaults.headerFontSize, LowVisionCategoryLayoutDefaults.headerFontSize)
+        assertEquals(LowVisionScreenDefaults.headerLineHeight, LowVisionCategoryLayoutDefaults.headerLineHeight)
+        assertTrue(LowVisionCategoryLayoutDefaults.centersHeaderText)
+        assertFalse(LowVisionCategoryLayoutDefaults.showsBackButton)
+    }
+
     @Test
     fun `category screen uses large two by two quadrant ratios`() {
         assertEquals(2, LowVisionCategoryLayoutDefaults.columnCount)

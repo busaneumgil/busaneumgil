@@ -152,11 +152,11 @@ function AdminApp() {
             <p>{pageMeta[page].description}</p>
           </div>
           {page !== "hazards" && <div className="topbar-actions">
-            <label>
+            <label className="backend-field">
               Backend
               <span>{backendApiUrl}</span>
             </label>
-            <label>
+            <label className="token-field">
               Access Token
               <input
                 type="password"

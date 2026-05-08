@@ -26,6 +26,7 @@ import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
@@ -97,6 +98,9 @@ class AppContainer(
     }
     private val favoriteRoutesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         FavoriteRoutesRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
+    private val hazardReportsRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        HazardReportsRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
@@ -251,6 +255,11 @@ class AppContainer(
         RepositoryModule.provideReportRepository(
             reportDraftDao = localDatabase.reportDraftDao(),
             reportOutboxDao = localDatabase.reportOutboxDao(),
+            hazardReportsRemoteDataSource =
+                if (AppEnvironment.isMockMode) null else hazardReportsRemoteDataSource,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
         )
     }
 

@@ -40,5 +40,13 @@ object EumgilDatabaseMigrations {
             }
         }
 
-    val all: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    val MIGRATION_3_4: Migration =
+        object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN serverReportId INTEGER")
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN lastFailureReason TEXT")
+            }
+        }
+
+    val all: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

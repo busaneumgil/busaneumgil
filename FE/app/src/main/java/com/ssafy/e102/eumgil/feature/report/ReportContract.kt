@@ -275,6 +275,10 @@ sealed interface ReportFailureReason {
 
     data object LocalSaveFailed : ReportFailureReason
 
+    data object ServerSubmitFailed : ReportFailureReason
+
+    data object Unauthorized : ReportFailureReason
+
     data object Unknown : ReportFailureReason
 }
 

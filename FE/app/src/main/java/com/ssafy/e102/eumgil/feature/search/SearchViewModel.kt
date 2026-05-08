@@ -82,15 +82,7 @@ class SearchViewModel(
     private fun handoffSearchResult(result: SearchResult): Boolean {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
-            mutableUiState.update { state ->
-                state.copy(
-                    resultState =
-                        SearchResultUiState.Error(
-                            query = state.query.trim(),
-                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
-                        ),
-                )
-            }
+            showResultActionError(message = blockedResultMessage(result))
             return false
         }
 
@@ -103,16 +95,14 @@ class SearchViewModel(
         result: SearchResult,
         destination: com.ssafy.e102.eumgil.core.model.PlaceDestination,
     ) {
+        if (!result.isVerifiedPlace) return
+
         viewModelScope.launch {
             val accessibilityTagKeys =
-                if (result.serverPlaceId.isNullOrBlank()) {
-                    result.accessibilityTagKeys
-                } else {
-                    runCatching {
-                        placesRepository?.getPlaceDetail(result.serverPlaceId)?.accessibilityTags
-                            ?: result.accessibilityTagKeys
-                    }.getOrDefault(result.accessibilityTagKeys)
-                }
+                runCatching {
+                    placesRepository?.getPlaceDetail(checkNotNull(result.serverPlaceId))?.accessibilityTags
+                        ?: result.accessibilityTagKeys
+                }.getOrDefault(result.accessibilityTagKeys)
 
             runCatching {
                 searchRepository.saveRecentDestination(
@@ -133,15 +123,7 @@ class SearchViewModel(
     private fun toggleBookmark(result: SearchResult) {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
-            mutableUiState.update { state ->
-                state.copy(
-                    resultState =
-                        SearchResultUiState.Error(
-                            query = state.query.trim(),
-                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
-                        ),
-                )
-            }
+            showResultActionError(message = blockedResultMessage(result))
             return
         }
 
@@ -179,15 +161,7 @@ class SearchViewModel(
     private fun saveLowVisionBookmark(result: SearchResult) {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
-            mutableUiState.update { state ->
-                state.copy(
-                    resultState =
-                        SearchResultUiState.Error(
-                            query = state.query.trim(),
-                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
-                        ),
-                )
-            }
+            showResultActionError(message = blockedResultMessage(result))
             return
         }
 
@@ -450,8 +424,28 @@ class SearchViewModel(
         }
     }
 
+    private fun showResultActionError(message: String) {
+        mutableUiState.update { state ->
+            state.copy(
+                resultState =
+                    SearchResultUiState.Error(
+                        query = state.query.trim(),
+                        message = message,
+                    ),
+            )
+        }
+    }
+
+    private fun blockedResultMessage(result: SearchResult): String =
+        if (!result.isVerifiedPlace) {
+            UNVERIFIED_PLACE_HANDOFF_MESSAGE
+        } else {
+            INVALID_DESTINATION_HANDOFF_MESSAGE
+        }
+
     companion object {
         private const val INVALID_DESTINATION_HANDOFF_MESSAGE = "좌표 정보가 올바르지 않아 경로 설정으로 넘길 수 없습니다."
+        private const val UNVERIFIED_PLACE_HANDOFF_MESSAGE = "접근성 정보가 확인된 장소만 길찾기를 시작할 수 있습니다."
         private const val BOOKMARK_TOGGLE_FAILURE_MESSAGE = "북마크 상태를 변경하지 못했습니다. 다시 시도해 주세요."
 
         fun provideFactory(

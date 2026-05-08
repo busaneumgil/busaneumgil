@@ -64,7 +64,12 @@ class SearchRemoteDataSourceTest {
                                           "lat": 35.1010,
                                           "lng": 129.0330
                                         },
-                                        "accessibilityFeatures": [],
+                                        "accessibilityFeatures": [
+                                          {
+                                            "featureType": "accessibleEntrance",
+                                            "isAvailable": true
+                                          }
+                                        ],
                                         "matched": false
                                       }
                                     ],

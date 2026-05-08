@@ -353,6 +353,45 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `provider only search result click blocks handoff and does not store recent destination`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val searchRepository = FakeSearchRepository()
+            val placesRepository = FakePlacesRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    placesRepository = placesRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:kakao:987654321",
+                    serverPlaceId = null,
+                    providerPlaceId = "987654321",
+                    title = "Provider Only Cafe",
+                    subtitle = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    category = null,
+                    accessibilityTagKeys = listOf("step-free-entrance"),
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertTrue(placesRepository.detailRequests.isEmpty())
+            assertTrue(searchRepository.savedRecentDestinations.isEmpty())
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Error)
+        }
+
+    @Test
     fun `matched search result click enriches recent destination from place detail`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -407,17 +446,14 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only search result click skips detail fetch and keeps search accessibility tags`() =
+    fun `provider only search result bookmark toggle is blocked`() =
         runTest {
-            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
-            val searchRepository = FakeSearchRepository()
-            val placesRepository = FakePlacesRepository()
+            val bookmarkRepository = FakeBookmarkRepository()
             val viewModel =
                 SearchViewModel(
-                    searchRepository = searchRepository,
-                    bookmarkRepository = FakeBookmarkRepository(),
-                    destinationSelectionRepository = destinationSelectionRepository,
-                    placesRepository = placesRepository,
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
                 )
             val result =
                 SearchResult(
@@ -435,23 +471,12 @@ class SearchViewModelTest {
 
             advanceUntilIdle()
 
-            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            viewModel.onAction(SearchUiAction.BookmarkToggleClicked(result = result))
             advanceUntilIdle()
 
-            assertTrue(placesRepository.detailRequests.isEmpty())
-            assertEquals(
-                RecentDestination(
-                    placeId = "provider:kakao:987654321",
-                    name = "Provider Only Cafe",
-                    address = "2 Gwangbok-ro, Busan",
-                    latitude = 35.1010,
-                    longitude = 129.0330,
-                    category = null,
-                    accessibilityTagKeys = listOf("step-free-entrance"),
-                    searchedAtMillis = 0L,
-                ),
-                searchRepository.savedRecentDestinations.single().copy(searchedAtMillis = 0L),
-            )
+            assertTrue(bookmarkRepository.bookmarks.value.isEmpty())
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Error)
         }
 
     @Test
@@ -490,6 +515,40 @@ class SearchViewModelTest {
                 ),
                 bookmarkRepository.bookmarks.value.single(),
             )
+        }
+
+    @Test
+    fun `provider only low vision bookmark save is blocked`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:kakao:987654321",
+                    serverPlaceId = null,
+                    providerPlaceId = "987654321",
+                    title = "Provider Only Cafe",
+                    subtitle = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    category = null,
+                    accessibilityTagKeys = listOf("step-free-entrance"),
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
+            advanceUntilIdle()
+
+            assertTrue(bookmarkRepository.bookmarks.value.isEmpty())
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Error)
         }
 
     @Test

@@ -138,6 +138,11 @@ fun LowVisionSearchScreen(
                     }
                 }
 
+                is SearchResultUiState.Error ->
+                    LowVisionSearchNoResultMessage(
+                        message = state.message ?: "검색 결과를 다시 확인해 주세요.",
+                    )
+
                 else -> LowVisionSearchNoResultMessage()
             }
         }
@@ -361,13 +366,13 @@ private fun LowVisionSearchActionButton(
 }
 
 @Composable
-private fun LowVisionSearchNoResultMessage() {
+private fun LowVisionSearchNoResultMessage(message: String = "목록 없음.") {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "목록 없음.",
+            text = message,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = PlaceListSubText,

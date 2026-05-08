@@ -30,6 +30,9 @@ data class SearchResult(
 ) {
     val displayPlaceId: String
         get() = serverPlaceId ?: providerPlaceId ?: placeId
+
+    val isVerifiedPlace: Boolean
+        get() = matched && !serverPlaceId.isNullOrBlank()
 }
 
 enum class SearchVoiceMode {

@@ -28,10 +28,9 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertResponse;
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertType;
-import com.ssafy.e102.domain.route.dto.response.RouteStepResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
@@ -119,11 +118,11 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.data.routes[0].legs[0].alightingStop").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].isLowFloor").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].badges").doesNotExist())
-			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].instruction").value("직진하세요."))
-			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].alert.type").value("CROSSWALK_AUDIO"))
-			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].badges").doesNotExist())
-			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].slopePercent").doesNotExist())
-			.andExpect(jsonPath("$.data.routes[0].legs[0].steps[0].widthState").doesNotExist());
+			.andExpect(jsonPath("$.data.routes[0].legs[0].steps").doesNotExist())
+			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].type").value("CROSSWALK_AUDIO"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].distanceFromLegStartMeter").value(0))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].durationFromLegStartSecond").value(0))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].geometry").value("POINT(128.9360 35.1200)"));
 
 		SecurityContextHolder.clearContext();
 	}
@@ -258,13 +257,12 @@ class RouteControllerTest {
 					960,
 					16,
 					"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
-					List.of(new RouteStepResponse(
+					List.of(new RouteGuidanceEventResponse(
 						1,
-						"직진하세요.",
-						BigDecimal.valueOf(30),
-						35,
-						"LINESTRING(128.9360 35.1200, 128.9361 35.1201)",
-						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK_AUDIO, BigDecimal.ZERO))))))));
+						RouteGuidanceEventType.CROSSWALK_AUDIO,
+						BigDecimal.ZERO,
+						0,
+						"POINT(128.9360 35.1200)")))))));
 	}
 
 	private UsernamePasswordAuthenticationToken authentication(UUID userId) {

@@ -25,6 +25,8 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.data.domain.Pageable;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
@@ -189,7 +191,7 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
-	@DisplayName("transit WALK leg는 walk payload의 steps/badges 구조를 유지하고 route badges로 집계한다")
+	@DisplayName("transit WALK leg는 walk payload의 guidanceEvents/badges 구조를 유지하고 route badges로 집계한다")
 	void mapsWalkConnectionBadgesIntoTransitRouteAndLegs() {
 		when(odsayClient.searchPubTransPath(START, END))
 			.thenReturn(new OdsayTransitSearchResult(List.of(busPath("map-1", "100", 20, 300))));
@@ -221,9 +223,18 @@ class TransitRouteSearchServiceTest {
 		assertThat(response.routes().get(0).legs().get(0).role()).isEqualTo(RouteLegRole.WALK_TO_TRANSIT);
 		assertThat(response.routes().get(0).legs().get(0).badges())
 			.containsExactly(RouteBadge.MIDDLE_SLOPE, RouteBadge.CROSSWALK);
+		assertThat(response.routes().get(0).legs().get(0).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(RouteGuidanceEventType.CROSSWALK, RouteGuidanceEventType.BUS_STOP);
 		assertThat(response.routes().get(0).legs().get(2).role()).isEqualTo(RouteLegRole.TRANSIT_TO_WALK);
 		assertThat(response.routes().get(0).legs().get(2).badges())
 			.containsExactly(RouteBadge.STAIR, RouteBadge.UNPAVED);
+		assertThat(response.routes().get(0).legs().get(2).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(
+				RouteGuidanceEventType.ARRIVING_POINT,
+				RouteGuidanceEventType.STAIR,
+				RouteGuidanceEventType.DESTINATION);
 	}
 
 	@Test
@@ -305,6 +316,10 @@ class TransitRouteSearchServiceTest {
 				assertThat(leg.boardingStop().lat()).isEqualByComparingTo("35.159");
 				assertThat(leg.boardingStop().lng()).isEqualByComparingTo("129.059");
 			});
+
+		assertThat(response.routes().get(0).legs().get(0).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(RouteGuidanceEventType.SUBWAY_ELEVATOR);
 
 		ArgumentCaptor<List<TransitRouteSnapshot>> snapshotCaptor = ArgumentCaptor.forClass(List.class);
 		verify(routeSearchCacheService).saveTransitMetadata(any(), snapshotCaptor.capture());

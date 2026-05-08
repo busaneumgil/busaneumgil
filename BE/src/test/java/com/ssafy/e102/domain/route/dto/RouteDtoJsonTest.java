@@ -10,10 +10,9 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertResponse;
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertType;
-import com.ssafy.e102.domain.route.dto.response.RouteStepResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.type.RouteBadge;
@@ -26,7 +25,7 @@ class RouteDtoJsonTest {
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Test
-	@DisplayName("도보 경로 검색 응답 DTO는 경로 API 계약 필드명과 enum 값을 직렬화한다")
+	@DisplayName("walk route response serializes guidanceEvents API contract")
 	void walkRouteSearchResponseSerializesApiContract() throws Exception {
 		WalkRouteSearchResponse response = new WalkRouteSearchResponse(
 			"rs_walk_20260506_abc123",
@@ -34,7 +33,7 @@ class RouteDtoJsonTest {
 				"walk_rt_safe_001",
 				TransportMode.WALK,
 				RouteOption.SAFE,
-				"안전 경로",
+				"safe route",
 				BigDecimal.valueOf(950),
 				960,
 				16,
@@ -44,18 +43,17 @@ class RouteDtoJsonTest {
 					1,
 					TransportMode.WALK,
 					RouteLegRole.WALK_ONLY,
-					"목적지까지 도보로 이동하세요.",
+					"walk to destination",
 					BigDecimal.valueOf(950),
 					960,
 					16,
 					"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
-					List.of(new RouteStepResponse(
+					List.of(new RouteGuidanceEventResponse(
 						1,
-						"직진하세요.",
-						BigDecimal.valueOf(30),
+						RouteGuidanceEventType.CROSSWALK_AUDIO,
+						BigDecimal.valueOf(12),
 						35,
-						"LINESTRING(128.9360 35.1200, 128.9361 35.1201)",
-						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK_AUDIO, BigDecimal.valueOf(12)))))))));
+						"POINT(128.9360 35.1200)")))))));
 
 		JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(response));
 
@@ -74,21 +72,35 @@ class RouteDtoJsonTest {
 		assertThat(leg.has("alightingStop")).isFalse();
 		assertThat(leg.has("isLowFloor")).isFalse();
 		assertThat(leg.has("badges")).isFalse();
-		JsonNode step = leg.get("steps").get(0);
-		assertThat(step.get("instruction").asText()).isEqualTo("직진하세요.");
-		assertThat(step.get("alert").get("type").asText()).isEqualTo("CROSSWALK_AUDIO");
-		assertThat(step.has("badges")).isFalse();
-		assertThat(step.has("slopePercent")).isFalse();
-		assertThat(step.has("widthState")).isFalse();
+		assertThat(leg.has("steps")).isFalse();
+		JsonNode guidanceEvent = leg.get("guidanceEvents").get(0);
+		assertThat(guidanceEvent.get("sequence").asInt()).isEqualTo(1);
+		assertThat(guidanceEvent.get("type").asText()).isEqualTo("CROSSWALK_AUDIO");
+		assertThat(guidanceEvent.get("distanceFromLegStartMeter").decimalValue()).isEqualByComparingTo("12");
+		assertThat(guidanceEvent.get("durationFromLegStartSecond").asInt()).isEqualTo(35);
+		assertThat(guidanceEvent.get("geometry").asText()).isEqualTo("POINT(128.9360 35.1200)");
 	}
 
 	@Test
-	@DisplayName("route step alert enum은 API 계약에 없는 NONE/CURB/TURN_LEFT/TURN_RIGHT를 노출하지 않는다")
-	void routeStepAlertTypeDoesNotExposeRemovedContractValues() {
-		assertThat(RouteStepAlertType.values())
+	@DisplayName("guidance event enum exposes API contract values")
+	void routeGuidanceEventTypeExposesContractValues() {
+		assertThat(RouteGuidanceEventType.values())
 			.extracting(Enum::name)
-			.contains("CROSSWALK", "CROSSWALK_SIGNAL", "CROSSWALK_AUDIO", "STAIR", "NARROW_SIDEWALK", "UNPAVED",
-				"MIDDLE_SLOPE")
-			.doesNotContain("NONE", "CURB", "TURN_LEFT", "TURN_RIGHT");
+			.contains(
+				"TURN_LEFT",
+				"TURN_RIGHT",
+				"CROSSWALK",
+				"CROSSWALK_SIGNAL",
+				"CROSSWALK_AUDIO",
+				"STAIR",
+				"NARROW_SIDEWALK",
+				"UNPAVED",
+				"LOW_SLOPE",
+				"MIDDLE_SLOPE",
+				"BUS_STOP",
+				"SUBWAY_ELEVATOR",
+				"ARRIVING_POINT",
+				"DESTINATION")
+			.doesNotContain("NONE", "CURB", "ELEVATOR", "ALIGHTING_POINT");
 	}
 }

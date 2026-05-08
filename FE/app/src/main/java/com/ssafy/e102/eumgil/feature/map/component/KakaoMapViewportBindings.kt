@@ -57,6 +57,7 @@ internal data class KakaoMarkerRenderState(
     val longitude: Double,
     @DrawableRes val iconResId: Int,
     val rank: Long,
+    val clickTargetId: String?,
 )
 
 internal data class KakaoRendererFailure(
@@ -110,13 +111,18 @@ internal fun createKakaoMarkerRenderStates(
     markerOverlayState: MapMarkerOverlayState,
     selectedMarkerId: String?,
 ): List<KakaoMarkerRenderState> =
-    markerOverlayState.visibleMarkers.map { marker ->
-        KakaoMarkerRenderState(
-            markerId = marker.markerId,
-            latitude = marker.coordinate.latitude,
-            longitude = marker.coordinate.longitude,
-            iconResId = categoryIconResId(marker.categoryType.category),
-            rank = if (marker.markerId == selectedMarkerId) 1L else 0L,
+    buildList {
+        addAll(
+            markerOverlayState.visibleMarkers.map { marker ->
+                KakaoMarkerRenderState(
+                    markerId = marker.markerId,
+                    latitude = marker.coordinate.latitude,
+                    longitude = marker.coordinate.longitude,
+                    iconResId = categoryIconResId(marker.categoryType.category),
+                    rank = if (marker.markerId == selectedMarkerId) 1L else 0L,
+                    clickTargetId = marker.markerId,
+                )
+            },
         )
     }
 

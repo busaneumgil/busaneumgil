@@ -15,6 +15,7 @@ data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
     val selectedDestination: PlaceDestination? = null,
     val selectedMarkerId: String? = null,
+    val selectedMapPinCoordinate: MapCoordinate? = null,
     val locationStatus: MapLocationStatus = MapLocationStatus.PermissionDenied,
     val recenterButtonState: MapRecenterButtonState = MapRecenterButtonState.REQUEST_PERMISSION,
     val isRecenterButtonActive: Boolean = false,
@@ -60,6 +61,10 @@ sealed interface MapUiAction {
 
     data class MarkerTapped(
         val markerId: String,
+    ) : MapUiAction
+
+    data class MapTapped(
+        val coordinate: MapCoordinate,
     ) : MapUiAction
 
     data class MarkerCategoryFilterToggled(

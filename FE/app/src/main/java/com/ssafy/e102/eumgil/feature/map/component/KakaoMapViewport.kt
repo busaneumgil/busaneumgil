@@ -3,17 +3,24 @@ package com.ssafy.e102.eumgil.feature.map.component
 import android.content.Context
 import android.util.Log
 import android.view.View
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -26,16 +33,20 @@ import com.kakao.vectormap.MapView
 import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.kakao.vectormap.label.LabelLayerOptions
 import com.kakao.vectormap.label.LabelOptions
+import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import kotlin.math.roundToInt
 
 @Composable
 internal fun KakaoMapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
+    onMapClick: (MapCoordinate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val controller = remember { KakaoMapViewportController() }
     val rendererFailure = controller.rendererFailure
+    val selectedMapPinScreenPoint = controller.selectedMapPinScreenPoint
 
     DisposableEffect(lifecycleOwner, controller) {
         val observer =
@@ -64,6 +75,7 @@ internal fun KakaoMapViewport(
                     context = context,
                     initialState = state,
                     onMarkerClick = onMarkerClick,
+                    onMapClick = onMapClick,
                 )
             },
             modifier = Modifier.fillMaxSize(),
@@ -71,9 +83,17 @@ internal fun KakaoMapViewport(
                 controller.render(
                     state = state,
                     onMarkerClick = onMarkerClick,
+                    onMapClick = onMapClick,
                 )
             },
         )
+
+        if (state.selectedMapPinCoordinate != null && selectedMapPinScreenPoint != null) {
+            MapSelectedPinOverlay(
+                screenPoint = selectedMapPinScreenPoint,
+                modifier = Modifier.align(Alignment.TopStart),
+            )
+        }
 
         if (controller.rendererStatus != KakaoRendererStatus.Ready) {
             MapFallbackSurface(
@@ -114,11 +134,14 @@ private class KakaoMapViewportController {
         private set
     var rendererFailure by mutableStateOf<KakaoRendererFailure?>(null)
         private set
+    var selectedMapPinScreenPoint by mutableStateOf<KakaoMapScreenPoint?>(null)
+        private set
 
     private var mapView: MapView? = null
     private var kakaoMap: KakaoMap? = null
     private var latestState: MapViewportUiState? = null
     private var markerClickHandler: ((String) -> Unit)? = null
+    private var mapClickHandler: ((MapCoordinate) -> Unit)? = null
     private var lastRenderedCameraRequestId: Long? = null
     private var lastRenderedMarkers: List<KakaoMarkerRenderState> = emptyList()
     private var isStarted = false
@@ -140,9 +163,11 @@ private class KakaoMapViewportController {
         context: Context,
         initialState: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
+        onMapClick: (MapCoordinate) -> Unit,
     ): MapView {
         latestState = initialState
         markerClickHandler = onMarkerClick
+        mapClickHandler = onMapClick
 
         return mapView ?: MapView(context).also { createdMapView ->
             Log.i(KAKAO_MAP_LOG_TAG, "Creating Kakao MapView instance")
@@ -158,9 +183,11 @@ private class KakaoMapViewportController {
     fun render(
         state: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
+        onMapClick: (MapCoordinate) -> Unit,
     ) {
         latestState = state
         markerClickHandler = onMarkerClick
+        mapClickHandler = onMapClick
         renderIntoMapIfReady()
     }
 
@@ -189,6 +216,7 @@ private class KakaoMapViewportController {
         mapView = null
         rendererStatus = KakaoRendererStatus.Initializing
         rendererFailure = null
+        selectedMapPinScreenPoint = null
         lastRenderedCameraRequestId = null
         lastRenderedMarkers = emptyList()
     }
@@ -204,6 +232,7 @@ private class KakaoMapViewportController {
                     rendererStatus = KakaoRendererStatus.Initializing
                     rendererFailure = null
                     kakaoMap = null
+                    selectedMapPinScreenPoint = null
                     hasMapLifecycleResumed = false
                     lifecycleDispatchRetryCount = 0
                     lastRenderedCameraRequestId = null
@@ -254,6 +283,27 @@ private class KakaoMapViewportController {
                             true
                         } ?: false
                     }
+                    readyMap.setOnViewportClickListener { _, position, screenPoint ->
+                        selectedMapPinScreenPoint =
+                            KakaoMapScreenPoint(
+                                x = screenPoint.x.roundToInt(),
+                                y = screenPoint.y.roundToInt(),
+                            )
+                        mapClickHandler?.invoke(
+                            MapCoordinate(
+                                latitude = position.latitude,
+                                longitude = position.longitude,
+                            ),
+                        )
+                    }
+                    readyMap.setOnCameraMoveEndListener { currentMap, _, _ ->
+                        latestState?.let { state ->
+                            syncSelectedMapPinScreenPoint(
+                                readyMap = currentMap,
+                                state = state,
+                            )
+                        }
+                    }
                     renderIntoMapIfReady()
                     syncLifecycleToMapView(reason = "map-ready")
                 }
@@ -284,6 +334,7 @@ private class KakaoMapViewportController {
 
         syncCamera(readyMap = readyMap, state = state)
         syncMarkers(readyMap = readyMap, state = state)
+        syncSelectedMapPinScreenPoint(readyMap = readyMap, state = state)
     }
 
     private fun syncLifecycleToMapView(reason: String) {
@@ -437,7 +488,9 @@ private class KakaoMapViewportController {
                     .setStyles(marker.iconResId)
                     .setClickable(true)
                     .setRank(marker.rank)
-                    .setTag(marker.markerId),
+                    .apply {
+                        marker.clickTargetId?.let(::setTag)
+                    },
             )
         }
         lastRenderedMarkers = markerRenderStates
@@ -452,6 +505,36 @@ private class KakaoMapViewportController {
             }",
         )
     }
+
+    private fun syncSelectedMapPinScreenPoint(
+        readyMap: KakaoMap,
+        state: MapViewportUiState,
+    ) {
+        val coordinate = state.selectedMapPinCoordinate
+        if (coordinate == null) {
+            selectedMapPinScreenPoint = null
+            return
+        }
+
+        val projectedPoint =
+            readyMap.toScreenPoint(
+                LatLng.from(
+                    coordinate.latitude,
+                    coordinate.longitude,
+                ),
+            ) ?: run {
+                selectedMapPinScreenPoint = null
+                Log.w(
+                    KAKAO_MAP_LOG_TAG,
+                    "Selected map pin projection unavailable lat=${coordinate.latitude} lng=${coordinate.longitude}",
+                )
+                return
+            }
+        val nextPoint = KakaoMapScreenPoint(x = projectedPoint.x, y = projectedPoint.y)
+        if (selectedMapPinScreenPoint == nextPoint) return
+
+        selectedMapPinScreenPoint = nextPoint
+    }
 }
 
 private enum class KakaoRendererStatus {
@@ -460,7 +543,38 @@ private enum class KakaoRendererStatus {
     Error,
 }
 
+private data class KakaoMapScreenPoint(
+    val x: Int,
+    val y: Int,
+)
+
+@Composable
+private fun MapSelectedPinOverlay(
+    screenPoint: KakaoMapScreenPoint,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val xOffset =
+        with(density) { screenPoint.x.toDp() } - (MAP_SELECTED_PIN_WIDTH / 2)
+    val yOffset =
+        with(density) { screenPoint.y.toDp() } - MAP_SELECTED_PIN_HEIGHT
+
+    Image(
+        painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+        contentDescription = null,
+        modifier =
+            modifier
+                .offset(x = xOffset, y = yOffset)
+                .size(
+                    width = MAP_SELECTED_PIN_WIDTH,
+                    height = MAP_SELECTED_PIN_HEIGHT,
+                ),
+    )
+}
+
 private const val KAKAO_MARKER_LAYER_ID = "eumgil-map-markers"
 private const val KAKAO_MAP_LOG_TAG = "KakaoMapViewport"
 private const val MAX_LIFECYCLE_DISPATCH_RETRIES = 30
 private const val LIFECYCLE_DISPATCH_RETRY_DELAY_MILLIS = 50L
+private val MAP_SELECTED_PIN_WIDTH = 40.dp
+private val MAP_SELECTED_PIN_HEIGHT = 48.dp

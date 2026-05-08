@@ -205,6 +205,34 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `marker render state keeps only kakao facility markers`() {
+        val markerStates =
+            createKakaoMarkerRenderStates(
+                markerOverlayState =
+                    MapMarkerOverlayState(
+                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
+                        markers =
+                            listOf(
+                                MapMarkerUiModel(
+                                    markerId = "toilet",
+                                    name = "Accessible toilet",
+                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.2),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
+                                ),
+                            ),
+                        visibleMarkerCount = 1,
+                        totalMarkerCount = 1,
+                    ),
+                selectedMarkerId = null,
+            )
+
+        assertEquals(listOf("toilet"), markerStates.map { it.markerId })
+        assertEquals(R.drawable.ic_place_restroom, markerStates.last().iconResId)
+        assertEquals(0L, markerStates.last().rank)
+        assertEquals("toilet", markerStates.last().clickTargetId)
+    }
+
+    @Test
     fun `renderer failure keeps exception type and sanitized message for fallback`() {
         val failure =
             createKakaoRendererFailure(

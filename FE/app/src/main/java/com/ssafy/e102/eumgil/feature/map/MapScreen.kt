@@ -647,7 +647,9 @@ private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
 @Composable
 private fun mapRecentDestinationBottomSheetState(uiState: MapUiState): RecentDestinationBottomSheetState =
     MapRecentDestinationBottomSheetUiState(
-        isVisible = uiState.recentDestinations.isNotEmpty(),
+        isVisible =
+            uiState.recentDestinations.isNotEmpty() &&
+                uiState.selectedMapPinCoordinate == null,
         items =
             uiState.recentDestinations.map { destination ->
                 val tagLabels = recentDestinationTagLabels(destination)

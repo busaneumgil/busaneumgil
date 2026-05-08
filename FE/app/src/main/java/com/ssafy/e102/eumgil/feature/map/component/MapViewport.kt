@@ -56,6 +56,7 @@ internal data class MapViewportUiState(
     val markerOverlayState: MapMarkerOverlayState,
     val overlayState: MapViewportOverlayState = MapViewportOverlayState(),
     val selectedMarkerId: String?,
+    val selectedMapPinCoordinate: MapCoordinate?,
     val regionLabel: String,
     val statusLabel: String,
     val title: String,
@@ -76,6 +77,7 @@ sealed interface MapIntegrationState {
 internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
+    onMapClick: (MapCoordinate) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(state.integrationState) {
@@ -116,6 +118,7 @@ internal fun MapViewport(
                 integrationState = integrationState,
                 state = state,
                 onMarkerClick = onMarkerClick,
+                onMapClick = onMapClick,
                 modifier = modifier,
             )
         }
@@ -127,6 +130,7 @@ private fun MapContainer(
     integrationState: MapIntegrationState.Bound,
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
+    onMapClick: (MapCoordinate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (integrationState.providerName) {
@@ -134,6 +138,7 @@ private fun MapContainer(
             KakaoMapViewport(
                 state = state,
                 onMarkerClick = onMarkerClick,
+                onMapClick = onMapClick,
                 modifier = modifier,
             )
 

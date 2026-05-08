@@ -19,6 +19,7 @@ import com.ssafy.e102.global.response.ApiResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -63,7 +64,7 @@ public class AuthController {
 	@Operation(summary = "로그아웃", description = "현재 access token을 blacklist에 등록하고 사용자의 refresh token을 제거한다.")
 	@PostMapping("/logout")
 	public ApiResponse<Void> logout(
-		@AuthenticationPrincipal
+		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal) {
 		authService.logout(principal.userId(), principal.accessToken());
 		return ApiResponse.successMessage("로그아웃되었습니다.");

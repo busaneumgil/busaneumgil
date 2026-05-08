@@ -17,15 +17,15 @@ public class OpenApiConfig {
 	@Bean
 	public OpenAPI openApi() {
 		return new OpenAPI()
-			.info(new Info()
-				.title("E102 API")
-				.description("E102 API 문서")
-				.version("v1"))
 			.components(new Components()
 				.addSecuritySchemes(BEARER_AUTH, new SecurityScheme()
 					.type(SecurityScheme.Type.HTTP)
 					.scheme("bearer")
 					.bearerFormat("JWT")))
-			.addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
+			.addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
+			.info(new Info()
+				.title("E102 API")
+				.description("E102 API 문서")
+				.version("v1"));
 	}
 }

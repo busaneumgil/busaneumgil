@@ -20,6 +20,7 @@ data class FavoriteRouteEntity(
     val destinationPlaceId: String? = null,
     val destinationLatitude: Double,
     val destinationLongitude: Double,
+    val transportMode: String? = null,
     val routeOption: String? = null,
     val summaryDistanceMeters: Int? = null,
     val summaryDurationSeconds: Int? = null,

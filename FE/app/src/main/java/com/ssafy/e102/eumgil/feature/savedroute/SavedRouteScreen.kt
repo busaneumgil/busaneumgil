@@ -663,7 +663,15 @@ private fun SavedRouteBookmarkListItem(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
                 ) {
-                    SavedRouteTagChip(label = routeOptionLabel(routeBookmark.routeOption))
+                    transportModeLabel(routeBookmark.transportMode)?.let { label ->
+                        SavedRouteTagChip(label = label)
+                    }
+                    SavedRouteTagChip(
+                        label = routeOptionDisplayLabel(
+                            rawLabel = routeBookmark.routeOptionLabel,
+                            fallback = routeBookmark.routeOption,
+                        ),
+                    )
                 }
             }
             SavedBookmarkPrimaryActionButton(
@@ -806,6 +814,30 @@ private fun routeOptionLabel(routeOption: RouteOption): String =
                 RouteOption.SHORTEST -> R.string.route_setting_option_shortest_title
             },
     )
+
+@Composable
+private fun routeOptionDisplayLabel(
+    rawLabel: String?,
+    fallback: RouteOption,
+): String =
+    when (rawLabel?.uppercase()) {
+        "SAFE" -> stringResource(id = R.string.route_setting_option_safe_title)
+        "SHORTEST" -> stringResource(id = R.string.route_setting_option_shortest_title)
+        "RECOMMENDED" -> stringResource(id = R.string.saved_route_route_option_recommended)
+        "MIN_TRANSFER" -> stringResource(id = R.string.saved_route_route_option_min_transfer)
+        "MIN_WALK" -> stringResource(id = R.string.saved_route_route_option_min_walk)
+        null, "" -> routeOptionLabel(fallback)
+        else -> rawLabel
+    }
+
+@Composable
+private fun transportModeLabel(transportMode: String?): String? =
+    when (transportMode?.uppercase()) {
+        "WALK" -> stringResource(id = R.string.saved_route_transport_mode_walk)
+        "PUBLIC_TRANSIT" -> stringResource(id = R.string.saved_route_transport_mode_transit)
+        null, "" -> null
+        else -> transportMode
+    }
 
 @Composable
 private fun savedRouteMetaLabel(routeBookmark: SavedRouteBookmarkUiModel): String? {

@@ -33,6 +33,7 @@ class RouteBookmarkRepositoryTest {
                     endLabel = "부산역",
                     startPoint = FavoriteRoutePointDto(lat = 35.1686, lng = 129.0576),
                     endPoint = FavoriteRoutePointDto(lat = 35.1152, lng = 129.0422),
+                    transportMode = "WALK",
                     routeOption = "SAFE",
                 )
             val staleEntity = testFavoriteRouteEntity(favoriteRouteId = 99L, routeName = "stale-cache")
@@ -51,6 +52,74 @@ class RouteBookmarkRepositoryTest {
             assertEquals(1, bookmarks.size)
             assertEquals("7", bookmarks[0].bookmarkId)
             assertEquals("집에서 병원", bookmarks[0].routeName)
+            assertEquals(RouteOption.SAFE, bookmarks[0].routeOption)
+            assertEquals("WALK", bookmarks[0].transportMode)
+            assertEquals("SAFE", bookmarks[0].routeOptionLabel)
+        }
+
+    @Test
+    fun `observeRouteBookmarks preserves cached distance and duration after server refresh`() =
+        runBlocking {
+            val cachedEntity =
+                testFavoriteRouteEntity(favoriteRouteId = 7L, routeName = "cached")
+                    .copy(summaryDistanceMeters = 3250, summaryDurationSeconds = 1440)
+            val serverItem =
+                FavoriteRouteListItemDto(
+                    favRouteId = 7L,
+                    routeName = "renamed",
+                    startLabel = "출발",
+                    endLabel = "도착",
+                    startPoint = FavoriteRoutePointDto(lat = 35.0, lng = 129.0),
+                    endPoint = FavoriteRoutePointDto(lat = 35.1, lng = 129.1),
+                    transportMode = "WALK",
+                    routeOption = "SAFE",
+                )
+            val fakeDao = FakeFavoriteRouteDao(routes = listOf(cachedEntity))
+            val fakeDataSource = FakeFavoriteRoutesRemoteDataSource(serverContent = listOf(serverItem))
+
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    favoriteRoutesRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val bookmarks = repository.observeRouteBookmarks().first()
+
+            assertEquals(1, bookmarks.size)
+            assertEquals(3250, bookmarks[0].distanceMeters)
+            assertEquals(24, bookmarks[0].durationMinutes)
+            assertEquals("renamed", bookmarks[0].routeName)
+        }
+
+    @Test
+    fun `observeRouteBookmarks preserves transit transport mode and unknown route option label`() =
+        runBlocking {
+            val serverItem =
+                FavoriteRouteListItemDto(
+                    favRouteId = 11L,
+                    routeName = "transit-route",
+                    startLabel = "출발",
+                    endLabel = "도착",
+                    startPoint = FavoriteRoutePointDto(lat = 35.0, lng = 129.0),
+                    endPoint = FavoriteRoutePointDto(lat = 35.1, lng = 129.1),
+                    transportMode = "PUBLIC_TRANSIT",
+                    routeOption = "MIN_TRANSFER",
+                )
+            val fakeDao = FakeFavoriteRouteDao()
+            val fakeDataSource = FakeFavoriteRoutesRemoteDataSource(serverContent = listOf(serverItem))
+
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    favoriteRoutesRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val bookmarks = repository.observeRouteBookmarks().first()
+
+            assertEquals("PUBLIC_TRANSIT", bookmarks[0].transportMode)
+            assertEquals("MIN_TRANSFER", bookmarks[0].routeOptionLabel)
             assertEquals(RouteOption.SAFE, bookmarks[0].routeOption)
         }
 

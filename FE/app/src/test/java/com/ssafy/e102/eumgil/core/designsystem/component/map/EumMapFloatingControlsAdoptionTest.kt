@@ -15,8 +15,12 @@ class EumMapFloatingControlsAdoptionTest {
             source.contains("EumMapFloatingControls("),
         )
         assertTrue(
-            "Route setting should use the new current-location icon for the lower action card.",
-            source.contains("R.drawable.ic_map_current_location"),
+            "Route setting should reuse the route-start icon for the current-location action card.",
+            source.contains("R.drawable.ic_route_start_navigation_button"),
+        )
+        assertTrue(
+            "Route setting should tint the current-location action blue on the white floating button.",
+            source.contains("tint = MaterialTheme.colorScheme.primary"),
         )
     }
 
@@ -30,8 +34,12 @@ class EumMapFloatingControlsAdoptionTest {
             source.contains("EumMapFloatingControls("),
         )
         assertTrue(
-            "Navigation should use the new current-location icon for the lower action card.",
-            source.contains("R.drawable.ic_map_current_location"),
+            "Navigation should reuse the route-start icon for the current-location action card.",
+            source.contains("R.drawable.ic_route_start_navigation_button"),
+        )
+        assertTrue(
+            "Navigation should tint the current-location action blue on the white floating button.",
+            source.contains("tint = MaterialTheme.colorScheme.primary"),
         )
     }
 }

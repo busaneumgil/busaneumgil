@@ -625,8 +625,8 @@ private fun NavigationMapControls(
     EumMapFloatingControls(
         actionButtonState =
             EumMapFloatingActionButtonState(
-                iconRes = R.drawable.ic_map_current_location,
-                tint = MaterialTheme.colorScheme.onSurface,
+                iconRes = R.drawable.ic_route_start_navigation_button,
+                tint = MaterialTheme.colorScheme.primary,
                 contentDescription = stringResource(id = R.string.navigation_return_to_active_segment_label),
                 enabled = true,
             ),

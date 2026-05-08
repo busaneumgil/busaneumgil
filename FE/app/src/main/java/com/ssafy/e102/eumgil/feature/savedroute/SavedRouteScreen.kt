@@ -728,7 +728,7 @@ private fun SavedBookmarkPrimaryActionButton(
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_route_start_navigation),
+                painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(16.dp),

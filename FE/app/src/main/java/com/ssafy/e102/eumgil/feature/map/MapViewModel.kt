@@ -68,6 +68,7 @@ class MapViewModel(
     private var isRouteStarted = false
     private var locationLookupState: LocationLookupState = LocationLookupState.Idle
     private var locationLookupTimeoutJob: Job? = null
+    private var isRecenterButtonActive = false
 
     init {
         mutableUiState.update { state ->
@@ -95,6 +96,7 @@ class MapViewModel(
         }
 
         isRouteStarted = true
+        isRecenterButtonActive = false
         locationPermissionManager.refreshPermissionState()
         latestPermissionState = locationPermissionManager.permissionState.value
 
@@ -112,6 +114,7 @@ class MapViewModel(
         if (!isRouteStarted) return
 
         isRouteStarted = false
+        isRecenterButtonActive = false
         stopLocationLookup()
         currentLocationManager.stopLocationUpdates()
     }
@@ -299,6 +302,9 @@ class MapViewModel(
             destinationSelectionRepository.selectedDestination.collectLatest { destination ->
                 val previousDestination = selectedDestination
                 selectedDestination = destination
+                if (destination != null) {
+                    isRecenterButtonActive = false
+                }
 
                 mutableUiState.update { state ->
                     state.copy(selectedDestination = destination)
@@ -331,6 +337,7 @@ class MapViewModel(
                     renderSelectedFacilityState()
                 }
                 val destination = request.state.selectedDestination
+                isRecenterButtonActive = false
                 if (destination == null) {
                     applyFallbackCameraTarget()
                 } else {
@@ -351,6 +358,7 @@ class MapViewModel(
                 latestLocation = snapshot
 
                 if (snapshot == null) {
+                    isRecenterButtonActive = false
                     if (latestPermissionState is LocationPermissionState.Granted && isRouteStarted) {
                         startLocationLookup(forceRestart = false)
                     }
@@ -380,6 +388,7 @@ class MapViewModel(
     }
 
     private fun handlePermissionBlocked() {
+        isRecenterButtonActive = false
         stopLocationLookup()
         currentLocationManager.stopLocationUpdates()
         applyFallbackCameraTarget()
@@ -397,6 +406,7 @@ class MapViewModel(
 
             MapRecenterButtonState.ENABLED -> {
                 val snapshot = latestLocation ?: return retryLocationResolution()
+                isRecenterButtonActive = true
                 syncCameraToCurrentLocation(
                     snapshot = snapshot,
                     incrementRequestId = true,
@@ -412,8 +422,12 @@ class MapViewModel(
 
         when (latestPermissionState) {
             is LocationPermissionState.Granted -> startLocationTracking(forceLookupRestart = true)
-            LocationPermissionState.Denied -> emitUiEvent(MapUiEvent.RequestLocationPermission)
+            LocationPermissionState.Denied -> {
+                isRecenterButtonActive = false
+                emitUiEvent(MapUiEvent.RequestLocationPermission)
+            }
             is LocationPermissionState.Unavailable -> {
+                isRecenterButtonActive = false
                 applyFallbackCameraTarget()
                 renderUiState()
             }
@@ -624,11 +638,16 @@ class MapViewModel(
                     }
             }
 
+        if (recenterButtonState != MapRecenterButtonState.ENABLED) {
+            isRecenterButtonActive = false
+        }
+
         mutableUiState.update { state ->
             state.copy(
                 selectedDestination = selectedDestination,
                 locationStatus = locationStatus,
                 recenterButtonState = recenterButtonState,
+                isRecenterButtonActive = isRecenterButtonActive,
             )
         }
     }

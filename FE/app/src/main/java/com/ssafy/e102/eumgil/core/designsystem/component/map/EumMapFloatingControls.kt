@@ -54,7 +54,7 @@ fun EumMapFloatingControls(
     ) {
         Surface(
             modifier = Modifier.width(48.dp),
-            shape = RoundedCornerShape(EumRadius.scaleXl),
+            shape = RoundedCornerShape(EumRadius.scaleS),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
             shadowElevation = 6.dp,

@@ -177,6 +177,24 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route start cta uses provided png icon without tint override`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val asset = File("src/main/res/drawable/ic_route_start_navigation_button.png")
+
+        assertTrue(
+            "Route start CTA should use the provided PNG icon asset for the button.",
+            source.contains("R.drawable.ic_route_start_navigation_button"),
+        )
+        assertTrue(
+            "Route start CTA should tint the button icon white on the primary background.",
+            source.contains("tint = MaterialTheme.colorScheme.onPrimary"),
+        )
+        assertTrue("Route start CTA PNG icon should exist in drawable.", asset.exists())
+    }
+
+    @Test
     fun `route option prefix stays plain text while labels keep compact chip styling`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")

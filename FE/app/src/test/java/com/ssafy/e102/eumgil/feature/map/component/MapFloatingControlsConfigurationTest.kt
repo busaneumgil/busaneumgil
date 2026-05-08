@@ -39,8 +39,8 @@ class MapFloatingControlsConfigurationTest {
                 .readText()
 
         assertTrue(
-            "Shared map floating controls should use the FE floating-control rounding token 24dp.",
-            sharedSource.contains("RoundedCornerShape(EumRadius.scaleXl)"),
+            "Shared map floating controls should keep the zoom stack with a subtle small corner radius.",
+            sharedSource.contains("RoundedCornerShape(EumRadius.scaleS)"),
         )
         assertTrue(
             "Shared map floating controls should preserve the floating overlay elevation.",
@@ -51,12 +51,36 @@ class MapFloatingControlsConfigurationTest {
             mapSource.contains("EumMapFloatingControls("),
         )
         assertTrue(
-            "MAP current-location button should use the new dedicated navigation-style icon.",
-            mapSource.contains("R.drawable.ic_map_current_location"),
+            "MAP screen should distinguish between an available current-location action and an actively selected one.",
+            mapSource.contains("isRecenterButtonActive: Boolean"),
         )
         assertTrue(
-            "The new current-location icon asset should exist.",
-            File("src/main/res/drawable/ic_map_current_location.xml").exists(),
+            "MAP request-permission state should reuse the disabled-look PNG so the default inactive appearance matches the design.",
+            mapSource.split("iconRes = R.drawable.ic_map_current_location_disabled").size - 1 >= 2,
+        )
+        assertTrue(
+            "MAP enabled current-location button should reuse the route-start button icon.",
+            mapSource.contains("R.drawable.ic_route_start_navigation_button"),
+        )
+        assertTrue(
+            "MAP enabled current-location button should only show the filled route-start icon after the user explicitly activates current-location recentering.",
+            mapSource.contains("if (isRecenterButtonActive)"),
+        )
+        assertTrue(
+            "MAP enabled current-location button should tint the route-start icon with the primary color.",
+            mapSource.contains("tint = MaterialTheme.colorScheme.primary"),
+        )
+        assertTrue(
+            "MAP disabled current-location button should use the replacement PNG asset.",
+            mapSource.contains("R.drawable.ic_map_current_location_disabled"),
+        )
+        assertTrue(
+            "MAP disabled current-location button should render the provided image as-is without tinting it.",
+            mapSource.contains("tint = Color.Unspecified"),
+        )
+        assertTrue(
+            "The disabled current-location icon asset should exist in drawable.",
+            File("src/main/res/drawable/ic_map_current_location_disabled.png").exists(),
         )
     }
 }

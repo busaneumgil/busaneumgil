@@ -113,6 +113,7 @@ fun MapScreen(
         controlOverlay = {
             MapFloatingControls(
                 recenterButtonState = uiState.recenterButtonState,
+                isRecenterButtonActive = uiState.isRecenterButtonActive,
                 onRecenterClick = { onAction(MapUiAction.LocationActionClicked) },
             )
         },

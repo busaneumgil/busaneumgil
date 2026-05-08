@@ -1576,8 +1576,8 @@ private fun RouteMapControls(
     EumMapFloatingControls(
         actionButtonState =
             EumMapFloatingActionButtonState(
-                iconRes = R.drawable.ic_map_current_location,
-                tint = MaterialTheme.colorScheme.onSurface,
+                iconRes = R.drawable.ic_route_start_navigation_button,
+                tint = MaterialTheme.colorScheme.primary,
                 contentDescription = stringResource(id = R.string.route_setting_map_control_recenter),
                 enabled = true,
             ),
@@ -2054,7 +2054,7 @@ private fun RouteSettingCtaContent(
                 ),
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_route_start_navigation),
+                painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onPrimary,

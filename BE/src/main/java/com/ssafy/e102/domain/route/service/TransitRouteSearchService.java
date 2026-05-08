@@ -250,7 +250,7 @@ public class TransitRouteSearchService {
 				leg.type(),
 				leg.routeNo(),
 				stopKey(leg.boardingStop()),
-				stopKey(leg.alightingStop())))
+				stopKey(leg.arrivingStop())))
 			.toList();
 		if (transitLegKeys.isEmpty()) {
 			return route.routeId();
@@ -342,10 +342,10 @@ public class TransitRouteSearchService {
 					cursor,
 					nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex));
 				legs.add(transitLeg);
-				if (transitLeg.alightingStop() != null) {
+				if (transitLeg.arrivingStop() != null) {
 					cursor = new GeoPointRequest(
-						transitLeg.alightingStop().lat().doubleValue(),
-						transitLeg.alightingStop().lng().doubleValue());
+						transitLeg.arrivingStop().lat().doubleValue(),
+						transitLeg.arrivingStop().lng().doubleValue());
 				}
 			} catch (RouteException exception) {
 				log.warn(
@@ -483,7 +483,7 @@ public class TransitRouteSearchService {
 		List<TransitLaneOptionResponse> laneOptions = laneOptions(routeIndex, sequence, odsayLeg);
 		String routeNo = routeNo(odsayLeg, laneOptions);
 		RouteStopResponse boardingStop = boardingStop(odsayLeg, referencePoint);
-		RouteStopResponse alightingStop = alightingStop(odsayLeg);
+		RouteStopResponse arrivingStop = arrivingStop(odsayLeg);
 		BigDecimal distanceMeter = scale(odsayLeg.distanceMeter());
 		return new RouteLegResponse(
 			sequence,
@@ -495,20 +495,20 @@ public class TransitRouteSearchService {
 			estimatedMinute(durationSecond),
 			geometry != null ? geometry
 				: lineString(odsayLeg.startLng(), odsayLeg.startLat(), odsayLeg.endLng(), odsayLeg.endLat()),
-			arrivingPointEvents(alightingStop, distanceMeter, durationSecond),
+			arrivingPointEvents(arrivingStop, distanceMeter, durationSecond),
 			routeNo,
 			laneOptions,
 			boardingStop,
-			alightingStop,
+			arrivingStop,
 			null,
 			odsayLeg.type() == TransportMode.SUBWAY ? List.of(RouteBadge.ELEVATOR) : List.of());
 	}
 
 	private List<RouteGuidanceEventResponse> arrivingPointEvents(
-		RouteStopResponse alightingStop,
+		RouteStopResponse arrivingStop,
 		BigDecimal distanceMeter,
 		int durationSecond) {
-		if (alightingStop == null) {
+		if (arrivingStop == null) {
 			return List.of();
 		}
 		return List.of(new RouteGuidanceEventResponse(
@@ -516,7 +516,7 @@ public class TransitRouteSearchService {
 			RouteGuidanceEventType.ARRIVING_POINT,
 			distanceMeter == null ? BigDecimal.ZERO.setScale(2) : distanceMeter,
 			durationSecond,
-			point(alightingStop)));
+			point(arrivingStop)));
 	}
 
 	private RouteStopResponse boardingStop(OdsayTransitLeg leg, GeoPointRequest referencePoint) {
@@ -526,7 +526,7 @@ public class TransitRouteSearchService {
 		return stop(leg.startName(), leg.startLat(), leg.startLng());
 	}
 
-	private RouteStopResponse alightingStop(OdsayTransitLeg leg) {
+	private RouteStopResponse arrivingStop(OdsayTransitLeg leg) {
 		if (leg.type() == TransportMode.SUBWAY) {
 			return subwayStop(leg.endName(), leg.endId(), leg.endExitLat(), leg.endExitLng(),
 				referencePoint(leg.endLat(), leg.endLng()));
@@ -539,12 +539,12 @@ public class TransitRouteSearchService {
 		List<SubwayStationElevator> elevators = subwayStationElevatorRepository.findByOdsayStationId(odsayStationId);
 		if (!elevators.isEmpty()) {
 			SubwayStationElevator elevator = nearestElevator(elevators, referencePoint);
-			return stop(elevator.getStationName() + " 엘리베이터", elevator);
+			return stop(elevator.getStationName(), elevator);
 		}
 		return subwayStationRepository.findByOdsayStationId(odsayStationId)
 			.filter(station -> station.getPoint() != null)
-			.map(station -> stop(station.getStationName() + " 엘리베이터", station))
-			.orElseGet(() -> stop(name + " 엘리베이터", fallbackLat, fallbackLng));
+			.map(station -> stop(station.getStationName(), station))
+			.orElseGet(() -> stop(name, fallbackLat, fallbackLng));
 	}
 
 	private SubwayStationElevator nearestElevator(List<SubwayStationElevator> elevators,
@@ -797,13 +797,13 @@ public class TransitRouteSearchService {
 		snapshot.put("passStops", leg.passStops().stream().map(this::snapshotStop).toList());
 		if (leg.type() == TransportMode.SUBWAY) {
 			RouteStopResponse boardingStop = boardingStop(leg, null);
-			RouteStopResponse alightingStop = alightingStop(leg);
+			RouteStopResponse arrivingStop = arrivingStop(leg);
 			snapshot.put("odsayStationId", leg.startId());
 			snapshot.put("endOdsayStationId", leg.endId());
 			snapshot.put("lineName", routeNo(leg));
 			snapshot.put("wayCode", leg.wayCode());
 			snapshot.put("boardingElevator", snapshotStop(boardingStop));
-			snapshot.put("alightingElevator", snapshotStop(alightingStop));
+			snapshot.put("arrivingElevator", snapshotStop(arrivingStop));
 			snapshot.put("nextDeparture", nextDepartureSnapshot(leg));
 		}
 		return snapshot;

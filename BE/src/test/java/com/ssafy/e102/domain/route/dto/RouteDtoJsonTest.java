@@ -69,6 +69,7 @@ class RouteDtoJsonTest {
 		assertThat(leg.has("routeNo")).isFalse();
 		assertThat(leg.has("laneOptions")).isFalse();
 		assertThat(leg.has("boardingStop")).isFalse();
+		assertThat(leg.has("arrivingStop")).isFalse();
 		assertThat(leg.has("alightingStop")).isFalse();
 		assertThat(leg.has("isLowFloor")).isFalse();
 		assertThat(leg.has("badges")).isFalse();

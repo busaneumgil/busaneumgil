@@ -31,7 +31,7 @@ public record RouteLegResponse(
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	RouteStopResponse boardingStop,
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	RouteStopResponse alightingStop,
+	RouteStopResponse arrivingStop,
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	Boolean isLowFloor,
 	@JsonIgnore

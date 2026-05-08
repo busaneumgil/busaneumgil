@@ -115,6 +115,7 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.data.routes[0].legs[0].routeNo").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].laneOptions").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].boardingStop").doesNotExist())
+			.andExpect(jsonPath("$.data.routes[0].legs[0].arrivingStop").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].alightingStop").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].isLowFloor").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].badges").doesNotExist())

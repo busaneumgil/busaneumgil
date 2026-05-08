@@ -322,9 +322,12 @@ class TransitRouteSearchServiceTest {
 			.filteredOn(leg -> leg.type() == TransportMode.SUBWAY)
 			.first()
 			.satisfies(leg -> {
-				assertThat(leg.boardingStop().name()).isEqualTo("서면 엘리베이터");
+				assertThat(leg.boardingStop().name()).isEqualTo("서면");
 				assertThat(leg.boardingStop().lat()).isEqualByComparingTo("35.159");
 				assertThat(leg.boardingStop().lng()).isEqualByComparingTo("129.059");
+				assertThat(leg.arrivingStop().name()).isEqualTo("부산역");
+				assertThat(leg.arrivingStop().lat()).isEqualByComparingTo("35.115");
+				assertThat(leg.arrivingStop().lng()).isEqualByComparingTo("129.041");
 			});
 
 		assertThat(response.routes().get(0).legs().get(0).guidanceEvents())
@@ -345,6 +348,7 @@ class TransitRouteSearchServiceTest {
 			.satisfies(snapshot -> {
 				assertThat(snapshot.get("odsayStationId")).isEqualTo("S1");
 				assertThat(snapshot.get("wayCode")).isEqualTo(1);
+				assertThat(snapshot).containsKey("arrivingElevator");
 				Map<String, Object> nextDeparture = (Map<String, Object>)snapshot.get("nextDeparture");
 				assertThat(nextDeparture)
 					.containsEntry("departureTimeText", "08:02")

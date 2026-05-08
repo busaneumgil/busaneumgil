@@ -12,6 +12,7 @@ data class FavoriteRouteListItemDto(
     val endLabel: String,
     val startPoint: FavoriteRoutePointDto,
     val endPoint: FavoriteRoutePointDto,
+    val transportMode: String?,
     val routeOption: String,
 )
 

@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,13 +21,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionHomeBottomNav
 
 internal object LowVisionHomeLayoutDefaults {
+    const val headerTitle = "\uBD80\uC0B0\uC774\uC74C\uAE38"
     val headerSlotHeight = LowVisionScreenDefaults.headerLineHeight.value.dp
     const val voiceActionCardWeight = 2f
     const val currentLocationCardWeight = 1f
@@ -83,7 +85,23 @@ fun LowVisionHomeScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(LowVisionHomeLayoutDefaults.actionCardGap),
         ) {
-            Spacer(modifier = Modifier.height(LowVisionHomeLayoutDefaults.headerSlotHeight))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(LowVisionHomeLayoutDefaults.headerSlotHeight)
+                    .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = LowVisionHomeLayoutDefaults.headerTitle,
+                    color = LowVisionScreenDefaults.brandYellow,
+                    fontSize = LowVisionScreenDefaults.headerFontSize,
+                    lineHeight = LowVisionScreenDefaults.headerLineHeight,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
 
             // 1) 음성 입력 카드 (하단바 제외 영역의 2/3)
             HomeYellowCard(

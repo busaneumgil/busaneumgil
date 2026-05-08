@@ -42,4 +42,28 @@ class LowVisionPlaceCardDefaultsTest {
             ),
         )
     }
+
+    @Test
+    fun `place info a11y label combines place name and brief address`() {
+        assertEquals(
+            "부산역 엘리베이터. 중구 중앙대로 206. 탭하면 상세 주소를 음성으로 안내합니다.",
+            lowVisionPlaceInfoA11yLabel(
+                name = "부산역 엘리베이터",
+                address = "부산광역시 중구 중앙대로 206",
+            ),
+        )
+    }
+
+    @Test
+    fun `place info speech text includes place name and full gps detail`() {
+        assertEquals(
+            "부산역 엘리베이터. 상세 주소: 부산광역시 중구 중앙대로 206\nGPS 위치: 위도 35.11510, 경도 129.04150",
+            lowVisionPlaceInfoSpeechText(
+                name = "부산역 엘리베이터",
+                address = "부산광역시 중구 중앙대로 206",
+                latitude = 35.1151,
+                longitude = 129.0415,
+            ),
+        )
+    }
 }

@@ -10,7 +10,7 @@
   - 1차 FE 문서: 목표 계약 확인
 - `FE/mockup/`과 Figma handoff 같은 직접 산출물은 1차 FE 문서 다음 기준이다.
 - `Docs/PRD/`, `Docs/기획/`, 필요한 `Docs/API/`는 FE 계약을 보강할 때만 읽는다.
-- `FE/docs/2026-04-27_*`, `FE/docs/sprint_backlog/` 같은 2차 정리 문서는 1차 FE 문서나 직접 산출물을 덮어쓰지 않는다.
+- `FE/docs/archive/`, `FE/docs/debug-report/`, `FE/docs/todo/`, `FE/docs/sprint_backlog/` 같은 2차 정리 문서는 1차 FE 문서나 직접 산출물을 덮어쓰지 않는다.
 - FE가 API 계약을 볼 때는 실제로 소비하는 도메인 문서만 선택적으로 읽는다. 기본 후보는 `장소_도메인`, `사용자_도메인`, `길안내_도메인`, 필요 시 `음성_도메인`이다.
 - BE 작업은 `Docs/API/`, `Docs/ERD/`, `Docs/skills/backend/`, 실제 `BE/` 코드를 1차 기준으로 둔다.
 - 코드, FE 문서, Figma/mockup, PRD/API가 충돌하면 아래 네 항목을 분리해 기록한다.

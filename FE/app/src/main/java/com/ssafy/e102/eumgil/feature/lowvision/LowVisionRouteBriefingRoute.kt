@@ -80,24 +80,26 @@ fun LowVisionRouteBriefingRoute(
         }
     }
 
-    LowVisionRouteBriefingScreen(
-        uiState = uiState,
-        visibleSteps = uiState.steps.visibleBriefingSteps(visibleStepStartIndex),
-        isPlaying = playbackActive,
-        onPlaybackClick = {
-            if (playbackActive) {
-                playbackActive = false
-                ttsController.stop()
-            } else {
-                visibleStepStartIndex = 0
-                playbackToken = ttsState.completedUtteranceCount
-                playbackActive = true
-                ttsController.speak(uiState.steps.briefingSpeechTextFrom(0))
-            }
-        },
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionRouteBriefingScreen(
+            uiState = uiState,
+            visibleSteps = uiState.steps.visibleBriefingSteps(visibleStepStartIndex),
+            isPlaying = playbackActive,
+            onPlaybackClick = {
+                if (playbackActive) {
+                    playbackActive = false
+                    ttsController.stop()
+                } else {
+                    visibleStepStartIndex = 0
+                    playbackToken = ttsState.completedUtteranceCount
+                    playbackActive = true
+                    ttsController.speak(uiState.steps.briefingSpeechTextFrom(0))
+                }
+            },
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

@@ -53,12 +53,14 @@ fun LowVisionBookmarkRoute(
         }
     }
 
-    LowVisionBookmarkScreen(
-        uiState = uiState,
-        onAction = viewModel::onAction,
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionBookmarkScreen(
+            uiState = uiState,
+            onAction = viewModel::onAction,
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

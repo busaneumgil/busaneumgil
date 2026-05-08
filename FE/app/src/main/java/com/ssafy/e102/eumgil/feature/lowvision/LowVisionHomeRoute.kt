@@ -17,11 +17,13 @@ fun LowVisionHomeRoute(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LowVisionHomeScreen(
-        uiState = LowVisionHomeUiState(selectedTab = LowVisionBottomTab.HOME),
-        onVoiceInputClick = onVoiceInputClick,
-        onCurrentLocationClick = onCurrentLocationClick,
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionHomeScreen(
+            uiState = LowVisionHomeUiState(selectedTab = LowVisionBottomTab.HOME),
+            onVoiceInputClick = onVoiceInputClick,
+            onCurrentLocationClick = onCurrentLocationClick,
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }

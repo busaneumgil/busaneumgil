@@ -127,6 +127,7 @@ public class OdsayClient {
 	}
 
 	private OdsayTransitSearchResult parseSearchResult(JsonNode body) {
+		rejectOdsayError(body, "searchPubTransPathT");
 		JsonNode pathNodes = body == null ? null : body.path("result").path("path");
 		if (pathNodes == null || !pathNodes.isArray() || pathNodes.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
@@ -163,6 +164,7 @@ public class OdsayClient {
 	}
 
 	private List<OdsayLaneGeometry> parseLaneGeometries(JsonNode body) {
+		rejectOdsayError(body, "loadLane");
 		JsonNode laneNodes = body == null ? null : body.path("result").path("lane");
 		if (laneNodes == null || !laneNodes.isArray()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
@@ -324,6 +326,20 @@ public class OdsayClient {
 			exception);
 		return new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 			RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
+	}
+
+	private void rejectOdsayError(JsonNode body, String operation) {
+		JsonNode error = body == null ? null : body.path("error");
+		if (error == null || error.isMissingNode() || error.isNull()) {
+			return;
+		}
+		log.warn(
+			"external route call failed provider={} operation={} status={} error={}",
+			"odsay",
+			operation,
+			RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+			error);
+		throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED);
 	}
 
 	private RouteErrorCode timeoutOrFailure(Throwable throwable) {

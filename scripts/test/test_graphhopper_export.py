@@ -492,6 +492,63 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertIn("128.826939899868", xml)
         self.assertIn("128.826939895100", xml)
 
+    def test_export_precision_merge_prevents_collapsed_synthetic_child(self):
+        module = load_export_module()
+        original_decimal_places = module.GEOMETRY_DECIMAL_PLACES
+        module.GEOMETRY_DECIMAL_PLACES = 8
+        try:
+            nodes = [
+                {"vertex_id": 1, "lon": 128.82709585, "lat": 35.09417414},
+                {"vertex_id": 2, "lon": 128.82678768, "lat": 35.09394820},
+            ]
+            segments = [
+                {
+                    "edge_id": 4900,
+                    "from_node_id": 1,
+                    "to_node_id": 2,
+                    "geom_wkt": "LINESTRING(128.82709585 35.09417414, 128.82678768 35.09394820)",
+                    "walk_access": "YES",
+                    "avg_slope_percent": "0.0",
+                    "width_meter": "0.0",
+                    "braille_block_state": "UNKNOWN",
+                    "audio_signal_state": "UNKNOWN",
+                    "slope_state": "FLAT",
+                    "width_state": "UNKNOWN",
+                    "surface_state": "PAVED",
+                    "stairs_state": "NO",
+                    "signal_state": "UNKNOWN",
+                    "segment_type": "SIDE_LINE",
+                }
+            ]
+            features = [
+                {
+                    "feature_id": 939,
+                    "edge_id": 4900,
+                    "feature_type": "CROSSWALK",
+                    "geom_wkt": "POINT(128.8269182 35.0940894)",
+                    "state": "YES",
+                    "value_number": None,
+                },
+                {
+                    "feature_id": 3263,
+                    "edge_id": 4900,
+                    "feature_type": "BRAILLE_BLOCK",
+                    "geom_wkt": "POINT(128.8269182 35.09408939)",
+                    "state": "YES",
+                    "value_number": None,
+                },
+            ]
+
+            output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
+            report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
+
+            self.assertEqual(report["status"], "PASS")
+            for segment in output_segments:
+                coords = module.parse_linestring_wkt(segment["geom_wkt"])
+                self.assertNotEqual(coords[0], coords[-1])
+        finally:
+            module.GEOMETRY_DECIMAL_PLACES = original_decimal_places
+
     def test_custom_models_use_canonical_accessibility_enums(self):
         allowed_width_conditions = {
             "width_state == ADEQUATE_120",

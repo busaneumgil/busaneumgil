@@ -485,8 +485,19 @@ def same_export_coordinate(left, right):
     )
 
 
+def is_valid_export_linestring(coords):
+    if len(coords) < 2:
+        return False
+    exported = parse_linestring_wkt(format_linestring_wkt(coords))
+    return (
+        len(exported) >= 2
+        and exported[0] != exported[-1]
+        and all(is_valid_lon_lat(lon, lat) for lon, lat in exported)
+    )
+
+
 def normalize_split_fractions(coords, split_fractions):
-    """Merge split boundaries that become the same exported OSM coordinate."""
+    """Merge split boundaries that would create collapsed exported geometry."""
     ordered = sorted(split_fractions)
     normalized = []
     for fraction in ordered:
@@ -497,7 +508,8 @@ def normalize_split_fractions(coords, split_fractions):
             normalized.append(fraction)
             continue
         previous_point = point_at_fraction(coords, normalized[-1])
-        if same_export_coordinate(previous_point, point):
+        child_coords = linestring_between_fractions(coords, normalized[-1], fraction)
+        if same_export_coordinate(previous_point, point) or not is_valid_export_linestring(child_coords):
             if abs(fraction - 1.0) <= SPLIT_FRACTION_TOLERANCE:
                 normalized[-1] = 1.0
             continue
@@ -622,14 +634,19 @@ def apply_segment_features_to_export(nodes, segments, features):
             start_fraction = ordered_fractions[index - 1]
             end_fraction = ordered_fractions[index]
             child_coords = linestring_between_fractions(coords, start_fraction, end_fraction)
-            if len(child_coords) < 2:
+            if not is_valid_export_linestring(child_coords):
+                if output_segments and output_segments[-1].get("source_edge_id") == segment.get("edge_id"):
+                    for feature, feature_start, feature_end in feature_ranges:
+                        if ranges_overlap(start_fraction, end_fraction, feature_start, feature_end):
+                            apply_feature_state(output_segments[-1], feature)
                 continue
+            child_geom_wkt = format_linestring_wkt(child_coords)
             child = dict(segment)
             child["edge_id"] = next_synthetic_edge_id
             child["source_edge_id"] = segment["edge_id"]
             child["from_node_id"] = boundary_nodes[start_fraction]
             child["to_node_id"] = boundary_nodes[end_fraction]
-            child["geom_wkt"] = format_linestring_wkt(child_coords)
+            child["geom_wkt"] = child_geom_wkt
             next_synthetic_edge_id -= 1
             for feature, feature_start, feature_end in feature_ranges:
                 if ranges_overlap(start_fraction, end_fraction, feature_start, feature_end):

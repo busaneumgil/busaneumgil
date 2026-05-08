@@ -9,7 +9,7 @@ public record AiVoiceAnalysisProperties(String baseUrl) {
 	private static final String VOICE_ANALYZE_PATH = "/voice/analyze";
 
 	public AiVoiceAnalysisProperties {
-		Assert.hasText(baseUrl, "AI 서버 base URL은 필수입니다.");
+		Assert.hasText(baseUrl, "AI 서버 기본 URL은 필수입니다.");
 	}
 
 	public String voiceAnalyzeUri() {

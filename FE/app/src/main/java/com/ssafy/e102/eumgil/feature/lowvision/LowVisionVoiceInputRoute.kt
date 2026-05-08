@@ -15,10 +15,12 @@ fun LowVisionVoiceInputRoute(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LowVisionVoiceInputScreen(
-        uiState = LowVisionVoiceInputUiState(selectedTab = LowVisionBottomTab.HOME),
-        onCancelRecording = onCancelRecording,
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionVoiceInputScreen(
+            uiState = LowVisionVoiceInputUiState(selectedTab = LowVisionBottomTab.HOME),
+            onCancelRecording = onCancelRecording,
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }

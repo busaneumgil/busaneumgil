@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.domain.user.type.UserRole;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
 
@@ -17,4 +18,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 	boolean existsBySocialProviderAndSocialProviderUserId(
 		SocialProvider socialProvider,
 		String socialProviderUserId);
+
+	boolean existsByUserIdAndRole(UUID userId, UserRole role);
 }

@@ -12,13 +12,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.feature.navigation.NavigationFocusedSegmentCardUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationStepCardUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationStepMetricUiState
 
@@ -133,8 +136,8 @@ private fun NavigationStepMetricCard(
 @Composable
 private fun NavigationStepChip(
     label: String,
-    containerColor: androidx.compose.ui.graphics.Color,
-    contentColor: androidx.compose.ui.graphics.Color,
+    containerColor: Color,
+    contentColor: Color,
 ) {
     Surface(
         shape = RoundedCornerShape(EumRadius.full),
@@ -151,5 +154,82 @@ private fun NavigationStepChip(
             style = MaterialTheme.typography.labelMedium,
             color = contentColor,
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun NavigationFocusedSegmentCard(
+    uiState: NavigationFocusedSegmentCardUiState,
+    showReturnToActiveAction: Boolean,
+    onReturnToActiveClick: () -> Unit,
+    pendingActiveChangeLabel: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+        shadowElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NavigationStepChip(
+                    label = uiState.sequenceLabel,
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    contentColor = MaterialTheme.colorScheme.primary,
+                )
+                if (showReturnToActiveAction) {
+                    TextButton(onClick = onReturnToActiveClick) {
+                        Text(text = "현재 구간으로 돌아가기")
+                    }
+                }
+            }
+
+            pendingActiveChangeLabel?.takeIf { label -> label.isNotBlank() }?.let { label ->
+                NavigationStepChip(
+                    label = label,
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.56f),
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+
+            Text(
+                text = uiState.instruction,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            ) {
+                NavigationStepChip(
+                    label = uiState.riskLabel,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                NavigationStepChip(
+                    label = uiState.distanceLabel,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.66f),
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+
+            Text(
+                text = uiState.supportingText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

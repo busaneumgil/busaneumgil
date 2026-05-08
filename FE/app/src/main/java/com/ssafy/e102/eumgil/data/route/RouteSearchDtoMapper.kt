@@ -1,8 +1,14 @@
 package com.ssafy.e102.eumgil.data.route
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteAlert
+import com.ssafy.e102.eumgil.core.model.RouteAlertType
+import com.ssafy.e102.eumgil.core.model.RouteBadge
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteDefaults
+import com.ssafy.e102.eumgil.core.model.RouteLeg
+import com.ssafy.e102.eumgil.core.model.RouteLegRole
+import com.ssafy.e102.eumgil.core.model.RouteLegType
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
@@ -11,7 +17,10 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteSearchResult
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
+import com.ssafy.e102.eumgil.core.model.RouteStep
 import com.ssafy.e102.eumgil.core.model.RouteSummary
+import com.ssafy.e102.eumgil.core.model.RouteTransitStop
+import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -29,11 +38,13 @@ fun RouteSearchResponseDto.toDomain(
     RouteSearchResult(
         origin = query.origin,
         destination = query.destination,
+        searchId = searchId?.trim()?.takeIf(String::isNotEmpty),
         routes =
             routes.mapIndexed { index, route ->
                 route.toDomain(
                     defaultOption = query.requestedOptions.getOrElse(index) { RouteOption.SAFE },
                     geometryParser = geometryParser,
+                    fallbackIndex = index + 1,
                 )
             },
     )
@@ -41,31 +52,251 @@ fun RouteSearchResponseDto.toDomain(
 private fun RouteDto.toDomain(
     defaultOption: RouteOption,
     geometryParser: RouteGeometryParser,
+    fallbackIndex: Int,
 ): RouteCandidate {
     val resolvedOption = RouteOption.fromValue(routeOption) ?: defaultOption
-    val sourceSegments =
-        segments.ifEmpty {
-            legs.toSegmentDtos()
+    val resolvedTransportMode = normalizedTransportMode(resolvedOption)
+    val resolvedLegs = toDomainLegs(geometryParser)
+    val resolvedSegments =
+        if (resolvedLegs.isNotEmpty()) {
+            resolvedLegs.toCompatibilitySegments()
+        } else {
+            segments.toLegacySegments(geometryParser)
         }
-    val parsedSegments = sourceSegments.toParsedSegments(geometryParser = geometryParser)
-    val segmentDistanceTotal = parsedSegments.segments.sumOf(RouteSegment::distanceMeters)
-    val distanceMeters = normalizedDistance(segmentDistanceTotal)
+    val previewFromSegments = resolvedSegments.toPreviewModel()
+    val resolvedGeometry =
+        geometryParser
+            .parse(geometry)
+            .polyline
+            .takeIf(RoutePolyline::isRenderable)
+            ?: previewFromSegments.polyline
+    val distanceMeters =
+        normalizedDistance(
+            explicitDistanceMeters = distanceMeter.toRoundedMeters(),
+            segmentDistanceTotal = resolvedSegments.sumOf(RouteSegment::distanceMeters),
+            legDistanceTotal = resolvedLegs.sumOf(RouteLeg::resolvedDistanceMeters),
+        )
 
     return RouteCandidate(
+        routeId = normalizedRouteId(resolvedTransportMode, resolvedOption, fallbackIndex),
+        transportMode = resolvedTransportMode,
         routeOption = resolvedOption,
         title = normalizedTitle().ifEmpty { defaultTitle(resolvedOption) },
         summary =
             RouteSummary(
                 distanceMeters = distanceMeters,
                 estimatedTimeMinutes = normalizedEstimatedTime(distanceMeters = distanceMeters),
-                riskLevel = RouteRiskLevel.fromValue(riskLevel, fallback = parsedSegments.segments.maxRiskLevel()),
+                riskLevel =
+                    RouteRiskLevel.fromValue(
+                        riskLevel,
+                        fallback =
+                            resolvedSegments.maxRiskLevel(
+                                routeBadges = RouteBadge.fromCodes(badges),
+                            ),
+                    ),
             ),
-        preview = parsedSegments.preview,
-        segments = parsedSegments.segments,
+        transferCount = transferCount?.takeIf { count -> count >= 0 },
+        badges = RouteBadge.fromCodes(badges),
+        geometry = resolvedGeometry,
+        preview =
+            previewFromSegments.copy(
+                polyline = if (resolvedGeometry.isRenderable) resolvedGeometry else previewFromSegments.polyline,
+            ),
+        legs = resolvedLegs,
+        segments = resolvedSegments,
     )
 }
 
-private fun RouteSegmentDto.toDomain(
+private fun RouteDto.toDomainLegs(geometryParser: RouteGeometryParser): List<RouteLeg> =
+    when {
+        legs.isNotEmpty() ->
+            legs
+                .mapIndexed { index, legDto ->
+                    legDto.toDomain(
+                        fallbackSequence = index + 1,
+                        geometryParser = geometryParser,
+                    )
+                }.sortedBy(RouteLeg::sequence)
+
+        segments.isNotEmpty() -> {
+            val legacySegments = segments.toLegacySegments(geometryParser)
+            listOf(
+                RouteLeg(
+                    sequence = 1,
+                    type = RouteLegType.WALK,
+                    role = RouteLegRole.WALK_ONLY,
+                    instruction = legacySegments.firstOrNull()?.guidanceMessage ?: RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
+                    distanceMeters = legacySegments.sumOf(RouteSegment::distanceMeters),
+                    estimatedTimeMinutes = estimatedTimeMinute?.takeIf { value -> value >= 0 },
+                    polyline =
+                        geometryParser
+                            .parse(geometry)
+                            .polyline
+                            .takeIf(RoutePolyline::isRenderable)
+                            ?: legacySegments.toPreviewPolyline(),
+                    steps =
+                        legacySegments.map { segment ->
+                            RouteStep(
+                                sequence = segment.sequence,
+                                instruction = segment.guidanceMessage,
+                                distanceMeters = segment.distanceMeters,
+                                polyline = segment.polyline,
+                                badges = segment.safetyFlags.toSyntheticBadges(),
+                            )
+                        },
+                    badges = RouteBadge.fromCodes(badges),
+                ),
+            )
+        }
+
+        else -> emptyList()
+    }
+
+private fun RouteLegDto.toDomain(
+    fallbackSequence: Int,
+    geometryParser: RouteGeometryParser,
+): RouteLeg {
+    val resolvedSteps =
+        steps
+            .mapIndexed { index, step ->
+                step.toDomain(
+                    fallbackSequence = index + 1,
+                    geometryParser = geometryParser,
+                )
+            }.sortedBy(RouteStep::sequence)
+    val parsedPolyline = geometryParser.parse(geometry).polyline
+
+    return RouteLeg(
+        sequence = normalizedSequence(fallbackSequence),
+        type = RouteLegType.fromValue(type),
+        role = RouteLegRole.fromValue(role),
+        instruction = normalizedInstruction(instruction),
+        distanceMeters = distanceMeter.toRoundedMeters() ?: resolvedSteps.sumOf(RouteStep::distanceMeters),
+        estimatedTimeMinutes = estimatedTimeMinute?.takeIf { value -> value >= 0 },
+        polyline =
+            if (parsedPolyline.isRenderable) {
+                parsedPolyline
+            } else {
+                resolvedSteps.toStepPreviewPolyline()
+            },
+        steps = resolvedSteps,
+        routeNo = routeNo?.trim()?.takeIf(String::isNotEmpty),
+        boardingStop = boardingStop?.toDomainOrNull(),
+        alightingStop = alightingStop?.toDomainOrNull(),
+        isLowFloor = isLowFloor,
+        badges = RouteBadge.fromCodes(badges),
+    )
+}
+
+private fun RouteStepDto.toDomain(
+    fallbackSequence: Int,
+    geometryParser: RouteGeometryParser,
+): RouteStep =
+    RouteStep(
+        sequence =
+            sequence
+                ?.takeIf { value -> value > 0 }
+                ?: fallbackSequence,
+        instruction = normalizedInstruction(instruction),
+        distanceMeters = distanceMeter.toRoundedMeters() ?: 0,
+        polyline = geometryParser.parse(geometry).polyline,
+        badges = RouteBadge.fromCodes(badges),
+        alerts =
+            alerts.mapNotNull(RouteAlertDto::toDomainOrNull).ifEmpty {
+                listOfNotNull(alert?.toDomainOrNull())
+            },
+        slopePercent = slopePercent,
+        widthState = widthState?.trim()?.takeIf(String::isNotEmpty),
+    )
+
+private fun RouteStepAlertDto.toDomainOrNull(): RouteAlert? {
+    val resolvedType = RouteAlertType.fromValue(type) ?: return null
+    return RouteAlert(
+        type = resolvedType,
+        distanceMeters = distanceMeter.toRoundedMeters() ?: 0,
+    )
+}
+
+private fun RouteAlertDto.toDomainOrNull(): RouteAlert? {
+    val resolvedType = RouteAlertType.fromValue(type) ?: return null
+    return RouteAlert(
+        type = resolvedType,
+        distanceMeters = distanceMeter.toRoundedMeters() ?: 0,
+    )
+}
+
+private fun RouteTransitStopDto.toDomainOrNull(): RouteTransitStop? {
+    val resolvedName = name?.trim().orEmpty()
+    val resolvedLat = lat ?: return null
+    val resolvedLng = lng ?: return null
+    if (resolvedName.isEmpty()) return null
+
+    return RouteTransitStop(
+        name = resolvedName,
+        coordinate = GeoCoordinate(latitude = resolvedLat, longitude = resolvedLng),
+    )
+}
+
+private fun List<RouteLeg>.toCompatibilitySegments(): List<RouteSegment> {
+    var nextSequence = 1
+
+    return buildList {
+        sortedBy(RouteLeg::sequence).forEach { leg ->
+            if (leg.type == RouteLegType.WALK && leg.steps.isNotEmpty()) {
+                leg.steps.forEach { step ->
+                    add(
+                        step.toCompatibilitySegment(
+                            sequence = nextSequence++,
+                            sourceLegSequence = leg.sequence,
+                        ),
+                    )
+                }
+            } else {
+                add(
+                    leg.toCompatibilitySegment(
+                        sequence = nextSequence++,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+private fun RouteStep.toCompatibilitySegment(
+    sequence: Int,
+    sourceLegSequence: Int,
+): RouteSegment =
+    RouteSegment(
+        sequence = sequence,
+        polyline = polyline,
+        distanceMeters = distanceMeters,
+        safetyFlags = buildSafetyFlags(badges = badges, alerts = alerts, guidanceMessage = instruction),
+        riskLevel = resolveRiskLevel(badges = badges, alerts = alerts, guidanceMessage = instruction),
+        guidanceMessage = instruction.ifBlank { RouteDefaults.DEFAULT_GUIDANCE_MESSAGE },
+        sourceLegSequence = sourceLegSequence,
+        sourceStepSequence = this.sequence,
+    )
+
+private fun RouteLeg.toCompatibilitySegment(sequence: Int): RouteSegment =
+    RouteSegment(
+        sequence = sequence,
+        polyline = polyline,
+        distanceMeters = resolvedDistanceMeters,
+        safetyFlags = buildSafetyFlags(badges = badges, alerts = emptyList(), guidanceMessage = instruction),
+        riskLevel = resolveRiskLevel(badges = badges, alerts = emptyList(), guidanceMessage = instruction),
+        guidanceMessage = instruction.ifBlank { RouteDefaults.DEFAULT_GUIDANCE_MESSAGE },
+        sourceLegSequence = this.sequence,
+    )
+
+private fun List<RouteSegmentDto>.toLegacySegments(geometryParser: RouteGeometryParser): List<RouteSegment> =
+    mapIndexed { index, segment ->
+        segment.toLegacyDomain(
+            fallbackSequence = index + 1,
+            geometryParser = geometryParser,
+        )
+    }.sortedBy(RouteSegment::sequence)
+
+private fun RouteSegmentDto.toLegacyDomain(
     fallbackSequence: Int,
     geometryParser: RouteGeometryParser,
 ): RouteSegment {
@@ -74,7 +305,7 @@ private fun RouteSegmentDto.toDomain(
     return RouteSegment(
         sequence = normalizedSequence(fallbackSequence),
         polyline = geometryParseResult.polyline,
-        distanceMeters = normalizedDistance(),
+        distanceMeters = distanceMeter?.takeIf { distance -> distance >= 0 } ?: 0,
         safetyFlags =
             RouteSegmentSafetyFlags(
                 hasStairs = hasStairs == true,
@@ -83,9 +314,9 @@ private fun RouteSegmentDto.toDomain(
                 hasSignal = hasSignal == true,
                 hasAudioSignal = hasAudioSignal == true,
                 hasBrailleBlock = hasBrailleBlock == true,
-        ),
+            ),
         riskLevel = RouteRiskLevel.fromValue(riskLevel),
-        guidanceMessage = normalizedGuidanceMessage(),
+        guidanceMessage = normalizedInstruction(guidanceMessage),
     )
 }
 
@@ -97,28 +328,63 @@ private fun GeoCoordinate.toPointDto(): RoutePointDto =
 
 private fun RouteDto.normalizedTitle(): String = title?.trim().orEmpty()
 
-private fun RouteDto.normalizedDistance(segmentDistanceTotal: Int): Int =
-    distanceMeter
-        ?.takeIf { distance -> distance >= 0 }
-        ?: segmentDistanceTotal
+private fun RouteDto.normalizedRouteId(
+    transportMode: RouteTransportMode,
+    resolvedOption: RouteOption,
+    fallbackIndex: Int,
+): String =
+    routeId
+        ?.trim()
+        .orEmpty()
+        .ifEmpty {
+            val routePrefix =
+                when (transportMode) {
+                    RouteTransportMode.WALK -> "walk"
+                    RouteTransportMode.PUBLIC_TRANSIT -> "transit"
+                }
+            "$routePrefix-${resolvedOption.name.lowercase()}-$fallbackIndex"
+        }
+
+private fun RouteDto.normalizedTransportMode(resolvedOption: RouteOption): RouteTransportMode {
+    val fallback =
+        when (resolvedOption) {
+            RouteOption.SAFE,
+            RouteOption.SHORTEST,
+                -> RouteTransportMode.WALK
+
+            RouteOption.RECOMMENDED,
+            RouteOption.MIN_TRANSFER,
+            RouteOption.MIN_WALK,
+                -> RouteTransportMode.PUBLIC_TRANSIT
+        }
+
+    return RouteTransportMode.fromValue(transportMode, fallback = fallback)
+}
+
+private fun RouteDto.normalizedDistance(
+    explicitDistanceMeters: Int?,
+    segmentDistanceTotal: Int,
+    legDistanceTotal: Int,
+): Int =
+    explicitDistanceMeters ?: segmentDistanceTotal.takeIf { total -> total > 0 } ?: legDistanceTotal.coerceAtLeast(0)
 
 private fun RouteDto.normalizedEstimatedTime(distanceMeters: Int): Int =
     estimatedTimeMinute
         ?.takeIf { estimatedTime -> estimatedTime >= 0 }
         ?: distanceMeters.toEstimatedMinutes()
 
+private fun RouteLegDto.normalizedSequence(fallbackSequence: Int): Int =
+    sequence
+        ?.takeIf { candidateSequence -> candidateSequence > 0 }
+        ?: fallbackSequence
+
 private fun RouteSegmentDto.normalizedSequence(fallbackSequence: Int): Int =
     sequence
         ?.takeIf { candidateSequence -> candidateSequence > 0 }
         ?: fallbackSequence
 
-private fun RouteSegmentDto.normalizedDistance(): Int =
-    distanceMeter
-        ?.takeIf { distance -> distance >= 0 }
-        ?: 0
-
-private fun RouteSegmentDto.normalizedGuidanceMessage(): String =
-    guidanceMessage
+private fun normalizedInstruction(value: String?): String =
+    value
         ?.trim()
         .orEmpty()
         .ifEmpty { RouteDefaults.DEFAULT_GUIDANCE_MESSAGE }
@@ -147,30 +413,21 @@ private fun defaultTitle(routeOption: RouteOption): String =
     when (routeOption) {
         RouteOption.SAFE -> "Safe Route"
         RouteOption.SHORTEST -> "Shortest Route"
+        RouteOption.RECOMMENDED -> "Recommended Route"
+        RouteOption.MIN_TRANSFER -> "Minimum Transfer Route"
+        RouteOption.MIN_WALK -> "Minimum Walk Route"
     }
 
 fun List<RouteSegmentDto>.toRoutePreviewModel(geometryParser: RouteGeometryParser): RoutePreviewModel =
-    toParsedSegments(geometryParser = geometryParser).preview
+    toLegacySegments(geometryParser = geometryParser).toPreviewModel()
 
-private fun List<RouteSegmentDto>.toParsedSegments(geometryParser: RouteGeometryParser): ParsedRouteSegments {
-    val parsedSegments =
-        mapIndexed { index, segment ->
-            segment.toDomain(
-                fallbackSequence = index + 1,
-                geometryParser = geometryParser,
-            )
-        }.sortedBy(RouteSegment::sequence)
-
-    val renderableSegmentCount = parsedSegments.count(RouteSegment::hasRenderablePolyline)
-    return ParsedRouteSegments(
-        segments = parsedSegments,
-        preview =
-            RoutePreviewModel(
-                polyline = parsedSegments.toPreviewPolyline(),
-                segmentCount = parsedSegments.size,
-                renderableSegmentCount = renderableSegmentCount,
-                fallbackSegmentCount = parsedSegments.size - renderableSegmentCount,
-            ),
+private fun List<RouteSegment>.toPreviewModel(): RoutePreviewModel {
+    val renderableSegmentCount = count(RouteSegment::hasRenderablePolyline)
+    return RoutePreviewModel(
+        polyline = toPreviewPolyline(),
+        segmentCount = size,
+        renderableSegmentCount = renderableSegmentCount,
+        fallbackSegmentCount = size - renderableSegmentCount,
     )
 }
 
@@ -190,10 +447,30 @@ private fun List<RouteSegment>.toPreviewPolyline(): RoutePolyline {
     return RoutePolyline(points = previewPoints)
 }
 
-private fun List<RouteSegment>.maxRiskLevel(): RouteRiskLevel =
-    maxByOrNull { segment -> segment.riskLevel.severity }
-        ?.riskLevel
-        ?: RouteRiskLevel.MEDIUM
+private fun List<RouteStep>.toStepPreviewPolyline(): RoutePolyline {
+    val previewPoints = mutableListOf<GeoCoordinate>()
+
+    forEach { step ->
+        if (!step.hasRenderablePolyline) return@forEach
+
+        step.polyline.points.forEach { point ->
+            if (previewPoints.lastOrNull() != point) {
+                previewPoints += point
+            }
+        }
+    }
+
+    return RoutePolyline(points = previewPoints)
+}
+
+private fun List<RouteSegment>.maxRiskLevel(routeBadges: List<RouteBadge> = emptyList()): RouteRiskLevel {
+    val segmentLevel =
+        maxByOrNull { segment -> segment.riskLevel.severity }
+            ?.riskLevel
+            ?: RouteRiskLevel.LOW
+    val badgeLevel = resolveRiskLevel(badges = routeBadges, alerts = emptyList(), guidanceMessage = null)
+    return if (segmentLevel.severity >= badgeLevel.severity) segmentLevel else badgeLevel
+}
 
 private val RouteRiskLevel.severity: Int
     get() =
@@ -210,10 +487,76 @@ private fun Int.toEstimatedMinutes(): Int =
         ceil(this / DEFAULT_WALKING_SPEED_METERS_PER_MINUTE).toInt()
     }
 
-private data class ParsedRouteSegments(
-    val segments: List<RouteSegment>,
-    val preview: RoutePreviewModel,
-)
+private fun Double?.toRoundedMeters(): Int? =
+    this
+        ?.takeIf { value -> value >= 0.0 }
+        ?.roundToInt()
+
+private val RouteLeg.resolvedDistanceMeters: Int
+    get() = distanceMeters ?: steps.sumOf(RouteStep::distanceMeters)
+
+private fun RouteSegmentSafetyFlags.toSyntheticBadges(): List<RouteBadge> =
+    buildList {
+        if (hasStairs) add(RouteBadge.STAIR)
+        if (hasCrosswalk) add(RouteBadge.CROSSWALK)
+    }
+
+private fun buildSafetyFlags(
+    badges: List<RouteBadge>,
+    alerts: List<RouteAlert>,
+    guidanceMessage: String?,
+): RouteSegmentSafetyFlags {
+    val normalizedMessage = guidanceMessage.orEmpty()
+    return RouteSegmentSafetyFlags(
+        hasStairs = RouteBadge.STAIR in badges || alerts.any { alert -> alert.type == RouteAlertType.STAIR },
+        hasCurbGap = alerts.any { alert -> alert.type == RouteAlertType.CURB } || normalizedMessage.contains("턱", ignoreCase = true),
+        hasCrosswalk = RouteBadge.CROSSWALK in badges || alerts.any { alert -> alert.type == RouteAlertType.CROSSWALK },
+        hasSignal = normalizedMessage.contains("신호", ignoreCase = true) || normalizedMessage.contains("signal", ignoreCase = true),
+        hasAudioSignal = normalizedMessage.contains("음향", ignoreCase = true) || normalizedMessage.contains("audio", ignoreCase = true),
+        hasBrailleBlock = normalizedMessage.contains("점자", ignoreCase = true) || normalizedMessage.contains("braille", ignoreCase = true),
+    )
+}
+
+private fun resolveRiskLevel(
+    badges: List<RouteBadge>,
+    alerts: List<RouteAlert>,
+    guidanceMessage: String?,
+): RouteRiskLevel {
+    val message = guidanceMessage.orEmpty()
+    if (
+        RouteBadge.STAIR in badges ||
+        RouteBadge.NARROW_SIDEWALK in badges ||
+        RouteBadge.UNPAVED in badges ||
+        alerts.any { alert ->
+            alert.type == RouteAlertType.STAIR ||
+                alert.type == RouteAlertType.CURB ||
+                alert.type == RouteAlertType.NARROW_SIDEWALK ||
+                alert.type == RouteAlertType.UNPAVED
+        } ||
+        message.contains("공사", ignoreCase = true) ||
+        message.contains("construction", ignoreCase = true)
+    ) {
+        return RouteRiskLevel.HIGH
+    }
+
+    if (
+        RouteBadge.MIDDLE_SLOPE in badges ||
+        RouteBadge.CROSSWALK in badges ||
+        RouteBadge.ELEVATOR in badges ||
+        alerts.any { alert ->
+            alert.type == RouteAlertType.CROSSWALK ||
+                alert.type == RouteAlertType.MIDDLE_SLOPE ||
+                alert.type == RouteAlertType.ELEVATOR ||
+                alert.type == RouteAlertType.BUS_STOP ||
+                alert.type == RouteAlertType.SUBWAY_ELEVATOR ||
+                alert.type == RouteAlertType.ALIGHTING_POINT
+        }
+    ) {
+        return RouteRiskLevel.MEDIUM
+    }
+
+    return RouteRiskLevel.LOW
+}
 
 private const val DEFAULT_WALKING_SPEED_METERS_PER_MINUTE: Double = 60.0
 

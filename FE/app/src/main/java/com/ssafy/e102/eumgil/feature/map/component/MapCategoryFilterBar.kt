@@ -24,6 +24,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
@@ -64,7 +65,7 @@ fun MapCategoryFilterBar(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.scaleL),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.8f)),
         shadowElevation = 4.dp,
@@ -103,6 +104,7 @@ fun MapCategoryFilterBar(
                     FilterChip(
                         selected = state.selection.isShowingAllCategories,
                         onClick = onReset,
+                        shape = RoundedCornerShape(EumRadius.scaleS),
                         leadingIcon = {
                             FilterChipIcon(iconRes = R.drawable.ic_nav_facility)
                         },
@@ -121,6 +123,7 @@ fun MapCategoryFilterBar(
                     FilterChip(
                         selected = option.isSelected,
                         onClick = { onCategoryToggle(option.category) },
+                        shape = RoundedCornerShape(EumRadius.scaleS),
                         leadingIcon = {
                             FilterChipIcon(
                                 iconRes = categoryFilterIcon(option.category),
@@ -185,7 +188,7 @@ private fun FilterStatusCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
+        shape = RoundedCornerShape(EumRadius.scaleL),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
         shadowElevation = 4.dp,
@@ -208,6 +211,7 @@ private fun FilterChipIcon(
         painter = painterResource(id = iconRes),
         contentDescription = null,
         modifier = Modifier.size(iconSizeDp.dp),
+        tint = EumPrimary600,
     )
 }
 
@@ -232,9 +236,9 @@ private fun categoryFilterLabel(category: FacilityCategory): String =
 @DrawableRes
 private fun categoryFilterIcon(category: FacilityCategory): Int =
     when (category) {
-        FacilityCategory.TOILET -> R.drawable.ic_place_restroom
-        FacilityCategory.ELEVATOR -> R.drawable.ic_route_elevator
-        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        FacilityCategory.TOILET -> R.drawable.ic_user_wheelchair_compact
+        FacilityCategory.ELEVATOR -> R.drawable.ic_place_elevator
+        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging_station
         FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe
         FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
         FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation

@@ -123,7 +123,8 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].type").value("CROSSWALK_AUDIO"))
 			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].distanceFromLegStartMeter").value(0))
 			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].durationFromLegStartSecond").value(0))
-			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].geometry").value("POINT(128.9360 35.1200)"));
+			.andExpect(
+				jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].geometry").value("POINT(128.9360 35.1200)"));
 
 		SecurityContextHolder.clearContext();
 	}

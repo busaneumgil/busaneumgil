@@ -51,10 +51,25 @@ fun LowVisionRouteBriefingRoute(
     val ttsState by ttsController.state.collectAsStateWithLifecycle()
     var playbackActive by rememberSaveable { mutableStateOf(false) }
     var playbackToken by rememberSaveable { mutableIntStateOf(ttsState.completedUtteranceCount) }
+    var visibleStepStartIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(uiState.steps) {
+        visibleStepStartIndex = 0
+        if (uiState.steps.isEmpty()) {
+            playbackActive = false
+        }
+    }
 
     LaunchedEffect(ttsState.completedUtteranceCount) {
         if (playbackActive && ttsState.completedUtteranceCount > playbackToken) {
-            playbackActive = false
+            val nextStartIndex = uiState.steps.nextBriefingWindowStart(visibleStepStartIndex)
+            if (nextStartIndex == null) {
+                playbackActive = false
+            } else {
+                visibleStepStartIndex = nextStartIndex
+                playbackToken = ttsState.completedUtteranceCount
+                ttsController.speak(uiState.steps.briefingSpeechTextFrom(nextStartIndex))
+            }
         }
     }
 
@@ -65,22 +80,26 @@ fun LowVisionRouteBriefingRoute(
         }
     }
 
-    LowVisionRouteBriefingScreen(
-        uiState = uiState,
-        isPlaying = playbackActive,
-        onPlaybackClick = {
-            if (playbackActive) {
-                playbackActive = false
-                ttsController.stop()
-            } else {
-                playbackToken = ttsState.completedUtteranceCount
-                playbackActive = true
-                ttsController.speak(uiState.briefingText)
-            }
-        },
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionRouteBriefingScreen(
+            uiState = uiState,
+            visibleSteps = uiState.steps.visibleBriefingSteps(visibleStepStartIndex),
+            isPlaying = playbackActive,
+            onPlaybackClick = {
+                if (playbackActive) {
+                    playbackActive = false
+                    ttsController.stop()
+                } else {
+                    visibleStepStartIndex = 0
+                    playbackToken = ttsState.completedUtteranceCount
+                    playbackActive = true
+                    ttsController.speak(uiState.steps.briefingSpeechTextFrom(0))
+                }
+            },
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

@@ -133,7 +133,8 @@ class WalkRoutePayloadServiceTest {
 			.filter(guidanceEvent -> guidanceEvent.type() == RouteGuidanceEventType.NARROW_SIDEWALK)
 			.findFirst()
 			.orElseThrow();
-		assertThat(event.distanceFromLegStartMeter()).isGreaterThan(BigDecimal.ZERO).isLessThan(new BigDecimal("300.00"));
+		assertThat(event.distanceFromLegStartMeter()).isGreaterThan(BigDecimal.ZERO)
+			.isLessThan(new BigDecimal("300.00"));
 		assertThat(event.durationFromLegStartSecond()).isBetween(1, 89);
 		assertThat(event.geometry()).isEqualTo("POINT(128.0020 35.0000)");
 	}

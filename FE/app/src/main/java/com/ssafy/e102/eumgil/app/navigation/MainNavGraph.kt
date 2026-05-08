@@ -122,6 +122,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToRouteBriefing = {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
             initialEditingTarget = initialEditingTarget,
         )
     }
@@ -161,6 +168,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToRouteSetting = {
                 navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            onNavigateToRouteBriefing = {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -229,6 +243,11 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             initialRouteOption = initialRouteOption,
             onNavigateBack = {
                 navController.popBackStack()
+            },
+            onNavigateToSearch = { editingTarget ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget)) {
+                    launchSingleTop = true
+                }
             },
             onNavigateToRouteDetail = { routeOption ->
                 navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
@@ -398,6 +417,8 @@ internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): Stri
     } else {
         TopLevelRoute.SavedRoute.route
     }
+
+internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue

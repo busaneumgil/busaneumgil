@@ -3,13 +3,15 @@ package com.ssafy.e102.eumgil.feature.lowvision
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class LowVisionHomeScreenTest {
     @Test
-    fun `home screen reserves the low vision title slot without visible text`() {
+    fun `home screen shows the low vision brand title in the reserved header slot`() {
+        assertEquals("\uBD80\uC0B0\uC774\uC74C\uAE38", LowVisionHomeLayoutDefaults.headerTitle)
         assertEquals(48.dp, LowVisionHomeLayoutDefaults.headerSlotHeight)
     }
 
@@ -33,5 +35,39 @@ class LowVisionHomeScreenTest {
     fun `home action labels match terms guide card typography`() {
         assertEquals(48.sp, LowVisionHomeLayoutDefaults.actionLabelFontSize)
         assertEquals(FontWeight.Black, LowVisionHomeLayoutDefaults.actionLabelFontWeight)
+    }
+
+    @Test
+    fun `current location display shows gps coordinates when available`() {
+        val display =
+            lowVisionCurrentLocationDisplay(
+                LocationSnapshot(
+                    latitude = 35.179612,
+                    longitude = 129.075634,
+                    accuracyMeters = 4.8f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+
+        assertEquals("\uD604\uC7AC \uC704\uCE58", display.title)
+        assertEquals("", display.supportingText)
+        assertEquals(
+            "\uD604\uC7AC \uC704\uCE58 \uC704\uB3C4 35.17961\uB3C4 \uACBD\uB3C4 129.07563\uB3C4",
+            display.talkBackText,
+        )
+    }
+
+    @Test
+    fun `current location display announces gps loading before first fix`() {
+        val display = lowVisionCurrentLocationDisplay(latitude = null, longitude = null)
+
+        assertEquals("\uD604\uC7AC \uC704\uCE58", display.title)
+        assertEquals("", display.supportingText)
+        assertEquals("\uD604\uC7AC \uC704\uCE58", display.talkBackText)
+    }
+
+    @Test
+    fun `current location card does not announce itself as a button`() {
+        assertFalse(LowVisionHomeLayoutDefaults.currentLocationAnnouncesButtonRole)
     }
 }

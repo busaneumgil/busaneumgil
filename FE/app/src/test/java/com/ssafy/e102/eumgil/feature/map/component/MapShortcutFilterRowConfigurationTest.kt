@@ -8,18 +8,34 @@ import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 
 class MapShortcutFilterRowConfigurationTest {
     @Test
-    fun `map shortcut filter row uses dedicated elevator asset for top chip`() {
+    fun `map shortcut filter row uses compact wheelchair asset for toilet chip`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
                 .readText()
 
         assertTrue(
-            "Top shortcut elevator chip should use its dedicated drawable resource.",
-            source.contains("MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_map_shortcut_elevator"),
+            "Top shortcut toilet chip should use the compact wheelchair drawable derived from the onboarding source.",
+            source.contains("MapShortcutFilterKey.TOILET -> R.drawable.ic_user_wheelchair_compact"),
         )
         assertTrue(
-            "Dedicated elevator shortcut icon resource should exist.",
-            File("src/main/res/drawable/ic_map_shortcut_elevator.png").exists(),
+            "Compact wheelchair icon resource should exist for the map shortcut chip.",
+            File("src/main/res/drawable/ic_user_wheelchair_compact.png").exists(),
+        )
+    }
+
+    @Test
+    fun `map shortcut filter row uses provided elevator asset for top chip`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+
+        assertTrue(
+            "Top shortcut elevator chip should use the provided elevator drawable resource.",
+            source.contains("MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_place_elevator"),
+        )
+        assertTrue(
+            "Provided elevator icon resource should exist.",
+            File("src/main/res/drawable/ic_place_elevator.png").exists(),
         )
     }
 
@@ -35,21 +51,62 @@ class MapShortcutFilterRowConfigurationTest {
     }
 
     @Test
-    fun `map top search bar and shortcut filters share medium radius token`() {
-        val searchBarSource =
-            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapTopSearchBar.kt")
-                .readText()
-        val filterRowSource =
+    fun `map shortcut filter row uses scale s radius and restored elevation for chips`() {
+        val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
                 .readText()
 
         assertTrue(
-            "MAP top search bar should reuse the shared medium radius token.",
-            searchBarSource.contains("shape = RoundedCornerShape(EumRadius.medium)"),
+            "MAP top shortcut filters should use the 8dp chip radius token.",
+            source.contains("shape = RoundedCornerShape(EumRadius.scaleS)"),
         )
         assertTrue(
-            "MAP top shortcut filters should match the search bar corner radius token.",
-            filterRowSource.contains("shape = RoundedCornerShape(EumRadius.medium)"),
+            "MAP top shortcut filter chips should restore the previous shadow separation.",
+            source.contains("shadowElevation = if (selected) 4.dp else 2.dp"),
+        )
+    }
+
+    @Test
+    fun `map shortcut filter row keeps leading icons in service main blue`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+
+        assertTrue(
+            "MAP top shortcut filter icons should always tint to Primary 600.",
+            source.contains("tint = EumPrimary600"),
+        )
+    }
+
+    @Test
+    fun `map shortcut filter row uses the new charging station asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+
+        assertTrue(
+            "Top shortcut charging station chip should use the provided charging station drawable resource.",
+            source.contains("MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging_station"),
+        )
+        assertTrue(
+            "Provided charging station icon resource should exist.",
+            File("src/main/res/drawable/ic_place_charging_station.png").exists(),
+        )
+    }
+
+    @Test
+    fun `map shortcut filter row exposes selected state semantics`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+
+        assertTrue(
+            "MAP top shortcut filters should announce selected state for accessibility.",
+            source.contains("R.string.a11y_option_selected"),
+        )
+        assertTrue(
+            "MAP top shortcut filters should announce unselected state for accessibility.",
+            source.contains("R.string.a11y_option_unselected"),
         )
     }
 

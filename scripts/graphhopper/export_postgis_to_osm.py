@@ -197,7 +197,7 @@ ENUM_VALUES = {
 UNKNOWN_WARNING_THRESHOLD = 0.90
 ENDPOINT_TOLERANCE = 0.000001
 SPLIT_FRACTION_TOLERANCE = 0.000000001
-EXPORT_COORDINATE_DECIMALS = 8
+GEOMETRY_DECIMAL_PLACES = 12
 
 
 def jdbc_to_dsn(jdbc_url: str) -> dict:
@@ -472,16 +472,16 @@ def linestring_between_fractions(coords, start_fraction, end_fraction):
 def format_linestring_wkt(coords):
     formatted = []
     for lon, lat in coords:
-        formatted.append(f"{float(lon):.{EXPORT_COORDINATE_DECIMALS}f} {float(lat):.{EXPORT_COORDINATE_DECIMALS}f}")
+        formatted.append(f"{float(lon):.{GEOMETRY_DECIMAL_PLACES}f} {float(lat):.{GEOMETRY_DECIMAL_PLACES}f}")
     return f'LINESTRING({", ".join(formatted)})'
 
 
 def same_export_coordinate(left, right):
     return (
-        round(float(left[0]), EXPORT_COORDINATE_DECIMALS)
-        == round(float(right[0]), EXPORT_COORDINATE_DECIMALS)
-        and round(float(left[1]), EXPORT_COORDINATE_DECIMALS)
-        == round(float(right[1]), EXPORT_COORDINATE_DECIMALS)
+        round(float(left[0]), GEOMETRY_DECIMAL_PLACES)
+        == round(float(right[0]), GEOMETRY_DECIMAL_PLACES)
+        and round(float(left[1]), GEOMETRY_DECIMAL_PLACES)
+        == round(float(right[1]), GEOMETRY_DECIMAL_PLACES)
     )
 
 
@@ -838,8 +838,8 @@ def write_osm(nodes, segments, output):
             "node",
             {
                 "id": str(node_id_map[int(node["vertex_id"])]),
-                "lat": f'{float(node["lat"]):.8f}',
-                "lon": f'{float(node["lon"]):.8f}',
+                "lat": f'{float(node["lat"]):.{GEOMETRY_DECIMAL_PLACES}f}',
+                "lon": f'{float(node["lon"]):.{GEOMETRY_DECIMAL_PLACES}f}',
             },
         )
         tag(osm_node, "ieum:vertex_id", node["vertex_id"])
@@ -858,8 +858,8 @@ def write_osm(nodes, segments, output):
                 "node",
                 {
                     "id": str(synthetic_id),
-                    "lat": f"{lat:.8f}",
-                    "lon": f"{lon:.8f}",
+                    "lat": f"{lat:.{GEOMETRY_DECIMAL_PLACES}f}",
+                    "lon": f"{lon:.{GEOMETRY_DECIMAL_PLACES}f}",
                 },
             )
             refs.append(synthetic_id)

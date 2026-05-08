@@ -11,6 +11,7 @@ import com.ssafy.e102.domain.user.exception.UserException;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.domain.user.type.UserRole;
 
 class UserTest {
 
@@ -27,6 +28,7 @@ class UserTest {
 		assertThat(user.getSocialProviderUserId()).isEqualTo("kakao-user-id");
 		assertThat(user.getSelectedPrimaryUserType()).isEqualTo(PrimaryUserType.LOW_VISION);
 		assertThat(user.getSelectedMobilitySubtype()).isNull();
+		assertThat(user.getRole()).isEqualTo(UserRole.USER);
 	}
 
 	@Test

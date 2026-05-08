@@ -83,7 +83,8 @@ public class WalkRoutePayloadService {
 			estimatedTimeMinute,
 			badges,
 			geometry,
-			List.of(toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry, guidanceEvents, badges)));
+			List.of(
+				toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry, guidanceEvents, badges)));
 	}
 
 	public RouteLegResponse toWalkLeg(
@@ -204,7 +205,8 @@ public class WalkRoutePayloadService {
 				index + 1,
 				candidate.type(),
 				candidate.distanceFromLegStartMeter(),
-				durationFromLegStartSecond(candidate.distanceFromLegStartMeter(), totalDistanceMeter, totalDurationSecond),
+				durationFromLegStartSecond(candidate.distanceFromLegStartMeter(), totalDistanceMeter,
+					totalDurationSecond),
 				toPoint(coordinates.get(candidate.coordinateIndex()))));
 		}
 		return events;
@@ -274,7 +276,8 @@ public class WalkRoutePayloadService {
 		BigDecimal routeLength) {
 		List<GuidanceEventCandidate> candidates = new ArrayList<>();
 		candidates.addAll(crosswalkEventCandidates(path, totalDistanceMeter, routeLength));
-		ALERT_RULES.forEach(rule -> candidates.addAll(alertEventCandidates(path, rule, totalDistanceMeter, routeLength)));
+		ALERT_RULES
+			.forEach(rule -> candidates.addAll(alertEventCandidates(path, rule, totalDistanceMeter, routeLength)));
 
 		Map<Integer, GuidanceEventCandidate> representativeByIndex = new LinkedHashMap<>();
 		candidates.stream()
@@ -293,14 +296,15 @@ public class WalkRoutePayloadService {
 			.getOrDefault("segment_type", List.of())
 			.stream()
 			.filter(detail -> "CROSS_WALK".equals(detail.value()))
-			.flatMap(detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
-				.map(distanceMeter -> new GuidanceEventCandidate(
-					crosswalkEventType(path, detail),
-					detail.fromIndex(),
-					distanceMeter,
-					crosswalkPriority(path, detail),
-					1))
-				.stream())
+			.flatMap(
+				detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
+					.map(distanceMeter -> new GuidanceEventCandidate(
+						crosswalkEventType(path, detail),
+						detail.fromIndex(),
+						distanceMeter,
+						crosswalkPriority(path, detail),
+						1))
+					.stream())
 			.toList();
 	}
 
@@ -350,14 +354,15 @@ public class WalkRoutePayloadService {
 			.getOrDefault(rule.detailName(), List.of())
 			.stream()
 			.filter(detail -> rule.expectedValues().contains(detail.value()))
-			.flatMap(detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
-				.map(distanceMeter -> new GuidanceEventCandidate(
-					rule.type(),
-					detail.fromIndex(),
-					distanceMeter,
-					rule.priority(),
-					1))
-				.stream())
+			.flatMap(
+				detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
+					.map(distanceMeter -> new GuidanceEventCandidate(
+						rule.type(),
+						detail.fromIndex(),
+						distanceMeter,
+						rule.priority(),
+						1))
+					.stream())
 			.toList();
 	}
 

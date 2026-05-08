@@ -9,6 +9,6 @@ public record SocialLoginRequest(
 	@NotNull(message = "소셜 제공자는 필수입니다.")
 	SocialProvider socialProvider,
 
-	@NotBlank(message = "소셜 access token은 필수입니다.")
+	@NotBlank(message = "소셜 액세스 토큰은 필수입니다.")
 	String socialAccessToken) {
 }

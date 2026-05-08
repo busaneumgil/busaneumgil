@@ -7,7 +7,9 @@ spring:
   jpa:
     database: postgresql
     hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:validate}
+      # Bootstrap 단계에서는 누락 테이블을 자동 생성하기 위해 update를 기본값으로 둔다.
+      # 운영 전환 후에는 .env.prod 또는 compose 값으로 validate로 되돌린다.
+      ddl-auto: ${JPA_DDL_AUTO:update}
     open-in-view: false
   data:
     redis:

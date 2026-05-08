@@ -41,6 +41,7 @@ private val BriefingWhite = Color(0xFFFFFFFF)
 @Composable
 fun LowVisionRouteBriefingScreen(
     uiState: LowVisionRouteBriefingUiState,
+    visibleSteps: List<LowVisionRouteBriefingStepUiState> = uiState.steps.visibleBriefingSteps(0),
     isPlaying: Boolean,
     onPlaybackClick: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
@@ -87,7 +88,7 @@ fun LowVisionRouteBriefingScreen(
                         .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                uiState.steps.forEach { step ->
+                visibleSteps.forEach { step ->
                     BriefingStepRow(step = step)
                 }
             }

@@ -341,8 +341,8 @@
     <string name="search_screen_shell_item_supporting">다음 작업에서 repository 연동과 선택 액션을 이어서 붙일 수 있도록 shell 상태를 먼저 구성했습니다.</string>
     <string name="search_screen_result_coordinates">위도 %1$.4f, 경도 %2$.4f</string>
     <string name="search_screen_result_id">장소 ID: %1$s</string>
-    <string name="search_screen_result_action_label">이 장소를 목적지로 선택</string>
-    <string name="search_screen_result_selectable">선택 가능</string>
+    <string name="search_screen_result_action_label">경로 브리핑 열기</string>
+    <string name="search_screen_result_selectable">브리핑 화면으로 이동 가능</string>
     <string name="search_screen_result_a11y_with_address">%1$s, %2$s</string>
     <string name="search_screen_result_a11y_without_address">%1$s</string>
     <string name="search_screen_promo_banner_content_description">무장애 경로로 안전하고 편리하게 이동하세요</string>

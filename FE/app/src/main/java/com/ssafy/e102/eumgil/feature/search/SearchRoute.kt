@@ -19,6 +19,7 @@ fun SearchEntryRoute(
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String) -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     SearchRouteContent(
@@ -27,6 +28,7 @@ fun SearchEntryRoute(
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
 }
@@ -37,6 +39,7 @@ fun SearchResultsRoute(
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String) -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     SearchRouteContent(
@@ -45,6 +48,7 @@ fun SearchResultsRoute(
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
 }
@@ -56,6 +60,7 @@ private fun SearchRouteContent(
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String) -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -86,13 +91,13 @@ private fun SearchRouteContent(
         }
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToResults, onNavigateToRouteSetting) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToResults, onNavigateToRouteSetting, onNavigateToRouteBriefing) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 SearchUiEvent.NavigateBack -> onNavigateBack()
                 is SearchUiEvent.NavigateToResults -> onNavigateToResults(event.query)
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
-                SearchUiEvent.NavigateToRouteBriefing,
+                SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
             }
         }

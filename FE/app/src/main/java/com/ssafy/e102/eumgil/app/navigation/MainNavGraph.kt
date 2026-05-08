@@ -101,6 +101,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToRouteBriefing = {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
         )
     }
 
@@ -125,6 +132,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToRouteSetting = {
                 navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            onNavigateToRouteBriefing = {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -330,6 +344,8 @@ internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): Stri
     } else {
         TopLevelRoute.SavedRoute.route
     }
+
+internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue

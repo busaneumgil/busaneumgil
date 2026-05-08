@@ -24,13 +24,7 @@ data class LowVisionRouteBriefingUiState(
     val errorMessage: String? = null,
 ) {
     val briefingText: String
-        get() =
-            buildString {
-                append("경로 브리핑. ")
-                steps.forEach { step ->
-                    append("${step.sequence}번. ${step.instruction}. ")
-                }
-            }.trim()
+        get() = steps.toBriefingSpeechText()
 }
 
 data class LowVisionRouteBriefingStepUiState(
@@ -44,6 +38,44 @@ enum class LowVisionRouteBriefingStepIcon {
     TRANSIT,
     TURN,
 }
+
+internal const val BRIEFING_VISIBLE_STEP_COUNT: Int = 3
+
+internal fun List<LowVisionRouteBriefingStepUiState>.visibleBriefingSteps(
+    startIndex: Int,
+): List<LowVisionRouteBriefingStepUiState> {
+    if (isEmpty()) return emptyList()
+
+    val clampedStartIndex = startIndex.coerceIn(0, lastIndex)
+    val windowStartIndex = clampedStartIndex - clampedStartIndex % BRIEFING_VISIBLE_STEP_COUNT
+    return drop(windowStartIndex).take(BRIEFING_VISIBLE_STEP_COUNT)
+}
+
+internal fun List<LowVisionRouteBriefingStepUiState>.nextBriefingWindowStart(
+    startIndex: Int,
+): Int? {
+    val nextStartIndex =
+        if (startIndex < 0) {
+            0
+        } else {
+            startIndex - startIndex % BRIEFING_VISIBLE_STEP_COUNT + BRIEFING_VISIBLE_STEP_COUNT
+        }
+
+    return nextStartIndex.takeIf { it < size }
+}
+
+internal fun List<LowVisionRouteBriefingStepUiState>.briefingSpeechTextFrom(
+    startIndex: Int,
+): String =
+    visibleBriefingSteps(startIndex).toBriefingSpeechText()
+
+internal fun List<LowVisionRouteBriefingStepUiState>.toBriefingSpeechText(): String =
+    buildString {
+        append("경로 브리핑. ")
+        this@toBriefingSpeechText.forEach { step ->
+            append("${step.sequence}번. ${step.instruction}. ")
+        }
+    }.trim()
 
 class LowVisionRouteBriefingViewModel(
     private val routeRepository: RouteRepository,

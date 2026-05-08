@@ -164,6 +164,7 @@ open class FavoriteRoutesRemoteDataSource(
                     lat = endPointJson.optDouble("lat"),
                     lng = endPointJson.optDouble("lng"),
                 ),
+            transportMode = optString("transportMode").takeIf { it.isNotBlank() },
             routeOption = optString("routeOption"),
         )
     }

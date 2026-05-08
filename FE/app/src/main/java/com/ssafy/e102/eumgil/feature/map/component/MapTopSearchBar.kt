@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -32,6 +34,8 @@ fun MapTopSearchBar(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -39,6 +43,8 @@ fun MapTopSearchBar(
                 contentDescription = accessibilityLabel
             }
             .clickable(
+                interactionSource = interactionSource,
+                indication = null,
                 role = Role.Button,
                 onClickLabel = accessibilityLabel,
                 onClick = onClick,
@@ -91,7 +97,7 @@ fun MapTopSearchBar(
             }
 
             Icon(
-                painter = painterResource(id = R.drawable.ic_permission_mic),
+                painter = painterResource(id = R.drawable.ic_search_voice_mic),
                 contentDescription = null,
                 modifier =
                     Modifier

@@ -1,0 +1,377 @@
+package com.ssafy.e102.eumgil.feature.navigation.component
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentRailItemUiState
+import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentSyncUiState
+import com.ssafy.e102.eumgil.feature.navigation.iconRes
+
+@Composable
+fun NavigationSegmentRail(
+    uiState: NavigationSegmentSyncUiState,
+    onSegmentTapped: (Int) -> Unit,
+    onReturnToActiveSegmentClick: () -> Unit,
+    onRouteDetailClick: () -> Unit,
+    isRouteDetailEnabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val railColor = MaterialTheme.colorScheme.surface
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+    val firstSegmentIndex = uiState.railItems.firstOrNull()?.index
+    val lastSegmentIndex = uiState.railItems.lastOrNull()?.index
+    val canReturnToActiveSegment =
+        uiState.railItems.isNotEmpty() &&
+            (uiState.isInspectingSegments || uiState.focusedSegmentIndex != uiState.activeSegmentIndex)
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxHeight()
+                .background(color = railColor),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+            ) {
+                items(items = listOf("navigation-rail-start"), key = { it }) {
+                    NavigationSegmentRailWaypoint(
+                        label = stringResource(id = R.string.navigation_rail_origin_label),
+                        iconRes = R.drawable.ic_navigation_rail_origin_pin,
+                        dividerColor = dividerColor,
+                        enabled = firstSegmentIndex != null,
+                        onClick = {
+                            firstSegmentIndex?.let(onSegmentTapped)
+                        },
+                    )
+                }
+                items(items = uiState.railItems, key = { item -> item.index }) { item ->
+                    NavigationSegmentRailItem(
+                        item = item,
+                        dividerColor = dividerColor,
+                        onClick = { onSegmentTapped(item.index) },
+                    )
+                }
+                items(items = listOf("navigation-rail-destination"), key = { it }) {
+                    NavigationSegmentRailWaypoint(
+                        label = stringResource(id = R.string.navigation_rail_destination_label),
+                        iconRes = R.drawable.ic_navigation_rail_destination_pin,
+                        dividerColor = dividerColor,
+                        enabled = lastSegmentIndex != null,
+                        onClick = {
+                            lastSegmentIndex?.let(onSegmentTapped)
+                        },
+                    )
+                }
+                items(items = listOf("navigation-rail-return"), key = { it }) {
+                    NavigationSegmentRailReturnAction(
+                        enabled = canReturnToActiveSegment,
+                        dividerColor = dividerColor,
+                        onClick = onReturnToActiveSegmentClick,
+                    )
+                }
+            }
+            NavigationSegmentRailDetailAction(
+                enabled = isRouteDetailEnabled,
+                dividerColor = dividerColor,
+                onClick = onRouteDetailClick,
+            )
+        }
+
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(1.dp)
+                    .background(dividerColor),
+        )
+    }
+}
+
+@Composable
+private fun NavigationSegmentRailWaypoint(
+    label: String,
+    iconRes: Int,
+    dividerColor: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .semantics {
+                        contentDescription = label
+                        if (!enabled) {
+                            disabled()
+                        }
+                    }
+                    .clickable(
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .width(42.dp)
+                        .height(50.dp)
+                        .alpha(if (enabled) 1f else 0.38f),
+            )
+        }
+        HorizontalDivider(color = dividerColor)
+    }
+}
+
+@Composable
+private fun NavigationSegmentRailItem(
+    item: NavigationSegmentRailItemUiState,
+    dividerColor: Color,
+    onClick: () -> Unit,
+) {
+    val tone = navigationSegmentRailTone(item)
+    val isSelected = item.isFocused || item.isActive
+    val stateLabel =
+        when {
+            item.isFocused -> "Selected segment"
+            item.isActive -> "Current segment"
+            item.isCompleted -> "Completed segment"
+            else -> "Guidance segment"
+        }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .background(tone.containerColor)
+                    .semantics {
+                        contentDescription = "${item.guidanceAction.label} ${item.distanceLabel}"
+                        selected = isSelected
+                        stateDescription = stateLabel
+                    }
+                    .clickable(role = Role.Button, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (tone.indicatorColor != Color.Transparent) {
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .width(2.dp)
+                            .background(tone.indicatorColor),
+                )
+            }
+            Icon(
+                painter = painterResource(id = item.guidanceAction.iconRes()),
+                contentDescription = null,
+                tint = tone.iconTint,
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .alpha(tone.iconAlpha),
+            )
+        }
+        HorizontalDivider(color = dividerColor)
+    }
+}
+
+@Composable
+private fun NavigationSegmentRailReturnAction(
+    enabled: Boolean,
+    dividerColor: Color,
+    onClick: () -> Unit,
+) {
+    val label = stringResource(id = R.string.navigation_return_to_active_segment_label)
+    val outlineColor =
+        if (enabled) {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
+        }
+    val iconAlpha = if (enabled) 0.86f else 0.34f
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .semantics {
+                        contentDescription = label
+                        if (!enabled) {
+                            disabled()
+                        }
+                    }
+                    .clickable(
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .border(
+                            width = 1.dp,
+                            color = outlineColor,
+                            shape = CircleShape,
+                        ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_control_previous),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .size(22.dp)
+                            .rotate(90f)
+                            .alpha(iconAlpha),
+                )
+            }
+        }
+        HorizontalDivider(color = dividerColor)
+    }
+}
+
+@Composable
+private fun NavigationSegmentRailDetailAction(
+    enabled: Boolean,
+    dividerColor: Color,
+    onClick: () -> Unit,
+) {
+    val detailLabel = stringResource(id = R.string.navigation_detail_button_label)
+    val iconAlpha = if (enabled) 0.86f else 0.34f
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .semantics {
+                        contentDescription = detailLabel
+                        if (!enabled) {
+                            disabled()
+                        }
+                    }
+                    .clickable(
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_navigation_detail_more),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier =
+                    Modifier
+                        .size(30.dp)
+                        .alpha(iconAlpha),
+            )
+        }
+        HorizontalDivider(color = dividerColor)
+    }
+}
+
+private data class NavigationSegmentRailTone(
+    val containerColor: Color,
+    val indicatorColor: Color,
+    val iconTint: Color,
+    val iconAlpha: Float,
+)
+
+@Composable
+private fun navigationSegmentRailTone(item: NavigationSegmentRailItemUiState): NavigationSegmentRailTone =
+    when {
+        item.isFocused ->
+            NavigationSegmentRailTone(
+                containerColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = Color.Transparent,
+                iconTint = MaterialTheme.colorScheme.onPrimary,
+                iconAlpha = 1f,
+            )
+
+        item.isActive ->
+            NavigationSegmentRailTone(
+                containerColor = Color.Transparent,
+                indicatorColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
+                iconTint = MaterialTheme.colorScheme.onSurface,
+                iconAlpha = 1f,
+            )
+
+        item.isCompleted ->
+            NavigationSegmentRailTone(
+                containerColor = Color.Transparent,
+                indicatorColor = Color.Transparent,
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                iconAlpha = 0.42f,
+            )
+
+        else ->
+            NavigationSegmentRailTone(
+                containerColor = Color.Transparent,
+                indicatorColor = Color.Transparent,
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                iconAlpha = 0.72f,
+            )
+    }

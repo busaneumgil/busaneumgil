@@ -12,6 +12,20 @@ GRAPHHOPPER_IMAGE_TAG="${GRAPHHOPPER_IMAGE_TAG:-$APP_IMAGE_TAG}"
 GRAPHHOPPER_CACHE_VOLUME="${GRAPHHOPPER_CACHE_VOLUME:-s14p31e102-prod_graphhopper-prod-data}"
 
 export DEPLOY_GRAPHHOPPER
+
+require_env_value() {
+  local key="$1"
+  local raw
+
+  raw="$(grep -E "^${key}=" .env.prod | tail -n1 || true)"
+  if [ -z "$raw" ] || [ "${raw#*=}" = "" ]; then
+    echo "${key} must be set in .env.prod" >&2
+    exit 1
+  fi
+}
+
+require_env_value JWT_SECRET
+
 mkdir -p "$DEPLOY_STATE_DIR"
 if [ -f "$DEPLOY_STATE_DIR/current-app-image" ]; then
   cp "$DEPLOY_STATE_DIR/current-app-image" "$DEPLOY_STATE_DIR/previous-app-image"
@@ -50,7 +64,7 @@ if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
   docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d graphhopper
 fi
 
-"$ROOT_DIR/scripts/deploy/prod-smoke.sh"
+bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"
 
 echo "$APP_IMAGE_TAG" > "$DEPLOY_STATE_DIR/current-app-image"
 if [ "$needs_graphhopper_build" = "true" ] || [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then

@@ -1,3 +1,52 @@
+import groovy.json.JsonOutput
+
+String resolveTriggerDescription(def build) {
+  List causes = build.getBuildCauses()
+  if (!causes) {
+    return 'unknown'
+  }
+
+  def userCause = causes.find { (it._class ?: '').contains('UserIdCause') }
+  if (userCause) {
+    return userCause.userName ? "사용자 ${userCause.userName}" : (userCause.shortDescription ?: '사용자 수동 실행')
+  }
+
+  def scmCause = causes.find { (it._class ?: '').contains('SCMTriggerCause') }
+  if (scmCause) {
+    return 'SCM 변경'
+  }
+
+  def timerCause = causes.find { (it._class ?: '').contains('TimerTriggerCause') }
+  if (timerCause) {
+    return '스케줄 트리거'
+  }
+
+  return causes[0].shortDescription ?: causes[0]._class ?: 'unknown'
+}
+
+String safeValue(String value, String fallback = '-') {
+  String normalized = value?.trim()
+  return normalized ? normalized : fallback
+}
+
+void sendMattermost(def script, String message) {
+  String webhookUrl = script.env.MATTERMOST_WEBHOOK_URL ?: System.getenv('MATTERMOST_WEBHOOK_URL') ?: ''
+  if (!webhookUrl?.trim()) {
+    script.echo 'MATTERMOST_WEBHOOK_URL is not set. Skipping Mattermost notification.'
+    return
+  }
+
+  String payloadFile = ".mattermost-payload-${script.env.BUILD_NUMBER}.json"
+  script.writeFile file: payloadFile, text: JsonOutput.toJson([text: message])
+  script.sh """
+    curl -fsS -X POST \\
+      -H "Content-Type: application/json" \\
+      --data @${payloadFile} \\
+      "\$MATTERMOST_WEBHOOK_URL" >/dev/null 2>&1 || true
+    rm -f ${payloadFile}
+  """
+}
+
 pipeline {
   agent any
 
@@ -7,17 +56,52 @@ pipeline {
 
   environment {
     REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
+    DEPLOY_BRANCH = 'develop'
   }
 
   stages {
     stage('Checkout') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         git branch: 'develop', credentialsId: 'gitlab-pat', url: env.REPO_URL
+        script {
+          env.DEPLOY_COMMIT = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+        }
+      }
+    }
+
+    stage('Notify Start') {
+      steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+          String message = """\
+            ----
+            ##### :jenkins: DEV 배포가 시작되었습니다! :rocket:
+
+            - **대상 파이프라인:** `e102-dev-deploy`
+            - **브랜치:** `${safeValue(env.DEPLOY_BRANCH)}`
+            - **커밋:** `${safeValue(env.DEPLOY_COMMIT, 'unknown')}`
+            - **트리거:** `${safeValue(resolveTriggerDescription(currentBuild))}`
+            - **빌드 번호:** `#${safeValue(env.BUILD_NUMBER)}`
+            - **빌드 링크:** [Jenkins 빌드 바로가기](${safeValue(env.BUILD_URL)})
+
+            ----
+
+            :gunpang_timer: 배포 진행 상황을 확인해주세요.
+            ----
+          """.stripIndent().trim()
+          sendMattermost(this, message)
+        }
       }
     }
 
     stage('Prepare Server Config') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         withCredentials([file(credentialsId: 'e102-dev-env-file', variable: 'E102_DEV_ENV')]) {
           sh '''
             cp "$E102_DEV_ENV" .env.dev
@@ -30,18 +114,27 @@ pipeline {
 
     stage('Compose Config') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         sh 'docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml --profile graphhopper-build config --quiet'
       }
     }
 
     stage('Infra Up') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         sh 'docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml up -d postgres redis minio minio-init ai'
       }
     }
 
     stage('GraphHopper Cache') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         sh '''
           set -eu
           CACHE_VOLUME="s14p31e102-dev_graphhopper-dev-data"
@@ -83,12 +176,18 @@ pipeline {
 
     stage('Backend Deploy') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         sh 'docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml up -d --build --no-deps backend'
       }
     }
 
     stage('Smoke Test') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         sh '''
           for i in $(seq 1 24); do
             docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -fsS http://backend:8080/v3/api-docs >/tmp/e102-api-docs.json \
@@ -104,7 +203,54 @@ pipeline {
 
     stage('Status') {
       steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
         sh 'docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml ps'
+      }
+    }
+  }
+
+  post {
+    success {
+      script {
+        String message = """\
+          ----
+          ##### ✅ DEV 배포가 완료되었습니다.
+
+          - **대상 파이프라인:** `e102-dev-deploy`
+          - **브랜치:** `${safeValue(env.DEPLOY_BRANCH)}`
+          - **커밋:** `${safeValue(env.DEPLOY_COMMIT, 'unknown')}`
+          - **빌드 번호:** `#${safeValue(env.BUILD_NUMBER)}`
+          - **빌드 링크:** [Jenkins 빌드 바로가기](${safeValue(env.BUILD_URL)})
+
+          ----
+
+          dev 배포가 정상 완료되었습니다!
+          ----
+        """.stripIndent().trim()
+        sendMattermost(this, message)
+      }
+    }
+    failure {
+      script {
+        String message = """\
+          ----
+          ##### ❌ DEV 배포가 실패했습니다.
+
+          - **대상 파이프라인:** `e102-dev-deploy`
+          - **브랜치:** `${safeValue(env.DEPLOY_BRANCH)}`
+          - **커밋:** `${safeValue(env.DEPLOY_COMMIT, 'unknown')}`
+          - **실패 스테이지:** `${safeValue(env.LAST_STAGE_NAME, 'unknown')}`
+          - **빌드 번호:** `#${safeValue(env.BUILD_NUMBER)}`
+          - **빌드 링크:** [Jenkins 빌드 바로가기](${safeValue(env.BUILD_URL)})
+
+          ----
+
+          :please_call: 로그 확인이 필요합니다.
+          ----
+        """.stripIndent().trim()
+        sendMattermost(this, message)
       }
     }
   }

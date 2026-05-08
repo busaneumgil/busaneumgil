@@ -63,6 +63,7 @@ class DefaultRouteBookmarkRepository(
                 destinationName = request.endLabel,
                 destinationLatitude = request.endPoint.latitude,
                 destinationLongitude = request.endPoint.longitude,
+                transportMode = WALK_TRANSPORT_MODE,
                 routeOption = request.routeOption.name,
                 summaryDistanceMeters = request.distanceMeters,
                 summaryDurationSeconds = request.durationMinutes?.let { it * 60 },
@@ -83,6 +84,8 @@ class DefaultRouteBookmarkRepository(
                     longitude = cachedEntity.destinationLongitude,
                 ),
             routeOption = request.routeOption,
+            transportMode = cachedEntity.transportMode,
+            routeOptionLabel = cachedEntity.routeOption,
             distanceMeters = request.distanceMeters,
             durationMinutes = request.durationMinutes,
             createdAt = cachedEntity.createdAt,
@@ -136,15 +139,30 @@ class DefaultRouteBookmarkRepository(
                 )
 
             val now = clock()
+            val cachedById =
+                favoriteRouteDao
+                    .observeFavoriteRoutes()
+                    .first()
+                    .associateBy(FavoriteRouteEntity::favoriteRouteId)
+
             favoriteRouteDao.clearFavoriteRoutes()
             favoriteRouteDao.upsertFavoriteRoutes(
-                page.content.map { item -> item.toFavoriteRouteEntity(createdAt = now, updatedAt = now) },
+                page.content.map { item ->
+                    val cached = cachedById[item.favRouteId]
+                    item.toFavoriteRouteEntity(
+                        createdAt = cached?.createdAt ?: now,
+                        updatedAt = now,
+                        cachedDistanceMeters = cached?.summaryDistanceMeters,
+                        cachedDurationSeconds = cached?.summaryDurationSeconds,
+                    )
+                },
             )
         }
     }
 
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 50
+        private const val WALK_TRANSPORT_MODE = "WALK"
     }
 }
 
@@ -226,6 +244,8 @@ private fun FavoriteRouteEntity.toRouteBookmark(): RouteBookmark =
         startPoint = GeoCoordinate(latitude = originLatitude, longitude = originLongitude),
         endPoint = GeoCoordinate(latitude = destinationLatitude, longitude = destinationLongitude),
         routeOption = routeOption.toRouteOptionOrDefault(),
+        transportMode = transportMode,
+        routeOptionLabel = routeOption,
         distanceMeters = summaryDistanceMeters,
         durationMinutes = summaryDurationSeconds?.let { it / 60 },
         createdAt = createdAt,
@@ -235,6 +255,8 @@ private fun FavoriteRouteEntity.toRouteBookmark(): RouteBookmark =
 private fun FavoriteRouteListItemDto.toFavoriteRouteEntity(
     createdAt: Long,
     updatedAt: Long,
+    cachedDistanceMeters: Int? = null,
+    cachedDurationSeconds: Int? = null,
 ): FavoriteRouteEntity =
     FavoriteRouteEntity(
         favoriteRouteId = favRouteId,
@@ -245,7 +267,10 @@ private fun FavoriteRouteListItemDto.toFavoriteRouteEntity(
         destinationName = endLabel,
         destinationLatitude = endPoint.lat,
         destinationLongitude = endPoint.lng,
+        transportMode = transportMode,
         routeOption = routeOption,
+        summaryDistanceMeters = cachedDistanceMeters,
+        summaryDurationSeconds = cachedDurationSeconds,
         createdAt = createdAt,
         updatedAt = updatedAt,
     )

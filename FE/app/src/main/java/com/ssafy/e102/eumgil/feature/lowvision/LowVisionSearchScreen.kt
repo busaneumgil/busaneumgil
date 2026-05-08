@@ -364,18 +364,23 @@ private fun LowVisionSearchResultCard(
         Column(
             verticalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.actionButtonGap),
         ) {
-            LowVisionSearchActionButton(
-                label = "\uC800\uC7A5",
-                iconRes = LowVisionPlaceCardDefaults.saveIconRes,
-                onClick = onBookmarkClick,
-                contentDescription = bookmarkContentDescription,
-            )
-            LowVisionSearchActionButton(
-                label = "\uAE38\uCC3E\uAE30",
-                iconRes = LowVisionPlaceCardDefaults.routeIconRes,
-                onClick = onNavigateClick,
-                contentDescription = navigateContentDescription,
-            )
+            LowVisionPlaceCardDefaults.actionOrder.forEach { action ->
+                when (action) {
+                    LowVisionPlaceCardAction.Navigate -> LowVisionSearchActionButton(
+                        label = "\uAE38\uCC3E\uAE30",
+                        iconRes = LowVisionPlaceCardDefaults.routeIconRes,
+                        onClick = onNavigateClick,
+                        contentDescription = navigateContentDescription,
+                    )
+
+                    LowVisionPlaceCardAction.Bookmark -> LowVisionSearchActionButton(
+                        label = "\uC800\uC7A5",
+                        iconRes = LowVisionPlaceCardDefaults.saveIconRes,
+                        onClick = onBookmarkClick,
+                        contentDescription = bookmarkContentDescription,
+                    )
+                }
+            }
         }
     }
 }

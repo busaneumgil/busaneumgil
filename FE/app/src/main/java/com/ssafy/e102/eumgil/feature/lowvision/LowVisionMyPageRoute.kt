@@ -51,15 +51,17 @@ fun LowVisionMyPageRoute(
         }
     }
 
-    LowVisionMyPageScreen(
-        isLogoutLoading = uiState.isLogoutLoading,
-        snackbarHostState = snackbarHostState,
-        onModeChangeClick = onModeChangeClick,
-        onAppInfoClick = onAppInfoClick,
-        onLogoutClick = viewModel::onLogoutClick,
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionMyPageScreen(
+            isLogoutLoading = uiState.isLogoutLoading,
+            snackbarHostState = snackbarHostState,
+            onModeChangeClick = onModeChangeClick,
+            onAppInfoClick = onAppInfoClick,
+            onLogoutClick = viewModel::onLogoutClick,
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }
 
 @Composable
@@ -67,10 +69,12 @@ fun LowVisionAppInfoRoute(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LowVisionAppInfoScreen(
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionAppInfoScreen(
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

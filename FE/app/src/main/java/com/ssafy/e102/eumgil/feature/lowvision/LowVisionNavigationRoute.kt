@@ -70,12 +70,14 @@ fun LowVisionNavigationRoute(
         }
     }
 
-    LowVisionNavigationScreen(
-        uiState = uiState,
-        onAction = viewModel::onAction,
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionNavigationScreen(
+            uiState = uiState,
+            onAction = viewModel::onAction,
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }
 
 internal fun shouldNavigateLowVisionHome(event: NavigationUiEvent): Boolean =

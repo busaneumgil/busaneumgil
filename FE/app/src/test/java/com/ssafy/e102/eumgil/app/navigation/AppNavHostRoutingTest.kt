@@ -34,6 +34,11 @@ class AppNavHostRoutingTest {
     }
 
     @Test
+    fun `search result name tap resolves to route briefing`() {
+        assertEquals(LowVisionRoute.RouteBriefing.route, resolveSearchResultBriefingRoute())
+    }
+
+    @Test
     fun `auth onboarding and low vision routes hide top level tab`() {
         assertNull(AuthRoute.Login.route.toCurrentTopLevelRoute())
         assertNull(OnboardingRoute.UserTypePrimary.route.toCurrentTopLevelRoute())

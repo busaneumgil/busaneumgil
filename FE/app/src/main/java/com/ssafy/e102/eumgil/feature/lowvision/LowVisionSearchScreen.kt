@@ -26,15 +26,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -268,17 +265,20 @@ private fun LowVisionSearchResultCard(
     addressMaxLines: Int,
     modifier: Modifier = Modifier,
 ) {
-    var showsDetailAddress by rememberSaveable(name, address, latitude, longitude) { mutableStateOf(false) }
-    val addressText =
-        if (showsDetailAddress) {
-            lowVisionDetailAddress(
-                address = address,
-                latitude = latitude,
-                longitude = longitude,
-            )
-        } else {
-            lowVisionBriefAddress(address)
-        }
+    val view = LocalView.current
+    val addressText = lowVisionBriefAddress(address)
+    val placeInfoContentDescription =
+        lowVisionPlaceInfoA11yLabel(
+            name = name,
+            address = address,
+        )
+    val placeInfoSpeechText =
+        lowVisionPlaceInfoSpeechText(
+            name = name,
+            address = address,
+            latitude = latitude,
+            longitude = longitude,
+        )
 
     Column(
         modifier =
@@ -291,6 +291,10 @@ private fun LowVisionSearchResultCard(
                 )
                 .clip(RoundedCornerShape(18.dp))
                 .background(PlaceListBg)
+                .clickable(role = Role.Button, onClick = onContentClick)
+                .semantics {
+                    contentDescription = contentClickDescription
+                }
                 .padding(
                     horizontal = LowVisionSearchLayoutDefaults.cardHorizontalPadding,
                     vertical = LowVisionSearchLayoutDefaults.cardVerticalPadding,
@@ -323,16 +327,21 @@ private fun LowVisionSearchResultCard(
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clickable(
+                            role = Role.Button,
+                            onClick = {
+                                view.announceForAccessibility(placeInfoSpeechText)
+                            },
+                        )
+                        .semantics {
+                            contentDescription = placeInfoContentDescription
+                        },
             ) {
                 Text(
                     text = name,
-                    modifier =
-                        Modifier
-                            .clickable(role = Role.Button, onClick = onContentClick)
-                            .semantics {
-                                contentDescription = contentClickDescription
-                            },
                     fontSize = LowVisionSearchLayoutDefaults.titleFontSize,
                     fontWeight = FontWeight.Black,
                     color = Color.White,
@@ -342,11 +351,6 @@ private fun LowVisionSearchResultCard(
                 )
                 Text(
                     text = addressText,
-                    modifier =
-                        Modifier.clickable(
-                            role = Role.Button,
-                            onClick = { showsDetailAddress = !showsDetailAddress },
-                        ),
                     fontSize = LowVisionSearchLayoutDefaults.addressFontSize,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,

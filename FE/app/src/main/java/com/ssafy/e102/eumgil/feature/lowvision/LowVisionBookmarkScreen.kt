@@ -26,15 +26,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -237,17 +234,21 @@ private fun LowVisionBookmarkPlaceCard(
     addressMaxLines: Int,
     modifier: Modifier = Modifier,
 ) {
-    var showsDetailAddress by rememberSaveable(place.placeId) { mutableStateOf(false) }
-    val addressText =
-        if (showsDetailAddress) {
-            lowVisionDetailAddress(
-                address = place.address,
-                latitude = place.latitude,
-                longitude = place.longitude,
-            )
-        } else {
-            lowVisionBriefAddress(place.address)
-        }
+    val view = LocalView.current
+    val addressText = lowVisionBriefAddress(place.address)
+    val placeInfoContentDescription =
+        lowVisionPlaceInfoA11yLabel(
+            name = place.name,
+            address = place.address,
+        )
+    val placeInfoSpeechText =
+        lowVisionPlaceInfoSpeechText(
+            name = place.name,
+            address = place.address,
+            latitude = place.latitude,
+            longitude = place.longitude,
+        )
+    val briefingContentDescription = "${place.name}. 탭하면 경로 브리핑으로 이동합니다."
 
     Column(
         modifier =
@@ -260,6 +261,10 @@ private fun LowVisionBookmarkPlaceCard(
                 )
                 .clip(RoundedCornerShape(18.dp))
                 .background(PlaceListBg)
+                .clickable(role = Role.Button, onClick = onBriefingClick)
+                .semantics {
+                    contentDescription = briefingContentDescription
+                }
                 .padding(
                     horizontal = LowVisionBookmarkLayoutDefaults.cardHorizontalPadding,
                     vertical = LowVisionBookmarkLayoutDefaults.cardVerticalPadding,
@@ -292,15 +297,21 @@ private fun LowVisionBookmarkPlaceCard(
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clickable(
+                            role = Role.Button,
+                            onClick = {
+                                view.announceForAccessibility(placeInfoSpeechText)
+                            },
+                        )
+                        .semantics {
+                            contentDescription = placeInfoContentDescription
+                        },
             ) {
                 Text(
                     text = place.name,
-                    modifier =
-                        Modifier.clickable(
-                            role = Role.Button,
-                            onClick = onBriefingClick,
-                        ),
                     color = Color.White,
                     fontSize = LowVisionBookmarkLayoutDefaults.titleFontSize,
                     fontWeight = FontWeight.Black,
@@ -310,11 +321,6 @@ private fun LowVisionBookmarkPlaceCard(
                 )
                 Text(
                     text = addressText,
-                    modifier =
-                        Modifier.clickable(
-                            role = Role.Button,
-                            onClick = { showsDetailAddress = !showsDetailAddress },
-                        ),
                     color = Color.White,
                     fontSize = LowVisionBookmarkLayoutDefaults.addressFontSize,
                     fontWeight = FontWeight.Bold,

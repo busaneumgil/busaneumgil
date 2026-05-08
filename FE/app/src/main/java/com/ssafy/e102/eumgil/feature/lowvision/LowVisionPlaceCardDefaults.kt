@@ -32,5 +32,24 @@ internal fun lowVisionDetailAddress(
     "상세 주소: ${address?.trim()?.takeIf { it.isNotEmpty() } ?: "GPS 기반 위치"}\n" +
         "GPS 위치: 위도 ${latitude.toLowVisionCoordinateText()}, 경도 ${longitude.toLowVisionCoordinateText()}"
 
+internal fun lowVisionPlaceInfoA11yLabel(
+    name: String,
+    address: String?,
+): String =
+    "${name.trim()}. ${lowVisionBriefAddress(address)}. 탭하면 상세 주소를 음성으로 안내합니다."
+
+internal fun lowVisionPlaceInfoSpeechText(
+    name: String,
+    address: String?,
+    latitude: Double,
+    longitude: Double,
+): String =
+    "${name.trim()}. " +
+        lowVisionDetailAddress(
+            address = address,
+            latitude = latitude,
+            longitude = longitude,
+        )
+
 private fun Double.toLowVisionCoordinateText(): String =
     String.format(Locale.US, "%.5f", this)

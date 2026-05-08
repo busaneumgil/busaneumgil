@@ -117,10 +117,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 },
             ),
         ) { backStackEntry ->
-            LowVisionKwsNavEffect(
-                navController = navController,
-                backStackEntry = backStackEntry,
-            )
+            LowVisionKwsNavEffect(navController = navController, backStackEntry = backStackEntry)
             val encodedQuery = backStackEntry.arguments?.getString(LowVisionRoute.VoiceSearch.ARG_QUERY).orEmpty()
             val query = URLDecoder.decode(encodedQuery, StandardCharsets.UTF_8.toString()).trim()
             LowVisionSearchResultShell(
@@ -161,9 +158,6 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 backStackEntry = backStackEntry,
             )
             LowVisionCategoryRoute(
-                onBackClick = {
-                    navController.navigateToLowVisionBottomTab(LowVisionBottomTab.HOME)
-                },
                 onCategorySelected = { category ->
                     navController.navigate(LowVisionRoute.CategoryResult.createRoute(category))
                 },

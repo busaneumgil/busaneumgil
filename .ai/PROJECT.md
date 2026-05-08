@@ -113,7 +113,7 @@
 
 - `Docs/API/2026-04-12_API_전체_목록.md`
 - `Docs/API/*/*_API_명세.md`
-- `Docs/ERD/ERD_v3.md`
+- `Docs/ERD/ERD_v4.md`
 - `Docs/PoC/2026-04-21_부산_경사도_추출_정제_OSM_연계_통합_PoC.md`
 - `Docs/인프라/2026-04-20_AWS_인프라_설계안.md`
 - `Docs/컨벤션/2026-04-09_Git_Jira_컨벤션.md`

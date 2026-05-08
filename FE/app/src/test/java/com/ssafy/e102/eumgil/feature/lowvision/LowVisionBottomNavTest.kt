@@ -12,4 +12,10 @@ class LowVisionBottomNavTest {
         assertEquals(1f, LowVisionBottomNavDefaults.itemWeight)
         assertEquals(80.dp, LowVisionBottomNavDefaults.height)
     }
+
+    @Test
+    fun `bottom nav keeps tab height separate from the system safe zone`() {
+        assertEquals(80.dp, LowVisionBottomNavDefaults.height)
+        assertEquals(true, LowVisionBottomNavDefaults.reservesNavigationBarSafeZone)
+    }
 }

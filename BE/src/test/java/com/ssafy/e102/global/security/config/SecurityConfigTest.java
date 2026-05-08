@@ -3,11 +3,14 @@ package com.ssafy.e102.global.security.config;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
@@ -21,21 +24,30 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.e102.E102Application;
+import com.ssafy.e102.domain.admin.dto.response.AdminMeResponse;
+import com.ssafy.e102.domain.admin.service.AdminService;
 import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.auth.token.AuthTokenStore;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
+import com.ssafy.e102.domain.report.service.AdminHazardReportService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
+import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.domain.user.service.UserService;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.domain.user.type.UserRole;
 import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
-@SpringBootTest(classes = E102Application.class)
+@SpringBootTest(classes = E102Application.class, properties = {
+	"cors.allowed-origins=http://localhost:3001"
+})
 @AutoConfigureMockMvc
 class SecurityConfigTest {
+
+	private static final UUID ADMIN_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -53,10 +65,19 @@ class SecurityConfigTest {
 	private UserService userService;
 
 	@MockitoBean
+	private UserRepository userRepository;
+
+	@MockitoBean
 	private FavoriteRouteService favoriteRouteService;
 
 	@MockitoBean
+	private AdminService adminService;
+
+	@MockitoBean
 	private HazardReportService hazardReportService;
+
+	@MockitoBean
+	private AdminHazardReportService adminHazardReportService;
 
 	@Test
 	@DisplayName("소셜 로그인은 인증 없이 접근할 수 있다")
@@ -126,6 +147,54 @@ class SecurityConfigTest {
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(jsonPath("$.status").value("A4010"))
 			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("관리자 API는 인증이 필요하다")
+	void adminRequiresAuthentication() throws Exception {
+		mockMvc.perform(get("/admin/hazard-reports"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("관리자 웹 origin의 CORS preflight를 허용한다")
+	void adminWebCorsPreflightIsAllowed() throws Exception {
+		mockMvc.perform(options("/admin/me")
+			.header(HttpHeaders.ORIGIN, "http://localhost:3001")
+			.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
+			.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization"))
+			.andExpect(status().isOk())
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3001"));
+	}
+
+	@Test
+	@DisplayName("관리자 API는 ADMIN 권한이 필요하다")
+	void adminRequiresAdminRole() throws Exception {
+		String accessToken = jwtTokenProvider.createAccessToken(UUID.randomUUID());
+
+		mockMvc.perform(get("/admin/hazard-reports")
+			.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+			.andExpect(status().isForbidden())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4030"));
+	}
+
+	@Test
+	@DisplayName("ADMIN role 사용자는 관리자 API에 접근할 수 있다")
+	void adminRoleUserCanAccessAdminApi() throws Exception {
+		String accessToken = jwtTokenProvider.createAccessToken(ADMIN_USER_ID);
+		when(userRepository.existsByUserIdAndRole(ADMIN_USER_ID, UserRole.ADMIN)).thenReturn(true);
+		when(adminService.getMe(ADMIN_USER_ID))
+			.thenReturn(new AdminMeResponse(ADMIN_USER_ID, "ADMIN", List.of("HAZARD_REPORT_READ")));
+
+		mockMvc.perform(get("/admin/me")
+			.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.userId").value(ADMIN_USER_ID.toString()))
+			.andExpect(jsonPath("$.data.role").value("ADMIN"));
 	}
 
 	@Test

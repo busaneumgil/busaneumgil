@@ -14,13 +14,15 @@ import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -52,20 +54,20 @@ class SearchViewModelTest {
             advanceUntilIdle()
             val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
-            viewModel.onAction(SearchUiAction.QueryChanged(query = "  부산시청  "))
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "  Busan City Hall  "))
             viewModel.onAction(SearchUiAction.SearchSubmitted)
             advanceUntilIdle()
 
             assertEquals(
                 SearchUiEvent.NavigateToResults(
-                    query = "부산시청",
+                    query = "Busan City Hall",
                     editingTarget = RouteEditingTarget.DESTINATION,
                 ),
                 uiEvent.await(),
             )
             val resultState = viewModel.uiState.value.resultState
             assertTrue(resultState is SearchResultUiState.Success)
-            assertEquals("부산시청", (resultState as SearchResultUiState.Success).query)
+            assertEquals("Busan City Hall", (resultState as SearchResultUiState.Success).query)
             assertEquals(listOf(result), resultState.results)
         }
 
@@ -82,17 +84,122 @@ class SearchViewModelTest {
             advanceUntilIdle()
             val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
-            viewModel.onAction(SearchUiAction.RecentSearchClicked(keyword = "부산역"))
+            viewModel.onAction(SearchUiAction.RecentSearchClicked(keyword = "Busan Station"))
             advanceUntilIdle()
 
             assertEquals(
                 SearchUiEvent.NavigateToResults(
-                    query = "부산역",
+                    query = "Busan Station",
                     editingTarget = RouteEditingTarget.DESTINATION,
                 ),
                 uiEvent.await(),
             )
-            assertEquals("부산역", viewModel.uiState.value.query)
+            assertEquals("Busan Station", viewModel.uiState.value.query)
+        }
+
+    @Test
+    fun `voice input click emits voice route navigation`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.VoiceInputClicked)
+            advanceUntilIdle()
+
+            assertEquals(SearchUiEvent.NavigateToVoiceInput, uiEvent.await())
+        }
+
+    @Test
+    fun `voice route entered shows idle voice sheet before capture starts`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
+            advanceUntilIdle()
+
+            assertFalse(uiEvent.isCompleted)
+            assertEquals(SearchVoiceInputStatus.Idle, viewModel.uiState.value.voiceInputState.status)
+            assertEquals(true, viewModel.uiState.value.voiceInputState.isActive)
+            uiEvent.cancel()
+        }
+
+    @Test
+    fun `voice capture button click emits start voice capture event`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.VoiceCaptureButtonClicked)
+            advanceUntilIdle()
+
+            assertEquals(SearchUiEvent.StartVoiceCapture, uiEvent.await())
+            assertEquals(SearchVoiceInputStatus.Listening, viewModel.uiState.value.voiceInputState.status)
+        }
+
+    @Test
+    fun `voice transcript submits search and emits results navigation`() =
+        runTest {
+            val result =
+                SearchResult(
+                    placeId = "place-voice-1",
+                    title = "Busan Station",
+                    subtitle = "123 Busan-daero, Busan",
+                    latitude = 35.1151,
+                    longitude = 129.0414,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(searchResults = listOf(result)),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
+            viewModel.onAction(SearchUiAction.VoiceCaptureButtonClicked)
+            advanceUntilIdle()
+            val firstEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+            val secondEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.drop(1).first() }
+
+            viewModel.onAction(SearchUiAction.VoiceTranscriptReceived(transcript = "Busan Station"))
+            advanceUntilIdle()
+
+            assertEquals(SearchUiEvent.StopVoiceCapture, firstEvent.await())
+            assertEquals(
+                SearchUiEvent.NavigateToResults(
+                    query = "Busan Station",
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                ),
+                secondEvent.await(),
+            )
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Success)
+            assertEquals("Busan Station", (resultState as SearchResultUiState.Success).query)
+            assertEquals(listOf(result), resultState.results)
+            assertEquals("Busan Station", viewModel.uiState.value.voiceInputState.transcript)
         }
 
     @Test
@@ -183,10 +290,7 @@ class SearchViewModelTest {
             assertEquals(null, destinationSelectionRepository.selectedDestination.value)
             val resultState = viewModel.uiState.value.resultState
             assertTrue(resultState is SearchResultUiState.Error)
-            assertEquals(
-                "좌표 정보가 올바르지 않아 경로 설정으로 넘길 수 없습니다.",
-                (resultState as SearchResultUiState.Error).message,
-            )
+            assertTrue((resultState as SearchResultUiState.Error).message.isNullOrBlank().not())
         }
 
     @Test

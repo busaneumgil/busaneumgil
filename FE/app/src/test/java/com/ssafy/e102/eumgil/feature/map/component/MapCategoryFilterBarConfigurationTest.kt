@@ -8,22 +8,78 @@ import org.junit.Test
 
 class MapCategoryFilterBarConfigurationTest {
     @Test
-    fun `map category filter bar uses elevator icon asset for elevator chip`() {
+    fun `map category filter bar uses compact wheelchair icon asset for toilet chip`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
                 .readText()
 
         assertTrue(
-            "Elevator category chip should use the elevator drawable resource.",
-            source.contains("FacilityCategory.ELEVATOR -> R.drawable.ic_route_elevator"),
+            "Toilet category chip should use the compact wheelchair drawable derived from the onboarding source.",
+            source.contains("FacilityCategory.TOILET -> R.drawable.ic_user_wheelchair_compact"),
         )
     }
 
     @Test
-    fun `map category filter bar enlarges only the elevator icon`() {
+    fun `map category filter bar uses provided elevator icon asset for elevator chip`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "Elevator category chip should use the provided elevator drawable resource.",
+            source.contains("FacilityCategory.ELEVATOR -> R.drawable.ic_place_elevator"),
+        )
+    }
+
+    @Test
+    fun `map category filter bar enlarges only the elevator icon after compact toilet asset swap`() {
         assertEquals(20, categoryFilterIconSizeDp(FacilityCategory.ELEVATOR))
         assertEquals(18, categoryFilterIconSizeDp(FacilityCategory.TOILET))
         assertEquals(18, categoryFilterIconSizeDp(FacilityCategory.CHARGING_STATION))
+    }
+
+    @Test
+    fun `map category filter bar uses design token radius for container and chips`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "MAP top category filter overlay should use the 16dp container radius token.",
+            source.contains("shape = RoundedCornerShape(EumRadius.scaleL)"),
+        )
+        assertTrue(
+            "MAP top category filter chips should use the 8dp chip radius token.",
+            source.contains("shape = RoundedCornerShape(EumRadius.scaleS)"),
+        )
+    }
+
+    @Test
+    fun `map category filter bar keeps leading icons in service main blue`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "MAP top category filter icons should always tint to Primary 600.",
+            source.contains("tint = EumPrimary600"),
+        )
+    }
+
+    @Test
+    fun `map category filter bar uses the new charging station asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "Charging station category chip should use the provided charging station drawable resource.",
+            source.contains("FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging_station"),
+        )
+        assertTrue(
+            "Provided charging station icon resource should exist.",
+            File("src/main/res/drawable/ic_place_charging_station.png").exists(),
+        )
     }
 
     @Test

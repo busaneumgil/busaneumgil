@@ -7,6 +7,63 @@ import org.junit.Test
 
 class MapFacilityDetailSheetConfigurationTest {
     @Test
+    fun `facility detail and recent destinations use compact wheelchair icon asset for toilet`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Toilet category should map to the compact wheelchair place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.TOILET -> R.drawable.ic_user_wheelchair_compact"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the compact wheelchair place icon for toilets.",
+            source.contains("PlaceCategory.TOILET -> R.drawable.ic_user_wheelchair_compact"),
+        )
+        assertTrue(
+            "Compact wheelchair drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_user_wheelchair_compact.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use provided elevator icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Elevator category should map to the provided elevator place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.ELEVATOR -> R.drawable.ic_place_elevator"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the provided elevator place icon.",
+            source.contains("PlaceCategory.ELEVATOR -> R.drawable.ic_place_elevator"),
+        )
+        assertTrue(
+            "Provided elevator drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_elevator.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail and recent destinations use provided charging station icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Charging station category should map to the provided charging station place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging_station"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the provided charging station place icon.",
+            source.contains("PlaceCategory.CHARGING_STATION -> R.drawable.ic_place_charging_station"),
+        )
+        assertTrue(
+            "Provided charging station drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_charging_station.png").exists(),
+        )
+    }
+
+    @Test
     fun `facility detail sheet removes legacy section labels and guide copy`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()

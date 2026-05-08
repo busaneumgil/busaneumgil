@@ -13,7 +13,7 @@ class RouteSettingLayoutPolicyTest {
         val policy = routeSettingLayoutPolicy()
 
         assertFalse(policy.allowsDefaultVerticalScroll)
-        assertEquals(RouteSettingCtaPlacement.BottomSheetContent, policy.ctaPlacement)
+        assertEquals(RouteSettingCtaPlacement.BottomBar, policy.ctaPlacement)
         assertEquals(RouteSettingMapHeightPolicy.FillRemainingCenterSpace, policy.mapHeightPolicy)
         assertEquals(2, policy.maxVisibleOptionCards)
         assertFalse(policy.showsOptionSectionSupportingText)
@@ -33,7 +33,7 @@ class RouteSettingLayoutPolicyTest {
         assertFalse(policy.showsRecommendedBadge)
         assertEquals(RouteSettingStartCtaIcon.NavigationPointer, policy.startCtaIcon)
         assertEquals(RouteSettingCtaIconTint.OnPrimary, policy.startCtaIconTint)
-        assertTrue(policy.bottomSheetFlushToWindowBottom)
+        assertFalse(policy.bottomSheetFlushToWindowBottom)
         assertEquals(RouteSettingSheetElevation.None, policy.sheetElevation)
         assertEquals(RouteSettingSheetBorder.None, policy.sheetBorder)
         assertEquals(RouteSettingOptionCardContainerColor.White, policy.optionCardContainerColor)
@@ -42,6 +42,34 @@ class RouteSettingLayoutPolicyTest {
         assertEquals(RouteSettingTravelModeActiveColor.PrimaryBlue, policy.travelModeActiveColor)
         assertEquals(RouteSettingTravelModeInactiveColor.Grey700, policy.travelModeInactiveColor)
         assertEquals(RouteSettingTravelModeIconSize.Emphasized, policy.travelModeIconSize)
+    }
+
+    @Test
+    fun `route setting screen uses shared bottom bar instead of inline sheet cta`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("@Composable\nfun RouteDetailScreen")
+        val sheetSection =
+            source
+                .substringAfter("private fun RouteSettingRouteSheet(")
+                .substringBefore("@Composable\nprivate fun RouteWalkOptionSection")
+
+        assertTrue(
+            "Route selection should attach the start CTA with Scaffold.bottomBar to match route detail.",
+            screenSection.contains("bottomBar = {"),
+        )
+        assertTrue(
+            "Route selection should reuse the shared bottom bar component.",
+            screenSection.contains("RouteSettingBottomBar("),
+        )
+        assertFalse(
+            "The route sheet should no longer render the inline CTA content inside the sheet.",
+            sheetSection.contains("RouteSettingCtaContent("),
+        )
     }
 
     @Test

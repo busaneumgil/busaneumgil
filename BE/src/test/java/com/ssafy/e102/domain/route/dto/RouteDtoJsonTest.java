@@ -55,7 +55,7 @@ class RouteDtoJsonTest {
 						BigDecimal.valueOf(30),
 						35,
 						"LINESTRING(128.9360 35.1200, 128.9361 35.1201)",
-						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK, BigDecimal.valueOf(12)))))))));
+						new RouteStepAlertResponse(RouteStepAlertType.CROSSWALK_AUDIO, BigDecimal.valueOf(12)))))))));
 
 		JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(response));
 
@@ -70,7 +70,7 @@ class RouteDtoJsonTest {
 		assertThat(leg.get("role").asText()).isEqualTo("WALK_ONLY");
 		JsonNode step = leg.get("steps").get(0);
 		assertThat(step.get("instruction").asText()).isEqualTo("직진하세요.");
-		assertThat(step.get("alert").get("type").asText()).isEqualTo("CROSSWALK");
+		assertThat(step.get("alert").get("type").asText()).isEqualTo("CROSSWALK_AUDIO");
 		assertThat(step.has("badges")).isFalse();
 		assertThat(step.has("slopePercent")).isFalse();
 		assertThat(step.has("widthState")).isFalse();
@@ -81,7 +81,8 @@ class RouteDtoJsonTest {
 	void routeStepAlertTypeDoesNotExposeRemovedContractValues() {
 		assertThat(RouteStepAlertType.values())
 			.extracting(Enum::name)
-			.contains("CROSSWALK", "STAIR", "NARROW_SIDEWALK", "UNPAVED", "MIDDLE_SLOPE")
+			.contains("CROSSWALK", "CROSSWALK_SIGNAL", "CROSSWALK_AUDIO", "STAIR", "NARROW_SIDEWALK", "UNPAVED",
+				"MIDDLE_SLOPE")
 			.doesNotContain("NONE", "CURB", "TURN_LEFT", "TURN_RIGHT");
 	}
 }

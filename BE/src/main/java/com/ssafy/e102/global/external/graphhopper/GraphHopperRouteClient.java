@@ -37,6 +37,7 @@ public class GraphHopperRouteClient {
 		"edge_id",
 		"segment_type",
 		"signal_state",
+		"audio_signal_state",
 		"slope_state",
 		"avg_slope_percent",
 		"width_state",

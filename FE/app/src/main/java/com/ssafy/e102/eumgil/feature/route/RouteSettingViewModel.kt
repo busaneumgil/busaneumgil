@@ -76,10 +76,10 @@ class RouteSettingViewModel(
 
         viewModelScope.launch {
             // This ViewModel is activity-scoped, so same-place reselection needs an explicit request flow.
-            destinationSelectionRepository.selectionRequests.collectLatest { selectedDestination ->
+            destinationSelectionRepository.selectionRequests.collectLatest { request ->
                 hasLoadedInitialDestination = true
                 loadRouteShell(
-                    destinationResolution = resolveDestination(selectedDestination),
+                    destinationResolution = resolveDestination(request.state.selectedDestination),
                     resetSelectedOption = true,
                 )
             }

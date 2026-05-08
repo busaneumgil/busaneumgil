@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,7 +56,13 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.SearchSubmitted)
             advanceUntilIdle()
 
-            assertEquals(SearchUiEvent.NavigateToResults(query = "부산시청"), uiEvent.await())
+            assertEquals(
+                SearchUiEvent.NavigateToResults(
+                    query = "부산시청",
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                ),
+                uiEvent.await(),
+            )
             val resultState = viewModel.uiState.value.resultState
             assertTrue(resultState is SearchResultUiState.Success)
             assertEquals("부산시청", (resultState as SearchResultUiState.Success).query)
@@ -78,7 +85,13 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.RecentSearchClicked(keyword = "부산역"))
             advanceUntilIdle()
 
-            assertEquals(SearchUiEvent.NavigateToResults(query = "부산역"), uiEvent.await())
+            assertEquals(
+                SearchUiEvent.NavigateToResults(
+                    query = "부산역",
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                ),
+                uiEvent.await(),
+            )
             assertEquals("부산역", viewModel.uiState.value.query)
         }
 

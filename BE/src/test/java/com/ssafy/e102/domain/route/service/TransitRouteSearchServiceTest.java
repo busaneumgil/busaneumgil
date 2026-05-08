@@ -216,23 +216,27 @@ class TransitRouteSearchServiceTest {
 		assertThat(response.routes()).hasSize(1);
 		assertThat(response.routes().get(0).badges())
 			.containsExactly(
-				RouteBadge.MIDDLE_SLOPE,
-				RouteBadge.CROSSWALK,
 				RouteBadge.STAIR,
-				RouteBadge.UNPAVED);
+				RouteBadge.UNPAVED,
+				RouteBadge.MIDDLE_SLOPE,
+				RouteBadge.CROSSWALK);
 		assertThat(response.routes().get(0).legs().get(0).role()).isEqualTo(RouteLegRole.WALK_TO_TRANSIT);
+		assertThat(response.routes().get(0).legs().get(0).instruction()).isEqualTo("승차정류장까지 이동하세요.");
 		assertThat(response.routes().get(0).legs().get(0).badges())
 			.containsExactly(RouteBadge.MIDDLE_SLOPE, RouteBadge.CROSSWALK);
 		assertThat(response.routes().get(0).legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
-			.containsExactly(RouteGuidanceEventType.CROSSWALK, RouteGuidanceEventType.BUS_STOP);
+			.containsExactly(RouteGuidanceEventType.MIDDLE_SLOPE, RouteGuidanceEventType.BUS_STOP);
 		assertThat(response.routes().get(0).legs().get(1).type()).isEqualTo(TransportMode.BUS);
+		assertThat(response.routes().get(0).legs().get(1).instruction()).isEqualTo("100번 버스에 탑승하세요.");
 		assertThat(response.routes().get(0).legs().get(1).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
 			.containsExactly(RouteGuidanceEventType.ARRIVING_POINT);
 		RouteGuidanceEventResponse arrivingPoint = response.routes().get(0).legs().get(1).guidanceEvents().get(0);
 		assertThat(arrivingPoint.distanceFromLegStartMeter()).isEqualByComparingTo("1500.00");
 		assertThat(arrivingPoint.durationFromLegStartSecond()).isEqualTo(600);
+		assertThat(arrivingPoint.distanceFromRouteStartMeter()).isEqualByComparingTo("1800.00");
+		assertThat(arrivingPoint.durationFromRouteStartSecond()).isEqualTo(900);
 		assertThat(arrivingPoint.geometry()).isEqualTo("POINT(129.066 35.166)");
 		assertThat(response.routes().get(0).legs().get(2).role()).isEqualTo(RouteLegRole.TRANSIT_TO_WALK);
 		assertThat(response.routes().get(0).legs().get(2).badges())
@@ -333,12 +337,16 @@ class TransitRouteSearchServiceTest {
 		assertThat(response.routes().get(0).legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
 			.containsExactly(RouteGuidanceEventType.SUBWAY_ELEVATOR);
+		assertThat(response.routes().get(0).legs().get(0).instruction()).isEqualTo("서면역 엘리베이터까지 이동하세요.");
 		assertThat(response.routes().get(0).legs())
 			.filteredOn(leg -> leg.type() == TransportMode.SUBWAY)
 			.first()
-			.satisfies(leg -> assertThat(leg.guidanceEvents())
-				.extracting(RouteGuidanceEventResponse::type)
-				.containsExactly(RouteGuidanceEventType.ARRIVING_POINT));
+			.satisfies(leg -> {
+				assertThat(leg.instruction()).isEqualTo("부산 1호선에 탑승하세요.");
+				assertThat(leg.guidanceEvents())
+					.extracting(RouteGuidanceEventResponse::type)
+					.containsExactly(RouteGuidanceEventType.ARRIVING_POINT);
+			});
 
 		ArgumentCaptor<List<TransitRouteSnapshot>> snapshotCaptor = ArgumentCaptor.forClass(List.class);
 		verify(routeSearchCacheService).saveTransitMetadata(any(), snapshotCaptor.capture());

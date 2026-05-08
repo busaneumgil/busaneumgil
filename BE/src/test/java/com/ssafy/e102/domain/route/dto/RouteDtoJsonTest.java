@@ -79,6 +79,8 @@ class RouteDtoJsonTest {
 		assertThat(guidanceEvent.get("type").asText()).isEqualTo("CROSSWALK_AUDIO");
 		assertThat(guidanceEvent.get("distanceFromLegStartMeter").decimalValue()).isEqualByComparingTo("12");
 		assertThat(guidanceEvent.get("durationFromLegStartSecond").asInt()).isEqualTo(35);
+		assertThat(guidanceEvent.get("distanceFromRouteStartMeter").decimalValue()).isEqualByComparingTo("12");
+		assertThat(guidanceEvent.get("durationFromRouteStartSecond").asInt()).isEqualTo(35);
 		assertThat(guidanceEvent.get("geometry").asText()).isEqualTo("POINT(128.9360 35.1200)");
 	}
 

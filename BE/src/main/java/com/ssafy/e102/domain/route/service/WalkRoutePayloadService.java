@@ -37,13 +37,21 @@ import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 public class WalkRoutePayloadService {
 
 	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
-	private static final BigDecimal TURN_ZIGZAG_SUPPRESSION_METER = BigDecimal.valueOf(2);
+	private static final BigDecimal TURN_ZIGZAG_SUPPRESSION_METER = BigDecimal.valueOf(5);
+	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
+		RouteBadge.STAIR,
+		RouteBadge.NARROW_SIDEWALK,
+		RouteBadge.UNPAVED,
+		RouteBadge.MIDDLE_SLOPE,
+		RouteBadge.LOW_SLOPE,
+		RouteBadge.CROSSWALK,
+		RouteBadge.ELEVATOR);
 	private static final List<AlertRule> ALERT_RULES = List.of(
-		new AlertRule(RouteGuidanceEventType.STAIR, "stairs_state", Set.of("YES"), 4),
-		new AlertRule(RouteGuidanceEventType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 5),
-		new AlertRule(RouteGuidanceEventType.UNPAVED, "surface_state", Set.of("UNPAVED"), 6),
-		new AlertRule(RouteGuidanceEventType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 7),
-		new AlertRule(RouteGuidanceEventType.LOW_SLOPE, "slope_state", Set.of("FLAT"), 8));
+		new AlertRule(RouteGuidanceEventType.STAIR, "stairs_state", Set.of("YES"), 1),
+		new AlertRule(RouteGuidanceEventType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 2),
+		new AlertRule(RouteGuidanceEventType.UNPAVED, "surface_state", Set.of("UNPAVED"), 3),
+		new AlertRule(RouteGuidanceEventType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 4),
+		new AlertRule(RouteGuidanceEventType.LOW_SLOPE, "slope_state", Set.of("FLAT"), 5));
 
 	private final RouteTurnInstructionService routeTurnInstructionService;
 
@@ -326,9 +334,9 @@ public class WalkRoutePayloadService {
 		GraphHopperRoutePath path,
 		GraphHopperPathDetail crosswalkDetail) {
 		return switch (crosswalkEventType(path, crosswalkDetail)) {
-			case CROSSWALK_AUDIO -> 1;
-			case CROSSWALK_SIGNAL -> 2;
-			case CROSSWALK -> 3;
+			case CROSSWALK_AUDIO -> 6;
+			case CROSSWALK_SIGNAL -> 7;
+			case CROSSWALK -> 8;
 			default -> throw new IllegalStateException("unexpected crosswalk event type");
 		};
 	}
@@ -445,7 +453,8 @@ public class WalkRoutePayloadService {
 		Set<RouteBadge> badges = new LinkedHashSet<>();
 		if (hasAny(path, "slope_state", "MODERATE", "STEEP", "RISK")) {
 			badges.add(RouteBadge.MIDDLE_SLOPE);
-		} else if (hasAny(path, "slope_state", "FLAT")) {
+		}
+		if (hasAny(path, "slope_state", "FLAT")) {
 			badges.add(RouteBadge.LOW_SLOPE);
 		}
 		if (hasAny(path, "stairs_state", "YES")) {
@@ -460,7 +469,9 @@ public class WalkRoutePayloadService {
 		if (hasAny(path, "surface_state", "UNPAVED")) {
 			badges.add(RouteBadge.UNPAVED);
 		}
-		return new ArrayList<>(badges);
+		return BADGE_PRIORITY.stream()
+			.filter(badges::contains)
+			.toList();
 	}
 
 	private boolean hasAny(GraphHopperRoutePath path, String detailName, String... expectedValues) {

@@ -53,14 +53,14 @@ class WalkRoutePayloadServiceTest {
 		assertThat(route.estimatedTimeMinute()).isEqualTo(16);
 		assertThat(route.badges())
 			.containsExactly(
-				RouteBadge.MIDDLE_SLOPE,
-				RouteBadge.CROSSWALK,
 				RouteBadge.NARROW_SIDEWALK,
-				RouteBadge.UNPAVED);
+				RouteBadge.UNPAVED,
+				RouteBadge.MIDDLE_SLOPE,
+				RouteBadge.CROSSWALK);
 		assertThat(route.legs()).hasSize(1);
 		assertThat(route.legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
-			.containsExactly(RouteGuidanceEventType.CROSSWALK_SIGNAL, RouteGuidanceEventType.UNPAVED);
+			.containsExactly(RouteGuidanceEventType.NARROW_SIDEWALK, RouteGuidanceEventType.UNPAVED);
 		assertThat(route.legs().get(0).guidanceEvents().get(0).distanceFromLegStartMeter())
 			.isEqualByComparingTo("0.00");
 		assertThat(route.legs().get(0).guidanceEvents().get(0).geometry())
@@ -158,7 +158,7 @@ class WalkRoutePayloadServiceTest {
 			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
 
 		assertThat(route.legs().get(0).guidanceEvents()).hasSize(1);
-		assertThat(route.legs().get(0).guidanceEvents().get(0).type()).isEqualTo(RouteGuidanceEventType.CROSSWALK);
+		assertThat(route.legs().get(0).guidanceEvents().get(0).type()).isEqualTo(RouteGuidanceEventType.STAIR);
 		assertThat(route.legs().get(0).guidanceEvents().get(0).distanceFromLegStartMeter())
 			.isEqualByComparingTo("0.00");
 	}
@@ -237,6 +237,29 @@ class WalkRoutePayloadServiceTest {
 		assertThat(route.legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
 			.containsExactly(RouteGuidanceEventType.LOW_SLOPE);
+	}
+
+	@Test
+	void includesLowAndMiddleSlopeBadgesWhenBothSlopeTypesExist() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("100.00"),
+			60_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0000"))),
+			Map.of("slope_state", List.of(
+				new GraphHopperPathDetail(0, 1, "MODERATE"),
+				new GraphHopperPathDetail(1, 2, "FLAT"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.badges()).containsExactly(RouteBadge.MIDDLE_SLOPE, RouteBadge.LOW_SLOPE);
+		assertThat(route.legs().get(0).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(RouteGuidanceEventType.MIDDLE_SLOPE, RouteGuidanceEventType.LOW_SLOPE);
 	}
 
 	@Test

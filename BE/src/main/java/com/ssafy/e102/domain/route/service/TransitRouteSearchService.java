@@ -66,6 +66,14 @@ public class TransitRouteSearchService {
 	private static final double BUSAN_MAX_LNG = 129.40;
 	private static final double START_END_MIN_DISTANCE_METER = 20.0;
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
+	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
+		RouteBadge.STAIR,
+		RouteBadge.NARROW_SIDEWALK,
+		RouteBadge.UNPAVED,
+		RouteBadge.MIDDLE_SLOPE,
+		RouteBadge.LOW_SLOPE,
+		RouteBadge.CROSSWALK,
+		RouteBadge.ELEVATOR);
 
 	private final WalkRouteUserProfileQueryService userProfileQueryService;
 	private final SubwayStationElevatorRepository subwayStationElevatorRepository;
@@ -167,6 +175,7 @@ public class TransitRouteSearchService {
 		if (legs.isEmpty()) {
 			return java.util.Optional.empty();
 		}
+		List<RouteLegResponse> offsetLegs = withRouteGuidanceOffsets(legs);
 		RouteSummaryResponse route = new RouteSummaryResponse(
 			routeId,
 			TransportMode.PUBLIC_TRANSIT,
@@ -177,13 +186,60 @@ public class TransitRouteSearchService {
 			path.totalTimeMinute() * 60,
 			Math.max(1, path.totalTimeMinute()),
 			transferCount(path),
-			routeBadges(legs),
-			mergeGeometry(legs),
-			legs);
+			routeBadges(offsetLegs),
+			mergeGeometry(offsetLegs),
+			offsetLegs);
 		return java.util.Optional.of(new TransitRouteCandidate(
 			route,
 			new TransitRouteSnapshot(routeId, path.mapObj(), snapshotLegs(path)),
 			path.totalWalkMeter()));
+	}
+
+	private List<RouteLegResponse> withRouteGuidanceOffsets(List<RouteLegResponse> legs) {
+		List<RouteLegResponse> offsetLegs = new ArrayList<>();
+		BigDecimal distanceOffset = BigDecimal.ZERO.setScale(2);
+		int durationOffset = 0;
+		for (RouteLegResponse leg : legs) {
+			offsetLegs.add(withRouteGuidanceOffsets(leg, distanceOffset, durationOffset));
+			if (leg.distanceMeter() != null) {
+				distanceOffset = distanceOffset.add(leg.distanceMeter()).setScale(2, RoundingMode.HALF_UP);
+			}
+			durationOffset += leg.durationSecond();
+		}
+		return List.copyOf(offsetLegs);
+	}
+
+	private RouteLegResponse withRouteGuidanceOffsets(
+		RouteLegResponse leg,
+		BigDecimal distanceOffset,
+		int durationOffset) {
+		List<RouteGuidanceEventResponse> guidanceEvents = leg.guidanceEvents()
+			.stream()
+			.map(event -> new RouteGuidanceEventResponse(
+				event.sequence(),
+				event.type(),
+				event.distanceFromLegStartMeter(),
+				event.durationFromLegStartSecond(),
+				distanceOffset.add(event.distanceFromLegStartMeter()).setScale(2, RoundingMode.HALF_UP),
+				durationOffset + event.durationFromLegStartSecond(),
+				event.geometry()))
+			.toList();
+		return new RouteLegResponse(
+			leg.sequence(),
+			leg.type(),
+			leg.role(),
+			leg.instruction(),
+			leg.distanceMeter(),
+			leg.durationSecond(),
+			leg.estimatedTimeMinute(),
+			leg.geometry(),
+			guidanceEvents,
+			leg.routeNo(),
+			leg.laneOptions(),
+			leg.boardingStop(),
+			leg.arrivingStop(),
+			leg.isLowFloor(),
+			leg.badges());
 	}
 
 	private List<TransitRouteCandidate> selectCandidates(List<TransitRouteCandidate> candidates) {
@@ -321,12 +377,18 @@ public class TransitRouteSearchService {
 			try {
 				if (odsayLeg.type() == TransportMode.WALK) {
 					TransportMode nextTransitType = nextTransitType(odsayLegs, odsayIndex);
-					GeoPointRequest nextPoint = nextTransitStart(odsayLegs, odsayIndex, endPoint, cursor);
+					RouteStopResponse nextTransitStop = nextTransitStop(odsayLegs, odsayIndex, cursor);
+					GeoPointRequest nextPoint = nextTransitStop == null
+						? endPoint
+						: new GeoPointRequest(
+							nextTransitStop.lat().doubleValue(),
+							nextTransitStop.lng().doubleValue());
 					RouteLegResponse walkLeg = toWalkLeg(
 						legIndex,
 						cursor,
 						nextPoint,
 						nextTransitType,
+						nextTransitStop,
 						profile);
 					if (walkLeg == null) {
 						return List.of();
@@ -362,21 +424,17 @@ public class TransitRouteSearchService {
 		return List.copyOf(legs);
 	}
 
-	private GeoPointRequest nextTransitStart(
+	private RouteStopResponse nextTransitStop(
 		List<OdsayTransitLeg> odsayLegs,
 		int currentIndex,
-		GeoPointRequest endPoint,
 		GeoPointRequest referencePoint) {
 		for (int index = currentIndex + 1; index < odsayLegs.size(); index++) {
 			OdsayTransitLeg next = odsayLegs.get(index);
 			if (next.type() != TransportMode.WALK) {
-				RouteStopResponse stop = boardingStop(next, referencePoint);
-				if (stop != null) {
-					return new GeoPointRequest(stop.lat().doubleValue(), stop.lng().doubleValue());
-				}
+				return boardingStop(next, referencePoint);
 			}
 		}
-		return endPoint;
+		return null;
 	}
 
 	private TransportMode nextTransitType(List<OdsayTransitLeg> odsayLegs, int currentIndex) {
@@ -394,14 +452,16 @@ public class TransitRouteSearchService {
 		GeoPointRequest from,
 		GeoPointRequest to,
 		TransportMode nextTransitType,
+		RouteStopResponse nextTransitStop,
 		WalkRouteUserProfile profile) {
 		boolean hasNextTransit = nextTransitType != null;
+		String instruction = walkInstruction(nextTransitType, nextTransitStop);
 		if (GeoDistanceCalculator.distanceMeter(from, to) < 1.0) {
 			return new RouteLegResponse(
 				sequence,
 				TransportMode.WALK,
 				walkRole(hasNextTransit),
-				walkInstruction(hasNextTransit),
+				instruction,
 				BigDecimal.ZERO.setScale(2),
 				0,
 				0,
@@ -425,7 +485,7 @@ public class TransitRouteSearchService {
 			return walkRoutePayloadService.toWalkLeg(
 				sequence,
 				walkRole(hasNextTransit),
-				walkInstruction(hasNextTransit),
+				instruction,
 				path,
 				null,
 				destinationEventType(nextTransitType));
@@ -601,12 +661,33 @@ public class TransitRouteSearchService {
 		return RouteLegRole.TRANSIT_TO_WALK;
 	}
 
-	private String walkInstruction(boolean hasNextTransit) {
-		RouteLegRole role = walkRole(hasNextTransit);
-		if (role == RouteLegRole.TRANSIT_TO_WALK || role == RouteLegRole.WALK_TO_DESTINATION) {
+	private String walkInstruction(TransportMode nextTransitType, RouteStopResponse targetStop) {
+		if (nextTransitType == null) {
 			return "목적지까지 이동하세요.";
 		}
+		if (nextTransitType == TransportMode.BUS) {
+			return busStopInstruction(targetStop);
+		}
+		if (nextTransitType == TransportMode.SUBWAY) {
+			return subwayElevatorInstruction(targetStop);
+		}
 		return "대중교통 탑승 지점까지 이동하세요.";
+	}
+
+	private String busStopInstruction(RouteStopResponse targetStop) {
+		if (targetStop == null || targetStop.name() == null || targetStop.name().isBlank()) {
+			return "버스 정류장까지 이동하세요.";
+		}
+		String stopName = targetStop.name().endsWith("정류장") ? targetStop.name() : targetStop.name() + " 정류장";
+		return stopName + "까지 이동하세요.";
+	}
+
+	private String subwayElevatorInstruction(RouteStopResponse targetStop) {
+		if (targetStop == null || targetStop.name() == null || targetStop.name().isBlank()) {
+			return "지하철역 엘리베이터까지 이동하세요.";
+		}
+		String stationName = targetStop.name().endsWith("역") ? targetStop.name() : targetStop.name() + "역";
+		return stationName + " 엘리베이터까지 이동하세요.";
 	}
 
 	private List<RouteBadge> routeBadges(List<RouteLegResponse> legs) {
@@ -614,7 +695,9 @@ public class TransitRouteSearchService {
 		legs.stream()
 			.flatMap(leg -> (leg.badges() == null ? List.<RouteBadge>of() : leg.badges()).stream())
 			.forEach(badges::add);
-		return new ArrayList<>(badges);
+		return BADGE_PRIORITY.stream()
+			.filter(badges::contains)
+			.toList();
 	}
 
 	private List<TransitLaneOptionResponse> laneOptions(int routeIndex, int legIndex, OdsayTransitLeg odsayLeg) {
@@ -695,10 +778,21 @@ public class TransitRouteSearchService {
 	}
 
 	private String instruction(OdsayTransitLeg leg, String routeNo) {
+		String displayRouteNo = routeNo == null || routeNo.isBlank() ? leg.type().name() : routeNo;
 		if (leg.type() == TransportMode.BUS) {
-			return routeNo + "번 버스를 탑승하세요.";
+			return busRouteDisplayName(displayRouteNo) + "에 탑승하세요.";
 		}
-		return routeNo + "을/를 탑승하세요.";
+		return displayRouteNo + "에 탑승하세요.";
+	}
+
+	private String busRouteDisplayName(String routeNo) {
+		if (routeNo.endsWith("버스")) {
+			return routeNo;
+		}
+		if (routeNo.endsWith("번")) {
+			return routeNo + " 버스";
+		}
+		return routeNo + "번 버스";
 	}
 
 	private String routeNo(OdsayTransitLeg leg) {

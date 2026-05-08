@@ -33,5 +33,12 @@ object EumgilDatabaseMigrations {
             }
         }
 
-    val all: Array<Migration> = arrayOf(MIGRATION_1_2)
+    val MIGRATION_2_3: Migration =
+        object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE favoriteRoute ADD COLUMN transportMode TEXT")
+            }
+        }
+
+    val all: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

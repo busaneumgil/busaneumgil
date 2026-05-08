@@ -250,6 +250,11 @@
     <string name="saved_route_route_summary">%1$s → %2$s</string>
     <string name="saved_route_meta_distance">거리 %1$s</string>
     <string name="saved_route_meta_duration">예상 %1$s</string>
+    <string name="saved_route_transport_mode_walk">도보</string>
+    <string name="saved_route_transport_mode_transit">대중교통</string>
+    <string name="saved_route_route_option_recommended">추천</string>
+    <string name="saved_route_route_option_min_transfer">환승 최소</string>
+    <string name="saved_route_route_option_min_walk">도보 최소</string>
     <string name="my_page_screen_title">마이페이지</string>
     <string name="my_page_screen_description">계정 정보와 주요 메뉴를 확인하는 마이페이지 화면입니다.</string>
     <string name="my_page_default_user_name">이용진 사용자</string>

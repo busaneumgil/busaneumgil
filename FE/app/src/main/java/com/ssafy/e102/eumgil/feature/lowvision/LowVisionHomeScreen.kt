@@ -22,8 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
@@ -38,6 +40,7 @@ internal object LowVisionHomeLayoutDefaults {
     val actionLabelFontSize = 48.sp
     val actionLabelFontWeight = FontWeight.Black
     const val showsStatusGuide = false
+    const val currentLocationAnnouncesButtonRole = false
 }
 
 /**
@@ -66,9 +69,10 @@ fun LowVisionHomeScreen(
     onCurrentLocationClick: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
+    currentLocationDisplay: LowVisionCurrentLocationDisplay =
+        lowVisionCurrentLocationDisplay(latitude = null, longitude = null),
 ) {
     val voiceInputLabel = stringResource(id = R.string.low_vision_home_voice_input_label)
-    val currentLocationLabel = stringResource(id = R.string.low_vision_home_current_location_label)
 
     Column(
         modifier = modifier
@@ -122,11 +126,12 @@ fun LowVisionHomeScreen(
             HomeYellowCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(LowVisionHomeLayoutDefaults.currentLocationCardWeight)
-                    .lowVisionPreparingButtonSemantics(currentLocationLabel),
+                    .weight(LowVisionHomeLayoutDefaults.currentLocationCardWeight),
                 iconRes = R.drawable.ic_voice_location_pin,
                 iconSize = 56.dp,
-                label = currentLocationLabel,
+                label = currentLocationDisplay.title,
+                supportingText = currentLocationDisplay.supportingText,
+                readOnlyContentDescription = currentLocationDisplay.talkBackText,
                 onClick = onCurrentLocationClick,
             )
         }
@@ -141,16 +146,27 @@ fun LowVisionHomeScreen(
 @Composable
 private fun HomeYellowCard(
     iconRes: Int,
-    iconSize: androidx.compose.ui.unit.Dp,
+    iconSize: Dp,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    supportingText: String? = null,
+    readOnlyContentDescription: String? = null,
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(24.dp))
             .background(LowVisionScreenDefaults.brandYellow)
-            .clickable { onClick() },
+            .clickable { onClick() }
+            .then(
+                if (readOnlyContentDescription != null) {
+                    Modifier.clearAndSetSemantics {
+                        contentDescription = readOnlyContentDescription
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -169,7 +185,19 @@ private fun HomeYellowCard(
                 fontSize = LowVisionHomeLayoutDefaults.actionLabelFontSize,
                 fontWeight = LowVisionHomeLayoutDefaults.actionLabelFontWeight,
                 letterSpacing = (-1).sp,
+                textAlign = TextAlign.Center,
             )
+            if (!supportingText.isNullOrBlank()) {
+                Text(
+                    text = supportingText,
+                    color = Color.Black,
+                    fontSize = 24.sp,
+                    lineHeight = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

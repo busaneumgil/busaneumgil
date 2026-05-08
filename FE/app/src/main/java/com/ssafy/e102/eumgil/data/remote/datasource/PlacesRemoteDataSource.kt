@@ -48,7 +48,7 @@ open class PlacesRemoteDataSource private constructor(
                 latitude = latitude,
                 longitude = longitude,
             )
-        Log.i(
+        safeLogInfo(
             PLACES_REMOTE_LOG_TAG,
             "GET /places baseUrl=$baseUrlLabel lat=${latitude.toLogCoordinate()} lng=${longitude.toLogCoordinate()} radius=${query.radiusMeters} categories=${query.categories.toLogList()} featureTypes=${query.featureTypes.toLogList()}",
         )
@@ -61,12 +61,12 @@ open class PlacesRemoteDataSource private constructor(
         val responseJson = response.body.toJsonObjectOrNull()
         val placesBrowseDto = response.requirePlacesBrowseDto(responseJson)
         val places = PlaceDtoMapper.toPlaceSummaries(placesBrowseDto)
-        Log.i(
+        safeLogInfo(
             PLACES_REMOTE_LOG_TAG,
             "GET /places success status=${response.statusCode} count=${places.size}",
         )
         if (places.isEmpty()) {
-            Log.w(
+            safeLogWarn(
                 PLACES_REMOTE_LOG_TAG,
                 "GET /places returned empty result set lat=${latitude.toLogCoordinate()} lng=${longitude.toLogCoordinate()} radius=${query.radiusMeters}",
             )
@@ -175,6 +175,20 @@ private fun Collection<Enum<*>>.toLogList(): String =
     } else {
         joinToString(",") { value -> value.name }
     }
+
+private fun safeLogInfo(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.i(tag, message) }
+}
+
+private fun safeLogWarn(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.w(tag, message) }
+}
 
 class PlacesApiException(
     val httpStatusCode: Int,

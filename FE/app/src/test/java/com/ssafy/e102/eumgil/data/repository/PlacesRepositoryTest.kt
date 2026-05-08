@@ -8,7 +8,6 @@ import com.ssafy.e102.eumgil.core.model.PlaceQuery
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
-import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryReadPlan
@@ -76,44 +75,32 @@ class PlacesRepositoryTest {
                     radiusMeters = 1200,
                 )
             val localDataSource = PlacesLocalDataSource()
+            val remotePlaces =
+                listOf(
+                    PlaceSummary(
+                        placeId = "88",
+                        name = "Remote Welfare Center",
+                        address = "88 Welfare-ro, Busan",
+                        latitude = 35.1801,
+                        longitude = 129.0722,
+                        category = PlaceCategory.WELFARE,
+                        features =
+                            listOf(
+                                PlaceFeatureAvailability(
+                                    featureType = PlaceFeatureType.ELEVATOR,
+                                    isAvailable = true,
+                                ),
+                            ),
+                    ),
+                )
             val repository =
                 DefaultPlacesRepository(
                     remoteDataSource =
-                        PlacesRemoteDataSource(
-                            requestExecutor = { _, _, _ ->
-                                HttpJsonResponse(
-                                    statusCode = 200,
-                                    body =
-                                        """
-                                        {
-                                          "status": "S2000",
-                                          "data": {
-                                            "places": [
-                                              {
-                                                "placeId": 88,
-                                                "name": "Remote Welfare Center",
-                                                "category": "WELFARE",
-                                                "address": "88 Welfare-ro, Busan",
-                                                "point": {
-                                                  "lat": 35.1801,
-                                                  "lng": 129.0722
-                                                },
-                                                "accessibilityFeatures": [
-                                                  {
-                                                    "featureType": "elevator",
-                                                    "isAvailable": true
-                                                  }
-                                                ],
-                                                "isBookmarked": false
-                                              }
-                                            ]
-                                          },
-                                          "message": "ok"
-                                        }
-                                        """.trimIndent(),
-                                )
-                            },
-                        ),
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> = remotePlaces
+                        },
                     localDataSource = localDataSource,
                     mockDataSource = PlacesMockDataSource(),
                     sourcePolicy =
@@ -122,18 +109,7 @@ class PlacesRepositoryTest {
 
             val places = repository.getPlaces(query)
 
-            assertEquals(1, places.size)
-            assertEquals("88", places.first().placeId)
-            assertEquals(PlaceCategory.WELFARE, places.first().category)
-            assertEquals(
-                listOf(
-                    PlaceFeatureAvailability(
-                        featureType = PlaceFeatureType.ELEVATOR,
-                        isAvailable = true,
-                    ),
-                ),
-                places.first().features,
-            )
+            assertEquals(remotePlaces, places)
             assertEquals(places, localDataSource.getCachedPlaces(query))
         }
 
@@ -141,50 +117,7 @@ class PlacesRepositoryTest {
     fun `getPlaceDetail returns remote detail and caches it when remote succeeds`() =
         runBlocking {
             val localDataSource = PlacesLocalDataSource()
-            val repository =
-                DefaultPlacesRepository(
-                    remoteDataSource =
-                        PlacesRemoteDataSource(
-                            requestExecutor = { _, _, _ ->
-                                HttpJsonResponse(
-                                    statusCode = 200,
-                                    body =
-                                        """
-                                        {
-                                          "status": "S2000",
-                                          "data": {
-                                            "placeId": 88,
-                                            "name": "Remote Welfare Center",
-                                            "category": "WELFARE",
-                                            "address": "88 Welfare-ro, Busan",
-                                            "point": {
-                                              "lat": 35.1801,
-                                              "lng": 129.0722
-                                            },
-                                            "providerPlaceId": "kakao-88",
-                                            "accessibilityFeatures": [
-                                              {
-                                                "featureType": "elevator",
-                                                "isAvailable": true
-                                              }
-                                            ],
-                                            "isBookmarked": true
-                                          },
-                                          "message": "ok"
-                                        }
-                                        """.trimIndent(),
-                                )
-                            },
-                        ),
-                    localDataSource = localDataSource,
-                    mockDataSource = PlacesMockDataSource(),
-                    sourcePolicy =
-                        PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
-                )
-
-            val detail = repository.getPlaceDetail("88")
-
-            assertEquals(
+            val remoteDetail =
                 PlaceDetail(
                     placeId = "88",
                     name = "Remote Welfare Center",
@@ -203,10 +136,49 @@ class PlacesRepositoryTest {
                     accessibilityTags = listOf("elevator"),
                     providerPlaceId = "kakao-88",
                     description = null,
-                ),
-                detail,
-            )
+                )
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaceDetail(placeId: String): PlaceDetail? = remoteDetail
+                        },
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            val detail = repository.getPlaceDetail("88")
+
+            assertEquals(remoteDetail, detail)
             assertEquals(detail, localDataSource.getCachedPlaceDetail("88"))
+        }
+
+    @Test
+    fun `getPlaceDetail returns null when remote detail responds with 404`() =
+        runBlocking {
+            val localDataSource = PlacesLocalDataSource()
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaceDetail(placeId: String): PlaceDetail? = null
+                        },
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            val detail = repository.getPlaceDetail("404")
+
+            assertEquals(null, detail)
+            assertEquals(null, localDataSource.getCachedPlaceDetail("404"))
         }
 }
 

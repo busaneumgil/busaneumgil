@@ -39,7 +39,7 @@ internal object MapPlaceBrowseDataMapper {
             facilityId = placeId,
             name = name,
             coordinate = GeoCoordinate(latitude = latitude, longitude = longitude),
-            category = featureCategories.firstOrNull() ?: actualCategory,
+            category = actualCategory,
             filterCategories = (setOf(actualCategory) + featureCategories).distinct().toSet(),
             accessibilityTags = features.toAccessibilityTags(),
         )
@@ -100,12 +100,12 @@ internal object MapPlaceBrowseDataMapper {
                     PlaceFeatureType.ELEVATOR -> AccessibilityTag.ELEVATOR
                     PlaceFeatureType.ACCESSIBLE_TOILET -> AccessibilityTag.ACCESSIBLE_TOILET
                     PlaceFeatureType.ACCESSIBLE_PARKING -> AccessibilityTag.ACCESSIBLE_PARKING
-                    PlaceFeatureType.CHARGING_STATION,
-                    PlaceFeatureType.ACCESSIBLE_ROOM,
-                    PlaceFeatureType.GUIDANCE_FACILITY,
-                    -> null
+                    PlaceFeatureType.GUIDANCE_FACILITY -> AccessibilityTag.GUIDANCE_FACILITY
+                    PlaceFeatureType.ACCESSIBLE_ROOM -> AccessibilityTag.ACCESSIBLE_ROOM
+                    PlaceFeatureType.CHARGING_STATION -> null
                 }
             }.distinct()
+            .sortedBy(::accessibilityTagPriority)
             .toList()
 
     private fun rawAccessibilityTagToUiTag(rawKey: String): AccessibilityTag? =
@@ -117,7 +117,27 @@ internal object MapPlaceBrowseDataMapper {
             "elevator" -> AccessibilityTag.ELEVATOR
             "accessible-toilet" -> AccessibilityTag.ACCESSIBLE_TOILET
             "accessible-parking" -> AccessibilityTag.ACCESSIBLE_PARKING
+            "guidance-facility" -> AccessibilityTag.GUIDANCE_FACILITY
+            "accessible-room" -> AccessibilityTag.ACCESSIBLE_ROOM
             else -> null
+        }
+
+    private fun accessibilityTagPriority(tag: AccessibilityTag): Int =
+        when (tag) {
+            AccessibilityTag.STEP_FREE_ENTRANCE -> 0
+            AccessibilityTag.RAMP -> 1
+            AccessibilityTag.AUTO_DOOR -> 2
+            AccessibilityTag.WIDE_ENTRY -> 3
+            AccessibilityTag.ELEVATOR -> 4
+            AccessibilityTag.ACCESSIBLE_PARKING -> 5
+            AccessibilityTag.ACCESSIBLE_TOILET -> 6
+            AccessibilityTag.GUIDANCE_FACILITY -> 7
+            AccessibilityTag.ACCESSIBLE_ROOM -> 8
+            AccessibilityTag.WHEELCHAIR_TURNING_SPACE -> 9
+            AccessibilityTag.TABLE_SPACING -> 10
+            AccessibilityTag.LOW_HEIGHT_BUTTON -> 11
+            AccessibilityTag.REST_AREA -> 12
+            AccessibilityTag.OPEN_24_HOURS -> 13
         }
 
     private fun PlaceCategory.toFacilityCategory(): FacilityCategory =

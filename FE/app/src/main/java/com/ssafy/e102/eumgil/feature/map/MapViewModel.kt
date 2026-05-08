@@ -29,6 +29,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
+import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
@@ -67,6 +68,7 @@ class MapViewModel(
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
     private var selectedMarkerId: String? = null
+    private var selectedMapPinCoordinate: MapCoordinate? = null
     private var selectedFacilityDetail: FacilityDetailSeed? = null
     private var selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
     private var facilityBrowseData: FacilityBrowseData? = null
@@ -138,6 +140,7 @@ class MapViewModel(
             MapUiAction.ZoomInClicked -> handleZoomAction(delta = 1)
             MapUiAction.ZoomOutClicked -> handleZoomAction(delta = -1)
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
+            is MapUiAction.MapTapped -> handleMapTapped(action.coordinate)
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
@@ -156,7 +159,7 @@ class MapViewModel(
     private fun loadMarkerBrowseState() {
         val placesRepository = placesRepository
         if (placesRepository != null) {
-            Log.i(
+            safeLogInfo(
                 MAP_VIEW_MODEL_LOG_TAG,
                 "Loading live places browse state source=${currentPlacesBrowseAnchorSource().name}",
             )
@@ -166,13 +169,13 @@ class MapViewModel(
             return
         }
 
-        Log.i(MAP_VIEW_MODEL_LOG_TAG, "Loading facility seed browse state")
+        safeLogInfo(MAP_VIEW_MODEL_LOG_TAG, "Loading facility seed browse state")
         viewModelScope.launch {
             runCatching {
                 facilitySeedRepository.getFacilityBrowseData()
             }.onSuccess { browseData ->
                 facilityBrowseData = browseData
-                Log.i(
+                safeLogInfo(
                     MAP_VIEW_MODEL_LOG_TAG,
                     "Seed browse success markers=${browseData.facilityMarkers.size} categories=${browseData.availableCategories.size}",
                 )
@@ -180,7 +183,7 @@ class MapViewModel(
                 selectedShortcutFilterKey = null
                 renderMarkerBrowseState()
             }.onFailure {
-                Log.e(MAP_VIEW_MODEL_LOG_TAG, "Seed browse load failed", it)
+                safeLogError(MAP_VIEW_MODEL_LOG_TAG, "Seed browse load failed", it)
                 facilityBrowseData = null
                 updateSelectedFacility(markerId = null)
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
@@ -204,7 +207,7 @@ class MapViewModel(
     ) {
         val placesRepository = placesRepository ?: return
         if (!force && lastPlacesBrowseAnchorSource == anchorSource && facilityBrowseData != null) {
-            Log.d(
+            safeLogDebug(
                 MAP_VIEW_MODEL_LOG_TAG,
                 "Skipping live places browse reload source=${anchorSource.name} reason=cached",
             )
@@ -212,7 +215,7 @@ class MapViewModel(
         }
 
         val anchor = currentPlacesBrowseAnchor()
-        Log.i(
+        safeLogInfo(
             MAP_VIEW_MODEL_LOG_TAG,
             "Requesting places browse source=${anchorSource.name} force=$force lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
         )
@@ -229,12 +232,12 @@ class MapViewModel(
                 val browseData = MapPlaceBrowseDataMapper.toBrowseData(places)
                 facilityBrowseData = browseData
                 lastPlacesBrowseAnchorSource = anchorSource
-                Log.i(
+                safeLogInfo(
                     MAP_VIEW_MODEL_LOG_TAG,
                     "Places browse success source=${anchorSource.name} places=${places.size} markers=${browseData.facilityMarkers.size} categories=${browseData.availableCategories.size}",
                 )
                 if (places.isEmpty()) {
-                    Log.w(
+                    safeLogWarn(
                         MAP_VIEW_MODEL_LOG_TAG,
                         "Places browse returned no data source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
                     )
@@ -243,7 +246,7 @@ class MapViewModel(
                 selectedShortcutFilterKey = null
                 renderMarkerBrowseState()
             }.onFailure {
-                Log.e(
+                safeLogError(
                     MAP_VIEW_MODEL_LOG_TAG,
                     "Places browse failed source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
                     it,
@@ -296,6 +299,16 @@ class MapViewModel(
         }
 
         updateSelectedFacility(markerId = markerId)
+        renderSelectedFacilityState()
+    }
+
+    private fun handleMapTapped(coordinate: MapCoordinate) {
+        safeLogDebug(
+            MAP_VIEW_MODEL_LOG_TAG,
+            "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()}",
+        )
+        selectedMapPinCoordinate = coordinate
+        clearSelectedFacilitySelection()
         renderSelectedFacilityState()
     }
 
@@ -432,7 +445,7 @@ class MapViewModel(
             }
         if (lastMarkerOverlayLogSnapshot != overlayLogSnapshot) {
             lastMarkerOverlayLogSnapshot = overlayLogSnapshot
-            Log.i(MAP_VIEW_MODEL_LOG_TAG, "Marker overlay state $overlayLogSnapshot")
+            safeLogInfo(MAP_VIEW_MODEL_LOG_TAG, "Marker overlay state $overlayLogSnapshot")
         }
 
         val nextSelectedMarkerId =
@@ -876,6 +889,7 @@ class MapViewModel(
         mutableUiState.update { state ->
             state.copy(
                 selectedMarkerId = selectedMarkerId,
+                selectedMapPinCoordinate = selectedMapPinCoordinate,
                 facilityDetailSheetState = currentFacilityDetailSheetState(),
             )
         }
@@ -903,6 +917,9 @@ class MapViewModel(
         }
 
         val previousFacilityId = selectedFacilityDetail?.facilityId
+        if (markerId != null) {
+            selectedMapPinCoordinate = null
+        }
         selectedMarkerId = markerId
         selectedFacilityDetail = detail
         if (detail == null) {
@@ -1150,6 +1167,35 @@ class MapViewModel(
 }
 
 private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", this)
+
+private fun safeLogDebug(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.d(tag, message) }
+}
+
+private fun safeLogInfo(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.i(tag, message) }
+}
+
+private fun safeLogWarn(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.w(tag, message) }
+}
+
+private fun safeLogError(
+    tag: String,
+    message: String,
+    throwable: Throwable,
+) {
+    runCatching { Log.e(tag, message, throwable) }
+}
 
 private object NoOpSearchRepository : SearchRepository {
     override suspend fun search(query: com.ssafy.e102.eumgil.core.model.SearchQuery) = emptyList<com.ssafy.e102.eumgil.core.model.SearchResult>()

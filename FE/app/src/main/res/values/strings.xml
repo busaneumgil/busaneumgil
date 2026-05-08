@@ -206,6 +206,8 @@
     <string name="map_facility_detail_tag_wheelchair_turning_space">휠체어 회전 공간</string>
     <string name="map_facility_detail_tag_table_spacing">넓은 테이블 간격</string>
     <string name="map_facility_detail_tag_accessible_parking">장애인 주차</string>
+    <string name="map_facility_detail_tag_guidance_facility">안내시설 있음</string>
+    <string name="map_facility_detail_tag_accessible_room">객실 이용 가능</string>
     <string name="map_facility_detail_tag_low_height_button">낮은 버튼</string>
     <string name="map_facility_detail_tag_rest_area">휴식 공간</string>
     <string name="map_facility_detail_tag_open_24_hours">24시간 이용</string>

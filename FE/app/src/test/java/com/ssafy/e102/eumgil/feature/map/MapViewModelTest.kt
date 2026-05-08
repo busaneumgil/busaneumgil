@@ -35,6 +35,8 @@ import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.feature.map.component.createKakaoCameraRenderState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
+import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
@@ -405,6 +407,34 @@ class MapViewModelTest {
 
             viewModel.onAction(MapUiAction.MarkerTapped(markerId))
             advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.selectedMarkerId)
+            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
+        }
+
+    @Test
+    fun `map tap drops selected location pin and clears selected facility`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+            val tappedCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771)
+
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.MapTapped(tappedCoordinate))
+            advanceUntilIdle()
+
+            assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
         }
@@ -969,6 +999,162 @@ class MapViewModelTest {
             assertEquals("Accessible Cafe", destinationSelectionRepository.selectedDestination.value?.name)
             assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
+
+    @Test
+    fun `live places browse uses the fallback busan camera center before current location is ready`() =
+        runTest {
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "fallback-place-1",
+                                name = "Fallback Browse Place",
+                                address = "1 Busan-daero, Busan",
+                                latitude = 35.1802,
+                                longitude = 129.0724,
+                                category = PlaceCategory.WELFARE,
+                            ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            val query = placesRepository.queries.single()
+            assertEquals(MapDefaults.BUSAN_CENTER.latitude, query.latitude ?: Double.NaN, 0.0)
+            assertEquals(MapDefaults.BUSAN_CENTER.longitude, query.longitude ?: Double.NaN, 0.0)
+            assertEquals(1_000, query.radiusMeters)
+            assertEquals(MapCameraSource.DEFAULT_BUSAN, viewModel.uiState.value.cameraTarget.source)
+        }
+
+    @Test
+    fun `marker tap keeps preview detail when live detail returns not found`() =
+        runTest {
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "404",
+                                name = "Accessible Hotel",
+                                address = "10 Haeundae-ro, Busan",
+                                latitude = 35.1587,
+                                longitude = 129.1604,
+                                category = PlaceCategory.ACCOMMODATION,
+                                features =
+                                    listOf(
+                                        PlaceFeatureAvailability(
+                                            featureType = PlaceFeatureType.GUIDANCE_FACILITY,
+                                            isAvailable = true,
+                                        ),
+                                        PlaceFeatureAvailability(
+                                            featureType = PlaceFeatureType.ACCESSIBLE_ROOM,
+                                            isAvailable = true,
+                                        ),
+                                    ),
+                            ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MarkerTapped("404"))
+            advanceUntilIdle()
+
+            val detail = requireNotNull(viewModel.uiState.value.facilityDetailSheetState.detail)
+            assertEquals("404", detail.facilityId)
+            assertEquals(FacilityCategory.ACCOMMODATION, detail.category)
+            assertEquals(
+                listOf(
+                    AccessibilityTag.GUIDANCE_FACILITY,
+                    AccessibilityTag.ACCESSIBLE_ROOM,
+                ),
+                detail.accessibilityTags,
+            )
+            assertEquals(listOf("404"), placesRepository.detailRequests)
+            assertEquals("404", viewModel.uiState.value.selectedMarkerId)
+        }
+
+    @Test
+    fun `marker tap keeps preview detail when live detail request fails`() =
+        runTest {
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "failed-detail",
+                                name = "Accessible Welfare Center",
+                                address = "7 Welfare-ro, Busan",
+                                latitude = 35.1777,
+                                longitude = 129.0711,
+                                category = PlaceCategory.WELFARE,
+                                features =
+                                    listOf(
+                                        PlaceFeatureAvailability(
+                                            featureType = PlaceFeatureType.ACCESSIBLE_ENTRANCE,
+                                            isAvailable = true,
+                                        ),
+                                        PlaceFeatureAvailability(
+                                            featureType = PlaceFeatureType.ACCESSIBLE_PARKING,
+                                            isAvailable = true,
+                                        ),
+                                    ),
+                            ),
+                        ),
+                    detailFailureById =
+                        mapOf(
+                            "failed-detail" to IllegalStateException("detail fetch failed"),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MarkerTapped("failed-detail"))
+            advanceUntilIdle()
+
+            val detail = requireNotNull(viewModel.uiState.value.facilityDetailSheetState.detail)
+            assertEquals("failed-detail", detail.facilityId)
+            assertEquals(FacilityCategory.WELFARE, detail.category)
+            assertEquals(
+                listOf(
+                    AccessibilityTag.STEP_FREE_ENTRANCE,
+                    AccessibilityTag.ACCESSIBLE_PARKING,
+                ),
+                detail.accessibilityTags,
+            )
+            assertEquals("failed-detail", viewModel.uiState.value.selectedMarkerId)
+        }
 }
 
 private fun testDestination(): PlaceDestination =
@@ -1060,17 +1246,21 @@ private class FakeSearchRepository(
 private class FakePlacesRepository(
     private val places: List<PlaceSummary> = emptyList(),
     private val placeDetailsById: Map<String, PlaceDetail> = emptyMap(),
+    private val placesFailure: Throwable? = null,
+    private val detailFailureById: Map<String, Throwable> = emptyMap(),
 ) : PlacesRepository {
     val queries = mutableListOf<PlaceQuery>()
     val detailRequests = mutableListOf<String>()
 
     override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
         queries += query
+        placesFailure?.let { throw it }
         return places
     }
 
     override suspend fun getPlaceDetail(placeId: String): PlaceDetail? {
         detailRequests += placeId
+        detailFailureById[placeId]?.let { throw it }
         return placeDetailsById[placeId]
     }
 }

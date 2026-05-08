@@ -92,6 +92,9 @@ fun MapScreen(
                 onMarkerClick = { markerId ->
                     onAction(MapUiAction.MarkerTapped(markerId))
                 },
+                onMapClick = { coordinate ->
+                    onAction(MapUiAction.MapTapped(coordinate))
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -781,6 +784,7 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
                 selectedMarkerId = uiState.selectedMarkerId,
             ),
         selectedMarkerId = uiState.selectedMarkerId,
+        selectedMapPinCoordinate = uiState.selectedMapPinCoordinate,
         regionLabel = regionLabel,
         statusLabel = statusLabel,
         title = title,
@@ -917,9 +921,11 @@ private fun facilityDetailAccessibilityLabels(detail: FacilityDetailSeed): List<
             add(brailleBlockTypeLabel(brailleBlockType))
         }
         addAll(
-            detail.accessibilityTags.map { tag ->
+            detail.accessibilityTags
+                .sortedBy(::accessibilityTagDisplayPriority)
+                .map { tag ->
                 accessibilityTagLabel(tag)
-            },
+                },
         )
     }.distinct().take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
 
@@ -986,11 +992,35 @@ private fun accessibilityTagLabel(tag: AccessibilityTag): String =
         AccessibilityTag.ACCESSIBLE_PARKING ->
             stringResource(id = R.string.map_facility_detail_tag_accessible_parking)
 
+        AccessibilityTag.GUIDANCE_FACILITY ->
+            stringResource(id = R.string.map_facility_detail_tag_guidance_facility)
+
+        AccessibilityTag.ACCESSIBLE_ROOM ->
+            stringResource(id = R.string.map_facility_detail_tag_accessible_room)
+
         AccessibilityTag.LOW_HEIGHT_BUTTON ->
             stringResource(id = R.string.map_facility_detail_tag_low_height_button)
 
         AccessibilityTag.REST_AREA -> stringResource(id = R.string.map_facility_detail_tag_rest_area)
         AccessibilityTag.OPEN_24_HOURS -> stringResource(id = R.string.map_facility_detail_tag_open_24_hours)
+    }
+
+private fun accessibilityTagDisplayPriority(tag: AccessibilityTag): Int =
+    when (tag) {
+        AccessibilityTag.STEP_FREE_ENTRANCE -> 0
+        AccessibilityTag.RAMP -> 1
+        AccessibilityTag.AUTO_DOOR -> 2
+        AccessibilityTag.WIDE_ENTRY -> 3
+        AccessibilityTag.ELEVATOR -> 4
+        AccessibilityTag.ACCESSIBLE_PARKING -> 5
+        AccessibilityTag.ACCESSIBLE_TOILET -> 6
+        AccessibilityTag.GUIDANCE_FACILITY -> 7
+        AccessibilityTag.ACCESSIBLE_ROOM -> 8
+        AccessibilityTag.WHEELCHAIR_TURNING_SPACE -> 9
+        AccessibilityTag.TABLE_SPACING -> 10
+        AccessibilityTag.LOW_HEIGHT_BUTTON -> 11
+        AccessibilityTag.REST_AREA -> 12
+        AccessibilityTag.OPEN_24_HOURS -> 13
     }
 
 @Composable
@@ -1047,6 +1077,8 @@ private fun recentDestinationTagLabel(rawKey: String): String? =
         "elevator" -> "엘리베이터 있음"
         "accessible-parking" -> "장애인 주차 가능"
         "step-free-entrance" -> "단차 없음"
+        "guidance-facility" -> "안내시설 있음"
+        "accessible-room" -> "객실 이용 가능"
         "ramp" -> "경사로 있음"
         "auto-door" -> "출입 가능"
         "wide-entry" -> "출입 가능"

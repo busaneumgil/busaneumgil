@@ -52,12 +52,14 @@ fun LowVisionNavigationCompleteRoute(
         }
     }
 
-    LowVisionNavigationCompleteScreen(
-        isSaveEnabled = uiState.isExitEnabled,
-        onSaveClick = { viewModel.onAction(NavigationUiAction.SaveBookmarkClicked) },
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionNavigationCompleteScreen(
+            isSaveEnabled = uiState.isExitEnabled,
+            onSaveClick = { viewModel.onAction(NavigationUiAction.SaveBookmarkClicked) },
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

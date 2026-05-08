@@ -1,7 +1,18 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 
 /**
  * Route wrapper for [LowVisionHomeScreen].
@@ -17,11 +28,66 @@ fun LowVisionHomeRoute(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LowVisionHomeScreen(
-        uiState = LowVisionHomeUiState(selectedTab = LowVisionBottomTab.HOME),
-        onVoiceInputClick = onVoiceInputClick,
-        onCurrentLocationClick = onCurrentLocationClick,
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    val context = LocalContext.current
+    val appContext = context.applicationContext
+    val activity = remember(context) { context.findComponentActivity() }
+    val appContainer =
+        remember(appContext) {
+            (appContext as BusanEumgilApp).appContainer
+        }
+    val currentLocationManager =
+        remember(appContainer) { appContainer.currentLocationManager }
+    val locationPermissionManager =
+        remember(appContainer) { appContainer.locationPermissionManager }
+    val currentLocation by currentLocationManager.latestLocation.collectAsStateWithLifecycle()
+    val locationPermissionState by locationPermissionManager.permissionState.collectAsStateWithLifecycle()
+
+    DisposableEffect(currentLocationManager, locationPermissionManager) {
+        locationPermissionManager.refreshPermissionState()
+        currentLocationManager.startLocationUpdates()
+        currentLocationManager.refreshLatestLocation()
+        onDispose {
+            currentLocationManager.stopLocationUpdates()
+        }
+    }
+
+    LaunchedEffect(locationPermissionState, currentLocationManager) {
+        if (locationPermissionState is LocationPermissionState.Granted) {
+            currentLocationManager.startLocationUpdates()
+            currentLocationManager.refreshLatestLocation()
+        }
+    }
+
+    LowVisionFontTheme {
+        LowVisionHomeScreen(
+            uiState = LowVisionHomeUiState(selectedTab = LowVisionBottomTab.HOME),
+            onVoiceInputClick = onVoiceInputClick,
+            onCurrentLocationClick = {
+                locationPermissionManager.refreshPermissionState()
+                val currentPermissionState = locationPermissionManager.permissionState.value
+                if (shouldRequestLowVisionHomeLocationPermission(currentPermissionState)) {
+                    activity?.let(locationPermissionManager::requestLocationPermission)
+                } else {
+                    currentLocationManager.startLocationUpdates()
+                    currentLocationManager.refreshLatestLocation()
+                    onCurrentLocationClick()
+                }
+            },
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+            currentLocationDisplay = lowVisionCurrentLocationDisplay(currentLocation),
+        )
+    }
 }
+
+internal fun shouldRequestLowVisionHomeLocationPermission(
+    permissionState: LocationPermissionState,
+): Boolean =
+    permissionState is LocationPermissionState.Denied
+
+private tailrec fun Context.findComponentActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity -> this
+        is ContextWrapper -> baseContext.findComponentActivity()
+        else -> null
+    }

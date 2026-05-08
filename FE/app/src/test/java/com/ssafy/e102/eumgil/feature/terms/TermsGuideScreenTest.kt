@@ -20,6 +20,27 @@ class TermsGuideScreenTest {
     }
 
     @Test
+    fun `detail buttons open configured notion pages for each agreement step`() {
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be680ab9931f226486dac58?source=copy_link",
+            TermsGuideStep.AGREE.detailUrl,
+        )
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link",
+            TermsGuideStep.SENSITIVE.detailUrl,
+        )
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link",
+            TermsGuideStep.LOCATION.detailUrl,
+        )
+        assertNull(TermsGuideStep.AGE.detailUrl)
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link",
+            TermsGuideStep.PRIVACY.detailUrl,
+        )
+    }
+
+    @Test
     fun `bottom guidance and detail button use low vision readable sizing`() {
         assertEquals(2f, TermsGuideLayoutDefaults.mainActionCardWeight)
         assertEquals(1f, TermsGuideLayoutDefaults.detailActionCardWeight)

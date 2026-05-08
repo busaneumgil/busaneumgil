@@ -119,6 +119,30 @@ class SavedRouteViewModelTest {
         }
 
     @Test
+    fun `place briefing click stores destination and navigates to low vision route briefing`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.PlaceBriefingClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            val destination = destinationSelectionRepository.selectedDestination.value
+
+            assertEquals(SavedRouteUiEvent.NavigateToRouteBriefing, uiEvent.await())
+            assertEquals("bookmark-place-1", destination?.placeId)
+            assertEquals(PlaceCategory.ELEVATOR, destination?.category)
+        }
+
+    @Test
     fun `route guide click stores saved end point and navigates with saved route option`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -248,6 +272,83 @@ class SavedRouteViewModelTest {
         }
 
     @Test
+    fun `place bookmark list renders empty state when bookmarks list is empty`() =
+        runTest {
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(SavedBookmarkContentState.EMPTY, viewModel.uiState.value.placeContent.screenState)
+            assertEquals(emptyList<SavedPlaceUiModel>(), viewModel.uiState.value.placeContent.places)
+        }
+
+    @Test
+    fun `place bookmark list renders error state when observe fails`() =
+        runTest {
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(failObserve = true),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(SavedBookmarkContentState.ERROR, viewModel.uiState.value.placeContent.screenState)
+            assertEquals(
+                "북마크한 장소를 불러오지 못했습니다.",
+                viewModel.uiState.value.placeContent.errorMessage,
+            )
+        }
+
+    @Test
+    fun `edit mode keeps failed bookmarks pending when partial deletion fails`() =
+        runTest {
+            val firstBookmark = testPlaceBookmark()
+            val secondBookmark =
+                testPlaceBookmark().copy(
+                    placeId = "bookmark-place-2",
+                    placeName = "광안리 해수욕장",
+                )
+            val bookmarkRepository =
+                FakeBookmarkRepository(
+                    bookmarks = listOf(firstBookmark, secondBookmark),
+                    failingPlaceIds = setOf("bookmark-place-2"),
+                )
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.EditClicked)
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-1"))
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-2"))
+            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isEditMode)
+            assertEquals(
+                setOf("bookmark-place-2"),
+                viewModel.uiState.value.pendingPlaceRemovalIds,
+            )
+            assertEquals(1, bookmarkRepository.bookmarks.value.size)
+            assertEquals("bookmark-place-2", bookmarkRepository.bookmarks.value.first().placeId)
+            assertEquals(
+                "북마크한 장소를 삭제하지 못했습니다. 다시 시도해 주세요.",
+                viewModel.uiState.value.placeContent.errorMessage,
+            )
+        }
+
+    @Test
     fun `edit mode defers place bookmark deletion until done`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark()))
@@ -316,6 +417,7 @@ private class FakeBookmarkRepository(
     bookmarks: List<BookmarkData> = emptyList(),
     private val failObserve: Boolean = false,
     private val failDelete: Boolean = false,
+    private val failingPlaceIds: Set<String> = emptySet(),
 ) : BookmarkRepository {
     val bookmarks = MutableStateFlow(bookmarks)
 
@@ -334,7 +436,7 @@ private class FakeBookmarkRepository(
     }
 
     override suspend fun deleteBookmark(placeId: String) {
-        if (failDelete) error("bookmark delete failed")
+        if (failDelete || placeId in failingPlaceIds) error("bookmark delete failed")
         bookmarks.value = bookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
     }
 }

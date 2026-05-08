@@ -22,6 +22,7 @@ fun SearchEntryRoute(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     modifier: Modifier = Modifier,
 ) {
@@ -33,6 +34,7 @@ fun SearchEntryRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
 }
@@ -44,6 +46,7 @@ fun SearchResultsRoute(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     modifier: Modifier = Modifier,
 ) {
@@ -55,6 +58,7 @@ fun SearchResultsRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
 }
@@ -85,6 +89,7 @@ fun SearchVoiceInputRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = {},
         onNavigateToRouteSetting = {},
+        onNavigateToRouteBriefing = {},
         onStartVoiceCapture = { sttViewModel.startListening() },
         onStopVoiceCapture = { sttViewModel.stopListening() },
         modifier = modifier,
@@ -100,6 +105,7 @@ private fun SearchRouteContent(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteBriefing: () -> Unit = {},
     onStartVoiceCapture: () -> Unit = {},
     onStopVoiceCapture: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -148,6 +154,7 @@ private fun SearchRouteContent(
         onNavigateToResults,
         onNavigateToVoiceInput,
         onNavigateToRouteSetting,
+        onNavigateToRouteBriefing,
         onStartVoiceCapture,
         onStopVoiceCapture,
     ) {
@@ -159,7 +166,7 @@ private fun SearchRouteContent(
                 SearchUiEvent.StartVoiceCapture -> onStartVoiceCapture()
                 SearchUiEvent.StopVoiceCapture -> onStopVoiceCapture()
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
-                SearchUiEvent.NavigateToRouteBriefing,
+                SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
             }
         }

@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -53,7 +56,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         route = LOW_VISION_GRAPH_ROUTE,
         startDestination = LowVisionRoute.Home.route,
     ) {
-        composable(route = LowVisionRoute.Home.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.Home.route) { backStackEntry ->
             // 공유 ViewModel — 탭 전환 시에도 동일 인스턴스 (KWS 1개만 실행)
             LowVisionKwsNavEffect(
                 navController = navController,
@@ -87,7 +90,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         }
 
         // VoiceInput — KWS 제외 (STT AudioRecorder가 마이크 점유)
-        composable(route = LowVisionRoute.VoiceInput.route) {
+        lowVisionComposable(route = LowVisionRoute.VoiceInput.route) {
             LowVisionVoiceInputRoute(
                 onCancelRecording = {
                     navController.navigate(resolveLowVisionVoiceInputCancelRoute()) {
@@ -109,7 +112,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(
+        lowVisionComposable(
             route = LowVisionRoute.VoiceSearch.route,
             arguments = listOf(
                 navArgument(LowVisionRoute.VoiceSearch.ARG_QUERY) {
@@ -127,7 +130,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(route = LowVisionRoute.Bookmark.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.Bookmark.route) { backStackEntry ->
             LowVisionKwsNavEffect(
                 navController = navController,
                 backStackEntry = backStackEntry,
@@ -140,7 +143,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(route = LowVisionRoute.Search.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.Search.route) { backStackEntry ->
             LowVisionKwsNavEffect(
                 navController = navController,
                 backStackEntry = backStackEntry,
@@ -152,7 +155,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(route = LowVisionRoute.CategorySearch.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.CategorySearch.route) { backStackEntry ->
             LowVisionKwsNavEffect(
                 navController = navController,
                 backStackEntry = backStackEntry,
@@ -165,7 +168,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(
+        lowVisionComposable(
             route = LowVisionRoute.CategoryResult.route,
             arguments =
                 listOf(
@@ -187,7 +190,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(route = LowVisionRoute.RouteBriefing.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.RouteBriefing.route) { backStackEntry ->
             LowVisionKwsNavEffect(
                 navController = navController,
                 backStackEntry = backStackEntry,
@@ -198,7 +201,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         }
 
         // Guidance — KWS 제외 (음성 안내가 실행 중일 수 있음)
-        composable(route = LowVisionRoute.Guidance.route) {
+        lowVisionComposable(route = LowVisionRoute.Guidance.route) {
             LowVisionNavigationRoute(
                 onNavigateToComplete = {
                     navController.navigate(resolveLowVisionNavigationExitRoute()) {
@@ -220,7 +223,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(route = LowVisionRoute.NavigationComplete.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.NavigationComplete.route) { backStackEntry ->
             LowVisionKwsNavEffect(
                 navController = navController,
                 backStackEntry = backStackEntry,
@@ -238,7 +241,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(route = LowVisionRoute.MyPage.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.MyPage.route) { backStackEntry ->
             LowVisionKwsNavEffect(
                 navController = navController,
                 backStackEntry = backStackEntry,
@@ -262,7 +265,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        composable(route = LowVisionRoute.AppInfo.route) { backStackEntry ->
+        lowVisionComposable(route = LowVisionRoute.AppInfo.route) { backStackEntry ->
             LowVisionKwsNavEffect(
                 navController = navController,
                 backStackEntry = backStackEntry,
@@ -417,6 +420,39 @@ internal fun shouldNavigateLowVisionBottomTab(
     currentRoute: String?,
     selectedTab: LowVisionBottomTab,
 ): Boolean = resolveLowVisionSelectedBottomTab(currentRoute) != selectedTab
+
+internal fun shouldUseInstantLowVisionDestinationTransitions(): Boolean = true
+
+private fun NavGraphBuilder.lowVisionComposable(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit,
+) {
+    composable(
+        route = route,
+        arguments = arguments,
+        enterTransition = { lowVisionEnterTransition() },
+        exitTransition = { lowVisionExitTransition() },
+        popEnterTransition = { lowVisionEnterTransition() },
+        popExitTransition = { lowVisionExitTransition() },
+    ) { backStackEntry ->
+        content(backStackEntry)
+    }
+}
+
+private fun lowVisionEnterTransition(): EnterTransition? =
+    if (shouldUseInstantLowVisionDestinationTransitions()) {
+        EnterTransition.None
+    } else {
+        null
+    }
+
+private fun lowVisionExitTransition(): ExitTransition? =
+    if (shouldUseInstantLowVisionDestinationTransitions()) {
+        ExitTransition.None
+    } else {
+        null
+    }
 
 private fun NavHostController.navigateToLowVisionBottomTab(tab: LowVisionBottomTab) {
     if (!shouldNavigateLowVisionBottomTab(currentBackStackEntry?.destination?.route, tab)) {

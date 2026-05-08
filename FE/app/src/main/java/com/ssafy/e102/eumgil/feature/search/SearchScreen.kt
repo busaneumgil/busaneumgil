@@ -63,12 +63,34 @@ enum class SearchTrailingAction {
     ClearQuery,
 }
 
+internal enum class SearchResultVerificationState {
+    Verified,
+    Unverified,
+}
+
+internal data class SearchResultInteractionState(
+    val verificationState: SearchResultVerificationState,
+) {
+    val isActionEnabled: Boolean
+        get() = verificationState == SearchResultVerificationState.Verified
+}
+
 internal fun resolveSearchTrailingAction(query: String): SearchTrailingAction =
     if (query.isEmpty()) {
         SearchTrailingAction.VoiceInput
     } else {
         SearchTrailingAction.ClearQuery
     }
+
+internal fun resolveSearchResultInteractionState(result: SearchResult): SearchResultInteractionState =
+    SearchResultInteractionState(
+        verificationState =
+            if (result.isVerifiedPlace) {
+                SearchResultVerificationState.Verified
+            } else {
+                SearchResultVerificationState.Unverified
+            },
+    )
 
 internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiState): SearchScreenDestination =
     when (resultState) {
@@ -658,8 +680,14 @@ private fun SearchResultItem(
     result: SearchResult,
     onClick: () -> Unit,
 ) {
+    val interactionState = resolveSearchResultInteractionState(result)
     val actionLabel = stringResource(id = R.string.search_screen_result_action_label)
-    val selectableStateDescription = stringResource(id = R.string.search_screen_result_selectable)
+    val selectableStateDescription =
+        if (interactionState.isActionEnabled) {
+            stringResource(id = R.string.search_screen_result_selectable)
+        } else {
+            stringResource(id = R.string.search_screen_result_unverified_state)
+        }
     val accessibilityDescription =
         if (result.subtitle.isBlank()) {
             stringResource(
@@ -679,6 +707,7 @@ private fun SearchResultItem(
             Modifier
                 .fillMaxWidth()
                 .clickable(
+                    enabled = interactionState.isActionEnabled,
                     role = Role.Button,
                     onClickLabel = actionLabel,
                     onClick = onClick,
@@ -703,6 +732,9 @@ private fun SearchResultItem(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            if (interactionState.verificationState == SearchResultVerificationState.Unverified) {
+                SearchResultStatusBadge(text = stringResource(id = R.string.search_screen_result_unverified_badge))
+            }
             Text(
                 text = result.subtitle,
                 style = MaterialTheme.typography.bodyLarge,
@@ -724,6 +756,22 @@ private fun SearchResultItem(
                 color = MaterialTheme.colorScheme.primary,
             )
         }
+    }
+}
+
+@Composable
+private fun SearchResultStatusBadge(text: String) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f)),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
     }
 }
 

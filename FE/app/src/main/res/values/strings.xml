@@ -111,7 +111,7 @@
     <string name="onboarding_terms_status_progress">%1$d/%2$d 필수 완료 · %3$d/%4$d 전체 확인</string>
     <string name="map_screen_title">지도 메인</string>
     <string name="map_screen_description">검색 진입 오버레이와 지도 영역으로 구성된 지도 메인 shell 화면입니다.</string>
-    <string name="map_shell_search_title">어디로 갈까요?</string>
+    <string name="map_shell_search_title">부산이음길 검색</string>
     <string name="map_shell_search_hint">장소명, 주소, 접근성 시설 검색</string>
     <string name="map_shell_search_action">검색</string>
     <string name="map_shell_search_a11y_label">검색 화면 열기</string>
@@ -353,6 +353,8 @@
     <string name="search_screen_result_id">장소 ID: %1$s</string>
     <string name="search_screen_result_action_label">이 장소를 목적지로 선택</string>
     <string name="search_screen_result_selectable">선택 가능</string>
+    <string name="search_screen_result_unverified_badge">접근성 정보 미확인</string>
+    <string name="search_screen_result_unverified_state">접근성 정보 미확인, 선택 불가</string>
     <string name="search_screen_result_a11y_with_address">%1$s, %2$s</string>
     <string name="search_screen_result_a11y_without_address">%1$s</string>
     <string name="search_screen_promo_banner_content_description">무장애 경로로 안전하고 편리하게 이동하세요</string>

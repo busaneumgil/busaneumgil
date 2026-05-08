@@ -4,8 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -82,19 +82,19 @@ fun LowVisionSearchScreen(
     categoryLabel: String? = null,
 ) {
     Column(
-            modifier =
-                modifier
-                    .fillMaxSize()
-                    .background(PlaceListBg)
-                    .statusBarsPadding()
-                    .padding(
-                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
-                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
-                    ),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PlaceListBg)
+                .statusBarsPadding()
+                .padding(
+                    horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                    vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                ),
         verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
     ) {
         Text(
-            text = "검색 결과",
+            text = "\uAC80\uC0C9 \uACB0\uACFC",
             fontSize = LowVisionScreenDefaults.headerFontSize,
             fontWeight = FontWeight.ExtraBold,
             lineHeight = LowVisionScreenDefaults.headerLineHeight,
@@ -137,11 +137,6 @@ fun LowVisionSearchScreen(
                         )
                     }
                 }
-
-                is SearchResultUiState.Error ->
-                    LowVisionSearchNoResultMessage(
-                        message = state.message ?: "검색 결과를 다시 확인해 주세요.",
-                    )
 
                 else -> LowVisionSearchNoResultMessage()
             }
@@ -205,9 +200,9 @@ private fun LowVisionSearchResultList(
                 onBookmarkClick = { onBookmarkClick(result) },
                 onNavigateClick = { onNavigateClick(result) },
                 onContentClick = { onBriefingClick(result) },
-                contentClickDescription = "${result.title} 경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
-                bookmarkContentDescription = "${result.title} 저장. 저장 후 북마크로 이동합니다.",
-                navigateContentDescription = "${result.title} 길찾기. 저시력 안내 화면으로 이동합니다.",
+                contentClickDescription = "${result.title} \uACBD\uB85C \uBE0C\uB9AC\uD551. \uB450 \uBC88 \uD0ED\uD558\uBA74 \uBE0C\uB9AC\uD551 \uD654\uBA74\uC73C\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.",
+                bookmarkContentDescription = "${result.title} \uC800\uC7A5. \uC800\uC7A5 \uD6C4 \uBD81\uB9C8\uD06C\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.",
+                navigateContentDescription = "${result.title} \uAE38\uCC3E\uAE30. \uC800\uC2DC\uB825 \uC548\uB0B4 \uD654\uBA74\uC73C\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.",
                 modifier = Modifier.height(LowVisionSearchLayoutDefaults.resultCardMinHeight),
             )
         }
@@ -366,7 +361,7 @@ private fun LowVisionSearchActionButton(
 }
 
 @Composable
-private fun LowVisionSearchNoResultMessage(message: String = "목록 없음.") {
+private fun LowVisionSearchNoResultMessage(message: String = "\uBAA9\uB85D \uC5C6\uC74C.") {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,

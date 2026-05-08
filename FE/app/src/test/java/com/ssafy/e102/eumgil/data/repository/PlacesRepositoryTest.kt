@@ -180,6 +180,36 @@ class PlacesRepositoryTest {
             assertEquals(null, detail)
             assertEquals(null, localDataSource.getCachedPlaceDetail("404"))
         }
+
+    @Test
+    fun `getPlaceDetail returns cached detail when live policy falls back from remote to local`() =
+        runBlocking {
+            val cachedDetail =
+                PlaceDetail(
+                    placeId = "cached-place-1",
+                    name = "Cached Place Detail",
+                    address = "1 Cached-ro, Busan",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                    accessibilityTags = listOf("elevator"),
+                )
+            val localDataSource =
+                PlacesLocalDataSource().apply {
+                    updateCachedPlaceDetail(cachedDetail)
+                }
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource = PlacesRemoteDataSource(baseUrl = "https://example.com"),
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy = PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            val detail = repository.getPlaceDetail("cached-place-1")
+
+            assertEquals(cachedDetail, detail)
+        }
 }
 
 private class PlacesTestRepositorySourcePolicy(

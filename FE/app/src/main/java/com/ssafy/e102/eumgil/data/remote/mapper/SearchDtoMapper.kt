@@ -44,12 +44,14 @@ internal object SearchDtoMapper {
                 subtitle = placeDto.address.orEmpty(),
                 latitude = placeDto.point.lat,
                 longitude = placeDto.point.lng,
-                category = placeDto.category.toPlaceCategoryOrNull().takeIf { isVerifiedPlace },
+                category = PlaceApiFieldMapper.toPlaceCategoryOrNull(placeDto.category).takeIf { isVerifiedPlace },
                 serverPlaceId = serverPlaceId,
                 providerPlaceId = providerPlaceId,
                 accessibilityTagKeys =
                     if (isVerifiedPlace) {
-                        placeDto.accessibilityFeatures.toAccessibilityTagKeys()
+                        PlaceApiFieldMapper.toAccessibilityTagKeys(
+                            PlaceApiFieldMapper.toPlaceFeatureAvailabilities(placeDto.accessibilityFeatures),
+                        )
                     } else {
                         emptyList()
                     },
@@ -128,47 +130,6 @@ internal object SearchDtoMapper {
                 point.lng.toString(),
             ).joinToString(separator = ":")
         }
-
-    private fun String?.toPlaceCategoryOrNull(): PlaceCategory? =
-        when (this?.trim()?.uppercase()) {
-            null,
-            "",
-            -> null
-            "TOILET" -> PlaceCategory.TOILET
-            "ELEVATOR" -> PlaceCategory.ELEVATOR
-            "CHARGING_STATION" -> PlaceCategory.CHARGING_STATION
-            "FOOD_CAFE" -> PlaceCategory.FOOD_CAFE
-            "TOURIST_SPOT" -> PlaceCategory.TOURIST_SPOT
-            "ACCOMMODATION" -> PlaceCategory.ACCOMMODATION
-            "HEALTHCARE" -> PlaceCategory.HEALTHCARE
-            "WELFARE" -> PlaceCategory.WELFARE
-            "PUBLIC_OFFICE" -> PlaceCategory.PUBLIC_OFFICE
-            "BRAILLE_BLOCK" -> PlaceCategory.BRAILLE_BLOCK
-            "RESTAURANT" -> PlaceCategory.RESTAURANT
-            "TOURIST_ATTRACTION" -> PlaceCategory.TOURIST_ATTRACTION
-            "ETC",
-            "OTHER",
-            -> PlaceCategory.OTHER
-            else -> PlaceCategory.OTHER
-        }
-
-    private fun List<PlaceAccessibilityFeatureDto>.toAccessibilityTagKeys(): List<String> =
-        mapNotNull { feature ->
-            if (!feature.isAvailable) {
-                null
-            } else {
-                when (feature.featureType.trim()) {
-                    "accessibleEntrance" -> "step-free-entrance"
-                    "elevator" -> "elevator"
-                    "accessibleToilet" -> "accessible-toilet"
-                    "accessibleParking" -> "accessible-parking"
-                    "chargingStation" -> "charging-station"
-                    "accessibleRoom" -> "accessible-room"
-                    "guidanceFacility" -> "guidance-facility"
-                    else -> null
-                }
-            }
-        }.distinct()
 
     private fun String.toSearchVoiceIntent(): SearchVoiceIntent =
         when (trim().uppercase()) {

@@ -29,20 +29,17 @@ internal object PlaceDtoMapper {
 
     fun toPlaceSummaries(dto: PlacesBrowseDto): List<PlaceSummary> =
         dto.places.map { placeDto ->
-            val features =
-                placeDto.accessibilityFeatures.mapNotNull { featureDto ->
-                    featureDto.toPlaceFeatureAvailabilityOrNull()
-                }
+            val features = PlaceApiFieldMapper.toPlaceFeatureAvailabilities(placeDto.accessibilityFeatures)
             PlaceSummary(
                 placeId = placeDto.placeId.toString(),
                 name = placeDto.name,
                 address = placeDto.address.orEmpty(),
                 latitude = placeDto.point.lat,
                 longitude = placeDto.point.lng,
-                category = placeDto.category.toPlaceCategory(),
+                category = PlaceApiFieldMapper.toPlaceCategory(placeDto.category),
                 features = features,
                 isBookmarked = placeDto.isBookmarked,
-                accessibilityTags = features.toAccessibilityTagKeys(),
+                accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
             )
         }
 
@@ -53,20 +50,17 @@ internal object PlaceDtoMapper {
     }
 
     fun toPlaceDetail(dto: PlaceDetailDto): PlaceDetail {
-        val features =
-            dto.accessibilityFeatures.mapNotNull { featureDto ->
-                featureDto.toPlaceFeatureAvailabilityOrNull()
-            }
+        val features = PlaceApiFieldMapper.toPlaceFeatureAvailabilities(dto.accessibilityFeatures)
         return PlaceDetail(
             placeId = dto.placeId.toString(),
             name = dto.name,
             address = dto.address.orEmpty(),
             latitude = dto.point.lat,
             longitude = dto.point.lng,
-            category = dto.category.toPlaceCategory(),
+            category = PlaceApiFieldMapper.toPlaceCategory(dto.category),
             features = features,
             isBookmarked = dto.isBookmarked,
-            accessibilityTags = features.toAccessibilityTagKeys(),
+            accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
             providerPlaceId = dto.providerPlaceId?.takeIf { providerPlaceId -> providerPlaceId.isNotBlank() },
             description = dto.description?.takeIf { description -> description.isNotBlank() },
         )
@@ -142,62 +136,6 @@ internal object PlaceDtoMapper {
                 )
             }
         }
-
-    private fun String.toPlaceCategory(): PlaceCategory =
-        when (trim().uppercase()) {
-            "TOILET" -> PlaceCategory.TOILET
-            "ELEVATOR" -> PlaceCategory.ELEVATOR
-            "CHARGING_STATION" -> PlaceCategory.CHARGING_STATION
-            "FOOD_CAFE" -> PlaceCategory.FOOD_CAFE
-            "TOURIST_SPOT" -> PlaceCategory.TOURIST_SPOT
-            "ACCOMMODATION" -> PlaceCategory.ACCOMMODATION
-            "HEALTHCARE" -> PlaceCategory.HEALTHCARE
-            "WELFARE" -> PlaceCategory.WELFARE
-            "PUBLIC_OFFICE" -> PlaceCategory.PUBLIC_OFFICE
-            "BRAILLE_BLOCK" -> PlaceCategory.BRAILLE_BLOCK
-            "RESTAURANT" -> PlaceCategory.RESTAURANT
-            "TOURIST_ATTRACTION" -> PlaceCategory.TOURIST_ATTRACTION
-            "ETC",
-            "OTHER",
-            -> PlaceCategory.OTHER
-            else -> PlaceCategory.OTHER
-        }
-
-    private fun PlaceAccessibilityFeatureDto.toPlaceFeatureAvailabilityOrNull(): PlaceFeatureAvailability? {
-        val featureType =
-            when (featureType.trim()) {
-                "accessibleEntrance" -> PlaceFeatureType.ACCESSIBLE_ENTRANCE
-                "elevator" -> PlaceFeatureType.ELEVATOR
-                "accessibleToilet" -> PlaceFeatureType.ACCESSIBLE_TOILET
-                "accessibleParking" -> PlaceFeatureType.ACCESSIBLE_PARKING
-                "chargingStation" -> PlaceFeatureType.CHARGING_STATION
-                "accessibleRoom" -> PlaceFeatureType.ACCESSIBLE_ROOM
-                "guidanceFacility" -> PlaceFeatureType.GUIDANCE_FACILITY
-                else -> return null
-            }
-
-        return PlaceFeatureAvailability(
-            featureType = featureType,
-            isAvailable = isAvailable,
-        )
-    }
-
-    private fun List<PlaceFeatureAvailability>.toAccessibilityTagKeys(): List<String> =
-        mapNotNull { feature ->
-            if (!feature.isAvailable) {
-                null
-            } else {
-                when (feature.featureType) {
-                    PlaceFeatureType.ACCESSIBLE_ENTRANCE -> "step-free-entrance"
-                    PlaceFeatureType.ELEVATOR -> "elevator"
-                    PlaceFeatureType.ACCESSIBLE_TOILET -> "accessible-toilet"
-                    PlaceFeatureType.ACCESSIBLE_PARKING -> "accessible-parking"
-                    PlaceFeatureType.CHARGING_STATION -> "charging-station"
-                    PlaceFeatureType.ACCESSIBLE_ROOM -> "accessible-room"
-                    PlaceFeatureType.GUIDANCE_FACILITY -> "guidance-facility"
-                }
-            }
-        }.distinct()
 
     private fun JSONObject.optNullableString(name: String): String? =
         if (isNull(name)) {

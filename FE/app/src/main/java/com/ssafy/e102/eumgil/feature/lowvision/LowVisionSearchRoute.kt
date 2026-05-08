@@ -33,11 +33,15 @@ fun LowVisionSearchRoute(
         remember(context.applicationContext) {
             (context.applicationContext as BusanEumgilApp).appContainer
         }
+    val lowVisionSearchRepository =
+        remember(appContainer.searchRepository) {
+            LowVisionSearchRepository(delegate = appContainer.searchRepository)
+        }
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
-        remember(appContainer) {
+        remember(appContainer, lowVisionSearchRepository) {
             SearchViewModel.provideFactory(
-                searchRepository = appContainer.searchRepository,
+                searchRepository = lowVisionSearchRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 placesRepository = appContainer.placesRepository,
@@ -46,7 +50,7 @@ fun LowVisionSearchRoute(
     val viewModel =
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "LowVisionSearchRoute requires a ComponentActivity host." }
-            ViewModelProvider(owner, viewModelFactory)[SearchViewModel::class.java]
+            ViewModelProvider(owner, viewModelFactory).get(LOW_VISION_SEARCH_VIEW_MODEL_KEY, SearchViewModel::class.java)
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -84,3 +88,5 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
         is ContextWrapper -> baseContext.findComponentActivity()
         else -> null
     }
+
+private const val LOW_VISION_SEARCH_VIEW_MODEL_KEY: String = "low-vision-search-view-model"

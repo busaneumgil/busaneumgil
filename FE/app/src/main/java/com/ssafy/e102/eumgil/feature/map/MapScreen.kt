@@ -613,34 +613,10 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
 
 @Composable
 private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
-    val selectedDestination = uiState.selectedDestination
-
-    if (selectedDestination == null) {
-        return MapSearchBarState(
-            title = stringResource(id = R.string.map_shell_search_title),
-            subtitle = null,
-            accessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
-        )
-    }
-
     return MapSearchBarState(
-        title = selectedDestination.name,
-        subtitle =
-            selectedDestination.address
-                ?: stringResource(id = R.string.map_shell_search_hint_selected_fallback),
-        accessibilityLabel =
-            if (selectedDestination.address.isNullOrBlank()) {
-                stringResource(
-                    id = R.string.map_shell_search_a11y_label_selected_without_address,
-                    selectedDestination.name,
-                )
-            } else {
-                stringResource(
-                    id = R.string.map_shell_search_a11y_label_selected_with_address,
-                    selectedDestination.name,
-                    selectedDestination.address.orEmpty(),
-                )
-            },
+        title = stringResource(id = R.string.map_shell_search_title),
+        subtitle = null,
+        accessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
     )
 }
 

@@ -113,6 +113,7 @@ fun MapScreen(
         controlOverlay = {
             MapFloatingControls(
                 recenterButtonState = uiState.recenterButtonState,
+                isRecenterButtonActive = uiState.isRecenterButtonActive,
                 onRecenterClick = { onAction(MapUiAction.LocationActionClicked) },
             )
         },
@@ -1023,9 +1024,9 @@ private fun recentDestinationTagLabel(rawKey: String): String? =
 @DrawableRes
 private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
     when (category) {
-        FacilityCategory.TOILET -> R.drawable.ic_place_restroom
-        FacilityCategory.ELEVATOR -> R.drawable.ic_map_shortcut_elevator
-        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        FacilityCategory.TOILET -> R.drawable.ic_user_wheelchair_compact
+        FacilityCategory.ELEVATOR -> R.drawable.ic_place_elevator
+        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging_station
         FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe
         FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
         FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
@@ -1041,9 +1042,9 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
 @DrawableRes
 private fun recentDestinationIcon(category: PlaceCategory?): Int =
     when (category) {
-        PlaceCategory.TOILET -> R.drawable.ic_place_restroom
-        PlaceCategory.ELEVATOR -> R.drawable.ic_route_elevator
-        PlaceCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        PlaceCategory.TOILET -> R.drawable.ic_user_wheelchair_compact
+        PlaceCategory.ELEVATOR -> R.drawable.ic_place_elevator
+        PlaceCategory.CHARGING_STATION -> R.drawable.ic_place_charging_station
         PlaceCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe
         PlaceCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
         PlaceCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation

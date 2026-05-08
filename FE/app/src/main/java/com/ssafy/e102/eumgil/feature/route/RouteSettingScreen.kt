@@ -67,12 +67,15 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
+import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import java.util.Locale
 
 @Composable
@@ -111,6 +114,15 @@ fun RouteSettingScreen(
                 onBackClick = { onAction(RouteSettingUiAction.BackClicked) },
             )
         },
+        bottomBar = {
+            RouteSettingBottomBar(
+                buttonLabel = uiState.cta.label,
+                enabled = uiState.isStartEnabled,
+                supportingText = ctaSupportingText,
+                selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
+                onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
+            )
+        },
     ) { innerPadding ->
         Column(
             modifier =
@@ -124,6 +136,12 @@ fun RouteSettingScreen(
                 origin = uiState.origin,
                 destination = uiState.destination,
                 supportingMessage = supportingMessage,
+                onOriginClick = {
+                    onAction(RouteSettingUiAction.WaypointClicked(RouteEditingTarget.ORIGIN))
+                },
+                onDestinationClick = {
+                    onAction(RouteSettingUiAction.WaypointClicked(RouteEditingTarget.DESTINATION))
+                },
                 onSwapClick = { onAction(RouteSettingUiAction.WaypointsSwapClicked) },
                 modifier = Modifier.padding(horizontal = EumSpacing.medium),
             )
@@ -140,16 +158,12 @@ fun RouteSettingScreen(
             )
             RouteSettingRouteSheet(
                 uiState = uiState,
-                buttonLabel = uiState.cta.label,
-                supportingText = ctaSupportingText,
-                selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
                 onOptionClick = { routeOption ->
                     onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
                 },
                 onOptionDetailClick = { routeOption ->
                     onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
                 },
-                onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
             )
         }
     }
@@ -877,7 +891,7 @@ internal data class RouteSettingLayoutPolicy(
 )
 
 internal enum class RouteSettingCtaPlacement {
-    BottomSheetContent,
+    BottomBar,
 }
 
 internal enum class RouteSettingMapHeightPolicy {
@@ -956,7 +970,7 @@ internal enum class RouteSettingOptionDetailButtonAlignment {
 internal fun routeSettingLayoutPolicy(): RouteSettingLayoutPolicy =
     RouteSettingLayoutPolicy(
         allowsDefaultVerticalScroll = false,
-        ctaPlacement = RouteSettingCtaPlacement.BottomSheetContent,
+        ctaPlacement = RouteSettingCtaPlacement.BottomBar,
         mapHeightPolicy = RouteSettingMapHeightPolicy.FillRemainingCenterSpace,
         maxVisibleOptionCards = MAX_VISIBLE_OPTION_CARD_COUNT,
         showsOptionSectionSupportingText = false,
@@ -976,7 +990,7 @@ internal fun routeSettingLayoutPolicy(): RouteSettingLayoutPolicy =
         showsRecommendedBadge = false,
         startCtaIcon = RouteSettingStartCtaIcon.NavigationPointer,
         startCtaIconTint = RouteSettingCtaIconTint.OnPrimary,
-        bottomSheetFlushToWindowBottom = true,
+        bottomSheetFlushToWindowBottom = false,
         sheetElevation = RouteSettingSheetElevation.None,
         sheetBorder = RouteSettingSheetBorder.None,
         optionCardContainerColor = RouteSettingOptionCardContainerColor.White,
@@ -994,6 +1008,8 @@ private fun RouteWaypointCard(
     origin: RouteLocationUiState,
     destination: RouteLocationUiState,
     supportingMessage: String?,
+    onOriginClick: () -> Unit,
+    onDestinationClick: () -> Unit,
     onSwapClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1059,6 +1075,7 @@ private fun RouteWaypointCard(
                             supportingText = origin.supportingText,
                             markerColor = RouteWaypointOriginColor,
                             labelWidth = labelColumnWidth,
+                            onClick = onOriginClick,
                         )
                         if (policy.showsWaypointDivider) {
                             Spacer(
@@ -1075,6 +1092,7 @@ private fun RouteWaypointCard(
                             supportingText = destination.supportingText,
                             markerColor = RouteWaypointDestinationColor,
                             labelWidth = labelColumnWidth,
+                            onClick = onDestinationClick,
                         )
                     }
                 }
@@ -1166,9 +1184,14 @@ private fun RouteWaypointRow(
     supportingText: String?,
     markerColor: Color,
     labelWidth: Dp,
+    onClick: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(RouteWaypointSupportingGap),
     ) {
         Row(
@@ -1550,66 +1573,26 @@ private fun RouteMapMessageCard(
 private fun RouteMapControls(
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    EumMapFloatingControls(
+        actionButtonState =
+            EumMapFloatingActionButtonState(
+                iconRes = R.drawable.ic_route_start_navigation_button,
+                tint = MaterialTheme.colorScheme.primary,
+                contentDescription = stringResource(id = R.string.route_setting_map_control_recenter),
+                enabled = true,
+            ),
+        onActionClick = {},
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalAlignment = Alignment.End,
-    ) {
-        RouteMapControlButton(label = "+")
-        RouteMapControlButton(label = "-")
-        RouteMapControlButton(
-            label = stringResource(id = R.string.route_setting_map_control_recenter),
-            iconResId = R.drawable.ic_permission_location,
-        )
-    }
-}
-
-@Composable
-private fun RouteMapControlButton(
-    label: String,
-    iconResId: Int? = null,
-) {
-    Surface(
-        shape = RoundedCornerShape(RouteFloatingControlCornerRadius),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-        shadowElevation = RouteFloatingControlElevation,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(RouteMapControlButtonSize),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (iconResId != null) {
-                Icon(
-                    painter = painterResource(id = iconResId),
-                    contentDescription = label,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            } else {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-    }
+        onZoomInClick = {},
+        onZoomOutClick = {},
+    )
 }
 
 @Composable
 private fun RouteSettingRouteSheet(
     uiState: RouteSettingUiState,
-    buttonLabel: String,
-    supportingText: String?,
-    selectedRoute: RouteSelectedRouteUiState?,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
-    onStartClick: () -> Unit,
 ) {
     val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
 
@@ -1642,20 +1625,6 @@ private fun RouteSettingRouteSheet(
             } else {
                 RouteTransitOptionSection()
             }
-            RouteSettingCtaContent(
-                buttonLabel = buttonLabel,
-                enabled = uiState.isStartEnabled,
-                supportingText = supportingText,
-                selectedRoute = selectedRoute,
-                buttonHeight = RouteSettingInlineCtaButtonHeight,
-                verticalGap = RouteSettingCtaGap,
-                compactSupportingText = true,
-                onStartClick = onStartClick,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
-            )
         }
     }
 }
@@ -1978,30 +1947,6 @@ private fun RouteMetricTile(
 }
 
 @Composable
-private fun RouteSettingInlineCta(
-    buttonLabel: String,
-    enabled: Boolean,
-    supportingText: String?,
-    selectedRoute: RouteSelectedRouteUiState?,
-    onStartClick: () -> Unit,
-) {
-    RouteSettingCtaContent(
-        buttonLabel = buttonLabel,
-        enabled = enabled,
-        supportingText = supportingText,
-        selectedRoute = selectedRoute,
-        buttonHeight = RouteSettingInlineCtaButtonHeight,
-        verticalGap = RouteSettingCtaGap,
-        compactSupportingText = true,
-        onStartClick = onStartClick,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
-    )
-}
-
-@Composable
 private fun RouteSettingBottomBar(
     buttonLabel: String,
     enabled: Boolean,
@@ -2109,7 +2054,7 @@ private fun RouteSettingCtaContent(
                 ),
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_route_start_navigation),
+                painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onPrimary,
@@ -2435,6 +2380,9 @@ private fun optionAccentColor(routeOption: RouteOption): Color =
     when (routeOption) {
         RouteOption.SAFE -> MaterialTheme.colorScheme.primary
         RouteOption.SHORTEST -> MaterialTheme.colorScheme.tertiary
+        RouteOption.RECOMMENDED -> MaterialTheme.colorScheme.primary
+        RouteOption.MIN_TRANSFER -> MaterialTheme.colorScheme.secondary
+        RouteOption.MIN_WALK -> MaterialTheme.colorScheme.tertiary
     }
 
 @Composable
@@ -2496,6 +2444,9 @@ private fun RouteOption.routeOptionTitle(): String =
     when (this) {
         RouteOption.SAFE -> stringResource(id = R.string.route_setting_option_safe_title)
         RouteOption.SHORTEST -> stringResource(id = R.string.route_setting_option_shortest_title)
+        RouteOption.RECOMMENDED -> "추천 경로"
+        RouteOption.MIN_TRANSFER -> "최소 환승"
+        RouteOption.MIN_WALK -> "최소 도보"
     }
 
 @Composable
@@ -2503,6 +2454,9 @@ private fun routeOptionCompactPrefix(routeOption: RouteOption): String =
     when (routeOption) {
         RouteOption.SAFE -> stringResource(id = R.string.route_setting_card_recommended_route)
         RouteOption.SHORTEST -> stringResource(id = R.string.route_setting_card_alternative_route)
+        RouteOption.RECOMMENDED -> "추천 경로"
+        RouteOption.MIN_TRANSFER -> "최소 환승 경로"
+        RouteOption.MIN_WALK -> "최소 도보 경로"
     }
 
 private fun compactEstimatedTimeLabel(minutes: Int): String =
@@ -2710,9 +2664,7 @@ private val RouteOptionCardGap = 6.dp
 private val RouteOptionCardVerticalPadding = 8.dp
 private val RouteOptionDetailButtonTouchTargetSize = 48.dp
 private val RouteOptionDetailButtonIconSize = 24.dp
-private val RouteSettingInlineCtaButtonHeight = 52.dp
 private val RouteSettingBottomBarButtonHeight = 56.dp
-private val RouteSettingCtaGap = 4.dp
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035
 private const val MIN_ROUTE_PREVIEW_LONGITUDE_SPAN = 0.0045

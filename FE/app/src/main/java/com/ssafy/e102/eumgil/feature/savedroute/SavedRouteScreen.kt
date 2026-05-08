@@ -728,7 +728,7 @@ private fun SavedBookmarkPrimaryActionButton(
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_route_start_navigation),
+                painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(16.dp),
@@ -807,13 +807,13 @@ private fun savedPlaceCategoryLabel(category: String?): String =
 
 @Composable
 private fun routeOptionLabel(routeOption: RouteOption): String =
-    stringResource(
-        id =
-            when (routeOption) {
-                RouteOption.SAFE -> R.string.route_setting_option_safe_title
-                RouteOption.SHORTEST -> R.string.route_setting_option_shortest_title
-            },
-    )
+    when (routeOption) {
+        RouteOption.SAFE -> stringResource(id = R.string.route_setting_option_safe_title)
+        RouteOption.SHORTEST -> stringResource(id = R.string.route_setting_option_shortest_title)
+        RouteOption.RECOMMENDED -> "추천 경로"
+        RouteOption.MIN_TRANSFER -> "최소 환승"
+        RouteOption.MIN_WALK -> "최소 도보"
+    }
 
 @Composable
 private fun routeOptionDisplayLabel(

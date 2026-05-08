@@ -17,6 +17,7 @@ data class MapUiState(
     val selectedMarkerId: String? = null,
     val locationStatus: MapLocationStatus = MapLocationStatus.PermissionDenied,
     val recenterButtonState: MapRecenterButtonState = MapRecenterButtonState.REQUEST_PERMISSION,
+    val isRecenterButtonActive: Boolean = false,
     val markerOverlayState: MapMarkerOverlayState = MapMarkerOverlayState(),
     val markerFilterState: MapMarkerFilterUiState = MapMarkerFilterUiState(),
     val shortcutFilterState: MapShortcutFilterRowState = MapShortcutFilterRowState(),

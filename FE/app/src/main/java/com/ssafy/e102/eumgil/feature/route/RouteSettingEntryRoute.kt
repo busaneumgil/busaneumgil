@@ -16,11 +16,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.collect
 
 @Composable
 fun RouteSettingEntryRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     autoStartNavigation: Boolean = false,
@@ -31,10 +33,11 @@ fun RouteSettingEntryRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var initialRouteOptionApplied by rememberSaveable(initialRouteOption) { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToRouteDetail, onStartNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToSearch, onNavigateToRouteDetail, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
                 is RouteSettingUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
             }
@@ -87,6 +90,7 @@ fun RouteDetailEntryRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                is RouteSettingUiEvent.NavigateToSearch -> Unit
                 is RouteSettingUiEvent.NavigateToRouteDetail -> Unit
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
             }
@@ -116,6 +120,7 @@ private fun rememberRouteSettingViewModel(): RouteSettingViewModel {
             RouteSettingViewModel.provideFactory(
                 routeRepository = appContainer.routeRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                currentLocationManager = appContainer.currentLocationManager,
             )
         }
 

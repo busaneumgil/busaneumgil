@@ -9,17 +9,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -37,6 +43,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -46,10 +54,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
+import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
 
 @Composable
 fun NavigationScreen(
@@ -57,35 +68,78 @@ fun NavigationScreen(
     onAction: (NavigationUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Scaffold(
+    val screenPolicy = navigationScreenPolicy(uiState)
+    val railWidth = (LocalConfiguration.current.screenWidthDp.dp / 7).coerceIn(48.dp, 60.dp)
+
+    Box(
         modifier = modifier.fillMaxSize(),
-        topBar = {
-            NavigationTopBar(
-                onBackClick = { onAction(NavigationUiAction.BackClicked) },
-            )
-        },
-        bottomBar = {
-            NavigationBottomBar(
-                uiState = uiState,
-                onAction = onAction,
-            )
-        },
-    ) { innerPadding ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-        ) {
-            NavigationHeroCard(
-                uiState = uiState,
-                onAction = onAction,
-            )
-            NavigationMapStage(
-                uiState = uiState,
-                modifier = Modifier.weight(1f),
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                NavigationTopBar(
+                    onBackClick = { onAction(NavigationUiAction.BackClicked) },
+                )
+            },
+            bottomBar = {
+                val bottomBarLayoutPolicy =
+                    navigationBottomBarLayoutPolicy(
+                        showSegmentRail = screenPolicy.showSegmentRail,
+                        railWidth = railWidth,
+                    )
+                NavigationBottomBar(
+                    uiState = uiState,
+                    onAction = onAction,
+                    layoutPolicy = bottomBarLayoutPolicy,
+                )
+            },
+        ) { innerPadding ->
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+            ) {
+                NavigationHeroCard(
+                    uiState = uiState,
+                    onAction = onAction,
+                )
+                Row(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                ) {
+                    if (screenPolicy.showSegmentRail) {
+                        NavigationSegmentRail(
+                            uiState = uiState.segmentSync,
+                            onSegmentTapped = { index ->
+                                onAction(NavigationUiAction.SegmentTapped(index = index))
+                            },
+                            onReturnToActiveSegmentClick = {
+                                onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
+                            },
+                            onRouteDetailClick = { onAction(NavigationUiAction.RouteDetailClicked) },
+                            isRouteDetailEnabled = uiState.canOpenRouteDetail,
+                            modifier =
+                                Modifier
+                                    .width(railWidth)
+                                    .fillMaxHeight(),
+                        )
+                    }
+                    NavigationMapStage(
+                        uiState = uiState,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        if (uiState.isExitConfirmDialogVisible) {
+            NavigationExitConfirmDialog(
+                onDismiss = { onAction(NavigationUiAction.ExitNavigationDismissed) },
+                onConfirm = { onAction(NavigationUiAction.ConfirmExitNavigationClicked) },
+                modifier = Modifier.align(Alignment.Center),
             )
         }
     }
@@ -122,90 +176,121 @@ internal fun navigationTopBarPolicy(): NavigationTopBarPolicy =
         titleFontWeight = FontWeight.SemiBold,
     )
 
+internal data class NavigationScreenPolicy(
+    val showSegmentRail: Boolean,
+    val showFocusedSegmentCard: Boolean,
+    val showReturnToActiveAction: Boolean,
+)
+
+internal data class NavigationHeroLayoutPolicy(
+    val minHeight: Dp,
+    val maxHeight: Dp,
+    val showBottomDivider: Boolean,
+)
+
+internal data class NavigationBottomBarLayoutPolicy(
+    val topDividerStartInset: Dp,
+)
+
+internal fun navigationScreenPolicy(uiState: NavigationUiState): NavigationScreenPolicy =
+    NavigationScreenPolicy(
+        showSegmentRail = uiState.segmentSync.railItems.isNotEmpty() || uiState.canOpenRouteDetail,
+        showFocusedSegmentCard = false,
+        showReturnToActiveAction = uiState.segmentSync.isInspectingSegments,
+    )
+
+internal fun navigationHeroLayoutPolicy(screenHeight: Dp): NavigationHeroLayoutPolicy =
+    NavigationHeroLayoutPolicy(
+        minHeight = 116.dp,
+        maxHeight = (screenHeight * 0.24f).coerceAtLeast(132.dp),
+        showBottomDivider = false,
+    )
+
+internal fun navigationBottomBarLayoutPolicy(
+    showSegmentRail: Boolean,
+    railWidth: Dp,
+): NavigationBottomBarLayoutPolicy =
+    NavigationBottomBarLayoutPolicy(
+        topDividerStartInset = if (showSegmentRail) railWidth else 0.dp,
+    )
+
 @Composable
 private fun NavigationHeroCard(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
 ) {
+    val heroGuidanceAction = uiState.focusedSegmentCard?.guidanceAction ?: uiState.stepCard.guidanceAction
+    val heroDistanceLabel = uiState.focusedSegmentCard?.distanceLabel ?: uiState.stepCard.distanceLabel
+    val layoutPolicy = navigationHeroLayoutPolicy(LocalConfiguration.current.screenHeightDp.dp)
+
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = layoutPolicy.minHeight, max = layoutPolicy.maxHeight),
+        shape = RoundedCornerShape(0.dp),
         color = MaterialTheme.colorScheme.primary,
-        shadowElevation = 4.dp,
     ) {
-        Row(
-            modifier = Modifier.padding(EumSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-            verticalAlignment = Alignment.Top,
-        ) {
-            NavigationHeroMarker()
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        Column {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = EumSpacing.medium,
+                            vertical = EumSpacing.medium,
+                        ),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
-                    shape = RoundedCornerShape(EumRadius.full),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = uiState.stepCard.statusLabel,
-                        modifier =
-                            Modifier.padding(
-                                horizontal = EumSpacing.small,
-                                vertical = EumSpacing.xSmall,
-                            ),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                    NavigationHeroDirectionIcon(
+                        guidanceAction = heroGuidanceAction,
                     )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = heroGuidanceAction.label,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Text(
+                            text = heroDistanceLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
+                        )
+                    }
                 }
-                Text(
-                    text = uiState.stepCard.instruction,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                NavigationVoiceControl(
+                    uiState = uiState,
+                    onAction = onAction,
                 )
-                Text(
-                    text = "${uiState.stepCard.distanceLabel} · ${uiState.stepCard.emphasisLabel}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.92f),
-                )
-                Text(
-                    text = uiState.stepCard.supportingText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f),
-                )
-                if (uiState.tts.fallbackMessage.isNotBlank() && !uiState.tts.canRequestBriefing) {
-                    Text(
-                        text = uiState.tts.fallbackMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f),
-                    )
-                }
             }
-            NavigationVoiceControl(
-                uiState = uiState,
-                onAction = onAction,
-            )
+            if (layoutPolicy.showBottomDivider) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun NavigationHeroMarker() {
-    Surface(
-        modifier = Modifier.size(56.dp),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(id = R.string.navigation_hero_marker),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-    }
+private fun NavigationHeroDirectionIcon(
+    guidanceAction: NavigationGuidanceAction,
+) {
+    Icon(
+        painter = painterResource(id = guidanceAction.iconRes()),
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onPrimary,
+        modifier = Modifier.size(34.dp),
+    )
 }
 
 @Composable
@@ -213,80 +298,61 @@ private fun NavigationVoiceControl(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
 ) {
-    val primaryLabel =
-        if (uiState.tts.isEnabled) {
-            stringResource(id = R.string.navigation_voice_button_label)
+    val isEnabled = uiState.tts.isEnabled
+    val containerColor =
+        if (isEnabled) {
+            MaterialTheme.colorScheme.surface
         } else {
-            stringResource(id = R.string.navigation_voice_enable_button_label)
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+        }
+    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)
+    val iconRes =
+        if (isEnabled) {
+            R.drawable.ic_control_voice
+        } else {
+            R.drawable.ic_navigation_tts_off
+        }
+    val iconTint =
+        if (isEnabled) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    val contentDescription =
+        if (isEnabled) {
+            stringResource(id = R.string.navigation_tts_toggle_content_description_on)
+        } else {
+            stringResource(id = R.string.navigation_tts_toggle_content_description_off)
         }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-    ) {
-        Surface(
-            modifier =
-                Modifier
-                    .size(width = 88.dp, height = 96.dp)
-                    .clickable(
-                        role = Role.Button,
-                        onClick = {
-                            when {
-                                uiState.tts.canRequestBriefing ->
-                                    onAction(NavigationUiAction.BriefingReplayClicked)
-
-                                !uiState.tts.isEnabled ->
-                                    onAction(
-                                        NavigationUiAction.VoiceGuidanceToggled(
-                                            enabled = true,
-                                        ),
-                                    )
-
-                                else -> Unit
-                            }
-                        },
-                    ),
-            shape = RoundedCornerShape(EumRadius.large),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(EumSpacing.small),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = stringResource(id = R.string.navigation_voice_button_icon),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = primaryLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-        TextButton(
-            onClick = {
-                onAction(
-                    NavigationUiAction.VoiceGuidanceToggled(
-                        enabled = !uiState.tts.isEnabled,
-                    ),
-                )
-            },
-        ) {
-            Text(
-                text =
-                    if (uiState.tts.isEnabled) {
-                        stringResource(id = R.string.navigation_voice_toggle_disable)
-                    } else {
-                        stringResource(id = R.string.navigation_voice_toggle_enable)
+    Surface(
+        modifier =
+            Modifier
+                .size(44.dp)
+                .semantics {
+                    this.contentDescription = contentDescription
+                }
+                .clickable(
+                    role = Role.Button,
+                    onClick = {
+                        onAction(
+                            NavigationUiAction.VoiceGuidanceToggled(
+                                enabled = !isEnabled,
+                            ),
+                        )
                     },
-                color = MaterialTheme.colorScheme.onPrimary,
+                ),
+        shape = RoundedCornerShape(EumRadius.scaleM),
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
+        shadowElevation = 0.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(if (isEnabled) 26.dp else 28.dp),
             )
         }
     }
@@ -297,37 +363,29 @@ private fun NavigationMapStage(
     uiState: NavigationUiState,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Box(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-        shadowElevation = 2.dp,
     ) {
-        Box(
+        NavigationMapBackdrop(
+            mapOverlay = uiState.mapOverlay,
             modifier = Modifier.fillMaxSize(),
-        ) {
-            NavigationMapBackdrop(
-                mapOverlay = uiState.mapOverlay,
-                modifier = Modifier.fillMaxSize(),
-            )
-            if (uiState.mapOverlay.shouldUsePlaceholder) {
-                NavigationMapMessageCard(
-                    title = uiState.mapPlaceholderTitle,
-                    description = uiState.mapPlaceholderDescription,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(EumSpacing.medium),
-                )
-            }
-            NavigationMapControls(
+        )
+        if (uiState.mapOverlay.shouldUsePlaceholder) {
+            NavigationMapMessageCard(
+                title = uiState.mapPlaceholderTitle,
+                description = uiState.mapPlaceholderDescription,
                 modifier =
                     Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = EumSpacing.small),
+                        .align(Alignment.TopStart)
+                        .padding(EumSpacing.small),
             )
         }
+        NavigationMapControls(
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = EumSpacing.small),
+        )
     }
 }
 
@@ -337,7 +395,8 @@ private fun NavigationMapBackdrop(
     modifier: Modifier = Modifier,
 ) {
     val outline = MaterialTheme.colorScheme.outline
-    val currentColor = MaterialTheme.colorScheme.primary
+    val focusedSegmentColor = MaterialTheme.colorScheme.primary
+    val activeSegmentColor = MaterialTheme.colorScheme.secondary
     val originColor = MaterialTheme.colorScheme.secondary
     val destinationColor = MaterialTheme.colorScheme.error
     val projectionBounds = navigationProjectionBounds(mapOverlay)
@@ -374,7 +433,63 @@ private fun NavigationMapBackdrop(
                     )
                 drawPath(
                     path = routePreviewPath,
-                    color = currentColor.copy(alpha = 0.22f),
+                    color = outline.copy(alpha = 0.22f),
+                    style =
+                        Stroke(
+                            width = 10.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+                drawPath(
+                    path = routePreviewPath,
+                    color = focusedSegmentColor.copy(alpha = 0.16f),
+                    style =
+                        Stroke(
+                            width = 4.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+            }
+            if (mapOverlay.activeSegmentPolyline.size >= 2 &&
+                mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline
+            ) {
+                val activeSegmentPath =
+                    mapOverlay.activeSegmentPolyline.toNavigationPreviewPath(
+                        bounds = projectionBounds,
+                        canvasSize = size,
+                    )
+                drawPath(
+                    path = activeSegmentPath,
+                    color = activeSegmentColor.copy(alpha = 0.42f),
+                    style =
+                        Stroke(
+                            width = 9.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+                drawPath(
+                    path = activeSegmentPath,
+                    color = activeSegmentColor,
+                    style =
+                        Stroke(
+                            width = 4.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+            }
+            if (mapOverlay.focusedSegmentPolyline.size >= 2) {
+                val focusedSegmentPath =
+                    mapOverlay.focusedSegmentPolyline.toNavigationPreviewPath(
+                        bounds = projectionBounds,
+                        canvasSize = size,
+                    )
+                drawPath(
+                    path = focusedSegmentPath,
+                    color = focusedSegmentColor.copy(alpha = 0.24f),
                     style =
                         Stroke(
                             width = 12.dp.toPx(),
@@ -383,11 +498,11 @@ private fun NavigationMapBackdrop(
                         ),
                 )
                 drawPath(
-                    path = routePreviewPath,
-                    color = currentColor,
+                    path = focusedSegmentPath,
+                    color = focusedSegmentColor,
                     style =
                         Stroke(
-                            width = 5.dp.toPx(),
+                            width = 6.dp.toPx(),
                             cap = StrokeCap.Round,
                             join = StrokeJoin.Round,
                         ),
@@ -409,10 +524,19 @@ private fun NavigationMapBackdrop(
             }
             mapOverlay.currentLocation?.let { point ->
                 drawCircle(
-                    color = currentColor.copy(alpha = 0.16f),
+                    color = focusedSegmentColor.copy(alpha = 0.16f),
                     radius = 16.dp.toPx(),
                     center = projectionBounds.project(point.coordinate).toCanvasOffset(size),
                 )
+            }
+            if (mapOverlay.mapFocusMode == NavigationMapFocusMode.FOCUSED) {
+                mapOverlay.focusCoordinate?.let { coordinate ->
+                    drawCircle(
+                        color = focusedSegmentColor.copy(alpha = 0.18f),
+                        radius = 24.dp.toPx(),
+                        center = projectionBounds.project(coordinate).toCanvasOffset(size),
+                    )
+                }
             }
         }
 
@@ -453,7 +577,7 @@ private fun NavigationMapBackdrop(
         mapOverlay.currentLocation?.let { point ->
             NavigationMapMarker(
                 label = stringResource(id = R.string.navigation_map_marker_current),
-                containerColor = currentColor,
+                containerColor = focusedSegmentColor,
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
@@ -503,10 +627,10 @@ private fun NavigationMapMessageCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(EumRadius.scaleM),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.36f)),
-        shadowElevation = 2.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.small),
@@ -531,141 +655,135 @@ private fun NavigationMapMessageCard(
 private fun NavigationMapControls(
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    EumMapFloatingControls(
+        actionButtonState =
+            EumMapFloatingActionButtonState(
+                iconRes = R.drawable.ic_route_start_navigation_button,
+                tint = MaterialTheme.colorScheme.primary,
+                contentDescription = stringResource(id = R.string.navigation_return_to_active_segment_label),
+                enabled = true,
+            ),
+        onActionClick = {},
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
-        horizontalAlignment = Alignment.End,
-    ) {
-        NavigationMapControlButton(label = stringResource(id = R.string.navigation_map_control_zoom_in))
-        NavigationMapControlButton(label = stringResource(id = R.string.navigation_map_control_zoom_out))
-        NavigationMapControlButton(
-            label = stringResource(id = R.string.navigation_map_control_recenter),
-            isWide = true,
-        )
-    }
-}
-
-@Composable
-private fun NavigationMapControlButton(
-    label: String,
-    isWide: Boolean = false,
-) {
-    Surface(
-        modifier =
-            Modifier
-                .width(if (isWide) 56.dp else 48.dp)
-                .height(48.dp)
-                .clickable(
-                    role = Role.Button,
-                    onClick = {},
-                ),
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 4.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
+        onZoomInClick = {},
+        onZoomOutClick = {},
+        zoomInLabel = stringResource(id = R.string.navigation_map_control_zoom_in),
+        zoomOutLabel = stringResource(id = R.string.navigation_map_control_zoom_out),
+    )
 }
 
 @Composable
 private fun NavigationBottomBar(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
+    layoutPolicy: NavigationBottomBarLayoutPolicy,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 10.dp,
-        tonalElevation = 2.dp,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
         ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(EumRadius.large),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)),
+            HorizontalDivider(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = layoutPolicy.topDividerStartInset),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = EumSpacing.medium,
+                            vertical = EumSpacing.small,
+                        ),
             ) {
-                Row(
-                    modifier = Modifier.padding(EumSpacing.medium),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
+                Button(
+                    onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
+                    enabled = uiState.isExitEnabled,
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError,
+                            disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.36f),
+                            disabledContentColor = MaterialTheme.colorScheme.onError.copy(alpha = 0.7f),
+                        ),
+                    elevation =
+                        ButtonDefaults.buttonElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp,
+                            disabledElevation = 0.dp,
+                        ),
+                    shape = RoundedCornerShape(EumRadius.scaleM),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(60.dp),
                 ) {
-                    NavigationSummaryMetric(
-                        title = stringResource(id = R.string.navigation_summary_eta_title),
-                        value = uiState.remainingEtaLabel,
-                        modifier = Modifier.weight(1f),
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_control_stop),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onError,
+                        modifier = Modifier.size(18.dp),
                     )
-                    NavigationSummaryMetric(
-                        title = stringResource(id = R.string.navigation_summary_distance_title),
-                        value = uiState.remainingDistanceLabel,
-                        modifier = Modifier.weight(1f),
+                    Text(
+                        text = uiState.exitCta.label,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = EumSpacing.xSmall),
                     )
-                    Button(
-                        onClick = { onAction(NavigationUiAction.RouteDetailClicked) },
-                        enabled = uiState.canOpenRouteDetail,
-                        shape = RoundedCornerShape(EumRadius.medium),
-                    ) {
-                        Text(text = stringResource(id = R.string.navigation_detail_button_label))
-                    }
                 }
-            }
-            Button(
-                onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
-                enabled = uiState.isExitEnabled,
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                        disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.36f),
-                        disabledContentColor = MaterialTheme.colorScheme.onError.copy(alpha = 0.7f),
-                    ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = uiState.exitCta.label)
-            }
-            if (!uiState.isExitEnabled) {
-                Text(
-                    text = uiState.exitCta.supportingText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
 }
 
 @Composable
-private fun NavigationSummaryMetric(
-    title: String,
-    value: String,
+private fun NavigationExitConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    AlertDialog(
+        onDismissRequest = onDismiss,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
+        title = {
+            Text(
+                text = stringResource(id = R.string.navigation_exit_confirm_dialog_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(id = R.string.navigation_exit_confirm_dialog_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                shape = RoundedCornerShape(EumRadius.scaleM),
+            ) {
+                Text(text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(id = R.string.navigation_exit_confirm_dialog_cancel))
+            }
+        },
+    )
 }
 
 private fun DrawScope.drawNavigationMapGrid(outline: Color) {
@@ -731,10 +849,23 @@ private fun Modifier.offsetWithinNavigationMap(
 private fun navigationProjectionBounds(mapOverlay: NavigationMapOverlayUiState): NavigationProjectionBounds {
     val coordinates =
         buildList {
-            addAll(mapOverlay.selectedRoutePolyline)
-            mapOverlay.currentLocation?.let { point -> add(point.coordinate) }
-            mapOverlay.origin?.let { point -> add(point.coordinate) }
-            mapOverlay.destination?.let { point -> add(point.coordinate) }
+            when (mapOverlay.mapFocusMode) {
+                NavigationMapFocusMode.ACTIVE -> {
+                    addAll(mapOverlay.selectedRoutePolyline)
+                    mapOverlay.currentLocation?.let { point -> add(point.coordinate) }
+                    mapOverlay.origin?.let { point -> add(point.coordinate) }
+                    mapOverlay.destination?.let { point -> add(point.coordinate) }
+                }
+
+                NavigationMapFocusMode.FOCUSED -> {
+                    addAll(mapOverlay.focusedSegmentPolyline)
+                    if (mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline) {
+                        addAll(mapOverlay.activeSegmentPolyline)
+                    }
+                    mapOverlay.focusCoordinate?.let { coordinate -> add(coordinate) }
+                    mapOverlay.currentLocation?.let { point -> add(point.coordinate) }
+                }
+            }
         }
 
     if (coordinates.isEmpty()) {

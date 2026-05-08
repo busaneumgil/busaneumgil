@@ -9,7 +9,6 @@ import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
-import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
@@ -77,10 +76,6 @@ class AppContainer(
         )
     }
 
-    private val debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        DebugSettingsLocalDataSource(appSettingDao = localDatabase.appSettingDao())
-    }
-
     private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesLocalDataSource() }
     private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
@@ -124,9 +119,7 @@ class AppContainer(
     private val searchMockDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchMockDataSource() }
 
     private val repositorySourcePolicy: RepositorySourcePolicy by lazy(LazyThreadSafetyMode.NONE) {
-        RepositoryModule.provideRepositorySourcePolicy(
-            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
-        )
+        RepositoryModule.provideRepositorySourcePolicy()
     }
 
     val destinationSelectionRepository: DestinationSelectionRepository by lazy(LazyThreadSafetyMode.NONE) {
@@ -221,7 +214,6 @@ class AppContainer(
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
-            debugSettingsLocalDataSourceProvider = { debugSettingsLocalDataSource },
         )
     }
 

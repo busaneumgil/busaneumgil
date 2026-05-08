@@ -6,7 +6,6 @@ import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
-import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
@@ -152,19 +151,12 @@ object RepositoryModule {
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,
-        debugSettingsLocalDataSourceProvider: () -> DebugSettingsLocalDataSource,
     ): SettingsRepository =
         DefaultSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
-            debugSettingsLocalDataSourceProvider = debugSettingsLocalDataSourceProvider,
         )
 
-    fun provideRepositorySourcePolicy(
-        debugSettingsLocalDataSource: DebugSettingsLocalDataSource,
-    ): RepositorySourcePolicy =
-        DefaultRepositorySourcePolicy(
-            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
-        )
+    fun provideRepositorySourcePolicy(): RepositorySourcePolicy = DefaultRepositorySourcePolicy()
 
     fun providePlacesRepository(
         remoteDataSource: PlacesRemoteDataSource,

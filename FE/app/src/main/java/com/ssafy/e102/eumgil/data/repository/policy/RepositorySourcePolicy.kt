@@ -1,7 +1,6 @@
 package com.ssafy.e102.eumgil.data.repository.policy
 
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
-import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 
 enum class RepositoryDomain {
     PLACES,
@@ -44,22 +43,16 @@ interface RepositorySourcePolicy {
     suspend fun readPlan(domain: RepositoryDomain): RepositoryReadPlan
 }
 
-class DefaultRepositorySourcePolicy(
-    private val debugSettingsLocalDataSource: DebugSettingsLocalDataSource,
-) : RepositorySourcePolicy {
+class DefaultRepositorySourcePolicy : RepositorySourcePolicy {
     override suspend fun readPlan(domain: RepositoryDomain): RepositoryReadPlan =
         when (domain) {
             RepositoryDomain.SETTINGS -> RepositoryReadPlan.localOnly()
             RepositoryDomain.PLACES,
             RepositoryDomain.SEARCH ->
-                if (shouldForceMock()) {
+                if (AppEnvironment.isMockMode) {
                     RepositoryReadPlan.mockOnly()
                 } else {
                     RepositoryReadPlan.remoteLocalMock()
                 }
         }
-
-    private suspend fun shouldForceMock(): Boolean =
-        AppEnvironment.isMockMode ||
-            (AppEnvironment.isDebugBuild && debugSettingsLocalDataSource.getForceMockEnabled())
 }

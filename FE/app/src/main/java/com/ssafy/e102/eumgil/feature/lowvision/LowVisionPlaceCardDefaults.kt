@@ -6,10 +6,20 @@ import java.util.Locale
 
 internal object LowVisionPlaceCardDefaults {
     @DrawableRes
-    val saveIconRes: Int = R.drawable.ic_nav_bookmark_outline
+    val saveIconRes: Int = R.drawable.ic_nav_bookmark_selected
 
     @DrawableRes
     val routeIconRes: Int = R.drawable.ic_route_start_navigation
+
+    val actionOrder: List<LowVisionPlaceCardAction> = listOf(
+        LowVisionPlaceCardAction.Navigate,
+        LowVisionPlaceCardAction.Bookmark,
+    )
+}
+
+internal enum class LowVisionPlaceCardAction {
+    Navigate,
+    Bookmark,
 }
 
 internal fun lowVisionBriefAddress(address: String?): String {

@@ -334,16 +334,21 @@ private fun LowVisionBookmarkPlaceCard(
         Column(
             verticalArrangement = Arrangement.spacedBy(LowVisionBookmarkLayoutDefaults.actionButtonGap),
         ) {
-            LowVisionBookmarkButton(
-                labelRes = R.string.low_vision_bookmark_navigate,
-                iconRes = LowVisionPlaceCardDefaults.routeIconRes,
-                onClick = onNavigateClick,
-            )
-            LowVisionBookmarkButton(
-                labelRes = R.string.low_vision_bookmark_remove,
-                iconRes = LowVisionPlaceCardDefaults.saveIconRes,
-                onClick = onRemoveClick,
-            )
+            LowVisionPlaceCardDefaults.actionOrder.forEach { action ->
+                when (action) {
+                    LowVisionPlaceCardAction.Navigate -> LowVisionBookmarkButton(
+                        labelRes = R.string.low_vision_bookmark_navigate,
+                        iconRes = LowVisionPlaceCardDefaults.routeIconRes,
+                        onClick = onNavigateClick,
+                    )
+
+                    LowVisionPlaceCardAction.Bookmark -> LowVisionBookmarkButton(
+                        labelRes = R.string.low_vision_bookmark_remove,
+                        iconRes = LowVisionPlaceCardDefaults.saveIconRes,
+                        onClick = onRemoveClick,
+                    )
+                }
+            }
         }
     }
 }

@@ -1,13 +1,20 @@
 package com.ssafy.e102.domain.route.dto.response;
 
 /**
- * route guidance layer가 응답 step에 노출하는 alert type이다.
+ * route step 응답에 노출할 alert 유형이다.
  *
- * <p>{@code TURN_LEFT}와 {@code TURN_RIGHT}는 원천 {@code segment_features} type이 아니라
- * geometry 기반으로 계산된 alert다.
+ * <p>회전 방향은 alert가 아니라 {@code RouteStepResponse.instruction} 문구로 노출한다.
  */
 public enum RouteStepAlertType {
-	NONE,
-	TURN_LEFT,
-	TURN_RIGHT
+	CROSSWALK,
+	CROSSWALK_SIGNAL,
+	CROSSWALK_AUDIO,
+	MIDDLE_SLOPE,
+	STAIR,
+	NARROW_SIDEWALK,
+	UNPAVED,
+	ELEVATOR,
+	BUS_STOP,
+	SUBWAY_ELEVATOR,
+	ALIGHTING_POINT
 }

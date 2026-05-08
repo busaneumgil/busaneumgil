@@ -30,6 +30,7 @@ import com.ssafy.e102.domain.report.entity.HazardReportImage;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RouteSession;
+import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.global.entity.BaseEntity;
 
@@ -53,6 +54,7 @@ class DatabaseNamingStrategyTest {
 		HazardReportImage.class,
 		RoadNode.class,
 		RoadSegment.class,
+		SegmentFeature.class,
 		RouteSession.class);
 
 	@Test
@@ -187,6 +189,13 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(RoadSegment.class, "stairsState")).isEqualTo("stairs_state");
 		assertThat(physicalColumnName(RoadSegment.class, "signalState")).isEqualTo("signal_state");
 		assertThat(physicalColumnName(RoadSegment.class, "segmentType")).isEqualTo("segment_type");
+
+		assertThat(physicalColumnName(SegmentFeature.class, "featureId")).isEqualTo("feature_id");
+		assertThat(physicalColumnName(SegmentFeature.class, "edgeId")).isEqualTo("edge_id");
+		assertThat(physicalColumnName(SegmentFeature.class, "featureType")).isEqualTo("feature_type");
+		assertThat(physicalColumnName(SegmentFeature.class, "geom")).isEqualTo("geom");
+		assertThat(physicalColumnName(SegmentFeature.class, "state")).isEqualTo("state");
+		assertThat(physicalColumnName(SegmentFeature.class, "valueNumber")).isEqualTo("value_number");
 	}
 
 	@Test
@@ -223,6 +232,7 @@ class DatabaseNamingStrategyTest {
 			HazardReportImage.class,
 			RoadNode.class,
 			RoadSegment.class,
+			SegmentFeature.class,
 			RouteSession.class);
 
 		for (Class<?> entity : entities) {

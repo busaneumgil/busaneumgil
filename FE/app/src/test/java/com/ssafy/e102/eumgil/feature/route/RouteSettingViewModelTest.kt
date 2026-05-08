@@ -455,6 +455,12 @@ class RouteSettingViewModelTest {
                 ),
                 detailSteps.map(RouteDetailStepUiState::kind),
             )
+            assertEquals(
+                "음향신호기 안내를 확인한 뒤 횡단보도를 건너세요.",
+                detailSteps[3].description,
+            )
+            assertEquals("음향 신호", detailSteps[3].badgeLabel)
+            assertEquals(RouteDetailTone.INFO, detailSteps[3].badgeTone)
         }
 
     @Test
@@ -738,7 +744,12 @@ private fun directionalRouteRepository(): RouteRepository =
                                             RouteSegment(
                                                 sequence = 3,
                                                 distanceMeters = 60,
-                                                safetyFlags = RouteSegmentSafetyFlags(hasCrosswalk = true),
+                                                safetyFlags =
+                                                    RouteSegmentSafetyFlags(
+                                                        hasCrosswalk = true,
+                                                        hasSignal = true,
+                                                        hasAudioSignal = true,
+                                                    ),
                                                 guidanceMessage = "횡단보도로 이동하세요.",
                                             ),
                                             RouteSegment(

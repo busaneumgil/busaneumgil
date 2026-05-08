@@ -46,6 +46,14 @@ SEGMENT_FEATURE_COLUMNS = {
     "edge_id": ("edge_id", "edgeId"),
     "feature_type": ("feature_type", "featureType"),
     "geom": ("geom",),
+    "state": ("state",),
+    "value_number": ("value_number", "valueNumber"),
+}
+POSITION_EVENT_FEATURE_TYPES = {
+    "CROSSWALK",
+    "AUDIO_SIGNAL",
+    "BRAILLE_BLOCK",
+    "STAIRS",
 }
 
 SNAKE_ROAD_NODE_COLUMNS = {aliases[0] for aliases in ROAD_NODE_COLUMNS.values()}
@@ -63,6 +71,13 @@ def resolve_column(available_columns, aliases, canonical_name):
             return quote_identifier(candidate)
     expected = ", ".join(aliases[canonical_name])
     raise ValueError(f"Missing {canonical_name} column. Expected one of: {expected}")
+
+
+def resolve_optional_column(available_columns, aliases, canonical_name):
+    for candidate in aliases[canonical_name]:
+        if candidate in available_columns:
+            return quote_identifier(candidate)
+    return None
 
 
 def build_road_nodes_sql(available_columns):
@@ -122,15 +137,20 @@ def build_segment_features_sql(available_columns):
     edge_id = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "edge_id")
     feature_type = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "feature_type")
     geom = resolve_column(available_columns, SEGMENT_FEATURE_COLUMNS, "geom")
+    state = resolve_optional_column(available_columns, SEGMENT_FEATURE_COLUMNS, "state")
+    value_number = resolve_optional_column(available_columns, SEGMENT_FEATURE_COLUMNS, "value_number")
+    state_select = f"{state}::text" if state else "NULL::text"
+    value_number_select = value_number if value_number else "NULL::numeric"
     return f'''
 SELECT
   {feature_id} AS feature_id,
   {edge_id} AS edge_id,
   {feature_type}::text AS feature_type,
   ST_AsText({geom}::geometry) AS geom_wkt,
-  NULL::text AS state,
-  NULL::numeric AS value_number
+  {state_select} AS state,
+  {value_number_select} AS value_number
 FROM segment_features
+WHERE {feature_type}::text IN ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
 ORDER BY {edge_id}, {feature_id}
 '''
 
@@ -479,7 +499,6 @@ def apply_feature_state(segment, feature):
     """하나의 segment feature를 child segment의 최종 export 상태값에 반영한다."""
     feature_type = normalize_feature_type(feature.get("feature_type"))
     state = normalize_feature_state(feature.get("state"))
-    value_number = parse_feature_number(feature.get("value_number"))
 
     if feature_type == "CROSSWALK":
         segment["segment_type"] = "CROSS_WALK"
@@ -495,21 +514,6 @@ def apply_feature_state(segment, feature):
     if feature_type == "STAIRS":
         segment["stairs_state"] = state if state in ENUM_VALUES["stairs_state"] else "YES"
         return
-    if feature_type == "SLOPE":
-        if value_number is not None:
-            segment["avg_slope_percent"] = f"{value_number:.2f}"
-        segment["slope_state"] = state if state in ENUM_VALUES["slope_state"] else derive_slope_state(value_number)
-        return
-    if feature_type in {"WIDTH", "SIDEWALK_WIDTH"}:
-        if value_number is not None:
-            segment["width_meter"] = f"{value_number:.2f}"
-        segment["width_state"] = state if state in ENUM_VALUES["width_state"] else derive_width_state(value_number)
-        return
-    if feature_type == "SURFACE" and state in ENUM_VALUES["surface_state"]:
-        segment["surface_state"] = state
-        return
-    if feature_type == "WALK_ACCESS" and state in ENUM_VALUES["walk_access"]:
-        segment["walk_access"] = state
 
 
 def apply_segment_features_to_export(nodes, segments, features):
@@ -524,6 +528,8 @@ def apply_segment_features_to_export(nodes, segments, features):
 
     features_by_edge = defaultdict(list)
     for feature in features:
+        if normalize_feature_type(feature.get("feature_type")) not in POSITION_EVENT_FEATURE_TYPES:
+            continue
         features_by_edge[str(feature.get("edge_id"))].append(feature)
 
     output_nodes = [dict(node) for node in nodes]

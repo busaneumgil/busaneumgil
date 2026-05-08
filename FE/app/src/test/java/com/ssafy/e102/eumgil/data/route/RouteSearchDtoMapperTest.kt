@@ -86,6 +86,66 @@ class RouteSearchDtoMapperTest {
         assertTrue(route.hasRenderablePreview)
         assertEquals(route.preview.polyline, route.previewPolyline)
     }
+
+    @Test
+    fun `toDomain maps walk step alert crosswalk variants to safety flags`() {
+        val result =
+            RouteSearchResponseDto(
+                routes =
+                    listOf(
+                        RouteDto(
+                            routeOption = "SAFE",
+                            title = "안전 경로",
+                            distanceMeter = 90,
+                            estimatedTimeMinute = 2,
+                            legs =
+                                listOf(
+                                    RouteLegDto(
+                                        steps =
+                                            listOf(
+                                                RouteStepDto(
+                                                    sequence = 1,
+                                                    instruction = "직진하세요.",
+                                                    geometry = "LINESTRING(129.075600 35.179600, 129.076000 35.179900)",
+                                                    distanceMeter = 30.0,
+                                                    alert = RouteStepAlertDto(type = "CROSSWALK"),
+                                                ),
+                                                RouteStepDto(
+                                                    sequence = 2,
+                                                    instruction = "직진하세요.",
+                                                    geometry = "LINESTRING(129.076000 35.179900, 129.077000 35.180500)",
+                                                    distanceMeter = 30.0,
+                                                    alert = RouteStepAlertDto(type = "CROSSWALK_SIGNAL"),
+                                                ),
+                                                RouteStepDto(
+                                                    sequence = 3,
+                                                    instruction = "직진하세요.",
+                                                    geometry = "LINESTRING(129.077000 35.180500, 129.078000 35.181000)",
+                                                    distanceMeter = 30.0,
+                                                    alert = RouteStepAlertDto(type = "CROSSWALK_AUDIO"),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).toDomain(
+                query = testRouteSearchQuery(routeOptions = listOf("SAFE")),
+                geometryParser = geometryParser,
+            )
+
+        val flags = result.routes.single().segments.map { segment -> segment.safetyFlags }
+        assertEquals(3, flags.size)
+        assertTrue(flags[0].hasCrosswalk)
+        assertFalse(flags[0].hasSignal)
+        assertFalse(flags[0].hasAudioSignal)
+        assertTrue(flags[1].hasCrosswalk)
+        assertTrue(flags[1].hasSignal)
+        assertFalse(flags[1].hasAudioSignal)
+        assertTrue(flags[2].hasCrosswalk)
+        assertTrue(flags[2].hasSignal)
+        assertTrue(flags[2].hasAudioSignal)
+    }
 }
 
 private fun testRouteSearchQuery(routeOptions: List<String>): com.ssafy.e102.eumgil.core.model.RouteSearchQuery =

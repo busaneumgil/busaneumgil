@@ -697,16 +697,17 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
-  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `alightingStop`, `isLowFloor`, `badges`
-  - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
+  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `arrivingStop`, `isLowFloor`
+  - step/guidance event 단위: `sequence`, `type`, `instruction`, `distanceMeter`, `geometry`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
-  - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
-  - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
-  - SUBWAY metadata: ODsay `startID`, ODsay `endID`, ODsay `wayCode`, 내부 지하철역 식별자, 선택된 승차/하차 엘리베이터 식별자와 좌표
-  - reroute/refresh 판단용 metadata: leg별 geometry, BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표
+  - 공통 transit metadata: `type`, `lanes`, `passStops`
+  - BUS metadata: `lanes[].busNo`, `lanes[].busLocalBlID`, `passStops[].localStationID`
+  - SUBWAY metadata: ODsay `odsayStationId`, `endOdsayStationId`, `lineName`, `wayCode`, 선택된 승차/하차 엘리베이터 좌표, `nextDeparture`
+  - reroute/refresh 판단용 metadata: BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표, 원본 대중교통 path metadata
 - `route_snapshot_json`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
-- 실시간 도착정보는 외부 API 또는 Redis TTL cache에서만 관리한다.
+- BUS 실시간 도착정보는 BIMS 외부 API 또는 Redis `bims:arrival:{bstopid}:{lineid}` TTL 1분 cache에서만 관리한다.
+- SUBWAY 도착정보는 refresh 시점에 `subway_timetables` 시간표를 조회해 계산하며, 1차 구현에서는 지하철 외부 API를 직접 호출하지 않는다.
 - `status=ACTIVE`는 현재 안내 중이거나 재탐색 가능한 세션이다.
 - `status=COMPLETED`는 사용자가 도착 또는 안내 종료를 명시한 세션이다.
 - `EXPIRED`는 `status`로 두지 않는다. 만료는 JPA auditing의 수정일시 또는 별도 정책으로 판단한다.

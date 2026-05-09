@@ -186,6 +186,19 @@ class TransitRefreshServiceTest {
 	}
 
 	@Test
+	@DisplayName("BUS backend metadata를 해석할 수 없으면 ARRIVAL_UNKNOWN을 반환한다")
+	void refreshBusReturnsUnknownWhenMetadataIsMissing() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), null);
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
+
+		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.ARRIVAL_UNKNOWN);
+		assertThat(response.transits()).isEmpty();
+	}
+
+	@Test
 	@DisplayName("SUBWAY leg는 시간표 기반으로 다음 출발 정보를 반환한다")
 	void refreshSubwayUsesTimetable() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.SUBWAY), subwayMetadata());

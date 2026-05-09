@@ -118,6 +118,8 @@ services:
       S3_REGION: ${S3_REGION:-ap-northeast-2}
       GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BASE_URL:-http://graphhopper:8989}
       AI_BASE_URL: ${AI_BASE_URL:-http://ai:5000}
+      KAKAO_LOCAL_BASE_URL: ${KAKAO_LOCAL_BASE_URL:-https://dapi.kakao.com}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: ${JWT_ISSUER:-e102}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-15m}

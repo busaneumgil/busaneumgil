@@ -15,10 +15,10 @@ function defaultBackendApiUrl() {
   if (typeof window === "undefined") {
     return "http://localhost:8080";
   }
-  if (window.location.port === "3001") {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
     return "http://localhost:8080";
   }
-  return window.location.origin;
+  return "https://api.prod.busaneumgil.com";
 }
 
 export const backendApiUrl = (configuredBackendApiUrl || defaultBackendApiUrl()).replace(/\/$/, "");
@@ -65,8 +65,8 @@ async function requestAdminJson<T>(path: string, accessToken: string, init?: Req
 }
 
 export function getStoredAdminAccessToken() {
-	if (typeof window === "undefined") return "";
-	return normalizeAdminAccessToken(window.localStorage.getItem(adminAccessTokenStorageKey) || "");
+  if (typeof window === "undefined") return "";
+  return normalizeAdminAccessToken(window.localStorage.getItem(adminAccessTokenStorageKey) || "");
 }
 
 export function normalizeAdminAccessToken(accessToken: string) {

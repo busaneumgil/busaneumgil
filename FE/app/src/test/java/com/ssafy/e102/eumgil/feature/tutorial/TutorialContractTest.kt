@@ -26,6 +26,13 @@ class TutorialContractTest {
     }
 
     @Test
+    fun `tutorial step moves back until destination step`() {
+        assertNull(TutorialStep.DESTINATION.previous())
+        assertEquals(TutorialStep.DESTINATION, TutorialStep.ROUTE_COMPARISON.previous())
+        assertEquals(TutorialStep.ROUTE_COMPARISON, TutorialStep.REPORT.previous())
+    }
+
+    @Test
     fun `onboarding final action starts the app`() {
         assertEquals(
             R.string.tutorial_action_start,

@@ -16,6 +16,7 @@ class TutorialScreenTest {
     fun `tutorial keeps the hero mark fixed without a background tile`() {
         assertEquals(false, TutorialLayoutDefaults.hasHeroIconBackground)
         assertEquals(56.dp, TutorialLayoutDefaults.heroIconSize)
+        assertEquals(88.dp, TutorialLayoutDefaults.previousButtonMinWidth)
     }
 
     @Test

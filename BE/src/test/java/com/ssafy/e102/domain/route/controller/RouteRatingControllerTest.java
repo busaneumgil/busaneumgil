@@ -72,6 +72,30 @@ class RouteRatingControllerTest {
 	}
 
 	@Test
+	@DisplayName("경로 평가 score 최솟값 1은 성공한다")
+	void rateRouteAcceptsMinimumScore() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(routeRatingService.rate(eq(userId), any(RouteRatingRequest.class)))
+			.thenReturn(new RouteRatingResponse(2L));
+
+		mockMvc.perform(post("/route-ratings")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_selected_001",
+				  "score": 1
+				}
+				"""))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.status").value("S2010"))
+			.andExpect(jsonPath("$.data.ratingId").value(2));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
 	@DisplayName("경로 평가 routeId 누락은 RR4000을 반환한다")
 	void rateRouteRejectsBlankRouteId() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");

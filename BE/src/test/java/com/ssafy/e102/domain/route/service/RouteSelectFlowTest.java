@@ -27,15 +27,19 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
+import com.ssafy.e102.domain.route.dto.request.RouteRatingRequest;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
+import com.ssafy.e102.domain.route.entity.RouteRating;
 import com.ssafy.e102.domain.route.entity.RouteSession;
+import com.ssafy.e102.domain.route.repository.RouteRatingRepository;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.route.type.WalkRouteProfile;
 import com.ssafy.e102.domain.user.entity.User;
@@ -53,8 +57,11 @@ class RouteSelectFlowTest {
 	private final Map<String, String> redis = new HashMap<>();
 	private RouteSearchCacheService routeSearchCacheService;
 	private RouteSessionRepository routeSessionRepository;
+	private RouteRatingRepository routeRatingRepository;
 	private UserRepository userRepository;
+	private RouteSessionCommandService routeSessionCommandService;
 	private RouteSelectService routeSelectService;
+	private RouteRatingService routeRatingService;
 
 	@BeforeEach
 	void setUp() {
@@ -70,11 +77,14 @@ class RouteSelectFlowTest {
 		ObjectMapper objectMapper = new ObjectMapper();
 		routeSearchCacheService = new RouteSearchCacheService(redisTemplate, objectMapper);
 		routeSessionRepository = mock(RouteSessionRepository.class);
+		routeRatingRepository = mock(RouteRatingRepository.class);
 		userRepository = mock(UserRepository.class);
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 			any(), anyString(), any())).thenReturn(Optional.empty());
+		routeSessionCommandService = new RouteSessionCommandService(routeSessionRepository, userRepository);
 		routeSelectService = new RouteSelectService(routeSearchCacheService,
-			new RouteSessionCommandService(routeSessionRepository, userRepository), objectMapper);
+			routeSessionCommandService, objectMapper);
+		routeRatingService = new RouteRatingService(routeRatingRepository, routeSessionRepository, userRepository);
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 	}
 
@@ -125,6 +135,35 @@ class RouteSelectFlowTest {
 		verify(routeSessionRepository).saveAndFlush(sessionCaptor.capture());
 		assertThat(sessionCaptor.getValue().getRouteSnapshotJson().get("backendMetadata").get("mapObj").asText())
 			.isEqualTo("map-object");
+	}
+
+	@Test
+	@DisplayName("FE select 이후 end와 rating은 선택한 route session snapshot을 기준으로 처리된다")
+	void selectEndThenRatingUsesSelectedRouteSessionSnapshot() {
+		RouteSummaryResponse route = transitRoute("rs_transit_flow_recommended");
+		WalkRouteSearchResponse searchResponse = new WalkRouteSearchResponse("rs_transit_flow", List.of(route));
+		routeSearchCacheService.save(USER_ID, searchResponse);
+		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, route.routeId()))
+			.thenReturn(Optional.empty());
+		when(routeRatingRepository.saveAndFlush(any(RouteRating.class)))
+			.thenAnswer(invocation -> invocation.getArgument(0));
+
+		routeSelectService.select(USER_ID, route.routeId(), new SelectRouteRequest(searchResponse.searchId()));
+		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
+		verify(routeSessionRepository).saveAndFlush(sessionCaptor.capture());
+		RouteSession selectedSession = sessionCaptor.getValue();
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, route.routeId()))
+			.thenReturn(Optional.of(selectedSession));
+
+		routeSessionCommandService.endSession(USER_ID, route.routeId());
+		routeRatingService.rate(USER_ID, new RouteRatingRequest(route.routeId(), 5));
+
+		ArgumentCaptor<RouteRating> ratingCaptor = ArgumentCaptor.forClass(RouteRating.class);
+		verify(routeRatingRepository).saveAndFlush(ratingCaptor.capture());
+		assertThat(selectedSession.getStatus()).isEqualTo(RouteSessionStatus.COMPLETED);
+		assertThat(ratingCaptor.getValue().getScore()).isEqualTo((short)5);
+		assertThat(ratingCaptor.getValue().getRouteContextJson().get("routeId").asText()).isEqualTo(route.routeId());
+		assertThat(ratingCaptor.getValue().getRouteContextJson().has("remainingMinute")).isFalse();
 	}
 
 	private WalkRouteCandidate walkCandidate() {

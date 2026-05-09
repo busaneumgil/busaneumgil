@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
 import org.springframework.stereotype.Service;
@@ -14,10 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RerouteType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
+import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
@@ -34,14 +37,24 @@ public class RerouteService {
 	private static final double BUSAN_MAX_LNG = 129.40;
 	private static final double EARTH_RADIUS_METER = 6_371_000.0;
 	private static final double NO_REROUTE_DISTANCE_METER = 10.0;
+	private static final double WALK_REPAIR_MAX_DISTANCE_METER = 100.0;
+	private static final double FULL_REROUTE_MAX_DISTANCE_METER = 500.0;
 
 	private final RouteSessionRepository routeSessionRepository;
 	private final ObjectMapper objectMapper;
+	private final WalkRouteSearchService walkRouteSearchService;
+	private final TransitRouteSearchService transitRouteSearchService;
 	private final WKTReader wktReader = new WKTReader();
 
-	public RerouteService(RouteSessionRepository routeSessionRepository, ObjectMapper objectMapper) {
+	public RerouteService(
+		RouteSessionRepository routeSessionRepository,
+		ObjectMapper objectMapper,
+		WalkRouteSearchService walkRouteSearchService,
+		TransitRouteSearchService transitRouteSearchService) {
 		this.routeSessionRepository = routeSessionRepository;
 		this.objectMapper = objectMapper;
+		this.walkRouteSearchService = walkRouteSearchService;
+		this.transitRouteSearchService = transitRouteSearchService;
 	}
 
 	public RerouteResponse reroute(UUID userId, RerouteRequest request) {
@@ -53,7 +66,43 @@ public class RerouteService {
 		if (projection.distanceMeter() <= NO_REROUTE_DISTANCE_METER) {
 			return new RerouteResponse(RerouteType.NO_REROUTE_NEEDED, null);
 		}
-		return new RerouteResponse(RerouteType.NO_REROUTE_NEEDED, null);
+		if (projection.distanceMeter() <= WALK_REPAIR_MAX_DISTANCE_METER) {
+			return new RerouteResponse(RerouteType.WALK_REPAIR, route);
+		}
+		if (projection.distanceMeter() <= FULL_REROUTE_MAX_DISTANCE_METER) {
+			return new RerouteResponse(RerouteType.FULL_REROUTE,
+				fullReroute(userId, request.currentPoint(), routeSession, route));
+		}
+		return new RerouteResponse(RerouteType.FULL_REROUTE,
+			fullReroute(userId, request.currentPoint(), routeSession, route));
+	}
+
+	private RouteSummaryResponse fullReroute(
+		UUID userId,
+		GeoPointRequest currentPoint,
+		RouteSession routeSession,
+		RouteSummaryResponse previousRoute) {
+		WalkRouteSearchRequest searchRequest = new WalkRouteSearchRequest(
+			currentPoint,
+			endPoint(routeSession));
+		WalkRouteSearchResponse response = switch (previousRoute.transportMode()) {
+			case WALK -> walkRouteSearchService.search(userId, searchRequest);
+			case PUBLIC_TRANSIT, BUS, SUBWAY -> transitRouteSearchService.search(userId, searchRequest);
+		};
+		return response.routes()
+			.stream()
+			.filter(route -> route.routeOptions() != null && route.routeOptions().contains(previousRoute.routeOption()))
+			.findFirst()
+			.or(() -> response.routes().stream().findFirst())
+			.orElseThrow(() -> new RouteException(RouteErrorCode.ROUTE_NOT_FOUND));
+	}
+
+	private GeoPointRequest endPoint(RouteSession routeSession) {
+		Point endPoint = routeSession.getEndPoint();
+		if (endPoint == null) {
+			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+		}
+		return new GeoPointRequest(endPoint.getY(), endPoint.getX());
 	}
 
 	private RouteSession getOwnedRouteSession(UUID userId, String routeId) {

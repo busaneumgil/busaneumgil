@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.route.service;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -13,12 +14,17 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.PrecisionModel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RerouteType;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
+import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
@@ -31,14 +37,20 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 class RerouteServiceTest {
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
+	private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
 
 	private RouteSessionRepository routeSessionRepository;
+	private WalkRouteSearchService walkRouteSearchService;
+	private TransitRouteSearchService transitRouteSearchService;
 	private RerouteService service;
 
 	@BeforeEach
 	void setUp() {
 		routeSessionRepository = mock(RouteSessionRepository.class);
-		service = new RerouteService(routeSessionRepository, objectMapper);
+		walkRouteSearchService = mock(WalkRouteSearchService.class);
+		transitRouteSearchService = mock(TransitRouteSearchService.class);
+		service = new RerouteService(routeSessionRepository, objectMapper, walkRouteSearchService,
+			transitRouteSearchService);
 	}
 
 	@Test
@@ -133,6 +145,46 @@ class RerouteServiceTest {
 	}
 
 	@Test
+	@DisplayName("기존 route geometry 100m 이내 이탈은 WALK_REPAIR로 분기한다")
+	void returnsWalkRepairWhenCurrentPointIsNearRouteGeometry() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		RerouteResponse response = service.reroute(
+			userId,
+			new RerouteRequest("rt_001", new GeoPointRequest(35.1195, 128.9360)));
+
+		assertThat(response.rerouteType()).isEqualTo(RerouteType.WALK_REPAIR);
+		assertThat(response.route().routeId()).isEqualTo("rt_001");
+	}
+
+	@Test
+	@DisplayName("기존 route geometry 100m 초과 500m 이내 이탈은 FULL_REROUTE로 분기한다")
+	void returnsFullRerouteWhenCurrentPointIsFarFromRouteGeometry() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		RouteSummaryResponse reroutedRoute = routeSummary("rt_full_001");
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(walkRouteSearchService.search(userId, new WalkRouteSearchRequest(
+			new GeoPointRequest(35.1200, 128.9400),
+			new GeoPointRequest(35.1315, 128.8823))))
+			.thenReturn(new WalkRouteSearchResponse("rs_walk_reroute", List.of(reroutedRoute)));
+
+		RerouteResponse response = service.reroute(
+			userId,
+			new RerouteRequest("rt_001", new GeoPointRequest(35.1200, 128.9400)));
+
+		assertThat(response.rerouteType()).isEqualTo(RerouteType.FULL_REROUTE);
+		assertThat(response.route()).isEqualTo(reroutedRoute);
+		verify(walkRouteSearchService).search(userId, new WalkRouteSearchRequest(
+			new GeoPointRequest(35.1200, 128.9400),
+			new GeoPointRequest(35.1315, 128.8823)));
+	}
+
+	@Test
 	@DisplayName("route geometry WKT를 파싱할 수 없으면 RT4043으로 차단한다")
 	void rejectBrokenRouteGeometry() {
 		UUID userId = UUID.randomUUID();
@@ -172,6 +224,7 @@ class RerouteServiceTest {
 	private RouteSession routeSession(RouteSummaryResponse route) {
 		RouteSession routeSession = mock(RouteSession.class);
 		when(routeSession.getRouteSnapshotJson()).thenReturn(objectMapper.valueToTree(route));
+		when(routeSession.getEndPoint()).thenReturn(GEOMETRY_FACTORY.createPoint(new Coordinate(128.8823, 35.1315)));
 		return routeSession;
 	}
 

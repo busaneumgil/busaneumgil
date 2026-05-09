@@ -627,7 +627,7 @@
     <string name="tutorial_progress_count">%1$d / %2$d</string>
     <string name="tutorial_destination_title">목적지 찾기</string>
     <string name="tutorial_destination_headline">검색 한 번으로\n접근성 확인</string>
-    <string name="tutorial_destination_description">필터로 필요한 시설만 빠르게 볼 수 있어요.</string>
+    <string name="tutorial_destination_description">태그를 통해 원하는 장소를 쉽게 찾을 수 있어요.</string>
     <string name="tutorial_destination_item_search_title">장소 검색</string>
     <string name="tutorial_destination_item_search_description">목적지만 입력해요.</string>
     <string name="tutorial_destination_item_filter_title">접근성 필터</string>
@@ -654,10 +654,10 @@
     <string name="tutorial_route_item_navigation_title">길 안내 시작</string>
     <string name="tutorial_route_item_navigation_description">선택한 경로로\n바로 안내를 시작할 수 있어요.</string>
     <string name="tutorial_route_emphasis">빠른 길보다 이동하기 편한 길을 선택할 수 있어요.</string>
-    <string name="tutorial_route_recommended">추천 경로</string>
+    <string name="tutorial_route_recommended">완전히 안전한 길</string>
     <string name="tutorial_route_recommended_time">42분</string>
     <string name="tutorial_route_recommended_transfer">1회 환승</string>
-    <string name="tutorial_route_efficient">효율적 경로</string>
+    <string name="tutorial_route_efficient">효율적인 길</string>
     <string name="tutorial_route_efficient_time">51분</string>
     <string name="tutorial_route_efficient_transfer">2회 환승</string>
     <string name="tutorial_route_badge_elevator">엘리베이터 있음</string>
@@ -668,7 +668,7 @@
     <string name="tutorial_route_start_navigation">길 안내 시작</string>
     <string name="tutorial_report_title">제보하기</string>
     <string name="tutorial_report_headline">불편한 길은\n바로 공유하기</string>
-    <string name="tutorial_report_description">제보가 더 나은 이동 환경을 만듭니다.</string>
+    <string name="tutorial_report_description">간단한 몇 번의 터치로 제보를 진행해요.</string>
     <string name="tutorial_report_item_location_title">불편 지점 선택</string>
     <string name="tutorial_report_item_location_description">위치를 정해요.</string>
     <string name="tutorial_report_item_type_title">상세 유형 기록</string>
@@ -678,6 +678,7 @@
     <string name="tutorial_report_chip_damage">시설 파손</string>
     <string name="tutorial_report_item_share_title">제보 공유</string>
     <string name="tutorial_report_item_share_description">공유된 제보는\n다른 이용자의 안전한 이동에 도움이 돼요.</string>
+    <string name="tutorial_report_action_submit">제보하기</string>
     <string name="tutorial_report_emphasis">작은 제보가 더 나은 이동 환경을 만듭니다.</string>
     <string name="tutorial_report_tactile_block">점자블록 문제</string>
     <string name="tutorial_report_guiding_block">유도블록 문제</string>

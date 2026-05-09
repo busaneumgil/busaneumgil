@@ -25,8 +25,10 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -135,12 +137,18 @@ private fun TutorialBottomActions(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (canMovePrevious) {
-            TextButton(
+            OutlinedButton(
                 onClick = onPreviousActionClick,
                 modifier =
                     Modifier
                         .width(TutorialLayoutDefaults.previousButtonMinWidth)
                         .heightIn(min = TutorialLayoutDefaults.primaryButtonMinHeight),
+                shape = RoundedCornerShape(EumRadius.small),
+                border = BorderStroke(TutorialLayoutDefaults.previousButtonBorderWidth, EumBorderInfo),
+                colors =
+                    ButtonDefaults.outlinedButtonColors(
+                        contentColor = EumPrimary600,
+                    ),
             ) {
                 Text(
                     text = stringResource(id = R.string.tutorial_action_previous),
@@ -176,7 +184,7 @@ private fun TutorialHeader(uiState: TutorialUiState) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.headerSectionGap),
     ) {
         Text(
             text = stringResource(id = uiState.step.titleRes),
@@ -184,6 +192,7 @@ private fun TutorialHeader(uiState: TutorialUiState) {
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
+            lineHeight = TutorialLayoutDefaults.headerTitleLineHeight,
         )
         Text(
             text = stringResource(id = uiState.step.headlineRes),
@@ -191,13 +200,14 @@ private fun TutorialHeader(uiState: TutorialUiState) {
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Black,
             textAlign = TextAlign.Center,
-            lineHeight = MaterialTheme.typography.headlineSmall.lineHeight,
+            lineHeight = TutorialLayoutDefaults.headerHeadlineLineHeight,
         )
         Text(
             text = stringResource(id = uiState.step.descriptionRes),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
+            lineHeight = TutorialLayoutDefaults.headerDescriptionLineHeight,
         )
     }
 }
@@ -254,10 +264,17 @@ private fun TutorialVisualPanel(
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                    verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.supportingItemGap),
                 ) {
-                    content.items.forEach { item ->
+                    content.items.forEachIndexed { index, item ->
                         TutorialSupportingItemRow(item = item)
+                        if (index < content.items.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = TutorialLayoutDefaults.itemDividerStartPadding),
+                                color = EumBorderSubtle,
+                                thickness = TutorialLayoutDefaults.hairlineWidth,
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(EumSpacing.medium))
@@ -557,9 +574,15 @@ internal object TutorialLayoutDefaults {
 
     val primaryButtonMinHeight = 56.dp
     val previousButtonMinWidth = 88.dp
+    val previousButtonBorderWidth = 1.dp
     val visualPanelButtonGap = 12.dp
     val visualPanelMaxWidth = 360.dp
     val panelElevation = 2.dp
+
+    val headerSectionGap = 10.dp
+    val headerTitleLineHeight = 30.sp
+    val headerHeadlineLineHeight = 34.sp
+    val headerDescriptionLineHeight = 22.sp
 
     val tightGap = 8.dp
     val microGap = 4.dp
@@ -570,6 +593,8 @@ internal object TutorialLayoutDefaults {
     val supportingIconSize = 24.dp
     val supportingTitleLineHeight = 22.sp
     val supportingDescriptionLineHeight = 21.sp
+    val supportingItemGap = 18.dp
+    val itemDividerStartPadding = 56.dp
     val emphasisVerticalPadding = 9.dp
     val filterChipHorizontalPadding = 12.dp
     val filterChipVerticalPadding = 8.dp

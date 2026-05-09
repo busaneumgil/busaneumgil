@@ -692,7 +692,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
-  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `alightingStop`, `isLowFloor`, `badges`
+  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `arrivingStop`, `isLowFloor`, `badges`
   - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.

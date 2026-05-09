@@ -194,7 +194,6 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 3,
                     ),
                 selectedMarkerId = "elevator",
-                currentLocation = null,
             )
 
         assertEquals(listOf("toilet", "elevator"), markerStates.map { it.markerId })
@@ -206,33 +205,21 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `marker render state adds current location icon when location is ready`() {
+    fun `projected marker render state adds current location overlay when location is ready`() {
         val markerStates =
-            createKakaoMarkerRenderStates(
-                markerOverlayState =
-                    MapMarkerOverlayState(
-                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
-                        markers =
-                            listOf(
-                                MapMarkerUiModel(
-                                    markerId = "toilet",
-                                    name = "Accessible toilet",
-                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.2),
-                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
-                                ),
-                            ),
-                        visibleMarkerCount = 1,
-                        totalMarkerCount = 1,
-                    ),
-                selectedMarkerId = null,
+            createKakaoProjectedMarkerRenderStates(
                 currentLocation = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
             )
 
-        assertEquals(listOf("current-location", "toilet"), markerStates.map { it.markerId })
+        assertEquals(listOf("current-location"), markerStates.map { it.markerId })
+        assertEquals(KakaoProjectedMarkerKind.CURRENT_LOCATION, markerStates.first().kind)
         assertEquals(R.drawable.ic_map_current_location, markerStates.first().iconResId)
-        assertEquals(null, markerStates.first().clickTargetId)
-        assertEquals(35.1798, markerStates.first().latitude, 0.0)
-        assertEquals(129.0762, markerStates.first().longitude, 0.0)
+        assertEquals(35.1798, markerStates.first().coordinate.latitude, 0.0)
+        assertEquals(129.0762, markerStates.first().coordinate.longitude, 0.0)
+        assertEquals(0.5f, markerStates.first().anchorPointX)
+        assertEquals(0.5f, markerStates.first().anchorPointY)
     }
 
     @Test
@@ -255,7 +242,6 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 1,
                     ),
                 selectedMarkerId = null,
-                currentLocation = null,
             )
 
         assertEquals(listOf("toilet"), markerStates.map { it.markerId })
@@ -302,7 +288,6 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 4,
                     ),
                 selectedMarkerId = null,
-                currentLocation = null,
             )
 
         assertEquals(
@@ -396,7 +381,6 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 2,
                     ),
                 selectedMarkerId = "toilet",
-                currentLocation = null,
             )
 
         val summary =
@@ -431,34 +415,45 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `selected map pin is rendered as a kakao marker with dedicated icon and highest rank`() {
+    fun `selected map pin is rendered as a projected marker with dedicated icon and highest z index`() {
         val markerStates =
-            createKakaoMarkerRenderStates(
-                markerOverlayState =
-                    MapMarkerOverlayState(
-                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
-                        markers =
-                            listOf(
-                                MapMarkerUiModel(
-                                    markerId = "toilet",
-                                    name = "Accessible toilet",
-                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.2),
-                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
-                                ),
-                            ),
-                        visibleMarkerCount = 1,
-                        totalMarkerCount = 1,
-                    ),
-                selectedMarkerId = null,
+            createKakaoProjectedMarkerRenderStates(
                 currentLocation = null,
+                selectedDestinationCoordinate = null,
                 selectedMapPinCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771),
             )
 
-        assertEquals(listOf("selected-map-pin", "toilet"), markerStates.map { it.markerId })
+        assertEquals(listOf("selected-map-pin"), markerStates.map { it.markerId })
         assertEquals(R.drawable.ic_map_selected_pin_blue, markerStates.first().iconResId)
-        assertEquals(2L, markerStates.first().rank)
-        assertEquals(null, markerStates.first().clickTargetId)
+        assertEquals(KakaoProjectedMarkerKind.SELECTED_MAP_PIN, markerStates.first().kind)
         assertEquals(0.5f, markerStates.first().anchorPointX)
         assertEquals(1.0f, markerStates.first().anchorPointY)
+        assertEquals(4f, markerStates.first().zIndex)
+    }
+
+    @Test
+    fun `selected destination bookmark marker is rendered when no dropped pin exists`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = MapCoordinate(latitude = 35.1801, longitude = 129.0822),
+                selectedMapPinCoordinate = null,
+            )
+
+        assertEquals(listOf("selected-destination"), markerStates.map { it.markerId })
+        assertEquals(KakaoProjectedMarkerKind.SELECTED_DESTINATION, markerStates.first().kind)
+        assertEquals(R.drawable.ic_map_selected_pin_blue, markerStates.first().iconResId)
+    }
+
+    @Test
+    fun `dropped pin suppresses selected destination marker so only the newest explicit pin remains`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = MapCoordinate(latitude = 35.1801, longitude = 129.0822),
+                selectedMapPinCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771),
+            )
+
+        assertEquals(listOf("selected-map-pin"), markerStates.map { it.markerId })
     }
 }

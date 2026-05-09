@@ -63,18 +63,58 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
-    fun `selected map pin renders inside kakao marker layer instead of compose overlay`() {
+    fun `special map markers keep a compose overlay backup anchored by screen point`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
-        assertFalse(
-            "Selected map pin should not be rendered as a separate Compose overlay on top of the map.",
-            source.contains("MapSelectedPinOverlay("),
+        assertTrue(
+            "Special markers should have a Compose overlay path so selected pins, current location, and bookmarked destinations stay visible even when the Kakao label layer is unreliable.",
+            source.contains("MapProjectedMarkerOverlay("),
         )
-        assertFalse(
-            "Selected map pin should not depend on screen-point sync state once it is rendered inside the Kakao marker layer.",
-            source.contains("selectedMapPinScreenPoint"),
+        assertTrue(
+            "Projected marker overlays should be anchored from the map screen-point projection.",
+            source.contains("projectedMarkerOverlays"),
+        )
+        assertTrue(
+            "Projected marker overlays should include the selected destination marker so bookmarked places are not camera-only state.",
+            source.contains("selectedDestinationCoordinate"),
+        )
+    }
+
+    @Test
+    fun `blank map taps bind to terrain click listener so selected pin can be dropped`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Blank-area taps should use Kakao's terrain click callback so the dropped pin action is triggered on empty map space.",
+            source.contains("setOnTerrainClickListener"),
+        )
+        assertTrue(
+            "Blank-area taps should also listen to the generic map click callback so non-terrain surfaces can still drop a pin.",
+            source.contains("setOnMapClickListener"),
+        )
+    }
+
+    @Test
+    fun `kakao marker styles apply dp scale for visible map pin rendering`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Kakao marker styles should opt into dp scaling so vector pin assets render at an intended on-screen size.",
+            source.contains("setApplyDpScale(true)"),
+        )
+        assertTrue(
+            "Custom map markers should not compete with base map labels, otherwise the dropped pin can be hidden even after it is rendered.",
+            source.contains("setCompetitionType(CompetitionType.None)"),
+        )
+        assertTrue(
+            "Marker ordering should follow rank so the dropped pin can stay above lower-priority markers in the same layer.",
+            source.contains("setOrderingType(OrderingType.Rank)"),
         )
     }
 }

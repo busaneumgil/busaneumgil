@@ -305,6 +305,10 @@ class MapViewModel(
     }
 
     private fun handleMapTapped(coordinate: MapCoordinate) {
+        safeLogInfo(
+            MAP_VIEW_MODEL_LOG_TAG,
+            "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()}",
+        )
         selectedMapPinCoordinate = coordinate
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()

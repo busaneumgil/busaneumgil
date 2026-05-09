@@ -81,10 +81,33 @@ internal data class KakaoMapScreenPoint(
     val y: Int,
 )
 
-internal fun resolveSelectedMapPinScreenPoint(
-    projectedScreenPoint: KakaoMapScreenPoint?,
-    fallbackScreenPoint: KakaoMapScreenPoint?,
-): KakaoMapScreenPoint? = projectedScreenPoint ?: fallbackScreenPoint
+internal enum class KakaoProjectedMarkerKind {
+    CURRENT_LOCATION,
+    SELECTED_DESTINATION,
+    SELECTED_MAP_PIN,
+}
+
+internal data class KakaoProjectedMarkerRenderState(
+    val markerId: String,
+    val coordinate: MapCoordinate,
+    val kind: KakaoProjectedMarkerKind,
+    @DrawableRes val iconResId: Int,
+    val anchorPointX: Float,
+    val anchorPointY: Float,
+    val sizeDp: Int,
+    val zIndex: Float,
+)
+
+internal data class KakaoProjectedMarkerOverlay(
+    val markerId: String,
+    val kind: KakaoProjectedMarkerKind,
+    @DrawableRes val iconResId: Int,
+    val screenPoint: KakaoMapScreenPoint,
+    val anchorPointX: Float,
+    val anchorPointY: Float,
+    val sizeDp: Int,
+    val zIndex: Float,
+)
 
 internal data class KakaoMarkerRenderState(
     val markerId: String,
@@ -163,36 +186,8 @@ internal fun createKakaoRendererDestroyedFailure(): KakaoRendererFailure =
 internal fun createKakaoMarkerRenderStates(
     markerOverlayState: MapMarkerOverlayState,
     selectedMarkerId: String?,
-    currentLocation: com.ssafy.e102.eumgil.feature.map.model.MapCoordinate?,
-    selectedMapPinCoordinate: com.ssafy.e102.eumgil.feature.map.model.MapCoordinate? = null,
 ): List<KakaoMarkerRenderState> =
     buildList {
-        selectedMapPinCoordinate?.let { coordinate ->
-            add(
-                KakaoMarkerRenderState(
-                    markerId = "selected-map-pin",
-                    latitude = coordinate.latitude,
-                    longitude = coordinate.longitude,
-                    iconResId = R.drawable.ic_map_selected_pin_blue,
-                    rank = 2L,
-                    clickTargetId = null,
-                    anchorPointX = 0.5f,
-                    anchorPointY = 1.0f,
-                ),
-            )
-        }
-        currentLocation?.let { coordinate ->
-            add(
-                KakaoMarkerRenderState(
-                    markerId = "current-location",
-                    latitude = coordinate.latitude,
-                    longitude = coordinate.longitude,
-                    iconResId = R.drawable.ic_map_current_location,
-                    rank = 0L,
-                    clickTargetId = null,
-                ),
-            )
-        }
         addAll(
             markerOverlayState.visibleMarkers.map { marker ->
                 KakaoMarkerRenderState(
@@ -205,6 +200,77 @@ internal fun createKakaoMarkerRenderStates(
                 )
             },
         )
+    }
+
+internal fun createKakaoProjectedMarkerRenderStates(
+    currentLocation: MapCoordinate?,
+    selectedDestinationCoordinate: MapCoordinate?,
+    selectedMapPinCoordinate: MapCoordinate?,
+): List<KakaoProjectedMarkerRenderState> =
+    buildList {
+        currentLocation?.let { coordinate ->
+            add(
+                KakaoProjectedMarkerRenderState(
+                    markerId = "current-location",
+                    coordinate = coordinate,
+                    kind = KakaoProjectedMarkerKind.CURRENT_LOCATION,
+                    iconResId = R.drawable.ic_map_current_location,
+                    anchorPointX = 0.5f,
+                    anchorPointY = 0.5f,
+                    sizeDp = 28,
+                    zIndex = 2f,
+                ),
+            )
+        }
+        if (selectedMapPinCoordinate == null) {
+            selectedDestinationCoordinate?.let { coordinate ->
+                add(
+                    KakaoProjectedMarkerRenderState(
+                        markerId = "selected-destination",
+                        coordinate = coordinate,
+                        kind = KakaoProjectedMarkerKind.SELECTED_DESTINATION,
+                        iconResId = R.drawable.ic_map_selected_pin_blue,
+                        anchorPointX = 0.5f,
+                        anchorPointY = 1.0f,
+                        sizeDp = 32,
+                        zIndex = 3f,
+                    ),
+                )
+            }
+        }
+        selectedMapPinCoordinate?.let { coordinate ->
+            add(
+                KakaoProjectedMarkerRenderState(
+                    markerId = "selected-map-pin",
+                    coordinate = coordinate,
+                    kind = KakaoProjectedMarkerKind.SELECTED_MAP_PIN,
+                    iconResId = R.drawable.ic_map_selected_pin_blue,
+                    anchorPointX = 0.5f,
+                    anchorPointY = 1.0f,
+                    sizeDp = 32,
+                    zIndex = 4f,
+                ),
+            )
+        }
+    }
+
+internal fun createKakaoProjectedMarkerOverlays(
+    projectedMarkers: List<KakaoProjectedMarkerRenderState>,
+    projectScreenPoint: (MapCoordinate) -> KakaoMapScreenPoint?,
+): List<KakaoProjectedMarkerOverlay> =
+    projectedMarkers.mapNotNull { marker ->
+        projectScreenPoint(marker.coordinate)?.let { screenPoint ->
+            KakaoProjectedMarkerOverlay(
+                markerId = marker.markerId,
+                kind = marker.kind,
+                iconResId = marker.iconResId,
+                screenPoint = screenPoint,
+                anchorPointX = marker.anchorPointX,
+                anchorPointY = marker.anchorPointY,
+                sizeDp = marker.sizeDp,
+                zIndex = marker.zIndex,
+            )
+        }
     }
 
 internal fun createKakaoMarkerDebugSummary(

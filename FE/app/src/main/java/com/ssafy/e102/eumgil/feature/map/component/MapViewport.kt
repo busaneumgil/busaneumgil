@@ -56,6 +56,8 @@ internal data class MapViewportUiState(
     val integrationState: MapIntegrationState,
     val cameraTarget: MapCameraTarget,
     val currentLocation: MapCoordinate?,
+    val selectedDestinationCoordinate: MapCoordinate? = null,
+    val selectedDestinationName: String? = null,
     val markerOverlayState: MapMarkerOverlayState,
     val overlayState: MapViewportOverlayState = MapViewportOverlayState(),
     val selectedMarkerId: String?,

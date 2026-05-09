@@ -38,6 +38,7 @@ class TutorialScreenTest {
         assertEquals(true, TutorialLayoutDefaults.destinationFiltersAttachToSearch)
         assertEquals(true, TutorialLayoutDefaults.destinationSearchShowsMic)
         assertEquals(false, TutorialLayoutDefaults.destinationShowsMapPreview)
+        assertEquals(true, TutorialLayoutDefaults.reportDescriptionMentionsRouteContribution)
     }
 
     @Test

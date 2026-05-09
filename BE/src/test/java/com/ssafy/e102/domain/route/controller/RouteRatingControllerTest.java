@@ -163,6 +163,31 @@ class RouteRatingControllerTest {
 		SecurityContextHolder.clearContext();
 	}
 
+	@Test
+	@DisplayName("route session 없는 경로 평가는 RT4043을 반환한다")
+	void rateRouteRejectsMissingRouteSession() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		Mockito.doThrow(new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND))
+			.when(routeRatingService)
+			.rate(eq(userId), any(RouteRatingRequest.class));
+
+		mockMvc.perform(post("/route-ratings")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "missing_route",
+				  "score": 5
+				}
+				"""))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.status").value("RT4043"))
+			.andExpect(jsonPath("$.message").value("선택한 경로 정보를 찾을 수 없습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
 	private UsernamePasswordAuthenticationToken authentication(UUID userId) {
 		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
 			new AuthPrincipal(userId, "access-token"), null);

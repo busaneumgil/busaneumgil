@@ -45,7 +45,7 @@ public class RouteRating extends BaseEntity {
 	private Short score;
 
 	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "route_context_json", columnDefinition = "jsonb")
+	@Column(name = "route_context_json", nullable = false, columnDefinition = "jsonb")
 	private JsonNode routeContextJson;
 
 	public static RouteRating create(

@@ -632,7 +632,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 사용자 PK | user_id | UUID | NOT NULL |  |
 | 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
 | 별점 | score | SMALLINT | NOT NULL |  |
-| 경로 문맥 JSON | route_context_json | JSONB | NULL |  |
+| 경로 문맥 JSON | route_context_json | JSONB | NOT NULL |  |
 
 ### 후보값
 
@@ -648,8 +648,8 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - 경로 평가에는 별점만 저장한다.
 - 평가 대상은 사용자가 방금 안내받은 경로다.
 - `route_id`는 `POST /route-ratings` 요청의 평가 대상 경로 ID다.
-- `route_context_json`은 평가 시점에 route session이 있으면 `route_sessions.route_snapshot_json`을 복사해 저장한다.
-- `route_context_json`이 `NULL`이어도 rating 자체는 저장할 수 있다.
+- `route_context_json`은 평가 시점에 같은 사용자의 `route_sessions.route_snapshot_json`을 복사해 저장한다.
+- 같은 사용자의 route session이 없으면 평가를 저장하지 않는다.
 - 평가 생성 시각은 DB `created_at` 공통 감사 컬럼으로 관리하고, Java/API에서는 `createdAt`으로 노출할 수 있다.
 - 회원 탈퇴 시 경로 평가는 삭제한다.
 

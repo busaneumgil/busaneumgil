@@ -80,28 +80,17 @@ class RouteRatingServiceTest {
 	}
 
 	@Test
-	@DisplayName("route session이 없어도 route_context_json=null로 rating을 저장한다")
-	void rateStoresRatingWithoutRouteContextWhenSessionIsMissing() {
+	@DisplayName("route session이 없으면 RT4043으로 평가를 차단한다")
+	void rateRejectsMissingRouteSession() {
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_without_session"))
 			.thenReturn(Optional.empty());
 		when(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc("rt_without_session"))
 			.thenReturn(Optional.empty());
-		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_without_session"))
-			.thenReturn(Optional.empty());
-		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
-		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
-			.thenAnswer(invocation -> {
-				RouteRating rating = invocation.getArgument(0);
-				ReflectionTestUtils.setField(rating, "ratingId", 2L);
-				return rating;
-			});
 
-		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_without_session", 4));
-
-		ArgumentCaptor<RouteRating> ratingCaptor = ArgumentCaptor.forClass(RouteRating.class);
-		verify(routeRatingRepository).saveAndFlush(ratingCaptor.capture());
-		assertThat(response.ratingId()).isEqualTo(2L);
-		assertThat(ratingCaptor.getValue().getRouteContextJson()).isNull();
+		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest("rt_without_session", 4)))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 	}
 
 	@Test

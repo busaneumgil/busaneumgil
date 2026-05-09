@@ -43,11 +43,8 @@ public class RouteRatingService {
 
 	@Transactional
 	public RouteRatingResponse rate(UUID userId, RouteRatingRequest request) {
-		Optional<RouteSession> routeSession = routeSessionRepository
-			.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, request.routeId());
-		JsonNode routeContextJson = routeSession
-			.map(RouteSession::getRouteSnapshotJson)
-			.orElseGet(() -> routeContextOrThrowIfOwnedByOtherUser(request.routeId()));
+		RouteSession routeSession = getRouteSession(userId, request.routeId());
+		JsonNode routeContextJson = routeSession.getRouteSnapshotJson();
 
 		RouteRating routeRating = routeRatingRepository.findByUser_UserIdAndRouteId(userId, request.routeId())
 			.map(existingRating -> {
@@ -58,11 +55,16 @@ public class RouteRatingService {
 		return new RouteRatingResponse(routeRating.getRatingId());
 	}
 
-	private JsonNode routeContextOrThrowIfOwnedByOtherUser(String routeId) {
+	private RouteSession getRouteSession(UUID userId, String routeId) {
+		Optional<RouteSession> routeSession = routeSessionRepository
+			.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, routeId);
+		if (routeSession.isPresent()) {
+			return routeSession.get();
+		}
 		if (routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc(routeId).isPresent()) {
 			throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
 		}
-		return null;
+		throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 	}
 
 	private RouteRating createRatingOrUpdateAfterUniqueConflict(

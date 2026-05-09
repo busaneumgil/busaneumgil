@@ -194,6 +194,7 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 3,
                     ),
                 selectedMarkerId = "elevator",
+                currentLocation = null,
             )
 
         assertEquals(listOf("toilet", "elevator"), markerStates.map { it.markerId })
@@ -202,6 +203,36 @@ class KakaoMapViewportBindingsTest {
         assertEquals(0L, markerStates.first().rank)
         assertEquals(1L, markerStates.last().rank)
         assertTrue(markerStates.none { it.markerId == "hidden" })
+    }
+
+    @Test
+    fun `marker render state adds current location icon when location is ready`() {
+        val markerStates =
+            createKakaoMarkerRenderStates(
+                markerOverlayState =
+                    MapMarkerOverlayState(
+                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
+                        markers =
+                            listOf(
+                                MapMarkerUiModel(
+                                    markerId = "toilet",
+                                    name = "Accessible toilet",
+                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.2),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
+                                ),
+                            ),
+                        visibleMarkerCount = 1,
+                        totalMarkerCount = 1,
+                    ),
+                selectedMarkerId = null,
+                currentLocation = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+            )
+
+        assertEquals(listOf("current-location", "toilet"), markerStates.map { it.markerId })
+        assertEquals(R.drawable.ic_map_current_location, markerStates.first().iconResId)
+        assertEquals(null, markerStates.first().clickTargetId)
+        assertEquals(35.1798, markerStates.first().latitude, 0.0)
+        assertEquals(129.0762, markerStates.first().longitude, 0.0)
     }
 
     @Test
@@ -224,6 +255,7 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 1,
                     ),
                 selectedMarkerId = null,
+                currentLocation = null,
             )
 
         assertEquals(listOf("toilet"), markerStates.map { it.markerId })
@@ -270,6 +302,7 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 4,
                     ),
                 selectedMarkerId = null,
+                currentLocation = null,
             )
 
         assertEquals(
@@ -340,6 +373,7 @@ class KakaoMapViewportBindingsTest {
                         totalMarkerCount = 2,
                     ),
                 selectedMarkerId = "toilet",
+                currentLocation = null,
             )
 
         val summary =

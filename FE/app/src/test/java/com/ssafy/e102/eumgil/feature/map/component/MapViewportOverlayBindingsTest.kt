@@ -61,6 +61,8 @@ class MapViewportOverlayBindingsTest {
                         totalMarkerCount = 3,
                     ),
                 selectedMarkerId = "elevator",
+                currentLocation = null,
+                currentLocationLabel = null,
             )
 
         assertEquals(cameraTarget.center, overlayState.fallbackCamera.center)
@@ -73,6 +75,52 @@ class MapViewportOverlayBindingsTest {
         assertFalse(overlayState.points[1].isSelected)
         assertTrue(overlayState.points[2].isSelected)
         assertEquals("elevator", overlayState.points[2].clickTargetId)
+    }
+
+    @Test
+    fun `marker overlay binding adds current location point when location is ready`() {
+        val cameraTarget =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                source = MapCameraSource.CURRENT_LOCATION,
+                requestId = 12L,
+            )
+        val currentLocation = MapCoordinate(latitude = 35.1798, longitude = 129.0762)
+
+        val overlayState =
+            createMapMarkerViewportOverlayState(
+                cameraTarget = cameraTarget,
+                markerOverlayState =
+                    MapMarkerOverlayState(
+                        loadStatus = MapMarkerLoadStatus.READY,
+                        markers =
+                            listOf(
+                                MapMarkerUiModel(
+                                    markerId = "toilet",
+                                    name = "Accessible toilet",
+                                    coordinate = MapCoordinate(latitude = 35.18, longitude = 129.07),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
+                                ),
+                            ),
+                        visibleMarkerCount = 1,
+                        totalMarkerCount = 1,
+                    ),
+                selectedMarkerId = null,
+                currentLocation = currentLocation,
+                currentLocationLabel = "현",
+            )
+
+        assertEquals(
+            listOf(
+                MapViewportPointKind.CAMERA_FOCUS,
+                MapViewportPointKind.CURRENT_LOCATION,
+                MapViewportPointKind.FACILITY,
+            ),
+            overlayState.points.map { it.kind },
+        )
+        assertEquals(currentLocation, overlayState.points[1].coordinate)
+        assertEquals("현", overlayState.points[1].label)
+        assertEquals("toilet", overlayState.points[2].overlayId)
     }
 
     @Test

@@ -110,8 +110,21 @@ internal fun createKakaoRendererFailure(error: Throwable): KakaoRendererFailure 
 internal fun createKakaoMarkerRenderStates(
     markerOverlayState: MapMarkerOverlayState,
     selectedMarkerId: String?,
+    currentLocation: com.ssafy.e102.eumgil.feature.map.model.MapCoordinate?,
 ): List<KakaoMarkerRenderState> =
     buildList {
+        currentLocation?.let { coordinate ->
+            add(
+                KakaoMarkerRenderState(
+                    markerId = "current-location",
+                    latitude = coordinate.latitude,
+                    longitude = coordinate.longitude,
+                    iconResId = R.drawable.ic_map_current_location,
+                    rank = 0L,
+                    clickTargetId = null,
+                ),
+            )
+        }
         addAll(
             markerOverlayState.visibleMarkers.map { marker ->
                 KakaoMarkerRenderState(

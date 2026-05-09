@@ -466,6 +466,7 @@ private class KakaoMapViewportController {
             createKakaoMarkerRenderStates(
                 markerOverlayState = state.markerOverlayState,
                 selectedMarkerId = state.selectedMarkerId,
+                currentLocation = state.currentLocation,
             )
         if (lastRenderedMarkers == markerRenderStates) return
 

@@ -53,6 +53,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
 internal data class MapViewportUiState(
     val integrationState: MapIntegrationState,
     val cameraTarget: MapCameraTarget,
+    val currentLocation: MapCoordinate?,
     val markerOverlayState: MapMarkerOverlayState,
     val overlayState: MapViewportOverlayState = MapViewportOverlayState(),
     val selectedMarkerId: String?,

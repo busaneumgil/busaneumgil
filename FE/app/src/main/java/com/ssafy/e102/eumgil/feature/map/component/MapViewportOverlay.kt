@@ -78,6 +78,8 @@ internal fun createMapMarkerViewportOverlayState(
     cameraTarget: MapCameraTarget,
     markerOverlayState: MapMarkerOverlayState,
     selectedMarkerId: String?,
+    currentLocation: MapCoordinate?,
+    currentLocationLabel: String?,
 ): MapViewportOverlayState =
     MapViewportOverlayState(
         fallbackCamera = cameraTarget.toViewportFallbackCamera(),
@@ -91,6 +93,17 @@ internal fun createMapMarkerViewportOverlayState(
                         includeInProjection = false,
                     ),
                 )
+                currentLocation?.let { coordinate ->
+                    add(
+                        MapViewportPointOverlay(
+                            overlayId = "current-location",
+                            coordinate = coordinate,
+                            kind = MapViewportPointKind.CURRENT_LOCATION,
+                            label = currentLocationLabel,
+                            contentDescription = currentLocationLabel,
+                        ),
+                    )
+                }
                 addAll(
                     markerOverlayState.visibleMarkers.map { marker ->
                         MapViewportPointOverlay(

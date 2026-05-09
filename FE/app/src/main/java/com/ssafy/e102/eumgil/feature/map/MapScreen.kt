@@ -679,6 +679,12 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
 @Composable
 private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     val cameraTarget = uiState.cameraTarget
+    val currentLocationMarker =
+        if (cameraTarget.source == MapCameraSource.CURRENT_LOCATION) {
+            (uiState.locationStatus as? MapLocationStatus.Ready)?.location
+        } else {
+            null
+        }
     val integrationState =
         resolveMapIntegrationState(
             hasNativeAppKey = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(),
@@ -754,12 +760,18 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     return MapViewportUiState(
         integrationState = integrationState,
         cameraTarget = cameraTarget,
+        currentLocation = currentLocationMarker,
         markerOverlayState = uiState.markerOverlayState,
         overlayState =
             createMapMarkerViewportOverlayState(
                 cameraTarget = cameraTarget,
                 markerOverlayState = uiState.markerOverlayState,
                 selectedMarkerId = uiState.selectedMarkerId,
+                currentLocation = currentLocationMarker,
+                currentLocationLabel =
+                    currentLocationMarker?.let {
+                        stringResource(id = R.string.navigation_map_marker_current)
+                    },
             ),
         selectedMarkerId = uiState.selectedMarkerId,
         selectedMapPinCoordinate = uiState.selectedMapPinCoordinate,

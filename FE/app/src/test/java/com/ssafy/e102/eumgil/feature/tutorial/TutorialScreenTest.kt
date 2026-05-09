@@ -37,7 +37,8 @@ class TutorialScreenTest {
         assertEquals(false, TutorialLayoutDefaults.usesIllustrationHalo)
         assertEquals(true, TutorialLayoutDefaults.destinationFiltersAttachToSearch)
         assertEquals(true, TutorialLayoutDefaults.destinationSearchShowsMic)
-        assertEquals(false, TutorialLayoutDefaults.destinationShowsMapPreview)
+        assertEquals(true, TutorialLayoutDefaults.destinationShowsMapPreview)
+        assertEquals(true, TutorialLayoutDefaults.destinationMapAttachesBelowFilters)
         assertEquals(true, TutorialLayoutDefaults.reportDescriptionMentionsRouteContribution)
     }
 
@@ -48,5 +49,10 @@ class TutorialScreenTest {
         assertEquals(12.dp, TutorialLayoutDefaults.illustrationContentGap)
         assertEquals(6.dp, TutorialLayoutDefaults.headerVisualGap)
         assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
+    }
+
+    @Test
+    fun `route description keeps the setting phrase on its own line`() {
+        assertEquals(true, TutorialLayoutDefaults.routeDescriptionBreaksAfterSettingComma)
     }
 }

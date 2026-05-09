@@ -22,6 +22,7 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
@@ -131,6 +132,24 @@ class RerouteServiceTest {
 		assertRouteError(
 			() -> service.reroute(userId, new RerouteRequest("rt_001", new GeoPointRequest(35.12, 128.936))),
 			RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("route session snapshot에 backendMetadata가 있어도 FE route payload를 복구한다")
+	void restoresRouteSnapshotWithBackendMetadata() {
+		UUID userId = UUID.randomUUID();
+		ObjectNode snapshot = objectMapper.valueToTree(routeSummary("rt_001"));
+		snapshot.set("backendMetadata", objectMapper.createObjectNode().put("mapObj", "map-object"));
+		RouteSession routeSession = mock(RouteSession.class);
+		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		RerouteResponse response = service.reroute(
+			userId,
+			new RerouteRequest("rt_001", new GeoPointRequest(35.12001, 128.93601)));
+
+		assertThat(response.route()).isNull();
 	}
 
 	@Test

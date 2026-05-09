@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +32,7 @@ import com.ssafy.e102.domain.route.type.TransportMode;
 
 class RouteSearchCacheServiceTest {
 
+	private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 	@Mock
 	private StringRedisTemplate redisTemplate;
 
@@ -49,11 +52,11 @@ class RouteSearchCacheServiceTest {
 	void savesSearchResponseWithTenMinuteTtl() {
 		WalkRouteSearchResponse response = response();
 
-		cacheService.save(response);
+		cacheService.save(USER_ID, response);
 
 		verify(valueOperations).set(
 			org.mockito.ArgumentMatchers.eq("routeSearch:rs_walk_test"),
-			org.mockito.ArgumentMatchers.contains("\"searchId\":\"rs_walk_test\""),
+			org.mockito.ArgumentMatchers.contains("\"userId\":\"00000000-0000-0000-0000-000000000001\""),
 			org.mockito.ArgumentMatchers.eq(600L),
 			org.mockito.ArgumentMatchers.eq(TimeUnit.SECONDS));
 	}
@@ -61,7 +64,7 @@ class RouteSearchCacheServiceTest {
 	@Test
 	void findsRouteFromCachedSearchResponse() {
 		when(valueOperations.get("routeSearch:rs_walk_test")).thenReturn("""
-			{"searchId":"rs_walk_test","routes":[{"routeId":"rs_walk_test_safe","transportMode":"WALK","routeOption":"SAFE","title":"안전 경로","distanceMeter":100.00,"durationSecond":60,"estimatedTimeMinute":1,"badges":[],"geometry":"LINESTRING(0 0, 1 1)","legs":[]}]}
+			{"userId":"00000000-0000-0000-0000-000000000001","response":{"searchId":"rs_walk_test","routes":[{"routeId":"rs_walk_test_safe","transportMode":"WALK","routeOption":"SAFE","title":"안전 경로","distanceMeter":100.00,"durationSecond":60,"estimatedTimeMinute":1,"badges":[],"geometry":"LINESTRING(0 0, 1 1)","legs":[]}]}}
 			""");
 
 		Optional<RouteSummaryResponse> route = cacheService.findRoute("rs_walk_test", "rs_walk_test_safe");
@@ -83,7 +86,7 @@ class RouteSearchCacheServiceTest {
 	@Test
 	void getRouteThrowsCandidateNotFoundWhenRouteIdIsMissing() {
 		when(valueOperations.get("routeSearch:rs_walk_test")).thenReturn("""
-			{"searchId":"rs_walk_test","routes":[]}
+			{"userId":"00000000-0000-0000-0000-000000000001","response":{"searchId":"rs_walk_test","routes":[]}}
 			""");
 
 		assertThatThrownBy(() -> cacheService.getRouteOrThrow("rs_walk_test", "missing-route"))
@@ -93,25 +96,86 @@ class RouteSearchCacheServiceTest {
 	}
 
 	@Test
+	void getOwnedRouteReturnsRouteWhenSearchBelongsToUser() {
+		when(valueOperations.get("routeSearch:rs_walk_test")).thenReturn("""
+			{"userId":"00000000-0000-0000-0000-000000000001","response":{"searchId":"rs_walk_test","routes":[{"routeId":"rs_walk_test_safe","transportMode":"WALK","routeOption":"SAFE","title":"안전 경로","distanceMeter":100.00,"durationSecond":60,"estimatedTimeMinute":1,"badges":[],"geometry":"LINESTRING(0 0, 1 1)","legs":[]}]}}
+			""");
+
+		RouteSummaryResponse route = cacheService.getOwnedRouteOrThrow(USER_ID, "rs_walk_test", "rs_walk_test_safe");
+
+		assertThat(route.routeId()).isEqualTo("rs_walk_test_safe");
+	}
+
+	@Test
+	void getOwnedRouteThrowsAccessDeniedWhenSearchBelongsToOtherUser() {
+		when(valueOperations.get("routeSearch:rs_walk_test")).thenReturn("""
+			{"userId":"00000000-0000-0000-0000-000000000002","response":{"searchId":"rs_walk_test","routes":[{"routeId":"rs_walk_test_safe","transportMode":"WALK","routeOption":"SAFE","title":"안전 경로","distanceMeter":100.00,"durationSecond":60,"estimatedTimeMinute":1,"badges":[],"geometry":"LINESTRING(0 0, 1 1)","legs":[]}]}}
+			""");
+
+		assertThatThrownBy(() -> cacheService.getOwnedRouteOrThrow(USER_ID, "rs_walk_test", "rs_walk_test_safe"))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_ACCESS_DENIED);
+	}
+
+	@Test
+	void getOwnedRouteThrowsSearchExpiredWhenCachedSearchHasNoOwner() {
+		when(valueOperations.get("routeSearch:legacy")).thenReturn("""
+			{"searchId":"legacy","routes":[{"routeId":"legacy_safe","transportMode":"WALK","routeOption":"SAFE","title":"안전 경로","distanceMeter":100.00,"durationSecond":60,"estimatedTimeMinute":1,"badges":[],"geometry":"LINESTRING(0 0, 1 1)","legs":[]}]}
+			""");
+
+		assertThatThrownBy(() -> cacheService.getOwnedRouteOrThrow(USER_ID, "legacy", "legacy_safe"))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_SEARCH_EXPIRED);
+	}
+
+	@Test
+	void findsTransitMetadataByRouteId() {
+		when(valueOperations.get("routeSearchMeta:rs_transit_test")).thenReturn("""
+			[{"routeId":"rt_a","mapObj":"map-a","legs":[{"type":"BUS"}]},{"routeId":"rt_b","mapObj":"map-b","legs":[{"type":"SUBWAY"}]}]
+			""");
+
+		Optional<TransitRouteSnapshot> snapshot = cacheService.findTransitMetadata("rs_transit_test", "rt_b");
+
+		assertThat(snapshot).isPresent();
+		assertThat(snapshot.get().mapObj()).isEqualTo("map-b");
+		assertThat(snapshot.get().legs().get(0)).containsEntry("type", "SUBWAY");
+	}
+
+	@Test
+	void savesTransitMetadataWithTenMinuteTtl() {
+		List<TransitRouteSnapshot> snapshots = List.of(new TransitRouteSnapshot(
+			"rt_transit",
+			"map-obj",
+			List.of(Map.of("type", "BUS"))));
+
+		cacheService.saveTransitMetadata("rs_transit_test", snapshots);
+
+		verify(valueOperations).set(
+			org.mockito.ArgumentMatchers.eq("routeSearchMeta:rs_transit_test"),
+			org.mockito.ArgumentMatchers.contains("\"mapObj\":\"map-obj\""),
+			org.mockito.ArgumentMatchers.eq(600L),
+			org.mockito.ArgumentMatchers.eq(TimeUnit.SECONDS));
+	}
+
+	@Test
 	void saveThrowsInternalFailureWhenSearchResponseCannotBeSerialized() throws Exception {
 		ObjectMapper objectMapper = mock(ObjectMapper.class);
 		when(objectMapper.writeValueAsString(any()))
 			.thenThrow(new JsonProcessingException("serialize failed") {});
 		RouteSearchCacheService brokenCacheService = new RouteSearchCacheService(redisTemplate, objectMapper);
 
-		assertThatThrownBy(() -> brokenCacheService.save(response()))
+		assertThatThrownBy(() -> brokenCacheService.save(USER_ID, response()))
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessage("경로 검색 후보를 직렬화할 수 없습니다.");
 	}
 
 	@Test
 	void findSearchThrowsInternalFailureWhenCachedResponseCannotBeDeserialized() throws Exception {
-		ObjectMapper objectMapper = mock(ObjectMapper.class);
 		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 		when(valueOperations.get("routeSearch:rs_walk_test")).thenReturn("{broken");
-		when(objectMapper.readValue("{broken", WalkRouteSearchResponse.class))
-			.thenThrow(new JsonProcessingException("deserialize failed") {});
-		RouteSearchCacheService brokenCacheService = new RouteSearchCacheService(redisTemplate, objectMapper);
+		RouteSearchCacheService brokenCacheService = new RouteSearchCacheService(redisTemplate, new ObjectMapper());
 
 		assertThatThrownBy(() -> brokenCacheService.findSearch("rs_walk_test"))
 			.isInstanceOf(IllegalStateException.class)

@@ -244,11 +244,17 @@ class SearchViewModel(
     }
 
     private fun enterVoiceRoute() {
-        startVoiceCapture()
+        cancelPendingVoiceSearchNavigation()
+        showListeningVoiceInputState()
     }
 
     private fun startVoiceCapture() {
         cancelPendingVoiceSearchNavigation()
+        showListeningVoiceInputState()
+        emitUiEvent(SearchUiEvent.StartVoiceCapture)
+    }
+
+    private fun showListeningVoiceInputState() {
         mutableUiState.update { state ->
             state.copy(
                 voiceInputState =
@@ -260,7 +266,6 @@ class SearchViewModel(
                     ),
             )
         }
-        emitUiEvent(SearchUiEvent.StartVoiceCapture)
     }
 
     private fun handleVoiceCaptureEmpty() {

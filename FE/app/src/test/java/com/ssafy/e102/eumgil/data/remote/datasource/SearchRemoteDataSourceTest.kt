@@ -163,4 +163,41 @@ class SearchRemoteDataSourceTest {
             assertEquals("Busan Station", analysis.placeName)
             assertNull(analysis.confirmationMessage)
         }
+
+    @Test
+    fun `search uses backend compatible default size when limit is omitted`() =
+        runBlocking {
+            var capturedQueryParams: Map<String, String> = emptyMap()
+            val dataSource =
+                SearchRemoteDataSource(
+                    getRequestExecutor = { _, queryParams, _ ->
+                        capturedQueryParams = queryParams
+                        HttpJsonResponse(
+                            statusCode = 200,
+                            body =
+                                """
+                                {
+                                  "status": "S2000",
+                                  "data": {
+                                    "places": [],
+                                    "nextCursor": null,
+                                    "size": 0,
+                                    "totalElements": 0,
+                                    "hasNext": false
+                                  },
+                                  "message": "ok"
+                                }
+                                """.trimIndent(),
+                        )
+                    },
+                    postRequestExecutor = { _, _, _ ->
+                        error("voice analyze should not be called from search()")
+                    },
+                )
+
+            dataSource.search(SearchQuery(keyword = "Busan Station"))
+
+            assertEquals(SearchQuery.DEFAULT_LIMIT.toString(), capturedQueryParams["size"])
+            assertEquals("15", capturedQueryParams["size"])
+        }
 }

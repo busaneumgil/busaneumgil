@@ -12,7 +12,7 @@ data class SearchQuery(
         get() = keyword.trim()
 
     companion object {
-        const val DEFAULT_LIMIT: Int = 20
+        const val DEFAULT_LIMIT: Int = 15
     }
 }
 

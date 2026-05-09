@@ -2,8 +2,8 @@ package com.ssafy.e102.eumgil.feature.search
 
 import com.ssafy.e102.eumgil.app.navigation.SearchRoute
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
+import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -68,11 +68,17 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `results screen suppresses duplicate empty query state card`() {
+    fun `results screen suppresses non-result placeholder cards while editing`() {
         assertEquals(
             false,
             shouldShowSearchResultSection(
                 resultState = SearchResultUiState.EmptyQuery,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldShowSearchResultSection(
+                resultState = SearchResultUiState.Typing(query = "Busan Station"),
             ),
         )
         assertEquals(
@@ -162,7 +168,7 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `verified search result remains selectable`() {
+    fun `verified search result exposes selectable state description`() {
         val result =
             SearchResult(
                 placeId = "10",
@@ -175,14 +181,11 @@ class SearchScreenTest {
                 matched = true,
             )
 
-        val interactionState = resolveSearchResultInteractionState(result)
-
-        assertEquals(true, interactionState.isActionEnabled)
-        assertEquals(SearchResultVerificationState.Verified, interactionState.verificationState)
+        assertEquals(R.string.search_screen_result_selectable, resolveSearchResultStateDescriptionRes(result))
     }
 
     @Test
-    fun `provider only search result is exposed as blocked interaction`() {
+    fun `provider only search result exposes limited state description`() {
         val result =
             SearchResult(
                 placeId = "provider:kakao:987654321",
@@ -195,9 +198,44 @@ class SearchScreenTest {
                 matched = false,
             )
 
-        val interactionState = resolveSearchResultInteractionState(result)
+        assertEquals(R.string.search_screen_result_action_limited, resolveSearchResultStateDescriptionRes(result))
+    }
 
-        assertEquals(false, interactionState.isActionEnabled)
-        assertEquals(SearchResultVerificationState.Unverified, interactionState.verificationState)
+    @Test
+    fun `search result accessibility labels keep positive labels only sorted and collapsed`() {
+        val uiState =
+            resolveSearchResultAccessibilityTagUiState(
+                listOf(
+                    "accessible-parking",
+                    "wide-entry",
+                    "elevator",
+                    "accessible-toilet",
+                    "table-spacing",
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                R.string.place_accessibility_label_entry_available,
+                R.string.place_accessibility_label_elevator,
+                R.string.place_accessibility_label_accessible_parking,
+            ),
+            uiState.labelResIds,
+        )
+        assertEquals(1, uiState.overflowCount)
+    }
+
+    @Test
+    fun `search result accessibility labels ignore unsupported keys`() {
+        val uiState =
+            resolveSearchResultAccessibilityTagUiState(
+                listOf(
+                    "charging-station",
+                    "open-24-hours",
+                ),
+            )
+
+        assertEquals(emptyList<Int>(), uiState.labelResIds)
+        assertEquals(0, uiState.overflowCount)
     }
 }

@@ -86,6 +86,12 @@ fun SearchVoiceInputRoute(
     val ttsState by ttsController.state.collectAsStateWithLifecycle()
     val voiceInputPrompt = stringResource(R.string.voice_input_prompt)
 
+    LaunchedEffect(searchViewModel, sttViewModel) {
+        // Route entry auto-start must not depend on SearchViewModel UI-event collection order.
+        searchViewModel.onAction(SearchUiAction.VoiceRouteEntered)
+        sttViewModel.startListening()
+    }
+
     // -1: 아직 speak()를 한 번도 호출하지 않은 상태.
     // completedUtteranceCount >= 0 조건을 함께 쓰면 앱 진입 시 spurious 트리거 방지.
     val lastCompletedCount = remember { mutableIntStateOf(-1) }
@@ -182,12 +188,6 @@ private fun SearchRouteContent(
     LaunchedEffect(viewModel, initialQuery) {
         if (initialQuery != null) {
             viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
-        }
-    }
-
-    LaunchedEffect(viewModel, destination) {
-        if (destination == SearchScreenDestination.VoiceInput) {
-            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
         }
     }
 

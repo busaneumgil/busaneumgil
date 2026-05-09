@@ -65,18 +65,6 @@ enum class SearchTrailingAction {
     ClearQuery,
 }
 
-internal enum class SearchResultVerificationState {
-    Verified,
-    Unverified,
-}
-
-internal data class SearchResultInteractionState(
-    val verificationState: SearchResultVerificationState,
-) {
-    val isActionEnabled: Boolean
-        get() = verificationState == SearchResultVerificationState.Verified
-}
-
 internal fun resolveSearchTrailingAction(query: String): SearchTrailingAction =
     if (query.isEmpty()) {
         SearchTrailingAction.VoiceInput
@@ -84,18 +72,8 @@ internal fun resolveSearchTrailingAction(query: String): SearchTrailingAction =
         SearchTrailingAction.ClearQuery
     }
 
-internal fun resolveSearchResultInteractionState(result: SearchResult): SearchResultInteractionState =
-    SearchResultInteractionState(
-        verificationState =
-            if (result.isVerifiedPlace) {
-                SearchResultVerificationState.Verified
-            } else {
-                SearchResultVerificationState.Unverified
-            },
-    )
-
 internal fun shouldShowSearchResultSection(resultState: SearchResultUiState): Boolean =
-    resultState != SearchResultUiState.EmptyQuery
+    resultState != SearchResultUiState.EmptyQuery && resultState !is SearchResultUiState.Typing
 
 internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiState): SearchScreenDestination =
     when (resultState) {
@@ -566,13 +544,7 @@ private fun SearchResultSection(
                     borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
                 )
 
-            is SearchResultUiState.Typing ->
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_typing_title, resultState.query),
-                    description = stringResource(id = R.string.search_screen_typing_description),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
-                )
+            is SearchResultUiState.Typing -> Unit
 
             is SearchResultUiState.Loading ->
                 SearchStateCard(
@@ -763,14 +735,8 @@ private fun SearchResultItem(
     result: SearchResult,
     onClick: () -> Unit,
 ) {
-    val interactionState = resolveSearchResultInteractionState(result)
     val actionLabel = stringResource(id = R.string.search_screen_result_action_label)
-    val selectableStateDescription =
-        if (interactionState.isActionEnabled) {
-            stringResource(id = R.string.search_screen_result_selectable)
-        } else {
-            stringResource(id = R.string.search_screen_result_unverified_state)
-        }
+    val stateDescription = stringResource(id = resolveSearchResultStateDescriptionRes(result))
     val accessibilityDescription =
         if (result.subtitle.isBlank()) {
             stringResource(
@@ -784,19 +750,20 @@ private fun SearchResultItem(
                 result.subtitle,
             )
         }
+    val accessibilityTagUiState = resolveSearchResultAccessibilityTagUiState(result.accessibilityTagKeys)
+    val trimmedAddress = result.subtitle.trim()
 
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(
-                    enabled = interactionState.isActionEnabled,
                     role = Role.Button,
                     onClickLabel = actionLabel,
                     onClick = onClick,
                 ).semantics(mergeDescendants = true) {
                     contentDescription = accessibilityDescription
-                    stateDescription = selectableStateDescription
+                    this.stateDescription = stateDescription
                 },
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
@@ -815,45 +782,80 @@ private fun SearchResultItem(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            if (interactionState.verificationState == SearchResultVerificationState.Unverified) {
-                SearchResultStatusBadge(text = stringResource(id = R.string.search_screen_result_unverified_badge))
+            if (trimmedAddress.isNotEmpty()) {
+                Text(
+                    text = trimmedAddress,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Text(
-                text = result.subtitle,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            if (accessibilityTagUiState.hasLabels) {
+                SearchResultAccessibilityTagRow(uiState = accessibilityTagUiState)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultAccessibilityTagRow(
+    uiState: SearchResultAccessibilityTagUiState,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        uiState.labelResIds.forEach { labelResId ->
+            SearchResultAccessibilityTagChip(
+                text = stringResource(id = labelResId),
+                isOverflow = false,
             )
-            Text(
-                text =
-                    stringResource(
-                        id = R.string.search_screen_result_coordinates,
-                        result.latitude,
-                        result.longitude,
-                    ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(id = R.string.search_screen_result_id, result.displayPlaceId),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+        }
+        if (uiState.overflowCount > 0) {
+            SearchResultAccessibilityTagChip(
+                text = stringResource(id = R.string.place_accessibility_label_overflow, uiState.overflowCount),
+                isOverflow = true,
             )
         }
     }
 }
 
 @Composable
-private fun SearchResultStatusBadge(text: String) {
+private fun SearchResultAccessibilityTagChip(
+    text: String,
+    isOverflow: Boolean,
+) {
+    val containerColor =
+        if (isOverflow) {
+            MaterialTheme.colorScheme.surfaceVariant
+        } else {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+        }
+    val contentColor =
+        if (isOverflow) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f)),
+        color = containerColor,
+        border =
+            BorderStroke(
+                width = 1.dp,
+                color =
+                    if (isOverflow) {
+                        MaterialTheme.colorScheme.outlineVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                    },
+            ),
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = contentColor,
         )
     }
 }

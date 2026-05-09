@@ -9,6 +9,13 @@ class TutorialScreenTest {
     fun `tutorial uses a frame-free explanation panel that fills the body area`() {
         assertEquals(360.dp, TutorialLayoutDefaults.visualPanelMaxWidth)
         assertEquals(1f, TutorialLayoutDefaults.visualPanelWeight, 0f)
+        assertEquals(12.dp, TutorialLayoutDefaults.visualPanelButtonGap)
+    }
+
+    @Test
+    fun `tutorial keeps the hero mark fixed without a background tile`() {
+        assertEquals(false, TutorialLayoutDefaults.hasHeroIconBackground)
+        assertEquals(56.dp, TutorialLayoutDefaults.heroIconSize)
     }
 
     @Test

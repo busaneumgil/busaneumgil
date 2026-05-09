@@ -4,6 +4,11 @@ import type { AuthTestConfig, SocialLoginResponse, SocialProvider } from "../typ
 const KAKAO_SDK_URL = "https://developers.kakao.com/sdk/js/kakao.min.js";
 const GOOGLE_SDK_URL = "https://accounts.google.com/gsi/client";
 const NAVER_STATE_KEY = "busan-eumgil-ADMIN:naver-state";
+const envAuthConfig: AuthTestConfig = {
+  kakaoJavaScriptKey: (import.meta.env.VITE_ADMIN_KAKAO_JAVASCRIPT_KEY as string | undefined) || "",
+  naverClientId: (import.meta.env.VITE_ADMIN_NAVER_CLIENT_ID as string | undefined) || "",
+  googleClientId: (import.meta.env.VITE_ADMIN_GOOGLE_CLIENT_ID as string | undefined) || "",
+};
 
 declare global {
   interface Window {
@@ -38,11 +43,19 @@ export function currentAdminPageUrl() {
 }
 
 export async function fetchAuthTestConfig() {
+  if (hasAnyAuthConfigValue(envAuthConfig)) {
+    return envAuthConfig;
+  }
+
   const response = await fetch(`${backendApiUrl}/auth/test-config`);
   if (!response.ok) {
     throw new Error("소셜 로그인 설정을 불러오지 못했습니다.");
   }
   return response.json() as Promise<AuthTestConfig>;
+}
+
+function hasAnyAuthConfigValue(config: AuthTestConfig) {
+  return Boolean(config.kakaoJavaScriptKey || config.naverClientId || config.googleClientId);
 }
 
 export async function requestServiceToken(provider: SocialProvider, socialAccessToken: string) {

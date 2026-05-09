@@ -74,6 +74,16 @@ sealed interface OnboardingRoute : AppRoute {
     }
 }
 
+sealed interface TutorialRoute : AppRoute {
+    data object Onboarding : TutorialRoute {
+        override val route: String = "tutorial/onboarding"
+    }
+
+    data object Guide : TutorialRoute {
+        override val route: String = "tutorial/guide"
+    }
+}
+
 sealed interface TopLevelRoute : AppRoute {
     data object Map : TopLevelRoute {
         override val route: String = "map"

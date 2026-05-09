@@ -795,6 +795,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 - `departure_second_of_day`는 조회용 정규화 값이다. 24시 이후 표현도 허용한다.
 - `transit-refresh`는 선택된 SUBWAY leg snapshot의 `odsay_station_id`, `way_code`와 현재 날짜의 `service_day_type`으로 시간표를 조회한다.
 - 현재 시각 이후 `departure_second_of_day`가 가장 작은 row를 다음 열차로 본다.
+- 현재 날짜에 남은 출발 row가 없으면 다음 날짜의 `service_day_type`으로 가장 이른 row를 조회하고, 자정 경계를 넘어선 남은 분을 계산한다.
 - 공휴일 판정 테이블이 없으면 MVP에서는 일요일을 `HOLIDAY`, 토요일을 `SATURDAY`, 나머지를 `WEEKDAY`로 처리한다.
 
 ### 관계

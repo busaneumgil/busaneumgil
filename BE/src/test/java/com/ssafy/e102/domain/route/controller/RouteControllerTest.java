@@ -294,6 +294,36 @@ class RouteControllerTest {
 	}
 
 	@Test
+	@DisplayName("대중교통 도착정보 갱신 대상 session이 없으면 RT4043을 반환한다")
+	void refreshTransitMapsMissingRouteSession() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.ROUTE_SESSION_NOT_FOUND, 404, "RT4043", "선택한 경로 정보를 찾을 수 없습니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 다른 사용자 route 접근은 A4030을 반환한다")
+	void refreshTransitMapsAccessDenied() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.ROUTE_ACCESS_DENIED, 403, "A4030", "접근할 수 없는 경로입니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 비대상 leg는 PT4090을 반환한다")
+	void refreshTransitMapsNotTransitLeg() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.NOT_TRANSIT_LEG, 409, "PT4090", "대중교통 구간이 아닙니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 외부 API 실패는 EX5020을 반환한다")
+	void refreshTransitMapsExternalRouteApiFailed() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, 502, "EX5020", "외부 경로 정보를 불러오지 못했습니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 외부 API timeout은 EX5040을 반환한다")
+	void refreshTransitMapsExternalRouteApiTimeout() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT, 504, "EX5040", "외부 경로 정보 응답이 지연되고 있습니다.");
+	}
+
+	@Test
 	@DisplayName("경로 안내 종료 대상 session이 없으면 RT4043을 반환한다")
 	void endRouteReturnsSessionNotFound() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -604,6 +634,29 @@ class RouteControllerTest {
 			.content("""
 				{
 				  "searchId": "rs_walk_test"
+				}
+				"""))
+			.andExpect(status().is(httpStatus))
+			.andExpect(jsonPath("$.status").value(status))
+			.andExpect(jsonPath("$.message").value(message))
+			.andExpect(jsonPath("$.data").doesNotExist());
+
+		SecurityContextHolder.clearContext();
+	}
+
+	private void assertTransitRefreshError(RouteErrorCode errorCode, int httpStatus, String status, String message)
+		throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		Mockito.doThrow(new RouteException(errorCode))
+			.when(transitRefreshService)
+			.refresh(eq(userId), eq("rt_selected_001"), any(TransitRefreshRequest.class));
+
+		mockMvc.perform(post("/routes/rt_selected_001/transit-refresh")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "legSequence": 2
 				}
 				"""))
 			.andExpect(status().is(httpStatus))

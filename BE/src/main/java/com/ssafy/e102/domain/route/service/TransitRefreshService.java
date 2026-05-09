@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.route.service;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -8,9 +9,14 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,9 +41,9 @@ import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
 
 @Service
-@Transactional(readOnly = true)
 public class TransitRefreshService {
 
+	private static final Logger log = LoggerFactory.getLogger(TransitRefreshService.class);
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 	private static final int DAY_SECONDS = 24 * 60 * 60;
 
@@ -46,33 +52,78 @@ public class TransitRefreshService {
 	private final BimsArrivalCacheService bimsArrivalCacheService;
 	private final BusanBimsClient busanBimsClient;
 	private final SubwayTimetableRepository subwayTimetableRepository;
+	private final TransactionOperations readOnlyTransaction;
+	private final Clock clock;
 
+	@Autowired
 	public TransitRefreshService(
 		RouteSessionRepository routeSessionRepository,
 		ObjectMapper objectMapper,
 		BimsArrivalCacheService bimsArrivalCacheService,
 		BusanBimsClient busanBimsClient,
-		SubwayTimetableRepository subwayTimetableRepository) {
+		SubwayTimetableRepository subwayTimetableRepository,
+		PlatformTransactionManager transactionManager) {
+		this(
+			routeSessionRepository,
+			objectMapper,
+			bimsArrivalCacheService,
+			busanBimsClient,
+			subwayTimetableRepository,
+			readOnlyTransaction(transactionManager),
+			Clock.system(SEOUL_ZONE_ID));
+	}
+
+	TransitRefreshService(
+		RouteSessionRepository routeSessionRepository,
+		ObjectMapper objectMapper,
+		BimsArrivalCacheService bimsArrivalCacheService,
+		BusanBimsClient busanBimsClient,
+		SubwayTimetableRepository subwayTimetableRepository,
+		TransactionOperations readOnlyTransaction,
+		Clock clock) {
 		this.routeSessionRepository = routeSessionRepository;
 		this.objectMapper = objectMapper;
 		this.bimsArrivalCacheService = bimsArrivalCacheService;
 		this.busanBimsClient = busanBimsClient;
 		this.subwayTimetableRepository = subwayTimetableRepository;
+		this.readOnlyTransaction = readOnlyTransaction;
+		this.clock = clock;
+	}
+
+	private static TransactionOperations readOnlyTransaction(PlatformTransactionManager transactionManager) {
+		TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+		transactionTemplate.setReadOnly(true);
+		return transactionTemplate;
 	}
 
 	public TransitRefreshResponse refresh(UUID userId, String routeId, TransitRefreshRequest request) {
-		RouteSession routeSession = getOwnedRouteSession(userId, routeId);
-		RefreshTarget target = refreshTarget(routeSession, request.legSequence());
-		if (target.leg().type() == TransportMode.WALK) {
+		RefreshTarget target = readOnlyTransaction
+			.execute(status -> refreshTarget(userId, routeId, request.legSequence()));
+		if (target == null) {
+			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+		}
+		TransitRefreshResponse response;
+		if (target.leg().type() != TransportMode.BUS && target.leg().type() != TransportMode.SUBWAY) {
 			throw new RouteException(RouteErrorCode.NOT_TRANSIT_LEG);
 		}
 		if (target.leg().type() == TransportMode.BUS) {
-			return refreshBus(target);
+			response = refreshBus(target);
+		} else {
+			response = refreshSubway(target);
 		}
-		if (target.leg().type() == TransportMode.SUBWAY) {
-			return refreshSubway(target);
-		}
-		return new TransitRefreshResponse(target.leg().type(), TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of());
+		log.info(
+			"transit refresh completed routeId={} legSequence={} type={} arrivalStatus={} transitCount={}",
+			routeId,
+			request.legSequence(),
+			response.type(),
+			response.arrivalStatus(),
+			response.transits().size());
+		return response;
+	}
+
+	private RefreshTarget refreshTarget(UUID userId, String routeId, int legSequence) {
+		RouteSession routeSession = getOwnedRouteSession(userId, routeId);
+		return refreshTarget(routeSession, legSequence);
 	}
 
 	private RouteSession getOwnedRouteSession(UUID userId, String routeId) {
@@ -168,15 +219,21 @@ public class TransitRefreshService {
 		String stopId = boardingStopId(target.metadataLeg());
 		List<BusLane> lanes = busLanes(target);
 		if (!StringUtils.hasText(stopId) || lanes.isEmpty()) {
+			log.info(
+				"transit refresh bus metadata unavailable routeId={} legSequence={} hasStopId={} laneCount={}",
+				target.route().routeId(),
+				target.leg().sequence(),
+				StringUtils.hasText(stopId),
+				lanes.size());
 			return new TransitRefreshResponse(TransportMode.BUS, TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of());
 		}
 		List<TransitArrivalResponse> transits = lanes.stream()
 			.map(lane -> busArrival(stopId, lane))
-			.filter(arrival -> arrival.remainingMinute() != null)
-			.map(arrival -> new TransitArrivalResponse(
-				arrival.routeNo(),
-				arrival.remainingMinute(),
-				arrival.isLowFloor()))
+			.filter(result -> result.arrival().remainingMinute() != null)
+			.map(result -> new TransitArrivalResponse(
+				result.arrival().routeNo(),
+				result.arrival().remainingMinute(),
+				result.arrival().isLowFloor()))
 			.toList();
 		if (transits.isEmpty()) {
 			return new TransitRefreshResponse(TransportMode.BUS, TransitArrivalStatus.NO_CURRENT_ARRIVAL, List.of());
@@ -214,17 +271,26 @@ public class TransitRefreshService {
 			.toList();
 	}
 
-	private BusanBimsArrival busArrival(String stopId, BusLane lane) {
+	private BusArrivalResult busArrival(String stopId, BusLane lane) {
 		if (!StringUtils.hasText(lane.lineId())) {
-			return busanBimsClient.findArrival(stopId, null, lane.routeNo());
+			log.info("bims arrival cache bypass stopId={} routeNo={} reason={}", stopId, lane.routeNo(),
+				"missingLineId");
+			return new BusArrivalResult(busanBimsClient.findArrival(stopId, null, lane.routeNo()));
 		}
 		return bimsArrivalCacheService.find(stopId, lane.lineId())
+			.map(arrival -> {
+				log.info("bims arrival cache hit stopId={} lineId={} routeNo={}", stopId, lane.lineId(),
+					lane.routeNo());
+				return new BusArrivalResult(arrival);
+			})
 			.orElseGet(() -> {
+				log.info("bims arrival cache miss stopId={} lineId={} routeNo={}", stopId, lane.lineId(),
+					lane.routeNo());
 				BusanBimsArrival arrival = busanBimsClient.findArrival(stopId, lane.lineId(), lane.routeNo());
 				if (StringUtils.hasText(arrival.stopId()) && StringUtils.hasText(arrival.lineId())) {
 					bimsArrivalCacheService.save(arrival);
 				}
-				return arrival;
+				return new BusArrivalResult(arrival);
 			});
 	}
 
@@ -240,9 +306,15 @@ public class TransitRefreshService {
 		String odsayStationId = text(target.metadataLeg(), "odsayStationId");
 		Integer wayCode = integer(target.metadataLeg(), "wayCode");
 		if (!StringUtils.hasText(odsayStationId) || wayCode == null) {
+			log.info(
+				"transit refresh subway metadata unavailable routeId={} legSequence={} hasOdsayStationId={} hasWayCode={}",
+				target.route().routeId(),
+				target.leg().sequence(),
+				StringUtils.hasText(odsayStationId),
+				wayCode != null);
 			return new TransitRefreshResponse(TransportMode.SUBWAY, TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of());
 		}
-		LocalDateTime now = LocalDateTime.now(SEOUL_ZONE_ID);
+		LocalDateTime now = LocalDateTime.now(clock);
 		int secondOfDay = now.toLocalTime().toSecondOfDay();
 		SubwayServiceDayType serviceDayType = serviceDayType(now.getDayOfWeek());
 		List<SubwayTimetable> departures = subwayTimetableRepository.findNextDepartures(
@@ -253,14 +325,27 @@ public class TransitRefreshService {
 			PageRequest.of(0, 2));
 		boolean nextDay = false;
 		if (departures.isEmpty()) {
+			SubwayServiceDayType nextServiceDayType = serviceDayType(now.toLocalDate().plusDays(1).getDayOfWeek());
+			log.info(
+				"subway timetable same-day departure missing odsayStationId={} wayCode={} serviceDayType={} nextServiceDayType={}",
+				odsayStationId,
+				wayCode,
+				serviceDayType,
+				nextServiceDayType);
 			departures = subwayTimetableRepository.findFirstDepartures(
 				odsayStationId,
-				serviceDayType,
+				nextServiceDayType,
 				wayCode,
 				PageRequest.of(0, 2));
 			nextDay = true;
 		}
 		if (departures.isEmpty()) {
+			log.info(
+				"subway timetable unavailable odsayStationId={} wayCode={} serviceDayType={} nextDayLookup={}",
+				odsayStationId,
+				wayCode,
+				serviceDayType,
+				nextDay);
 			return new TransitRefreshResponse(TransportMode.SUBWAY, TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of());
 		}
 		boolean isNextDay = nextDay;
@@ -327,5 +412,9 @@ public class TransitRefreshService {
 		BusLane {
 			routeNo = Objects.requireNonNullElse(routeNo, "");
 		}
+	}
+
+	private record BusArrivalResult(
+		BusanBimsArrival arrival) {
 	}
 }

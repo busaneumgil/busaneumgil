@@ -8,9 +8,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -22,6 +25,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +52,9 @@ import com.ssafy.e102.global.external.bims.BusanBimsClient;
 class TransitRefreshServiceTest {
 
 	private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
+	private static final Clock MONDAY_NOON_CLOCK = Clock.fixed(Instant.parse("2026-05-04T03:00:00Z"), SEOUL_ZONE_ID);
+	private static final Clock SUNDAY_NIGHT_CLOCK = Clock.fixed(Instant.parse("2026-05-10T14:59:00Z"), SEOUL_ZONE_ID);
 
 	private RouteSessionRepository routeSessionRepository;
 	private ObjectMapper objectMapper;
@@ -62,7 +71,7 @@ class TransitRefreshServiceTest {
 		busanBimsClient = mock(BusanBimsClient.class);
 		subwayTimetableRepository = mock(SubwayTimetableRepository.class);
 		service = new TransitRefreshService(routeSessionRepository, objectMapper, bimsArrivalCacheService,
-			busanBimsClient, subwayTimetableRepository);
+			busanBimsClient, subwayTimetableRepository, immediateTransaction(), MONDAY_NOON_CLOCK);
 	}
 
 	@Test
@@ -83,6 +92,7 @@ class TransitRefreshServiceTest {
 		assertThat(response.transits()).hasSize(1);
 		assertThat(response.transits().get(0).remainingMinute()).isEqualTo(3);
 		verify(bimsArrivalCacheService).save(new BusanBimsArrival("507700000", "5200177000", "100", 3, true));
+		verifyNoInteractions(subwayTimetableRepository);
 	}
 
 	@Test
@@ -207,6 +217,19 @@ class TransitRefreshServiceTest {
 	}
 
 	@Test
+	@DisplayName("BUS/SUBWAY 외 leg에 transit-refresh를 요청하면 PT4090을 반환한다")
+	void refreshRejectsNonBusOrSubwayLeg() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.PUBLIC_TRANSIT), null);
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		assertThatThrownBy(() -> service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2)))
+			.isInstanceOf(RouteException.class)
+			.extracting("errorCode")
+			.isEqualTo(RouteErrorCode.NOT_TRANSIT_LEG);
+	}
+
+	@Test
 	@DisplayName("route session snapshot에 backendMetadata가 있어도 FE route payload를 복구한다")
 	void refreshIgnoresBackendMetadataWhenRestoringRoutePayload() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS),
@@ -268,6 +291,13 @@ class TransitRefreshServiceTest {
 		assertThat(response.transits()).hasSize(1);
 		assertThat(response.transits().get(0).routeNo()).isEqualTo("1호선");
 		assertThat(response.transits().get(0).remainingMinute()).isPositive();
+		verify(subwayTimetableRepository).findNextDepartures(
+			eq("301"),
+			eq(SubwayServiceDayType.WEEKDAY),
+			eq(1),
+			anyInt(),
+			any(Pageable.class));
+		verifyNoInteractions(bimsArrivalCacheService, busanBimsClient);
 	}
 
 	@Test
@@ -296,6 +326,52 @@ class TransitRefreshServiceTest {
 		assertThat(response.transits()).isEmpty();
 	}
 
+	@Test
+	@DisplayName("SUBWAY 오늘 남은 출발이 없으면 다음 날짜 serviceDayType으로 첫차를 조회한다")
+	void refreshSubwayUsesNextDayServiceDayTypeWhenTodayDepartureIsMissing() {
+		service = new TransitRefreshService(routeSessionRepository, objectMapper, bimsArrivalCacheService,
+			busanBimsClient, subwayTimetableRepository, immediateTransaction(), SUNDAY_NIGHT_CLOCK);
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.SUBWAY), subwayMetadata());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(subwayTimetableRepository.findNextDepartures(
+			eq("301"),
+			eq(SubwayServiceDayType.HOLIDAY),
+			eq(1),
+			anyInt(),
+			any(Pageable.class)))
+			.thenReturn(List.of());
+		when(subwayTimetableRepository.findFirstDepartures(
+			eq("301"),
+			eq(SubwayServiceDayType.WEEKDAY),
+			eq(1),
+			any(Pageable.class)))
+			.thenReturn(List.of(SubwayTimetable.create(
+				"301",
+				SubwayServiceDayType.WEEKDAY,
+				1,
+				"05:30",
+				5 * 60 * 60 + 30 * 60,
+				"다대포해수욕장")));
+
+		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
+
+		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.SCHEDULE_BASED);
+		assertThat(response.transits().get(0).remainingMinute()).isEqualTo(331);
+		verify(subwayTimetableRepository).findNextDepartures(
+			eq("301"),
+			eq(SubwayServiceDayType.HOLIDAY),
+			eq(1),
+			anyInt(),
+			any(Pageable.class));
+		verify(subwayTimetableRepository).findFirstDepartures(
+			eq("301"),
+			eq(SubwayServiceDayType.WEEKDAY),
+			eq(1),
+			any(Pageable.class));
+		verifyNoInteractions(bimsArrivalCacheService, busanBimsClient);
+	}
+
 	private RouteSession routeSession(RouteSummaryResponse route, JsonNode backendMetadata) {
 		JsonNode snapshot = objectMapper.valueToTree(route);
 		if (backendMetadata != null && snapshot instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
@@ -304,6 +380,15 @@ class TransitRefreshServiceTest {
 		RouteSession routeSession = mock(RouteSession.class);
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
 		return routeSession;
+	}
+
+	private TransactionOperations immediateTransaction() {
+		return new TransactionOperations() {
+			@Override
+			public <T> T execute(TransactionCallback<T> action) {
+				return action.doInTransaction(new SimpleTransactionStatus());
+			}
+		};
 	}
 
 	private RouteSummaryResponse routeSummary(TransportMode targetLegType) {
@@ -373,7 +458,7 @@ class TransitRefreshServiceTest {
 	}
 
 	private SubwayTimetable subwayTimetable(int offsetSecond) {
-		int secondOfDay = LocalDateTime.now(ZoneId.of("Asia/Seoul")).toLocalTime().toSecondOfDay();
+		int secondOfDay = LocalDateTime.now(MONDAY_NOON_CLOCK).toLocalTime().toSecondOfDay();
 		int departureSecondOfDay = (secondOfDay + offsetSecond) % (24 * 60 * 60);
 		return SubwayTimetable.create(
 			"301",

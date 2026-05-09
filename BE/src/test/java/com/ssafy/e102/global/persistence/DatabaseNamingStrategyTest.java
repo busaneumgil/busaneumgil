@@ -217,11 +217,13 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(RouteSession.class, "sessionId")).isEqualTo("session_id");
 		assertThat(joinColumnName(RouteSession.class, "user")).isEqualTo("user_id");
 		assertThat(physicalColumnName(RouteSession.class, "routeId")).isEqualTo("route_id");
+		assertThat(physicalColumnName(RouteSession.class, "activeRouteKey")).isEqualTo("active_route_key");
 		assertThat(physicalColumnName(RouteSession.class, "startPoint")).isEqualTo("start_point");
 		assertThat(physicalColumnName(RouteSession.class, "endPoint")).isEqualTo("end_point");
 		assertThat(physicalColumnName(RouteSession.class, "routeSnapshotJson"))
 			.isEqualTo("route_snapshot_json");
 		assertThat(physicalColumnName(RouteSession.class, "status")).isEqualTo("status");
+		assertThat(uniqueColumnNames(RouteSession.class)).contains("user_id", "active_route_key");
 	}
 
 	@Test

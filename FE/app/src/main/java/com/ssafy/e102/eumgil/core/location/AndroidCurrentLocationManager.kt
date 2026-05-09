@@ -36,7 +36,10 @@ class AndroidCurrentLocationManager(
     override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation.asStateFlow()
 
     override fun refreshLatestLocation() {
-        mutableLatestLocation.value = resolveBestLastKnownLocation()?.toSnapshot()
+        mutableLatestLocation.value =
+            resolveBestLastKnownLocation()
+                ?.toSnapshot()
+                ?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
     }
 
     override fun startLocationUpdates() {

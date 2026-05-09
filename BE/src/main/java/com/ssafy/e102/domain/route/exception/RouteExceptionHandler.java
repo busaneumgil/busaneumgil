@@ -23,6 +23,11 @@ public class RouteExceptionHandler {
 		HttpMessageNotReadableException.class
 	})
 	public ResponseEntity<ErrorResponse> handleInvalidRouteRequest(Exception exception, HttpServletRequest request) {
+		if (isSelectRequest(request)) {
+			return ResponseEntity
+				.status(RouteErrorCode.INVALID_ROUTE_SELECT_REQUEST.getHttpStatus())
+				.body(ErrorResponse.from(RouteErrorCode.INVALID_ROUTE_SELECT_REQUEST));
+		}
 		if (isRerouteRequest(request) && exception instanceof MethodArgumentNotValidException validationException) {
 			RouteErrorCode errorCode = rerouteValidationErrorCode(validationException);
 			return ResponseEntity
@@ -41,6 +46,10 @@ public class RouteExceptionHandler {
 
 	private boolean isRerouteRequest(HttpServletRequest request) {
 		return "/routes/reroute".equals(request.getRequestURI());
+	}
+
+	private boolean isSelectRequest(HttpServletRequest request) {
+		return request.getRequestURI().matches("^/routes/[^/]+/select$");
 	}
 
 	private RouteErrorCode rerouteValidationErrorCode(MethodArgumentNotValidException exception) {

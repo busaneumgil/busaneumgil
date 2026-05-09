@@ -2,7 +2,7 @@
 
 > **작성일:** 2026-04-23
 > **기준 문서:** `docs/erd.md` (원본 OSM 기반)
-> **최종 수정일:** 2026-05-07
+> **최종 수정일:** 2026-05-09
 > **변경 사유:** canonical source를 `busan.osm.pbf`에서 `N3L_A0020000_26` SHP(국토교통부 도로 중심선)로 전환함에 따라 `road_nodes`와 `road_segments`의 source identity 컬럼을 재정의하고, 편의시설 PoC 채택본 기준으로 장소 카테고리를 최신화했으며, 선택된 경로 안내 세션 복구를 위한 `route_sessions`를 추가
 > **참조 계획:** `.ai/PLANS/current-sprint/02-osm-schema-and-network-load.md`
 
@@ -21,9 +21,10 @@
 | `route_logs`, `route_log_points` | 실제 이동 로그 수집 | MVP ERD에서 제외 |
 | `route_ratings` | - | 도착 직후 별점 평가 저장 |
 | `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
+| `bookmarks` | `user_id`, `place_id`만 저장하는 내부 장소 전용 구조 | `bookmark_target_id`, 선택적 `place_id`, 외부 snapshot 컬럼을 갖는 hybrid 북마크 구조 |
 | `subway_stations`, `subway_timetables` | 지하철 시간표/역 정보 테이블 없음 | ODsay 역 식별자 기반 지하철 역 마스터와 시간표 저장 |
 
-장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
+장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 전역 `places` 마스터 컬럼으로는 보존하지 않고, 외부 북마크 snapshot의 `bookmarks.provider_category`에서만 제한적으로 보존한다. 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
 
 ---
 
@@ -97,7 +98,7 @@ erDiagram
 
     HAZARD_REPORTS ||--o{ HAZARD_REPORT_IMAGES : has
 
-    PLACES ||--o{ BOOKMARKS : bookmarked
+    PLACES o|--o{ BOOKMARKS : canonicalLink
     PLACES ||--o{ PLACE_ACCESSIBILITY_FEATURES : has
 
     ROAD_NODES ||--o{ ROAD_SEGMENTS : fromNode
@@ -118,7 +119,14 @@ erDiagram
     BOOKMARKS {
         INT bookmark_id PK
         UUID user_id FK
+        VARCHAR bookmark_target_id
         BIGINT place_id FK
+        VARCHAR provider
+        VARCHAR provider_place_id
+        VARCHAR name
+        VARCHAR provider_category
+        VARCHAR address
+        GEOMETRY point
     }
 
     FAVORITE_ROUTES {
@@ -302,17 +310,31 @@ erDiagram
 
 사용자가 찜한 장소를 저장한다.
 
+내부 장소는 `places`와 canonical link를 연결하고, 내부 매칭되지 않은 외부 대상은 사용자별 snapshot으로 저장한다.
+
 ### 컬럼 명세
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 북마크 ID | bookmark_id | INT | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
-| 장소 ID | place_id | BIGINT | NOT NULL |  |
+| 북마크 대상 식별자 | bookmark_target_id | VARCHAR(32) | NULL |  |
+| 장소 ID | place_id | BIGINT | NULL |  |
+| 외부 제공자 | provider | VARCHAR(30) | NULL |  |
+| 외부 제공자 장소 ID | provider_place_id | VARCHAR(100) | NULL |  |
+| 표시명 | name | VARCHAR(255) | NULL |  |
+| 외부 원본 카테고리 | provider_category | VARCHAR(255) | NULL |  |
+| 표시 주소 | address | VARCHAR(255) | NULL |  |
+| 표시 좌표 | point | GEOMETRY(POINT, 4326) | NULL |  |
 
 ### 비고
 
-- `UNIQUE (user_id, place_id)` 제약을 둔다.
+- `UNIQUE (user_id, bookmark_target_id)` 제약을 둔다.
+- 신규 생성 row는 `bookmark_target_id`를 항상 채운다. 다만 기존 내부 북마크 legacy row를 흡수하는 전환 구간을 고려해 현재 스키마 자체는 nullable로 둔다.
+- 내부 장소 북마크는 `place_id`를 채우고, 목록 응답 시에는 `places` canonical 데이터를 우선 사용한다. 따라서 `name`, `address`, `point` snapshot은 비워둘 수 있다.
+- 내부 매칭되지 않은 외부 북마크는 `place_id=NULL`이며 `provider`, `provider_place_id`, `name`, `provider_category`, `address`, `point` snapshot만 가진다.
+- `bookmark_target_id`는 서버가 생성하는 opaque 식별자다. 삭제 API와 중복 방지 기준으로 사용한다.
+- 외부 snapshot row는 사용자 북마크 데이터일 뿐, 전역 `places` 마스터 데이터로 승격하지 않는다.
 
 ---
 
@@ -706,6 +728,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 세션 ID | session_id | UUID | NOT NULL |  |
 | 사용자 ID | user_id | UUID | NOT NULL |  |
 | 대표 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
+| 활성 경로 중복 방지 키 | active_route_key | VARCHAR(120) | NULL |  |
 | 출발지 좌표 | start_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 도착지 좌표 | end_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 경로 스냅샷 JSON | route_snapshot_json | JSONB | NOT NULL |  |
@@ -719,12 +742,16 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `session_id`는 실제 안내 세션의 식별자다.
 - `route_id`는 프론트와 API에서 참조하는 대표 경로 ID다.
+- `active_route_key`는 같은 사용자의 같은 route가 동시에 여러 ACTIVE session으로 저장되는 것을 막는 내부 키다. `ACTIVE` 상태에서는 `route_id`와 같은 값을 저장하고, `COMPLETED`로 전환할 때 `NULL`로 비운다.
+- DB는 `(user_id, active_route_key)` unique 제약으로 ACTIVE 중복 선택을 최종 방어한다. PostgreSQL unique 제약은 `NULL`을 서로 다른 값으로 취급하므로 완료된 과거 session은 같은 route라도 여러 건 보관할 수 있다.
+- 기존 DB에 이 컬럼을 추가하는 배포에서는 기존 `ACTIVE` row의 `active_route_key`를 `route_id`로 보정한 뒤 unique 제약을 적용한다. 중복 ACTIVE row가 이미 있으면 최신 row만 유지하거나 나머지를 `COMPLETED`로 정리한 뒤 제약을 적용한다.
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
-  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `alightingStop`, `isLowFloor`, `badges`
+  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `arrivingStop`, `isLowFloor`
   - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
+- 접근성 요약은 route 단위 `badges`에 저장하고, leg 단위 상세 안내는 `guidanceEvents`를 기준으로 복구한다. `RouteLegResponse.badges`는 API 응답과 snapshot JSON에 노출하지 않는다.
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
   - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
   - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
@@ -900,7 +927,8 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 ### places - bookmarks
 
-- `places 1 : N bookmarks`
+- `places 0..1 : N bookmarks`
+- `bookmarks.place_id`는 내부 장소와 연결된 경우에만 채운다. 외부 snapshot 북마크는 `place_id=NULL`이다.
 
 ### places - place_accessibility_features
 

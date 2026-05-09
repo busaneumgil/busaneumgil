@@ -31,8 +31,12 @@ class PlacesLocalDataSource {
             keyword?.trim().orEmpty(),
             latitude?.toString().orEmpty(),
             longitude?.toString().orEmpty(),
+            radiusMeters.toString(),
             categories
                 .sortedBy(PlaceCategory::name)
+                .joinToString(separator = ","),
+            featureTypes
+                .sortedBy { featureType -> featureType.name }
                 .joinToString(separator = ","),
         ).joinToString(separator = "|")
 }

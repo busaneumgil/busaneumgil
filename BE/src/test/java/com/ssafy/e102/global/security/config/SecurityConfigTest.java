@@ -31,6 +31,7 @@ import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.auth.token.AuthTokenStore;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
+import com.ssafy.e102.domain.bookmark.service.PlaceBookmarkService;
 import com.ssafy.e102.domain.report.service.AdminHazardReportService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
@@ -73,6 +74,9 @@ class SecurityConfigTest {
 
 	@MockitoBean
 	private AdminService adminService;
+
+	@MockitoBean
+	private PlaceBookmarkService placeBookmarkService;
 
 	@MockitoBean
 	private HazardReportService hazardReportService;
@@ -137,6 +141,16 @@ class SecurityConfigTest {
 	@DisplayName("경로 북마크 API는 인증이 필요하다")
 	void favoriteRoutesRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/favorite-routes"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("장소 북마크 API는 인증이 필요하다")
+	void placeBookmarksRequireAuthentication() throws Exception {
+		mockMvc.perform(get("/bookmarks"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(jsonPath("$.status").value("A4010"))
@@ -223,6 +237,7 @@ class SecurityConfigTest {
 	void validAccessTokenCreatesPrincipal() throws Exception {
 		UUID userId = UUID.randomUUID();
 		String accessToken = jwtTokenProvider.createAccessToken(userId);
+		when(userRepository.existsByUserIdAndRole(userId, UserRole.ADMIN)).thenReturn(false);
 		when(userService.getMe(userId))
 			.thenReturn(new UserMeResponse(userId, SocialProvider.KAKAO, PrimaryUserType.LOW_VISION, null));
 

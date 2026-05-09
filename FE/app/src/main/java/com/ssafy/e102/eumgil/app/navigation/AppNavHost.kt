@@ -24,6 +24,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -32,11 +33,12 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.provideProfileUserTypeUpdateRepository
 import com.ssafy.e102.eumgil.feature.map.MapKwsEvent
 import com.ssafy.e102.eumgil.feature.map.MapKwsViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
-import kotlinx.coroutines.flow.map
 
 internal val AppNavHostContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
@@ -57,10 +59,14 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
         }
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
+    var bootstrappedAuthGateState by remember { mutableStateOf<AuthGateState?>(null) }
+    var bootstrappedInitSettings by remember { mutableStateOf<InitSettings?>(null) }
 
     LaunchedEffect(authSessionRepository, settingsRepository) {
         val authGateState = authSessionRepository.getAuthGateState()
         val savedSettings = settingsRepository.getInitSettings()
+        bootstrappedAuthGateState = authGateState
+        bootstrappedInitSettings = savedSettings
         appStartDestination =
             resolveAppStartDestination(
                 authGateState = authGateState,
@@ -69,21 +75,41 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
     }
 
-    if (appStartDestination == null) {
+    if (appStartDestination == null || bootstrappedAuthGateState == null || bootstrappedInitSettings == null) {
         AppEntryLoadingScreen(modifier = modifier)
         return
     }
 
     val startDestination = appStartDestination ?: return
+    val initialAuthGateState = bootstrappedAuthGateState ?: return
+    val initialInitSettings = bootstrappedInitSettings ?: return
     val navController = rememberNavController()
+    val authGateState by
+        remember(authSessionRepository) {
+            authSessionRepository.observeAuthGateState()
+        }.collectAsStateWithLifecycle(initialValue = initialAuthGateState)
+    val initSettings by
+        remember(settingsRepository) {
+            settingsRepository.observeInitSettings()
+        }.collectAsStateWithLifecycle(initialValue = initialInitSettings)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
     val currentTopLevelRoute = currentRoute.toCurrentTopLevelRoute()
     val showTopLevelBar = currentTopLevelRoute != null
 
-    val selectedPrimaryUserType by remember(settingsRepository) {
-        settingsRepository.observeInitSettings().map { it.selectedPrimaryUserType }
-    }.collectAsStateWithLifecycle(initialValue = null)
+    val selectedPrimaryUserType = initSettings.selectedPrimaryUserType
+
+    LaunchedEffect(navController, authGateState, currentRoute) {
+        if (authGateState.hasSession || authGateState.hasPendingSignup || currentRoute == null) return@LaunchedEffect
+        if (currentRoute == AuthRoute.Login.route) return@LaunchedEffect
+
+        navController.navigate(AuthRoute.Login.route) {
+            launchSingleTop = true
+            popUpTo(navController.graph.findStartDestination().id) {
+                inclusive = true
+            }
+        }
+    }
 
     if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
         MobilityKwsEffect(

@@ -4,6 +4,7 @@
 .gradle-user/
 .android/
 .kotlin/
+.codex_tmp/
 .idea/
 *.iml
 local.properties

@@ -128,7 +128,7 @@ data class RouteDetailStepUiState(
 
 data class RouteSettingCtaUiState(
     val label: String = "길 안내 시작",
-    val supportingText: String = "fixture 기반 route summary를 불러오는 동안 CTA를 잠시 비활성화합니다.",
+    val supportingText: String = "경로 요약을 불러오는 동안 CTA를 잠시 비활성화합니다.",
     val isEnabled: Boolean = false,
 )
 

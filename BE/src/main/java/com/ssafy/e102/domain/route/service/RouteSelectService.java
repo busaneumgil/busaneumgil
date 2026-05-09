@@ -9,8 +9,8 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,12 +18,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
-import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
-import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
-import com.ssafy.e102.domain.user.entity.User;
-import com.ssafy.e102.domain.user.repository.UserRepository;
 
 /**
  * 사용자가 검색 후보 중 하나를 실제 안내 route session으로 확정한다.
@@ -34,38 +30,36 @@ public class RouteSelectService {
 	private static final int SRID = 4326;
 
 	private final RouteSearchCacheService routeSearchCacheService;
-	private final RouteSessionRepository routeSessionRepository;
-	private final UserRepository userRepository;
+	private final RouteSessionCommandService routeSessionCommandService;
 	private final ObjectMapper objectMapper;
 	private final WKTReader wktReader = new WKTReader();
 	private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), SRID);
 
 	public RouteSelectService(
 		RouteSearchCacheService routeSearchCacheService,
-		RouteSessionRepository routeSessionRepository,
-		UserRepository userRepository,
+		RouteSessionCommandService routeSessionCommandService,
 		ObjectMapper objectMapper) {
 		this.routeSearchCacheService = routeSearchCacheService;
-		this.routeSessionRepository = routeSessionRepository;
-		this.userRepository = userRepository;
+		this.routeSessionCommandService = routeSessionCommandService;
 		this.objectMapper = objectMapper;
 	}
 
-	@Transactional
 	public void select(UUID userId, String routeId, SelectRouteRequest request) {
 		RouteSummaryResponse route = routeSearchCacheService.getOwnedRouteOrThrow(userId, request.searchId(), routeId);
-		if (routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, route.routeId())
-			.isPresent()) {
-			return;
-		}
-		User user = userRepository.getReferenceById(userId);
 		Coordinate[] coordinates = routeCoordinates(route);
-		routeSessionRepository.save(RouteSession.create(
-			user,
-			route.routeId(),
-			toPoint(coordinates[0]),
-			toPoint(coordinates[coordinates.length - 1]),
-			snapshot(request.searchId(), route)));
+		try {
+			routeSessionCommandService.saveActiveSessionIfAbsent(
+				userId,
+				route.routeId(),
+				toPoint(coordinates[0]),
+				toPoint(coordinates[coordinates.length - 1]),
+				snapshot(request.searchId(), route));
+		} catch (DataIntegrityViolationException exception) {
+			if (routeSessionCommandService.hasActiveSession(userId, route.routeId())) {
+				return;
+			}
+			throw exception;
+		}
 	}
 
 	private JsonNode snapshot(String searchId, RouteSummaryResponse route) {

@@ -672,6 +672,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 세션 ID | session_id | UUID | NOT NULL |  |
 | 사용자 ID | user_id | UUID | NOT NULL |  |
 | 대표 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
+| 활성 경로 중복 방지 키 | active_route_key | VARCHAR(120) | NULL |  |
 | 출발지 좌표 | start_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 도착지 좌표 | end_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 경로 스냅샷 JSON | route_snapshot_json | JSONB | NOT NULL |  |
@@ -685,6 +686,9 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `session_id`는 실제 안내 세션의 식별자다.
 - `route_id`는 프론트와 API에서 참조하는 대표 경로 ID다.
+- `active_route_key`는 같은 사용자의 같은 route가 동시에 여러 ACTIVE session으로 저장되는 것을 막는 내부 키다. `ACTIVE` 상태에서는 `route_id`와 같은 값을 저장하고, `COMPLETED`로 전환할 때 `NULL`로 비운다.
+- DB는 `(user_id, active_route_key)` unique 제약으로 ACTIVE 중복 선택을 최종 방어한다. PostgreSQL unique 제약은 `NULL`을 서로 다른 값으로 취급하므로 완료된 과거 session은 같은 route라도 여러 건 보관할 수 있다.
+- 기존 DB에 이 컬럼을 추가하는 배포에서는 기존 `ACTIVE` row의 `active_route_key`를 `route_id`로 보정한 뒤 unique 제약을 적용한다. 중복 ACTIVE row가 이미 있으면 최신 row만 유지하거나 나머지를 `COMPLETED`로 정리한 뒤 제약을 적용한다.
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`

@@ -23,6 +23,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +33,8 @@ import lombok.NoArgsConstructor;
 @Table(name = "route_sessions", indexes = {
 	@Index(name = "idx_route_sessions_user_route_updated", columnList = "user_id, route_id, updated_at"),
 	@Index(name = "idx_route_sessions_route_updated", columnList = "route_id, updated_at")
+}, uniqueConstraints = {
+	@UniqueConstraint(name = "uk_route_sessions_user_active_route", columnNames = {"user_id", "active_route_key"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteSession extends BaseEntity {
@@ -47,6 +50,9 @@ public class RouteSession extends BaseEntity {
 
 	@Column(nullable = false, length = 120)
 	private String routeId;
+
+	@Column(length = 120)
+	private String activeRouteKey;
 
 	@Column(nullable = false, columnDefinition = "geometry(Point, 4326)")
 	private Point startPoint;
@@ -71,10 +77,16 @@ public class RouteSession extends BaseEntity {
 		RouteSession routeSession = new RouteSession();
 		routeSession.user = user;
 		routeSession.routeId = routeId;
+		routeSession.activeRouteKey = routeId;
 		routeSession.startPoint = startPoint;
 		routeSession.endPoint = endPoint;
 		routeSession.routeSnapshotJson = routeSnapshotJson;
 		routeSession.status = RouteSessionStatus.ACTIVE;
 		return routeSession;
+	}
+
+	public void complete() {
+		this.status = RouteSessionStatus.COMPLETED;
+		this.activeRouteKey = null;
 	}
 }

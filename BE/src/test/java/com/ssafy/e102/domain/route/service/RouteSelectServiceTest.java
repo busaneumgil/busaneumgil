@@ -10,14 +10,14 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.locationtech.jts.geom.Point;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,59 +26,51 @@ import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteStopResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitLaneOptionResponse;
-import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
-import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
-import com.ssafy.e102.domain.user.entity.User;
-import com.ssafy.e102.domain.user.repository.UserRepository;
-import com.ssafy.e102.domain.user.type.PrimaryUserType;
-import com.ssafy.e102.domain.user.type.SocialProvider;
 
 class RouteSelectServiceTest {
 
 	private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	private RouteSearchCacheService routeSearchCacheService;
-	private RouteSessionRepository routeSessionRepository;
-	private UserRepository userRepository;
+	private RouteSessionCommandService routeSessionCommandService;
 	private RouteSelectService service;
 
 	@BeforeEach
 	void setUp() {
 		routeSearchCacheService = mock(RouteSearchCacheService.class);
-		routeSessionRepository = mock(RouteSessionRepository.class);
-		userRepository = mock(UserRepository.class);
-		service = new RouteSelectService(routeSearchCacheService, routeSessionRepository, userRepository,
-			new ObjectMapper());
+		routeSessionCommandService = mock(RouteSessionCommandService.class);
+		service = new RouteSelectService(routeSearchCacheService, routeSessionCommandService, new ObjectMapper());
 	}
 
 	@Test
 	@DisplayName("Redis 후보 route를 ACTIVE route session으로 저장한다")
 	void selectStoresActiveRouteSession() {
 		RouteSummaryResponse route = transitRoute("rt_selected_001");
-		User user = user(USER_ID);
 		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
 			.thenReturn(route);
-		when(userRepository.getReferenceById(USER_ID)).thenReturn(user);
 
 		service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test"));
 
-		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
-		verify(routeSessionRepository).save(sessionCaptor.capture());
-		RouteSession session = sessionCaptor.getValue();
-		assertThat(session.getUser()).isEqualTo(user);
-		assertThat(session.getRouteId()).isEqualTo("rt_selected_001");
-		assertThat(session.getStatus().name()).isEqualTo("ACTIVE");
-		assertThat(session.getStartPoint().getY()).isEqualTo(35.12);
-		assertThat(session.getStartPoint().getX()).isEqualTo(128.936);
-		assertThat(session.getEndPoint().getY()).isEqualTo(35.14);
-		assertThat(session.getEndPoint().getX()).isEqualTo(128.956);
-		assertThat(session.getRouteSnapshotJson().get("routeId").asText()).isEqualTo("rt_selected_001");
+		ArgumentCaptor<Point> startPointCaptor = ArgumentCaptor.forClass(Point.class);
+		ArgumentCaptor<Point> endPointCaptor = ArgumentCaptor.forClass(Point.class);
+		ArgumentCaptor<JsonNode> snapshotCaptor = ArgumentCaptor.forClass(JsonNode.class);
+		verify(routeSessionCommandService).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.eq(USER_ID),
+			org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+			startPointCaptor.capture(),
+			endPointCaptor.capture(),
+			snapshotCaptor.capture());
+		assertThat(startPointCaptor.getValue().getY()).isEqualTo(35.12);
+		assertThat(startPointCaptor.getValue().getX()).isEqualTo(128.936);
+		assertThat(endPointCaptor.getValue().getY()).isEqualTo(35.14);
+		assertThat(endPointCaptor.getValue().getX()).isEqualTo(128.956);
+		assertThat(snapshotCaptor.getValue().get("routeId").asText()).isEqualTo("rt_selected_001");
 	}
 
 	@Test
@@ -86,14 +78,17 @@ class RouteSelectServiceTest {
 	void selectRemovesLiveRemainingMinuteFromSnapshot() {
 		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
 			.thenReturn(transitRoute("rt_selected_001"));
-		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 
 		service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test"));
 
-		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
-		verify(routeSessionRepository).save(sessionCaptor.capture());
-		JsonNode laneOption = sessionCaptor.getValue()
-			.getRouteSnapshotJson()
+		ArgumentCaptor<JsonNode> snapshotCaptor = ArgumentCaptor.forClass(JsonNode.class);
+		verify(routeSessionCommandService).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.eq(USER_ID),
+			org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			snapshotCaptor.capture());
+		JsonNode laneOption = snapshotCaptor.getValue()
 			.get("legs")
 			.get(0)
 			.get("laneOptions")
@@ -115,13 +110,17 @@ class RouteSelectServiceTest {
 					"type", TransportMode.BUS,
 					"lanes", List.of(Map.of("busLocalBlID", "BL1")),
 					"passStops", List.of(Map.of("localStationID", "BS1")))))));
-		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 
 		service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test"));
 
-		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
-		verify(routeSessionRepository).save(sessionCaptor.capture());
-		JsonNode backendMetadata = sessionCaptor.getValue().getRouteSnapshotJson().get("backendMetadata");
+		ArgumentCaptor<JsonNode> snapshotCaptor = ArgumentCaptor.forClass(JsonNode.class);
+		verify(routeSessionCommandService).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.eq(USER_ID),
+			org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			snapshotCaptor.capture());
+		JsonNode backendMetadata = snapshotCaptor.getValue().get("backendMetadata");
 		assertThat(backendMetadata.get("routeId").asText()).isEqualTo("rt_selected_001");
 		assertThat(backendMetadata.get("mapObj").asText()).isEqualTo("map-object");
 		assertThat(backendMetadata.get("legs").get(0).get("lanes").get(0).get("busLocalBlID").asText())
@@ -144,14 +143,19 @@ class RouteSelectServiceTest {
 			List.of(walkLeg("LINESTRING(128.936 35.12, 128.956 35.14)")));
 		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_walk_test", "rt_selected_001"))
 			.thenReturn(route);
-		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 
 		service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_walk_test"));
 
-		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
-		verify(routeSessionRepository).save(sessionCaptor.capture());
-		assertThat(sessionCaptor.getValue().getStartPoint().getY()).isEqualTo(35.12);
-		assertThat(sessionCaptor.getValue().getEndPoint().getY()).isEqualTo(35.14);
+		ArgumentCaptor<Point> startPointCaptor = ArgumentCaptor.forClass(Point.class);
+		ArgumentCaptor<Point> endPointCaptor = ArgumentCaptor.forClass(Point.class);
+		verify(routeSessionCommandService).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.eq(USER_ID),
+			org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+			startPointCaptor.capture(),
+			endPointCaptor.capture(),
+			org.mockito.ArgumentMatchers.any(JsonNode.class));
+		assertThat(startPointCaptor.getValue().getY()).isEqualTo(35.12);
+		assertThat(endPointCaptor.getValue().getY()).isEqualTo(35.14);
 	}
 
 	@Test
@@ -187,7 +191,12 @@ class RouteSelectServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_SEARCH_EXPIRED);
-		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+		verify(routeSessionCommandService, never()).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any());
 	}
 
 	@Test
@@ -200,7 +209,12 @@ class RouteSelectServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_CANDIDATE_NOT_FOUND);
-		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+		verify(routeSessionCommandService, never()).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any());
 	}
 
 	@Test
@@ -213,21 +227,51 @@ class RouteSelectServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_ACCESS_DENIED);
-		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+		verify(routeSessionCommandService, never()).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any());
 	}
 
 	@Test
-	@DisplayName("같은 사용자의 같은 routeId 중복 select는 추가 저장 없이 성공한다")
-	void selectDuplicateRouteDoesNotCreateAnotherSession() {
+	@DisplayName("ACTIVE unique 제약 충돌 후 세션이 확인되면 중복 select 성공으로 처리한다")
+	void selectTreatsUniqueConflictAsDuplicateWhenActiveSessionExists() {
 		RouteSummaryResponse route = transitRoute("rt_selected_001");
 		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
 			.thenReturn(route);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
-			.thenReturn(Optional.of(mock(RouteSession.class)));
+		org.mockito.Mockito.doThrow(new DataIntegrityViolationException("duplicate active route"))
+			.when(routeSessionCommandService)
+			.saveActiveSessionIfAbsent(
+				org.mockito.ArgumentMatchers.eq(USER_ID),
+				org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+				org.mockito.ArgumentMatchers.any(Point.class),
+				org.mockito.ArgumentMatchers.any(Point.class),
+				org.mockito.ArgumentMatchers.any(JsonNode.class));
+		when(routeSessionCommandService.hasActiveSession(USER_ID, "rt_selected_001")).thenReturn(true);
 
 		service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test"));
+	}
 
-		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+	@Test
+	@DisplayName("ACTIVE unique 제약 충돌 후 세션이 없으면 DB 예외를 전파한다")
+	void selectPropagatesUniqueConflictWhenActiveSessionIsMissing() {
+		RouteSummaryResponse route = transitRoute("rt_selected_001");
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
+			.thenReturn(route);
+		org.mockito.Mockito.doThrow(new DataIntegrityViolationException("unknown constraint"))
+			.when(routeSessionCommandService)
+			.saveActiveSessionIfAbsent(
+				org.mockito.ArgumentMatchers.eq(USER_ID),
+				org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+				org.mockito.ArgumentMatchers.any(Point.class),
+				org.mockito.ArgumentMatchers.any(Point.class),
+				org.mockito.ArgumentMatchers.any(JsonNode.class));
+		when(routeSessionCommandService.hasActiveSession(USER_ID, "rt_selected_001")).thenReturn(false);
+
+		assertThatThrownBy(() -> service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test")))
+			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
 	private RouteSummaryResponse transitRoute(String routeId) {
@@ -272,11 +316,5 @@ class RouteSelectServiceTest {
 			1,
 			geometry,
 			List.of());
-	}
-
-	private User user(UUID userId) {
-		User user = User.create(SocialProvider.KAKAO, "kakao-user-id", PrimaryUserType.LOW_VISION, null);
-		ReflectionTestUtils.setField(user, "userId", userId);
-		return user;
 	}
 }

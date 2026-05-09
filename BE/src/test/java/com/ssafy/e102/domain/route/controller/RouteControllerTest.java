@@ -214,7 +214,8 @@ class RouteControllerTest {
 				"""))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
-			.andExpect(jsonPath("$.data").value(nullValue()));
+			.andExpect(jsonPath("$.data").value(nullValue()))
+			.andExpect(jsonPath("$.message").value("경로가 선택되었습니다."));
 
 		verify(routeSelectService).select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class));
 		SecurityContextHolder.clearContext();

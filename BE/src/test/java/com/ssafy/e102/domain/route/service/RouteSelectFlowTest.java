@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -70,8 +71,10 @@ class RouteSelectFlowTest {
 		routeSearchCacheService = new RouteSearchCacheService(redisTemplate, objectMapper);
 		routeSessionRepository = mock(RouteSessionRepository.class);
 		userRepository = mock(UserRepository.class);
-		routeSelectService = new RouteSelectService(routeSearchCacheService, routeSessionRepository, userRepository,
-			objectMapper);
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			any(), anyString(), any())).thenReturn(Optional.empty());
+		routeSelectService = new RouteSelectService(routeSearchCacheService,
+			new RouteSessionCommandService(routeSessionRepository, userRepository), objectMapper);
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 	}
 
@@ -100,7 +103,7 @@ class RouteSelectFlowTest {
 		routeSelectService.select(USER_ID, routeId, new SelectRouteRequest(searchResponse.searchId()));
 
 		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
-		verify(routeSessionRepository).save(sessionCaptor.capture());
+		verify(routeSessionRepository).saveAndFlush(sessionCaptor.capture());
 		assertThat(sessionCaptor.getValue().getRouteId()).isEqualTo(routeId);
 		assertThat(sessionCaptor.getValue().getRouteSnapshotJson().get("routeId").asText()).isEqualTo(routeId);
 	}
@@ -119,7 +122,7 @@ class RouteSelectFlowTest {
 		routeSelectService.select(USER_ID, route.routeId(), new SelectRouteRequest(searchResponse.searchId()));
 
 		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
-		verify(routeSessionRepository).save(sessionCaptor.capture());
+		verify(routeSessionRepository).saveAndFlush(sessionCaptor.capture());
 		assertThat(sessionCaptor.getValue().getRouteSnapshotJson().get("backendMetadata").get("mapObj").asText())
 			.isEqualTo("map-object");
 	}

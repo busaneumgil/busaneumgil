@@ -74,6 +74,6 @@ public class RouteController {
 		@Valid @RequestBody
 		SelectRouteRequest request) {
 		routeSelectService.select(principal.userId(), routeId, request);
-		return ApiResponse.success();
+		return ApiResponse.successMessage("경로가 선택되었습니다.");
 	}
 }

@@ -6,6 +6,7 @@ enum class RepositoryDomain {
     PLACES,
     SEARCH,
     SETTINGS,
+    VOICE_ANALYZE,
 }
 
 enum class RepositorySource {
@@ -53,7 +54,8 @@ class DefaultRepositorySourcePolicy : RepositorySourcePolicy {
         when (domain) {
             RepositoryDomain.SETTINGS -> RepositoryReadPlan.localOnly()
             RepositoryDomain.PLACES,
-            RepositoryDomain.SEARCH ->
+            RepositoryDomain.SEARCH,
+            RepositoryDomain.VOICE_ANALYZE ->
                 if (AppEnvironment.isMockMode) {
                     RepositoryReadPlan.mockOnly()
                 } else {

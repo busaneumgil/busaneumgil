@@ -119,6 +119,40 @@ class TransitRefreshServiceTest {
 	}
 
 	@Test
+	@DisplayName("BIMS timeout은 EX5040으로 전파한다")
+	void refreshBusPropagatesBimsTimeout() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(bimsArrivalCacheService.find("507700000", "5200177000"))
+			.thenReturn(Optional.empty());
+		when(busanBimsClient.findArrival("507700000", "5200177000", "100"))
+			.thenThrow(new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT));
+
+		assertThatThrownBy(() -> service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2)))
+			.isInstanceOf(RouteException.class)
+			.extracting("errorCode")
+			.isEqualTo(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT);
+	}
+
+	@Test
+	@DisplayName("BIMS 오류는 EX5020으로 전파한다")
+	void refreshBusPropagatesBimsFailure() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(bimsArrivalCacheService.find("507700000", "5200177000"))
+			.thenReturn(Optional.empty());
+		when(busanBimsClient.findArrival("507700000", "5200177000", "100"))
+			.thenThrow(new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED));
+
+		assertThatThrownBy(() -> service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2)))
+			.isInstanceOf(RouteException.class)
+			.extracting("errorCode")
+			.isEqualTo(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED);
+	}
+
+	@Test
 	@DisplayName("다른 사용자의 route session이면 A4030을 반환한다")
 	void refreshRejectsRouteSessionOwnedByOtherUser() {
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "other_route"))
@@ -196,6 +230,21 @@ class TransitRefreshServiceTest {
 
 		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.ARRIVAL_UNKNOWN);
 		assertThat(response.transits()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("refresh는 route snapshot과 geometry를 변경하지 않는다")
+	void refreshDoesNotMutateRouteSnapshot() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
+		JsonNode before = routeSession.getRouteSnapshotJson().deepCopy();
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(bimsArrivalCacheService.find("507700000", "5200177000"))
+			.thenReturn(Optional.of(new BusanBimsArrival("507700000", "5200177000", "100", 2, false)));
+
+		service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
+
+		assertThat(routeSession.getRouteSnapshotJson()).isEqualTo(before);
 	}
 
 	@Test

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -197,7 +198,7 @@ class RerouteServiceTest {
 	}
 
 	@Test
-	@DisplayName("기존 route geometry 500m 초과 이탈은 RT4091로 차단한다")
+	@DisplayName("기존 route geometry 500m 초과 이탈은 RT4091로 새 검색 fallback을 유도한다")
 	void rejectTooFarCurrentPoint() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
@@ -207,6 +208,7 @@ class RerouteServiceTest {
 		assertRouteError(
 			() -> service.reroute(userId, new RerouteRequest("rt_001", new GeoPointRequest(35.1200, 128.9500))),
 			RouteErrorCode.ROUTE_TOO_FAR_FOR_REROUTE);
+		verifyNoInteractions(walkRouteSearchService, transitRouteSearchService);
 	}
 
 	@Test

@@ -259,7 +259,7 @@ class RouteControllerTest {
 	}
 
 	@Test
-	@DisplayName("reroute 과도 이탈은 RT4091로 반환한다")
+	@DisplayName("reroute 과도 이탈은 FE 새 검색 fallback을 위해 RT4091로 반환한다")
 	void rerouteMapsTooFarCurrentPoint() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))

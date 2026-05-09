@@ -2,8 +2,8 @@ package com.ssafy.e102.domain.place.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,12 +23,12 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClientException;
 
-import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
+import com.ssafy.e102.domain.place.dto.request.PlaceClickDetailRequest;
 import com.ssafy.e102.domain.place.dto.response.PlaceClickDetailResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
-import com.ssafy.e102.domain.place.dto.request.PlaceClickDetailRequest;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
 import com.ssafy.e102.domain.place.exception.PlaceErrorCode;
@@ -202,6 +202,35 @@ class PlaceServiceTest {
 		assertThat(response.category()).isEqualTo(PlaceCategory.TOURIST_SPOT);
 		assertThat(response.providerCategory()).isNull();
 		assertThat(response.isBookmarked()).isTrue();
+	}
+
+	@Test
+	@DisplayName("외부 상세 조회는 providerPlaceId가 내부 장소와 매칭되면 nameHint 없이도 canonical 내부 장소를 반환한다")
+	void getPlaceDetailWithInternalProviderMatchWithoutNameHint() {
+		UUID userId = UUID.randomUUID();
+		Place place = place(
+			10L,
+			"부산시민공원",
+			PlaceCategory.TOURIST_SPOT,
+			"123456789",
+			35.1686,
+			129.0576,
+			AccessibilityFeatureType.accessibleEntrance);
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.1686,
+			129.0576,
+			PlaceClickType.POI,
+			"KAKAO",
+			"123456789",
+			null);
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("123456789"))).thenReturn(List.of(place));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.INTERNAL_PLACE);
+		assertThat(response.placeId()).isEqualTo(10L);
+		assertThat(response.name()).isEqualTo("부산시민공원");
 	}
 
 	@Test

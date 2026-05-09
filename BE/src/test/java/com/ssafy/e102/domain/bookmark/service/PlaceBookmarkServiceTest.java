@@ -13,12 +13,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 import org.locationtech.jts.geom.Point;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.domain.Sort;
@@ -32,10 +33,10 @@ import com.ssafy.e102.domain.bookmark.exception.PlaceBookmarkException;
 import com.ssafy.e102.domain.place.entity.Bookmark;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
-import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.repository.BookmarkRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.support.BookmarkTargetIdFactory;
+import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
 import com.ssafy.e102.domain.user.entity.User;
@@ -216,6 +217,35 @@ class PlaceBookmarkServiceTest {
 		assertThat(response.bookmarkId()).isEqualTo(7L);
 		assertThat(response.targetType()).isEqualTo(PlaceDetailType.INTERNAL_PLACE);
 		assertThat(response.placeId()).isEqualTo(10L);
+	}
+
+	@Test
+	@DisplayName("장소 북마크 저장 중 DB unique 제약이 발생하면 중복 북마크 에러를 반환한다")
+	void mapDuplicateConstraintViolationToBookmarkAlreadyExists() {
+		UUID userId = UUID.randomUUID();
+		User user = user(userId);
+		Place place = place(10L, "부산시민공원", PlaceCategory.TOURIST_SPOT, "123456789", 35.1686, 129.0576);
+		CreatePlaceBookmarkRequest request = new CreatePlaceBookmarkRequest(
+			10L,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null);
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+		when(bookmarkRepository.existsByUser_UserIdAndPlace_PlaceId(userId, 10L)).thenReturn(false);
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId,
+			BookmarkTargetIdFactory.fromInternalPlace(10L)))
+			.thenReturn(false);
+		when(bookmarkRepository.save(any(Bookmark.class)))
+			.thenThrow(new DataIntegrityViolationException("uk_bookmarks_user_target"));
+
+		assertThatThrownBy(() -> placeBookmarkService.createBookmark(userId, request))
+			.isInstanceOf(PlaceBookmarkException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceBookmarkErrorCode.PLACE_BOOKMARK_ALREADY_EXISTS);
 	}
 
 	@Test

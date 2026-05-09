@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
@@ -103,7 +104,8 @@ public class PlaceBookmarkService {
 			|| bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId)) {
 			throw new PlaceBookmarkException(PlaceBookmarkErrorCode.PLACE_BOOKMARK_ALREADY_EXISTS);
 		}
-		Bookmark savedBookmark = bookmarkRepository.save(Bookmark.createInternal(user, place, bookmarkTargetId));
+		Bookmark savedBookmark = saveBookmarkHandlingDuplicate(
+			Bookmark.createInternal(user, place, bookmarkTargetId));
 		return new PlaceBookmarkCreateResponse(
 			savedBookmark.getBookmarkId().longValue(),
 			bookmarkTargetId,
@@ -132,7 +134,7 @@ public class PlaceBookmarkService {
 		if (bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId)) {
 			throw new PlaceBookmarkException(PlaceBookmarkErrorCode.PLACE_BOOKMARK_ALREADY_EXISTS);
 		}
-		Bookmark savedBookmark = bookmarkRepository.save(Bookmark.createExternal(
+		Bookmark savedBookmark = saveBookmarkHandlingDuplicate(Bookmark.createExternal(
 			user,
 			bookmarkTargetId,
 			provider,
@@ -196,6 +198,14 @@ public class PlaceBookmarkService {
 				.findFirst();
 		}
 		return Optional.empty();
+	}
+
+	private Bookmark saveBookmarkHandlingDuplicate(Bookmark bookmark) {
+		try {
+			return bookmarkRepository.save(bookmark);
+		} catch (DataIntegrityViolationException exception) {
+			throw new PlaceBookmarkException(PlaceBookmarkErrorCode.PLACE_BOOKMARK_ALREADY_EXISTS);
+		}
 	}
 
 	private Optional<Bookmark> findLegacyInternalBookmarkByTarget(UUID userId, String bookmarkTargetId) {

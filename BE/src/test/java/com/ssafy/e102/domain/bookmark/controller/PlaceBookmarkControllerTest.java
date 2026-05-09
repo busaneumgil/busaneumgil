@@ -30,11 +30,13 @@ import com.ssafy.e102.domain.bookmark.dto.request.CreatePlaceBookmarkRequest;
 import com.ssafy.e102.domain.bookmark.dto.response.PlaceBookmarkCreateResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.PlaceBookmarkItemResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.PlaceBookmarkListResponse;
+import com.ssafy.e102.domain.bookmark.exception.PlaceBookmarkExceptionHandler;
 import com.ssafy.e102.domain.bookmark.service.PlaceBookmarkService;
 import com.ssafy.e102.domain.place.dto.response.PlaceAccessibilityFeatureResponse;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
+import com.ssafy.e102.global.exception.GlobalExceptionHandler;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
@@ -50,6 +52,7 @@ class PlaceBookmarkControllerTest {
 		MockitoAnnotations.openMocks(this);
 		mockMvc = MockMvcBuilders.standaloneSetup(new PlaceBookmarkController(placeBookmarkService))
 			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+			.setControllerAdvice(new PlaceBookmarkExceptionHandler(), new GlobalExceptionHandler())
 			.build();
 	}
 
@@ -107,21 +110,46 @@ class PlaceBookmarkControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "provider": "KAKAO",
-				  "providerPlaceId": "123456789",
-				  "name": "부산시민공원",
-				  "providerCategory": "여행 > 관광,명소 > 공원",
-				  "address": "부산광역시 부산진구 시민공원로 73",
-				  "point": {
-				    "lat": 35.1686,
-				    "lng": 129.0576
-				  }
+					"provider": "KAKAO",
+					"providerPlaceId": "123456789",
+					"name": "부산시민공원",
+					"providerCategory": "여행 > 관광,명소 > 공원",
+					"address": "부산광역시 부산진구 시민공원로 73",
+					"point": {
+						"lat": 35.1686,
+						"lng": 129.0576
+					}
 				}
 				"""))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("S2010"))
 			.andExpect(jsonPath("$.data.bookmarkId").value(1))
 			.andExpect(jsonPath("$.data.bookmarkTargetId").value("tgt_9d13f0b44d68abcd"));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("장소 북마크 저장 요청값 검증 실패는 BM4000을 반환한다")
+	void createBookmarkValidationErrorReturnsBookmarkErrorCode() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/bookmarks")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+					"provider": "KAKAO",
+					"name": "부산시민공원",
+					"point": {
+						"lat": "wrong",
+						"lng": 129.0576
+					}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("BM4000"));
 
 		SecurityContextHolder.clearContext();
 	}
@@ -138,6 +166,20 @@ class PlaceBookmarkControllerTest {
 			.andExpect(content().string(""));
 
 		verify(placeBookmarkService).deleteBookmarkByTarget(userId, "tgt_9d13f0b44d68abcd");
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("공통 장소 북마크 해제 요청값 검증 실패는 BM4001을 반환한다")
+	void deleteBookmarkByTargetValidationErrorReturnsBookmarkDeleteErrorCode() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(delete("/bookmarks/targets/invalid-target-id")
+			.principal(authentication))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("BM4001"));
+
 		SecurityContextHolder.clearContext();
 	}
 

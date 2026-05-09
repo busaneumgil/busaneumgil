@@ -183,12 +183,13 @@ public class PlaceService {
 	}
 
 	public PlaceClickDetailResponse getPlaceDetail(UUID userId, PlaceClickDetailRequest request) {
-		validatePlaceClickDetailRequest(request);
+		validateBasePlaceClickDetailRequest(request);
 		Optional<Place> internalPlace = findMatchedInternalPlace(request.providerPlaceId());
 		if (internalPlace.isPresent()) {
 			return toInternalClickDetailResponse(userId, request, internalPlace.get());
 		}
 		if (request.clickType() == PlaceClickType.POI) {
+			validateExternalPoiDetailRequest(request);
 			return getExternalPoiDetail(userId, request);
 		}
 		return getExternalAddressDetail(userId, request);
@@ -258,12 +259,15 @@ public class PlaceService {
 		return keyword.trim();
 	}
 
-	private void validatePlaceClickDetailRequest(PlaceClickDetailRequest request) {
+	private void validateBasePlaceClickDetailRequest(PlaceClickDetailRequest request) {
 		if (request == null || request.lat() == null || request.lng() == null || request.clickType() == null) {
 			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
 		}
 		validateCoordinateRange(request.lat(), request.lng());
-		if (request.clickType() == PlaceClickType.POI && !StringUtils.hasText(request.nameHint())) {
+	}
+
+	private void validateExternalPoiDetailRequest(PlaceClickDetailRequest request) {
+		if (!StringUtils.hasText(request.nameHint())) {
 			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
 		}
 	}

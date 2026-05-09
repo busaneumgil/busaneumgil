@@ -310,19 +310,20 @@ erDiagram
 | --- | --- | --- | --- | --- |
 | 북마크 ID | bookmark_id | INT | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
-| 북마크 대상 식별자 | bookmark_target_id | VARCHAR(120) | NOT NULL |  |
+| 북마크 대상 식별자 | bookmark_target_id | VARCHAR(32) | NULL |  |
 | 장소 ID | place_id | BIGINT | NULL |  |
 | 외부 제공자 | provider | VARCHAR(30) | NULL |  |
 | 외부 제공자 장소 ID | provider_place_id | VARCHAR(100) | NULL |  |
-| 표시명 | name | VARCHAR(255) | NOT NULL |  |
+| 표시명 | name | VARCHAR(255) | NULL |  |
 | 외부 원본 카테고리 | provider_category | VARCHAR(255) | NULL |  |
 | 표시 주소 | address | VARCHAR(255) | NULL |  |
-| 표시 좌표 | point | GEOMETRY(POINT, 4326) | NOT NULL |  |
+| 표시 좌표 | point | GEOMETRY(POINT, 4326) | NULL |  |
 
 ### 비고
 
 - `UNIQUE (user_id, bookmark_target_id)` 제약을 둔다.
-- 내부 장소 북마크는 `place_id`를 채우고, `name`, `address`, `point`는 목록 응답 성능과 snapshot 보존을 위해 함께 저장할 수 있다.
+- 신규 생성 row는 `bookmark_target_id`를 항상 채운다. 다만 기존 내부 북마크 legacy row를 흡수하는 전환 구간을 고려해 현재 스키마 자체는 nullable로 둔다.
+- 내부 장소 북마크는 `place_id`를 채우고, 목록 응답 시에는 `places` canonical 데이터를 우선 사용한다. 따라서 `name`, `address`, `point` snapshot은 비워둘 수 있다.
 - 내부 매칭되지 않은 외부 북마크는 `place_id=NULL`이며 `provider`, `provider_place_id`, `name`, `provider_category`, `address`, `point` snapshot만 가진다.
 - `bookmark_target_id`는 서버가 생성하는 opaque 식별자다. 삭제 API와 중복 방지 기준으로 사용한다.
 - 외부 snapshot row는 사용자 북마크 데이터일 뿐, 전역 `places` 마스터 데이터로 승격하지 않는다.

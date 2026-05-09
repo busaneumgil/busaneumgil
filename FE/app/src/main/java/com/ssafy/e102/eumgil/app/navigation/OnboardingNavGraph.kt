@@ -143,6 +143,15 @@ fun NavGraphBuilder.onboardingNavGraph(
                         )
                         val completedSettings = settingsRepository.getInitSettings()
                         val nextRoute = resolveOnboardingTermsCompletedRoute(completedSettings.selectedPrimaryUserType)
+                        val shouldCompleteSignupBeforeTutorial =
+                            shouldCompletePendingSignupBeforeOnboardingTutorial(
+                                completedSettings.selectedPrimaryUserType,
+                            )
+                        if (shouldCompleteSignupBeforeTutorial) {
+                            authSignupRepository.completePendingSignup(
+                                requiredTermsAccepted = agreement.isLocationTermsAgreed,
+                            )
+                        }
                         if (nextRoute == TutorialRoute.Onboarding.route) {
                             navController.navigate(nextRoute) {
                                 launchSingleTop = true
@@ -151,9 +160,11 @@ fun NavGraphBuilder.onboardingNavGraph(
                                 }
                             }
                         } else {
-                            authSignupRepository.completePendingSignup(
-                                requiredTermsAccepted = agreement.isLocationTermsAgreed,
-                            )
+                            if (!shouldCompleteSignupBeforeTutorial) {
+                                authSignupRepository.completePendingSignup(
+                                    requiredTermsAccepted = agreement.isLocationTermsAgreed,
+                                )
+                            }
                             navController.navigateToCompletedOnboarding(route = nextRoute)
                         }
                     }.onFailure { throwable ->
@@ -170,27 +181,12 @@ fun NavGraphBuilder.onboardingNavGraph(
     }
 
     composable(route = TutorialRoute.Onboarding.route) {
-        val coroutineScope = rememberCoroutineScope()
-        val context = LocalContext.current
-
         MobilityTutorialRoute(
             entryPoint = TutorialEntryPoint.ONBOARDING,
             onCompleted = {
-                coroutineScope.launch {
-                    runCatching {
-                        authSignupRepository.completePendingSignup(requiredTermsAccepted = true)
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveTutorialOnboardingCompletedRoute(),
-                        )
-                    }.onFailure { throwable ->
-                        Toast
-                            .makeText(
-                                context,
-                                throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                    }
-                }
+                navController.navigateToCompletedOnboarding(
+                    route = resolveTutorialOnboardingCompletedRoute(),
+                )
             },
         )
     }

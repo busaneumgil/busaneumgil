@@ -56,7 +56,7 @@ public class RouteController {
 	public ApiResponse<RerouteResponse> reroute(
 		@AuthenticationPrincipal
 		AuthPrincipal principal,
-		@RequestBody
+		@Valid @RequestBody
 		RerouteRequest request) {
 		return ApiResponse.success(rerouteService.reroute(principal.userId(), request));
 	}

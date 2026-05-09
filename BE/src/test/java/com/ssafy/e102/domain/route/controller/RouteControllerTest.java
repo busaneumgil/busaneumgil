@@ -196,8 +196,6 @@ class RouteControllerTest {
 	@DisplayName("reroute 요청값 오류는 RT4001로 반환한다")
 	void rerouteMapsInvalidRerouteRequest() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
-			.thenThrow(new RouteException(RouteErrorCode.INVALID_REROUTE_REQUEST));
 
 		mockMvc.perform(post("/routes/reroute")
 			.principal(authentication(userId))
@@ -205,6 +203,26 @@ class RouteControllerTest {
 			.content("""
 				{
 				  "currentPoint": {"lat": 35.12, "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4001"))
+			.andExpect(jsonPath("$.message").value("재탐색 요청값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute currentPoint 누락은 RT4001로 반환한다")
+	void rerouteMapsMissingCurrentPointToInvalidRerouteRequest() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001"
 				}
 				"""))
 			.andExpect(status().isBadRequest())
@@ -226,6 +244,27 @@ class RouteControllerTest {
 				{
 				  "routeId": "rt_existing_001",
 				  "currentPoint": {"lat": "wrong", "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4005"))
+			.andExpect(jsonPath("$.message").value("현재 위치값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute currentPoint 좌표 validation 실패는 RT4005로 반환한다")
+	void rerouteMapsInvalidCurrentPointValidation() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": null, "lng": 128.936}
 				}
 				"""))
 			.andExpect(status().isBadRequest())

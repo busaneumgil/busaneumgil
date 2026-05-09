@@ -39,10 +39,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderInfo
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary200
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary500
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -105,6 +105,8 @@ fun TutorialScreen(
                 modifier = Modifier.weight(TutorialLayoutDefaults.visualPanelWeight),
             )
         }
+
+        Spacer(modifier = Modifier.height(TutorialLayoutDefaults.visualPanelButtonGap))
 
         Button(
             onClick = onPrimaryActionClick,
@@ -186,6 +188,7 @@ private fun TutorialVisualPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
+            TutorialHeroIcon(iconRes = content.heroIconRes)
             Column(
                 modifier =
                     Modifier
@@ -195,11 +198,9 @@ private fun TutorialVisualPanel(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                TutorialHeroIcon(iconRes = content.heroIconRes)
-                Spacer(modifier = Modifier.height(EumSpacing.medium))
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                 ) {
                     content.items.forEach { item ->
                         TutorialSupportingItemRow(item = item)
@@ -215,21 +216,12 @@ private fun TutorialVisualPanel(
 
 @Composable
 private fun TutorialHeroIcon(@DrawableRes iconRes: Int) {
-    Box(
-        modifier =
-            Modifier
-                .size(TutorialLayoutDefaults.heroIconContainerSize)
-                .clip(RoundedCornerShape(EumRadius.large))
-                .background(EumPrimary200),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            modifier = Modifier.size(TutorialLayoutDefaults.heroIconSize),
-            tint = EumPrimary600,
-        )
-    }
+    Icon(
+        painter = painterResource(id = iconRes),
+        contentDescription = null,
+        modifier = Modifier.size(TutorialLayoutDefaults.heroIconSize),
+        tint = EumPrimary600,
+    )
 }
 
 @Composable
@@ -251,14 +243,15 @@ private fun TutorialSupportingItemRow(item: TutorialSupportingItem) {
                 Text(
                     text = stringResource(id = item.titleRes),
                     color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    lineHeight = TutorialLayoutDefaults.supportingTitleLineHeight,
                 )
                 Text(
                     text = stringResource(id = item.descriptionRes),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = TutorialLayoutDefaults.supportingDescriptionLineHeight,
                 )
             }
         }
@@ -504,8 +497,10 @@ internal object TutorialLayoutDefaults {
     const val supportingItemCount: Int = 3
     const val destinationFilterChipCount: Int = 3
     const val visualPanelWeight: Float = 1f
+    const val hasHeroIconBackground: Boolean = false
 
     val primaryButtonMinHeight = 56.dp
+    val visualPanelButtonGap = 12.dp
     val visualPanelMaxWidth = 360.dp
     val panelElevation = 2.dp
 
@@ -513,10 +508,11 @@ internal object TutorialLayoutDefaults {
     val microGap = 4.dp
     val hairlineWidth = 1.dp
 
-    val heroIconContainerSize = 76.dp
-    val heroIconSize = 40.dp
+    val heroIconSize = 56.dp
     val supportingIconContainerSize = 44.dp
     val supportingIconSize = 24.dp
+    val supportingTitleLineHeight = 22.sp
+    val supportingDescriptionLineHeight = 21.sp
     val emphasisVerticalPadding = 9.dp
     val filterChipHorizontalPadding = 12.dp
     val filterChipVerticalPadding = 8.dp

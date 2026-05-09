@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
@@ -32,6 +33,7 @@ import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
+import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 class RerouteServiceTest {
@@ -157,7 +159,9 @@ class RerouteServiceTest {
 			new RerouteRequest("rt_001", new GeoPointRequest(35.1195, 128.9360)));
 
 		assertThat(response.rerouteType()).isEqualTo(RerouteType.WALK_REPAIR);
-		assertThat(response.route().routeId()).isEqualTo("rt_001");
+		assertThat(response.route().routeId()).startsWith("rr_repair_");
+		assertThat(response.route().routeId()).isNotEqualTo("rt_001");
+		assertSavedRerouteSession(response.route().routeId(), 35.1195, 128.9360);
 	}
 
 	@Test
@@ -178,10 +182,12 @@ class RerouteServiceTest {
 			new RerouteRequest("rt_001", new GeoPointRequest(35.1200, 128.9400)));
 
 		assertThat(response.rerouteType()).isEqualTo(RerouteType.FULL_REROUTE);
-		assertThat(response.route()).isEqualTo(reroutedRoute);
+		assertThat(response.route().routeId()).startsWith("rr_full_");
+		assertThat(response.route().routeId()).isNotEqualTo(reroutedRoute.routeId());
 		verify(walkRouteSearchService).search(userId, new WalkRouteSearchRequest(
 			new GeoPointRequest(35.1200, 128.9400),
 			new GeoPointRequest(35.1315, 128.8823)));
+		assertSavedRerouteSession(response.route().routeId(), 35.1200, 128.9400);
 	}
 
 	@Test
@@ -223,9 +229,20 @@ class RerouteServiceTest {
 
 	private RouteSession routeSession(RouteSummaryResponse route) {
 		RouteSession routeSession = mock(RouteSession.class);
+		when(routeSession.getUser()).thenReturn(mock(User.class));
 		when(routeSession.getRouteSnapshotJson()).thenReturn(objectMapper.valueToTree(route));
 		when(routeSession.getEndPoint()).thenReturn(GEOMETRY_FACTORY.createPoint(new Coordinate(128.8823, 35.1315)));
 		return routeSession;
+	}
+
+	private void assertSavedRerouteSession(String routeId, double expectedLat, double expectedLng) {
+		ArgumentCaptor<RouteSession> routeSessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
+		verify(routeSessionRepository).save(routeSessionCaptor.capture());
+		RouteSession savedRouteSession = routeSessionCaptor.getValue();
+		assertThat(savedRouteSession.getRouteId()).isEqualTo(routeId);
+		assertThat(savedRouteSession.getStartPoint().getY()).isEqualTo(expectedLat);
+		assertThat(savedRouteSession.getStartPoint().getX()).isEqualTo(expectedLng);
+		assertThat(savedRouteSession.getRouteSnapshotJson().get("routeId").asText()).isEqualTo(routeId);
 	}
 
 	private void assertRouteError(Runnable action, RouteErrorCode expectedErrorCode) {

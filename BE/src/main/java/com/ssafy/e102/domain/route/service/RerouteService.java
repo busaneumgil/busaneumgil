@@ -6,7 +6,9 @@ import java.util.UUID;
 
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.geom.PrecisionModel;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
 import org.springframework.stereotype.Service;
@@ -39,12 +41,14 @@ public class RerouteService {
 	private static final double NO_REROUTE_DISTANCE_METER = 10.0;
 	private static final double WALK_REPAIR_MAX_DISTANCE_METER = 100.0;
 	private static final double FULL_REROUTE_MAX_DISTANCE_METER = 500.0;
+	private static final int SRID = 4326;
 
 	private final RouteSessionRepository routeSessionRepository;
 	private final ObjectMapper objectMapper;
 	private final WalkRouteSearchService walkRouteSearchService;
 	private final TransitRouteSearchService transitRouteSearchService;
 	private final WKTReader wktReader = new WKTReader();
+	private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), SRID);
 
 	public RerouteService(
 		RouteSessionRepository routeSessionRepository,
@@ -57,6 +61,7 @@ public class RerouteService {
 		this.transitRouteSearchService = transitRouteSearchService;
 	}
 
+	@Transactional
 	public RerouteResponse reroute(UUID userId, RerouteRequest request) {
 		validateRequest(request);
 		validateCurrentPoint(request.currentPoint());
@@ -67,14 +72,60 @@ public class RerouteService {
 			return new RerouteResponse(RerouteType.NO_REROUTE_NEEDED, null);
 		}
 		if (projection.distanceMeter() <= WALK_REPAIR_MAX_DISTANCE_METER) {
-			return new RerouteResponse(RerouteType.WALK_REPAIR, route);
+			RouteSummaryResponse repairedRoute = withNewRouteId(route, newRouteId("rr_repair"));
+			saveRerouteSession(routeSession, request.currentPoint(), repairedRoute);
+			return new RerouteResponse(RerouteType.WALK_REPAIR, repairedRoute);
 		}
 		if (projection.distanceMeter() <= FULL_REROUTE_MAX_DISTANCE_METER) {
-			return new RerouteResponse(RerouteType.FULL_REROUTE,
-				fullReroute(userId, request.currentPoint(), routeSession, route));
+			RouteSummaryResponse reroutedRoute = withNewRouteId(
+				fullReroute(userId, request.currentPoint(), routeSession, route),
+				newRouteId("rr_full"));
+			saveRerouteSession(routeSession, request.currentPoint(), reroutedRoute);
+			return new RerouteResponse(RerouteType.FULL_REROUTE, reroutedRoute);
 		}
-		return new RerouteResponse(RerouteType.FULL_REROUTE,
-			fullReroute(userId, request.currentPoint(), routeSession, route));
+		RouteSummaryResponse reroutedRoute = withNewRouteId(
+			fullReroute(userId, request.currentPoint(), routeSession, route),
+			newRouteId("rr_full"));
+		saveRerouteSession(routeSession, request.currentPoint(), reroutedRoute);
+		return new RerouteResponse(RerouteType.FULL_REROUTE, reroutedRoute);
+	}
+
+	private void saveRerouteSession(
+		RouteSession previousSession,
+		GeoPointRequest currentPoint,
+		RouteSummaryResponse route) {
+		routeSessionRepository.save(RouteSession.create(
+			previousSession.getUser(),
+			route.routeId(),
+			toPoint(currentPoint),
+			previousSession.getEndPoint(),
+			objectMapper.valueToTree(route)));
+	}
+
+	private Point toPoint(GeoPointRequest request) {
+		Point point = geometryFactory.createPoint(new Coordinate(request.lng(), request.lat()));
+		point.setSRID(SRID);
+		return point;
+	}
+
+	private RouteSummaryResponse withNewRouteId(RouteSummaryResponse route, String routeId) {
+		return new RouteSummaryResponse(
+			routeId,
+			route.transportMode(),
+			route.routeOption(),
+			route.routeOptions(),
+			route.title(),
+			route.distanceMeter(),
+			route.durationSecond(),
+			route.estimatedTimeMinute(),
+			route.transferCount(),
+			route.badges(),
+			route.geometry(),
+			route.legs());
+	}
+
+	private String newRouteId(String prefix) {
+		return prefix + "_" + UUID.randomUUID();
 	}
 
 	private RouteSummaryResponse fullReroute(

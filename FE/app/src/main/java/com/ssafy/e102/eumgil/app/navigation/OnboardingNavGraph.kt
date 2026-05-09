@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
+import com.ssafy.e102.eumgil.data.repository.PendingSignupTokenExpiredException
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateRepository
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateResult
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -170,6 +171,9 @@ fun NavGraphBuilder.onboardingNavGraph(
                                 throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        if (throwable is PendingSignupTokenExpiredException) {
+                            navController.navigateToLoginAfterAuthenticationFailure()
+                        }
                     }
                 }
             },
@@ -232,6 +236,9 @@ fun NavGraphBuilder.onboardingNavGraph(
                                 throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        if (throwable is PendingSignupTokenExpiredException) {
+                            navController.navigateToLoginAfterAuthenticationFailure()
+                        }
                     }
                 }
             },

@@ -11,6 +11,7 @@ public enum PlaceErrorCode implements ErrorCode {
 	PLACE_KEYWORD_REQUIRED(HttpStatus.BAD_REQUEST, "PL4001", "장소 검색어를 입력해주세요."),
 	PLACE_NOT_FOUND(HttpStatus.NOT_FOUND, "PL4040", "장소를 찾을 수 없습니다."),
 	PLACE_ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "PL4041", "좌표에 해당하는 주소를 찾을 수 없습니다."),
+	PLACE_CLICK_DETAIL_NOT_FOUND(HttpStatus.NOT_FOUND, "PL4042", "지도 클릭 대상의 상세 정보를 찾을 수 없습니다."),
 	PLACE_SEARCH_EXTERNAL_API_FAILED(HttpStatus.BAD_GATEWAY, "PL5020", "장소 검색 외부 API 호출에 실패했습니다."),
 	PLACE_REVERSE_GEOCODE_EXTERNAL_API_FAILED(
 		HttpStatus.BAD_GATEWAY,

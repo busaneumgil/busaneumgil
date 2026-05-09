@@ -24,14 +24,17 @@ import com.ssafy.e102.E102Application;
 import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
+import com.ssafy.e102.domain.bookmark.service.PlaceBookmarkService;
 import com.ssafy.e102.domain.auth.token.AuthTokenStore;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
+import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
 import com.ssafy.e102.domain.user.service.UserService;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.domain.user.type.UserRole;
 import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
 @SpringBootTest(classes = E102Application.class)
@@ -54,7 +57,13 @@ class SecurityConfigTest {
 	private UserService userService;
 
 	@MockitoBean
+	private UserRepository userRepository;
+
+	@MockitoBean
 	private FavoriteRouteService favoriteRouteService;
+
+	@MockitoBean
+	private PlaceBookmarkService placeBookmarkService;
 
 	@MockitoBean
 	private HazardReportService hazardReportService;
@@ -123,6 +132,16 @@ class SecurityConfigTest {
 	}
 
 	@Test
+	@DisplayName("장소 북마크 API는 인증이 필요하다")
+	void placeBookmarksRequireAuthentication() throws Exception {
+		mockMvc.perform(get("/bookmarks"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
 	@DisplayName("도보 경로 검색 API는 인증이 필요하다")
 	void walkRouteSearchRequiresAuthentication() throws Exception {
 		mockMvc.perform(post("/routes/search/walk")
@@ -154,6 +173,7 @@ class SecurityConfigTest {
 	void validAccessTokenCreatesPrincipal() throws Exception {
 		UUID userId = UUID.randomUUID();
 		String accessToken = jwtTokenProvider.createAccessToken(userId);
+		when(userRepository.existsByUserIdAndRole(userId, UserRole.ADMIN)).thenReturn(false);
 		when(userService.getMe(userId))
 			.thenReturn(new UserMeResponse(userId, SocialProvider.KAKAO, PrimaryUserType.LOW_VISION, null));
 

@@ -56,6 +56,8 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/users/**")
 				.authenticated()
+				.requestMatchers("/bookmarks/**")
+				.authenticated()
 				.requestMatchers("/favorite-routes/**")
 				.authenticated()
 				.requestMatchers("/places", "/places/**")

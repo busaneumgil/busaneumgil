@@ -70,6 +70,7 @@ sealed interface MapUiAction {
     data class ViewportCameraChanged(
         val center: MapCoordinate,
         val zoomLevel: Int,
+        val isUserGesture: Boolean = false,
     ) : MapUiAction
 
     data class MarkerCategoryFilterToggled(

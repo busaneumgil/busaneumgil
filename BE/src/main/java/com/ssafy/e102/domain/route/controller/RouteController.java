@@ -7,7 +7,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
+import com.ssafy.e102.domain.route.service.RerouteService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.global.response.ApiResponse;
@@ -29,6 +32,7 @@ public class RouteController {
 
 	private final WalkRouteSearchService walkRouteSearchService;
 	private final TransitRouteSearchService transitRouteSearchService;
+	private final RerouteService rerouteService;
 
 	@PostMapping("/search/walk")
 	public ApiResponse<WalkRouteSearchResponse> searchWalkRoutes(
@@ -46,5 +50,14 @@ public class RouteController {
 		@Valid @RequestBody
 		WalkRouteSearchRequest request) {
 		return ApiResponse.success(transitRouteSearchService.search(principal.userId(), request));
+	}
+
+	@PostMapping("/reroute")
+	public ApiResponse<RerouteResponse> reroute(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@Valid @RequestBody
+		RerouteRequest request) {
+		return ApiResponse.success(rerouteService.reroute(principal.userId(), request));
 	}
 }

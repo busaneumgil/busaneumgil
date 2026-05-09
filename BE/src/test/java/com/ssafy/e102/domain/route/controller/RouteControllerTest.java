@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.route.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -28,6 +29,8 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
@@ -36,6 +39,7 @@ import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.exception.RouteExceptionHandler;
+import com.ssafy.e102.domain.route.service.RerouteService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.domain.route.type.RouteBadge;
@@ -49,14 +53,16 @@ class RouteControllerTest {
 
 	private WalkRouteSearchService walkRouteSearchService;
 	private TransitRouteSearchService transitRouteSearchService;
+	private RerouteService rerouteService;
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
 		walkRouteSearchService = Mockito.mock(WalkRouteSearchService.class);
 		transitRouteSearchService = Mockito.mock(TransitRouteSearchService.class);
+		rerouteService = Mockito.mock(RerouteService.class);
 		mockMvc = MockMvcBuilders
-			.standaloneSetup(new RouteController(walkRouteSearchService, transitRouteSearchService))
+			.standaloneSetup(new RouteController(walkRouteSearchService, transitRouteSearchService, rerouteService))
 			.setCustomArgumentResolvers(new AuthPrincipalArgumentResolver())
 			.setControllerAdvice(new RouteExceptionHandler(), new GlobalExceptionHandler())
 			.build();
@@ -158,6 +164,160 @@ class RouteControllerTest {
 	@DisplayName("추천 경로 없음은 RT4040 에러 응답으로 매핑한다")
 	void searchWalkRoutesMapsRouteNotFoundError() throws Exception {
 		assertRouteError(RouteErrorCode.ROUTE_NOT_FOUND, 404, "RT4040", "탐색 가능한 경로가 없습니다.");
+	}
+
+	@Test
+	@DisplayName("reroute 요청은 인증 사용자와 routeId/currentPoint body만 service로 넘긴다")
+	void rerouteUsesAuthenticatedUser() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
+			.thenReturn(new RerouteResponse(null));
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": 35.12, "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.route").value(nullValue()))
+			.andExpect(jsonPath("$.data.rerouteType").doesNotExist());
+
+		verify(rerouteService).reroute(eq(userId), any(RerouteRequest.class));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute 요청값 오류는 RT4001로 반환한다")
+	void rerouteMapsInvalidRerouteRequest() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "currentPoint": {"lat": 35.12, "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4001"))
+			.andExpect(jsonPath("$.message").value("재탐색 요청값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute currentPoint 누락은 RT4001로 반환한다")
+	void rerouteMapsMissingCurrentPointToInvalidRerouteRequest() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001"
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4001"))
+			.andExpect(jsonPath("$.message").value("재탐색 요청값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute currentPoint 형식 오류는 RT4005로 반환한다")
+	void rerouteMapsMalformedCurrentPoint() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": "wrong", "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4005"))
+			.andExpect(jsonPath("$.message").value("현재 위치값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute currentPoint 좌표 validation 실패는 RT4005로 반환한다")
+	void rerouteMapsInvalidCurrentPointValidation() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": null, "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4005"))
+			.andExpect(jsonPath("$.message").value("현재 위치값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute currentPoint 서비스 영역 오류는 RT4003으로 반환한다")
+	void rerouteMapsOutOfServiceAreaCurrentPoint() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
+			.thenThrow(new RouteException(RouteErrorCode.OUT_OF_SERVICE_AREA));
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": 37.5665, "lng": 126.9780}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4003"))
+			.andExpect(jsonPath("$.message").value("부산광역시 안의 위치를 선택해 주세요."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute 과도 이탈은 FE 새 검색 fallback을 위해 RT4091로 반환한다")
+	void rerouteMapsTooFarCurrentPoint() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
+			.thenThrow(new RouteException(RouteErrorCode.ROUTE_TOO_FAR_FOR_REROUTE));
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": 35.1200, "lng": 128.9500}
+				}
+				"""))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.status").value("RT4091"))
+			.andExpect(jsonPath("$.message").value("현재 위치가 기존 경로에서 너무 멀리 벗어났습니다."));
+
+		SecurityContextHolder.clearContext();
 	}
 
 	@Test

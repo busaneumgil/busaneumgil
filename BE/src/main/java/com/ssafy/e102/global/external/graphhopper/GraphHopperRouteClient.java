@@ -2,6 +2,7 @@ package com.ssafy.e102.global.external.graphhopper;
 
 import java.net.URI;
 import java.net.SocketTimeoutException;
+import java.util.Locale;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -72,6 +73,7 @@ public class GraphHopperRouteClient {
 				.getBody();
 			return extractFirstPath(response);
 		} catch (HttpStatusCodeException exception) {
+			RouteErrorCode errorCode = graphHopperHttpErrorCode(exception);
 			log.warn(
 				"external route call failed provider={} operation={} status={} body={}",
 				"graphhopper",
@@ -80,8 +82,8 @@ public class GraphHopperRouteClient {
 				exception.getResponseBodyAsString(),
 				exception);
 			throw new RouteException(
-				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
-				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(),
+				errorCode,
+				errorCode.getMessage(),
 				exception);
 		} catch (ResourceAccessException exception) {
 			RouteErrorCode errorCode = hasTimeoutCause(exception)
@@ -108,6 +110,22 @@ public class GraphHopperRouteClient {
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(),
 				exception);
 		}
+	}
+
+	private RouteErrorCode graphHopperHttpErrorCode(HttpStatusCodeException exception) {
+		if (isGraphHopperNoRoute(exception.getResponseBodyAsString())) {
+			return RouteErrorCode.ROUTE_NOT_FOUND;
+		}
+		return RouteErrorCode.EXTERNAL_ROUTE_API_FAILED;
+	}
+
+	private boolean isGraphHopperNoRoute(String responseBody) {
+		if (responseBody == null || responseBody.isBlank()) {
+			return false;
+		}
+		String normalizedBody = responseBody.toLowerCase(Locale.ROOT);
+		return normalizedBody.contains("connectionnotfoundexception")
+			|| normalizedBody.contains("connection between locations not found");
 	}
 
 	private URI routeUri(GraphHopperRouteRequest request) {

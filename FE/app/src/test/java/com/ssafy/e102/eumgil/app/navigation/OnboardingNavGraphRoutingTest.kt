@@ -49,6 +49,22 @@ class OnboardingNavGraphRoutingTest {
     }
 
     @Test
+    fun `mobility impaired terms completion moves to onboarding tutorial before map`() {
+        assertEquals(
+            TutorialRoute.Onboarding.route,
+            resolveMobilityOnboardingAfterTermsRoute(),
+        )
+    }
+
+    @Test
+    fun `terms completion route sends mobility users to tutorial`() {
+        assertEquals(
+            TutorialRoute.Onboarding.route,
+            resolveOnboardingTermsCompletedRoute(PrimaryUserType.MOBILITY_IMPAIRED.routeValue),
+        )
+    }
+
+    @Test
     fun `profile edit low vision primary user type opens low vision home without terms`() {
         assertEquals(
             LowVisionRoute.Home.route,

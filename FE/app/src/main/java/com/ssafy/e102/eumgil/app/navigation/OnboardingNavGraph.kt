@@ -25,6 +25,8 @@ import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
+import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
+import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.onboardingNavGraph(
@@ -139,12 +141,46 @@ fun NavGraphBuilder.onboardingNavGraph(
                             isLocationTermsAgreed = agreement.isLocationTermsAgreed,
                             isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
                         )
-                        authSignupRepository.completePendingSignup(
-                            requiredTermsAccepted = agreement.isLocationTermsAgreed,
-                        )
                         val completedSettings = settingsRepository.getInitSettings()
+                        val nextRoute = resolveOnboardingTermsCompletedRoute(completedSettings.selectedPrimaryUserType)
+                        if (nextRoute == TutorialRoute.Onboarding.route) {
+                            navController.navigate(nextRoute) {
+                                launchSingleTop = true
+                                popUpTo(OnboardingRoute.Terms.route) {
+                                    inclusive = true
+                                }
+                            }
+                        } else {
+                            authSignupRepository.completePendingSignup(
+                                requiredTermsAccepted = agreement.isLocationTermsAgreed,
+                            )
+                            navController.navigateToCompletedOnboarding(route = nextRoute)
+                        }
+                    }.onFailure { throwable ->
+                        Toast
+                            .makeText(
+                                context,
+                                throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                    }
+                }
+            },
+        )
+    }
+
+    composable(route = TutorialRoute.Onboarding.route) {
+        val coroutineScope = rememberCoroutineScope()
+        val context = LocalContext.current
+
+        MobilityTutorialRoute(
+            entryPoint = TutorialEntryPoint.ONBOARDING,
+            onCompleted = {
+                coroutineScope.launch {
+                    runCatching {
+                        authSignupRepository.completePendingSignup(requiredTermsAccepted = true)
                         navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
+                            route = resolveTutorialOnboardingCompletedRoute(),
                         )
                     }.onFailure { throwable ->
                         Toast
@@ -239,6 +275,19 @@ internal fun resolveOnboardingCompletedRoute(selectedPrimaryUserType: String?): 
     } else {
         TopLevelRoute.Map.route
     }
+
+internal fun resolveMobilityOnboardingAfterTermsRoute(): String = TutorialRoute.Onboarding.route
+
+internal fun resolveOnboardingTermsCompletedRoute(selectedPrimaryUserType: String?): String =
+    if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
+        resolveMobilityOnboardingAfterTermsRoute()
+    } else {
+        resolveOnboardingCompletedRoute(selectedPrimaryUserType)
+    }
+
+internal fun resolveTutorialOnboardingCompletedRoute(): String = TopLevelRoute.Map.route
+
+internal fun resolveTutorialGuideCompletedRoute(): String = MyPageSubRoute.AppInfo.route
 
 internal fun resolveProfileEditCompletedRoute(selectedPrimaryUserType: String?): String =
     if (selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {

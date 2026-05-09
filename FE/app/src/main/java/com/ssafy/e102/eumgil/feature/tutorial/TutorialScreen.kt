@@ -41,6 +41,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
@@ -310,6 +311,12 @@ private fun TutorialDestinationSearchScene(content: TutorialVisualContent) {
                     .align(Alignment.TopCenter)
                     .padding(top = TutorialLayoutDefaults.destinationFilterTopPadding),
         )
+        TutorialDestinationMapPreview(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = TutorialLayoutDefaults.destinationMapTopPadding),
+        )
     }
 }
 
@@ -407,28 +414,147 @@ private fun TutorialSearchBar(
 }
 
 @Composable
-private fun TutorialLocationPin(
-    @DrawableRes iconRes: Int,
-    modifier: Modifier = Modifier,
-) {
+private fun TutorialDestinationMapPreview(modifier: Modifier = Modifier) {
     Surface(
         modifier =
             modifier
-                .width(TutorialLayoutDefaults.smallCardWidth)
-                .height(TutorialLayoutDefaults.smallCardHeight),
-        shape = RoundedCornerShape(EumRadius.full),
+                .width(TutorialLayoutDefaults.destinationMapWidth)
+                .height(TutorialLayoutDefaults.destinationMapHeight),
+        shape = RoundedCornerShape(EumRadius.large),
         color = EumWhite,
         border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
         shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = null,
-                modifier = Modifier.size(TutorialLayoutDefaults.smallCardIconSize),
-                tint = EumPrimary600,
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(EumSpacing.small),
+        ) {
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapRoadWidth,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 18.dp),
+            )
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapRoadWidth,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 78.dp),
+            )
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 52.dp),
+            )
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 58.dp),
+            )
+            TutorialMapRoute(
+                width = 128.dp,
+                height = TutorialLayoutDefaults.destinationMapRouteWidth,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 56.dp, top = 52.dp),
+            )
+            TutorialMapRoute(
+                width = TutorialLayoutDefaults.destinationMapRouteWidth,
+                height = 42.dp,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 180.dp, top = 52.dp),
+            )
+            TutorialMapNode(
+                selected = false,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 42.dp, top = 42.dp),
+            )
+            TutorialMapNode(
+                selected = true,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 166.dp, top = 82.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun TutorialMapRoad(
+    width: Dp,
+    height: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .width(width)
+                .height(height)
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(TutorialLayoutDefaults.destinationMapRoadColor),
+    )
+}
+
+@Composable
+private fun TutorialMapRoute(
+    width: Dp,
+    height: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .width(width)
+                .height(height)
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(EumPrimary600),
+    )
+}
+
+@Composable
+private fun TutorialMapNode(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(
+                    if (selected) {
+                        TutorialLayoutDefaults.destinationMapSelectedNodeSize
+                    } else {
+                        TutorialLayoutDefaults.destinationMapNodeSize
+                    },
+                )
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(if (selected) EumPrimary600 else EumWhite),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(TutorialLayoutDefaults.destinationMapNodeDotSize)
+                    .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                    .background(if (selected) EumWhite else EumPrimary600),
+        )
     }
 }
 
@@ -708,7 +834,9 @@ internal object TutorialLayoutDefaults {
     const val usesIllustrationHalo: Boolean = false
     const val destinationFiltersAttachToSearch: Boolean = true
     const val destinationSearchShowsMic: Boolean = true
-    const val destinationShowsMapPreview: Boolean = false
+    const val destinationShowsMapPreview: Boolean = true
+    const val destinationMapAttachesBelowFilters: Boolean = true
+    const val routeDescriptionBreaksAfterSettingComma: Boolean = true
     const val reportDescriptionMentionsRouteContribution: Boolean = true
     const val visualPanelWeight: Float = 1f
     const val hasHeroIconBackground: Boolean = false
@@ -739,6 +867,16 @@ internal object TutorialLayoutDefaults {
     val searchBarWidth = 270.dp
     val searchBarHeight = 58.dp
     val destinationFilterTopPadding = 66.dp
+    val destinationMapTopPadding = 116.dp
+    val destinationMapWidth = 300.dp
+    val destinationMapHeight = 128.dp
+    val destinationMapRoadWidth = 6.dp
+    val destinationMapRouteWidth = 7.dp
+    val destinationMapWideRoadWidth = 268.dp
+    val destinationMapTallRoadHeight = 104.dp
+    val destinationMapNodeSize = 18.dp
+    val destinationMapSelectedNodeSize = 22.dp
+    val destinationMapNodeDotSize = 8.dp
     val floatingPanelHeight = 56.dp
     val floatingPanelElevation = 3.dp
     val floatingPanelIconSize = 22.dp
@@ -761,5 +899,6 @@ internal object TutorialLayoutDefaults {
     val indicatorHeight = 6.dp
     val pillCorner = 99.dp
 
+    val destinationMapRoadColor = Color(0xFFE7ECF5)
     val indicatorTrackColor = Color(0xFFD9DDE7)
 }

@@ -239,6 +239,8 @@ class AppContainer(
             localDataSource = placesLocalDataSource,
             mockDataSource = placesMockDataSource,
             sourcePolicy = repositorySourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 

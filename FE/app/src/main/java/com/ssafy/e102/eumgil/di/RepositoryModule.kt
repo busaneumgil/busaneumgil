@@ -167,12 +167,16 @@ object RepositoryModule {
         localDataSource: PlacesLocalDataSource,
         mockDataSource: PlacesMockDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): PlacesRepository =
         DefaultPlacesRepository(
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideFacilitySeedRepository(

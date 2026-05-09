@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
@@ -8,14 +10,21 @@ import com.ssafy.e102.eumgil.core.model.PlaceQuery
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
+import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.PlacesApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryReadPlan
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 class PlacesRepositoryTest {
     @Test
@@ -141,6 +150,155 @@ class PlacesRepositoryTest {
 
             assertEquals(remotePlaces, places)
             assertEquals(places, localDataSource.getCachedPlaces(query))
+        }
+
+    @Test
+    fun `getPlaces retries with refreshed auth session when remote responds unauthorized`() =
+        runBlocking {
+            val query =
+                PlaceQuery(
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    radiusMeters = 1200,
+                )
+            val localDataSource = PlacesLocalDataSource()
+            val authSessionRepository =
+                FakeAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val remotePlaces =
+                listOf(
+                    PlaceSummary(
+                        placeId = "88",
+                        name = "Remote Welfare Center",
+                        address = "88 Welfare-ro, Busan",
+                        latitude = 35.1801,
+                        longitude = 129.0722,
+                        category = PlaceCategory.WELFARE,
+                    ),
+                )
+            var requestCount = 0
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+                                requestCount += 1
+                                return when (requestCount) {
+                                    1 ->
+                                        throw PlacesApiException(
+                                            httpStatusCode = 401,
+                                            status = "AUTH_401",
+                                            message = "인증이 필요합니다.",
+                                        )
+
+                                    2 -> {
+                                        assertEquals(
+                                            "refreshed-access-token",
+                                            authSessionRepository.getAuthGateState().authSession?.accessToken,
+                                        )
+                                        remotePlaces
+                                    }
+
+                                    else -> error("Unexpected getPlaces retry count: $requestCount")
+                                }
+                            }
+                        },
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+                                assertEquals("refresh-token", refreshToken)
+                                return ReissueResponseDto(
+                                    accessToken = "refreshed-access-token",
+                                    refreshToken = "refreshed-refresh-token",
+                                )
+                            }
+                        },
+                )
+
+            val places = repository.getPlaces(query)
+
+            assertEquals(remotePlaces, places)
+            assertEquals(2, requestCount)
+            assertEquals(remotePlaces, localDataSource.getCachedPlaces(query))
+            assertEquals(
+                "refreshed-refresh-token",
+                authSessionRepository.getAuthGateState().authSession?.refreshToken,
+            )
+        }
+
+    @Test
+    fun `getPlaces clears auth session when token refresh fails`() =
+        runBlocking {
+            val authSessionRepository =
+                FakeAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+                                throw PlacesApiException(
+                                    httpStatusCode = 401,
+                                    status = "AUTH_401",
+                                    message = "인증이 필요합니다.",
+                                )
+                            }
+                        },
+                    localDataSource = PlacesLocalDataSource(),
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+                                throw IllegalStateException("refresh failed")
+                            }
+                        },
+                )
+
+            val failure =
+                runCatching {
+                    repository.getPlaces(
+                        PlaceQuery(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                        ),
+                    )
+                }.exceptionOrNull() as? PlacesApiException
+
+            requireNotNull(failure)
+            assertEquals(401, failure.httpStatusCode)
+            assertEquals("PLACE_AUTHENTICATION_FAILED", failure.status)
+            assertEquals("인증이 필요합니다.", failure.message)
+            assertNull(authSessionRepository.getAuthGateState().authSession)
         }
 
     @Test
@@ -274,4 +432,47 @@ private class PlacesTestRepositorySourcePolicy(
     private val plan: RepositoryReadPlan,
 ) : RepositorySourcePolicy {
     override suspend fun readPlan(domain: RepositoryDomain): RepositoryReadPlan = plan
+}
+
+private class FakeAuthSessionRepository(
+    initialState: AuthGateState,
+) : AuthSessionRepository {
+    private var authGateState: AuthGateState = initialState
+
+    override fun observeAuthGateState(): Flow<AuthGateState> = flowOf(authGateState)
+
+    override suspend fun getAuthGateState(): AuthGateState = authGateState
+
+    override suspend fun saveAuthSession(
+        authSession: AuthSession,
+        isProfileCompleted: Boolean,
+    ) {
+        authGateState =
+            authGateState.copy(
+                authSession = authSession,
+                isProfileCompleted = isProfileCompleted,
+                signupToken = null,
+            )
+    }
+
+    override suspend fun saveSignupToken(signupToken: String) {
+        authGateState =
+            authGateState.copy(
+                authSession = null,
+                isProfileCompleted = false,
+                signupToken = signupToken,
+            )
+    }
+
+    override suspend fun clearSignupToken() {
+        authGateState = authGateState.copy(signupToken = null)
+    }
+
+    override suspend fun markProfileCompleted() {
+        authGateState = authGateState.copy(isProfileCompleted = true)
+    }
+
+    override suspend fun clearAuthSession() {
+        authGateState = authGateState.copy(authSession = null, isProfileCompleted = false)
+    }
 }

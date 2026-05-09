@@ -5,6 +5,8 @@ import com.ssafy.e102.eumgil.core.model.PlaceQuery
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.PlacesApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySource
@@ -21,7 +23,19 @@ class DefaultPlacesRepository(
     private val localDataSource: PlacesLocalDataSource,
     private val mockDataSource: PlacesMockDataSource,
     private val sourcePolicy: RepositorySourcePolicy,
+    authSessionRepository: AuthSessionRepository? = null,
+    authRemoteDataSource: AuthRemoteDataSource? = null,
 ) : PlacesRepository {
+    private val authenticatedRequestRunner =
+        if (authSessionRepository != null && authRemoteDataSource != null) {
+            AuthenticatedRequestRunner(
+                authSessionRepository = authSessionRepository,
+                authRemoteDataSource = authRemoteDataSource,
+            )
+        } else {
+            null
+        }
+
     override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
         val readPlan = sourcePolicy.readPlan(RepositoryDomain.PLACES)
         val lastSource = readPlan.sources.last()
@@ -30,7 +44,7 @@ class DefaultPlacesRepository(
         for (source in readPlan.sources) {
             when (source) {
                 RepositorySource.REMOTE -> {
-                    val remoteResult = runCatching { remoteDataSource.getPlaces(query) }
+                    val remoteResult = runCatching { runAuthenticatedRemoteRequest { remoteDataSource.getPlaces(query) } }
                     if (remoteResult.isSuccess) {
                         val places = remoteResult.getOrDefault(emptyList())
                         localDataSource.updateCachedPlaces(query = query, places = places)
@@ -64,7 +78,10 @@ class DefaultPlacesRepository(
         for (source in readPlan.sources) {
             when (source) {
                 RepositorySource.REMOTE -> {
-                    val remoteResult = runCatching { remoteDataSource.getPlaceDetail(placeId) }
+                    val remoteResult =
+                        runCatching {
+                            runAuthenticatedRemoteRequest { remoteDataSource.getPlaceDetail(placeId) }
+                        }
                     if (remoteResult.isSuccess) {
                         val placeDetail = remoteResult.getOrNull()
                         if (placeDetail != null) {
@@ -90,5 +107,45 @@ class DefaultPlacesRepository(
         }
 
         throw remoteFailure ?: IllegalStateException("No place detail source matched the current policy.")
+    }
+
+    private suspend fun <T> runAuthenticatedRemoteRequest(execute: suspend () -> T): T {
+        val runner = authenticatedRequestRunner ?: return execute()
+
+        return when (
+            val result =
+                runner.run(
+                    execute = { execute() },
+                    isAuthenticationFailure = ::isAuthenticationFailure,
+                )
+        ) {
+            AuthenticatedRequestResult.MissingSession ->
+                throw PlacesApiException(
+                    httpStatusCode = HTTP_UNAUTHORIZED,
+                    status = PLACE_STATUS_MISSING_SESSION,
+                    message = AUTH_REQUIRED_MESSAGE,
+                )
+
+            AuthenticatedRequestResult.AuthenticationFailed ->
+                throw PlacesApiException(
+                    httpStatusCode = HTTP_UNAUTHORIZED,
+                    status = PLACE_STATUS_AUTHENTICATION_FAILED,
+                    message = AUTH_REQUIRED_MESSAGE,
+                )
+
+            is AuthenticatedRequestResult.Success -> result.value
+        }
+    }
+
+    private fun isAuthenticationFailure(throwable: Throwable): Boolean =
+        throwable is PlacesApiException &&
+            (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)
+
+    private companion object {
+        private const val HTTP_UNAUTHORIZED = 401
+        private const val HTTP_FORBIDDEN = 403
+        private const val PLACE_STATUS_MISSING_SESSION = "PLACE_AUTH_MISSING_SESSION"
+        private const val PLACE_STATUS_AUTHENTICATION_FAILED = "PLACE_AUTHENTICATION_FAILED"
+        private const val AUTH_REQUIRED_MESSAGE = "인증이 필요합니다."
     }
 }

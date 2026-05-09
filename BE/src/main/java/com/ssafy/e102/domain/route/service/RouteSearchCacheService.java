@@ -87,7 +87,7 @@ public class RouteSearchCacheService {
 		try {
 			return objectMapper.writeValueAsString(value);
 		} catch (JsonProcessingException exception) {
-			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "경로 검색 후보를 저장할 수 없습니다.", exception);
+			throw new IllegalStateException("경로 검색 후보를 직렬화할 수 없습니다.", exception);
 		}
 	}
 
@@ -95,7 +95,7 @@ public class RouteSearchCacheService {
 		try {
 			return objectMapper.readValue(value, WalkRouteSearchResponse.class);
 		} catch (JsonProcessingException exception) {
-			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "경로 검색 후보를 읽을 수 없습니다.", exception);
+			throw new IllegalStateException("경로 검색 후보를 역직렬화할 수 없습니다.", exception);
 		}
 	}
 }

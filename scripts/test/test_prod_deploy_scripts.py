@@ -18,6 +18,10 @@ PROD_COMPOSE = ROOT_DIR / "docker-compose.prod.yml"
 LOCAL_COMPOSE = ROOT_DIR / "docker-compose.local.yml"
 JENKINSFILE = ROOT_DIR / "INF" / "jenkins" / "pipelines" / "e102-prod-deploy.Jenkinsfile"
 DEV_JENKINSFILE = ROOT_DIR / "INF" / "jenkins" / "pipelines" / "e102-dev-deploy.Jenkinsfile"
+DEV_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "02-dev-deploy-job.groovy"
+PROD_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "03-prod-deploy-job.groovy"
+PROD_CREDENTIAL_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "prod-deploy-credentials.groovy"
+JENKINS_README = ROOT_DIR / "INF" / "jenkins" / "README.md"
 PROD_DEPLOY = ROOT_DIR / "scripts" / "deploy" / "prod-deploy.sh"
 PROD_ROLLBACK = ROOT_DIR / "scripts" / "deploy" / "prod-rollback.sh"
 PROD_SMOKE = ROOT_DIR / "scripts" / "deploy" / "prod-smoke.sh"
@@ -67,10 +71,11 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_jenkinsfile_uploads_prod_env_via_temp_file_then_rename(self):
         content = JENKINSFILE.read_text(encoding="utf-8")
 
+        self.assertIn('/var/jenkins_home/prod-secrets/.env.prod', content)
         self.assertIn('.env.prod.upload', content)
         self.assertIn('mv -f .env.prod.upload .env.prod', content)
         self.assertIn("chmod +x scripts/deploy/*.sh", content)
-        self.assertNotIn('scp -i "$S2_KEY" -o StrictHostKeyChecking=accept-new "$PROD_ENV" "$S2_USER@$S2_HOST:$REMOTE_DIR/.env.prod"', content)
+        self.assertNotIn("file(credentialsId: 'e102-prod-env-file'", content)
 
     def test_jenkinsfile_uses_pipeline_params_for_remote_flags(self):
         content = JENKINSFILE.read_text(encoding="utf-8")
@@ -133,6 +138,12 @@ class ProdDeployScriptsTest(unittest.TestCase):
         content = DEV_JENKINSFILE.read_text(encoding="utf-8")
 
         self.assertIn("up -d --build", content)
+        self.assertIn("cp /opt/e102-server/.env.dev .env.dev", content)
+        self.assertNotIn("file(credentialsId: 'e102-dev-env-file'", content)
+        self.assertNotIn("-o /tmp/e102-ai-health.json", content)
+        self.assertNotIn("-o /tmp/e102-ai-voice-analyze.json", content)
+        self.assertIn("AI_HEALTH_BODY=", content)
+        self.assertIn("AI_RESPONSE_BODY=", content)
         self.assertIn("/health", content)
         self.assertIn('"providers"[[:space:]]*:', content)
         self.assertIn("/voice/analyze", content)
@@ -140,6 +151,43 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('"success"[[:space:]]*:[[:space:]]*false', content)
         self.assertIn('"intent"[[:space:]]*:[[:space:]]*"unknown"', content)
         self.assertLess(content.index("up -d --build postgres redis minio minio-init ai"), content.index('AI_HEALTH_STATUS='))
+
+    def test_dev_job_bootstrap_loads_pipeline_from_scm_instead_of_inline_script(self):
+        content = DEV_JOB_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn("CpsScmFlowDefinition", content)
+        self.assertIn("GitSCM", content)
+        self.assertIn("INF/jenkins/pipelines/e102-dev-deploy.Jenkinsfile", content)
+        self.assertIn("*/develop", content)
+        self.assertIn("gitlab-pat", content)
+        self.assertNotIn("CpsFlowDefinition", content)
+
+    def test_prod_job_bootstrap_loads_pipeline_from_scm_instead_of_inline_script(self):
+        content = PROD_JOB_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn("CpsScmFlowDefinition", content)
+        self.assertIn("GitSCM", content)
+        self.assertIn("INF/jenkins/pipelines/e102-prod-deploy.Jenkinsfile", content)
+        self.assertIn("*/master", content)
+        self.assertIn("gitlab-pat", content)
+        self.assertNotIn("CpsFlowDefinition", content)
+
+    def test_prod_credential_bootstrap_keeps_only_non_env_credentials(self):
+        content = PROD_CREDENTIAL_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn("removeIfExists('e102-dev-env-file')", content)
+        self.assertIn("removeIfExists('e102-prod-env-file')", content)
+        self.assertNotIn("upsertFileCredential", content)
+        self.assertIn("e102-s2-host", content)
+        self.assertIn("e102-s2-ssh-key", content)
+        self.assertIn("e102-mattermost-webhook-url", content)
+
+    def test_jenkins_readme_documents_host_env_files_as_source_of_truth(self):
+        content = JENKINS_README.read_text(encoding="utf-8")
+
+        self.assertIn("/opt/e102-server/.env.dev", content)
+        self.assertIn("/var/jenkins_home/prod-secrets/.env.prod", content)
+        self.assertNotIn("02-e102-env-credentials.groovy", content)
 
 
 if __name__ == "__main__":

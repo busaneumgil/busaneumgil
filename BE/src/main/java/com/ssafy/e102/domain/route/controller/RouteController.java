@@ -10,11 +10,14 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
+import com.ssafy.e102.domain.route.dto.request.TransitRefreshRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
+import com.ssafy.e102.domain.route.dto.response.TransitRefreshResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.service.RerouteService;
 import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
 import com.ssafy.e102.domain.route.service.RouteSelectService;
+import com.ssafy.e102.domain.route.service.TransitRefreshService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.global.response.ApiResponse;
@@ -39,6 +42,7 @@ public class RouteController {
 	private final RerouteService rerouteService;
 	private final RouteSelectService routeSelectService;
 	private final RouteSessionCommandService routeSessionCommandService;
+	private final TransitRefreshService transitRefreshService;
 
 	@PostMapping("/search/walk")
 	public ApiResponse<WalkRouteSearchResponse> searchWalkRoutes(
@@ -87,5 +91,18 @@ public class RouteController {
 		String routeId) {
 		routeSessionCommandService.endSession(principal.userId(), routeId);
 		return ApiResponse.successMessage("안내가 종료되었습니다.");
+	}
+
+	@PostMapping("/{routeId}/transit-refresh")
+	public ApiResponse<TransitRefreshResponse> refreshTransit(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@PathVariable
+		String routeId,
+		@Valid @RequestBody
+		TransitRefreshRequest request) {
+		return ApiResponse.successMessage(
+			transitRefreshService.refresh(principal.userId(), routeId, request),
+			"대중교통 도착정보를 갱신했습니다.");
 	}
 }

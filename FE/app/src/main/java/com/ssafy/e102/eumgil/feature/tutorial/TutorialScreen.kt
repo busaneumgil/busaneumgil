@@ -1,7 +1,9 @@
 package com.ssafy.e102.eumgil.feature.tutorial
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,12 +22,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,7 +36,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -47,7 +50,6 @@ import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderInfo
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary500
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -252,7 +254,7 @@ private fun TutorialVisualPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            TutorialHeroIcon(iconRes = content.heroIconRes)
+            TutorialLineIllustration(step = step, iconRes = content.heroIconRes)
             Column(
                 modifier =
                     Modifier
@@ -266,19 +268,10 @@ private fun TutorialVisualPanel(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.supportingItemGap),
                 ) {
-                    content.items.forEachIndexed { index, item ->
+                    content.items.forEach { item ->
                         TutorialSupportingItemRow(item = item)
-                        if (index < content.items.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = TutorialLayoutDefaults.itemDividerStartPadding),
-                                color = EumBorderSubtle,
-                                thickness = TutorialLayoutDefaults.hairlineWidth,
-                            )
-                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(EumSpacing.medium))
-                TutorialEmphasisChip(labelRes = content.emphasisRes)
             }
             TutorialPagerIndicator(currentStep = currentStep, totalSteps = totalSteps)
         }
@@ -286,12 +279,167 @@ private fun TutorialVisualPanel(
 }
 
 @Composable
-private fun TutorialHeroIcon(@DrawableRes iconRes: Int) {
-    Icon(
-        painter = painterResource(id = iconRes),
-        contentDescription = null,
-        modifier = Modifier.size(TutorialLayoutDefaults.heroIconSize),
-        tint = EumPrimary600,
+private fun TutorialLineIllustration(
+    step: TutorialStep,
+    @DrawableRes iconRes: Int,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.illustrationHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val primary = EumPrimary600
+            val glowColor = primary.copy(alpha = 0.10f)
+            val strokeWidth = TutorialLayoutDefaults.illustrationStrokeWidth.toPx()
+            val thinStrokeWidth = TutorialLayoutDefaults.illustrationThinStrokeWidth.toPx()
+            val baselineY = size.height * 0.72f
+            val centerX = size.width / 2f
+
+            drawCircle(
+                color = glowColor,
+                radius = size.minDimension * 0.38f,
+                center = Offset(centerX, size.height * 0.50f),
+            )
+            drawLine(
+                color = primary.copy(alpha = 0.18f),
+                start = Offset(size.width * 0.12f, baselineY),
+                end = Offset(size.width * 0.88f, baselineY),
+                strokeWidth = thinStrokeWidth,
+            )
+
+            when (step) {
+                TutorialStep.DESTINATION -> drawDestinationIllustration(primary, strokeWidth, thinStrokeWidth)
+                TutorialStep.ROUTE_COMPARISON -> drawRouteIllustration(primary, strokeWidth, thinStrokeWidth)
+                TutorialStep.REPORT -> drawReportIllustration(primary, strokeWidth, thinStrokeWidth)
+            }
+        }
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(TutorialLayoutDefaults.heroIconSize),
+            tint = EumPrimary600,
+        )
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDestinationIllustration(
+    primary: Color,
+    strokeWidth: Float,
+    thinStrokeWidth: Float,
+) {
+    drawCircle(
+        color = primary.copy(alpha = 0.80f),
+        radius = size.minDimension * 0.12f,
+        center = Offset(size.width * 0.36f, size.height * 0.44f),
+        style = Stroke(width = strokeWidth),
+    )
+    drawLine(
+        color = primary.copy(alpha = 0.80f),
+        start = Offset(size.width * 0.44f, size.height * 0.54f),
+        end = Offset(size.width * 0.52f, size.height * 0.64f),
+        strokeWidth = strokeWidth,
+    )
+    drawRoundChipLine(
+        xStart = size.width * 0.56f,
+        y = size.height * 0.40f,
+        primary = primary,
+        strokeWidth = thinStrokeWidth,
+    )
+    drawRoundChipLine(
+        xStart = size.width * 0.58f,
+        y = size.height * 0.54f,
+        primary = primary,
+        strokeWidth = thinStrokeWidth,
+    )
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRouteIllustration(
+    primary: Color,
+    strokeWidth: Float,
+    thinStrokeWidth: Float,
+) {
+    val path =
+        Path().apply {
+            moveTo(size.width * 0.22f, size.height * 0.64f)
+            cubicTo(
+                size.width * 0.34f,
+                size.height * 0.24f,
+                size.width * 0.54f,
+                size.height * 0.82f,
+                size.width * 0.76f,
+                size.height * 0.42f,
+            )
+        }
+    drawPath(path = path, color = primary.copy(alpha = 0.80f), style = Stroke(width = strokeWidth))
+    listOf(0.22f to 0.64f, 0.52f to 0.62f, 0.76f to 0.42f).forEach { (x, y) ->
+        drawCircle(
+            color = EumWhite,
+            radius = size.minDimension * 0.045f,
+            center = Offset(size.width * x, size.height * y),
+        )
+        drawCircle(
+            color = primary,
+            radius = size.minDimension * 0.045f,
+            center = Offset(size.width * x, size.height * y),
+            style = Stroke(width = thinStrokeWidth),
+        )
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawReportIllustration(
+    primary: Color,
+    strokeWidth: Float,
+    thinStrokeWidth: Float,
+) {
+    val pinCenter = Offset(size.width * 0.36f, size.height * 0.42f)
+    drawCircle(
+        color = primary.copy(alpha = 0.80f),
+        radius = size.minDimension * 0.10f,
+        center = pinCenter,
+        style = Stroke(width = strokeWidth),
+    )
+    drawLine(
+        color = primary.copy(alpha = 0.80f),
+        start = Offset(pinCenter.x, pinCenter.y + size.minDimension * 0.10f),
+        end = Offset(size.width * 0.36f, size.height * 0.68f),
+        strokeWidth = strokeWidth,
+    )
+
+    val warning =
+        Path().apply {
+            moveTo(size.width * 0.66f, size.height * 0.28f)
+            lineTo(size.width * 0.82f, size.height * 0.62f)
+            lineTo(size.width * 0.50f, size.height * 0.62f)
+            close()
+        }
+    drawPath(path = warning, color = primary.copy(alpha = 0.80f), style = Stroke(width = strokeWidth))
+    drawLine(
+        color = primary,
+        start = Offset(size.width * 0.66f, size.height * 0.40f),
+        end = Offset(size.width * 0.66f, size.height * 0.52f),
+        strokeWidth = thinStrokeWidth,
+    )
+    drawCircle(
+        color = primary,
+        radius = size.minDimension * 0.014f,
+        center = Offset(size.width * 0.66f, size.height * 0.57f),
+    )
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoundChipLine(
+    xStart: Float,
+    y: Float,
+    primary: Color,
+    strokeWidth: Float,
+) {
+    drawLine(
+        color = primary.copy(alpha = 0.70f),
+        start = Offset(xStart, y),
+        end = Offset(xStart + size.width * 0.22f, y),
+        strokeWidth = strokeWidth,
     )
 }
 
@@ -318,12 +466,14 @@ private fun TutorialSupportingItemRow(item: TutorialSupportingItem) {
                     fontWeight = FontWeight.Bold,
                     lineHeight = TutorialLayoutDefaults.supportingTitleLineHeight,
                 )
-                Text(
-                    text = stringResource(id = item.descriptionRes),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    lineHeight = TutorialLayoutDefaults.supportingDescriptionLineHeight,
-                )
+                item.descriptionRes?.let { descriptionRes ->
+                    Text(
+                        text = stringResource(id = descriptionRes),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = TutorialLayoutDefaults.supportingDescriptionLineHeight,
+                    )
+                }
             }
         }
         if (item.filterChips.isNotEmpty()) {
@@ -397,38 +547,15 @@ private fun TutorialFilterChip(chip: TutorialFilterChip) {
     }
 }
 
-@Composable
-private fun TutorialEmphasisChip(@StringRes labelRes: Int) {
-    Surface(
-        shape = RoundedCornerShape(EumRadius.full),
-        color = EumSurfaceInfo,
-        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
-    ) {
-        Text(
-            text = stringResource(id = labelRes),
-            modifier =
-                Modifier.padding(
-                    horizontal = EumSpacing.medium,
-                    vertical = TutorialLayoutDefaults.emphasisVerticalPadding,
-                ),
-            color = EumPrimary500,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
 private data class TutorialVisualContent(
     @DrawableRes val heroIconRes: Int,
     val items: List<TutorialSupportingItem>,
-    @StringRes val emphasisRes: Int,
 )
 
 private data class TutorialSupportingItem(
     @DrawableRes val iconRes: Int,
     @StringRes val titleRes: Int,
-    @StringRes val descriptionRes: Int,
+    @StringRes val descriptionRes: Int? = null,
     val filterChips: List<TutorialFilterChip> = emptyList(),
 )
 
@@ -447,12 +574,10 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
                         TutorialSupportingItem(
                             iconRes = R.drawable.ic_nav_search,
                             titleRes = R.string.tutorial_destination_item_search_title,
-                            descriptionRes = R.string.tutorial_destination_item_search_description,
                         ),
                         TutorialSupportingItem(
                             iconRes = R.drawable.ic_lowvision_category_elevator,
                             titleRes = R.string.tutorial_destination_item_filter_title,
-                            descriptionRes = R.string.tutorial_destination_item_filter_description,
                             filterChips =
                                 listOf(
                                     TutorialFilterChip(
@@ -469,13 +594,7 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
                                     ),
                                 ),
                         ),
-                        TutorialSupportingItem(
-                            iconRes = R.drawable.ic_map_current_location,
-                            titleRes = R.string.tutorial_destination_item_location_title,
-                            descriptionRes = R.string.tutorial_destination_item_location_description,
-                        ),
                     ),
-                emphasisRes = R.string.tutorial_destination_emphasis,
             )
 
         TutorialStep.ROUTE_COMPARISON ->
@@ -486,20 +605,27 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
                         TutorialSupportingItem(
                             iconRes = R.drawable.ic_route_time,
                             titleRes = R.string.tutorial_route_item_compare_title,
-                            descriptionRes = R.string.tutorial_route_item_compare_description,
                         ),
                         TutorialSupportingItem(
                             iconRes = R.drawable.ic_route_elevator,
                             titleRes = R.string.tutorial_route_item_accessibility_title,
-                            descriptionRes = R.string.tutorial_route_item_accessibility_description,
-                        ),
-                        TutorialSupportingItem(
-                            iconRes = R.drawable.ic_route_start_navigation,
-                            titleRes = R.string.tutorial_route_item_navigation_title,
-                            descriptionRes = R.string.tutorial_route_item_navigation_description,
+                            filterChips =
+                                listOf(
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_route_elevator,
+                                        labelRes = R.string.tutorial_route_chip_elevator,
+                                    ),
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_route_auto_door,
+                                        labelRes = R.string.tutorial_route_chip_accessible,
+                                    ),
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_route_ramp,
+                                        labelRes = R.string.tutorial_route_chip_low_step,
+                                    ),
+                                ),
                         ),
                     ),
-                emphasisRes = R.string.tutorial_route_emphasis,
             )
 
         TutorialStep.REPORT ->
@@ -510,20 +636,27 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
                         TutorialSupportingItem(
                             iconRes = R.drawable.ic_permission_location,
                             titleRes = R.string.tutorial_report_item_location_title,
-                            descriptionRes = R.string.tutorial_report_item_location_description,
                         ),
                         TutorialSupportingItem(
                             iconRes = R.drawable.ic_report_tactile_damage,
                             titleRes = R.string.tutorial_report_item_type_title,
-                            descriptionRes = R.string.tutorial_report_item_type_description,
-                        ),
-                        TutorialSupportingItem(
-                            iconRes = R.drawable.ic_status_warning,
-                            titleRes = R.string.tutorial_report_item_share_title,
-                            descriptionRes = R.string.tutorial_report_item_share_description,
+                            filterChips =
+                                listOf(
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_route_tactile_blocks,
+                                        labelRes = R.string.tutorial_report_chip_tactile,
+                                    ),
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_report_sidewalk,
+                                        labelRes = R.string.tutorial_report_chip_sidewalk,
+                                    ),
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_status_warning,
+                                        labelRes = R.string.tutorial_report_chip_damage,
+                                    ),
+                                ),
                         ),
                     ),
-                emphasisRes = R.string.tutorial_report_emphasis,
             )
     }
 
@@ -565,8 +698,11 @@ private fun TutorialPagerIndicator(
 
 internal object TutorialLayoutDefaults {
     const val totalStepCount: Int = TutorialStep.TOTAL_STEPS
-    const val supportingItemCount: Int = 3
+    const val supportingItemCount: Int = 2
     const val destinationFilterChipCount: Int = 3
+    const val routeAccessibilityChipCount: Int = 3
+    const val reportCategoryChipCount: Int = 3
+    const val showsEmphasisChip: Boolean = false
     const val visualPanelWeight: Float = 1f
     const val hasHeroIconBackground: Boolean = false
     const val firstStepWithPreviousAction: Int = 2
@@ -588,14 +724,15 @@ internal object TutorialLayoutDefaults {
     val microGap = 4.dp
     val hairlineWidth = 1.dp
 
+    val illustrationHeight = 132.dp
+    val illustrationStrokeWidth = 3.dp
+    val illustrationThinStrokeWidth = 2.dp
     val heroIconSize = 56.dp
     val supportingIconContainerSize = 44.dp
     val supportingIconSize = 24.dp
     val supportingTitleLineHeight = 22.sp
     val supportingDescriptionLineHeight = 21.sp
     val supportingItemGap = 18.dp
-    val itemDividerStartPadding = 56.dp
-    val emphasisVerticalPadding = 9.dp
     val filterChipHorizontalPadding = 12.dp
     val filterChipVerticalPadding = 8.dp
     val filterChipIconSize = 18.dp

@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
-import com.ssafy.e102.domain.route.dto.response.RerouteType;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
@@ -75,19 +74,19 @@ public class RerouteService {
 		RouteSummaryResponse route = restoreRouteSnapshot(routeSession);
 		RouteProjection projection = projectCurrentPoint(route, request.currentPoint());
 		if (projection.distanceMeter() <= NO_REROUTE_DISTANCE_METER) {
-			return new RerouteResponse(RerouteType.NO_REROUTE_NEEDED, null);
+			return new RerouteResponse(null);
 		}
 		if (projection.distanceMeter() <= WALK_REPAIR_MAX_DISTANCE_METER) {
 			RouteSummaryResponse repairedRoute = walkRepair(userId, request.currentPoint(), route, projection);
 			saveRerouteSession(routeSession, request.currentPoint(), repairedRoute);
-			return new RerouteResponse(RerouteType.WALK_REPAIR, repairedRoute);
+			return new RerouteResponse(repairedRoute);
 		}
 		if (projection.distanceMeter() <= FULL_REROUTE_MAX_DISTANCE_METER) {
 			RouteSummaryResponse reroutedRoute = withNewRouteId(
 				fullReroute(userId, request.currentPoint(), routeSession, route),
 				newRouteId("rr_full"));
 			saveRerouteSession(routeSession, request.currentPoint(), reroutedRoute);
-			return new RerouteResponse(RerouteType.FULL_REROUTE, reroutedRoute);
+			return new RerouteResponse(reroutedRoute);
 		}
 		throw new RouteException(RouteErrorCode.ROUTE_TOO_FAR_FOR_REROUTE);
 	}

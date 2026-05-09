@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
-import com.ssafy.e102.domain.route.dto.response.RerouteType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
@@ -135,7 +134,7 @@ class RerouteServiceTest {
 	}
 
 	@Test
-	@DisplayName("현재 위치가 route geometry 10m 이하면 NO_REROUTE_NEEDED를 반환한다")
+	@DisplayName("현재 위치가 route geometry 10m 이하면 새 route 없이 반환한다")
 	void returnsNoRerouteNeededWhenCurrentPointIsStillNearRouteGeometry() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
@@ -146,7 +145,6 @@ class RerouteServiceTest {
 			userId,
 			new RerouteRequest("rt_001", new GeoPointRequest(35.12001, 128.93601)));
 
-		assertThat(response.rerouteType()).isEqualTo(RerouteType.NO_REROUTE_NEEDED);
 		assertThat(response.route()).isNull();
 		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
 		verify(walkRouteSearchService, never()).search(org.mockito.ArgumentMatchers.any(),
@@ -156,7 +154,7 @@ class RerouteServiceTest {
 	}
 
 	@Test
-	@DisplayName("기존 route geometry 100m 이내 이탈은 WALK_REPAIR로 분기한다")
+	@DisplayName("기존 route geometry 100m 이내 이탈은 복귀 WALK leg를 붙인 새 route를 반환한다")
 	void returnsWalkRepairWhenCurrentPointIsNearRouteGeometry() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
@@ -172,7 +170,6 @@ class RerouteServiceTest {
 			userId,
 			new RerouteRequest("rt_001", new GeoPointRequest(35.1195, 128.9360)));
 
-		assertThat(response.rerouteType()).isEqualTo(RerouteType.WALK_REPAIR);
 		assertThat(response.route().routeId()).startsWith("rr_repair_");
 		assertThat(response.route().routeId()).isNotEqualTo("rt_001");
 		assertThat(response.route().legs()).hasSize(2);
@@ -186,7 +183,7 @@ class RerouteServiceTest {
 	}
 
 	@Test
-	@DisplayName("기존 route geometry 100m 초과 500m 이내 이탈은 FULL_REROUTE로 분기한다")
+	@DisplayName("기존 route geometry 100m 초과 500m 이내 이탈은 전체 재탐색 route를 반환한다")
 	void returnsFullRerouteWhenCurrentPointIsFarFromRouteGeometry() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
@@ -202,7 +199,6 @@ class RerouteServiceTest {
 			userId,
 			new RerouteRequest("rt_001", new GeoPointRequest(35.1200, 128.9400)));
 
-		assertThat(response.rerouteType()).isEqualTo(RerouteType.FULL_REROUTE);
 		assertThat(response.route().routeId()).startsWith("rr_full_");
 		assertThat(response.route().routeId()).isNotEqualTo(reroutedRoute.routeId());
 		verify(walkRouteSearchService).search(userId, new WalkRouteSearchRequest(

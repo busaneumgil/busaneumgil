@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.route.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -30,7 +31,6 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
-import com.ssafy.e102.domain.route.dto.response.RerouteType;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
@@ -171,7 +171,7 @@ class RouteControllerTest {
 	void rerouteUsesAuthenticatedUser() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
-			.thenReturn(new RerouteResponse(RerouteType.NO_REROUTE_NEEDED, null));
+			.thenReturn(new RerouteResponse(null));
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 
 		mockMvc.perform(post("/routes/reroute")
@@ -185,8 +185,8 @@ class RouteControllerTest {
 				"""))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
-			.andExpect(jsonPath("$.data.rerouteType").value("NO_REROUTE_NEEDED"))
-			.andExpect(jsonPath("$.data.route").doesNotExist());
+			.andExpect(jsonPath("$.data.route").value(nullValue()))
+			.andExpect(jsonPath("$.data.rerouteType").doesNotExist());
 
 		verify(rerouteService).reroute(eq(userId), any(RerouteRequest.class));
 		SecurityContextHolder.clearContext();

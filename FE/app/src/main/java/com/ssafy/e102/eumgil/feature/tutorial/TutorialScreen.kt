@@ -56,16 +56,14 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 fun TutorialScreen(
     uiState: TutorialUiState,
     onPrimaryActionClick: () -> Unit,
+    onPreviousActionClick: () -> Unit,
     onSkipClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val primaryActionLabel =
-        stringResource(
-            id =
-                resolveTutorialPrimaryActionLabel(
-                    entryPoint = uiState.entryPoint,
-                    isLastStep = uiState.step.isLast,
-                ),
+    val primaryActionLabelRes =
+        resolveTutorialPrimaryActionLabel(
+            entryPoint = uiState.entryPoint,
+            isLastStep = uiState.step.isLast,
         )
 
     Column(
@@ -108,11 +106,46 @@ fun TutorialScreen(
 
         Spacer(modifier = Modifier.height(TutorialLayoutDefaults.visualPanelButtonGap))
 
+        TutorialBottomActions(
+            primaryActionLabel = primaryActionLabelRes,
+            canMovePrevious = uiState.canMovePrevious,
+            onPreviousActionClick = onPreviousActionClick,
+            onPrimaryActionClick = onPrimaryActionClick,
+        )
+    }
+}
+
+@Composable
+private fun TutorialBottomActions(
+    @StringRes primaryActionLabel: Int,
+    canMovePrevious: Boolean,
+    onPreviousActionClick: () -> Unit,
+    onPrimaryActionClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(
+            onClick = onPreviousActionClick,
+            enabled = canMovePrevious,
+            modifier =
+                Modifier
+                    .width(TutorialLayoutDefaults.previousButtonMinWidth)
+                    .heightIn(min = TutorialLayoutDefaults.primaryButtonMinHeight),
+        ) {
+            Text(
+                text = stringResource(id = R.string.tutorial_action_previous),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
         Button(
             onClick = onPrimaryActionClick,
             modifier =
                 Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .heightIn(min = TutorialLayoutDefaults.primaryButtonMinHeight),
             shape = RoundedCornerShape(EumRadius.small),
             colors =
@@ -122,7 +155,7 @@ fun TutorialScreen(
                 ),
         ) {
             Text(
-                text = primaryActionLabel,
+                text = stringResource(id = primaryActionLabel),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -409,7 +442,7 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
 
         TutorialStep.ROUTE_COMPARISON ->
             TutorialVisualContent(
-                heroIconRes = R.drawable.ic_nav_route,
+                heroIconRes = R.drawable.ic_route_start_navigation,
                 items =
                     listOf(
                         TutorialSupportingItem(
@@ -500,6 +533,7 @@ internal object TutorialLayoutDefaults {
     const val hasHeroIconBackground: Boolean = false
 
     val primaryButtonMinHeight = 56.dp
+    val previousButtonMinWidth = 88.dp
     val visualPanelButtonGap = 12.dp
     val visualPanelMaxWidth = 360.dp
     val panelElevation = 2.dp

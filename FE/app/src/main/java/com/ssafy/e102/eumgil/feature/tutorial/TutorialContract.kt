@@ -39,6 +39,8 @@ enum class TutorialStep(
 
     fun next(): TutorialStep? = entries.firstOrNull { step -> step.sequence == sequence + 1 }
 
+    fun previous(): TutorialStep? = entries.firstOrNull { step -> step.sequence == sequence - 1 }
+
     companion object {
         const val TOTAL_STEPS: Int = 3
 
@@ -52,6 +54,7 @@ data class TutorialUiState(
 ) {
     val currentStep: Int get() = step.sequence
     val totalSteps: Int get() = TutorialStep.TOTAL_STEPS
+    val canMovePrevious: Boolean get() = step.previous() != null
 }
 
 fun resolveTutorialPrimaryActionLabel(

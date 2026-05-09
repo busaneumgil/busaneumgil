@@ -30,6 +30,11 @@ fun MobilityTutorialRoute(
                 currentStepSequence = nextStep.sequence
             }
         },
+        onPreviousActionClick = {
+            currentStep.previous()?.let { previousStep ->
+                currentStepSequence = previousStep.sequence
+            }
+        },
         onSkipClick = onCompleted,
         modifier = modifier,
     )

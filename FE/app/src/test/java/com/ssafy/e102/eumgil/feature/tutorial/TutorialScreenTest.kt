@@ -7,10 +7,12 @@ import org.junit.Test
 
 class TutorialScreenTest {
     @Test
-    fun `tutorial uses a frame-free explanation panel that fills the body area`() {
-        assertEquals(360.dp, TutorialLayoutDefaults.visualPanelMaxWidth)
+    fun `tutorial uses a full body stage without a white card frame`() {
+        assertEquals(420.dp, TutorialLayoutDefaults.visualPanelMaxWidth)
         assertEquals(1f, TutorialLayoutDefaults.visualPanelWeight, 0f)
         assertEquals(12.dp, TutorialLayoutDefaults.visualPanelButtonGap)
+        assertEquals(false, TutorialLayoutDefaults.usesWhitePanelFrame)
+        assertEquals(3, TutorialLayoutDefaults.distinctIllustrationSceneCount)
     }
 
     @Test

@@ -26,7 +26,7 @@ import com.ssafy.e102.domain.user.repository.UserRepository;
 public class RouteRatingService {
 
 	private static final String POSTGRES_UNIQUE_VIOLATION_SQL_STATE = "23505";
-	private static final String ROUTE_RATING_UNIQUE_CONSTRAINT = "uk_route_ratings_user_route";
+	private static final String ROUTE_RATING_UNIQUE_CONSTRAINT = "uk_route_ratings_session";
 
 	private final RouteRatingRepository routeRatingRepository;
 	private final RouteSessionRepository routeSessionRepository;
@@ -46,12 +46,13 @@ public class RouteRatingService {
 		RouteSession routeSession = getRouteSession(userId, request.routeId());
 		JsonNode routeContextJson = routeSession.getRouteSnapshotJson();
 
-		RouteRating routeRating = routeRatingRepository.findByUser_UserIdAndRouteId(userId, request.routeId())
+		RouteRating routeRating = routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId())
 			.map(existingRating -> {
 				existingRating.updateScore(request.score(), routeContextJson);
 				return existingRating;
 			})
-			.orElseGet(() -> createRatingOrUpdateAfterUniqueConflict(userId, request, routeContextJson));
+			.orElseGet(
+				() -> createRatingOrUpdateAfterUniqueConflict(userId, routeSession, request.score(), routeContextJson));
 		return new RouteRatingResponse(routeRating.getRatingId());
 	}
 
@@ -69,27 +70,28 @@ public class RouteRatingService {
 
 	private RouteRating createRatingOrUpdateAfterUniqueConflict(
 		UUID userId,
-		RouteRatingRequest request,
+		RouteSession routeSession,
+		int score,
 		JsonNode routeContextJson) {
 		try {
-			return createRating(userId, request, routeContextJson);
+			return createRating(userId, routeSession, score, routeContextJson);
 		} catch (DataIntegrityViolationException exception) {
 			if (!isRouteRatingUniqueViolation(exception)) {
 				throw exception;
 			}
-			RouteRating existingRating = routeRatingRepository.findByUser_UserIdAndRouteId(userId, request.routeId())
+			RouteRating existingRating = routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId())
 				.orElseThrow(() -> exception);
-			existingRating.updateScore(request.score(), routeContextJson);
+			existingRating.updateScore(score, routeContextJson);
 			return existingRating;
 		}
 	}
 
-	private RouteRating createRating(UUID userId, RouteRatingRequest request, JsonNode routeContextJson) {
+	private RouteRating createRating(UUID userId, RouteSession routeSession, int score, JsonNode routeContextJson) {
 		User user = userRepository.getReferenceById(userId);
 		return routeRatingRepository.saveAndFlush(RouteRating.create(
 			user,
-			request.routeId(),
-			request.score(),
+			routeSession,
+			score,
 			routeContextJson));
 	}
 

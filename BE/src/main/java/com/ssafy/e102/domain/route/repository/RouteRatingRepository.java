@@ -9,5 +9,5 @@ import com.ssafy.e102.domain.route.entity.RouteRating;
 
 public interface RouteRatingRepository extends JpaRepository<RouteRating, Long> {
 
-	Optional<RouteRating> findByUser_UserIdAndRouteId(UUID userId, String routeId);
+	Optional<RouteRating> findByRouteSession_SessionId(UUID sessionId);
 }

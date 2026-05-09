@@ -222,11 +222,12 @@ class DatabaseNamingStrategyTest {
 
 		assertThat(physicalColumnName(RouteRating.class, "ratingId")).isEqualTo("rating_id");
 		assertThat(joinColumnName(RouteRating.class, "user")).isEqualTo("user_id");
+		assertThat(joinColumnName(RouteRating.class, "routeSession")).isEqualTo("session_id");
 		assertThat(physicalColumnName(RouteRating.class, "routeId")).isEqualTo("route_id");
 		assertThat(physicalColumnName(RouteRating.class, "score")).isEqualTo("score");
 		assertThat(physicalColumnName(RouteRating.class, "routeContextJson"))
 			.isEqualTo("route_context_json");
-		assertThat(uniqueColumnNames(RouteRating.class)).contains("user_id", "route_id");
+		assertThat(uniqueColumnNames(RouteRating.class)).contains("session_id");
 	}
 
 	@Test

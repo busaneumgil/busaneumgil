@@ -143,8 +143,6 @@ class RouteSelectFlowTest {
 		RouteSummaryResponse route = transitRoute("rs_transit_flow_recommended");
 		WalkRouteSearchResponse searchResponse = new WalkRouteSearchResponse("rs_transit_flow", List.of(route));
 		routeSearchCacheService.save(USER_ID, searchResponse);
-		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, route.routeId()))
-			.thenReturn(Optional.empty());
 		when(routeRatingRepository.saveAndFlush(any(RouteRating.class)))
 			.thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -157,6 +155,8 @@ class RouteSelectFlowTest {
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 			USER_ID, route.routeId(), RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(selectedSession));
+		when(routeRatingRepository.findByRouteSession_SessionId(selectedSession.getSessionId()))
+			.thenReturn(Optional.empty());
 
 		routeSessionCommandService.endSession(USER_ID, route.routeId());
 		routeRatingService.rate(USER_ID, new RouteRatingRequest(route.routeId(), 5));

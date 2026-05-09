@@ -55,11 +55,10 @@ class RouteRatingServiceTest {
 	@DisplayName("route session snapshot을 route_context_json으로 복사해 rating을 저장한다")
 	void rateStoresRouteContextFromSession() {
 		JsonNode snapshot = snapshot("rt_selected_001");
-		RouteSession routeSession = mock(RouteSession.class);
-		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
+		RouteSession routeSession = routeSession("rt_selected_001", snapshot);
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
 			.thenReturn(Optional.of(routeSession));
-		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_selected_001"))
+		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.empty());
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
@@ -75,6 +74,7 @@ class RouteRatingServiceTest {
 		verify(routeRatingRepository).saveAndFlush(ratingCaptor.capture());
 		assertThat(response.ratingId()).isEqualTo(1L);
 		assertThat(ratingCaptor.getValue().getRouteId()).isEqualTo("rt_selected_001");
+		assertThat(ratingCaptor.getValue().getRouteSession()).isSameAs(routeSession);
 		assertThat(ratingCaptor.getValue().getScore()).isEqualTo((short)5);
 		assertThat(ratingCaptor.getValue().getRouteContextJson()).isEqualTo(snapshot);
 	}
@@ -96,14 +96,14 @@ class RouteRatingServiceTest {
 	@Test
 	@DisplayName("같은 사용자의 같은 routeId 평가는 최신 score로 갱신한다")
 	void rateUpdatesExistingRating() {
-		RouteRating existingRating = RouteRating.create(user(USER_ID), "rt_selected_001", 3, snapshot("old"));
+		RouteSession routeSession = routeSession("rt_selected_001", snapshot("old"));
+		RouteRating existingRating = RouteRating.create(user(USER_ID), routeSession, 3, snapshot("old"));
 		ReflectionTestUtils.setField(existingRating, "ratingId", 3L);
 		JsonNode snapshot = snapshot("rt_selected_001");
-		RouteSession routeSession = mock(RouteSession.class);
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
 			.thenReturn(Optional.of(routeSession));
-		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_selected_001"))
+		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.of(existingRating));
 
 		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5));
@@ -130,14 +130,13 @@ class RouteRatingServiceTest {
 	@Test
 	@DisplayName("동시 중복 저장 unique 충돌은 기존 rating score 갱신으로 흡수한다")
 	void rateUpdatesExistingRatingAfterUniqueConflict() {
-		RouteRating existingRating = RouteRating.create(user(USER_ID), "rt_selected_001", 2, null);
-		ReflectionTestUtils.setField(existingRating, "ratingId", 4L);
 		JsonNode snapshot = snapshot("rt_selected_001");
-		RouteSession routeSession = mock(RouteSession.class);
-		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
+		RouteSession routeSession = routeSession("rt_selected_001", snapshot);
+		RouteRating existingRating = RouteRating.create(user(USER_ID), routeSession, 2, snapshot("old"));
+		ReflectionTestUtils.setField(existingRating, "ratingId", 4L);
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
 			.thenReturn(Optional.of(routeSession));
-		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_selected_001"))
+		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.empty(), Optional.of(existingRating));
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
@@ -154,10 +153,11 @@ class RouteRatingServiceTest {
 	@DisplayName("route rating unique 충돌이 아니면 DB 예외를 전파한다")
 	void ratePropagatesUnexpectedDataIntegrityViolation() {
 		RouteSession routeSession = mock(RouteSession.class);
+		when(routeSession.getSessionId()).thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000099"));
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot("rt_selected_001"));
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
 			.thenReturn(Optional.of(routeSession));
-		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_selected_001"))
+		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.empty());
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
 		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
@@ -169,12 +169,12 @@ class RouteRatingServiceTest {
 
 	private DataIntegrityViolationException routeRatingUniqueViolation() {
 		SQLException sqlException = new SQLException(
-			"duplicate key value violates unique constraint \"uk_route_ratings_user_route\"",
+			"duplicate key value violates unique constraint \"uk_route_ratings_session\"",
 			"23505");
 		ConstraintViolationException constraintViolationException = new ConstraintViolationException(
 			"could not execute statement",
 			sqlException,
-			"uk_route_ratings_user_route");
+			"uk_route_ratings_session");
 		return new DataIntegrityViolationException("duplicate route rating", constraintViolationException);
 	}
 
@@ -186,5 +186,13 @@ class RouteRatingServiceTest {
 		User user = User.create(SocialProvider.KAKAO, "kakao-user-id", PrimaryUserType.LOW_VISION, null);
 		ReflectionTestUtils.setField(user, "userId", userId);
 		return user;
+	}
+
+	private RouteSession routeSession(String routeId, JsonNode snapshot) {
+		RouteSession routeSession = mock(RouteSession.class);
+		when(routeSession.getSessionId()).thenReturn(UUID.randomUUID());
+		when(routeSession.getRouteId()).thenReturn(routeId);
+		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
+		return routeSession;
 	}
 }

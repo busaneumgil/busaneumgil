@@ -93,6 +93,7 @@ erDiagram
     USERS ||--o{ HAZARD_REPORTS : reports
     USERS ||--o{ ROUTE_RATINGS : rates
     USERS ||--o{ ROUTE_SESSIONS : starts
+    ROUTE_SESSIONS ||--o| ROUTE_RATINGS : rated
 
     HAZARD_REPORTS ||--o{ HAZARD_REPORT_IMAGES : has
 
@@ -199,6 +200,7 @@ erDiagram
 
     ROUTE_RATINGS {
         BIGINT rating_id PK
+        UUID session_id FK
         UUID user_id FK
         VARCHAR route_id
         SMALLINT score
@@ -629,6 +631,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 경로 평가 ID | rating_id | BIGINT | NOT NULL |  |
+| 세션 ID | session_id | UUID | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
 | 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
 | 별점 | score | SMALLINT | NOT NULL |  |
@@ -641,13 +644,15 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### 제약
 
 - `rating_id` PK
-- `UNIQUE (user_id, route_id)`
+- `session_id` FK -> `route_sessions.session_id`
+- `UNIQUE (session_id)`
 
 ### 비고
 
 - 경로 평가에는 별점만 저장한다.
 - 평가 대상은 사용자가 방금 안내받은 경로다.
-- `route_id`는 `POST /route-ratings` 요청의 평가 대상 경로 ID다.
+- `session_id`는 평가 대상 route session이다. route session 하나는 평가가 없거나 최대 하나만 가진다.
+- `route_id`는 `POST /route-ratings` 요청의 평가 대상 경로 ID이며, 조회와 운영 확인을 위해 route session의 대표 경로 ID를 중복 저장한다.
 - `route_context_json`은 평가 시점에 같은 사용자의 `route_sessions.route_snapshot_json`을 복사해 저장한다.
 - 같은 사용자의 route session이 없으면 평가를 저장하지 않는다.
 - 평가 생성 시각은 DB `created_at` 공통 감사 컬럼으로 관리하고, Java/API에서는 `createdAt`으로 노출할 수 있다.
@@ -858,6 +863,12 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - `users 1 : N route_ratings`
 - 회원 탈퇴 시 별점 평가 내역은 삭제한다.
+
+### route_sessions - route_ratings
+
+- `route_sessions 1 : 0..1 route_ratings`
+- 하나의 안내 세션은 평가가 없을 수 있고, 평가가 있다면 최대 1개만 가진다.
+- `route_ratings.session_id`는 `route_sessions.session_id`를 참조하며 `UNIQUE` 제약으로 같은 세션 중복 평가를 막는다.
 
 ### users - route_sessions
 

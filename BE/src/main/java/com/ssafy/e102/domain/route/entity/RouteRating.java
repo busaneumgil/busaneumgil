@@ -15,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
@@ -24,7 +25,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @Entity
 @Table(name = "route_ratings", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_route_ratings_user_route", columnNames = {"user_id", "route_id"})
+	@UniqueConstraint(name = "uk_route_ratings_session", columnNames = {"session_id"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteRating extends BaseEntity {
@@ -38,6 +39,10 @@ public class RouteRating extends BaseEntity {
 	@JoinColumn(name = "user_id", nullable = false)
 	private User user;
 
+	@OneToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "session_id", nullable = false)
+	private RouteSession routeSession;
+
 	@Column(name = "route_id", nullable = false, length = 120)
 	private String routeId;
 
@@ -50,12 +55,13 @@ public class RouteRating extends BaseEntity {
 
 	public static RouteRating create(
 		User user,
-		String routeId,
+		RouteSession routeSession,
 		int score,
 		JsonNode routeContextJson) {
 		RouteRating routeRating = new RouteRating();
 		routeRating.user = user;
-		routeRating.routeId = routeId;
+		routeRating.routeSession = routeSession;
+		routeRating.routeId = routeSession.getRouteId();
 		routeRating.updateScore(score, routeContextJson);
 		return routeRating;
 	}

@@ -3,6 +3,8 @@ package com.ssafy.e102.eumgil.app.navigation
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OnboardingNavGraphRoutingTest {
@@ -45,6 +47,40 @@ class OnboardingNavGraphRoutingTest {
         assertEquals(
             OnboardingRoute.MobilityTypeSecondary.route,
             resolvePrimaryUserTypeNextRoute(PrimaryUserType.MOBILITY_IMPAIRED),
+        )
+    }
+
+    @Test
+    fun `mobility impaired terms completion moves to onboarding tutorial before map`() {
+        assertEquals(
+            TutorialRoute.Onboarding.route,
+            resolveMobilityOnboardingAfterTermsRoute(),
+        )
+    }
+
+    @Test
+    fun `terms completion route sends mobility users to tutorial`() {
+        assertEquals(
+            TutorialRoute.Onboarding.route,
+            resolveOnboardingTermsCompletedRoute(PrimaryUserType.MOBILITY_IMPAIRED.routeValue),
+        )
+    }
+
+    @Test
+    fun `mobility terms completion completes signup before tutorial starts`() {
+        assertTrue(
+            shouldCompletePendingSignupBeforeOnboardingTutorial(
+                PrimaryUserType.MOBILITY_IMPAIRED.routeValue,
+            ),
+        )
+    }
+
+    @Test
+    fun `low vision terms completion does not use tutorial signup handoff`() {
+        assertFalse(
+            shouldCompletePendingSignupBeforeOnboardingTutorial(
+                PrimaryUserType.LOW_VISION.routeValue,
+            ),
         )
     }
 

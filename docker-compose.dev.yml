@@ -124,6 +124,8 @@ services:
       S3_REGION: ${MINIO_REGION:-ap-northeast-2}
       GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BASE_URL:-http://graphhopper:8989}
       AI_BASE_URL: ${AI_BASE_URL:-http://ai:5000}
+      KAKAO_LOCAL_BASE_URL: ${KAKAO_LOCAL_BASE_URL:-https://dapi.kakao.com}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
       ODSAY_API_BASE_URL: ${ODSAY_API_BASE_URL:-https://api.odsay.com/v1/api}
       ODSAY_API_KEY: ${ODSAY_API_KEY:?ODSAY_API_KEY is required}
       ODSAY_CONNECT_TIMEOUT: ${ODSAY_CONNECT_TIMEOUT:-5s}

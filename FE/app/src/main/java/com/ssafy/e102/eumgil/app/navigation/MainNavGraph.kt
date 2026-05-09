@@ -1,11 +1,17 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.Manifest
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -33,6 +39,8 @@ import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
+import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
@@ -199,6 +207,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments
                 ?.getString(SearchRoute.VoiceInput.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val context = LocalContext.current
+        val micPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (!isGranted) navController.popBackStack()
+        }
+        LaunchedEffect(Unit) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO,
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
         SearchVoiceInputRoute(
             onNavigateBack = {
                 navController.popBackStack()
@@ -346,6 +369,27 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToGuide = {
+                navController.navigate(resolveAppInfoGuideRoute())
+            },
+        )
+    }
+
+    composable(route = TutorialRoute.Guide.route) {
+        MobilityTutorialRoute(
+            entryPoint = TutorialEntryPoint.GUIDE,
+            onCompleted = {
+                val didPopToAppInfo =
+                    navController.popBackStack(
+                        route = resolveTutorialGuideCompletedRoute(),
+                        inclusive = false,
+                    )
+                if (!didPopToAppInfo) {
+                    navController.navigate(resolveTutorialGuideCompletedRoute()) {
+                        launchSingleTop = true
+                    }
+                }
+            },
         )
     }
 
@@ -419,6 +463,8 @@ internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): Stri
     }
 
 internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
+
+internal fun resolveAppInfoGuideRoute(): String = TutorialRoute.Guide.route
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue

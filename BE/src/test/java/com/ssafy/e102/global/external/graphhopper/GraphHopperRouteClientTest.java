@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -15,6 +16,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.RequestEntity;
@@ -109,6 +111,66 @@ class GraphHopperRouteClientTest {
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
 			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withServerError());
+
+		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
+			new GeoPointRequest(35.12, 128.936),
+			new GeoPointRequest(35.1315, 128.8823),
+			WalkRouteProfile.PEDESTRIAN_SAFE)))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED);
+	}
+
+	@Test
+	@DisplayName("GraphHopper ConnectionNotFoundException은 RT4040으로 매핑한다")
+	void routeMapsConnectionNotFoundToRouteNotFound() {
+		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
+			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body("""
+					{
+					  "message": "Connection between locations not found",
+					  "hints": [
+					    {
+					      "message": "Connection between locations not found",
+					      "details": "com.graphhopper.util.exceptions.ConnectionNotFoundException"
+					    }
+					  ]
+					}
+					"""));
+
+		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
+			new GeoPointRequest(35.12, 128.936),
+			new GeoPointRequest(35.1315, 128.8823),
+			WalkRouteProfile.PEDESTRIAN_SAFE)))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("GraphHopper profile/parameter 오류는 EX5020으로 유지한다")
+	void routeKeepsBadRequestWithoutNoRouteHintAsExternalRouteApiFailed() {
+		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
+			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body("""
+					{
+					  "message": "Cannot find profile pedestrian_safe",
+					  "hints": [
+					    {
+					      "message": "Cannot find profile pedestrian_safe",
+					      "details": "java.lang.IllegalArgumentException"
+					    }
+					  ]
+					}
+					"""));
 
 		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
 			new GeoPointRequest(35.12, 128.936),

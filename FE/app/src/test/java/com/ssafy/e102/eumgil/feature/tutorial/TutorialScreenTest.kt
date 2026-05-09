@@ -13,6 +13,7 @@ class TutorialScreenTest {
         assertEquals(12.dp, TutorialLayoutDefaults.visualPanelButtonGap)
         assertEquals(false, TutorialLayoutDefaults.usesWhitePanelFrame)
         assertEquals(3, TutorialLayoutDefaults.distinctIllustrationSceneCount)
+        assertEquals(true, TutorialLayoutDefaults.usesNavigationSafeZone)
     }
 
     @Test
@@ -30,16 +31,19 @@ class TutorialScreenTest {
         assertEquals(0, TutorialLayoutDefaults.supportingItemCount)
         assertEquals(3, TutorialLayoutDefaults.destinationFilterChipCount)
         assertEquals(3, TutorialLayoutDefaults.routeAccessibilityChipCount)
-        assertEquals(3, TutorialLayoutDefaults.reportCategoryChipCount)
+        assertEquals(0, TutorialLayoutDefaults.reportCategoryChipCount)
         assertEquals(false, TutorialLayoutDefaults.showsEmphasisChip)
         assertEquals(true, TutorialLayoutDefaults.usesLayeredFlatIllustration)
+        assertEquals(false, TutorialLayoutDefaults.usesIllustrationHalo)
+        assertEquals(true, TutorialLayoutDefaults.destinationFiltersAttachToSearch)
     }
 
     @Test
     fun `tutorial uses readable header and panel text rhythm`() {
         assertEquals(34.sp, TutorialLayoutDefaults.headerHeadlineLineHeight)
         assertEquals(22.sp, TutorialLayoutDefaults.headerDescriptionLineHeight)
-        assertEquals(22.dp, TutorialLayoutDefaults.illustrationContentGap)
+        assertEquals(12.dp, TutorialLayoutDefaults.illustrationContentGap)
+        assertEquals(6.dp, TutorialLayoutDefaults.headerVisualGap)
         assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
     }
 }

@@ -63,6 +63,15 @@ sealed interface OnboardingRoute : AppRoute {
         fun createRoute(stepRouteValue: String = DEFAULT_STEP): String =
             "onboarding/terms_guide/$stepRouteValue"
     }
+
+    data object Permission : OnboardingRoute {
+        const val ARG_NEXT_ROUTE: String = "next_route"
+
+        override val route: String = "onboarding/permission/{$ARG_NEXT_ROUTE}"
+
+        fun createRoute(nextRoute: String): String =
+            "onboarding/permission/${Uri.encode(nextRoute)}"
+    }
 }
 
 sealed interface TopLevelRoute : AppRoute {
@@ -134,6 +143,16 @@ sealed interface LowVisionRoute : AppRoute {
 
     data object AppInfo : LowVisionRoute {
         override val route: String = "low_vision/app_info"
+    }
+
+    /** 음성 인식 결과로 진입하는 검색 화면. [query]는 URL 인코딩된 STT 결과. */
+    data object VoiceSearch : LowVisionRoute {
+        const val ARG_QUERY: String = "query"
+
+        override val route: String = "low_vision/voice_search/{$ARG_QUERY}"
+
+        fun createRoute(query: String): String =
+            "low_vision/voice_search/${Uri.encode(query.ifBlank { " " })}"
     }
 }
 

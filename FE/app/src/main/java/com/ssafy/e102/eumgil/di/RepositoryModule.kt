@@ -13,6 +13,7 @@ import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
@@ -22,6 +23,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSour
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.VoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
@@ -46,8 +48,10 @@ import com.ssafy.e102.eumgil.data.repository.LocalOnlyUserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.DefaultVoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.ServerAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.ServerAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -217,5 +221,16 @@ object RepositoryModule {
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
+        )
+
+    fun provideVoiceAnalyzeRepository(
+        remoteDataSource: VoiceAnalyzeRemoteDataSource,
+        mockDataSource: MockVoiceAnalyzeRemoteDataSource,
+        sourcePolicy: RepositorySourcePolicy,
+    ): VoiceAnalyzeRepository =
+        DefaultVoiceAnalyzeRepository(
+            remoteDataSource = remoteDataSource,
+            mockDataSource = mockDataSource,
+            sourcePolicy = sourcePolicy,
         )
 }

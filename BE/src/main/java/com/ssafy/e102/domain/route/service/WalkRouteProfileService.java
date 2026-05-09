@@ -53,6 +53,7 @@ public class WalkRouteProfileService {
 		return switch (routeOption) {
 			case SAFE -> WalkRouteProfile.VISUAL_SAFE;
 			case SHORTEST -> WalkRouteProfile.VISUAL_FAST;
+			default -> throw invalidRequest("도보 경로 옵션이 아닙니다.");
 		};
 	}
 
@@ -71,6 +72,7 @@ public class WalkRouteProfileService {
 		return switch (routeOption) {
 			case SAFE -> WalkRouteProfile.WHEELCHAIR_AUTO_SAFE;
 			case SHORTEST -> WalkRouteProfile.WHEELCHAIR_AUTO_FAST;
+			default -> throw invalidRequest("도보 경로 옵션이 아닙니다.");
 		};
 	}
 
@@ -78,6 +80,7 @@ public class WalkRouteProfileService {
 		return switch (routeOption) {
 			case SAFE -> WalkRouteProfile.WHEELCHAIR_MANUAL_SAFE;
 			case SHORTEST -> WalkRouteProfile.WHEELCHAIR_MANUAL_FAST;
+			default -> throw invalidRequest("도보 경로 옵션이 아닙니다.");
 		};
 	}
 
@@ -85,6 +88,7 @@ public class WalkRouteProfileService {
 		return switch (routeOption) {
 			case SAFE -> WalkRouteProfile.PEDESTRIAN_SAFE;
 			case SHORTEST -> WalkRouteProfile.PEDESTRIAN_FAST;
+			default -> throw invalidRequest("도보 경로 옵션이 아닙니다.");
 		};
 	}
 

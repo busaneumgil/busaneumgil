@@ -21,6 +21,7 @@
 | `route_logs`, `route_log_points` | 실제 이동 로그 수집 | MVP ERD에서 제외 |
 | `route_ratings` | - | 도착 직후 별점 평가 저장 |
 | `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
+| `subway_stations`, `subway_timetables` | 지하철 시간표/역 정보 테이블 없음 | ODsay 역 식별자 기반 지하철 역 마스터와 시간표 저장 |
 
 장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
 
@@ -42,7 +43,7 @@
 - 지도/장소 검색 API는 MVP 기준 카카오 단일 사용을 전제로 한다.
 - 대중교통 경로 후보는 ODsay 같은 외부 대중교통 길찾기 API를 우선 사용하고, 버스/저상버스 정보는 부산광역시_부산버스정보시스템 OpenAPI를 실시간 조회한다.
 - 사용자가 실제 선택해 안내를 시작한 route만 `route_sessions`에 영속 저장한다. 검색 후보 묶음은 Redis `routeSearch:{searchId}`에만 저장한다.
-- 실시간 도착정보는 DB에 저장하지 않고 Redis TTL cache 또는 외부 API 재조회로 처리한다.
+- 실시간 도착정보는 DB에 저장하지 않고 Redis TTL cache 또는 외부 API 재조회로 처리한다. 지하철 시간표 기반 도착 예정 계산은 정적 `subway_timetables`를 조회한다.
 
 ---
 
@@ -72,6 +73,8 @@
 
 ### 대중교통 도메인
 
+- `subway_stations`
+- `subway_timetables`
 - `subway_station_elevators`
 - Redis `routeSearch:{searchId}`는 검색 후보 묶음 임시 저장소로 사용
 - Redis `bims:arrival:{bstopid}:{lineid}`는 BUS 실시간 도착정보 TTL cache로 사용
@@ -100,6 +103,8 @@ erDiagram
     ROAD_NODES ||--o{ ROAD_SEGMENTS : fromNode
     ROAD_NODES ||--o{ ROAD_SEGMENTS : toNode
     ROAD_SEGMENTS ||--o{ SEGMENT_FEATURES : has
+    SUBWAY_STATIONS ||--o{ SUBWAY_TIMETABLES : has
+    SUBWAY_STATIONS ||--o{ SUBWAY_STATION_ELEVATORS : maps
 
     USERS {
         UUID user_id PK
@@ -218,9 +223,28 @@ erDiagram
         ENUM status
     }
 
+    SUBWAY_STATIONS {
+        BIGINT subway_station_id PK
+        VARCHAR odsay_station_id
+        VARCHAR station_name
+        VARCHAR line_name
+        GEOMETRY point
+    }
+
+    SUBWAY_TIMETABLES {
+        BIGINT subway_timetable_id PK
+        VARCHAR odsay_station_id
+        ENUM service_day_type
+        SMALLINT way_code
+        VARCHAR departure_time_text
+        INT departure_second_of_day
+        VARCHAR end_station_name
+    }
+
     SUBWAY_STATION_ELEVATORS {
         INT elevator_id PK
         VARCHAR station_id
+        VARCHAR odsay_station_id
         VARCHAR station_name
         VARCHAR line_name
         VARCHAR entrance_no
@@ -704,7 +728,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
   - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
   - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
-  - SUBWAY metadata: ODsay `startID`, ODsay `endID`, 내부 지하철역 식별자, 선택된 승차/하차 엘리베이터 식별자와 좌표
+  - SUBWAY metadata: ODsay `startID`, ODsay `endID`, ODsay `wayCode`, 내부 지하철역 식별자, 선택된 승차/하차 엘리베이터 식별자와 좌표
   - reroute/refresh 판단용 metadata: leg별 geometry, BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표
 - `route_snapshot_json`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
 - 실시간 도착정보는 외부 API 또는 Redis TTL cache에서만 관리한다.
@@ -718,7 +742,92 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 14) subway_station_elevators
+## 13) subway_stations
+
+### 역할
+
+ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하기 위한 역 마스터다.
+
+대중교통 경로 검색의 SUBWAY leg, 지하철 시간표, 지하철 엘리베이터 정보를 같은 ODsay 역 기준으로 묶는 데 사용한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 지하철역 ID | subway_station_id | BIGSERIAL | NOT NULL |  |
+| ODsay 역 식별자 | odsay_station_id | VARCHAR(30) | NOT NULL |  |
+| 역명 | station_name | VARCHAR(100) | NOT NULL |  |
+| 호선명 | line_name | VARCHAR(50) | NOT NULL |  |
+| 역 중심 좌표 | point | GEOMETRY(POINT, 4326) | NULL |  |
+
+### 제약
+
+- `subway_station_id` PK
+- `UNIQUE (odsay_station_id)`
+- `INDEX (station_name, line_name)`
+
+### 비고
+
+- `odsay_station_id`는 ODsay `stationID`를 문자열로 저장한다.
+- `point`는 ODsay 역 좌표다. 시간표 응답만으로 생성해 좌표를 알 수 없는 경우 NULL을 허용한다.
+- 역 제외/검수 정책은 적재 대상 CSV 또는 배치 검증에서 처리하고, MVP DB 컬럼으로 활성 여부를 따로 저장하지 않는다.
+
+### 관계
+
+- `subway_stations 1 : N subway_timetables` (`odsay_station_id` 기준)
+- `subway_stations 1 : N subway_station_elevators` (`odsay_station_id` 기준 논리 관계)
+
+---
+
+## 14) subway_timetables
+
+### 역할
+
+지하철역별 시간표를 저장한다.
+
+`transit-refresh`에서 현재 시각 이후 가장 가까운 지하철 출발시각을 찾는 데 사용한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 지하철 시간표 ID | subway_timetable_id | BIGSERIAL | NOT NULL |  |
+| ODsay 역 식별자 | odsay_station_id | VARCHAR(30) | NOT NULL |  |
+| 운행일 유형 | service_day_type | ENUM | NOT NULL |  |
+| 방면 코드 | way_code | SMALLINT | NOT NULL |  |
+| 출발시각 원문 | departure_time_text | VARCHAR(10) | NOT NULL |  |
+| 출발시각 초 환산값 | departure_second_of_day | INT | NOT NULL |  |
+| 종착역명 | end_station_name | VARCHAR(100) | NOT NULL |  |
+
+### enum 값
+
+- `service_day_type`: `WEEKDAY`, `SATURDAY`, `HOLIDAY`
+
+### 코드 값
+
+- `way_code`: `1=상행`, `2=하행`
+
+### 제약
+
+- `subway_timetable_id` PK
+- `INDEX (odsay_station_id, service_day_type, way_code, departure_second_of_day)`
+- `UNIQUE (odsay_station_id, service_day_type, way_code, departure_second_of_day, end_station_name)`
+
+### 비고
+
+- `departure_time_text`는 ODsay `departureTime` 원문 보존용이다.
+- `departure_second_of_day`는 조회용 정규화 값이다. 24시 이후 표현도 허용한다.
+- `transit-refresh`는 선택된 SUBWAY leg snapshot의 `odsay_station_id`, `way_code`와 현재 날짜의 `service_day_type`으로 시간표를 조회한다.
+- 현재 시각 이후 `departure_second_of_day`가 가장 작은 row를 다음 열차로 본다.
+- 공휴일 판정 테이블이 없으면 MVP에서는 일요일을 `HOLIDAY`, 토요일을 `SATURDAY`, 나머지를 `WEEKDAY`로 처리한다.
+
+### 관계
+
+- `subway_timetables N : 1 subway_stations` (`odsay_station_id` 기준)
+
+---
+
+## 15) subway_station_elevators
 
 ### 역할
 
@@ -755,8 +864,8 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ### 관계
 
-- 별도 `station` 테이블과 FK 관계를 두지 않는다.
-- `station_id`는 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
+- `subway_stations`와 물리 FK는 두지 않고, `odsay_station_id` 기준 논리 관계로 연결한다.
+- `station_id`는 부산교통공사 기준 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
 
 ---
 
@@ -806,6 +915,16 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `road_segments 1 : N segment_features`
 - 하나의 보행 segment는 0개 이상의 개별 feature를 가질 수 있다.
+
+### subway_stations - subway_timetables
+
+- `subway_stations 1 : N subway_timetables`
+- `odsay_station_id` 기준 논리 관계로 연결한다.
+
+### subway_stations - subway_station_elevators
+
+- `subway_stations 1 : N subway_station_elevators`
+- `odsay_station_id` 기준 논리 관계로 연결한다.
 
 ### admin_areas - road_segments
 

@@ -32,6 +32,9 @@ import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
+import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
+import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.global.entity.BaseEntity;
 
@@ -57,7 +60,10 @@ class DatabaseNamingStrategyTest {
 		RoadSegment.class,
 		AdminArea.class,
 		SegmentFeature.class,
-		RouteSession.class);
+		RouteSession.class,
+		SubwayStation.class,
+		SubwayStationElevator.class,
+		SubwayTimetable.class);
 
 	@Test
 	@DisplayName("Hibernate 물리 컬럼 네이밍은 snake_case 전략을 사용한다")
@@ -219,6 +225,40 @@ class DatabaseNamingStrategyTest {
 	}
 
 	@Test
+	@DisplayName("지하철 시간표 엔티티의 물리 컬럼명은 snake_case다")
+	void subwayScheduleColumnsUseSnakeCase() {
+		assertThat(physicalColumnName(SubwayStation.class, "subwayStationId"))
+			.isEqualTo("subway_station_id");
+		assertThat(physicalColumnName(SubwayStation.class, "odsayStationId"))
+			.isEqualTo("odsay_station_id");
+		assertThat(physicalColumnName(SubwayStation.class, "stationName")).isEqualTo("station_name");
+		assertThat(physicalColumnName(SubwayStation.class, "lineName")).isEqualTo("line_name");
+		assertThat(physicalColumnName(SubwayStation.class, "point")).isEqualTo("point");
+		assertThat(uniqueColumnNames(SubwayStation.class)).contains("odsay_station_id");
+
+		assertThat(physicalColumnName(SubwayTimetable.class, "subwayTimetableId"))
+			.isEqualTo("subway_timetable_id");
+		assertThat(physicalColumnName(SubwayTimetable.class, "odsayStationId"))
+			.isEqualTo("odsay_station_id");
+		assertThat(physicalColumnName(SubwayTimetable.class, "serviceDayType"))
+			.isEqualTo("service_day_type");
+		assertThat(physicalColumnName(SubwayTimetable.class, "wayCode")).isEqualTo("way_code");
+		assertThat(physicalColumnName(SubwayTimetable.class, "departureTimeText"))
+			.isEqualTo("departure_time_text");
+		assertThat(physicalColumnName(SubwayTimetable.class, "departureSecondOfDay"))
+			.isEqualTo("departure_second_of_day");
+		assertThat(physicalColumnName(SubwayTimetable.class, "endStationName"))
+			.isEqualTo("end_station_name");
+		assertThat(uniqueColumnNames(SubwayTimetable.class))
+			.contains(
+				"odsay_station_id",
+				"service_day_type",
+				"way_code",
+				"departure_second_of_day",
+				"end_station_name");
+	}
+
+	@Test
 	@DisplayName("감사 컬럼은 snake_case로 고정한다")
 	void baseEntityAuditColumnsUseSnakeCase() {
 		assertThat(physicalColumnName(BaseEntity.class, "createdAt")).isEqualTo("created_at");
@@ -241,7 +281,9 @@ class DatabaseNamingStrategyTest {
 			RoadSegment.class,
 			AdminArea.class,
 			SegmentFeature.class,
-			RouteSession.class);
+			RouteSession.class,
+			SubwayStation.class,
+			SubwayTimetable.class);
 
 		for (Class<?> entity : entities) {
 			for (Field field : entity.getDeclaredFields()) {

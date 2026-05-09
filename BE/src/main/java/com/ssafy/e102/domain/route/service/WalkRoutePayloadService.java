@@ -4,21 +4,20 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import org.locationtech.jts.geom.Coordinate;
 import org.springframework.stereotype.Service;
 
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertResponse;
-import com.ssafy.e102.domain.route.dto.response.RouteStepAlertType;
-import com.ssafy.e102.domain.route.dto.response.RouteStepResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
@@ -32,18 +31,27 @@ import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 /**
  * GraphHopper path를 경로 API 응답 DTO로 변환한다.
  *
- * <p>이 서비스는 GraphHopper 원본 JSON 대신 {@link GraphHopperRoutePath}의 정제된 거리, 시간, geometry, path detail만
- * 읽고 route/leg/step payload를 만든다.
+ * <p>WALK leg 전체 geometry를 유지하고, 회전/접근성 안내는 leg 시작점 기준 누적 거리의 guidanceEvents로 만든다.
  */
 @Service
 public class WalkRoutePayloadService {
 
 	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
+	private static final BigDecimal TURN_ZIGZAG_SUPPRESSION_METER = BigDecimal.valueOf(5);
+	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
+		RouteBadge.STAIR,
+		RouteBadge.NARROW_SIDEWALK,
+		RouteBadge.UNPAVED,
+		RouteBadge.MIDDLE_SLOPE,
+		RouteBadge.LOW_SLOPE,
+		RouteBadge.CROSSWALK,
+		RouteBadge.ELEVATOR);
 	private static final List<AlertRule> ALERT_RULES = List.of(
-		new AlertRule(RouteStepAlertType.STAIR, "stairs_state", Set.of("YES"), 4),
-		new AlertRule(RouteStepAlertType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 5),
-		new AlertRule(RouteStepAlertType.UNPAVED, "surface_state", Set.of("UNPAVED"), 6),
-		new AlertRule(RouteStepAlertType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 7));
+		new AlertRule(RouteGuidanceEventType.STAIR, "stairs_state", Set.of("YES"), 1),
+		new AlertRule(RouteGuidanceEventType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 2),
+		new AlertRule(RouteGuidanceEventType.UNPAVED, "surface_state", Set.of("UNPAVED"), 3),
+		new AlertRule(RouteGuidanceEventType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 4),
+		new AlertRule(RouteGuidanceEventType.LOW_SLOPE, "slope_state", Set.of("FLAT"), 5));
 
 	private final RouteTurnInstructionService routeTurnInstructionService;
 
@@ -58,7 +66,12 @@ public class WalkRoutePayloadService {
 		int estimatedTimeMinute = estimatedTimeMinute(durationSecond);
 		BigDecimal distanceMeter = scaleDistance(path.distanceMeter());
 		List<RouteBadge> badges = badges(path);
-		List<RouteStepResponse> steps = toSteps(path, distanceMeter, durationSecond);
+		List<RouteGuidanceEventResponse> guidanceEvents = toGuidanceEvents(
+			path,
+			distanceMeter,
+			durationSecond,
+			null,
+			null);
 
 		return new RouteSummaryResponse(
 			routeId(searchId, candidate.routeOption()),
@@ -70,7 +83,54 @@ public class WalkRoutePayloadService {
 			estimatedTimeMinute,
 			badges,
 			geometry,
-			List.of(toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry, steps)));
+			List.of(
+				toWalkOnlyLeg(distanceMeter, durationSecond, estimatedTimeMinute, geometry, guidanceEvents, badges)));
+	}
+
+	public RouteLegResponse toWalkLeg(
+		int sequence,
+		RouteLegRole role,
+		String instruction,
+		GraphHopperRoutePath path) {
+		return toWalkLeg(sequence, role, instruction, path, null);
+	}
+
+	public RouteLegResponse toWalkLeg(
+		int sequence,
+		RouteLegRole role,
+		String instruction,
+		GraphHopperRoutePath path,
+		RouteGuidanceEventType destinationEventType) {
+		return toWalkLeg(sequence, role, instruction, path, null, destinationEventType);
+	}
+
+	public RouteLegResponse toWalkLeg(
+		int sequence,
+		RouteLegRole role,
+		String instruction,
+		GraphHopperRoutePath path,
+		RouteGuidanceEventType startEventType,
+		RouteGuidanceEventType destinationEventType) {
+		String geometry = toLineString(path.coordinates());
+		int durationSecond = durationSecond(path.timeMs());
+		int estimatedTimeMinute = estimatedTimeMinute(durationSecond);
+		BigDecimal distanceMeter = scaleDistance(path.distanceMeter());
+		return new RouteLegResponse(
+			sequence,
+			TransportMode.WALK,
+			role,
+			instruction,
+			distanceMeter,
+			durationSecond,
+			estimatedTimeMinute,
+			geometry,
+			toGuidanceEvents(path, distanceMeter, durationSecond, startEventType, destinationEventType),
+			null,
+			List.of(),
+			null,
+			null,
+			null,
+			badges(path));
 	}
 
 	private RouteLegResponse toWalkOnlyLeg(
@@ -78,7 +138,8 @@ public class WalkRoutePayloadService {
 		int durationSecond,
 		int estimatedTimeMinute,
 		String geometry,
-		List<RouteStepResponse> steps) {
+		List<RouteGuidanceEventResponse> guidanceEvents,
+		List<RouteBadge> badges) {
 		return new RouteLegResponse(
 			1,
 			TransportMode.WALK,
@@ -88,123 +149,248 @@ public class WalkRoutePayloadService {
 			durationSecond,
 			estimatedTimeMinute,
 			geometry,
-			steps);
+			guidanceEvents,
+			null,
+			List.of(),
+			null,
+			null,
+			null,
+			badges);
 	}
 
-	private List<RouteStepResponse> toSteps(GraphHopperRoutePath path, BigDecimal totalDistanceMeter,
-		int totalDurationSecond) {
-		List<GraphHopperCoordinate> coordinates = path.coordinates();
-		if (coordinates.size() < 2) {
-			return List.of(toStep(path, 1, 0, coordinates.size() - 1, totalDistanceMeter, totalDurationSecond));
-		}
-		List<Integer> splitPoints = splitPoints(path);
-		BigDecimal routeLength = routeLength(coordinates);
-		List<RouteStepResponse> steps = new ArrayList<>();
-		BigDecimal accumulatedDistance = BigDecimal.ZERO.setScale(2);
-		int accumulatedDuration = 0;
-		for (int index = 0; index < splitPoints.size() - 1; index++) {
-			int fromIndex = splitPoints.get(index);
-			int toIndex = splitPoints.get(index + 1);
-			boolean isLastStep = index == splitPoints.size() - 2;
-			BigDecimal stepDistance = stepDistance(
-				totalDistanceMeter,
-				coordinates,
-				fromIndex,
-				toIndex,
-				routeLength,
-				accumulatedDistance,
-				isLastStep);
-			int stepDuration = stepDuration(
-				totalDurationSecond,
-				coordinates,
-				fromIndex,
-				toIndex,
-				routeLength,
-				accumulatedDuration,
-				isLastStep);
-			accumulatedDistance = accumulatedDistance.add(stepDistance);
-			accumulatedDuration += stepDuration;
-			steps.add(toStep(path, index + 1, fromIndex, toIndex, stepDistance, stepDuration));
-		}
-		return steps;
-	}
-
-	private RouteStepResponse toStep(
+	private List<RouteGuidanceEventResponse> toGuidanceEvents(
 		GraphHopperRoutePath path,
-		int sequence,
-		int fromIndex,
-		int toIndex,
-		BigDecimal distanceMeter,
-		int durationSecond) {
-		GraphHopperRoutePath stepPath = slice(path, fromIndex, toIndex);
-		Optional<RouteTurnDirection> turnDirection = turnDirection(path, fromIndex);
-		RouteStepAlertResponse alert = representativeAlert(path, fromIndex, toIndex, distanceMeter)
-			.map(candidate -> new RouteStepAlertResponse(candidate.type(), candidate.distanceMeter()))
-			.orElse(null);
-		return new RouteStepResponse(
-			sequence,
-			instruction(turnDirection),
-			distanceMeter,
-			durationSecond,
-			toLineString(stepPath.coordinates()),
-			alert);
+		BigDecimal totalDistanceMeter,
+		int totalDurationSecond,
+		RouteGuidanceEventType startEventType,
+		RouteGuidanceEventType destinationEventType) {
+		List<GraphHopperCoordinate> coordinates = path.coordinates();
+		if (coordinates.isEmpty()) {
+			return List.of();
+		}
+		BigDecimal routeLength = routeLength(coordinates);
+		List<GuidanceEventCandidate> candidates = new ArrayList<>();
+		if (startEventType != null) {
+			candidates.add(new GuidanceEventCandidate(
+				startEventType,
+				0,
+				BigDecimal.ZERO.setScale(2),
+				0,
+				-1));
+		}
+		candidates.addAll(turnEventCandidates(path, totalDistanceMeter, routeLength));
+		candidates.addAll(accessibilityEventCandidates(path, totalDistanceMeter, routeLength));
+		if (destinationEventType != null && coordinates.size() > 1) {
+			int destinationIndex = coordinates.size() - 1;
+			candidates.add(new GuidanceEventCandidate(
+				destinationEventType,
+				destinationIndex,
+				scaledDistanceBetween(coordinates, 0, destinationIndex, totalDistanceMeter, routeLength),
+				0,
+				2));
+		}
+
+		List<GuidanceEventCandidate> sorted = candidates.stream()
+			.sorted(Comparator
+				.comparing(GuidanceEventCandidate::distanceFromLegStartMeter)
+				.thenComparingInt(GuidanceEventCandidate::kindOrder)
+				.thenComparingInt(GuidanceEventCandidate::priority)
+				.thenComparing(candidate -> candidate.type().name()))
+			.toList();
+
+		List<RouteGuidanceEventResponse> events = new ArrayList<>();
+		for (int index = 0; index < sorted.size(); index++) {
+			GuidanceEventCandidate candidate = sorted.get(index);
+			events.add(new RouteGuidanceEventResponse(
+				index + 1,
+				candidate.type(),
+				candidate.distanceFromLegStartMeter(),
+				durationFromLegStartSecond(candidate.distanceFromLegStartMeter(), totalDistanceMeter,
+					totalDurationSecond),
+				toPoint(coordinates.get(candidate.coordinateIndex()))));
+		}
+		return events;
 	}
 
-	private String instruction(Optional<RouteTurnDirection> turnDirection) {
-		return turnDirection
-			.map(RouteTurnDirection::instruction)
-			.orElse("직진하세요.");
-	}
-
-	private List<Integer> splitPoints(GraphHopperRoutePath path) {
-		int lastCoordinateIndex = path.coordinates().size() - 1;
-		SortedSet<Integer> splitPoints = new TreeSet<>();
-		splitPoints.add(0);
-		splitPoints.add(lastCoordinateIndex);
-		path.details().values()
-			.stream()
-			.flatMap(List::stream)
-			.forEach(detail -> {
-				addSplitPoint(splitPoints, detail.fromIndex(), lastCoordinateIndex);
-				addSplitPoint(splitPoints, detail.toIndex(), lastCoordinateIndex);
-			});
-		for (int index = 1; index < lastCoordinateIndex; index++) {
-			if (turnDirection(path, index).isPresent()) {
-				splitPoints.add(index);
+	private List<GuidanceEventCandidate> turnEventCandidates(
+		GraphHopperRoutePath path,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		List<GraphHopperCoordinate> coordinates = path.coordinates();
+		List<GuidanceEventCandidate> events = new ArrayList<>();
+		for (int index = 1; index < coordinates.size() - 1; index++) {
+			Optional<RouteTurnDirection> direction = turnDirection(path, index);
+			if (direction.isPresent()) {
+				events.add(new GuidanceEventCandidate(
+					turnEventType(direction.get()),
+					index,
+					scaledDistanceBetween(coordinates, 0, index, totalDistanceMeter, routeLength),
+					0,
+					0));
 			}
 		}
-		return new ArrayList<>(splitPoints);
+		return suppressShortTurnZigzags(events);
 	}
 
-	private void addSplitPoint(SortedSet<Integer> splitPoints, int index, int lastCoordinateIndex) {
-		if (index > 0 && index < lastCoordinateIndex) {
-			splitPoints.add(index);
+	private List<GuidanceEventCandidate> suppressShortTurnZigzags(List<GuidanceEventCandidate> events) {
+		if (events.size() < 2) {
+			return events;
 		}
+		Set<Integer> suppressedIndexes = new LinkedHashSet<>();
+		for (int index = 0; index < events.size() - 1; index++) {
+			GuidanceEventCandidate current = events.get(index);
+			GuidanceEventCandidate next = events.get(index + 1);
+			if (isTurn(current) && isTurn(next)
+				&& next.distanceFromLegStartMeter()
+					.subtract(current.distanceFromLegStartMeter())
+					.abs()
+					.compareTo(TURN_ZIGZAG_SUPPRESSION_METER) <= 0) {
+				suppressedIndexes.add(index);
+				suppressedIndexes.add(index + 1);
+			}
+		}
+		List<GuidanceEventCandidate> filtered = new ArrayList<>();
+		for (int index = 0; index < events.size(); index++) {
+			if (!suppressedIndexes.contains(index)) {
+				filtered.add(events.get(index));
+			}
+		}
+		return filtered;
 	}
 
-	private GraphHopperRoutePath slice(GraphHopperRoutePath path, int fromIndex, int toIndex) {
-		int normalizedFrom = Math.max(0, fromIndex);
-		int normalizedTo = Math.min(path.coordinates().size() - 1, Math.max(toIndex, normalizedFrom));
-		List<GraphHopperCoordinate> coordinates = path.coordinates().subList(normalizedFrom, normalizedTo + 1);
-		return new GraphHopperRoutePath(
-			BigDecimal.ZERO,
-			0,
-			coordinates,
-			path.details()
-				.entrySet()
-				.stream()
-				.collect(Collectors.toMap(
-					java.util.Map.Entry::getKey,
-					entry -> overlappingDetails(entry.getValue(), normalizedFrom, normalizedTo))));
+	private boolean isTurn(GuidanceEventCandidate candidate) {
+		return candidate.type() == RouteGuidanceEventType.TURN_LEFT
+			|| candidate.type() == RouteGuidanceEventType.TURN_RIGHT;
 	}
 
-	private List<GraphHopperPathDetail> overlappingDetails(
-		List<GraphHopperPathDetail> details,
+	private RouteGuidanceEventType turnEventType(RouteTurnDirection direction) {
+		return switch (direction) {
+			case LEFT -> RouteGuidanceEventType.TURN_LEFT;
+			case RIGHT -> RouteGuidanceEventType.TURN_RIGHT;
+		};
+	}
+
+	private List<GuidanceEventCandidate> accessibilityEventCandidates(
+		GraphHopperRoutePath path,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		List<GuidanceEventCandidate> candidates = new ArrayList<>();
+		candidates.addAll(crosswalkEventCandidates(path, totalDistanceMeter, routeLength));
+		ALERT_RULES
+			.forEach(rule -> candidates.addAll(alertEventCandidates(path, rule, totalDistanceMeter, routeLength)));
+
+		Map<Integer, GuidanceEventCandidate> representativeByIndex = new LinkedHashMap<>();
+		candidates.stream()
+			.sorted(Comparator
+				.comparingInt(GuidanceEventCandidate::priority)
+				.thenComparing(GuidanceEventCandidate::distanceFromLegStartMeter))
+			.forEach(candidate -> representativeByIndex.putIfAbsent(candidate.coordinateIndex(), candidate));
+		return new ArrayList<>(representativeByIndex.values());
+	}
+
+	private List<GuidanceEventCandidate> crosswalkEventCandidates(
+		GraphHopperRoutePath path,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		return path.details()
+			.getOrDefault("segment_type", List.of())
+			.stream()
+			.filter(detail -> "CROSS_WALK".equals(detail.value()))
+			.flatMap(
+				detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
+					.map(distanceMeter -> new GuidanceEventCandidate(
+						crosswalkEventType(path, detail),
+						detail.fromIndex(),
+						distanceMeter,
+						crosswalkPriority(path, detail),
+						1))
+					.stream())
+			.toList();
+	}
+
+	private RouteGuidanceEventType crosswalkEventType(
+		GraphHopperRoutePath path,
+		GraphHopperPathDetail crosswalkDetail) {
+		boolean hasSignal = hasOverlappingDetailValue(
+			path,
+			"signal_state",
+			"YES",
+			crosswalkDetail,
+			crosswalkDetail.fromIndex(),
+			crosswalkDetail.toIndex());
+		boolean hasAudioSignal = hasOverlappingDetailValue(
+			path,
+			"audio_signal_state",
+			"YES",
+			crosswalkDetail,
+			crosswalkDetail.fromIndex(),
+			crosswalkDetail.toIndex());
+		if (hasSignal && hasAudioSignal) {
+			return RouteGuidanceEventType.CROSSWALK_AUDIO;
+		}
+		if (hasSignal) {
+			return RouteGuidanceEventType.CROSSWALK_SIGNAL;
+		}
+		return RouteGuidanceEventType.CROSSWALK;
+	}
+
+	private int crosswalkPriority(
+		GraphHopperRoutePath path,
+		GraphHopperPathDetail crosswalkDetail) {
+		return switch (crosswalkEventType(path, crosswalkDetail)) {
+			case CROSSWALK_AUDIO -> 6;
+			case CROSSWALK_SIGNAL -> 7;
+			case CROSSWALK -> 8;
+			default -> throw new IllegalStateException("unexpected crosswalk event type");
+		};
+	}
+
+	private List<GuidanceEventCandidate> alertEventCandidates(
+		GraphHopperRoutePath path,
+		AlertRule rule,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		return path.details()
+			.getOrDefault(rule.detailName(), List.of())
+			.stream()
+			.filter(detail -> rule.expectedValues().contains(detail.value()))
+			.flatMap(
+				detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
+					.map(distanceMeter -> new GuidanceEventCandidate(
+						rule.type(),
+						detail.fromIndex(),
+						distanceMeter,
+						rule.priority(),
+						1))
+					.stream())
+			.toList();
+	}
+
+	private Optional<BigDecimal> eventDistanceMeter(
+		List<GraphHopperCoordinate> coordinates,
+		int eventIndex,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		if (eventIndex < 0 || eventIndex >= coordinates.size()) {
+			return Optional.empty();
+		}
+		return Optional.of(scaledDistanceBetween(coordinates, 0, eventIndex, totalDistanceMeter, routeLength));
+	}
+
+	private boolean hasOverlappingDetailValue(
+		GraphHopperRoutePath path,
+		String detailName,
+		String expectedValue,
+		GraphHopperPathDetail baseDetail,
 		int fromIndex,
 		int toIndex) {
-		return details.stream()
-			.filter(detail -> detail.fromIndex() < toIndex && detail.toIndex() > fromIndex)
-			.toList();
+		int overlapFrom = Math.max(baseDetail.fromIndex(), fromIndex);
+		int overlapTo = Math.min(baseDetail.toIndex(), toIndex);
+		return path.details()
+			.getOrDefault(detailName, List.of())
+			.stream()
+			.anyMatch(detail -> expectedValue.equals(detail.value()) && detail.fromIndex() < overlapTo
+				&& detail.toIndex() > overlapFrom);
 	}
 
 	private Optional<RouteTurnDirection> turnDirection(GraphHopperRoutePath path, int pivotIndex) {
@@ -221,50 +407,32 @@ public class WalkRoutePayloadService {
 		return new Coordinate(coordinate.lng().doubleValue(), coordinate.lat().doubleValue());
 	}
 
-	private BigDecimal stepDistance(
-		BigDecimal totalDistanceMeter,
+	private BigDecimal scaledDistanceBetween(
 		List<GraphHopperCoordinate> coordinates,
 		int fromIndex,
 		int toIndex,
-		BigDecimal routeLength,
-		BigDecimal accumulatedDistance,
-		boolean isLastStep) {
-		if (isLastStep) {
-			return totalDistanceMeter.subtract(accumulatedDistance)
-				.max(BigDecimal.ZERO)
-				.setScale(2, RoundingMode.HALF_UP);
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		if (toIndex <= fromIndex || routeLength.compareTo(BigDecimal.ZERO) == 0) {
+			return BigDecimal.ZERO.setScale(2);
 		}
-		BigDecimal ratio = stepLengthRatio(coordinates, fromIndex, toIndex, routeLength);
+		BigDecimal distance = routeLength(coordinates.subList(fromIndex, toIndex + 1));
+		BigDecimal ratio = distance.divide(routeLength, 8, RoundingMode.HALF_UP);
 		return totalDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
 	}
 
-	private int stepDuration(
-		int totalDurationSecond,
-		List<GraphHopperCoordinate> coordinates,
-		int fromIndex,
-		int toIndex,
-		BigDecimal routeLength,
-		int accumulatedDuration,
-		boolean isLastStep) {
-		if (isLastStep) {
-			return Math.max(1, totalDurationSecond - accumulatedDuration);
+	private int durationFromLegStartSecond(
+		BigDecimal distanceFromLegStartMeter,
+		BigDecimal totalDistanceMeter,
+		int totalDurationSecond) {
+		if (totalDistanceMeter.compareTo(BigDecimal.ZERO) == 0) {
+			return 0;
 		}
-		BigDecimal ratio = stepLengthRatio(coordinates, fromIndex, toIndex, routeLength);
-		return Math.max(1, BigDecimal.valueOf(totalDurationSecond)
-			.multiply(ratio)
+		return BigDecimal.valueOf(totalDurationSecond)
+			.multiply(distanceFromLegStartMeter)
+			.divide(totalDistanceMeter, 8, RoundingMode.HALF_UP)
 			.setScale(0, RoundingMode.HALF_UP)
-			.intValue());
-	}
-
-	private BigDecimal stepLengthRatio(
-		List<GraphHopperCoordinate> coordinates,
-		int fromIndex,
-		int toIndex,
-		BigDecimal routeLength) {
-		if (routeLength.compareTo(BigDecimal.ZERO) == 0) {
-			return BigDecimal.ONE;
-		}
-		return routeLength(coordinates.subList(fromIndex, toIndex + 1)).divide(routeLength, 8, RoundingMode.HALF_UP);
+			.intValue();
 	}
 
 	private BigDecimal routeLength(List<GraphHopperCoordinate> coordinates) {
@@ -290,7 +458,8 @@ public class WalkRoutePayloadService {
 		Set<RouteBadge> badges = new LinkedHashSet<>();
 		if (hasAny(path, "slope_state", "MODERATE", "STEEP", "RISK")) {
 			badges.add(RouteBadge.MIDDLE_SLOPE);
-		} else if (hasAny(path, "slope_state", "FLAT")) {
+		}
+		if (hasAny(path, "slope_state", "FLAT")) {
 			badges.add(RouteBadge.LOW_SLOPE);
 		}
 		if (hasAny(path, "stairs_state", "YES")) {
@@ -305,125 +474,9 @@ public class WalkRoutePayloadService {
 		if (hasAny(path, "surface_state", "UNPAVED")) {
 			badges.add(RouteBadge.UNPAVED);
 		}
-		return new ArrayList<>(badges);
-	}
-
-	private Optional<StepAlertCandidate> representativeAlert(
-		GraphHopperRoutePath path,
-		int fromIndex,
-		int toIndex,
-		BigDecimal stepDistanceMeter) {
-		BigDecimal stepLength = routeLength(path.coordinates().subList(fromIndex, toIndex + 1));
-		return java.util.stream.Stream.concat(
-			crosswalkAlertCandidates(path, fromIndex, toIndex, stepDistanceMeter, stepLength).stream(),
-			ALERT_RULES.stream()
-				.flatMap(rule -> alertCandidates(path, rule, fromIndex, toIndex, stepDistanceMeter, stepLength)
-					.stream()))
-			.min(Comparator
-				.comparingInt(StepAlertCandidate::priority)
-				.thenComparing(StepAlertCandidate::distanceMeter));
-	}
-
-	private List<StepAlertCandidate> crosswalkAlertCandidates(
-		GraphHopperRoutePath path,
-		int fromIndex,
-		int toIndex,
-		BigDecimal stepDistanceMeter,
-		BigDecimal stepLength) {
-		return path.details()
-			.getOrDefault("segment_type", List.of())
-			.stream()
-			.filter(detail -> "CROSS_WALK".equals(detail.value()))
-			.filter(detail -> isOverlapping(detail, fromIndex, toIndex))
-			.map(detail -> new StepAlertCandidate(
-				crosswalkAlertType(path, detail, fromIndex, toIndex),
-				relativeDistanceMeter(path.coordinates(), fromIndex, toIndex, detail.fromIndex(), stepDistanceMeter,
-					stepLength),
-				crosswalkPriority(path, detail, fromIndex, toIndex)))
+		return BADGE_PRIORITY.stream()
+			.filter(badges::contains)
 			.toList();
-	}
-
-	private RouteStepAlertType crosswalkAlertType(
-		GraphHopperRoutePath path,
-		GraphHopperPathDetail crosswalkDetail,
-		int fromIndex,
-		int toIndex) {
-		if (hasOverlappingDetailValue(path, "audio_signal_state", "YES", crosswalkDetail, fromIndex, toIndex)) {
-			return RouteStepAlertType.CROSSWALK_AUDIO;
-		}
-		if (hasOverlappingDetailValue(path, "signal_state", "YES", crosswalkDetail, fromIndex, toIndex)) {
-			return RouteStepAlertType.CROSSWALK_SIGNAL;
-		}
-		return RouteStepAlertType.CROSSWALK;
-	}
-
-	private int crosswalkPriority(
-		GraphHopperRoutePath path,
-		GraphHopperPathDetail crosswalkDetail,
-		int fromIndex,
-		int toIndex) {
-		return switch (crosswalkAlertType(path, crosswalkDetail, fromIndex, toIndex)) {
-			case CROSSWALK_AUDIO -> 1;
-			case CROSSWALK_SIGNAL -> 2;
-			case CROSSWALK -> 3;
-			default -> throw new IllegalStateException("예상하지 못한 횡단보도 안내 유형입니다.");
-		};
-	}
-
-	private boolean hasOverlappingDetailValue(
-		GraphHopperRoutePath path,
-		String detailName,
-		String expectedValue,
-		GraphHopperPathDetail baseDetail,
-		int fromIndex,
-		int toIndex) {
-		int overlapFrom = Math.max(baseDetail.fromIndex(), fromIndex);
-		int overlapTo = Math.min(baseDetail.toIndex(), toIndex);
-		return path.details()
-			.getOrDefault(detailName, List.of())
-			.stream()
-			.anyMatch(detail -> expectedValue.equals(detail.value()) && detail.fromIndex() < overlapTo
-				&& detail.toIndex() > overlapFrom);
-	}
-
-	private List<StepAlertCandidate> alertCandidates(
-		GraphHopperRoutePath path,
-		AlertRule rule,
-		int fromIndex,
-		int toIndex,
-		BigDecimal stepDistanceMeter,
-		BigDecimal stepLength) {
-		return path.details()
-			.getOrDefault(rule.detailName(), List.of())
-			.stream()
-			.filter(detail -> rule.expectedValues().contains(detail.value()))
-			.filter(detail -> isOverlapping(detail, fromIndex, toIndex))
-			.map(detail -> new StepAlertCandidate(
-				rule.type(),
-				relativeDistanceMeter(path.coordinates(), fromIndex, toIndex, detail.fromIndex(), stepDistanceMeter,
-					stepLength),
-				rule.priority()))
-			.toList();
-	}
-
-	private boolean isOverlapping(GraphHopperPathDetail detail, int fromIndex, int toIndex) {
-		return detail.fromIndex() < toIndex && detail.toIndex() > fromIndex;
-	}
-
-	private BigDecimal relativeDistanceMeter(
-		List<GraphHopperCoordinate> coordinates,
-		int stepFromIndex,
-		int stepToIndex,
-		int eventFromIndex,
-		BigDecimal stepDistanceMeter,
-		BigDecimal stepLength) {
-		int normalizedEventIndex = Math.min(Math.max(eventFromIndex, stepFromIndex), stepToIndex);
-		if (normalizedEventIndex <= stepFromIndex || stepLength.compareTo(BigDecimal.ZERO) == 0) {
-			return BigDecimal.ZERO.setScale(2);
-		}
-		BigDecimal eventOffsetLength = routeLength(coordinates.subList(stepFromIndex, normalizedEventIndex + 1));
-		BigDecimal ratio = eventOffsetLength.divide(stepLength, 8, RoundingMode.HALF_UP);
-		return stepDistanceMeter.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
 	}
 
 	private boolean hasAny(GraphHopperRoutePath path, String detailName, String... expectedValues) {
@@ -449,6 +502,7 @@ public class WalkRoutePayloadService {
 		return switch (routeOption) {
 			case SAFE -> "안전 경로";
 			case SHORTEST -> "최단 경로";
+			default -> throw new IllegalArgumentException("Unsupported walk route option: " + routeOption);
 		};
 	}
 
@@ -471,16 +525,22 @@ public class WalkRoutePayloadService {
 		return "LINESTRING(" + points + ")";
 	}
 
+	private String toPoint(GraphHopperCoordinate coordinate) {
+		return "POINT(" + coordinate.lng().toPlainString() + " " + coordinate.lat().toPlainString() + ")";
+	}
+
 	private record AlertRule(
-		RouteStepAlertType type,
+		RouteGuidanceEventType type,
 		String detailName,
 		Set<String> expectedValues,
 		int priority) {
 	}
 
-	private record StepAlertCandidate(
-		RouteStepAlertType type,
-		BigDecimal distanceMeter,
-		int priority) {
+	private record GuidanceEventCandidate(
+		RouteGuidanceEventType type,
+		int coordinateIndex,
+		BigDecimal distanceFromLegStartMeter,
+		int priority,
+		int kindOrder) {
 	}
 }

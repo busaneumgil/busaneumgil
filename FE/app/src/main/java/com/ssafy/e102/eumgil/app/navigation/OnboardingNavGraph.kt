@@ -15,16 +15,20 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
+import com.ssafy.e102.eumgil.data.repository.PendingSignupTokenExpiredException
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateRepository
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateResult
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LowVisionFollowUpRoute
+import com.ssafy.e102.eumgil.feature.onboarding.PermissionRoute
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
+import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
+import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.onboardingNavGraph(
@@ -139,13 +143,27 @@ fun NavGraphBuilder.onboardingNavGraph(
                             isLocationTermsAgreed = agreement.isLocationTermsAgreed,
                             isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
                         )
-                        authSignupRepository.completePendingSignup(
-                            requiredTermsAccepted = agreement.isLocationTermsAgreed,
-                        )
                         val completedSettings = settingsRepository.getInitSettings()
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
-                        )
+                        val nextRoute = resolveOnboardingTermsCompletedRoute(completedSettings.selectedPrimaryUserType)
+                        val shouldCompleteSignupBeforeTutorial =
+                            shouldCompletePendingSignupBeforeOnboardingTutorial(
+                                completedSettings.selectedPrimaryUserType,
+                            )
+                        if (shouldCompleteSignupBeforeTutorial || nextRoute != TutorialRoute.Onboarding.route) {
+                            authSignupRepository.completePendingSignup(
+                                requiredTermsAccepted = agreement.isLocationTermsAgreed,
+                            )
+                        }
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                nextRoute,
+                            ),
+                        ) {
+                            launchSingleTop = true
+                            popUpTo(OnboardingRoute.Terms.route) {
+                                inclusive = true
+                            }
+                        }
                     }.onFailure { throwable ->
                         Toast
                             .makeText(
@@ -153,8 +171,22 @@ fun NavGraphBuilder.onboardingNavGraph(
                                 throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        if (throwable is PendingSignupTokenExpiredException) {
+                            navController.navigateToLoginAfterAuthenticationFailure()
+                        }
                     }
                 }
+            },
+        )
+    }
+
+    composable(route = TutorialRoute.Onboarding.route) {
+        MobilityTutorialRoute(
+            entryPoint = TutorialEntryPoint.ONBOARDING,
+            onCompleted = {
+                navController.navigateToCompletedOnboarding(
+                    route = resolveTutorialOnboardingCompletedRoute(),
+                )
             },
         )
     }
@@ -190,9 +222,13 @@ fun NavGraphBuilder.onboardingNavGraph(
                         )
                         authSignupRepository.completePendingSignup(requiredTermsAccepted = true)
                         val completedSettings = settingsRepository.getInitSettings()
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
-                        )
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
+                            ),
+                        ) {
+                            launchSingleTop = true
+                        }
                     }.onFailure { throwable ->
                         Toast
                             .makeText(
@@ -200,11 +236,33 @@ fun NavGraphBuilder.onboardingNavGraph(
                                 throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        if (throwable is PendingSignupTokenExpiredException) {
+                            navController.navigateToLoginAfterAuthenticationFailure()
+                        }
                     }
                 }
             },
             onRequestDetails = { step ->
                 createTermsGuideDetailIntent(step)?.let(context::startActivity)
+            },
+        )
+    }
+
+    composable(
+        route = OnboardingRoute.Permission.route,
+        arguments = listOf(
+            navArgument(OnboardingRoute.Permission.ARG_NEXT_ROUTE) {
+                type = NavType.StringType
+            },
+        ),
+    ) { backStackEntry ->
+        val nextRoute = backStackEntry.arguments
+            ?.getString(OnboardingRoute.Permission.ARG_NEXT_ROUTE)
+            .orEmpty()
+
+        PermissionRoute(
+            onPermissionHandled = {
+                navController.navigateToCompletedOnboarding(route = nextRoute)
             },
         )
     }
@@ -239,6 +297,22 @@ internal fun resolveOnboardingCompletedRoute(selectedPrimaryUserType: String?): 
     } else {
         TopLevelRoute.Map.route
     }
+
+internal fun resolveMobilityOnboardingAfterTermsRoute(): String = TutorialRoute.Onboarding.route
+
+internal fun shouldCompletePendingSignupBeforeOnboardingTutorial(selectedPrimaryUserType: String?): Boolean =
+    selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue
+
+internal fun resolveOnboardingTermsCompletedRoute(selectedPrimaryUserType: String?): String =
+    if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
+        resolveMobilityOnboardingAfterTermsRoute()
+    } else {
+        resolveOnboardingCompletedRoute(selectedPrimaryUserType)
+    }
+
+internal fun resolveTutorialOnboardingCompletedRoute(): String = TopLevelRoute.Map.route
+
+internal fun resolveTutorialGuideCompletedRoute(): String = MyPageSubRoute.AppInfo.route
 
 internal fun resolveProfileEditCompletedRoute(selectedPrimaryUserType: String?): String =
     if (selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {

@@ -43,7 +43,7 @@ android {
 
     defaultConfig {
         applicationId = "com.ssafy.e102.eumgil"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
@@ -109,6 +109,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            // sherpa-onnx AAR 내 .so 중복 방지
+            pickFirsts += listOf("lib/x86/libonnxruntime.so", "lib/x86_64/libonnxruntime.so", "lib/armeabi-v7a/libonnxruntime.so", "lib/arm64-v8a/libonnxruntime.so")
+        }
     }
 }
 
@@ -119,11 +123,15 @@ tasks.register("testClasses") {
 }
 
 dependencies {
+    // sherpa-onnx on-device STT (AAR at app/libs/)
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.activity:activity-compose:1.8.2")

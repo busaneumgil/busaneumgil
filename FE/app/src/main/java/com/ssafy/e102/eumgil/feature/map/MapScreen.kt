@@ -49,6 +49,7 @@ import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
+import com.ssafy.e102.eumgil.feature.map.component.MapCategoryFilterBar
 import com.ssafy.e102.eumgil.feature.map.component.MapFloatingControls
 import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
 import com.ssafy.e102.eumgil.feature.map.component.MapShortcutFilterRow
@@ -125,6 +126,14 @@ fun MapScreen(
                         state = uiState.shortcutFilterState,
                         onChipClick = { key ->
                             onAction(MapUiAction.ShortcutFilterClicked(key))
+                        },
+                    )
+
+                    MapCategoryFilterBar(
+                        state = uiState.markerFilterState,
+                        onReset = { onAction(MapUiAction.MarkerCategoryFilterReset) },
+                        onCategoryToggle = { category ->
+                            onAction(MapUiAction.MarkerCategoryFilterToggled(category))
                         },
                     )
                 }
@@ -778,6 +787,14 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
         integrationState = integrationState,
         cameraTarget = cameraTarget,
         currentLocation = currentLocationMarker,
+        selectedDestinationCoordinate =
+            uiState.selectedDestination?.let { destination ->
+                MapCoordinate(
+                    latitude = destination.latitude,
+                    longitude = destination.longitude,
+                )
+            },
+        selectedDestinationName = uiState.selectedDestination?.name,
         markerOverlayState = uiState.markerOverlayState,
         overlayState =
             createMapMarkerViewportOverlayState(

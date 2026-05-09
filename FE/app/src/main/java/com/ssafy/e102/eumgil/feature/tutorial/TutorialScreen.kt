@@ -709,6 +709,7 @@ internal object TutorialLayoutDefaults {
     const val destinationFiltersAttachToSearch: Boolean = true
     const val destinationSearchShowsMic: Boolean = true
     const val destinationShowsMapPreview: Boolean = false
+    const val reportDescriptionMentionsRouteContribution: Boolean = true
     const val visualPanelWeight: Float = 1f
     const val hasHeroIconBackground: Boolean = false
     const val firstStepWithPreviousAction: Int = 2

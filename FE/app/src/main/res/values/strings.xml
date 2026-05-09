@@ -668,7 +668,7 @@
     <string name="tutorial_route_start_navigation">길 안내 시작</string>
     <string name="tutorial_report_title">제보하기</string>
     <string name="tutorial_report_headline">불편한 길은\n바로 공유하기</string>
-    <string name="tutorial_report_description">간단한 몇 번의 터치로 제보를 진행해요.</string>
+    <string name="tutorial_report_description">몇 번의 터치로 경로 설정에 참여하세요.</string>
     <string name="tutorial_report_item_location_title">불편 지점 선택</string>
     <string name="tutorial_report_item_location_description">위치를 정해요.</string>
     <string name="tutorial_report_item_type_title">상세 유형 기록</string>

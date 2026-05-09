@@ -1,8 +1,11 @@
 package com.ssafy.e102.domain.route.service;
 
+import java.sql.SQLException;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +24,9 @@ import com.ssafy.e102.domain.user.repository.UserRepository;
 @Service
 @Transactional(readOnly = true)
 public class RouteRatingService {
+
+	private static final String POSTGRES_UNIQUE_VIOLATION_SQL_STATE = "23505";
+	private static final String ROUTE_RATING_UNIQUE_CONSTRAINT = "uk_route_ratings_user_route";
 
 	private final RouteRatingRepository routeRatingRepository;
 	private final RouteSessionRepository routeSessionRepository;
@@ -48,7 +54,7 @@ public class RouteRatingService {
 				existingRating.updateScore(request.score(), routeContextJson);
 				return existingRating;
 			})
-			.orElseGet(() -> createRating(userId, request, routeContextJson));
+			.orElseGet(() -> createRatingOrUpdateAfterUniqueConflict(userId, request, routeContextJson));
 		return new RouteRatingResponse(routeRating.getRatingId());
 	}
 
@@ -59,12 +65,60 @@ public class RouteRatingService {
 		return null;
 	}
 
+	private RouteRating createRatingOrUpdateAfterUniqueConflict(
+		UUID userId,
+		RouteRatingRequest request,
+		JsonNode routeContextJson) {
+		try {
+			return createRating(userId, request, routeContextJson);
+		} catch (DataIntegrityViolationException exception) {
+			if (!isRouteRatingUniqueViolation(exception)) {
+				throw exception;
+			}
+			RouteRating existingRating = routeRatingRepository.findByUser_UserIdAndRouteId(userId, request.routeId())
+				.orElseThrow(() -> exception);
+			existingRating.updateScore(request.score(), routeContextJson);
+			return existingRating;
+		}
+	}
+
 	private RouteRating createRating(UUID userId, RouteRatingRequest request, JsonNode routeContextJson) {
 		User user = userRepository.getReferenceById(userId);
-		return routeRatingRepository.save(RouteRating.create(
+		return routeRatingRepository.saveAndFlush(RouteRating.create(
 			user,
 			request.routeId(),
 			request.score(),
 			routeContextJson));
+	}
+
+	private boolean isRouteRatingUniqueViolation(Throwable exception) {
+		Throwable current = exception;
+		while (current != null) {
+			if (current instanceof ConstraintViolationException constraintViolationException) {
+				if (ROUTE_RATING_UNIQUE_CONSTRAINT.equals(constraintViolationException.getConstraintName())
+					&& POSTGRES_UNIQUE_VIOLATION_SQL_STATE.equals(constraintViolationException.getSQLState())) {
+					return true;
+				}
+			}
+			if (current instanceof SQLException sqlException && isRouteRatingUniqueViolation(sqlException)) {
+				return true;
+			}
+			current = current.getCause();
+		}
+		return false;
+	}
+
+	private boolean isRouteRatingUniqueViolation(SQLException exception) {
+		SQLException current = exception;
+		while (current != null) {
+			String message = current.getMessage();
+			if (POSTGRES_UNIQUE_VIOLATION_SQL_STATE.equals(current.getSQLState())
+				&& message != null
+				&& message.contains(ROUTE_RATING_UNIQUE_CONSTRAINT)) {
+				return true;
+			}
+			current = current.getNextException();
+		}
+		return false;
 	}
 }

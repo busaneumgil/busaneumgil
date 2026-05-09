@@ -27,11 +27,14 @@ import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.auth.token.AuthTokenStore;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
+import com.ssafy.e102.domain.route.service.RouteRatingService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
+import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.domain.user.service.UserService;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.domain.user.type.UserRole;
 import com.ssafy.e102.global.security.jwt.JwtTokenProvider;
 
 @SpringBootTest(classes = E102Application.class)
@@ -54,6 +57,9 @@ class SecurityConfigTest {
 	private UserService userService;
 
 	@MockitoBean
+	private UserRepository userRepository;
+
+	@MockitoBean
 	private FavoriteRouteService favoriteRouteService;
 
 	@MockitoBean
@@ -61,6 +67,9 @@ class SecurityConfigTest {
 
 	@MockitoBean
 	private WalkRouteSearchService walkRouteSearchService;
+
+	@MockitoBean
+	private RouteRatingService routeRatingService;
 
 	@Test
 	@DisplayName("소셜 로그인은 인증 없이 접근할 수 있다")
@@ -140,6 +149,23 @@ class SecurityConfigTest {
 	}
 
 	@Test
+	@DisplayName("경로 평가 API는 인증이 필요하다")
+	void routeRatingsRequireAuthentication() throws Exception {
+		mockMvc.perform(post("/route-ratings")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_selected_001",
+				  "score": 5
+				}
+				"""))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
 	@DisplayName("도로 상태 제보 API는 인증이 필요하다")
 	void hazardReportsRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/hazard-reports/me"))
@@ -154,6 +180,7 @@ class SecurityConfigTest {
 	void validAccessTokenCreatesPrincipal() throws Exception {
 		UUID userId = UUID.randomUUID();
 		String accessToken = jwtTokenProvider.createAccessToken(userId);
+		when(userRepository.existsByUserIdAndRole(userId, UserRole.ADMIN)).thenReturn(false);
 		when(userService.getMe(userId))
 			.thenReturn(new UserMeResponse(userId, SocialProvider.KAKAO, PrimaryUserType.LOW_VISION, null));
 

@@ -6,13 +6,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.sql.SQLException;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,7 +62,7 @@ class RouteRatingServiceTest {
 		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_selected_001"))
 			.thenReturn(Optional.empty());
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
-		when(routeRatingRepository.save(org.mockito.ArgumentMatchers.any(RouteRating.class)))
+		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
 			.thenAnswer(invocation -> {
 				RouteRating rating = invocation.getArgument(0);
 				ReflectionTestUtils.setField(rating, "ratingId", 1L);
@@ -69,7 +72,7 @@ class RouteRatingServiceTest {
 		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5));
 
 		ArgumentCaptor<RouteRating> ratingCaptor = ArgumentCaptor.forClass(RouteRating.class);
-		verify(routeRatingRepository).save(ratingCaptor.capture());
+		verify(routeRatingRepository).saveAndFlush(ratingCaptor.capture());
 		assertThat(response.ratingId()).isEqualTo(1L);
 		assertThat(ratingCaptor.getValue().getRouteId()).isEqualTo("rt_selected_001");
 		assertThat(ratingCaptor.getValue().getScore()).isEqualTo((short)5);
@@ -86,7 +89,7 @@ class RouteRatingServiceTest {
 		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_without_session"))
 			.thenReturn(Optional.empty());
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
-		when(routeRatingRepository.save(org.mockito.ArgumentMatchers.any(RouteRating.class)))
+		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
 			.thenAnswer(invocation -> {
 				RouteRating rating = invocation.getArgument(0);
 				ReflectionTestUtils.setField(rating, "ratingId", 2L);
@@ -96,7 +99,7 @@ class RouteRatingServiceTest {
 		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_without_session", 4));
 
 		ArgumentCaptor<RouteRating> ratingCaptor = ArgumentCaptor.forClass(RouteRating.class);
-		verify(routeRatingRepository).save(ratingCaptor.capture());
+		verify(routeRatingRepository).saveAndFlush(ratingCaptor.capture());
 		assertThat(response.ratingId()).isEqualTo(2L);
 		assertThat(ratingCaptor.getValue().getRouteContextJson()).isNull();
 	}
@@ -133,6 +136,57 @@ class RouteRatingServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_ACCESS_DENIED);
+	}
+
+	@Test
+	@DisplayName("동시 중복 저장 unique 충돌은 기존 rating score 갱신으로 흡수한다")
+	void rateUpdatesExistingRatingAfterUniqueConflict() {
+		RouteRating existingRating = RouteRating.create(user(USER_ID), "rt_selected_001", 2, null);
+		ReflectionTestUtils.setField(existingRating, "ratingId", 4L);
+		JsonNode snapshot = snapshot("rt_selected_001");
+		RouteSession routeSession = mock(RouteSession.class);
+		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.empty(), Optional.of(existingRating));
+		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
+		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
+			.thenThrow(routeRatingUniqueViolation());
+
+		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5));
+
+		assertThat(response.ratingId()).isEqualTo(4L);
+		assertThat(existingRating.getScore()).isEqualTo((short)5);
+		assertThat(existingRating.getRouteContextJson()).isEqualTo(snapshot);
+	}
+
+	@Test
+	@DisplayName("route rating unique 충돌이 아니면 DB 예외를 전파한다")
+	void ratePropagatesUnexpectedDataIntegrityViolation() {
+		RouteSession routeSession = mock(RouteSession.class);
+		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot("rt_selected_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(routeRatingRepository.findByUser_UserIdAndRouteId(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.empty());
+		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
+		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
+			.thenThrow(new DataIntegrityViolationException("unknown constraint"));
+
+		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5)))
+			.isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	private DataIntegrityViolationException routeRatingUniqueViolation() {
+		SQLException sqlException = new SQLException(
+			"duplicate key value violates unique constraint \"uk_route_ratings_user_route\"",
+			"23505");
+		ConstraintViolationException constraintViolationException = new ConstraintViolationException(
+			"could not execute statement",
+			sqlException,
+			"uk_route_ratings_user_route");
+		return new DataIntegrityViolationException("duplicate route rating", constraintViolationException);
 	}
 
 	private JsonNode snapshot(String routeId) {

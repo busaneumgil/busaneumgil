@@ -1,10 +1,14 @@
 package com.ssafy.e102.domain.route.service;
 
+import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -20,9 +24,12 @@ import com.ssafy.e102.domain.route.dto.response.TransitArrivalResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitArrivalStatus;
 import com.ssafy.e102.domain.route.dto.response.TransitRefreshResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
+import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
+import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
+import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
@@ -31,20 +38,26 @@ import com.ssafy.e102.global.external.bims.BusanBimsClient;
 @Transactional(readOnly = true)
 public class TransitRefreshService {
 
+	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
+	private static final int DAY_SECONDS = 24 * 60 * 60;
+
 	private final RouteSessionRepository routeSessionRepository;
 	private final ObjectMapper objectMapper;
 	private final BimsArrivalCacheService bimsArrivalCacheService;
 	private final BusanBimsClient busanBimsClient;
+	private final SubwayTimetableRepository subwayTimetableRepository;
 
 	public TransitRefreshService(
 		RouteSessionRepository routeSessionRepository,
 		ObjectMapper objectMapper,
 		BimsArrivalCacheService bimsArrivalCacheService,
-		BusanBimsClient busanBimsClient) {
+		BusanBimsClient busanBimsClient,
+		SubwayTimetableRepository subwayTimetableRepository) {
 		this.routeSessionRepository = routeSessionRepository;
 		this.objectMapper = objectMapper;
 		this.bimsArrivalCacheService = bimsArrivalCacheService;
 		this.busanBimsClient = busanBimsClient;
+		this.subwayTimetableRepository = subwayTimetableRepository;
 	}
 
 	public TransitRefreshResponse refresh(UUID userId, String routeId, TransitRefreshRequest request) {
@@ -55,6 +68,9 @@ public class TransitRefreshService {
 		}
 		if (target.leg().type() == TransportMode.BUS) {
 			return refreshBus(target);
+		}
+		if (target.leg().type() == TransportMode.SUBWAY) {
+			return refreshSubway(target);
 		}
 		return new TransitRefreshResponse(target.leg().type(), TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of());
 	}
@@ -218,6 +234,84 @@ public class TransitRefreshService {
 		}
 		String value = node.get(fieldName).asText();
 		return StringUtils.hasText(value) ? value : null;
+	}
+
+	private TransitRefreshResponse refreshSubway(RefreshTarget target) {
+		String odsayStationId = text(target.metadataLeg(), "odsayStationId");
+		Integer wayCode = integer(target.metadataLeg(), "wayCode");
+		if (!StringUtils.hasText(odsayStationId) || wayCode == null) {
+			return new TransitRefreshResponse(TransportMode.SUBWAY, TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of());
+		}
+		LocalDateTime now = LocalDateTime.now(SEOUL_ZONE_ID);
+		int secondOfDay = now.toLocalTime().toSecondOfDay();
+		SubwayServiceDayType serviceDayType = serviceDayType(now.getDayOfWeek());
+		List<SubwayTimetable> departures = subwayTimetableRepository.findNextDepartures(
+			odsayStationId,
+			serviceDayType,
+			wayCode,
+			secondOfDay,
+			PageRequest.of(0, 2));
+		boolean nextDay = false;
+		if (departures.isEmpty()) {
+			departures = subwayTimetableRepository.findFirstDepartures(
+				odsayStationId,
+				serviceDayType,
+				wayCode,
+				PageRequest.of(0, 2));
+			nextDay = true;
+		}
+		if (departures.isEmpty()) {
+			return new TransitRefreshResponse(TransportMode.SUBWAY, TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of());
+		}
+		boolean isNextDay = nextDay;
+		String routeNo = subwayRouteNo(target);
+		List<TransitArrivalResponse> transits = departures.stream()
+			.map(departure -> new TransitArrivalResponse(
+				routeNo,
+				remainingMinute(secondOfDay, departure.getDepartureSecondOfDay(), isNextDay),
+				null))
+			.toList();
+		return new TransitRefreshResponse(TransportMode.SUBWAY, TransitArrivalStatus.SCHEDULE_BASED, transits);
+	}
+
+	private String subwayRouteNo(RefreshTarget target) {
+		String lineName = text(target.metadataLeg(), "lineName");
+		if (StringUtils.hasText(lineName)) {
+			return lineName;
+		}
+		return target.leg().routeNo();
+	}
+
+	private Integer integer(JsonNode node, String fieldName) {
+		if (node == null || !node.hasNonNull(fieldName)) {
+			return null;
+		}
+		if (node.get(fieldName).canConvertToInt()) {
+			return node.get(fieldName).asInt();
+		}
+		try {
+			return Integer.parseInt(node.get(fieldName).asText());
+		} catch (NumberFormatException exception) {
+			return null;
+		}
+	}
+
+	private int remainingMinute(int nowSecondOfDay, int departureSecondOfDay, boolean nextDay) {
+		int remainSecond = departureSecondOfDay - nowSecondOfDay;
+		if (nextDay || remainSecond < 0) {
+			remainSecond += DAY_SECONDS;
+		}
+		return Math.max(0, (int)Math.ceil(remainSecond / 60.0));
+	}
+
+	private SubwayServiceDayType serviceDayType(DayOfWeek dayOfWeek) {
+		if (dayOfWeek == DayOfWeek.SATURDAY) {
+			return SubwayServiceDayType.SATURDAY;
+		}
+		if (dayOfWeek == DayOfWeek.SUNDAY) {
+			return SubwayServiceDayType.HOLIDAY;
+		}
+		return SubwayServiceDayType.WEEKDAY;
 	}
 
 	private record RefreshTarget(

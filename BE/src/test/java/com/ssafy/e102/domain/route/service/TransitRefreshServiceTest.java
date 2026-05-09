@@ -2,12 +2,17 @@ package com.ssafy.e102.domain.route.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,6 +21,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Pageable;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,11 +31,14 @@ import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitArrivalStatus;
 import com.ssafy.e102.domain.route.dto.response.TransitRefreshResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
+import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
+import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
@@ -42,6 +51,7 @@ class TransitRefreshServiceTest {
 	private ObjectMapper objectMapper;
 	private BimsArrivalCacheService bimsArrivalCacheService;
 	private BusanBimsClient busanBimsClient;
+	private SubwayTimetableRepository subwayTimetableRepository;
 	private TransitRefreshService service;
 
 	@BeforeEach
@@ -50,8 +60,9 @@ class TransitRefreshServiceTest {
 		objectMapper = new ObjectMapper();
 		bimsArrivalCacheService = mock(BimsArrivalCacheService.class);
 		busanBimsClient = mock(BusanBimsClient.class);
+		subwayTimetableRepository = mock(SubwayTimetableRepository.class);
 		service = new TransitRefreshService(routeSessionRepository, objectMapper, bimsArrivalCacheService,
-			busanBimsClient);
+			busanBimsClient, subwayTimetableRepository);
 	}
 
 	@Test
@@ -174,6 +185,55 @@ class TransitRefreshServiceTest {
 		assertThat(response.type()).isEqualTo(TransportMode.BUS);
 	}
 
+	@Test
+	@DisplayName("SUBWAY leg는 시간표 기반으로 다음 출발 정보를 반환한다")
+	void refreshSubwayUsesTimetable() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.SUBWAY), subwayMetadata());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(subwayTimetableRepository.findNextDepartures(
+			eq("301"),
+			any(SubwayServiceDayType.class),
+			eq(1),
+			anyInt(),
+			any(Pageable.class)))
+			.thenReturn(List.of(subwayTimetable(600)));
+
+		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
+
+		assertThat(response.type()).isEqualTo(TransportMode.SUBWAY);
+		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.SCHEDULE_BASED);
+		assertThat(response.transits()).hasSize(1);
+		assertThat(response.transits().get(0).routeNo()).isEqualTo("1호선");
+		assertThat(response.transits().get(0).remainingMinute()).isPositive();
+	}
+
+	@Test
+	@DisplayName("SUBWAY 시간표가 없으면 ARRIVAL_UNKNOWN을 반환한다")
+	void refreshSubwayReturnsUnknownWhenTimetableIsMissing() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.SUBWAY), subwayMetadata());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(subwayTimetableRepository.findNextDepartures(
+			eq("301"),
+			any(SubwayServiceDayType.class),
+			eq(1),
+			anyInt(),
+			any(Pageable.class)))
+			.thenReturn(List.of());
+		when(subwayTimetableRepository.findFirstDepartures(
+			eq("301"),
+			any(SubwayServiceDayType.class),
+			eq(1),
+			any(Pageable.class)))
+			.thenReturn(List.of());
+
+		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
+
+		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.ARRIVAL_UNKNOWN);
+		assertThat(response.transits()).isEmpty();
+	}
+
 	private RouteSession routeSession(RouteSummaryResponse route, JsonNode backendMetadata) {
 		JsonNode snapshot = objectMapper.valueToTree(route);
 		if (backendMetadata != null && snapshot instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
@@ -215,7 +275,11 @@ class TransitRefreshServiceTest {
 			5,
 			"LINESTRING(128.936 35.12, 128.956 35.14)",
 			List.of(),
-			type == TransportMode.BUS ? "100" : null,
+			switch (type) {
+				case BUS -> "100";
+				case SUBWAY -> "1호선";
+				default -> null;
+			},
 			List.of(),
 			null,
 			null,
@@ -234,5 +298,27 @@ class TransitRefreshServiceTest {
 				"passStops", List.of(Map.of(
 					"localStationID", "507700000",
 					"stationName", "부산정류장"))))));
+	}
+
+	private JsonNode subwayMetadata() {
+		return objectMapper.valueToTree(Map.of(
+			"mapObj", "map-object",
+			"legs", List.of(Map.of(
+				"type", "SUBWAY",
+				"odsayStationId", "301",
+				"wayCode", 1,
+				"lineName", "1호선"))));
+	}
+
+	private SubwayTimetable subwayTimetable(int offsetSecond) {
+		int secondOfDay = LocalDateTime.now(ZoneId.of("Asia/Seoul")).toLocalTime().toSecondOfDay();
+		int departureSecondOfDay = (secondOfDay + offsetSecond) % (24 * 60 * 60);
+		return SubwayTimetable.create(
+			"301",
+			SubwayServiceDayType.WEEKDAY,
+			1,
+			"14:30",
+			departureSecondOfDay,
+			"다대포해수욕장");
 	}
 }

@@ -21,14 +21,10 @@ import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteIdResponse;
 import com.ssafy.e102.domain.bookmark.dto.response.FavoriteRouteListResponse;
 import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
 import com.ssafy.e102.global.response.ApiResponse;
-import com.ssafy.e102.global.response.ErrorResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -48,18 +44,6 @@ public class FavoriteRouteController {
 	private final FavoriteRouteService favoriteRouteService;
 
 	@Operation(summary = "경로 북마크 목록 조회", description = "로그인 사용자의 경로 북마크 목록을 커서 기반으로 조회합니다.")
-	@ApiResponses({
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "400",
-			description = "cursor/size 형식 또는 범위 오류",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "401",
-			description = "토큰 누락/만료",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class)))
-	})
 	@GetMapping
 	public ApiResponse<FavoriteRouteListResponse> getFavoriteRoutes(
 		@Parameter(hidden = true) @AuthenticationPrincipal
@@ -72,28 +56,6 @@ public class FavoriteRouteController {
 	}
 
 	@Operation(summary = "경로 북마크 상세 조회", description = "로그인 사용자의 특정 경로 북마크 상세 정보를 조회합니다.")
-	@ApiResponses({
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "400",
-			description = "path variable 형식 오류",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "401",
-			description = "토큰 누락/만료",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "403",
-			description = "다른 사용자의 경로 북마크 조회 시도",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "404",
-			description = "경로 북마크가 존재하지 않음",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class)))
-	})
 	@GetMapping("/{favRouteId}")
 	public ApiResponse<FavoriteRouteDetailResponse> getFavoriteRouteDetail(
 		@Parameter(hidden = true) @AuthenticationPrincipal
@@ -104,28 +66,6 @@ public class FavoriteRouteController {
 	}
 
 	@Operation(summary = "경로 북마크 저장", description = "로그인 사용자의 경로 북마크를 저장합니다.")
-	@ApiResponses({
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "400",
-			description = "요청값 검증 실패 또는 경로 북마크 생성 규칙 위반",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "401",
-			description = "토큰 누락/만료",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "403",
-			description = "다른 사용자의 route session 저장 시도",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "404",
-			description = "route session 없음 또는 snapshot 복구 불가",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class)))
-	})
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<FavoriteRouteIdResponse> createFavoriteRoute(
@@ -137,28 +77,6 @@ public class FavoriteRouteController {
 	}
 
 	@Operation(summary = "경로 북마크 수정", description = "로그인 사용자의 경로 북마크 정보를 수정합니다.")
-	@ApiResponses({
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "400",
-			description = "요청값 검증 실패 또는 경로 북마크 수정 규칙 위반",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "401",
-			description = "토큰 누락/만료",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "403",
-			description = "다른 사용자의 경로 북마크 수정 시도",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "404",
-			description = "경로 북마크가 존재하지 않음",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class)))
-	})
 	@PatchMapping("/{favRouteId}")
 	public ApiResponse<FavoriteRouteIdResponse> updateFavoriteRoute(
 		@Parameter(hidden = true) @AuthenticationPrincipal
@@ -171,23 +89,6 @@ public class FavoriteRouteController {
 	}
 
 	@Operation(summary = "경로 북마크 삭제", description = "로그인 사용자의 경로 북마크를 삭제합니다.")
-	@ApiResponses({
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "401",
-			description = "토큰 누락/만료",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "403",
-			description = "다른 사용자의 경로 북마크 삭제 시도",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class))),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(
-			responseCode = "404",
-			description = "경로 북마크가 존재하지 않음",
-			content = @Content(
-				schema = @Schema(implementation = ErrorResponse.class)))
-	})
 	@DeleteMapping("/{favRouteId}")
 	public ApiResponse<Void> deleteFavoriteRoute(
 		@Parameter(hidden = true) @AuthenticationPrincipal

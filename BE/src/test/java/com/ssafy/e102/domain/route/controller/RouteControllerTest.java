@@ -28,6 +28,9 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
+import com.ssafy.e102.domain.route.dto.response.RerouteType;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
@@ -36,6 +39,7 @@ import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.exception.RouteExceptionHandler;
+import com.ssafy.e102.domain.route.service.RerouteService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.domain.route.type.RouteBadge;
@@ -49,14 +53,16 @@ class RouteControllerTest {
 
 	private WalkRouteSearchService walkRouteSearchService;
 	private TransitRouteSearchService transitRouteSearchService;
+	private RerouteService rerouteService;
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
 		walkRouteSearchService = Mockito.mock(WalkRouteSearchService.class);
 		transitRouteSearchService = Mockito.mock(TransitRouteSearchService.class);
+		rerouteService = Mockito.mock(RerouteService.class);
 		mockMvc = MockMvcBuilders
-			.standaloneSetup(new RouteController(walkRouteSearchService, transitRouteSearchService))
+			.standaloneSetup(new RouteController(walkRouteSearchService, transitRouteSearchService, rerouteService))
 			.setCustomArgumentResolvers(new AuthPrincipalArgumentResolver())
 			.setControllerAdvice(new RouteExceptionHandler(), new GlobalExceptionHandler())
 			.build();
@@ -158,6 +164,54 @@ class RouteControllerTest {
 	@DisplayName("추천 경로 없음은 RT4040 에러 응답으로 매핑한다")
 	void searchWalkRoutesMapsRouteNotFoundError() throws Exception {
 		assertRouteError(RouteErrorCode.ROUTE_NOT_FOUND, 404, "RT4040", "탐색 가능한 경로가 없습니다.");
+	}
+
+	@Test
+	@DisplayName("reroute 요청은 인증 사용자와 routeId/currentPoint body만 service로 넘긴다")
+	void rerouteUsesAuthenticatedUser() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
+			.thenReturn(new RerouteResponse(RerouteType.NO_REROUTE_NEEDED, null));
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": 35.12, "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.rerouteType").value("NO_REROUTE_NEEDED"))
+			.andExpect(jsonPath("$.data.route").doesNotExist());
+
+		verify(rerouteService).reroute(eq(userId), any(RerouteRequest.class));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute 요청값 오류는 RT4001로 반환한다")
+	void rerouteMapsInvalidRerouteRequest() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
+			.thenThrow(new RouteException(RouteErrorCode.INVALID_REROUTE_REQUEST));
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "currentPoint": {"lat": 35.12, "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4001"))
+			.andExpect(jsonPath("$.message").value("재탐색 요청값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
 	}
 
 	@Test

@@ -8,10 +8,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -241,7 +243,7 @@ class RouteSelectServiceTest {
 		RouteSummaryResponse route = transitRoute("rt_selected_001");
 		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
 			.thenReturn(route);
-		org.mockito.Mockito.doThrow(new DataIntegrityViolationException("duplicate active route"))
+		org.mockito.Mockito.doThrow(activeRouteUniqueViolation())
 			.when(routeSessionCommandService)
 			.saveActiveSessionIfAbsent(
 				org.mockito.ArgumentMatchers.eq(USER_ID),
@@ -256,11 +258,11 @@ class RouteSelectServiceTest {
 
 	@Test
 	@DisplayName("ACTIVE unique 제약 충돌 후 세션이 없으면 DB 예외를 전파한다")
-	void selectPropagatesUniqueConflictWhenActiveSessionIsMissing() {
+	void selectPropagatesActiveRouteUniqueViolationWhenActiveSessionIsMissing() {
 		RouteSummaryResponse route = transitRoute("rt_selected_001");
 		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
 			.thenReturn(route);
-		org.mockito.Mockito.doThrow(new DataIntegrityViolationException("unknown constraint"))
+		org.mockito.Mockito.doThrow(activeRouteUniqueViolation())
 			.when(routeSessionCommandService)
 			.saveActiveSessionIfAbsent(
 				org.mockito.ArgumentMatchers.eq(USER_ID),
@@ -272,6 +274,37 @@ class RouteSelectServiceTest {
 
 		assertThatThrownBy(() -> service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test")))
 			.isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	@Test
+	@DisplayName("ACTIVE unique 제약 충돌이 아니면 세션이 확인되어도 DB 예외를 전파한다")
+	void selectPropagatesDataIntegrityViolationWhenConstraintIsNotActiveRouteUnique() {
+		RouteSummaryResponse route = transitRoute("rt_selected_001");
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
+			.thenReturn(route);
+		org.mockito.Mockito.doThrow(new DataIntegrityViolationException("unknown constraint"))
+			.when(routeSessionCommandService)
+			.saveActiveSessionIfAbsent(
+				org.mockito.ArgumentMatchers.eq(USER_ID),
+				org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+				org.mockito.ArgumentMatchers.any(Point.class),
+				org.mockito.ArgumentMatchers.any(Point.class),
+				org.mockito.ArgumentMatchers.any(JsonNode.class));
+		when(routeSessionCommandService.hasActiveSession(USER_ID, "rt_selected_001")).thenReturn(true);
+
+		assertThatThrownBy(() -> service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test")))
+			.isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	private DataIntegrityViolationException activeRouteUniqueViolation() {
+		SQLException sqlException = new SQLException(
+			"duplicate key value violates unique constraint \"uk_route_sessions_user_active_route\"",
+			"23505");
+		ConstraintViolationException constraintViolationException = new ConstraintViolationException(
+			"could not execute statement",
+			sqlException,
+			"uk_route_sessions_user_active_route");
+		return new DataIntegrityViolationException("duplicate active route", constraintViolationException);
 	}
 
 	private RouteSummaryResponse transitRoute(String routeId) {

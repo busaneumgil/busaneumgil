@@ -1,7 +1,9 @@
 package com.ssafy.e102.domain.route.service;
 
+import java.sql.SQLException;
 import java.util.UUID;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -28,6 +30,8 @@ import com.ssafy.e102.domain.route.exception.RouteException;
 public class RouteSelectService {
 
 	private static final int SRID = 4326;
+	private static final String POSTGRES_UNIQUE_VIOLATION_SQL_STATE = "23505";
+	private static final String ACTIVE_ROUTE_UNIQUE_CONSTRAINT = "uk_route_sessions_user_active_route";
 
 	private final RouteSearchCacheService routeSearchCacheService;
 	private final RouteSessionCommandService routeSessionCommandService;
@@ -55,7 +59,8 @@ public class RouteSelectService {
 				toPoint(coordinates[coordinates.length - 1]),
 				snapshot(request.searchId(), route));
 		} catch (DataIntegrityViolationException exception) {
-			if (routeSessionCommandService.hasActiveSession(userId, route.routeId())) {
+			if (isActiveRouteUniqueViolation(exception)
+				&& routeSessionCommandService.hasActiveSession(userId, route.routeId())) {
 				return;
 			}
 			throw exception;
@@ -82,6 +87,37 @@ public class RouteSelectService {
 		if (node.isArray()) {
 			node.elements().forEachRemaining(this::removeRemainingMinute);
 		}
+	}
+
+	private boolean isActiveRouteUniqueViolation(Throwable exception) {
+		Throwable current = exception;
+		while (current != null) {
+			if (current instanceof ConstraintViolationException constraintViolationException) {
+				if (ACTIVE_ROUTE_UNIQUE_CONSTRAINT.equals(constraintViolationException.getConstraintName())
+					&& POSTGRES_UNIQUE_VIOLATION_SQL_STATE.equals(constraintViolationException.getSQLState())) {
+					return true;
+				}
+			}
+			if (current instanceof SQLException sqlException && isActiveRouteUniqueViolation(sqlException)) {
+				return true;
+			}
+			current = current.getCause();
+		}
+		return false;
+	}
+
+	private boolean isActiveRouteUniqueViolation(SQLException exception) {
+		SQLException current = exception;
+		while (current != null) {
+			String message = current.getMessage();
+			if (POSTGRES_UNIQUE_VIOLATION_SQL_STATE.equals(current.getSQLState())
+				&& message != null
+				&& message.contains(ACTIVE_ROUTE_UNIQUE_CONSTRAINT)) {
+				return true;
+			}
+			current = current.getNextException();
+		}
+		return false;
 	}
 
 	private Coordinate[] routeCoordinates(RouteSummaryResponse route) {

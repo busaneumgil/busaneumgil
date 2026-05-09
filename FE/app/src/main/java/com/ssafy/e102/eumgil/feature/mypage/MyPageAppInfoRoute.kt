@@ -31,6 +31,7 @@ private const val PRIVACY_POLICY_URL =
 fun MyPageAppInfoRoute(
     onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit,
+    onNavigateToGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -76,9 +77,7 @@ fun MyPageAppInfoRoute(
         uiState = uiState,
         snackbarHostState = snackbarHostState,
         onBackClick = onNavigateBack,
-        onGuideClick = {
-            coroutineScope.launch { snackbarHostState.showSnackbar(preparingMessage) }
-        },
+        onGuideClick = onNavigateToGuide,
         onInquiryClick = {
             coroutineScope.launch { snackbarHostState.showSnackbar(preparingMessage) }
         },

@@ -23,6 +23,11 @@ class TutorialRoutingTest {
     }
 
     @Test
+    fun `app info guide action opens guide tutorial`() {
+        assertEquals(TutorialRoute.Guide.route, resolveAppInfoGuideRoute())
+    }
+
+    @Test
     fun `onboarding completion moves to map`() {
         assertEquals(TopLevelRoute.Map.route, resolveTutorialOnboardingCompletedRoute())
     }

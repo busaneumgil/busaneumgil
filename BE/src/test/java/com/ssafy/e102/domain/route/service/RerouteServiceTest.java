@@ -26,6 +26,7 @@ import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RerouteType;
+import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
@@ -33,6 +34,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
+import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.user.entity.User;
@@ -158,8 +160,13 @@ class RerouteServiceTest {
 	void returnsWalkRepairWhenCurrentPointIsNearRouteGeometry() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		RouteSummaryResponse repairRoute = repairRouteSummary("rt_repair_candidate");
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
 			.thenReturn(Optional.of(routeSession));
+		when(walkRouteSearchService.search(userId, new WalkRouteSearchRequest(
+			new GeoPointRequest(35.1195, 128.9360),
+			new GeoPointRequest(35.12, 128.936))))
+			.thenReturn(new WalkRouteSearchResponse("rs_walk_repair", List.of(repairRoute)));
 
 		RerouteResponse response = service.reroute(
 			userId,
@@ -168,6 +175,13 @@ class RerouteServiceTest {
 		assertThat(response.rerouteType()).isEqualTo(RerouteType.WALK_REPAIR);
 		assertThat(response.route().routeId()).startsWith("rr_repair_");
 		assertThat(response.route().routeId()).isNotEqualTo("rt_001");
+		assertThat(response.route().legs()).hasSize(2);
+		assertThat(response.route().legs().get(0).instruction()).isEqualTo("기존 경로까지 이동하세요.");
+		assertThat(response.route().legs().get(0).geometry()).isEqualTo("LINESTRING(128.936 35.1195, 128.936 35.12)");
+		assertThat(response.route().legs().get(1).sequence()).isEqualTo(2);
+		verify(walkRouteSearchService).search(userId, new WalkRouteSearchRequest(
+			new GeoPointRequest(35.1195, 128.9360),
+			new GeoPointRequest(35.12, 128.936)));
 		assertSavedRerouteSession(response.route().routeId(), 35.1195, 128.9360);
 	}
 
@@ -245,7 +259,39 @@ class RerouteServiceTest {
 			2,
 			List.of(RouteBadge.LOW_SLOPE),
 			"LINESTRING(128.936 35.12, 128.937 35.121)",
-			List.of());
+			List.of(new RouteLegResponse(
+				1,
+				TransportMode.WALK,
+				RouteLegRole.WALK_ONLY,
+				"목적지까지 이동하세요.",
+				BigDecimal.valueOf(120),
+				90,
+				2,
+				"LINESTRING(128.936 35.12, 128.937 35.121)",
+				List.of())));
+	}
+
+	private RouteSummaryResponse repairRouteSummary(String routeId) {
+		return new RouteSummaryResponse(
+			routeId,
+			TransportMode.WALK,
+			RouteOption.SAFE,
+			"안전 경로",
+			BigDecimal.valueOf(55),
+			45,
+			1,
+			List.of(),
+			"LINESTRING(128.936 35.1195, 128.936 35.12)",
+			List.of(new RouteLegResponse(
+				1,
+				TransportMode.WALK,
+				RouteLegRole.WALK_ONLY,
+				"목적지까지 이동하세요.",
+				BigDecimal.valueOf(55),
+				45,
+				1,
+				"LINESTRING(128.936 35.1195, 128.936 35.12)",
+				List.of())));
 	}
 
 	private RouteSession routeSession(RouteSummaryResponse route) {

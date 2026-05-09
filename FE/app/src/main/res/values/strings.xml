@@ -606,4 +606,45 @@
     <string name="low_vision_bookmark_no_address">주소 정보 없음</string>
     <string name="low_vision_bookmark_navigate">길찾기</string>
     <string name="low_vision_bookmark_remove">삭제</string>
+
+    <!-- feature/tutorial mobility-impaired onboarding and guide walkthrough -->
+    <string name="tutorial_action_skip">건너뛰기</string>
+    <string name="tutorial_action_start">시작하기</string>
+    <string name="tutorial_action_close">닫기</string>
+    <string name="tutorial_progress_count">%1$d / %2$d</string>
+    <string name="tutorial_destination_title">목적지 찾기</string>
+    <string name="tutorial_destination_headline">가고 싶은 장소를 검색하고\n주변 접근성 정보를 확인해요</string>
+    <string name="tutorial_destination_description">검색창과 필터로 필요한 장소와 시설을 빠르게 찾아보세요.</string>
+    <string name="tutorial_destination_search_hint">어디로 가시나요?</string>
+    <string name="tutorial_filter_toilet">장애인 화장실</string>
+    <string name="tutorial_filter_elevator">엘리베이터</string>
+    <string name="tutorial_filter_parking">장애인 주차장</string>
+    <string name="tutorial_filter_more">더보기</string>
+    <string name="tutorial_current_location">현 위치</string>
+    <string name="tutorial_route_title">경로 비교하기</string>
+    <string name="tutorial_route_headline">안전한 길과 최단거리를 비교하고\n나에게 맞는 경로를 골라요</string>
+    <string name="tutorial_route_description">예상 시간, 거리, 위험도와 접근성 정보를 함께 확인해보세요.</string>
+    <string name="tutorial_route_recommended">추천 경로</string>
+    <string name="tutorial_route_recommended_time">42분</string>
+    <string name="tutorial_route_recommended_transfer">1회 환승</string>
+    <string name="tutorial_route_efficient">효율적 경로</string>
+    <string name="tutorial_route_efficient_time">51분</string>
+    <string name="tutorial_route_efficient_transfer">2회 환승</string>
+    <string name="tutorial_route_badge_elevator">엘리베이터 있음</string>
+    <string name="tutorial_route_badge_access">출입 가능</string>
+    <string name="tutorial_route_badge_no_step">단차 없음</string>
+    <string name="tutorial_route_badge_plus_two">+2</string>
+    <string name="tutorial_route_badge_plus_one">+1</string>
+    <string name="tutorial_route_start_navigation">길 안내 시작</string>
+    <string name="tutorial_report_title">제보하기</string>
+    <string name="tutorial_report_headline">불편한 길이나 장애물을 발견하면\n제보로 함께 공유해요</string>
+    <string name="tutorial_report_description">하단의 제보 탭에서 위치와 상세 내용을 남길 수 있어요.</string>
+    <string name="tutorial_report_tactile_block">점자블록 문제</string>
+    <string name="tutorial_report_guiding_block">유도블록 문제</string>
+    <string name="tutorial_report_facility_damage">시설 파손/노후</string>
+    <string name="tutorial_report_other">기타 장애물</string>
+    <string name="tutorial_tab_home">홈</string>
+    <string name="tutorial_tab_bookmark">북마크</string>
+    <string name="tutorial_tab_report">제보</string>
+    <string name="tutorial_tab_my_page">마이페이지</string>
 </resources>

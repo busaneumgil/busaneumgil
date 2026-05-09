@@ -30,12 +30,14 @@ class TutorialScreenTest {
         assertEquals(3, TutorialLayoutDefaults.totalStepCount)
         assertEquals(0, TutorialLayoutDefaults.supportingItemCount)
         assertEquals(3, TutorialLayoutDefaults.destinationFilterChipCount)
-        assertEquals(3, TutorialLayoutDefaults.routeAccessibilityChipCount)
+        assertEquals(0, TutorialLayoutDefaults.routeAccessibilityChipCount)
         assertEquals(0, TutorialLayoutDefaults.reportCategoryChipCount)
         assertEquals(false, TutorialLayoutDefaults.showsEmphasisChip)
         assertEquals(true, TutorialLayoutDefaults.usesLayeredFlatIllustration)
         assertEquals(false, TutorialLayoutDefaults.usesIllustrationHalo)
         assertEquals(true, TutorialLayoutDefaults.destinationFiltersAttachToSearch)
+        assertEquals(true, TutorialLayoutDefaults.destinationSearchShowsMic)
+        assertEquals(false, TutorialLayoutDefaults.destinationShowsMapPreview)
     }
 
     @Test

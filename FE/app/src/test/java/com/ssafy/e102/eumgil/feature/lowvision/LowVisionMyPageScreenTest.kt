@@ -11,4 +11,11 @@ class LowVisionMyPageScreenTest {
         assertEquals(1f, LowVisionMyPageLayoutDefaults.actionSectionWeight)
         assertEquals(112.dp, LowVisionMyPageLayoutDefaults.actionMinHeight)
     }
+
+    @Test
+    fun `app info keeps two information panels and one withdrawal action`() {
+        assertEquals(2, LowVisionAppInfoLayoutDefaults.infoPanelCount)
+        assertEquals(1, LowVisionAppInfoLayoutDefaults.withdrawActionCount)
+        assertEquals(112.dp, LowVisionAppInfoLayoutDefaults.withdrawActionMinHeight)
+    }
 }

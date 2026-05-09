@@ -80,7 +80,7 @@ class WalkRouteSearchServiceTest {
 		assertThat(response.routes().get(0).estimatedTimeMinute()).isEqualTo(1);
 		assertThat(response.routes().get(0).geometry())
 			.isEqualTo("LINESTRING(128.936 35.12, 128.8823 35.1315)");
-		assertThat(response.routes().get(0).legs().get(0).steps()).hasSize(1);
+		assertThat(response.routes().get(0).legs().get(0).guidanceEvents()).isEmpty();
 		verify(routeSearchCacheService).save(response);
 		verify(graphHopperSearchService).searchCandidates(
 			startPoint,

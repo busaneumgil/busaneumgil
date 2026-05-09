@@ -17,6 +17,8 @@ class TutorialScreenTest {
         assertEquals(false, TutorialLayoutDefaults.hasHeroIconBackground)
         assertEquals(56.dp, TutorialLayoutDefaults.heroIconSize)
         assertEquals(88.dp, TutorialLayoutDefaults.previousButtonMinWidth)
+        assertEquals(2, TutorialLayoutDefaults.firstStepWithPreviousAction)
+        assertEquals(1f, TutorialLayoutDefaults.panelTouchNavigationZoneWeight, 0f)
     }
 
     @Test

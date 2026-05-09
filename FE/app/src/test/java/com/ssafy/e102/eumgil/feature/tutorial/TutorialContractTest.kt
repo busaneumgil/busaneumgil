@@ -33,6 +33,24 @@ class TutorialContractTest {
     }
 
     @Test
+    fun `tutorial ui state exposes whether panel can move next`() {
+        assertEquals(
+            true,
+            TutorialUiState(
+                step = TutorialStep.DESTINATION,
+                entryPoint = TutorialEntryPoint.ONBOARDING,
+            ).canMoveNext,
+        )
+        assertEquals(
+            false,
+            TutorialUiState(
+                step = TutorialStep.REPORT,
+                entryPoint = TutorialEntryPoint.ONBOARDING,
+            ).canMoveNext,
+        )
+    }
+
+    @Test
     fun `onboarding final action starts the app`() {
         assertEquals(
             R.string.tutorial_action_start,

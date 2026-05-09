@@ -3,12 +3,14 @@ from flask_cors import CORS
 import os
 import time
 from dataclasses import asdict
-from dotenv import load_dotenv
 
-load_dotenv()
+from env_loader import load_runtime_env
+
+
+load_runtime_env()
 
 if not os.getenv("GMS_KEY"):
-    raise EnvironmentError("GMS_KEY 환경변수가 설정되어 있지 않습니다.")
+    raise EnvironmentError("GMS_KEY 환경변수가 설정되어 있지 않습니다. 루트 .env.dev/.env.prod 또는 runtime env를 확인하세요.")
 
 from config import Config
 from utils.logger import get_logger

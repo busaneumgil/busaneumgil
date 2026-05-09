@@ -23,10 +23,13 @@ class TutorialScreenTest {
     }
 
     @Test
-    fun `tutorial keeps a consistent three point explanation structure`() {
+    fun `tutorial keeps concise visual cues while preserving key chips`() {
         assertEquals(3, TutorialLayoutDefaults.totalStepCount)
-        assertEquals(3, TutorialLayoutDefaults.supportingItemCount)
+        assertEquals(2, TutorialLayoutDefaults.supportingItemCount)
         assertEquals(3, TutorialLayoutDefaults.destinationFilterChipCount)
+        assertEquals(3, TutorialLayoutDefaults.routeAccessibilityChipCount)
+        assertEquals(3, TutorialLayoutDefaults.reportCategoryChipCount)
+        assertEquals(false, TutorialLayoutDefaults.showsEmphasisChip)
     }
 
     @Test

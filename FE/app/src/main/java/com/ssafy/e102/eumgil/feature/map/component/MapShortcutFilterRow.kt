@@ -98,7 +98,7 @@ private fun ShortcutFilterChip(
                 .semantics(mergeDescendants = true) {
                     stateDescription = selectionStateDescription
                 },
-        enabled = chip.isEnabled,
+        enabled = true,
         shape = RoundedCornerShape(EumRadius.scaleS),
         color = containerColor,
         border = BorderStroke(1.dp, borderColor),

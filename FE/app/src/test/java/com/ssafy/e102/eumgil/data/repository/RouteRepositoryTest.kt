@@ -9,30 +9,38 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
-import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
-import com.ssafy.e102.eumgil.data.mock.fixture.RouteFixtureSearchPayload
+import com.ssafy.e102.eumgil.data.mock.fixture.MockRouteFixtures
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.route.RouteAlertDto
 import com.ssafy.e102.eumgil.data.route.RouteDto
 import com.ssafy.e102.eumgil.data.route.RouteLegDto
+import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteStepDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitStopDto
-import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RouteRepositoryTest {
     @Test
-    fun `getRouteSearchData returns fixture backed SAFE and SHORTEST routes and caches the result`() =
+    fun `getRouteSearchData returns server backed SAFE and SHORTEST routes and caches the result`() =
         runBlocking {
             val localDataSource = RouteLocalDataSource()
+            var remoteCallCount = 0
             val repository =
                 DefaultRouteRepository(
                     localDataSource = localDataSource,
-                    mockDataSource = RouteMockDataSource(),
+                    remoteDataSource =
+                        remoteDataSource { request ->
+                            remoteCallCount += 1
+                            MockRouteFixtures.searchRoutes(request)
+                        },
                 )
             val query = testRouteQuery()
 
@@ -40,9 +48,9 @@ class RouteRepositoryTest {
             val cachedSearchData = localDataSource.getCachedSearchData(query)
             val cachedRead = repository.getRouteSearchData(query)
 
-            assertEquals(RouteSearchSourceType.MOCK_FIXTURE, searchData.source.type)
-            assertEquals("busan-cityhall-to-station-demo", searchData.source.fixtureId)
-            assertEquals("Busan City Hall to Busan Station demo route", searchData.source.label)
+            assertEquals(RouteSearchSourceType.SERVER_API, searchData.source.type)
+            assertEquals("실시간 경로", searchData.source.label)
+            assertFalse(searchData.source.isFromCache)
             assertEquals("rs_walk_busan_demo", searchData.result.searchId)
             assertEquals(listOf(RouteOption.SAFE, RouteOption.SHORTEST), searchData.result.availableOptions)
             assertEquals(
@@ -57,6 +65,7 @@ class RouteRepositoryTest {
             assertTrue(searchData.primaryRoute?.hasRenderablePreview == true)
             assertTrue(cachedRead.source.isFromCache)
             assertEquals(searchData.result, cachedRead.result)
+            assertEquals(1, remoteCallCount)
         }
 
     @Test
@@ -65,80 +74,72 @@ class RouteRepositoryTest {
             val repository =
                 DefaultRouteRepository(
                     localDataSource = RouteLocalDataSource(),
-                    mockDataSource =
-                        RouteMockDataSource(
-                            fixturePayloadProvider = { request ->
-                                RouteFixtureSearchPayload(
-                                    fixtureId = "custom-invalid-dto-fixture",
-                                    fixtureName = "Invalid DTO fixture",
-                                    request = request,
-                                    response =
-                                        RouteSearchResponseDto(
-                                            searchId = "rs_transit_invalid_fixture",
-                                            routes =
+                    remoteDataSource =
+                        remoteDataSource {
+                            RouteSearchResponseDto(
+                                searchId = "rs_transit_invalid_server_payload",
+                                routes =
+                                    listOf(
+                                        RouteDto(
+                                            routeId = "pt_rt_invalid_server_payload",
+                                            transportMode = "PUBLIC_TRANSIT",
+                                            routeOption = "RECOMMENDED",
+                                            title = " ",
+                                            distanceMeter = -1.0,
+                                            estimatedTimeMinute = null,
+                                            transferCount = 1,
+                                            badges = listOf("UNPAVED"),
+                                            legs =
                                                 listOf(
-                                                    RouteDto(
-                                                        routeId = "pt_rt_invalid_fixture",
-                                                        transportMode = "PUBLIC_TRANSIT",
-                                                        routeOption = "RECOMMENDED",
-                                                        title = " ",
-                                                        distanceMeter = -1.0,
-                                                        estimatedTimeMinute = null,
-                                                        transferCount = 1,
-                                                        badges = listOf("UNPAVED"),
-                                                        legs =
+                                                    RouteLegDto(
+                                                        sequence = 1,
+                                                        type = "WALK",
+                                                        role = "WALK_TO_TRANSIT",
+                                                        instruction = " ",
+                                                        distanceMeter = -10.0,
+                                                        geometry = "POINT(129.0756 35.1796)",
+                                                        steps =
                                                             listOf(
-                                                                RouteLegDto(
-                                                                    sequence = 1,
-                                                                    type = "WALK",
-                                                                    role = "WALK_TO_TRANSIT",
+                                                                RouteStepDto(
+                                                                    sequence = -1,
                                                                     instruction = " ",
                                                                     distanceMeter = -10.0,
                                                                     geometry = "POINT(129.0756 35.1796)",
-                                                                    steps =
+                                                                    alerts =
                                                                         listOf(
-                                                                            RouteStepDto(
-                                                                                sequence = -1,
-                                                                                instruction = " ",
-                                                                                distanceMeter = -10.0,
-                                                                                geometry = "POINT(129.0756 35.1796)",
-                                                                                alerts =
-                                                                                    listOf(
-                                                                                        RouteAlertDto(
-                                                                                            type = "CURB",
-                                                                                            distanceMeter = 10.0,
-                                                                                        ),
-                                                                                    ),
+                                                                            RouteAlertDto(
+                                                                                type = "CURB",
+                                                                                distanceMeter = 10.0,
                                                                             ),
-                                                                        ),
-                                                                ),
-                                                                RouteLegDto(
-                                                                    sequence = 2,
-                                                                    type = "BUS",
-                                                                    role = "TRANSIT",
-                                                                    instruction = "Take bus 100",
-                                                                    estimatedTimeMinute = 7,
-                                                                    routeNo = "100",
-                                                                    boardingStop =
-                                                                        RouteTransitStopDto(
-                                                                            name = "Stop A",
-                                                                            lat = 35.1796,
-                                                                            lng = 129.0756,
-                                                                        ),
-                                                                    alightingStop =
-                                                                        RouteTransitStopDto(
-                                                                            name = "Stop B",
-                                                                            lat = 35.1800,
-                                                                            lng = 129.0761,
                                                                         ),
                                                                 ),
                                                             ),
                                                     ),
+                                                    RouteLegDto(
+                                                        sequence = 2,
+                                                        type = "BUS",
+                                                        role = "TRANSIT",
+                                                        instruction = "Take bus 100",
+                                                        estimatedTimeMinute = 7,
+                                                        routeNo = "100",
+                                                        boardingStop =
+                                                            RouteTransitStopDto(
+                                                                name = "Stop A",
+                                                                lat = 35.1796,
+                                                                lng = 129.0756,
+                                                            ),
+                                                        alightingStop =
+                                                            RouteTransitStopDto(
+                                                                name = "Stop B",
+                                                                lat = 35.1800,
+                                                                lng = 129.0761,
+                                                            ),
+                                                    ),
                                                 ),
                                         ),
-                                )
-                            },
-                        ),
+                                    ),
+                            )
+                        },
                 )
             val query = testRouteQuery(requestedOptions = listOf(RouteOption.SAFE))
 
@@ -147,8 +148,8 @@ class RouteRepositoryTest {
             val firstSegment = route.segments.first()
             val secondSegment = route.segments.last()
 
-            assertEquals("rs_transit_invalid_fixture", result.searchId)
-            assertEquals("pt_rt_invalid_fixture", route.routeId)
+            assertEquals("rs_transit_invalid_server_payload", result.searchId)
+            assertEquals("pt_rt_invalid_server_payload", route.routeId)
             assertEquals(RouteTransportMode.PUBLIC_TRANSIT, route.transportMode)
             assertEquals(RouteOption.RECOMMENDED, route.routeOption)
             assertEquals("Recommended Route", route.title)
@@ -170,7 +171,52 @@ class RouteRepositoryTest {
             assertNotNull(route.legs.last().boardingStop)
             assertNotNull(route.legs.last().alightingStop)
         }
+
+    @Test
+    fun `getRouteSearchData propagates remote failure without mock fallback or cache write`() =
+        runBlocking {
+            val localDataSource = RouteLocalDataSource()
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource {
+                            throw RouteApiException(
+                                httpStatusCode = 404,
+                                status = "RT4040",
+                                message = "탐색 가능한 경로가 없습니다.",
+                            )
+                        },
+                )
+            val query = testRouteQuery()
+
+            var failure: Throwable? = null
+            try {
+                repository.getRouteSearchData(query)
+            } catch (throwable: Throwable) {
+                failure = throwable
+            }
+
+            val error = failure as? RouteApiException
+            assertNotNull(error)
+            assertEquals(404, error?.httpStatusCode)
+            assertEquals("RT4040", error?.status)
+            assertEquals("탐색 가능한 경로가 없습니다.", error?.message)
+            assertNull(localDataSource.getCachedSearchData(query))
+        }
 }
+
+private fun remoteDataSource(
+    responseProvider: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto,
+): RouteRemoteDataSource =
+    object : RouteRemoteDataSource(
+        postRequestExecutor = { _, _, _ ->
+            error("repository tests override searchWalkRoutes directly")
+        },
+    ) {
+        override suspend fun searchWalkRoutes(request: RouteSearchRequestDto): RouteSearchResponseDto =
+            responseProvider(request)
+    }
 
 private fun testRouteQuery(
     requestedOptions: List<RouteOption> = RouteOption.defaultSearchOptions,

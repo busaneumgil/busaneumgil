@@ -169,4 +169,27 @@ class MapCategoryFilterBarConfigurationTest {
             source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
         )
     }
+
+    @Test
+    fun `map category filter bar error copy explains the facility load failure in user terms`() {
+        val stringsSource =
+            File("src/main/res/values/strings.xml")
+                .readText()
+
+        assertTrue(
+            "Map filter error copy should describe a nearby facility information load failure instead of internal marker terminology.",
+            stringsSource.contains("<string name=\"map_filter_summary_error\">주변 접근성 시설 정보를 불러오지 못했어요. 잠시 후 다시 확인해 주세요.</string>"),
+        )
+    }
+    @Test
+    fun `map category filter bar hides empty facility data copy`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "Map category filter overlay should stay hidden instead of showing an empty facility data banner.",
+            source.contains("state.isEmptyData -> return"),
+        )
+    }
 }

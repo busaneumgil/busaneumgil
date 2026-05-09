@@ -29,12 +29,14 @@ fun SearchEntryRoute(
     onNavigateToRouteSetting: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    preserveEntryStateOnReentry: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     SearchRouteContent(
         destination = SearchScreenDestination.Entry,
         initialQuery = null,
         initialEditingTarget = initialEditingTarget,
+        preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
@@ -76,12 +78,19 @@ fun SearchVoiceInputRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val searchViewModel = rememberSearchViewModel()
     val sttViewModel: SearchVoiceInputViewModel = viewModel()
     val ttsController = remember(context.applicationContext) {
         AndroidTextToSpeechController(context = context.applicationContext)
     }
     val ttsState by ttsController.state.collectAsStateWithLifecycle()
     val voiceInputPrompt = stringResource(R.string.voice_input_prompt)
+
+    LaunchedEffect(searchViewModel, sttViewModel) {
+        // Route entry auto-start must not depend on SearchViewModel UI-event collection order.
+        searchViewModel.onAction(SearchUiAction.VoiceRouteEntered)
+        sttViewModel.startListening()
+    }
 
     // -1: 아직 speak()를 한 번도 호출하지 않은 상태.
     // completedUtteranceCount >= 0 조건을 함께 쓰면 앱 진입 시 spurious 트리거 방지.
@@ -101,8 +110,16 @@ fun SearchVoiceInputRoute(
     LaunchedEffect(sttViewModel) {
         sttViewModel.uiEvent.collect { event ->
             when (event) {
-                is SearchVoiceInputEvent.TranscriptReady -> onNavigateToResults(event.text, initialEditingTarget)
-                SearchVoiceInputEvent.TranscriptEmpty -> onNavigateBack()
+                is SearchVoiceInputEvent.TranscriptReady ->
+                    searchViewModel.onAction(
+                        SearchUiAction.VoiceTranscriptReceived(
+                            transcript = event.recognizedText,
+                            searchQuery = event.searchQuery,
+                        ),
+                    )
+                SearchVoiceInputEvent.TranscriptEmpty -> {
+                    searchViewModel.onAction(SearchUiAction.VoiceCaptureEmpty)
+                }
                 is SearchVoiceInputEvent.SpeakError -> ttsController.speak(event.text)
                 SearchVoiceInputEvent.ReadyToRecord -> {
                     // AndroidTextToSpeechController가 내부적으로 pendingText를 처리하므로
@@ -141,6 +158,7 @@ private fun SearchRouteContent(
     destination: SearchScreenDestination,
     initialQuery: String?,
     initialEditingTarget: RouteEditingTarget,
+    preserveEntryStateOnReentry: Boolean = false,
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
@@ -150,41 +168,26 @@ private fun SearchRouteContent(
     onStopVoiceCapture: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val appContainer =
-        remember(context.applicationContext) {
-            (context.applicationContext as BusanEumgilApp).appContainer
-        }
-    val activity = remember(context) { context.findComponentActivity() }
-    val viewModelFactory =
-        remember(appContainer) {
-            SearchViewModel.provideFactory(
-                searchRepository = appContainer.searchRepository,
-                bookmarkRepository = appContainer.bookmarkRepository,
-                destinationSelectionRepository = appContainer.destinationSelectionRepository,
-                placesRepository = appContainer.placesRepository,
-            )
-        }
-    val viewModel =
-        remember(activity, viewModelFactory) {
-            val owner = checkNotNull(activity) { "SearchRoute requires a ComponentActivity host." }
-            ViewModelProvider(owner, viewModelFactory)[SearchViewModel::class.java]
-        }
+    val viewModel = rememberSearchViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel, initialEditingTarget) {
         viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = initialEditingTarget))
     }
 
-    LaunchedEffect(viewModel, initialQuery) {
-        if (initialQuery != null) {
-            viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
+    LaunchedEffect(viewModel, destination, preserveEntryStateOnReentry) {
+        if (destination == SearchScreenDestination.Entry) {
+            viewModel.onAction(
+                SearchUiAction.EntryRouteEntered(
+                    preserveState = preserveEntryStateOnReentry,
+                ),
+            )
         }
     }
 
-    LaunchedEffect(viewModel, destination) {
-        if (destination == SearchScreenDestination.VoiceInput) {
-            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
+    LaunchedEffect(viewModel, initialQuery) {
+        if (initialQuery != null) {
+            viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
         }
     }
 
@@ -218,6 +221,30 @@ private fun SearchRouteContent(
         onAction = viewModel::onAction,
         modifier = modifier,
     )
+}
+
+@Composable
+private fun rememberSearchViewModel(): SearchViewModel {
+    val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
+    val activity = remember(context) { context.findComponentActivity() }
+    val viewModelFactory =
+        remember(appContainer) {
+            SearchViewModel.provideFactory(
+                searchRepository = appContainer.searchRepository,
+                bookmarkRepository = appContainer.bookmarkRepository,
+                destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                placesRepository = appContainer.placesRepository,
+            )
+        }
+
+    return remember(activity, viewModelFactory) {
+        val owner = checkNotNull(activity) { "SearchRoute requires a ComponentActivity host." }
+        ViewModelProvider(owner, viewModelFactory)[SearchViewModel::class.java]
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

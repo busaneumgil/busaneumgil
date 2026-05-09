@@ -81,7 +81,7 @@ class WalkRouteSearchServiceTest {
 		assertThat(response.routes().get(0).geometry())
 			.isEqualTo("LINESTRING(128.936 35.12, 128.8823 35.1315)");
 		assertThat(response.routes().get(0).legs().get(0).guidanceEvents()).isEmpty();
-		verify(routeSearchCacheService).save(response);
+		verify(routeSearchCacheService).save(userId, response);
 		verify(graphHopperSearchService).searchCandidates(
 			startPoint,
 			endPoint,

@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNavDefaults
 import org.junit.Assert.assertEquals
@@ -17,5 +18,10 @@ class LowVisionBottomNavTest {
     fun `bottom nav keeps tab height separate from the system safe zone`() {
         assertEquals(80.dp, LowVisionBottomNavDefaults.height)
         assertEquals(true, LowVisionBottomNavDefaults.reservesNavigationBarSafeZone)
+    }
+
+    @Test
+    fun `voice input bottom nav uses a white background surface`() {
+        assertEquals(Color.White, lowVisionVoiceInputBottomNavBackgroundColor())
     }
 }

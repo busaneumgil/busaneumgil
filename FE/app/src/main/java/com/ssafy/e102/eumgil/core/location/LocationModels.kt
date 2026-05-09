@@ -24,3 +24,14 @@ data class LocationSnapshot(
     val accuracyMeters: Float?,
     val recordedAtEpochMillis: Long,
 )
+
+fun LocationSnapshot.isFreshCurrentLocation(
+    nowEpochMillis: Long = System.currentTimeMillis(),
+    maxAgeMillis: Long = MAX_CURRENT_LOCATION_AGE_MILLIS,
+): Boolean {
+    if (recordedAtEpochMillis <= 0L) return false
+
+    return recordedAtEpochMillis >= nowEpochMillis - maxAgeMillis
+}
+
+const val MAX_CURRENT_LOCATION_AGE_MILLIS = 2 * 60 * 1_000L

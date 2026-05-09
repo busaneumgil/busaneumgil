@@ -465,7 +465,7 @@ private fun MarkerOverlayStatusCard(
 private fun markerOverlayStatusMessage(markerOverlayState: MapMarkerOverlayState): String? =
     when {
         markerOverlayState.isLoadFailed -> stringResource(id = R.string.map_viewport_marker_status_error)
-        markerOverlayState.isEmptyData -> stringResource(id = R.string.map_viewport_marker_status_empty_data)
+        markerOverlayState.isEmptyData -> null
         markerOverlayState.isEmptyResult -> stringResource(id = R.string.map_viewport_marker_status_empty_result)
         else -> null
     }

@@ -58,7 +58,13 @@ export function loadKakaoMap(): Promise<void> {
     const script = document.createElement("script");
     script.async = true;
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false&libraries=services`;
-    script.onload = () => window.kakao?.maps.load(resolve);
+    script.onload = () => {
+      if (!window.kakao?.maps) {
+        reject(new Error("Kakao Map SDK를 초기화할 수 없습니다."));
+        return;
+      }
+      window.kakao.maps.load(resolve);
+    };
     script.onerror = () => reject(new Error("Kakao Map SDK 로드 실패"));
     document.head.appendChild(script);
   });

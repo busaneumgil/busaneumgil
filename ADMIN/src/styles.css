@@ -62,6 +62,7 @@ body {
 }
 
 button,
+input,
 select {
   font: inherit;
 }
@@ -107,6 +108,56 @@ select {
 
 .app-shell.sidebar-collapsed {
   grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.admin-login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 32px;
+  background:
+    linear-gradient(#f8fafc 0 0),
+    repeating-linear-gradient(0deg, rgb(148 163 184 / 0.16) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(90deg, rgb(148 163 184 / 0.16) 0 1px, transparent 1px 48px);
+}
+
+.admin-login-panel {
+  display: grid;
+  gap: 16px;
+  width: min(720px, 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--color-white);
+  padding: 28px;
+  box-shadow: var(--shadow-map-overlay);
+}
+
+.login-kicker {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: var(--radius-pill);
+  padding: 5px 10px;
+  background: var(--color-primary-200);
+  color: var(--color-primary-600);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-login-panel h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 38px;
+}
+
+.admin-login-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.admin-login-panel .admin-auth-panel {
+  grid-template-columns: 1fr;
+  align-items: stretch;
 }
 
 .sidebar {
@@ -902,19 +953,51 @@ select {
   gap: 14px;
 }
 
-.admin-token-panel {
+.admin-auth-panel {
   display: grid;
-  grid-template-columns: minmax(180px, 260px) minmax(360px, 1fr) auto minmax(220px, 320px);
+  grid-template-columns: minmax(120px, 180px) minmax(300px, 1fr) minmax(260px, 380px) minmax(240px, 360px);
   align-items: end;
   gap: 12px;
+  width: 100%;
+}
+
+.admin-auth-panel.compact {
+  grid-template-columns: 132px minmax(270px, 1fr) minmax(148px, 180px) minmax(220px, 320px);
+  align-items: center;
+}
+
+.admin-token-panel {
+  display: block;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   background: var(--color-white);
   padding: 12px;
 }
 
-.admin-token-panel strong,
-.admin-token-panel label {
+.admin-session-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-session-panel div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-session-panel strong {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-session-panel span {
+  color: var(--color-gray-700);
+  font-size: 13px;
+}
+
+.admin-auth-backend,
+.admin-auth-panel label {
   display: grid;
   gap: 5px;
   color: var(--muted);
@@ -922,14 +1005,96 @@ select {
   font-weight: 800;
 }
 
-.admin-token-panel span {
+.admin-auth-backend span,
+.admin-auth-status span,
+.admin-auth-status small {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--color-gray-700);
   font-size: 13px;
 }
 
-.admin-token-panel input {
+.admin-auth-status {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-auth-status small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-auth-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.login-button {
+  min-width: 92px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-s);
+  white-space: nowrap;
+}
+
+.login-button.kakao {
+  border-color: #fee500;
+  background: #fee500;
+  color: #191600;
+}
+
+.login-button.kakao:hover {
+  border-color: #f5dc00;
+  background: #f5dc00;
+  color: #191600;
+}
+
+.login-button.naver {
+  border-color: #03c75a;
+  background: #03c75a;
+  color: var(--color-white);
+}
+
+.login-button.naver:hover {
+  border-color: #02b351;
+  background: #02b351;
+  color: var(--color-white);
+}
+
+.login-button.google {
+  border-color: var(--border);
+  background: var(--color-white);
+  color: var(--color-gray-900);
+}
+
+.login-button.google:hover {
+  border-color: var(--color-primary-400);
+  background: #f8fafc;
+  color: var(--color-primary-600);
+}
+
+.admin-token-fallback {
+  min-width: 0;
+}
+
+.admin-token-fallback summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-token-fallback > div {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 8px;
+}
+
+.admin-token-fallback input {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);

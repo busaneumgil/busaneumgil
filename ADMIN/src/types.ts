@@ -1,5 +1,23 @@
 export type AdminRole = "ADMIN";
 
+export type SocialProvider = "KAKAO" | "NAVER" | "GOOGLE";
+
+export interface AuthTestConfig {
+  kakaoJavaScriptKey: string;
+  naverClientId: string;
+  googleClientId: string;
+}
+
+export interface SocialLoginResponse {
+  signupRequired: boolean;
+  signupToken: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  userId: string | null;
+  selectedPrimaryUserType: string | null;
+  selectedMobilitySubtype: string | null;
+}
+
 export type WorkStatus = "TODO" | "DRAFT" | "REVIEW" | "APPLIED" | "REOPENED";
 
 export type AdminPage = "network" | "facilities" | "hazards";

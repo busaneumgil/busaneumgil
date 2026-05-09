@@ -1,21 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
-  backendApiUrl,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
   fetchAdminRoadNetworkPayload,
   getStoredAdminAccessToken,
-  normalizeAdminAccessToken,
   storeAdminAccessToken,
 } from "./api/adminApi";
+import { AdminAuthPanel } from "./auth/AdminAuthPanel";
 import { adminShellClassName } from "./layout/adminLayout";
 import { FacilityMap } from "./map/FacilityMap";
 import { facilityCategoryLabel } from "./map/facilityStyle";
 import { SegmentMap, type RoadviewDockState } from "./map/SegmentMap";
 import { HazardReportsPage } from "./report/HazardReportsPage";
 import { useAdminStore } from "./store/adminStore";
-import type { AdminPage, FacilityFeature, SegmentFeature } from "./types";
+import type { AdminMeResponse, AdminPage, FacilityFeature, SegmentFeature } from "./types";
 
 const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
@@ -53,6 +52,7 @@ function AdminApp() {
   const [selectedSegment, setSelectedSegment] = useState<SegmentFeature | null>(null);
   const [accessToken, setAccessToken] = useState(getStoredAdminAccessToken);
   const [tokenInput, setTokenInput] = useState(accessToken);
+  const [adminPrincipal, setAdminPrincipal] = useState<AdminMeResponse | null>(null);
   const {
     page,
     selectedGu,
@@ -67,6 +67,7 @@ function AdminApp() {
   } = useAdminStore();
 
   const hasToken = Boolean(accessToken);
+  const isAdminAuthenticated = hasToken && adminPrincipal?.role === "ADMIN";
 
   useEffect(() => {
     setRoadviewDock({
@@ -81,41 +82,56 @@ function AdminApp() {
   const areasQuery = useQuery({
     queryKey: ["admin-areas", accessToken],
     queryFn: () => fetchAdminAreas(accessToken),
-    enabled: page !== "hazards" && hasToken,
+    enabled: page !== "hazards" && isAdminAuthenticated,
     retry: false,
   });
 
   const payloadQuery = useQuery({
     queryKey: ["admin-road-network", selectedGu, selectedDong, accessToken],
     queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
-    enabled: page === "network" && hasToken,
+    enabled: page === "network" && isAdminAuthenticated,
     retry: false,
   });
 
   const facilityQuery = useQuery({
     queryKey: ["admin-facilities", accessToken],
     queryFn: () => fetchAdminFacilityPayload({ accessToken }),
-    enabled: page === "facilities" && hasToken,
+    enabled: page === "facilities" && isAdminAuthenticated,
     retry: false,
   });
-
-  function saveToken() {
-    const nextToken = normalizeAdminAccessToken(tokenInput);
-    storeAdminAccessToken(nextToken);
-    setAccessToken(nextToken);
-    setTokenInput(nextToken);
-  }
-
-  function clearToken() {
-    storeAdminAccessToken("");
-    setAccessToken("");
-    setTokenInput("");
-  }
 
   const filteredDongs = useMemo(() => {
     const areas = areasQuery.data ?? [];
     return areas.filter((area) => area.gu === selectedGu);
   }, [areasQuery.data, selectedGu]);
+
+  function logoutAdmin() {
+    storeAdminAccessToken("");
+    setAccessToken("");
+    setTokenInput("");
+    setAdminPrincipal(null);
+  }
+
+  const currentAdmin = adminPrincipal;
+
+  if (!isAdminAuthenticated || !currentAdmin) {
+    return (
+      <div className="admin-login-shell">
+        <div className="admin-login-panel">
+          <span className="login-kicker">BusanEumgil Admin</span>
+          <h1>관리자 로그인</h1>
+          <p>소셜 로그인 후 관리자 권한이 확인된 계정만 운영 화면에 접근할 수 있습니다.</p>
+          <AdminAuthPanel
+            accessToken={accessToken}
+            tokenInput={tokenInput}
+            onAccessTokenChange={setAccessToken}
+            onTokenInputChange={setTokenInput}
+            onAdminVerified={setAdminPrincipal}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={adminShellClassName(sidebarCollapsed)}>
@@ -153,20 +169,10 @@ function AdminApp() {
           </div>
           {page !== "hazards" && <div className="topbar-actions">
             <label className="backend-field">
-              Backend
-              <span>{backendApiUrl}</span>
+              Admin
+              <span>{currentAdmin.userId}</span>
             </label>
-            <label className="token-field">
-              Access Token
-              <input
-                type="password"
-                value={tokenInput}
-                placeholder="ADMIN accessToken"
-                onChange={(event) => setTokenInput(event.target.value)}
-              />
-            </label>
-            <button className="primary" type="button" onClick={saveToken}>적용</button>
-            <button type="button" onClick={clearToken}>제거</button>
+            <button type="button" onClick={logoutAdmin}>로그아웃</button>
             <label>
               구
               <select
@@ -210,7 +216,7 @@ function AdminApp() {
           </div>}
         </header>
 
-        {page === "hazards" && <HazardReportsPage />}
+        {page === "hazards" && <HazardReportsPage accessToken={accessToken} adminPrincipal={currentAdmin} onLogout={logoutAdmin} />}
 
         {page === "network" && (
           <div className="editor-layout">

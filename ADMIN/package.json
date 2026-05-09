@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host localhost --port 3001",
     "build": "tsc -b && vite build",
+    "build:be-static": "tsc -b && vite build --base=/admin-web/ --outDir ../BE/src/main/resources/static/admin-web --emptyOutDir",
     "test": "vitest run",
     "preview": "vite preview --host localhost --port 4173"
   },

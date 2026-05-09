@@ -11,7 +11,17 @@ import type {
 
 const configuredBackendApiUrl = import.meta.env.VITE_BACKEND_API_URL as string | undefined;
 
-export const backendApiUrl = (configuredBackendApiUrl || "http://127.0.0.1:8080").replace(/\/$/, "");
+function defaultBackendApiUrl() {
+  if (typeof window === "undefined") {
+    return "http://localhost:8080";
+  }
+  if (window.location.port === "3001") {
+    return "http://localhost:8080";
+  }
+  return window.location.origin;
+}
+
+export const backendApiUrl = (configuredBackendApiUrl || defaultBackendApiUrl()).replace(/\/$/, "");
 
 export const adminAccessTokenStorageKey = "busan-eumgil-ADMIN:access-token";
 
@@ -28,18 +38,8 @@ interface FetchAdminHazardReportsParams {
   accessToken: string;
 }
 
-async function requestAdminJson<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
-  const normalizedToken = normalizeAdminAccessToken(accessToken);
-  if (!normalizedToken) {
-    throw new Error("Access Token을 입력하세요.");
-  }
-  const response = await fetch(`${backendApiUrl}${path}`, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bearer ${normalizedToken}`,
-    },
-  });
+export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${backendApiUrl}${path}`, init);
   const body = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) {
     throw new Error(body?.message || `${response.status} ${response.statusText}`);
@@ -48,6 +48,20 @@ async function requestAdminJson<T>(path: string, accessToken: string, init?: Req
     throw new Error("응답을 읽을 수 없습니다.");
   }
   return body.data;
+}
+
+async function requestAdminJson<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
+  const normalizedToken = normalizeAdminAccessToken(accessToken);
+  if (!normalizedToken) {
+    throw new Error("Access Token을 입력하세요.");
+  }
+  return requestJson<T>(path, {
+    ...init,
+    headers: {
+      ...init?.headers,
+      Authorization: `Bearer ${normalizedToken}`,
+    },
+  });
 }
 
 export function getStoredAdminAccessToken() {

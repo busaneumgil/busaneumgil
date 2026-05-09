@@ -1,20 +1,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  adminAccessTokenStorageKey,
   approveAdminHazardReport,
-  backendApiUrl,
   fetchAdminHazardReportDetail,
   fetchAdminHazardReports,
-  fetchAdminMe,
-  getStoredAdminAccessToken,
-  normalizeAdminAccessToken,
   rejectAdminHazardReport,
-  storeAdminAccessToken,
 } from "../api/adminApi";
 import type {
   AdminHazardReportDetail,
   AdminHazardReportSummary,
+  AdminMeResponse,
   HazardReportStatus,
   HazardReportType,
 } from "../types";
@@ -36,22 +31,19 @@ const reportTypeLabel: Record<HazardReportType, string> = {
   OTHER_OBSTACLE: "기타 장애물",
 };
 
-export function HazardReportsPage() {
+interface HazardReportsPageProps {
+  accessToken: string;
+  adminPrincipal: AdminMeResponse;
+  onLogout: () => void;
+}
+
+export function HazardReportsPage({ accessToken, adminPrincipal, onLogout }: HazardReportsPageProps) {
   const queryClient = useQueryClient();
-  const [accessToken, setAccessToken] = useState(getStoredAdminAccessToken);
-  const [tokenInput, setTokenInput] = useState(accessToken);
   const [status, setStatus] = useState<"" | HazardReportStatus>("PENDING");
   const [cursorStack, setCursorStack] = useState<Array<number | null>>([null]);
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
   const cursor = cursorStack[cursorStack.length - 1] ?? null;
   const hasToken = Boolean(accessToken);
-
-  const adminMeQuery = useQuery({
-    queryKey: ["admin-me", accessToken],
-    queryFn: () => fetchAdminMe(accessToken),
-    enabled: hasToken,
-    retry: false,
-  });
 
   const reportsQuery = useQuery({
     queryKey: ["admin-hazard-reports", status, cursor, accessToken],
@@ -90,26 +82,6 @@ export function HazardReportsPage() {
     },
   });
 
-  function saveToken() {
-    const nextToken = normalizeAdminAccessToken(tokenInput);
-    storeAdminAccessToken(nextToken);
-    setAccessToken(nextToken);
-    setTokenInput(nextToken);
-    setCursorStack([null]);
-    setSelectedReportId(null);
-  }
-
-  function clearToken() {
-    storeAdminAccessToken("");
-    setTokenInput("");
-    setAccessToken("");
-    setCursorStack([null]);
-    setSelectedReportId(null);
-    queryClient.removeQueries({ queryKey: ["admin-me"] });
-    queryClient.removeQueries({ queryKey: ["admin-hazard-reports"] });
-    queryClient.removeQueries({ queryKey: ["admin-hazard-report-detail"] });
-  }
-
   function changeStatus(nextStatus: "" | HazardReportStatus) {
     setStatus(nextStatus);
     setCursorStack([null]);
@@ -126,32 +98,12 @@ export function HazardReportsPage() {
   return (
     <div className="hazard-page">
       <section className="admin-token-panel">
-        <div>
-          <strong>Backend</strong>
-          <span>{backendApiUrl}</span>
-        </div>
-        <label>
-          Access Token
-          <input
-            type="password"
-            value={tokenInput}
-            placeholder="ADMIN accessToken"
-            onChange={(event) => setTokenInput(event.target.value)}
-          />
-        </label>
-        <div className="button-row compact">
-          <button className="primary" type="button" onClick={saveToken}>
-            적용
-          </button>
-          <button type="button" onClick={clearToken}>
-            제거
-          </button>
-        </div>
-        <div className="admin-principal">
-          {adminMeQuery.isLoading && <span>관리자 확인 중</span>}
-          {adminMeQuery.data && <span>{adminMeQuery.data.userId} · {adminMeQuery.data.role}</span>}
-          {adminMeQuery.error instanceof Error && <span className="danger-text">{adminMeQuery.error.message}</span>}
-          {!hasToken && <span className="muted">토큰을 넣으면 제보 목록을 조회합니다.</span>}
+        <div className="admin-session-panel">
+          <div>
+            <strong>Admin</strong>
+            <span>{adminPrincipal.userId} · {adminPrincipal.role}</span>
+          </div>
+          <button type="button" onClick={onLogout}>로그아웃</button>
         </div>
       </section>
 

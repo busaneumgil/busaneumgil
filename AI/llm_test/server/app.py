@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 if not os.getenv("GMS_KEY"):
-    raise EnvironmentError(".env 파일에 GMS_KEY가 설정되어 있지 않습니다.")
+    raise EnvironmentError("GMS_KEY 환경변수가 설정되어 있지 않습니다.")
 
 from config import Config
 from utils.logger import get_logger

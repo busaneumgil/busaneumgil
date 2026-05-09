@@ -83,11 +83,7 @@ public class RerouteService {
 			saveRerouteSession(routeSession, request.currentPoint(), reroutedRoute);
 			return new RerouteResponse(RerouteType.FULL_REROUTE, reroutedRoute);
 		}
-		RouteSummaryResponse reroutedRoute = withNewRouteId(
-			fullReroute(userId, request.currentPoint(), routeSession, route),
-			newRouteId("rr_full"));
-		saveRerouteSession(routeSession, request.currentPoint(), reroutedRoute);
-		return new RerouteResponse(RerouteType.FULL_REROUTE, reroutedRoute);
+		throw new RouteException(RouteErrorCode.ROUTE_TOO_FAR_FOR_REROUTE);
 	}
 
 	private void saveRerouteSession(

@@ -191,6 +191,19 @@ class RerouteServiceTest {
 	}
 
 	@Test
+	@DisplayName("기존 route geometry 500m 초과 이탈은 RT4091로 차단한다")
+	void rejectTooFarCurrentPoint() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		assertRouteError(
+			() -> service.reroute(userId, new RerouteRequest("rt_001", new GeoPointRequest(35.1200, 128.9500))),
+			RouteErrorCode.ROUTE_TOO_FAR_FOR_REROUTE);
+	}
+
+	@Test
 	@DisplayName("route geometry WKT를 파싱할 수 없으면 RT4043으로 차단한다")
 	void rejectBrokenRouteGeometry() {
 		UUID userId = UUID.randomUUID();

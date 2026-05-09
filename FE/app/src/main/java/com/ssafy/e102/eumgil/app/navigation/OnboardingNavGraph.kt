@@ -278,6 +278,9 @@ internal fun resolveOnboardingCompletedRoute(selectedPrimaryUserType: String?): 
 
 internal fun resolveMobilityOnboardingAfterTermsRoute(): String = TutorialRoute.Onboarding.route
 
+internal fun shouldCompletePendingSignupBeforeOnboardingTutorial(selectedPrimaryUserType: String?): Boolean =
+    selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue
+
 internal fun resolveOnboardingTermsCompletedRoute(selectedPrimaryUserType: String?): String =
     if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
         resolveMobilityOnboardingAfterTermsRoute()

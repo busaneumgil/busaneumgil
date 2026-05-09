@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.tutorial
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,16 +93,16 @@ fun TutorialScreen(
         Column(
             modifier =
                 Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
+                    .weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
             TutorialHeader(uiState = uiState)
-            TutorialVisualPanel(step = uiState.step)
-            TutorialPagerIndicator(
+            TutorialVisualPanel(
+                step = uiState.step,
                 currentStep = uiState.currentStep,
                 totalSteps = uiState.totalSteps,
+                modifier = Modifier.weight(TutorialLayoutDefaults.visualPanelWeight),
             )
         }
 
@@ -159,35 +160,55 @@ private fun TutorialHeader(uiState: TutorialUiState) {
 }
 
 @Composable
-private fun TutorialVisualPanel(step: TutorialStep) {
+private fun TutorialVisualPanel(
+    step: TutorialStep,
+    currentStep: Int,
+    totalSteps: Int,
+    modifier: Modifier = Modifier,
+) {
     val content = step.visualContent()
 
     Surface(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
-                .widthIn(max = TutorialLayoutDefaults.visualPanelMaxWidth)
-                .heightIn(min = TutorialLayoutDefaults.visualPanelMinHeight),
+                .widthIn(max = TutorialLayoutDefaults.visualPanelMaxWidth),
         shape = RoundedCornerShape(EumRadius.large),
         color = EumWhite,
         border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderSubtle),
         shadowElevation = TutorialLayoutDefaults.panelElevation,
     ) {
         Column(
-            modifier = Modifier.padding(EumSpacing.large),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(EumSpacing.large),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            TutorialHeroIcon(iconRes = content.heroIconRes)
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                content.items.forEach { item ->
-                    TutorialSupportingItemRow(item = item)
+                TutorialHeroIcon(iconRes = content.heroIconRes)
+                Spacer(modifier = Modifier.height(EumSpacing.medium))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                ) {
+                    content.items.forEach { item ->
+                        TutorialSupportingItemRow(item = item)
+                    }
                 }
+                Spacer(modifier = Modifier.height(EumSpacing.medium))
+                TutorialEmphasisChip(labelRes = content.emphasisRes)
             }
-            TutorialEmphasisChip(labelRes = content.emphasisRes)
+            TutorialPagerIndicator(currentStep = currentStep, totalSteps = totalSteps)
         }
     }
 }
@@ -213,40 +234,100 @@ private fun TutorialHeroIcon(@DrawableRes iconRes: Int) {
 
 @Composable
 private fun TutorialSupportingItemRow(item: TutorialSupportingItem) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.tightGap),
     ) {
-        Surface(
-            modifier = Modifier.size(TutorialLayoutDefaults.supportingIconContainerSize),
-            shape = RoundedCornerShape(EumRadius.small),
-            color = EumSurfaceInfo,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    painter = painterResource(id = item.iconRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(TutorialLayoutDefaults.supportingIconSize),
-                    tint = EumPrimary600,
+            TutorialIconTile(iconRes = item.iconRes)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.microGap),
+            ) {
+                Text(
+                    text = stringResource(id = item.titleRes),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(id = item.descriptionRes),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
                 )
             }
         }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.microGap),
+        if (item.filterChips.isNotEmpty()) {
+            TutorialFilterChipRow(chips = item.filterChips)
+        }
+    }
+}
+
+@Composable
+private fun TutorialIconTile(@DrawableRes iconRes: Int) {
+    Surface(
+        modifier = Modifier.size(TutorialLayoutDefaults.supportingIconContainerSize),
+        shape = RoundedCornerShape(EumRadius.small),
+        color = EumSurfaceInfo,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.supportingIconSize),
+                tint = EumPrimary600,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TutorialFilterChipRow(chips: List<TutorialFilterChip>) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+    ) {
+        chips.forEach { chip ->
+            TutorialFilterChip(chip = chip)
+        }
+    }
+}
+
+@Composable
+private fun TutorialFilterChip(chip: TutorialFilterChip) {
+    Surface(
+        shape = RoundedCornerShape(EumRadius.small),
+        color = EumSurfaceInfo,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+    ) {
+        Row(
+            modifier =
+                Modifier.padding(
+                    horizontal = TutorialLayoutDefaults.filterChipHorizontalPadding,
+                    vertical = TutorialLayoutDefaults.filterChipVerticalPadding,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
         ) {
-            Text(
-                text = stringResource(id = item.titleRes),
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+            Icon(
+                painter = painterResource(id = chip.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+                tint = EumPrimary600,
             )
             Text(
-                text = stringResource(id = item.descriptionRes),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                text = stringResource(id = chip.labelRes),
+                color = EumPrimary600,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }
@@ -284,6 +365,12 @@ private data class TutorialSupportingItem(
     @DrawableRes val iconRes: Int,
     @StringRes val titleRes: Int,
     @StringRes val descriptionRes: Int,
+    val filterChips: List<TutorialFilterChip> = emptyList(),
+)
+
+private data class TutorialFilterChip(
+    @DrawableRes val iconRes: Int,
+    @StringRes val labelRes: Int,
 )
 
 private fun TutorialStep.visualContent(): TutorialVisualContent =
@@ -302,6 +389,21 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
                             iconRes = R.drawable.ic_lowvision_category_elevator,
                             titleRes = R.string.tutorial_destination_item_filter_title,
                             descriptionRes = R.string.tutorial_destination_item_filter_description,
+                            filterChips =
+                                listOf(
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_place_restroom,
+                                        labelRes = R.string.tutorial_filter_toilet,
+                                    ),
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_lowvision_category_elevator,
+                                        labelRes = R.string.tutorial_filter_elevator,
+                                    ),
+                                    TutorialFilterChip(
+                                        iconRes = R.drawable.ic_place_parking,
+                                        labelRes = R.string.tutorial_filter_parking,
+                                    ),
+                                ),
                         ),
                         TutorialSupportingItem(
                             iconRes = R.drawable.ic_map_current_location,
@@ -400,10 +502,11 @@ private fun TutorialPagerIndicator(
 internal object TutorialLayoutDefaults {
     const val totalStepCount: Int = TutorialStep.TOTAL_STEPS
     const val supportingItemCount: Int = 3
+    const val destinationFilterChipCount: Int = 3
+    const val visualPanelWeight: Float = 1f
 
     val primaryButtonMinHeight = 56.dp
     val visualPanelMaxWidth = 360.dp
-    val visualPanelMinHeight = 320.dp
     val panelElevation = 2.dp
 
     val tightGap = 8.dp
@@ -415,6 +518,10 @@ internal object TutorialLayoutDefaults {
     val supportingIconContainerSize = 44.dp
     val supportingIconSize = 24.dp
     val emphasisVerticalPadding = 9.dp
+    val filterChipHorizontalPadding = 12.dp
+    val filterChipVerticalPadding = 8.dp
+    val filterChipIconSize = 18.dp
+    val filterChipGap = 6.dp
 
     val indicatorSelectedWidth = 70.dp
     val indicatorDefaultWidth = 54.dp

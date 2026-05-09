@@ -29,11 +29,6 @@ internal class AudioRecorder {
         private val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }
 
-    private var audioRecord: AudioRecord? = null
-    private var noiseSuppressor: NoiseSuppressor? = null
-    private var echoCanceler: AcousticEchoCanceler? = null
-    private var gainControl: AutomaticGainControl? = null
-
     @Volatile
     private var isRecording = false
 
@@ -42,7 +37,9 @@ internal class AudioRecorder {
         val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         val bufferSize = minBuf.coerceAtLeast(WINDOW_SIZE * 2)
 
-        audioRecord = AudioRecord(
+        // 인스턴스 필드가 아닌 flow 호출마다 독립된 지역 변수로 선언.
+        // 이전 flow의 finally가 새 flow의 객체를 null로 만드는 레이스 컨디션 방지.
+        val audioRecord = AudioRecord(
             MediaRecorder.AudioSource.VOICE_RECOGNITION,
             SAMPLE_RATE,
             CHANNEL_CONFIG,
@@ -50,46 +47,51 @@ internal class AudioRecorder {
             bufferSize,
         )
 
-        val sessionId = audioRecord!!.audioSessionId
+        val sessionId = audioRecord.audioSessionId
 
-        if (NoiseSuppressor.isAvailable()) {
-            noiseSuppressor = NoiseSuppressor.create(sessionId)?.also {
-                it.enabled = true
-                Log.d(TAG, "NoiseSuppressor 활성화")
-            }
-        }
-        if (AcousticEchoCanceler.isAvailable()) {
-            echoCanceler = AcousticEchoCanceler.create(sessionId)?.also {
-                it.enabled = true
-                Log.d(TAG, "AcousticEchoCanceler 활성화")
-            }
-        }
-        if (AutomaticGainControl.isAvailable()) {
-            gainControl = AutomaticGainControl.create(sessionId)?.also {
-                it.enabled = true
-                Log.d(TAG, "AutomaticGainControl 활성화")
-            }
-        }
+        val noiseSuppressor: NoiseSuppressor? =
+            if (NoiseSuppressor.isAvailable()) {
+                NoiseSuppressor.create(sessionId)?.also {
+                    it.enabled = true
+                    Log.d(TAG, "NoiseSuppressor 활성화")
+                }
+            } else null
 
-        audioRecord!!.startRecording()
+        val echoCanceler: AcousticEchoCanceler? =
+            if (AcousticEchoCanceler.isAvailable()) {
+                AcousticEchoCanceler.create(sessionId)?.also {
+                    it.enabled = true
+                    Log.d(TAG, "AcousticEchoCanceler 활성화")
+                }
+            } else null
+
+        val gainControl: AutomaticGainControl? =
+            if (AutomaticGainControl.isAvailable()) {
+                AutomaticGainControl.create(sessionId)?.also {
+                    it.enabled = true
+                    Log.d(TAG, "AutomaticGainControl 활성화")
+                }
+            } else null
+
+        audioRecord.startRecording()
         isRecording = true
         Log.d(TAG, "녹음 시작")
 
         val shortBuffer = ShortArray(WINDOW_SIZE)
         try {
             while (isRecording) {
-                val read = audioRecord!!.read(shortBuffer, 0, shortBuffer.size)
+                val read = audioRecord.read(shortBuffer, 0, shortBuffer.size)
                 if (read > 0) {
                     emit(FloatArray(read) { shortBuffer[it] / 32768f })
                 }
             }
         } finally {
-            noiseSuppressor?.release(); noiseSuppressor = null
-            echoCanceler?.release(); echoCanceler = null
-            gainControl?.release(); gainControl = null
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
+            // 각 flow가 자신이 만든 지역 변수만 정리하므로 Effect 리소스 누수 없음
+            noiseSuppressor?.release()
+            echoCanceler?.release()
+            gainControl?.release()
+            audioRecord.stop()
+            audioRecord.release()
             Log.d(TAG, "녹음 중지")
         }
     }.flowOn(Dispatchers.IO)

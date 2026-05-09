@@ -606,4 +606,9 @@
     <string name="low_vision_bookmark_no_address">주소 정보 없음</string>
     <string name="low_vision_bookmark_navigate">길찾기</string>
     <string name="low_vision_bookmark_remove">삭제</string>
+
+    <!-- voice input TTS prompts -->
+    <string name="voice_input_prompt">말씀해 주세요</string>
+    <string name="voice_input_retry">다시 시도해주세요</string>
+    <string name="voice_input_confirmation">%s를 찾으시나요?</string>
 </resources>

@@ -36,4 +36,6 @@ data class LowVisionVoiceInputUiState(
     val selectedTab: LowVisionBottomTab = LowVisionBottomTab.HOME,
     /** AI 확인 요청 메시지 (TTS 재생용). null이면 대기 없음. */
     val confirmationMessage: String? = null,
+    /** 동일 confirmationMessage 반복 재생을 위한 카운터. */
+    val ttsNonce: Int = 0,
 )

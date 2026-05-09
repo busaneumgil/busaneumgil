@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeIntent
 import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeMode
@@ -23,6 +24,10 @@ import kotlinx.coroutines.withContext
 sealed interface SearchVoiceInputEvent {
     data class TranscriptReady(val text: String) : SearchVoiceInputEvent
     data object TranscriptEmpty : SearchVoiceInputEvent
+    data class SpeakError(val text: String) : SearchVoiceInputEvent
+
+    /** TTS "말씀해 주세요" 재생 요청 — Route가 TTS 완료 후 [beginRecording]을 호출한다. */
+    data object ReadyToRecord : SearchVoiceInputEvent
 }
 
 /**
@@ -54,6 +59,10 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
     private var sttManager: SttManager? = null
     private var listeningJob: Job? = null
 
+    /**
+     * 모델 초기화 후 [SearchVoiceInputEvent.ReadyToRecord]를 발행한다.
+     * Route가 TTS "말씀해 주세요" 완료 후 [beginRecording]을 호출한다.
+     */
     fun startListening() {
         if (listeningJob?.isActive == true) return
         listeningJob = viewModelScope.launch(Dispatchers.IO) {
@@ -70,11 +79,22 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
                 if (vadManager == null) vadManager = VadManager(context)
                 if (sttManager == null) sttManager = SttManager.getInstance(context)
 
-                runPipeline()
+                _uiEvent.send(SearchVoiceInputEvent.ReadyToRecord)
             } catch (e: Exception) {
                 Log.e(TAG, "초기화 실패: ${e.message}", e)
                 _uiEvent.send(SearchVoiceInputEvent.TranscriptEmpty)
             }
+        }
+    }
+
+    /**
+     * 실제 VAD+STT 파이프라인을 시작한다.
+     * Route에서 TTS 완료 후 호출한다.
+     */
+    fun beginRecording() {
+        if (listeningJob?.isActive == true) return
+        listeningJob = viewModelScope.launch(Dispatchers.IO) {
+            runPipeline()
         }
     }
 
@@ -174,10 +194,12 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
                 _uiEvent.send(SearchVoiceInputEvent.TranscriptReady(text = result.placeName))
             } else {
                 Log.e(TAG, "음성 분석 API 호출 실패: intent=${result.intent}, placeName=${result.placeName}")
+                _uiEvent.send(SearchVoiceInputEvent.SpeakError(getApplication<Application>().getString(R.string.voice_input_retry)))
                 _uiEvent.send(SearchVoiceInputEvent.TranscriptEmpty)
             }
         } catch (e: Exception) {
             Log.e(TAG, "음성 분석 API 호출 실패: ${e.message}")
+            _uiEvent.send(SearchVoiceInputEvent.SpeakError(getApplication<Application>().getString(R.string.voice_input_retry)))
         }
     }
 

@@ -32,6 +32,9 @@ sealed interface LowVisionVoiceInputEvent {
 
     /** 사용자 취소 또는 오류: 홈 화면으로 복귀. */
     data object RecordingCancelled : LowVisionVoiceInputEvent
+
+    /** TTS "말씀해 주세요" 재생 요청 — Route가 TTS 완료 후 [beginRecording]을 호출한다. */
+    data object ReadyToRecord : LowVisionVoiceInputEvent
 }
 
 /**
@@ -103,7 +106,20 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
         }
     }
 
-    private fun startRecording() {
+    /**
+     * TTS "말씀해 주세요" 재생을 Route에 요청한다.
+     * Route가 TTS 완료를 감지하면 [beginRecording]을 호출한다.
+     */
+    private suspend fun startRecording() {
+        _uiEvent.send(LowVisionVoiceInputEvent.ReadyToRecord)
+    }
+
+    /**
+     * 실제 VAD+STT 파이프라인을 시작한다.
+     * Route에서 TTS 완료 후 호출한다.
+     */
+    fun beginRecording() {
+        if (recordingJob?.isActive == true) return
         recordingJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 var voiceDetectedEver = false
@@ -223,14 +239,20 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                 result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == null && !result.confirmationMessage.isNullOrBlank() -> {
                     // AI 확인 요청 → TTS 메시지 표시 후 다음 발화 대기
                     Log.d(TAG, "=== 확인 요청: '${result.confirmationMessage}' ===")
-                    _uiState.value = _uiState.value.copy(confirmationMessage = result.confirmationMessage)
+                    _uiState.value = _uiState.value.copy(
+                        confirmationMessage = result.confirmationMessage,
+                        ttsNonce = _uiState.value.ttsNonce + 1,
+                    )
                     startRecording()
                 }
 
                 result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == false -> {
                     // 장소 부정 → 새 장소로 전환, history 유지 + TTS 대기 (confirmed=null 브랜치와 동일)
                     Log.d(TAG, "=== 장소 부정 → 새 장소 탐색 (confirmationMessage=${result.confirmationMessage}) ===")
-                    _uiState.value = _uiState.value.copy(confirmationMessage = result.confirmationMessage)
+                    _uiState.value = _uiState.value.copy(
+                        confirmationMessage = result.confirmationMessage,
+                        ttsNonce = _uiState.value.ttsNonce + 1,
+                    )
                     startRecording()
                 }
 

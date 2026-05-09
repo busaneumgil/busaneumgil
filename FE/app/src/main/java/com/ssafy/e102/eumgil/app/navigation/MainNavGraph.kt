@@ -39,6 +39,8 @@ import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
+import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
@@ -377,6 +379,27 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToGuide = {
+                navController.navigate(resolveAppInfoGuideRoute())
+            },
+        )
+    }
+
+    composable(route = TutorialRoute.Guide.route) {
+        MobilityTutorialRoute(
+            entryPoint = TutorialEntryPoint.GUIDE,
+            onCompleted = {
+                val didPopToAppInfo =
+                    navController.popBackStack(
+                        route = resolveTutorialGuideCompletedRoute(),
+                        inclusive = false,
+                    )
+                if (!didPopToAppInfo) {
+                    navController.navigate(resolveTutorialGuideCompletedRoute()) {
+                        launchSingleTop = true
+                    }
+                }
+            },
         )
     }
 
@@ -450,6 +473,8 @@ internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): Stri
     }
 
 internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
+
+internal fun resolveAppInfoGuideRoute(): String = TutorialRoute.Guide.route
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue

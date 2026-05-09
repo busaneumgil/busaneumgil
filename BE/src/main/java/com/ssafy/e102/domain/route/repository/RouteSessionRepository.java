@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.route.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,6 +14,11 @@ public interface RouteSessionRepository extends JpaRepository<RouteSession, UUID
 	Optional<RouteSession> findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(UUID userId, String routeId);
 
 	Optional<RouteSession> findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+		UUID userId,
+		String routeId,
+		RouteSessionStatus status);
+
+	List<RouteSession> findAllByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 		UUID userId,
 		String routeId,
 		RouteSessionStatus status);

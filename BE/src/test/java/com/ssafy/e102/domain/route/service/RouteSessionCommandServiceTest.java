@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -107,6 +108,72 @@ class RouteSessionCommandServiceTest {
 	}
 
 	@Test
+	@DisplayName("legacy ACTIVE session의 activeRouteKey가 비어 있으면 select 경계에서 보정한다")
+	void saveActiveSessionBackfillsLegacyActiveRouteKey() {
+		RouteSession legacyActiveSession = RouteSession.create(
+			user(USER_ID),
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			snapshot("rt_selected_001"));
+		ReflectionTestUtils.setField(legacyActiveSession, "activeRouteKey", null);
+		when(routeSessionRepository.findAllByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(List.of(legacyActiveSession));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.of(legacyActiveSession));
+
+		service.saveActiveSessionIfAbsent(
+			USER_ID,
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			snapshot("rt_selected_001"));
+
+		assertThat(legacyActiveSession.getActiveRouteKey()).isEqualTo("rt_selected_001");
+		verify(routeSessionRepository).saveAndFlush(legacyActiveSession);
+		verify(userRepository, never()).getReferenceById(any());
+	}
+
+	@Test
+	@DisplayName("중복 ACTIVE session이 있으면 최신만 유지하고 나머지는 COMPLETED로 보정한다")
+	void saveActiveSessionCompletesDuplicateActiveSessions() {
+		RouteSession latestSession = RouteSession.create(
+			user(USER_ID),
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			snapshot("rt_selected_001"));
+		RouteSession duplicateSession = RouteSession.create(
+			user(USER_ID),
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			snapshot("rt_selected_001"));
+		ReflectionTestUtils.setField(latestSession, "activeRouteKey", null);
+		ReflectionTestUtils.setField(duplicateSession, "activeRouteKey", null);
+		when(routeSessionRepository.findAllByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE))
+			.thenReturn(List.of(latestSession, duplicateSession));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.of(latestSession));
+
+		service.saveActiveSessionIfAbsent(
+			USER_ID,
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			snapshot("rt_selected_001"));
+
+		assertThat(latestSession.getStatus()).isEqualTo(RouteSessionStatus.ACTIVE);
+		assertThat(latestSession.getActiveRouteKey()).isEqualTo("rt_selected_001");
+		assertThat(duplicateSession.getStatus()).isEqualTo(RouteSessionStatus.COMPLETED);
+		assertThat(duplicateSession.getActiveRouteKey()).isNull();
+		verify(routeSessionRepository).saveAllAndFlush(List.of(duplicateSession));
+		verify(routeSessionRepository).saveAndFlush(latestSession);
+		verify(userRepository, never()).getReferenceById(any());
+	}
+
+	@Test
 	@DisplayName("ACTIVE session 존재 여부는 status=ACTIVE 조건으로 조회한다")
 	void hasActiveSessionUsesActiveStatus() {
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
@@ -127,6 +194,8 @@ class RouteSessionCommandServiceTest {
 			snapshot("rt_selected_001"));
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
 			.thenReturn(Optional.of(session));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.of(session));
 
 		service.endSession(USER_ID, "rt_selected_001");
 

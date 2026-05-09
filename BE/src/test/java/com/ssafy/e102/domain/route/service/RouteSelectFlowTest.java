@@ -154,6 +154,9 @@ class RouteSelectFlowTest {
 		RouteSession selectedSession = sessionCaptor.getValue();
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, route.routeId()))
 			.thenReturn(Optional.of(selectedSession));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, route.routeId(), RouteSessionStatus.ACTIVE))
+			.thenReturn(Optional.of(selectedSession));
 
 		routeSessionCommandService.endSession(USER_ID, route.routeId());
 		routeRatingService.rate(USER_ID, new RouteRatingRequest(route.routeId(), 5));

@@ -688,7 +688,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `route_id`는 프론트와 API에서 참조하는 대표 경로 ID다.
 - `active_route_key`는 같은 사용자의 같은 route가 동시에 여러 ACTIVE session으로 저장되는 것을 막는 내부 키다. `ACTIVE` 상태에서는 `route_id`와 같은 값을 저장하고, `COMPLETED`로 전환할 때 `NULL`로 비운다.
 - DB는 `(user_id, active_route_key)` unique 제약으로 ACTIVE 중복 선택을 최종 방어한다. PostgreSQL unique 제약은 `NULL`을 서로 다른 값으로 취급하므로 완료된 과거 session은 같은 route라도 여러 건 보관할 수 있다.
-- 기존 DB에 이 컬럼을 추가하는 배포에서는 기존 `ACTIVE` row의 `active_route_key`를 `route_id`로 보정한 뒤 unique 제약을 적용한다. 중복 ACTIVE row가 이미 있으면 최신 row만 유지하거나 나머지를 `COMPLETED`로 정리한 뒤 제약을 적용한다.
+- 별도 DB migration을 사용하지 않는 배포에서는 select/end 애플리케이션 경계에서 기존 `ACTIVE` row의 `active_route_key`를 `route_id`로 보정한다. 같은 사용자/route에 중복 ACTIVE row가 있으면 최신 row만 ACTIVE로 유지하고 나머지는 `COMPLETED`로 정리한다.
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`

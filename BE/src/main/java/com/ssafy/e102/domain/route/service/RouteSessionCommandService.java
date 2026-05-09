@@ -1,5 +1,7 @@
 package com.ssafy.e102.domain.route.service;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.locationtech.jts.geom.Point;
@@ -33,6 +35,7 @@ public class RouteSessionCommandService {
 		Point startPoint,
 		Point endPoint,
 		JsonNode routeSnapshotJson) {
+		normalizeActiveSessions(userId, routeId);
 		if (hasActiveSession(userId, routeId)) {
 			return;
 		}
@@ -47,25 +50,62 @@ public class RouteSessionCommandService {
 
 	@Transactional(readOnly = true)
 	public boolean hasActiveSession(UUID userId, String routeId) {
-		return routeSessionRepository
-			.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(userId, routeId, RouteSessionStatus.ACTIVE)
-			.isPresent();
+		return findActiveSession(userId, routeId).isPresent();
 	}
 
 	@Transactional
 	public void endSession(UUID userId, String routeId) {
-		routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, routeId)
-			.ifPresentOrElse(
-				session -> {
-					if (session.getStatus() == RouteSessionStatus.ACTIVE) {
-						session.complete();
-					}
-				},
-				() -> {
-					if (routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc(routeId).isPresent()) {
-						throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
-					}
-					throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
-				});
+		normalizeActiveSessions(userId, routeId);
+		Optional<RouteSession> activeSession = findActiveSession(userId, routeId);
+		if (activeSession.isPresent()) {
+			activeSession.get().complete();
+			return;
+		}
+		if (findOwnedSession(userId, routeId).isPresent()) {
+			return;
+		}
+		if (findAnySession(routeId).isPresent()) {
+			throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
+		}
+		throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+	}
+
+	private void normalizeActiveSessions(UUID userId, String routeId) {
+		List<RouteSession> activeSessions = routeSessionRepository
+			.findAllByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(userId, routeId, RouteSessionStatus.ACTIVE);
+		if (activeSessions == null || activeSessions.isEmpty()) {
+			return;
+		}
+
+		RouteSession latest = activeSessions.get(0);
+		List<RouteSession> duplicates = activeSessions.subList(1, activeSessions.size());
+		if (!duplicates.isEmpty()) {
+			duplicates.forEach(RouteSession::complete);
+			routeSessionRepository.saveAllAndFlush(duplicates);
+		}
+		if (latest.ensureActiveRouteKey()) {
+			routeSessionRepository.saveAndFlush(latest);
+		}
+	}
+
+	private Optional<RouteSession> findActiveSession(UUID userId, String routeId) {
+		return Optional.ofNullable(routeSessionRepository
+			.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+				userId,
+				routeId,
+				RouteSessionStatus.ACTIVE))
+			.orElse(Optional.empty());
+	}
+
+	private Optional<RouteSession> findOwnedSession(UUID userId, String routeId) {
+		return Optional.ofNullable(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(
+			userId,
+			routeId))
+			.orElse(Optional.empty());
+	}
+
+	private Optional<RouteSession> findAnySession(String routeId) {
+		return Optional.ofNullable(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc(routeId))
+			.orElse(Optional.empty());
 	}
 }

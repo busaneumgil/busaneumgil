@@ -93,6 +93,8 @@ internal data class KakaoMarkerRenderState(
     @DrawableRes val iconResId: Int,
     val rank: Long,
     val clickTargetId: String?,
+    val anchorPointX: Float? = null,
+    val anchorPointY: Float? = null,
 )
 
 internal data class KakaoRendererFailure(
@@ -148,6 +150,16 @@ internal fun createKakaoRendererTimeoutFailure(): KakaoRendererFailure =
         detailMessage = KAKAO_RENDERER_TIMEOUT_DETAIL_FALLBACK,
     )
 
+internal fun resolveKakaoRendererFailureAfterUnexpectedDestroy(
+    existingFailure: KakaoRendererFailure?,
+): KakaoRendererFailure = existingFailure ?: createKakaoRendererDestroyedFailure()
+
+internal fun createKakaoRendererDestroyedFailure(): KakaoRendererFailure =
+    KakaoRendererFailure(
+        reasonLabel = KAKAO_RENDERER_DESTROYED_REASON_LABEL,
+        detailMessage = KAKAO_RENDERER_DESTROYED_DETAIL_FALLBACK,
+    )
+
 internal fun createKakaoMarkerRenderStates(
     markerOverlayState: MapMarkerOverlayState,
     selectedMarkerId: String?,
@@ -164,6 +176,8 @@ internal fun createKakaoMarkerRenderStates(
                     iconResId = R.drawable.ic_map_selected_pin_blue,
                     rank = 2L,
                     clickTargetId = null,
+                    anchorPointX = 0.5f,
+                    anchorPointY = 1.0f,
                 ),
             )
         }
@@ -230,6 +244,8 @@ private fun categoryMarkerIconResId(category: FacilityCategory): Int =
 
 internal const val KAKAO_RENDERER_ERROR_REASON_FALLBACK = "MapError"
 internal const val KAKAO_RENDERER_ERROR_DETAIL_FALLBACK = "Unknown renderer failure"
+internal const val KAKAO_RENDERER_DESTROYED_REASON_LABEL = "MapDestroyed"
+internal const val KAKAO_RENDERER_DESTROYED_DETAIL_FALLBACK = "Renderer was destroyed before becoming ready"
 internal const val KAKAO_RENDERER_TIMEOUT_REASON_LABEL = "MapTimeout"
 internal const val KAKAO_RENDERER_TIMEOUT_DETAIL_FALLBACK = "Renderer did not become ready in time"
 internal const val KAKAO_ZOOM_CAMERA_ANIMATION_DURATION_MILLIS = 220

@@ -347,6 +347,29 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `unexpected renderer destroy preserves existing retryable failure`() {
+        val timeoutFailure = createKakaoRendererTimeoutFailure()
+
+        val resolvedFailure =
+            resolveKakaoRendererFailureAfterUnexpectedDestroy(
+                existingFailure = timeoutFailure,
+            )
+
+        assertEquals(timeoutFailure, resolvedFailure)
+    }
+
+    @Test
+    fun `unexpected renderer destroy creates retryable failure when no failure exists yet`() {
+        val resolvedFailure =
+            resolveKakaoRendererFailureAfterUnexpectedDestroy(
+                existingFailure = null,
+            )
+
+        assertEquals(KAKAO_RENDERER_DESTROYED_REASON_LABEL, resolvedFailure.reasonLabel)
+        assertEquals(KAKAO_RENDERER_DESTROYED_DETAIL_FALLBACK, resolvedFailure.detailMessage)
+    }
+
+    @Test
     fun `marker debug summary keeps overlay counts and current selection`() {
         val markerStates =
             createKakaoMarkerRenderStates(
@@ -435,5 +458,7 @@ class KakaoMapViewportBindingsTest {
         assertEquals(R.drawable.ic_map_selected_pin_blue, markerStates.first().iconResId)
         assertEquals(2L, markerStates.first().rank)
         assertEquals(null, markerStates.first().clickTargetId)
+        assertEquals(0.5f, markerStates.first().anchorPointX)
+        assertEquals(1.0f, markerStates.first().anchorPointY)
     }
 }

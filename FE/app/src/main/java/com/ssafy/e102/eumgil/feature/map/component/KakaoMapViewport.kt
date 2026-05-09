@@ -26,10 +26,12 @@ import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapView
+import com.kakao.vectormap.GestureType
 import com.kakao.vectormap.camera.CameraAnimation
 import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.kakao.vectormap.label.LabelLayerOptions
 import com.kakao.vectormap.label.LabelOptions
+import com.kakao.vectormap.label.LabelStyle
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import kotlinx.coroutines.delay
 
@@ -37,7 +39,7 @@ import kotlinx.coroutines.delay
 internal fun KakaoMapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
-    onCameraMoveEnd: (MapCoordinate, Int) -> Unit,
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
     onMapClick: (MapCoordinate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -162,7 +164,7 @@ private class KakaoMapViewportController {
     private var kakaoMap: KakaoMap? = null
     private var latestState: MapViewportUiState? = null
     private var markerClickHandler: ((String) -> Unit)? = null
-    private var cameraMoveEndHandler: ((MapCoordinate, Int) -> Unit)? = null
+    private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean) -> Unit)? = null
     private var mapClickHandler: ((MapCoordinate) -> Unit)? = null
     private var lastRenderedCameraRequestId: Long? = null
     private var lastRenderedCameraTarget: com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget? = null
@@ -186,7 +188,7 @@ private class KakaoMapViewportController {
         context: Context,
         initialState: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
-        onCameraMoveEnd: (MapCoordinate, Int) -> Unit,
+        onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
         onMapClick: (MapCoordinate) -> Unit,
     ): MapView {
         latestState = initialState
@@ -208,7 +210,7 @@ private class KakaoMapViewportController {
     fun render(
         state: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
-        onCameraMoveEnd: (MapCoordinate, Int) -> Unit,
+        onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
         onMapClick: (MapCoordinate) -> Unit,
     ) {
         latestState = state
@@ -269,15 +271,27 @@ private class KakaoMapViewportController {
         createdMapView.start(
             object : MapLifeCycleCallback() {
                 override fun onMapDestroy() {
-                    rendererStatus = KakaoRendererStatus.Initializing
-                    rendererFailure = null
+                    if (isFinished) {
+                        Log.i(KAKAO_MAP_LOG_TAG, "Ignoring Kakao map destroy callback after controller finish")
+                        return
+                    }
+
+                    val destroyFailure =
+                        resolveKakaoRendererFailureAfterUnexpectedDestroy(
+                            existingFailure = rendererFailure,
+                        )
+                    rendererFailure = destroyFailure
+                    rendererStatus = KakaoRendererStatus.Error
                     kakaoMap = null
                     hasMapLifecycleResumed = false
                     lifecycleDispatchRetryCount = 0
                     lastRenderedCameraRequestId = null
                     lastRenderedCameraTarget = null
                     lastRenderedMarkers = emptyList()
-                    Log.i(KAKAO_MAP_LOG_TAG, "Kakao map renderer destroyed")
+                    Log.w(
+                        KAKAO_MAP_LOG_TAG,
+                        "Kakao map renderer destroyed before interactive recovery: ${destroyFailure.debugSummary}",
+                    )
                 }
 
                 override fun onMapError(error: Exception) {
@@ -331,7 +345,7 @@ private class KakaoMapViewportController {
                             ),
                         )
                     }
-                    readyMap.setOnCameraMoveEndListener { _, cameraPosition, _ ->
+                    readyMap.setOnCameraMoveEndListener { _, cameraPosition, gestureType ->
                         val movedCenter =
                             MapCoordinate(
                                 latitude = cameraPosition.position.latitude,
@@ -347,6 +361,7 @@ private class KakaoMapViewportController {
                         cameraMoveEndHandler?.invoke(
                             movedCenter,
                             cameraPosition.zoomLevel,
+                            gestureType.isUserDrivenCameraMove(),
                         )
                     }
                     renderIntoMapIfReady()
@@ -539,7 +554,15 @@ private class KakaoMapViewportController {
                         marker.markerId,
                         LatLng.from(marker.latitude, marker.longitude),
                     )
-                    .setStyles(marker.iconResId)
+                    .setStyles(
+                        LabelStyle
+                            .from(marker.iconResId)
+                            .apply {
+                                if (marker.anchorPointX != null && marker.anchorPointY != null) {
+                                    setAnchorPoint(marker.anchorPointX, marker.anchorPointY)
+                                }
+                            },
+                    )
                     .setClickable(true)
                     .setRank(marker.rank)
                     .apply {
@@ -573,3 +596,5 @@ private const val MAX_LIFECYCLE_DISPATCH_RETRIES = 30
 private const val LIFECYCLE_DISPATCH_RETRY_DELAY_MILLIS = 50L
 private const val KAKAO_RENDERER_RESTART_DELAY_MILLIS = 220L
 private const val KAKAO_RENDERER_READY_TIMEOUT_MILLIS = 4_000L
+
+private fun GestureType.isUserDrivenCameraMove(): Boolean = this != GestureType.Unknown

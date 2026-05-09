@@ -80,7 +80,7 @@ sealed interface MapIntegrationState {
 internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
-    onCameraMoveEnd: (MapCoordinate, Int) -> Unit = { _, _ -> },
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit = { _, _, _ -> },
     onMapClick: (MapCoordinate) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -135,7 +135,7 @@ private fun MapContainer(
     integrationState: MapIntegrationState.Bound,
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
-    onCameraMoveEnd: (MapCoordinate, Int) -> Unit,
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
     onMapClick: (MapCoordinate) -> Unit,
     modifier: Modifier = Modifier,
 ) {

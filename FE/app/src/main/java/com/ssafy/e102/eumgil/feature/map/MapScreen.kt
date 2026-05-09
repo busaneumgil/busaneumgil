@@ -95,11 +95,12 @@ fun MapScreen(
                     onMarkerClick = { markerId ->
                         onAction(MapUiAction.MarkerTapped(markerId))
                     },
-                    onCameraMoveEnd = { center, zoomLevel ->
+                    onCameraMoveEnd = { center, zoomLevel, isUserGesture ->
                         onAction(
                             MapUiAction.ViewportCameraChanged(
                                 center = center,
                                 zoomLevel = zoomLevel,
+                                isUserGesture = isUserGesture,
                             ),
                         )
                     },
@@ -700,12 +701,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
 @Composable
 private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     val cameraTarget = uiState.cameraTarget
-    val currentLocationMarker =
-        if (cameraTarget.source == MapCameraSource.CURRENT_LOCATION) {
-            (uiState.locationStatus as? MapLocationStatus.Ready)?.location
-        } else {
-            null
-        }
+    val currentLocationMarker = resolveCurrentLocationMarker(uiState.locationStatus)
     val integrationState =
         resolveMapIntegrationState(
             hasNativeAppKey = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(),
@@ -803,6 +799,9 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
         supportingText = supportingText,
     )
 }
+
+internal fun resolveCurrentLocationMarker(locationStatus: MapLocationStatus): MapCoordinate? =
+    (locationStatus as? MapLocationStatus.Ready)?.location
 
 @Composable
 private fun selectedDestinationSummaryText(destination: PlaceDestination?): String {

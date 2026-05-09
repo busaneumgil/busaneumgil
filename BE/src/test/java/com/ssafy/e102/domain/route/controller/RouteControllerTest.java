@@ -260,6 +260,24 @@ class RouteControllerTest {
 	}
 
 	@Test
+	@DisplayName("select 검색 결과 만료는 RT4041로 반환한다")
+	void selectRouteMapsExpiredSearch() throws Exception {
+		assertSelectRouteError(RouteErrorCode.ROUTE_SEARCH_EXPIRED, 404, "RT4041", "검색 결과가 만료되었습니다.");
+	}
+
+	@Test
+	@DisplayName("select 후보 routeId 없음은 RT4042로 반환한다")
+	void selectRouteMapsMissingCandidate() throws Exception {
+		assertSelectRouteError(RouteErrorCode.ROUTE_CANDIDATE_NOT_FOUND, 404, "RT4042", "선택한 경로 후보를 찾을 수 없습니다.");
+	}
+
+	@Test
+	@DisplayName("select 다른 사용자 접근은 A4030으로 반환한다")
+	void selectRouteMapsAccessDenied() throws Exception {
+		assertSelectRouteError(RouteErrorCode.ROUTE_ACCESS_DENIED, 403, "A4030", "접근할 수 없는 경로입니다.");
+	}
+
+	@Test
 	@DisplayName("reroute 요청값 오류는 RT4001로 반환한다")
 	void rerouteMapsInvalidRerouteRequest() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -454,6 +472,29 @@ class RouteControllerTest {
 				{
 				  "startPoint": {"lat": 35.12, "lng": 128.936},
 				  "endPoint": {"lat": 35.1315, "lng": 128.8823}
+				}
+				"""))
+			.andExpect(status().is(httpStatus))
+			.andExpect(jsonPath("$.status").value(status))
+			.andExpect(jsonPath("$.message").value(message))
+			.andExpect(jsonPath("$.data").doesNotExist());
+
+		SecurityContextHolder.clearContext();
+	}
+
+	private void assertSelectRouteError(RouteErrorCode errorCode, int httpStatus, String status, String message)
+		throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		Mockito.doThrow(new RouteException(errorCode))
+			.when(routeSelectService)
+			.select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class));
+
+		mockMvc.perform(post("/routes/rt_selected_001/select")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "searchId": "rs_walk_test"
 				}
 				"""))
 			.andExpect(status().is(httpStatus))

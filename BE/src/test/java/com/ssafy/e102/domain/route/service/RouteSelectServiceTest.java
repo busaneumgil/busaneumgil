@@ -3,12 +3,14 @@ package com.ssafy.e102.domain.route.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -173,6 +175,59 @@ class RouteSelectServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_SELECT_CONFLICT);
+	}
+
+	@Test
+	@DisplayName("Redis 검색 결과가 만료되면 RT4041을 그대로 반환한다")
+	void selectPropagatesExpiredSearchError() {
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "expired", "rt_selected_001"))
+			.thenThrow(new RouteException(RouteErrorCode.ROUTE_SEARCH_EXPIRED));
+
+		assertThatThrownBy(() -> service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("expired")))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_SEARCH_EXPIRED);
+		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+	}
+
+	@Test
+	@DisplayName("검색 묶음 안에 routeId가 없으면 RT4042를 그대로 반환한다")
+	void selectPropagatesMissingCandidateError() {
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_walk_test", "missing_route"))
+			.thenThrow(new RouteException(RouteErrorCode.ROUTE_CANDIDATE_NOT_FOUND));
+
+		assertThatThrownBy(() -> service.select(USER_ID, "missing_route", new SelectRouteRequest("rs_walk_test")))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_CANDIDATE_NOT_FOUND);
+		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+	}
+
+	@Test
+	@DisplayName("다른 사용자의 searchId이면 A4030을 그대로 반환한다")
+	void selectPropagatesOwnerMismatchError() {
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_other_user", "rt_selected_001"))
+			.thenThrow(new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED));
+
+		assertThatThrownBy(() -> service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_other_user")))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_ACCESS_DENIED);
+		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+	}
+
+	@Test
+	@DisplayName("같은 사용자의 같은 routeId 중복 select는 추가 저장 없이 성공한다")
+	void selectDuplicateRouteDoesNotCreateAnotherSession() {
+		RouteSummaryResponse route = transitRoute("rt_selected_001");
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
+			.thenReturn(route);
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(mock(RouteSession.class)));
+
+		service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test"));
+
+		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
 	}
 
 	private RouteSummaryResponse transitRoute(String routeId) {

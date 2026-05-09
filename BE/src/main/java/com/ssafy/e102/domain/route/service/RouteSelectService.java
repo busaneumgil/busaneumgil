@@ -54,6 +54,10 @@ public class RouteSelectService {
 	@Transactional
 	public void select(UUID userId, String routeId, SelectRouteRequest request) {
 		RouteSummaryResponse route = routeSearchCacheService.getOwnedRouteOrThrow(userId, request.searchId(), routeId);
+		if (routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, route.routeId())
+			.isPresent()) {
+			return;
+		}
 		User user = userRepository.getReferenceById(userId);
 		Coordinate[] coordinates = routeCoordinates(route);
 		routeSessionRepository.save(RouteSession.create(

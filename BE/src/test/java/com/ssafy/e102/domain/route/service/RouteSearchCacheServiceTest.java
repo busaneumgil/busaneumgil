@@ -119,6 +119,18 @@ class RouteSearchCacheServiceTest {
 	}
 
 	@Test
+	void getOwnedRouteThrowsSearchExpiredWhenCachedSearchHasNoOwner() {
+		when(valueOperations.get("routeSearch:legacy")).thenReturn("""
+			{"searchId":"legacy","routes":[{"routeId":"legacy_safe","transportMode":"WALK","routeOption":"SAFE","title":"안전 경로","distanceMeter":100.00,"durationSecond":60,"estimatedTimeMinute":1,"badges":[],"geometry":"LINESTRING(0 0, 1 1)","legs":[]}]}
+			""");
+
+		assertThatThrownBy(() -> cacheService.getOwnedRouteOrThrow(USER_ID, "legacy", "legacy_safe"))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_SEARCH_EXPIRED);
+	}
+
+	@Test
 	void findsTransitMetadataByRouteId() {
 		when(valueOperations.get("routeSearchMeta:rs_transit_test")).thenReturn("""
 			[{"routeId":"rt_a","mapObj":"map-a","legs":[{"type":"BUS"}]},{"routeId":"rt_b","mapObj":"map-b","legs":[{"type":"SUBWAY"}]}]

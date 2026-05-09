@@ -132,3 +132,19 @@ bash scripts/deploy/prod-smoke.sh
 GraphHopper smoke는 `DEPLOY_GRAPHHOPPER=true`일 때만 실행한다.
 
 길안내 API의 실제 route smoke는 `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md`의 `POST /routes/search/walk`, `POST /routes/search/transit` 구현이 완료된 뒤 추가한다.
+
+## 8. route search Redis cache cleanup
+
+`routeSearch:{searchId}` cache 구조가 바뀌는 배포에서는 기존 owner-less cache를 선택 가능한 정상 후보로 취급하지 않는다. Redis miss나 owner 없는 legacy cache는 `POST /routes/{routeId}/select`에서 `RT4041`로 재검색을 유도한다.
+
+배포 직후 애매한 owner 검증 상태를 없애려면 Redis 전체를 flush하지 말고 경로 검색 임시 key만 삭제한다.
+
+```bash
+redis-cli --scan --pattern 'routeSearch:*' | xargs -r redis-cli del
+redis-cli --scan --pattern 'routeSearchMeta:*' | xargs -r redis-cli del
+```
+
+주의:
+
+- 공용 BIMS TTL cache, auth/session cache, 다른 도메인 cache는 삭제하지 않는다.
+- 삭제 대상은 search 이후 select 전까지 쓰는 임시 후보 묶음이며, 사용자는 `RT4041`을 받으면 재검색하면 된다.

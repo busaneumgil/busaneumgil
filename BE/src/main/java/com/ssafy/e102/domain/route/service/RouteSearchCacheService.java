@@ -91,6 +91,9 @@ public class RouteSearchCacheService {
 	public RouteSummaryResponse getOwnedRouteOrThrow(UUID userId, String searchId, String routeId) {
 		RouteSearchCacheEntry entry = findEntry(searchId)
 			.orElseThrow(() -> new RouteException(RouteErrorCode.ROUTE_SEARCH_EXPIRED));
+		if (entry.userId() == null) {
+			throw new RouteException(RouteErrorCode.ROUTE_SEARCH_EXPIRED);
+		}
 		if (!userId.equals(entry.userId())) {
 			throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
 		}

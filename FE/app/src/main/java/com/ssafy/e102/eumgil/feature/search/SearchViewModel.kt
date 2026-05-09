@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -14,6 +15,7 @@ import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+internal const val VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS = 2_000L
 
 class SearchViewModel(
     private val searchRepository: SearchRepository,
@@ -36,6 +40,7 @@ class SearchViewModel(
     val uiEvent: SharedFlow<SearchUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var searchJob: Job? = null
+    private var voiceSearchNavigationJob: Job? = null
 
     init {
         refreshRecentSearches()
@@ -45,16 +50,24 @@ class SearchViewModel(
         when (action) {
             SearchUiAction.BackClicked -> emitUiEvent(SearchUiEvent.NavigateBack)
             is SearchUiAction.EditingTargetConfigured -> configureEditingTarget(action.editingTarget)
+            is SearchUiAction.EntryRouteEntered -> enterEntryRoute(preserveState = action.preserveState)
             SearchUiAction.VoiceInputClicked -> emitUiEvent(SearchUiEvent.NavigateToVoiceInput)
             SearchUiAction.VoiceRouteEntered -> enterVoiceRoute()
             SearchUiAction.VoiceCaptureButtonClicked -> startVoiceCapture()
+            SearchUiAction.VoiceCaptureEmpty -> handleVoiceCaptureEmpty()
             SearchUiAction.VoiceInputDismissed -> dismissVoiceInput()
             SearchUiAction.ClearQueryClicked -> clearQuery()
             SearchUiAction.SearchSubmitted -> submitSearch()
-            is SearchUiAction.VoiceTranscriptReceived -> handleVoiceTranscript(action.transcript)
+            is SearchUiAction.VoiceTranscriptReceived ->
+                handleVoiceTranscript(
+                    transcript = action.transcript,
+                    searchQuery = action.searchQuery,
+                )
             is SearchUiAction.QueryChanged -> updateQuery(action.query)
             is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
+            is SearchUiAction.RecentSearchDeleteClicked -> deleteRecentSearch(action.keyword)
+            SearchUiAction.RecentSearchClearAllClicked -> clearRecentSearches()
             is SearchUiAction.SearchResultClicked -> selectSearchResult(action.result)
             is SearchUiAction.SearchResultBriefingClicked -> briefSearchResult(action.result)
             is SearchUiAction.BookmarkToggleClicked -> toggleBookmark(action.result)
@@ -81,15 +94,7 @@ class SearchViewModel(
     private fun handoffSearchResult(result: SearchResult): Boolean {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
-            mutableUiState.update { state ->
-                state.copy(
-                    resultState =
-                        SearchResultUiState.Error(
-                            query = state.query.trim(),
-                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
-                        ),
-                )
-            }
+            showResultActionError(message = blockedResultMessage(result))
             return false
         }
 
@@ -102,11 +107,14 @@ class SearchViewModel(
         result: SearchResult,
         destination: com.ssafy.e102.eumgil.core.model.PlaceDestination,
     ) {
+        if (!result.isVerifiedPlace) return
+
         viewModelScope.launch {
             val accessibilityTagKeys =
                 runCatching {
-                    placesRepository?.getPlaceDetail(result.placeId)?.accessibilityTags.orEmpty()
-                }.getOrDefault(emptyList())
+                    placesRepository?.getPlaceDetail(checkNotNull(result.serverPlaceId))?.accessibilityTags
+                        ?: result.accessibilityTagKeys
+                }.getOrDefault(result.accessibilityTagKeys)
 
             runCatching {
                 searchRepository.saveRecentDestination(
@@ -127,15 +135,7 @@ class SearchViewModel(
     private fun toggleBookmark(result: SearchResult) {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
-            mutableUiState.update { state ->
-                state.copy(
-                    resultState =
-                        SearchResultUiState.Error(
-                            query = state.query.trim(),
-                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
-                        ),
-                )
-            }
+            showResultActionError(message = blockedResultMessage(result))
             return
         }
 
@@ -173,15 +173,7 @@ class SearchViewModel(
     private fun saveLowVisionBookmark(result: SearchResult) {
         val destination = result.toPlaceDestinationOrNull()
         if (destination == null) {
-            mutableUiState.update { state ->
-                state.copy(
-                    resultState =
-                        SearchResultUiState.Error(
-                            query = state.query.trim(),
-                            message = INVALID_DESTINATION_HANDOFF_MESSAGE,
-                        ),
-                )
-            }
+            showResultActionError(message = blockedResultMessage(result))
             return
         }
 
@@ -236,20 +228,33 @@ class SearchViewModel(
         renderInputState()
     }
 
-    private fun enterVoiceRoute() {
+    private fun enterEntryRoute(preserveState: Boolean) {
+        if (preserveState) return
+
+        cancelPendingVoiceSearchNavigation()
+        searchJob?.cancel()
         mutableUiState.update { state ->
             state.copy(
-                voiceInputState =
-                    SearchVoiceInputUiState(
-                        isActive = true,
-                        transcript = "",
-                        status = SearchVoiceInputStatus.Idle,
-                    ),
+                query = "",
+                hasEditedQuery = false,
+                resultState = SearchResultUiState.Initial,
+                voiceInputState = SearchVoiceInputUiState(),
             )
         }
     }
 
+    private fun enterVoiceRoute() {
+        cancelPendingVoiceSearchNavigation()
+        showListeningVoiceInputState()
+    }
+
     private fun startVoiceCapture() {
+        cancelPendingVoiceSearchNavigation()
+        showListeningVoiceInputState()
+        emitUiEvent(SearchUiEvent.StartVoiceCapture)
+    }
+
+    private fun showListeningVoiceInputState() {
         mutableUiState.update { state ->
             state.copy(
                 voiceInputState =
@@ -257,42 +262,81 @@ class SearchViewModel(
                         isActive = true,
                         transcript = "",
                         status = SearchVoiceInputStatus.Listening,
+                        guidance = SearchVoiceInputGuidance.None,
                     ),
             )
         }
-        emitUiEvent(SearchUiEvent.StartVoiceCapture)
+    }
+
+    private fun handleVoiceCaptureEmpty() {
+        cancelPendingVoiceSearchNavigation()
+        mutableUiState.update { state ->
+            state.copy(
+                voiceInputState =
+                    SearchVoiceInputUiState(
+                        isActive = true,
+                        transcript = "",
+                        status = SearchVoiceInputStatus.Idle,
+                        guidance = SearchVoiceInputGuidance.RetryRequired,
+                    ),
+            )
+        }
     }
 
     private fun dismissVoiceInput() {
+        cancelPendingVoiceSearchNavigation()
         val shouldStopCapture = mutableUiState.value.voiceInputState.status == SearchVoiceInputStatus.Listening
-        mutableUiState.update { state ->
-            state.copy(voiceInputState = SearchVoiceInputUiState())
-        }
         if (shouldStopCapture) {
             emitUiEvent(SearchUiEvent.StopVoiceCapture)
         }
         emitUiEvent(SearchUiEvent.NavigateBack)
     }
 
-    private fun handleVoiceTranscript(transcript: String) {
+    private fun handleVoiceTranscript(
+        transcript: String,
+        searchQuery: String?,
+    ) {
         val normalizedTranscript = transcript.trim()
         if (normalizedTranscript.isEmpty()) return
         val shouldStopCapture = mutableUiState.value.voiceInputState.status == SearchVoiceInputStatus.Listening
+        val normalizedSearchQuery = searchQuery?.trim()?.takeIf(String::isNotEmpty)
 
+        cancelPendingVoiceSearchNavigation()
         mutableUiState.update { state ->
             state.copy(
                 voiceInputState =
                     SearchVoiceInputUiState(
-                        isActive = false,
+                        isActive = true,
                         transcript = normalizedTranscript,
-                        status = SearchVoiceInputStatus.Idle,
+                        status = SearchVoiceInputStatus.Recognized,
+                        guidance = SearchVoiceInputGuidance.None,
                     ),
             )
         }
         if (shouldStopCapture) {
             emitUiEvent(SearchUiEvent.StopVoiceCapture)
         }
-        submitSearch(keyword = normalizedTranscript)
+        voiceSearchNavigationJob =
+            viewModelScope.launch {
+                delay(VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS)
+                val resolvedKeyword =
+                    normalizedSearchQuery
+                        ?: runCatching {
+                            searchRepository.analyzeVoiceSearch(
+                                text = normalizedTranscript,
+                                mode = SearchVoiceMode.MOBILITY_IMPAIRED,
+                            ).placeName
+                        }.getOrNull()
+                            ?.trim()
+                            ?.takeIf(String::isNotEmpty)
+                        ?: normalizedTranscript
+                submitSearch(keyword = resolvedKeyword)
+            }
+    }
+
+    private fun cancelPendingVoiceSearchNavigation() {
+        voiceSearchNavigationJob?.cancel()
+        voiceSearchNavigationJob = null
     }
 
     private fun renderInputState() {
@@ -426,14 +470,77 @@ class SearchViewModel(
         }
     }
 
+    private fun deleteRecentSearch(keyword: String) {
+        val normalizedKeyword = keyword.trim()
+        if (normalizedKeyword.isEmpty()) return
+
+        viewModelScope.launch {
+            val recentSearches =
+                try {
+                    searchRepository.deleteRecentSearch(normalizedKeyword)
+                    searchRepository.getRecentSearches()
+                } catch (throwable: Throwable) {
+                    if (throwable is CancellationException) throw throwable
+                    mutableUiState.value.recentSearches
+                }
+
+            mutableUiState.update { state ->
+                state.copy(recentSearches = recentSearches)
+            }
+        }
+    }
+
+    private fun clearRecentSearches() {
+        viewModelScope.launch {
+            val recentSearches =
+                try {
+                    searchRepository.clearRecentSearches()
+                    searchRepository.getRecentSearches()
+                } catch (throwable: Throwable) {
+                    if (throwable is CancellationException) throw throwable
+                    mutableUiState.value.recentSearches
+                }
+
+            mutableUiState.update { state ->
+                state.copy(recentSearches = recentSearches)
+            }
+        }
+    }
+
     private fun emitUiEvent(event: SearchUiEvent) {
         viewModelScope.launch {
             mutableUiEvent.emit(event)
         }
     }
 
+    private fun showResultActionError(message: String) {
+        mutableUiState.update { state ->
+            state.copy(
+                resultState =
+                    SearchResultUiState.Error(
+                        query = state.query.trim(),
+                        message = message,
+                    ),
+            )
+        }
+    }
+
+    private fun blockedResultMessage(result: SearchResult): String =
+        if (!result.isVerifiedPlace) {
+            UNVERIFIED_PLACE_HANDOFF_MESSAGE
+        } else {
+            INVALID_DESTINATION_HANDOFF_MESSAGE
+        }
+
+    override fun onCleared() {
+        cancelPendingVoiceSearchNavigation()
+        searchJob?.cancel()
+        super.onCleared()
+    }
+
     companion object {
         private const val INVALID_DESTINATION_HANDOFF_MESSAGE = "좌표 정보가 올바르지 않아 경로 설정으로 넘길 수 없습니다."
+        private const val UNVERIFIED_PLACE_HANDOFF_MESSAGE = "접근성 정보가 확인된 장소만 길찾기를 시작할 수 있습니다."
         private const val BOOKMARK_TOGGLE_FAILURE_MESSAGE = "북마크 상태를 변경하지 못했습니다. 다시 시도해 주세요."
 
         fun provideFactory(

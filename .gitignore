@@ -3,6 +3,8 @@
 .gradle/
 build/
 out/
+__pycache__/
+*.py[cod]
 HELP.md
 .env
 .env.*

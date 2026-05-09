@@ -16,11 +16,18 @@ data class SearchVoiceInputUiState(
     val isActive: Boolean = false,
     val transcript: String = "",
     val status: SearchVoiceInputStatus = SearchVoiceInputStatus.Idle,
+    val guidance: SearchVoiceInputGuidance = SearchVoiceInputGuidance.None,
 )
 
 enum class SearchVoiceInputStatus {
     Idle,
     Listening,
+    Recognized,
+}
+
+enum class SearchVoiceInputGuidance {
+    None,
+    RetryRequired,
 }
 
 sealed interface SearchUiAction {
@@ -30,16 +37,23 @@ sealed interface SearchUiAction {
         val editingTarget: RouteEditingTarget,
     ) : SearchUiAction
 
+    data class EntryRouteEntered(
+        val preserveState: Boolean,
+    ) : SearchUiAction
+
     data object VoiceInputClicked : SearchUiAction
 
     data object VoiceRouteEntered : SearchUiAction
 
     data object VoiceCaptureButtonClicked : SearchUiAction
 
+    data object VoiceCaptureEmpty : SearchUiAction
+
     data object VoiceInputDismissed : SearchUiAction
 
     data class VoiceTranscriptReceived(
         val transcript: String,
+        val searchQuery: String? = null,
     ) : SearchUiAction
 
     data class ResultsRouteEntered(
@@ -57,6 +71,12 @@ sealed interface SearchUiAction {
     data class RecentSearchClicked(
         val keyword: String,
     ) : SearchUiAction
+
+    data class RecentSearchDeleteClicked(
+        val keyword: String,
+    ) : SearchUiAction
+
+    data object RecentSearchClearAllClicked : SearchUiAction
 
     data class SearchResultClicked(
         val result: SearchResult,

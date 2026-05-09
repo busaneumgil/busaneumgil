@@ -283,9 +283,8 @@ private class RecordingRouteRepository : RouteRepository {
                         ),
                 ),
             source =
-                RouteSearchSource.mockFixture(
-                    fixtureId = "recording-fixture",
-                    label = "Recording fixture",
+                RouteSearchSource.serverApi(
+                    label = "Recording route payload",
                 ),
         )
     }

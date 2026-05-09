@@ -2,6 +2,8 @@ package com.ssafy.e102.domain.route.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +19,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
@@ -87,6 +90,32 @@ class RouteSearchCacheServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_CANDIDATE_NOT_FOUND);
+	}
+
+	@Test
+	void saveThrowsInternalFailureWhenSearchResponseCannotBeSerialized() throws Exception {
+		ObjectMapper objectMapper = mock(ObjectMapper.class);
+		when(objectMapper.writeValueAsString(any()))
+			.thenThrow(new JsonProcessingException("serialize failed") {});
+		RouteSearchCacheService brokenCacheService = new RouteSearchCacheService(redisTemplate, objectMapper);
+
+		assertThatThrownBy(() -> brokenCacheService.save(response()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessage("경로 검색 후보를 직렬화할 수 없습니다.");
+	}
+
+	@Test
+	void findSearchThrowsInternalFailureWhenCachedResponseCannotBeDeserialized() throws Exception {
+		ObjectMapper objectMapper = mock(ObjectMapper.class);
+		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+		when(valueOperations.get("routeSearch:rs_walk_test")).thenReturn("{broken");
+		when(objectMapper.readValue("{broken", WalkRouteSearchResponse.class))
+			.thenThrow(new JsonProcessingException("deserialize failed") {});
+		RouteSearchCacheService brokenCacheService = new RouteSearchCacheService(redisTemplate, objectMapper);
+
+		assertThatThrownBy(() -> brokenCacheService.findSearch("rs_walk_test"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessage("경로 검색 후보를 역직렬화할 수 없습니다.");
 	}
 
 	private WalkRouteSearchResponse response() {

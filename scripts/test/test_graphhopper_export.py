@@ -375,6 +375,59 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual(output_segments[0]["audio_signal_state"], "UNKNOWN")
         self.assertEqual(output_segments[1]["audio_signal_state"], "YES")
 
+    def test_near_duplicate_feature_points_do_not_create_zero_length_child_segment(self):
+        module = load_export_module()
+        nodes = [
+            {"vertex_id": 1, "lon": 0.0, "lat": 0.0},
+            {"vertex_id": 2, "lon": 10.0, "lat": 0.0},
+        ]
+        segments = [
+            {
+                "edge_id": 300,
+                "from_node_id": 1,
+                "to_node_id": 2,
+                "geom_wkt": "LINESTRING(0 0, 10 0)",
+                "walk_access": "YES",
+                "avg_slope_percent": "0.0",
+                "width_meter": "2.0",
+                "braille_block_state": "UNKNOWN",
+                "audio_signal_state": "UNKNOWN",
+                "slope_state": "FLAT",
+                "width_state": "ADEQUATE_150",
+                "surface_state": "PAVED",
+                "stairs_state": "NO",
+                "signal_state": "UNKNOWN",
+                "segment_type": "SIDE_LINE",
+            }
+        ]
+        features = [
+            {
+                "feature_id": 1,
+                "edge_id": 300,
+                "feature_type": "CROSSWALK",
+                "geom_wkt": "POINT(5.0000000000001 0)",
+                "state": "YES",
+                "value_number": None,
+            },
+            {
+                "feature_id": 2,
+                "edge_id": 300,
+                "feature_type": "BRAILLE_BLOCK",
+                "geom_wkt": "POINT(5.0000000000002 0)",
+                "state": "YES",
+                "value_number": None,
+            },
+        ]
+
+        output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
+
+        self.assertEqual(len(output_nodes), 3)
+        self.assertEqual(len(output_segments), 2)
+        self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3])
+        self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 2])
+        report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
+        self.assertEqual(report["status"], "PASS")
+
     def test_close_point_features_do_not_collapse_child_segment_after_rounding(self):
         # 아주 가까운 두 point feature가 같은 source edge를 나눌 때
         # WKT/OSM 좌표 반올림 때문에 zero-length child가 생기면 안 된다.
@@ -438,6 +491,63 @@ class GraphhopperExportTest(unittest.TestCase):
 
         self.assertIn("128.826939899868", xml)
         self.assertIn("128.826939895100", xml)
+
+    def test_export_precision_merge_prevents_collapsed_synthetic_child(self):
+        module = load_export_module()
+        original_decimal_places = module.GEOMETRY_DECIMAL_PLACES
+        module.GEOMETRY_DECIMAL_PLACES = 8
+        try:
+            nodes = [
+                {"vertex_id": 1, "lon": 128.82709585, "lat": 35.09417414},
+                {"vertex_id": 2, "lon": 128.82678768, "lat": 35.09394820},
+            ]
+            segments = [
+                {
+                    "edge_id": 4900,
+                    "from_node_id": 1,
+                    "to_node_id": 2,
+                    "geom_wkt": "LINESTRING(128.82709585 35.09417414, 128.82678768 35.09394820)",
+                    "walk_access": "YES",
+                    "avg_slope_percent": "0.0",
+                    "width_meter": "0.0",
+                    "braille_block_state": "UNKNOWN",
+                    "audio_signal_state": "UNKNOWN",
+                    "slope_state": "FLAT",
+                    "width_state": "UNKNOWN",
+                    "surface_state": "PAVED",
+                    "stairs_state": "NO",
+                    "signal_state": "UNKNOWN",
+                    "segment_type": "SIDE_LINE",
+                }
+            ]
+            features = [
+                {
+                    "feature_id": 939,
+                    "edge_id": 4900,
+                    "feature_type": "CROSSWALK",
+                    "geom_wkt": "POINT(128.8269182 35.0940894)",
+                    "state": "YES",
+                    "value_number": None,
+                },
+                {
+                    "feature_id": 3263,
+                    "edge_id": 4900,
+                    "feature_type": "BRAILLE_BLOCK",
+                    "geom_wkt": "POINT(128.8269182 35.09408939)",
+                    "state": "YES",
+                    "value_number": None,
+                },
+            ]
+
+            output_nodes, output_segments = module.apply_segment_features_to_export(nodes, segments, features)
+            report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
+
+            self.assertEqual(report["status"], "PASS")
+            for segment in output_segments:
+                coords = module.parse_linestring_wkt(segment["geom_wkt"])
+                self.assertNotEqual(coords[0], coords[-1])
+        finally:
+            module.GEOMETRY_DECIMAL_PLACES = original_decimal_places
 
     def test_custom_models_use_canonical_accessibility_enums(self):
         allowed_width_conditions = {

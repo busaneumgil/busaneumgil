@@ -276,6 +276,14 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 backStackEntry = backStackEntry,
             )
             LowVisionAppInfoRoute(
+                onNavigateToLogin = {
+                    navController.navigate(resolveLowVisionLogoutRoute()) {
+                        launchSingleTop = true
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
+                        }
+                    }
+                },
                 onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
             )
         }

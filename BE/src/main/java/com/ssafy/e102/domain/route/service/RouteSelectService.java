@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
@@ -60,12 +61,14 @@ public class RouteSelectService {
 			route.routeId(),
 			toPoint(coordinates[0]),
 			toPoint(coordinates[coordinates.length - 1]),
-			snapshot(route)));
+			snapshot(request.searchId(), route)));
 	}
 
-	private JsonNode snapshot(RouteSummaryResponse route) {
-		JsonNode snapshot = objectMapper.valueToTree(route);
+	private JsonNode snapshot(String searchId, RouteSummaryResponse route) {
+		ObjectNode snapshot = objectMapper.valueToTree(route);
 		removeRemainingMinute(snapshot);
+		routeSearchCacheService.findTransitMetadata(searchId, route.routeId())
+			.ifPresent(metadata -> snapshot.set("backendMetadata", objectMapper.valueToTree(metadata)));
 		return snapshot;
 	}
 
@@ -74,7 +77,7 @@ public class RouteSelectService {
 			return;
 		}
 		if (node.isObject()) {
-			((com.fasterxml.jackson.databind.node.ObjectNode)node).remove("remainingMinute");
+			((ObjectNode)node).remove("remainingMinute");
 			node.elements().forEachRemaining(this::removeRemainingMinute);
 			return;
 		}

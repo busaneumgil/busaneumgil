@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
@@ -232,13 +234,22 @@ public class RerouteService {
 		}
 		try {
 			RouteSummaryResponse route = objectMapper.treeToValue(
-				routeSession.getRouteSnapshotJson(),
+				routePayloadSnapshot(routeSession.getRouteSnapshotJson()),
 				RouteSummaryResponse.class);
 			validateRestoredRoute(route);
 			return route;
 		} catch (JsonProcessingException | IllegalArgumentException exception) {
 			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND, "선택한 경로 정보를 복구할 수 없습니다.", exception);
 		}
+	}
+
+	private JsonNode routePayloadSnapshot(JsonNode snapshot) {
+		if (snapshot.has("backendMetadata") && snapshot instanceof ObjectNode objectNode) {
+			ObjectNode routePayload = objectNode.deepCopy();
+			routePayload.remove("backendMetadata");
+			return routePayload;
+		}
+		return snapshot;
 	}
 
 	private void validateRestoredRoute(RouteSummaryResponse route) {

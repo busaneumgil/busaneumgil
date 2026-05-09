@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -97,6 +98,32 @@ class RouteSelectServiceTest {
 			.get(0);
 		assertThat(laneOption.has("remainingMinute")).isFalse();
 		assertThat(laneOption.get("routeNo").asText()).isEqualTo("강서구13");
+	}
+
+	@Test
+	@DisplayName("대중교통 metadata가 있으면 route snapshot에 backendMetadata로 함께 저장한다")
+	void selectStoresTransitBackendMetadata() {
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
+			.thenReturn(transitRoute("rt_selected_001"));
+		when(routeSearchCacheService.findTransitMetadata("rs_transit_test", "rt_selected_001"))
+			.thenReturn(java.util.Optional.of(new TransitRouteSnapshot(
+				"rt_selected_001",
+				"map-object",
+				List.of(Map.of(
+					"type", TransportMode.BUS,
+					"lanes", List.of(Map.of("busLocalBlID", "BL1")),
+					"passStops", List.of(Map.of("localStationID", "BS1")))))));
+		when(userRepository.getReferenceById(USER_ID)).thenReturn(user(USER_ID));
+
+		service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test"));
+
+		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
+		verify(routeSessionRepository).save(sessionCaptor.capture());
+		JsonNode backendMetadata = sessionCaptor.getValue().getRouteSnapshotJson().get("backendMetadata");
+		assertThat(backendMetadata.get("routeId").asText()).isEqualTo("rt_selected_001");
+		assertThat(backendMetadata.get("mapObj").asText()).isEqualTo("map-object");
+		assertThat(backendMetadata.get("legs").get(0).get("lanes").get(0).get("busLocalBlID").asText())
+			.isEqualTo("BL1");
 	}
 
 	@Test

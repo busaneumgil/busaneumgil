@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -115,6 +116,35 @@ class RouteSearchCacheServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_ACCESS_DENIED);
+	}
+
+	@Test
+	void findsTransitMetadataByRouteId() {
+		when(valueOperations.get("routeSearchMeta:rs_transit_test")).thenReturn("""
+			[{"routeId":"rt_a","mapObj":"map-a","legs":[{"type":"BUS"}]},{"routeId":"rt_b","mapObj":"map-b","legs":[{"type":"SUBWAY"}]}]
+			""");
+
+		Optional<TransitRouteSnapshot> snapshot = cacheService.findTransitMetadata("rs_transit_test", "rt_b");
+
+		assertThat(snapshot).isPresent();
+		assertThat(snapshot.get().mapObj()).isEqualTo("map-b");
+		assertThat(snapshot.get().legs().get(0)).containsEntry("type", "SUBWAY");
+	}
+
+	@Test
+	void savesTransitMetadataWithTenMinuteTtl() {
+		List<TransitRouteSnapshot> snapshots = List.of(new TransitRouteSnapshot(
+			"rt_transit",
+			"map-obj",
+			List.of(Map.of("type", "BUS"))));
+
+		cacheService.saveTransitMetadata("rs_transit_test", snapshots);
+
+		verify(valueOperations).set(
+			org.mockito.ArgumentMatchers.eq("routeSearchMeta:rs_transit_test"),
+			org.mockito.ArgumentMatchers.contains("\"mapObj\":\"map-obj\""),
+			org.mockito.ArgumentMatchers.eq(600L),
+			org.mockito.ArgumentMatchers.eq(TimeUnit.SECONDS));
 	}
 
 	@Test

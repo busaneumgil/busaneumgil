@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
@@ -52,6 +53,14 @@ public class RouteSearchCacheService {
 			serialize(snapshots),
 			ROUTE_SEARCH_TTL.toSeconds(),
 			TimeUnit.SECONDS);
+	}
+
+	public Optional<TransitRouteSnapshot> findTransitMetadata(String searchId, String routeId) {
+		return Optional.ofNullable(redisTemplate.opsForValue().get(metadataKey(searchId)))
+			.map(this::deserializeTransitMetadata)
+			.flatMap(snapshots -> snapshots.stream()
+				.filter(snapshot -> snapshot.routeId().equals(routeId))
+				.findFirst());
 	}
 
 	public Optional<WalkRouteSearchResponse> findSearch(String searchId) {
@@ -123,6 +132,14 @@ public class RouteSearchCacheService {
 			return new RouteSearchCacheEntry(null, objectMapper.treeToValue(root, WalkRouteSearchResponse.class));
 		} catch (JsonProcessingException exception) {
 			throw new IllegalStateException("경로 검색 후보를 역직렬화할 수 없습니다.", exception);
+		}
+	}
+
+	private List<TransitRouteSnapshot> deserializeTransitMetadata(String value) {
+		try {
+			return objectMapper.readValue(value, new TypeReference<>() {});
+		} catch (JsonProcessingException exception) {
+			throw new IllegalStateException("경로 검색 후보 metadata를 역직렬화할 수 없습니다.", exception);
 		}
 	}
 

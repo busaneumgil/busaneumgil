@@ -1,12 +1,30 @@
 import jenkins.model.Jenkins
 import hudson.triggers.SCMTrigger
+import hudson.plugins.git.BranchSpec
+import hudson.plugins.git.GitSCM
+import hudson.plugins.git.UserRemoteConfig
 import org.jenkinsci.plugins.workflow.job.WorkflowJob
-import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition
+import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition
 import org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty
 
 String jobName = 'e102-prod-deploy'
-File pipelineFile = new File('/usr/share/jenkins/ref/pipelines/e102-prod-deploy.Jenkinsfile')
-String pipelineScript = pipelineFile.getText('UTF-8')
+String repoUrl = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
+String credentialsId = 'gitlab-pat'
+String branchSpec = '*/master'
+String scriptPath = 'INF/jenkins/pipelines/e102-prod-deploy.Jenkinsfile'
+
+def scm = new GitSCM(
+  [new UserRemoteConfig(repoUrl, null, null, credentialsId)],
+  [new BranchSpec(branchSpec)],
+  false,
+  [],
+  null,
+  null,
+  []
+)
+
+def flowDefinition = new CpsScmFlowDefinition(scm, scriptPath)
+flowDefinition.setLightweight(true)
 
 Jenkins j = Jenkins.get()
 def job = j.getItem(jobName)
@@ -14,7 +32,7 @@ if (job == null) {
   job = j.createProject(WorkflowJob.class, jobName)
 }
 job.setDescription('master 브랜치를 30분마다 Poll SCM으로 확인해 S2 prod 서버에 backend, AI, 선택적 GraphHopper graph-cache/runtime을 배포합니다.')
-job.setDefinition(new CpsFlowDefinition(pipelineScript, true))
+job.setDefinition(flowDefinition)
 if (job.getProperty(PipelineTriggersJobProperty.class) == null) {
   job.addProperty(new PipelineTriggersJobProperty([new SCMTrigger('H/30 * * * *')]))
 }

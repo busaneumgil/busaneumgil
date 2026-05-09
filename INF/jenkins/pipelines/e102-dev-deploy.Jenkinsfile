@@ -102,13 +102,12 @@ pipeline {
         script {
           env.LAST_STAGE_NAME = env.STAGE_NAME
         }
-        withCredentials([file(credentialsId: 'e102-dev-env-file', variable: 'E102_DEV_ENV')]) {
-          sh '''
-            cp "$E102_DEV_ENV" .env.dev
-            cp /opt/e102-server/docker-compose.s1.override.yml docker-compose.s1.override.yml
-            chmod 600 .env.dev
-          '''
-        }
+        sh '''
+          test -f /opt/e102-server/.env.dev
+          cp /opt/e102-server/.env.dev .env.dev
+          cp /opt/e102-server/docker-compose.s1.override.yml docker-compose.s1.override.yml
+          chmod 600 .env.dev
+        '''
       }
     }
 
@@ -190,20 +189,24 @@ pipeline {
         }
         sh '''
           for i in $(seq 1 24); do
-            AI_HEALTH_STATUS="$(docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -sS -o /tmp/e102-ai-health.json -w '%{http_code}' \
+            AI_HEALTH_RAW="$(docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -sS -w '\n%{http_code}' \
               http://ai:5000/health || true)"
-            AI_STATUS="$(docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -sS -o /tmp/e102-ai-voice-analyze.json -w '%{http_code}' \
+            AI_HEALTH_STATUS="$(printf '%s' "$AI_HEALTH_RAW" | tail -n 1)"
+            AI_HEALTH_BODY="$(printf '%s' "$AI_HEALTH_RAW" | sed '$d')"
+            AI_RESPONSE_RAW="$(docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -sS -w '\n%{http_code}' \
               -H 'Content-Type: application/json' \
               -d '{}' \
               http://ai:5000/voice/analyze || true)"
+            AI_STATUS="$(printf '%s' "$AI_RESPONSE_RAW" | tail -n 1)"
+            AI_RESPONSE_BODY="$(printf '%s' "$AI_RESPONSE_RAW" | sed '$d')"
             docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -fsS http://backend:8080/v3/api-docs >/tmp/e102-api-docs.json \
               && [ "$AI_HEALTH_STATUS" = "200" ] \
-              && grep -Eq '"providers"[[:space:]]*:' /tmp/e102-ai-health.json \
-              && grep -Eq '"POST /voice/analyze"' /tmp/e102-ai-health.json \
+              && printf '%s' "$AI_HEALTH_BODY" | grep -Eq '"providers"[[:space:]]*:' \
+              && printf '%s' "$AI_HEALTH_BODY" | grep -Eq '"POST /voice/analyze"' \
               && [ "$AI_STATUS" = "400" ] \
-              && grep -Eq '"success"[[:space:]]*:[[:space:]]*false' /tmp/e102-ai-voice-analyze.json \
-              && grep -Eq '"intent"[[:space:]]*:[[:space:]]*"unknown"' /tmp/e102-ai-voice-analyze.json \
-              && grep -Eq '"error"[[:space:]]*:' /tmp/e102-ai-voice-analyze.json \
+              && printf '%s' "$AI_RESPONSE_BODY" | grep -Eq '"success"[[:space:]]*:[[:space:]]*false' \
+              && printf '%s' "$AI_RESPONSE_BODY" | grep -Eq '"intent"[[:space:]]*:[[:space:]]*"unknown"' \
+              && printf '%s' "$AI_RESPONSE_BODY" | grep -Eq '"error"[[:space:]]*:' \
               && docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -fsS http://graphhopper:8990/healthcheck >/tmp/e102-graphhopper-health.txt \
               && exit 0
             sleep 5

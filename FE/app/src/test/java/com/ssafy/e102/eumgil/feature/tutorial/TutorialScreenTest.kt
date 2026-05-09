@@ -2,20 +2,18 @@ package com.ssafy.e102.eumgil.feature.tutorial
 
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TutorialScreenTest {
     @Test
-    fun `tutorial keeps overlay highlight prominent without using live screen overlay`() {
-        assertEquals(4.dp, TutorialLayoutDefaults.highlightStrokeWidth)
-        assertTrue(TutorialLayoutDefaults.phoneMockupMaxHeight >= 420.dp)
+    fun `tutorial uses a frame-free explanation panel instead of a phone mockup`() {
+        assertEquals(360.dp, TutorialLayoutDefaults.visualPanelMaxWidth)
+        assertEquals(320.dp, TutorialLayoutDefaults.visualPanelMinHeight)
     }
 
     @Test
-    fun `tutorial reserves stable mock viewport dimensions`() {
-        assertEquals(328.dp, TutorialLayoutDefaults.phoneMockupWidth)
-        assertEquals(456.dp, TutorialLayoutDefaults.phoneMockupMaxHeight)
+    fun `tutorial keeps a consistent three point explanation structure`() {
         assertEquals(3, TutorialLayoutDefaults.totalStepCount)
+        assertEquals(3, TutorialLayoutDefaults.supportingItemCount)
     }
 }

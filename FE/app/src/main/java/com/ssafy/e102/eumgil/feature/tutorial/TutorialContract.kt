@@ -55,6 +55,7 @@ data class TutorialUiState(
     val currentStep: Int get() = step.sequence
     val totalSteps: Int get() = TutorialStep.TOTAL_STEPS
     val canMovePrevious: Boolean get() = step.previous() != null
+    val canMoveNext: Boolean get() = step.next() != null
 }
 
 fun resolveTutorialPrimaryActionLabel(

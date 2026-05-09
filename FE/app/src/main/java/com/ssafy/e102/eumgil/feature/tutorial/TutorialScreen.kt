@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.material3.Button
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +59,7 @@ fun TutorialScreen(
     uiState: TutorialUiState,
     onPrimaryActionClick: () -> Unit,
     onPreviousActionClick: () -> Unit,
+    onPanelNextStepClick: () -> Unit,
     onSkipClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -100,6 +103,10 @@ fun TutorialScreen(
                 step = uiState.step,
                 currentStep = uiState.currentStep,
                 totalSteps = uiState.totalSteps,
+                canMovePrevious = uiState.canMovePrevious,
+                canMoveNext = uiState.canMoveNext,
+                onPreviousActionClick = onPreviousActionClick,
+                onPanelNextStepClick = onPanelNextStepClick,
                 modifier = Modifier.weight(TutorialLayoutDefaults.visualPanelWeight),
             )
         }
@@ -127,19 +134,20 @@ private fun TutorialBottomActions(
         horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(
-            onClick = onPreviousActionClick,
-            enabled = canMovePrevious,
-            modifier =
-                Modifier
-                    .width(TutorialLayoutDefaults.previousButtonMinWidth)
-                    .heightIn(min = TutorialLayoutDefaults.primaryButtonMinHeight),
-        ) {
-            Text(
-                text = stringResource(id = R.string.tutorial_action_previous),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
+        if (canMovePrevious) {
+            TextButton(
+                onClick = onPreviousActionClick,
+                modifier =
+                    Modifier
+                        .width(TutorialLayoutDefaults.previousButtonMinWidth)
+                        .heightIn(min = TutorialLayoutDefaults.primaryButtonMinHeight),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.tutorial_action_previous),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
         Button(
             onClick = onPrimaryActionClick,
@@ -199,6 +207,10 @@ private fun TutorialVisualPanel(
     step: TutorialStep,
     currentStep: Int,
     totalSteps: Int,
+    canMovePrevious: Boolean,
+    canMoveNext: Boolean,
+    onPreviousActionClick: () -> Unit,
+    onPanelNextStepClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val content = step.visualContent()
@@ -207,7 +219,16 @@ private fun TutorialVisualPanel(
         modifier =
             modifier
                 .fillMaxWidth()
-                .widthIn(max = TutorialLayoutDefaults.visualPanelMaxWidth),
+                .widthIn(max = TutorialLayoutDefaults.visualPanelMaxWidth)
+                .pointerInput(canMovePrevious, canMoveNext) {
+                    detectTapGestures { offset ->
+                        val isLeftSide = offset.x < size.width / 2f
+                        when {
+                            isLeftSide && canMovePrevious -> onPreviousActionClick()
+                            !isLeftSide && canMoveNext -> onPanelNextStepClick()
+                        }
+                    }
+                },
         shape = RoundedCornerShape(EumRadius.large),
         color = EumWhite,
         border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderSubtle),
@@ -531,6 +552,8 @@ internal object TutorialLayoutDefaults {
     const val destinationFilterChipCount: Int = 3
     const val visualPanelWeight: Float = 1f
     const val hasHeroIconBackground: Boolean = false
+    const val firstStepWithPreviousAction: Int = 2
+    const val panelTouchNavigationZoneWeight: Float = 1f
 
     val primaryButtonMinHeight = 56.dp
     val previousButtonMinWidth = 88.dp

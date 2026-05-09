@@ -22,6 +22,7 @@ public enum RouteErrorCode implements ErrorCode {
 	ROUTE_SEARCH_EXPIRED(HttpStatus.NOT_FOUND, "RT4041", "검색 결과가 만료되었습니다."),
 	ROUTE_CANDIDATE_NOT_FOUND(HttpStatus.NOT_FOUND, "RT4042", "선택한 경로 후보를 찾을 수 없습니다."),
 	ROUTE_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "RT4043", "선택한 경로 정보를 찾을 수 없습니다."),
+	ROUTE_SELECT_CONFLICT(HttpStatus.CONFLICT, "RT4090", "선택할 수 없는 경로입니다."),
 	ROUTE_TOO_FAR_FOR_REROUTE(HttpStatus.CONFLICT, "RT4091", "현재 위치가 기존 경로에서 너무 멀리 벗어났습니다."),
 	EXTERNAL_ROUTE_API_FAILED(HttpStatus.BAD_GATEWAY, "EX5020", "외부 경로 정보를 불러오지 못했습니다."),
 	EXTERNAL_ROUTE_API_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "EX5040", "외부 경로 정보 응답이 지연되고 있습니다.");

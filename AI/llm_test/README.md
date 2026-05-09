@@ -26,7 +26,7 @@ llm_test/
 │   ├── config.py               # 서버 설정 (HOST, PORT, DEFAULT_MODEL)
 │   ├── environment.yaml        # conda 환경 정의
 │   ├── requirements.txt        # pip 의존 패키지
-│   ├── .env.example            # 환경변수 예시
+│   ├── .env.example            # 루트 .env.dev/.env.prod에 넣을 AI env 예시
 │   │
 │   ├── providers/              # LLM 모델별 구현
 │   │   ├── base_provider.py    # LLMResponse 데이터클래스 + BaseProvider 인터페이스
@@ -74,15 +74,22 @@ llm_test/
 
 ### 1. 환경변수 설정
 
+실제 값은 저장소 루트의 `.env.dev` 또는 `.env.prod`에서 관리합니다.
+AI 전용 예시는 `server/.env.example`에 있습니다.
+
 ```bash
-cd server/
-cp .env.example .env
+# 개발용
+cp AI/llm_test/server/.env.example .env.dev
+
+# 운영용
+cp AI/llm_test/server/.env.example .env.prod
 ```
 
-`.env` 파일에 GMS_KEY 입력:
+최소 예시:
 
-```
+```dotenv
 GMS_KEY=your_gms_key_here
+DEFAULT_MODEL=gemini
 ```
 
 ### 2. 패키지 설치
@@ -100,10 +107,16 @@ pip install -r server/requirements.txt
 
 ```bash
 cd server/
-python app.py
+APP_ENV=dev python app.py
 ```
 
 기본 포트: `5000`
+
+- `APP_ENV=dev`면 루트 `.env.dev`
+- `APP_ENV=local`도 루트 `.env.dev`로 정규화됩니다.
+- `APP_ENV=prod`면 루트 `.env.prod`
+- `APP_ENV`가 없으면 기본으로 루트 `.env.dev`를 먼저 찾습니다.
+- 기존 `server/.env`가 있으면 마지막 fallback으로만 사용합니다.
 
 ---
 
@@ -325,3 +338,10 @@ python tests/test_batch.py
 | `PORT` | 서버 포트 | `5000` |
 | `DEBUG` | Flask 디버그 모드 | `True` |
 | `DEFAULT_MODEL` | 모델 미지정 시 기본값 | `gemini` |
+
+환경변수 로딩 우선순위:
+1. 프로세스에 이미 주입된 runtime env
+2. `ENV_FILE`이 지정한 파일
+3. `APP_ENV` 또는 `SPRING_PROFILES_ACTIVE`에 맞는 루트 `.env.<env>`
+4. `APP_ENV`가 없을 때 기본 루트 `.env.dev`
+5. legacy fallback `server/.env`

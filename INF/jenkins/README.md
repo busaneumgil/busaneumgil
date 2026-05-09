@@ -80,7 +80,7 @@ PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는�
 6. cache가 비어 있으면 `graphhopper-build` profile로 PostgreSQL LineString 기반 cache 생성
 7. GraphHopper runtime 기동
 8. backend image build 및 컨테이너 재생성
-9. backend `/v3/api-docs`, GraphHopper `/healthcheck` smoke test
+9. AI `/health` payload, AI `/voice/analyze` invalid-request schema, backend `/v3/api-docs`, GraphHopper `/healthcheck` smoke test
 10. compose 상태 출력
 
 GraphHopper는 S1 dev stack에 포함한다. runtime은 graph-cache serve only 구조이며, Jenkins dev pipeline은 cache가 비어 있을 때만 build job을 실행한다.

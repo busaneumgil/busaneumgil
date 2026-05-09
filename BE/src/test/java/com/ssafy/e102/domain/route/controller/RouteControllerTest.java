@@ -41,6 +41,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.exception.RouteExceptionHandler;
 import com.ssafy.e102.domain.route.service.RerouteService;
+import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
 import com.ssafy.e102.domain.route.service.RouteSelectService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
@@ -57,6 +58,7 @@ class RouteControllerTest {
 	private TransitRouteSearchService transitRouteSearchService;
 	private RerouteService rerouteService;
 	private RouteSelectService routeSelectService;
+	private RouteSessionCommandService routeSessionCommandService;
 	private MockMvc mockMvc;
 
 	@BeforeEach
@@ -65,10 +67,11 @@ class RouteControllerTest {
 		transitRouteSearchService = Mockito.mock(TransitRouteSearchService.class);
 		rerouteService = Mockito.mock(RerouteService.class);
 		routeSelectService = Mockito.mock(RouteSelectService.class);
+		routeSessionCommandService = Mockito.mock(RouteSessionCommandService.class);
 		mockMvc = MockMvcBuilders
 			.standaloneSetup(
 				new RouteController(walkRouteSearchService, transitRouteSearchService, rerouteService,
-					routeSelectService))
+					routeSelectService, routeSessionCommandService))
 			.setCustomArgumentResolvers(new AuthPrincipalArgumentResolver())
 			.setControllerAdvice(new RouteExceptionHandler(), new GlobalExceptionHandler())
 			.build();
@@ -218,6 +221,59 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.message").value("경로가 선택되었습니다."));
 
 		verify(routeSelectService).select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("경로 안내 종료는 routeId와 인증 사용자로 session 종료를 요청한다")
+	void endRouteCompletesRouteSession() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/rt_selected_001/end")
+			.principal(authentication))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data", nullValue()))
+			.andExpect(jsonPath("$.message").value("안내가 종료되었습니다."));
+
+		verify(routeSessionCommandService).endSession(userId, "rt_selected_001");
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("경로 안내 종료 대상 session이 없으면 RT4043을 반환한다")
+	void endRouteReturnsSessionNotFound() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		Mockito.doThrow(new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND))
+			.when(routeSessionCommandService)
+			.endSession(userId, "missing_route");
+
+		mockMvc.perform(post("/routes/missing_route/end")
+			.principal(authentication))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.status").value("RT4043"))
+			.andExpect(jsonPath("$.message").value("선택한 경로 정보를 찾을 수 없습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("다른 사용자의 경로 안내 종료는 A4030을 반환한다")
+	void endRouteReturnsAccessDenied() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		Mockito.doThrow(new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED))
+			.when(routeSessionCommandService)
+			.endSession(userId, "other_route");
+
+		mockMvc.perform(post("/routes/other_route/end")
+			.principal(authentication))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.status").value("A4030"))
+			.andExpect(jsonPath("$.message").value("접근할 수 없는 경로입니다."));
+
 		SecurityContextHolder.clearContext();
 	}
 

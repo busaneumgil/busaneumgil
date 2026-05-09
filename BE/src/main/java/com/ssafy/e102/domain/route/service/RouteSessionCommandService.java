@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ssafy.e102.domain.route.entity.RouteSession;
+import com.ssafy.e102.domain.route.exception.RouteErrorCode;
+import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.user.entity.User;
@@ -48,5 +50,22 @@ public class RouteSessionCommandService {
 		return routeSessionRepository
 			.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(userId, routeId, RouteSessionStatus.ACTIVE)
 			.isPresent();
+	}
+
+	@Transactional
+	public void endSession(UUID userId, String routeId) {
+		routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, routeId)
+			.ifPresentOrElse(
+				session -> {
+					if (session.getStatus() == RouteSessionStatus.ACTIVE) {
+						session.complete();
+					}
+				},
+				() -> {
+					if (routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc(routeId).isPresent()) {
+						throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
+					}
+					throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+				});
 	}
 }

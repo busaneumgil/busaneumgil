@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.route.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -23,6 +24,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.entity.RouteSession;
+import com.ssafy.e102.domain.route.exception.RouteErrorCode;
+import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.user.entity.User;
@@ -111,6 +114,70 @@ class RouteSessionCommandServiceTest {
 			.thenReturn(Optional.of(mock(RouteSession.class)));
 
 		assertThat(service.hasActiveSession(USER_ID, "rt_selected_001")).isTrue();
+	}
+
+	@Test
+	@DisplayName("ACTIVE route session을 COMPLETED로 전환한다")
+	void endSessionCompletesActiveSession() {
+		RouteSession session = RouteSession.create(
+			user(USER_ID),
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			snapshot("rt_selected_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(session));
+
+		service.endSession(USER_ID, "rt_selected_001");
+
+		assertThat(session.getStatus()).isEqualTo(RouteSessionStatus.COMPLETED);
+		assertThat(session.getActiveRouteKey()).isNull();
+	}
+
+	@Test
+	@DisplayName("이미 COMPLETED인 route session 종료는 중복 성공으로 처리한다")
+	void endSessionTreatsCompletedSessionAsSuccess() {
+		RouteSession session = RouteSession.create(
+			user(USER_ID),
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			snapshot("rt_selected_001"));
+		session.complete();
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(session));
+
+		service.endSession(USER_ID, "rt_selected_001");
+
+		assertThat(session.getStatus()).isEqualTo(RouteSessionStatus.COMPLETED);
+	}
+
+	@Test
+	@DisplayName("다른 사용자의 route session은 A4030으로 차단한다")
+	void endSessionRejectsOtherUserRoute() {
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "other_route"))
+			.thenReturn(Optional.empty());
+		when(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc("other_route"))
+			.thenReturn(Optional.of(mock(RouteSession.class)));
+
+		assertThatThrownBy(() -> service.endSession(USER_ID, "other_route"))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_ACCESS_DENIED);
+	}
+
+	@Test
+	@DisplayName("route session이 없으면 RT4043을 반환한다")
+	void endSessionRejectsMissingRouteSession() {
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "missing_route"))
+			.thenReturn(Optional.empty());
+		when(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc("missing_route"))
+			.thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.endSession(USER_ID, "missing_route"))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 	}
 
 	private Point point(double lng, double lat) {

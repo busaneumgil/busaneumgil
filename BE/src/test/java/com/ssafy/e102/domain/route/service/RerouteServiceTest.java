@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.route.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
+import com.ssafy.e102.domain.route.dto.response.RerouteType;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
@@ -113,6 +116,45 @@ class RerouteServiceTest {
 			RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 	}
 
+	@Test
+	@DisplayName("현재 위치가 route geometry 10m 이하면 NO_REROUTE_NEEDED를 반환한다")
+	void returnsNoRerouteNeededWhenCurrentPointIsStillNearRouteGeometry() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		RerouteResponse response = service.reroute(
+			userId,
+			new RerouteRequest("rt_001", new GeoPointRequest(35.12001, 128.93601)));
+
+		assertThat(response.rerouteType()).isEqualTo(RerouteType.NO_REROUTE_NEEDED);
+		assertThat(response.route()).isNull();
+	}
+
+	@Test
+	@DisplayName("route geometry WKT를 파싱할 수 없으면 RT4043으로 차단한다")
+	void rejectBrokenRouteGeometry() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(new RouteSummaryResponse(
+			"rt_001",
+			TransportMode.WALK,
+			RouteOption.SAFE,
+			"안전 경로",
+			BigDecimal.valueOf(120),
+			90,
+			2,
+			List.of(RouteBadge.LOW_SLOPE),
+			"BROKEN",
+			List.of()));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		assertRouteError(
+			() -> service.reroute(userId, new RerouteRequest("rt_001", new GeoPointRequest(35.12, 128.936))),
+			RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+	}
+
 	private RouteSummaryResponse routeSummary(String routeId) {
 		return new RouteSummaryResponse(
 			routeId,
@@ -125,6 +167,12 @@ class RerouteServiceTest {
 			List.of(RouteBadge.LOW_SLOPE),
 			"LINESTRING(128.936 35.12, 128.937 35.121)",
 			List.of());
+	}
+
+	private RouteSession routeSession(RouteSummaryResponse route) {
+		RouteSession routeSession = mock(RouteSession.class);
+		when(routeSession.getRouteSnapshotJson()).thenReturn(objectMapper.valueToTree(route));
+		return routeSession;
 	}
 
 	private void assertRouteError(Runnable action, RouteErrorCode expectedErrorCode) {

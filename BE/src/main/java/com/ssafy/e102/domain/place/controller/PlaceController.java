@@ -3,10 +3,14 @@ package com.ssafy.e102.domain.place.controller;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ssafy.e102.domain.place.dto.request.PlaceClickDetailRequest;
+import com.ssafy.e102.domain.place.dto.response.PlaceClickDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
@@ -15,6 +19,7 @@ import com.ssafy.e102.domain.place.service.PlaceService;
 import com.ssafy.e102.global.response.ApiResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -74,5 +79,14 @@ public class PlaceController {
 		@PathVariable
 		String placeId) {
 		return ApiResponse.success(placeService.getPlace(principal.userId(), placeId));
+	}
+
+	@PostMapping("/detail")
+	public ApiResponse<PlaceClickDetailResponse> getPlaceDetail(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@Valid @RequestBody
+		PlaceClickDetailRequest request) {
+		return ApiResponse.success(placeService.getPlaceDetail(principal.userId(), request));
 	}
 }

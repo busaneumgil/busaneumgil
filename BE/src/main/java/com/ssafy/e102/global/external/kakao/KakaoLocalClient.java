@@ -128,6 +128,8 @@ public class KakaoLocalClient {
 		String roadAddressName,
 		@JsonProperty("address_name")
 		String addressName,
+		@JsonProperty("category_name")
+		String categoryName,
 		String x,
 		String y,
 		String distance) {
@@ -137,6 +139,7 @@ public class KakaoLocalClient {
 				id,
 				placeName,
 				address(),
+				categoryName,
 				distanceMeter(),
 				new GeoPointResponse(Double.parseDouble(y), Double.parseDouble(x)));
 		}

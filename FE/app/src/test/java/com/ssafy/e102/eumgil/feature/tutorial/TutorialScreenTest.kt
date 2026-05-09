@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.tutorial
 
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -26,5 +27,13 @@ class TutorialScreenTest {
         assertEquals(3, TutorialLayoutDefaults.totalStepCount)
         assertEquals(3, TutorialLayoutDefaults.supportingItemCount)
         assertEquals(3, TutorialLayoutDefaults.destinationFilterChipCount)
+    }
+
+    @Test
+    fun `tutorial uses readable header and panel text rhythm`() {
+        assertEquals(34.sp, TutorialLayoutDefaults.headerHeadlineLineHeight)
+        assertEquals(22.sp, TutorialLayoutDefaults.headerDescriptionLineHeight)
+        assertEquals(18.dp, TutorialLayoutDefaults.supportingItemGap)
+        assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
     }
 }

@@ -20,6 +20,7 @@ import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateResult
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LowVisionFollowUpRoute
+import com.ssafy.e102.eumgil.feature.onboarding.PermissionRoute
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
@@ -147,25 +148,20 @@ fun NavGraphBuilder.onboardingNavGraph(
                             shouldCompletePendingSignupBeforeOnboardingTutorial(
                                 completedSettings.selectedPrimaryUserType,
                             )
-                        if (shouldCompleteSignupBeforeTutorial) {
+                        if (shouldCompleteSignupBeforeTutorial || nextRoute != TutorialRoute.Onboarding.route) {
                             authSignupRepository.completePendingSignup(
                                 requiredTermsAccepted = agreement.isLocationTermsAgreed,
                             )
                         }
-                        if (nextRoute == TutorialRoute.Onboarding.route) {
-                            navController.navigate(nextRoute) {
-                                launchSingleTop = true
-                                popUpTo(OnboardingRoute.Terms.route) {
-                                    inclusive = true
-                                }
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                nextRoute,
+                            ),
+                        ) {
+                            launchSingleTop = true
+                            popUpTo(OnboardingRoute.Terms.route) {
+                                inclusive = true
                             }
-                        } else {
-                            if (!shouldCompleteSignupBeforeTutorial) {
-                                authSignupRepository.completePendingSignup(
-                                    requiredTermsAccepted = agreement.isLocationTermsAgreed,
-                                )
-                            }
-                            navController.navigateToCompletedOnboarding(route = nextRoute)
                         }
                     }.onFailure { throwable ->
                         Toast
@@ -222,9 +218,13 @@ fun NavGraphBuilder.onboardingNavGraph(
                         )
                         authSignupRepository.completePendingSignup(requiredTermsAccepted = true)
                         val completedSettings = settingsRepository.getInitSettings()
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
-                        )
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
+                            ),
+                        ) {
+                            launchSingleTop = true
+                        }
                     }.onFailure { throwable ->
                         Toast
                             .makeText(
@@ -237,6 +237,25 @@ fun NavGraphBuilder.onboardingNavGraph(
             },
             onRequestDetails = { step ->
                 createTermsGuideDetailIntent(step)?.let(context::startActivity)
+            },
+        )
+    }
+
+    composable(
+        route = OnboardingRoute.Permission.route,
+        arguments = listOf(
+            navArgument(OnboardingRoute.Permission.ARG_NEXT_ROUTE) {
+                type = NavType.StringType
+            },
+        ),
+    ) { backStackEntry ->
+        val nextRoute = backStackEntry.arguments
+            ?.getString(OnboardingRoute.Permission.ARG_NEXT_ROUTE)
+            .orEmpty()
+
+        PermissionRoute(
+            onPermissionHandled = {
+                navController.navigateToCompletedOnboarding(route = nextRoute)
             },
         )
     }

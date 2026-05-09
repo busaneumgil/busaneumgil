@@ -1,11 +1,17 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.Manifest
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -201,6 +207,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments
                 ?.getString(SearchRoute.VoiceInput.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val context = LocalContext.current
+        val micPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (!isGranted) navController.popBackStack()
+        }
+        LaunchedEffect(Unit) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO,
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
         SearchVoiceInputRoute(
             onNavigateBack = {
                 navController.popBackStack()

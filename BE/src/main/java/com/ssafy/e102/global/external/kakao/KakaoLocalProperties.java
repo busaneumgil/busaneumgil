@@ -9,6 +9,6 @@ public record KakaoLocalProperties(
 	String apiKey) {
 
 	public KakaoLocalProperties {
-		Assert.hasText(baseUrl, "카카오 로컬 API baseUrl은 필수입니다.");
+		Assert.hasText(baseUrl, "카카오 로컬 API 기본 URL은 필수입니다.");
 	}
 }

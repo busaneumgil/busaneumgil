@@ -14,7 +14,7 @@ public record GraphHopperCoordinate(
 
 	static GraphHopperCoordinate from(List<BigDecimal> coordinate) {
 		if (coordinate == null || coordinate.size() < 2) {
-			throw new IllegalArgumentException("GraphHopper coordinate must contain lng and lat.");
+			throw new IllegalArgumentException("GraphHopper 좌표에는 경도와 위도가 포함되어야 합니다.");
 		}
 		// GraphHopper/GeoJSON geometry는 longitude가 먼저 온다.
 		return new GraphHopperCoordinate(coordinate.get(0), coordinate.get(1));

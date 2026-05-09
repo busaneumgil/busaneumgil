@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
@@ -26,6 +27,7 @@ import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.KtorVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
@@ -47,6 +49,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import com.ssafy.e102.eumgil.di.RepositoryModule
@@ -107,11 +110,17 @@ class AppContainer(
     private val userRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         UserRemoteDataSource(httpJsonClient = httpJsonClient)
     }
+    private val voiceAnalyzeRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        KtorVoiceAnalyzeRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
 
     private val placesMockDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesMockDataSource() }
     private val facilitySeedMockDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedMockDataSource() }
     private val routeMockDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteMockDataSource() }
     private val searchMockDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchMockDataSource() }
+    private val mockVoiceAnalyzeRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        MockVoiceAnalyzeRemoteDataSource()
+    }
 
     private val repositorySourcePolicy: RepositorySourcePolicy by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideRepositorySourcePolicy(
@@ -251,6 +260,14 @@ class AppContainer(
         RepositoryModule.provideReportRepository(
             reportDraftDao = localDatabase.reportDraftDao(),
             reportOutboxDao = localDatabase.reportOutboxDao(),
+        )
+    }
+
+    val voiceAnalyzeRepository: VoiceAnalyzeRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideVoiceAnalyzeRepository(
+            remoteDataSource = voiceAnalyzeRemoteDataSource,
+            mockDataSource = mockVoiceAnalyzeRemoteDataSource,
+            sourcePolicy = repositorySourcePolicy,
         )
     }
 

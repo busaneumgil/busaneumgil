@@ -669,4 +669,9 @@
     <string name="tutorial_tab_bookmark">북마크</string>
     <string name="tutorial_tab_report">제보</string>
     <string name="tutorial_tab_my_page">마이페이지</string>
+
+    <!-- voice input TTS prompts -->
+    <string name="voice_input_prompt">말씀해 주세요</string>
+    <string name="voice_input_retry">다시 시도해주세요</string>
+    <string name="voice_input_confirmation">%s를 찾으시나요?</string>
 </resources>

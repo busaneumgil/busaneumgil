@@ -259,6 +259,29 @@ class RouteControllerTest {
 	}
 
 	@Test
+	@DisplayName("reroute 과도 이탈은 RT4091로 반환한다")
+	void rerouteMapsTooFarCurrentPoint() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
+			.thenThrow(new RouteException(RouteErrorCode.ROUTE_TOO_FAR_FOR_REROUTE));
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": 35.1200, "lng": 128.9500}
+				}
+				"""))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.status").value("RT4091"))
+			.andExpect(jsonPath("$.message").value("현재 위치가 기존 경로에서 너무 멀리 벗어났습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
 	@DisplayName("GraphHopper 실패는 EX5020 에러 응답으로 매핑한다")
 	void searchWalkRoutesMapsExternalRouteApiFailed() throws Exception {
 		assertRouteError(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, 502, "EX5020", "외부 경로 정보를 불러오지 못했습니다.");

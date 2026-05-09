@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.route.service;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -144,6 +145,11 @@ class RerouteServiceTest {
 
 		assertThat(response.rerouteType()).isEqualTo(RerouteType.NO_REROUTE_NEEDED);
 		assertThat(response.route()).isNull();
+		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+		verify(walkRouteSearchService, never()).search(org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any());
+		verify(transitRouteSearchService, never()).search(org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any());
 	}
 
 	@Test

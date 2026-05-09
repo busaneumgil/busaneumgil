@@ -38,10 +38,13 @@ class ProdDeployScriptsTest(unittest.TestCase):
 
         self.assertIn("GMS_KEY", dev_content)
         self.assertIn("DEFAULT_MODEL", dev_content)
+        self.assertIn("APP_ENV: dev", dev_content)
         self.assertIn("GMS_KEY", prod_content)
         self.assertIn("DEFAULT_MODEL", prod_content)
+        self.assertIn("APP_ENV: prod", prod_content)
         self.assertIn("GMS_KEY", local_content)
         self.assertIn("DEFAULT_MODEL", local_content)
+        self.assertIn("APP_ENV: dev", local_content)
         self.assertNotIn("AI_PORT: ${AI_PORT:-5000}", dev_content)
         self.assertNotIn("AI_PORT: ${AI_PORT:-5000}", prod_content)
         self.assertNotIn("AI_PORT: ${AI_PORT:-5000}", local_content)

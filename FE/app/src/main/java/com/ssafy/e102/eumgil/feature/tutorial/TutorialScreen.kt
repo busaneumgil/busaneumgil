@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderInfo
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -222,7 +221,7 @@ private fun TutorialVisualPanel(
 ) {
     val content = step.visualContent()
 
-    Surface(
+    Box(
         modifier =
             modifier
                 .fillMaxWidth()
@@ -236,10 +235,6 @@ private fun TutorialVisualPanel(
                         }
                     }
                 },
-        shape = RoundedCornerShape(EumRadius.large),
-        color = EumWhite,
-        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderSubtle),
-        shadowElevation = TutorialLayoutDefaults.panelElevation,
     ) {
         Column(
             modifier =
@@ -271,16 +266,23 @@ private fun TutorialFlatIllustration(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        TutorialMockupScene(content = content)
+        TutorialIllustrationScene(content = content)
         Spacer(modifier = Modifier.height(TutorialLayoutDefaults.illustrationContentGap))
-        TutorialCueStrip(cues = content.cues)
-        Spacer(modifier = Modifier.height(EumSpacing.medium))
         TutorialFilterChipRow(chips = content.chips)
     }
 }
 
 @Composable
-private fun TutorialMockupScene(content: TutorialVisualContent) {
+private fun TutorialIllustrationScene(content: TutorialVisualContent) {
+    when (content.scene) {
+        TutorialIllustrationSceneType.DESTINATION_SEARCH -> TutorialDestinationSearchScene(content = content)
+        TutorialIllustrationSceneType.ROUTE_COMPARISON -> TutorialRouteComparisonScene(content = content)
+        TutorialIllustrationSceneType.REPORT_SUBMISSION -> TutorialReportSubmissionScene(content = content)
+    }
+}
+
+@Composable
+private fun TutorialDestinationSearchScene(content: TutorialVisualContent) {
     Box(
         modifier =
             Modifier
@@ -288,73 +290,118 @@ private fun TutorialMockupScene(content: TutorialVisualContent) {
                 .height(TutorialLayoutDefaults.illustrationHeight),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
+        TutorialHalo()
+        TutorialMapBlock(
             modifier =
                 Modifier
-                    .size(TutorialLayoutDefaults.illustrationHaloSize)
-                    .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                    .background(EumSurfaceInfo),
+                    .align(Alignment.Center)
+                    .padding(top = TutorialLayoutDefaults.sceneMapTopPadding),
         )
-        TutorialMockPhone()
-        TutorialFloatingPanel(
+        TutorialSearchBar(
             iconRes = content.heroIconRes,
-            labelRes = content.cues.first().labelRes,
+            labelRes = content.primaryLabelRes,
             modifier = Modifier.align(Alignment.TopCenter),
         )
-        TutorialSmallInfoCard(
-            iconRes = content.cues.last().iconRes,
+        TutorialLocationPin(
+            iconRes = R.drawable.ic_map_current_location,
             modifier =
                 Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = TutorialLayoutDefaults.illustrationSidePadding),
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = TutorialLayoutDefaults.scenePinBottomPadding),
         )
     }
 }
 
 @Composable
-private fun TutorialMockPhone() {
-    Surface(
+private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
+    Column(
         modifier =
             Modifier
-                .width(TutorialLayoutDefaults.mockPhoneWidth)
-                .height(TutorialLayoutDefaults.mockPhoneHeight),
-        shape = RoundedCornerShape(TutorialLayoutDefaults.mockPhoneCorner),
-        color = EumWhite,
-        border = BorderStroke(TutorialLayoutDefaults.mockPhoneBorderWidth, EumPrimary600.copy(alpha = 0.35f)),
-        shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.illustrationHeight),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        TutorialRouteCard(
+            iconRes = content.heroIconRes,
+            labelRes = content.primaryLabelRes,
+            time = "42분",
+            selected = true,
+        )
+        Spacer(modifier = Modifier.height(EumSpacing.small))
+        TutorialRouteCard(
+            iconRes = R.drawable.ic_route_time,
+            labelRes = content.secondaryLabelRes,
+            time = "51분",
+            selected = false,
+        )
+    }
+}
+
+@Composable
+private fun TutorialReportSubmissionScene(content: TutorialVisualContent) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.illustrationHeight),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
+            TutorialReportTile(iconRes = R.drawable.ic_route_tactile_blocks, labelRes = R.string.tutorial_report_chip_tactile)
+            TutorialReportTile(iconRes = R.drawable.ic_report_sidewalk, labelRes = R.string.tutorial_report_chip_sidewalk)
+        }
+        Spacer(modifier = Modifier.height(EumSpacing.small))
+        Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
+            TutorialReportTile(iconRes = R.drawable.ic_status_warning, labelRes = R.string.tutorial_report_chip_damage)
+            TutorialReportTile(iconRes = content.heroIconRes, labelRes = content.primaryLabelRes, selected = true)
+        }
+    }
+}
+
+@Composable
+private fun TutorialHalo() {
+    Box(
+        modifier =
+            Modifier
+                .size(TutorialLayoutDefaults.illustrationHaloSize)
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(EumSurfaceInfo),
+    )
+}
+
+@Composable
+private fun TutorialMapBlock(modifier: Modifier = Modifier) {
+    Surface(
+        modifier =
+            modifier
+                .width(TutorialLayoutDefaults.mapBlockWidth)
+                .height(TutorialLayoutDefaults.mapBlockHeight),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = EumSurfaceInfo,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
     ) {
         Column(
-            modifier = Modifier.padding(TutorialLayoutDefaults.mockPhonePadding),
-            verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.tightGap),
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            repeat(TutorialLayoutDefaults.mockPhoneLineCount) { index ->
+            repeat(TutorialLayoutDefaults.mapBlockLineCount) { index ->
                 Box(
                     modifier =
                         Modifier
-                            .fillMaxWidth(if (index == 0) 0.78f else 0.58f)
-                            .height(TutorialLayoutDefaults.mockPhoneLineHeight)
+                            .fillMaxWidth(if (index == 1) 0.62f else 0.82f)
+                            .height(TutorialLayoutDefaults.mapBlockLineHeight)
                             .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                            .background(EumSurfaceInfo),
+                            .background(EumPrimary600.copy(alpha = 0.12f)),
                 )
-            }
-            Spacer(modifier = Modifier.height(TutorialLayoutDefaults.microGap))
-            Row(horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.microGap)) {
-                repeat(TutorialLayoutDefaults.mockPhoneDotCount) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(TutorialLayoutDefaults.mockPhoneDotSize)
-                                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                                .background(EumPrimary600.copy(alpha = 0.28f)),
-                    )
-                }
             }
         }
     }
 }
 
 @Composable
-private fun TutorialFloatingPanel(
+private fun TutorialSearchBar(
     @DrawableRes iconRes: Int,
     @StringRes labelRes: Int,
     modifier: Modifier = Modifier,
@@ -362,10 +409,11 @@ private fun TutorialFloatingPanel(
     Surface(
         modifier =
             modifier
-                .width(TutorialLayoutDefaults.floatingPanelWidth)
-                .height(TutorialLayoutDefaults.floatingPanelHeight),
-        shape = RoundedCornerShape(EumRadius.small),
-        color = EumPrimary600,
+                .width(TutorialLayoutDefaults.searchBarWidth)
+                .height(TutorialLayoutDefaults.searchBarHeight),
+        shape = RoundedCornerShape(EumRadius.full),
+        color = EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
         shadowElevation = TutorialLayoutDefaults.floatingPanelElevation,
     ) {
         Row(
@@ -377,11 +425,11 @@ private fun TutorialFloatingPanel(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 modifier = Modifier.size(TutorialLayoutDefaults.floatingPanelIconSize),
-                tint = EumWhite,
+                tint = EumPrimary600,
             )
             Text(
                 text = stringResource(id = labelRes),
-                color = EumWhite,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -390,7 +438,7 @@ private fun TutorialFloatingPanel(
 }
 
 @Composable
-private fun TutorialSmallInfoCard(
+private fun TutorialLocationPin(
     @DrawableRes iconRes: Int,
     modifier: Modifier = Modifier,
 ) {
@@ -399,9 +447,10 @@ private fun TutorialSmallInfoCard(
             modifier
                 .width(TutorialLayoutDefaults.smallCardWidth)
                 .height(TutorialLayoutDefaults.smallCardHeight),
-        shape = RoundedCornerShape(EumRadius.small),
-        color = EumSurfaceInfo,
+        shape = RoundedCornerShape(EumRadius.full),
+        color = EumWhite,
         border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+        shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
@@ -415,43 +464,113 @@ private fun TutorialSmallInfoCard(
 }
 
 @Composable
-private fun TutorialCueStrip(cues: List<TutorialVisualCue>) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
+private fun TutorialRouteCard(
+    @DrawableRes iconRes: Int,
+    @StringRes labelRes: Int,
+    time: String,
+    selected: Boolean,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.routeCardHeight),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = EumWhite,
+        border =
+            BorderStroke(
+                width = TutorialLayoutDefaults.routeCardBorderWidth,
+                color = if (selected) EumPrimary600 else EumBorderInfo,
+            ),
+        shadowElevation = if (selected) TutorialLayoutDefaults.mockPhoneElevation else 0.dp,
     ) {
-        cues.forEach { cue ->
-            TutorialCuePill(cue = cue)
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            TutorialRadioDot(selected = selected)
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.smallCardIconSize),
+                tint = EumPrimary600,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(id = labelRes),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = time,
+                    color = EumPrimary600,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun TutorialCuePill(cue: TutorialVisualCue) {
-    Surface(
-        shape = RoundedCornerShape(EumRadius.full),
-        color = EumSurfaceInfo,
+private fun TutorialRadioDot(selected: Boolean) {
+    Box(
+        modifier =
+            Modifier
+                .size(TutorialLayoutDefaults.radioDotOuterSize)
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(if (selected) EumPrimary600.copy(alpha = 0.18f) else EumBorderInfo),
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
+        Box(
             modifier =
-                Modifier.padding(
-                    horizontal = EumSpacing.small,
-                    vertical = TutorialLayoutDefaults.cuePillVerticalPadding,
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+                Modifier
+                    .size(TutorialLayoutDefaults.radioDotInnerSize)
+                    .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                    .background(if (selected) EumPrimary600 else EumWhite),
+        )
+    }
+}
+
+@Composable
+private fun TutorialReportTile(
+    @DrawableRes iconRes: Int,
+    @StringRes labelRes: Int,
+    selected: Boolean = false,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .width(TutorialLayoutDefaults.reportTileWidth)
+                .height(TutorialLayoutDefaults.reportTileHeight),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = if (selected) EumPrimary600 else EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, if (selected) EumPrimary600 else EumBorderInfo),
+        shadowElevation = if (selected) TutorialLayoutDefaults.mockPhoneElevation else 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.small),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                painter = painterResource(id = cue.iconRes),
+                painter = painterResource(id = iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(TutorialLayoutDefaults.cuePillIconSize),
-                tint = EumPrimary600,
+                modifier = Modifier.size(TutorialLayoutDefaults.smallCardIconSize),
+                tint = if (selected) EumWhite else EumPrimary600,
             )
+            Spacer(modifier = Modifier.height(TutorialLayoutDefaults.tightGap))
             Text(
-                text = stringResource(id = cue.labelRes),
-                color = MaterialTheme.colorScheme.onSurface,
+                text = stringResource(id = labelRes),
+                color = if (selected) EumWhite else MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -505,15 +624,18 @@ private fun TutorialFilterChip(chip: TutorialFilterChip) {
 }
 
 private data class TutorialVisualContent(
+    val scene: TutorialIllustrationSceneType,
     @DrawableRes val heroIconRes: Int,
-    val cues: List<TutorialVisualCue>,
+    @StringRes val primaryLabelRes: Int,
+    @StringRes val secondaryLabelRes: Int,
     val chips: List<TutorialFilterChip>,
 )
 
-private data class TutorialVisualCue(
-    @DrawableRes val iconRes: Int,
-    @StringRes val labelRes: Int,
-)
+private enum class TutorialIllustrationSceneType {
+    DESTINATION_SEARCH,
+    ROUTE_COMPARISON,
+    REPORT_SUBMISSION,
+}
 
 private data class TutorialFilterChip(
     @DrawableRes val iconRes: Int,
@@ -524,18 +646,10 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
     when (this) {
         TutorialStep.DESTINATION ->
             TutorialVisualContent(
+                scene = TutorialIllustrationSceneType.DESTINATION_SEARCH,
                 heroIconRes = R.drawable.ic_nav_search,
-                cues =
-                    listOf(
-                        TutorialVisualCue(
-                            iconRes = R.drawable.ic_nav_search,
-                            labelRes = R.string.tutorial_destination_item_search_title,
-                        ),
-                        TutorialVisualCue(
-                            iconRes = R.drawable.ic_lowvision_category_elevator,
-                            labelRes = R.string.tutorial_destination_item_filter_title,
-                        ),
-                    ),
+                primaryLabelRes = R.string.tutorial_destination_item_search_title,
+                secondaryLabelRes = R.string.tutorial_destination_item_filter_title,
                 chips =
                     listOf(
                         TutorialFilterChip(
@@ -555,18 +669,10 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
 
         TutorialStep.ROUTE_COMPARISON ->
             TutorialVisualContent(
+                scene = TutorialIllustrationSceneType.ROUTE_COMPARISON,
                 heroIconRes = R.drawable.ic_route_start_navigation,
-                cues =
-                    listOf(
-                        TutorialVisualCue(
-                            iconRes = R.drawable.ic_route_time,
-                            labelRes = R.string.tutorial_route_item_compare_title,
-                        ),
-                        TutorialVisualCue(
-                            iconRes = R.drawable.ic_route_elevator,
-                            labelRes = R.string.tutorial_route_item_accessibility_title,
-                        ),
-                    ),
+                primaryLabelRes = R.string.tutorial_route_item_compare_title,
+                secondaryLabelRes = R.string.tutorial_route_item_accessibility_title,
                 chips =
                     listOf(
                         TutorialFilterChip(
@@ -586,18 +692,10 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
 
         TutorialStep.REPORT ->
             TutorialVisualContent(
+                scene = TutorialIllustrationSceneType.REPORT_SUBMISSION,
                 heroIconRes = R.drawable.ic_nav_report,
-                cues =
-                    listOf(
-                        TutorialVisualCue(
-                            iconRes = R.drawable.ic_permission_location,
-                            labelRes = R.string.tutorial_report_item_location_title,
-                        ),
-                        TutorialVisualCue(
-                            iconRes = R.drawable.ic_report_tactile_damage,
-                            labelRes = R.string.tutorial_report_item_type_title,
-                        ),
-                    ),
+                primaryLabelRes = R.string.tutorial_report_item_location_title,
+                secondaryLabelRes = R.string.tutorial_report_item_type_title,
                 chips =
                     listOf(
                         TutorialFilterChip(
@@ -660,6 +758,8 @@ internal object TutorialLayoutDefaults {
     const val reportCategoryChipCount: Int = 3
     const val showsEmphasisChip: Boolean = false
     const val usesLayeredFlatIllustration: Boolean = true
+    const val usesWhitePanelFrame: Boolean = false
+    const val distinctIllustrationSceneCount: Int = 3
     const val visualPanelWeight: Float = 1f
     const val hasHeroIconBackground: Boolean = false
     const val firstStepWithPreviousAction: Int = 2
@@ -669,8 +769,7 @@ internal object TutorialLayoutDefaults {
     val previousButtonMinWidth = 88.dp
     val previousButtonBorderWidth = 1.dp
     val visualPanelButtonGap = 12.dp
-    val visualPanelMaxWidth = 360.dp
-    val panelElevation = 2.dp
+    val visualPanelMaxWidth = 420.dp
 
     val headerSectionGap = 10.dp
     val headerTitleLineHeight = 30.sp
@@ -681,30 +780,31 @@ internal object TutorialLayoutDefaults {
     val microGap = 4.dp
     val hairlineWidth = 1.dp
 
-    val illustrationHeight = 210.dp
+    val illustrationHeight = 230.dp
     val illustrationHaloSize = 150.dp
     val illustrationContentGap = 22.dp
-    val illustrationSidePadding = 42.dp
+    val sceneMapTopPadding = 34.dp
+    val scenePinBottomPadding = 18.dp
     val heroIconSize = 56.dp
-    val mockPhoneWidth = 116.dp
-    val mockPhoneHeight = 158.dp
-    val mockPhoneCorner = 24.dp
-    val mockPhoneBorderWidth = 2.dp
+    val mapBlockWidth = 248.dp
+    val mapBlockHeight = 150.dp
+    val mapBlockLineCount = 4
+    val mapBlockLineHeight = 10.dp
     val mockPhoneElevation = 2.dp
-    val mockPhonePadding = 18.dp
-    val mockPhoneLineCount = 3
-    val mockPhoneLineHeight = 10.dp
-    val mockPhoneDotCount = 3
-    val mockPhoneDotSize = 8.dp
-    val floatingPanelWidth = 210.dp
+    val searchBarWidth = 270.dp
+    val searchBarHeight = 58.dp
     val floatingPanelHeight = 56.dp
     val floatingPanelElevation = 3.dp
     val floatingPanelIconSize = 22.dp
     val smallCardWidth = 72.dp
     val smallCardHeight = 60.dp
     val smallCardIconSize = 28.dp
-    val cuePillVerticalPadding = 8.dp
-    val cuePillIconSize = 18.dp
+    val routeCardHeight = 78.dp
+    val routeCardBorderWidth = 2.dp
+    val radioDotOuterSize = 24.dp
+    val radioDotInnerSize = 12.dp
+    val reportTileWidth = 132.dp
+    val reportTileHeight = 92.dp
     val filterChipHorizontalPadding = 12.dp
     val filterChipVerticalPadding = 8.dp
     val filterChipIconSize = 18.dp

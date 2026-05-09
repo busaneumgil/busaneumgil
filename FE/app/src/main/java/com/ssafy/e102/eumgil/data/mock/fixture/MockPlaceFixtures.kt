@@ -121,6 +121,7 @@ object MockPlaceFixtures {
                     latitude = place.latitude,
                     longitude = place.longitude,
                     category = place.category,
+                    accessibilityTagKeys = place.accessibilityTags,
                 )
             }
 

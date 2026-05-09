@@ -111,6 +111,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments
                 ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val preserveEntryStateOnReentry =
+            backStackEntry.savedStateHandle.get<Boolean>(SEARCH_PRESERVE_ENTRY_STATE_KEY) == true
+        backStackEntry.savedStateHandle.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, false)
         SearchEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
@@ -138,6 +141,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         )
     }
 
@@ -162,6 +166,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         SearchResultsRoute(
             initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
             onNavigateBack = {
+                navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
             onNavigateToResults = { query, editingTarget ->
@@ -224,6 +231,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         }
         SearchVoiceInputRoute(
             onNavigateBack = {
+                navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
             onNavigateToResults = { query, editingTarget ->
@@ -468,6 +478,8 @@ internal fun resolveAppInfoGuideRoute(): String = TutorialRoute.Guide.route
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue
+
+private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntryState"
 
 internal data class TopLevelNavigationPolicy(
     val launchSingleTop: Boolean,

@@ -76,6 +76,8 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayBackdrop
+import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOverlayState
 import java.util.Locale
 
 @Composable
@@ -1456,7 +1458,6 @@ private fun RouteMapStage(
                     } else {
                         emptyList()
                     },
-                routeColor = routeColor,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -2069,128 +2070,27 @@ private fun RouteSettingCtaContent(
 private fun RouteMapBackdrop(
     previewMap: RoutePreviewMapUiState,
     routePath: List<GeoCoordinate>,
-    routeColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val outline = MaterialTheme.colorScheme.outline
-    val originColor = MaterialTheme.colorScheme.secondary
-    val destinationColor = MaterialTheme.colorScheme.error
-    val projectionMap =
-        previewMap.copy(
-            polyline =
-                if (routePath.isNotEmpty()) {
-                    routePath
-                } else {
-                    listOfNotNull(previewMap.originCoordinate, previewMap.destinationCoordinate)
-                },
-        )
-    val backgroundBrush =
-        Brush.verticalGradient(
-            colors =
-                listOf(
-                    MaterialTheme.colorScheme.surfaceVariant,
-                    MaterialTheme.colorScheme.surfaceContainerLowest,
-                ),
-        )
     val mapDescription = stringResource(id = R.string.route_setting_preview_title)
-
-    BoxWithConstraints(
-        modifier =
-            modifier
-                .background(backgroundBrush)
-                .semantics(mergeDescendants = true) {
-                    contentDescription = mapDescription
-                },
-    ) {
-        val projectionBounds = routePreviewProjectionBounds(projectionMap)
-        val horizontalPadding = 28.dp
-        val verticalPadding = 24.dp
-        val markerAreaWidth = (maxWidth - (horizontalPadding * 2)).coerceAtLeast(0.dp)
-        val markerAreaHeight = (maxHeight - (verticalPadding * 2)).coerceAtLeast(0.dp)
-
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRoutePreviewMapGrid(outline = outline)
-
-            if (routePath.size >= 2) {
-                val routePreviewPath =
-                    routePath.toRoutePreviewPath(
-                        bounds = projectionBounds,
-                        canvasSize = size,
-                    )
-                drawPath(
-                    path = routePreviewPath,
-                    color = routeColor.copy(alpha = 0.26f),
-                    style =
-                        Stroke(
-                            width = 12.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-                drawPath(
-                    path = routePreviewPath,
-                    color = routeColor,
-                    style =
-                        Stroke(
-                            width = 5.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-            }
-
-            previewMap.originCoordinate?.let { coordinate ->
-                drawCircle(
-                    color = originColor.copy(alpha = 0.18f),
-                    radius = 18.dp.toPx(),
-                    center = projectionBounds.project(coordinate).toCanvasOffset(size),
-                )
-            }
-            previewMap.destinationCoordinate?.let { coordinate ->
-                drawCircle(
-                    color = destinationColor.copy(alpha = 0.14f),
-                    radius = 20.dp.toPx(),
-                    center = projectionBounds.project(coordinate).toCanvasOffset(size),
-                )
-            }
-        }
-
-        previewMap.originCoordinate?.let { coordinate ->
-            RoutePreviewMapMarker(
-                label = stringResource(id = R.string.route_setting_preview_marker_origin),
-                containerColor = originColor,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .offsetWithinRoutePreviewMap(
-                            point = projectionBounds.project(coordinate),
-                            areaWidth = markerAreaWidth,
-                            areaHeight = markerAreaHeight,
-                            horizontalPadding = horizontalPadding,
-                            verticalPadding = verticalPadding,
-                            elementSize = RoutePreviewMarkerSize,
-                        ),
-            )
-        }
-
-        previewMap.destinationCoordinate?.let { coordinate ->
-            RoutePreviewMapMarker(
-                label = stringResource(id = R.string.route_setting_preview_marker_destination),
-                containerColor = destinationColor,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .offsetWithinRoutePreviewMap(
-                            point = projectionBounds.project(coordinate),
-                            areaWidth = markerAreaWidth,
-                            areaHeight = markerAreaHeight,
-                            horizontalPadding = horizontalPadding,
-                            verticalPadding = verticalPadding,
-                            elementSize = RoutePreviewMarkerSize,
-                        ),
-            )
-        }
-    }
+    MapViewportOverlayBackdrop(
+        overlayState =
+            createRoutePreviewViewportOverlayState(
+                previewMap =
+                    previewMap.copy(
+                        polyline =
+                            if (routePath.isNotEmpty()) {
+                                routePath
+                            } else {
+                                previewMap.polyline
+                            },
+                    ),
+            ),
+        modifier = modifier,
+        horizontalPadding = 28.dp,
+        verticalPadding = 24.dp,
+        contentDescription = mapDescription,
+    )
 }
 
 @Composable

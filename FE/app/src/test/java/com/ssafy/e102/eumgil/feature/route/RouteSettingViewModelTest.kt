@@ -17,10 +17,13 @@ import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
-import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
+import com.ssafy.e102.eumgil.data.mock.fixture.MockRouteFixtures
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -147,7 +150,7 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `empty destination falls back to fixture destination and still renders summary`() =
+    fun `empty destination falls back to default destination and still renders summary`() =
         runTest {
             val viewModel =
                 RouteSettingViewModel(
@@ -161,7 +164,7 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.isUsingFallbackDestination)
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
-            assertEquals("검색 handoff 전에는 fixture 목적지를 기본 도착지로 유지합니다.", uiState.destinationFallbackMessage)
+            assertEquals("검색 handoff 전에는 기본 도착지를 유지합니다.", uiState.destinationFallbackMessage)
             assertEquals(null, uiState.destination.metadataLabel)
             assertEquals("부산역", uiState.destination.name)
             assertEquals("부산 동구 중앙대로 206", uiState.destination.supportingText)
@@ -204,7 +207,7 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `invalid destination coordinates fall back to fixture destination and disable start action`() =
+    fun `invalid destination coordinates fall back to default destination and disable start action`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -222,7 +225,7 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.isUsingFallbackDestination)
             assertEquals(RouteDestinationHandoffState.INVALID_COORDINATE, uiState.destinationHandoffState)
-            assertEquals("선택한 목적지 좌표를 확인할 수 없어 fixture 목적지로 대체했습니다.", uiState.destinationFallbackMessage)
+            assertEquals("선택한 목적지 좌표를 확인할 수 없어 기본 도착지로 대체했습니다.", uiState.destinationFallbackMessage)
             assertEquals("부산역", uiState.destination.name)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
             assertEquals(RoutePreviewMapStatus.INVALID_DESTINATION, uiState.routePreviewMap.status)
@@ -359,9 +362,9 @@ class RouteSettingViewModelTest {
 
             assertFalse(uiState.cta.isEnabled)
             assertEquals("경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다.", uiState.cta.supportingText)
-            assertEquals("fixture load failed", uiState.loadErrorMessage)
+            assertEquals("route load failed", uiState.loadErrorMessage)
             assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
-            assertEquals("fixture load failed", uiState.routePreviewMap.fallbackMessage)
+            assertEquals("route load failed", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
         }
 
@@ -596,8 +599,23 @@ class RouteSettingViewModelTest {
 private fun testRouteRepository() =
     DefaultRouteRepository(
         localDataSource = RouteLocalDataSource(),
-        mockDataSource = RouteMockDataSource(),
+        remoteDataSource =
+            testRouteRemoteDataSource { request ->
+                MockRouteFixtures.searchRoutes(request)
+            },
     )
+
+private fun testRouteRemoteDataSource(
+    responseProvider: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto,
+): RouteRemoteDataSource =
+    object : RouteRemoteDataSource(
+        postRequestExecutor = { _, _, _ ->
+            error("viewmodel tests override searchWalkRoutes directly")
+        },
+    ) {
+        override suspend fun searchWalkRoutes(request: RouteSearchRequestDto): RouteSearchResponseDto =
+            responseProvider(request)
+    }
 
 private fun testDestination(): PlaceDestination =
     PlaceDestination(
@@ -661,9 +679,8 @@ private fun partialRouteRepository(): RouteRepository =
                             ),
                     ),
                 source =
-                    RouteSearchSource.mockFixture(
-                        fixtureId = "partial-fixture",
-                        label = "Partial route fixture",
+                    RouteSearchSource.serverApi(
+                        label = "Partial route payload",
                     ),
             )
     }
@@ -680,9 +697,8 @@ private fun emptyRouteRepository(): RouteRepository =
                         routes = emptyList(),
                     ),
                 source =
-                    RouteSearchSource.mockFixture(
-                        fixtureId = "empty-fixture",
-                        label = "Empty route fixture",
+                    RouteSearchSource.serverApi(
+                        label = "Empty route payload",
                     ),
             )
     }
@@ -690,7 +706,7 @@ private fun emptyRouteRepository(): RouteRepository =
 private fun failingRouteRepository(): RouteRepository =
     object : RouteRepository {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
-            error("fixture load failed")
+            error("route load failed")
     }
 
 private fun directionalRouteRepository(): RouteRepository =
@@ -762,9 +778,8 @@ private fun directionalRouteRepository(): RouteRepository =
                             ),
                     ),
                 source =
-                    RouteSearchSource.mockFixture(
-                        fixtureId = "directional-fixture",
-                        label = "Directional route fixture",
+                    RouteSearchSource.serverApi(
+                        label = "Directional route payload",
                     ),
             )
     }
@@ -849,9 +864,8 @@ private class CountingRouteRepository : RouteRepository {
                         ),
                 ),
             source =
-                RouteSearchSource.mockFixture(
-                    fixtureId = "counting-fixture-$countLabel",
-                    label = "Counting route fixture #$countLabel",
+                RouteSearchSource.serverApi(
+                    label = "Counting route payload #$countLabel",
                 ),
         )
     }

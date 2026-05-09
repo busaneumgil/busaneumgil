@@ -114,6 +114,20 @@ class SplashConfigurationTest {
     }
 
     @Test
+    fun `app nav host observes auth state and redirects to login when session is cleared`() {
+        val appNavHost = File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt").readText()
+
+        assertTrue(
+            "AppNavHost should observe auth gate updates after startup.",
+            appNavHost.contains("authSessionRepository.observeAuthGateState()"),
+        )
+        assertTrue(
+            "AppNavHost should redirect back to the login route when the authenticated session disappears.",
+            appNavHost.contains("navController.navigate(AuthRoute.Login.route)"),
+        )
+    }
+
+    @Test
     fun `app container defers database backed startup dependencies until needed`() {
         val appContainer = File("src/main/java/com/ssafy/e102/eumgil/app/AppContainer.kt").readText()
         val settingsRepository = File("src/main/java/com/ssafy/e102/eumgil/data/repository/SettingsRepository.kt").readText()

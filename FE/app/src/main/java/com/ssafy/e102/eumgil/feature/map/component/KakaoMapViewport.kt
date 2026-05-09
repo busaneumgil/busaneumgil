@@ -199,6 +199,8 @@ private class KakaoMapViewportController {
     private var lastRenderedMarkers: List<KakaoMarkerRenderState> = emptyList()
     private var lastDispatchedMapTapCoordinate: MapCoordinate? = null
     private var lastDispatchedMapTapUptimeMillis: Long = 0L
+    private var isCameraMoveInProgress = false
+    private var projectedMarkerTrackingRunnable: Runnable? = null
     private var isStarted = false
     private var isFinished = false
     private var isLifecycleResumed = false
@@ -271,6 +273,7 @@ private class KakaoMapViewportController {
         hasMapLifecycleResumed = false
         lifecycleDispatchRetryCount = 0
         mapView?.removeOnAttachStateChangeListener(attachStateListener)
+        stopProjectedMarkerTracking()
         mapView?.finish()
         mapView = null
         rendererStatus = KakaoRendererStatus.Initializing
@@ -314,6 +317,7 @@ private class KakaoMapViewportController {
                     rendererFailure = destroyFailure
                     rendererStatus = KakaoRendererStatus.Error
                     kakaoMap = null
+                    stopProjectedMarkerTracking()
                     projectedMarkerOverlays = emptyList()
                     hasMapLifecycleResumed = false
                     lifecycleDispatchRetryCount = 0
@@ -383,6 +387,9 @@ private class KakaoMapViewportController {
                             )
                         }
                     }
+                    readyMap.setOnCameraMoveStartListener { _, _ ->
+                        startProjectedMarkerTracking()
+                    }
                     readyMap.setOnCameraMoveEndListener { _, cameraPosition, gestureType ->
                         val movedCenter =
                             MapCoordinate(
@@ -401,6 +408,7 @@ private class KakaoMapViewportController {
                             cameraPosition.zoomLevel,
                             gestureType.isUserDrivenCameraMove(),
                         )
+                        stopProjectedMarkerTracking()
                         updateProjectedMarkerOverlays(readyMap = readyMap, state = latestState)
                     }
                     renderIntoMapIfReady()
@@ -686,6 +694,37 @@ private class KakaoMapViewportController {
                         KakaoMapScreenPoint(x = point.x, y = point.y)
                     }
             }
+    }
+
+    private fun startProjectedMarkerTracking() {
+        val boundMapView = mapView ?: return
+        val readyMap = kakaoMap ?: return
+        isCameraMoveInProgress = true
+        if (projectedMarkerTrackingRunnable != null) return
+
+        val trackingRunnable =
+            object : Runnable {
+                override fun run() {
+                    if (!isCameraMoveInProgress || isFinished || mapView !== boundMapView || kakaoMap !== readyMap) {
+                        projectedMarkerTrackingRunnable = null
+                        return
+                    }
+                    updateProjectedMarkerOverlays(readyMap = readyMap, state = latestState)
+                    boundMapView.postOnAnimation(this)
+                }
+            }
+        projectedMarkerTrackingRunnable = trackingRunnable
+        boundMapView.postOnAnimation(trackingRunnable)
+    }
+
+    private fun stopProjectedMarkerTracking() {
+        isCameraMoveInProgress = false
+        val boundMapView = mapView ?: run {
+            projectedMarkerTrackingRunnable = null
+            return
+        }
+        projectedMarkerTrackingRunnable?.let(boundMapView::removeCallbacks)
+        projectedMarkerTrackingRunnable = null
     }
 }
 

@@ -21,7 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "사용자", description = "내 정보 조회, 사용자 유형 수정, 회원탈퇴 API")
+@Tag(name = "사용자", description = "내 정보 조회, 사용자 유형 수정, 회원 탈퇴 API")
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -29,7 +29,7 @@ public class UserController {
 
 	private final UserService userService;
 
-	@Operation(summary = "내 정보 조회", description = "로그인 사용자의 기본 정보와 선택한 사용자 유형을 조회합니다.")
+	@Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자의 가입 정보와 선택 사용자 유형을 조회한다.")
 	@GetMapping("/me")
 	public ApiResponse<UserMeResponse> getMe(
 		@Parameter(hidden = true) @AuthenticationPrincipal
@@ -37,7 +37,7 @@ public class UserController {
 		return ApiResponse.success(userService.getMe(principal.userId()));
 	}
 
-	@Operation(summary = "사용자 유형 수정", description = "로그인 사용자의 주 사용자 유형과 이동 보조 하위 유형을 수정합니다.")
+	@Operation(summary = "사용자 유형 수정", description = "현재 로그인한 사용자의 주 사용자 유형과 이동 보조 하위 유형을 수정한다.")
 	@PatchMapping("/me/user-type")
 	public ApiResponse<UserTypeResponse> updateUserType(
 		@Parameter(hidden = true) @AuthenticationPrincipal
@@ -50,7 +50,7 @@ public class UserController {
 			request.selectedMobilitySubtype()));
 	}
 
-	@Operation(summary = "회원탈퇴", description = "로그인 사용자를 탈퇴 처리하고 현재 토큰을 무효화합니다.")
+	@Operation(summary = "회원 탈퇴", description = "현재 로그인한 사용자를 탈퇴 처리하고 access token과 refresh token을 더 이상 사용할 수 없게 한다.")
 	@DeleteMapping("/me")
 	public ApiResponse<Void> withdraw(
 		@Parameter(hidden = true) @AuthenticationPrincipal

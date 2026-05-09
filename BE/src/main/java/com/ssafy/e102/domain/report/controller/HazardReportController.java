@@ -38,35 +38,35 @@ public class HazardReportController {
 
 	private final HazardReportService hazardReportService;
 
-	@Operation(summary = "도로 상태 제보 등록", description = "로그인 사용자가 도로 상태 제보를 등록합니다.")
+	@Operation(summary = "도로 상태 제보 등록", description = "현재 로그인한 사용자가 도로 상태 문제 위치, 유형, 설명, 첨부 이미지를 등록한다.")
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<HazardReportIdResponse> createHazardReport(
-		@Parameter(hidden = true) @AuthenticationPrincipal
+		@AuthenticationPrincipal
 		AuthPrincipal principal,
 		@Valid @RequestBody
 		CreateHazardReportRequest request) {
 		return ApiResponse.created(hazardReportService.createHazardReport(principal.userId(), request));
 	}
 
-	@Operation(summary = "내 도로 상태 제보 목록 조회", description = "로그인 사용자가 등록한 도로 상태 제보 목록을 커서 기반으로 조회합니다.")
+	@Operation(summary = "내 제보 목록 조회", description = "현재 로그인한 사용자가 등록한 도로 상태 제보 목록을 최신순 cursor 기반으로 조회한다.")
 	@GetMapping("/me")
 	public ApiResponse<HazardReportListResponse> getMyHazardReports(
-		@Parameter(hidden = true) @AuthenticationPrincipal
+		@AuthenticationPrincipal
 		AuthPrincipal principal,
-		@Parameter(description = "다음 페이지 조회 기준이 되는 마지막 제보 ID") @RequestParam(required = false) @Positive
+		@Parameter(description = "마지막으로 조회한 제보 ID. 첫 조회 시 생략한다.") @RequestParam(required = false) @Positive
 		Long cursor,
-		@Parameter(description = "조회 개수") @RequestParam(defaultValue = "10") @Min(1) @Max(100)
+		@Parameter(description = "조회 개수. 허용 범위는 1~100이다.") @RequestParam(defaultValue = "10") @Min(1) @Max(100)
 		int size) {
 		return ApiResponse.success(hazardReportService.getMyHazardReports(principal.userId(), cursor, size));
 	}
 
-	@Operation(summary = "내 도로 상태 제보 상세 조회", description = "로그인 사용자가 등록한 특정 도로 상태 제보 상세 정보를 조회합니다.")
+	@Operation(summary = "내 제보 상세 조회", description = "현재 로그인한 사용자가 등록한 특정 도로 상태 제보의 상세 정보와 첨부 이미지를 조회한다.")
 	@GetMapping("/me/{reportId}")
 	public ApiResponse<HazardReportDetailResponse> getMyHazardReportDetail(
-		@Parameter(hidden = true) @AuthenticationPrincipal
+		@AuthenticationPrincipal
 		AuthPrincipal principal,
-		@Parameter(description = "도로 상태 제보 ID") @PathVariable @Positive
+		@Parameter(description = "조회할 제보 ID") @PathVariable @Positive
 		Long reportId) {
 		return ApiResponse.success(hazardReportService.getMyHazardReportDetail(principal.userId(), reportId));
 	}

@@ -110,6 +110,11 @@ allowed = {
     "segmentType": {"CROSS_WALK", "SIDE_LINE"},
 }
 
+segment_type_aliases = {
+    "SIDE_WALK": "CROSS_WALK",
+    "TRANSITION_CONNECTOR": "SIDE_LINE",
+}
+
 
 def fail(message):
     print(f"CSV validation failed: {message}", file=sys.stderr)
@@ -182,9 +187,10 @@ with open(segments_path, newline="", encoding="utf-8-sig") as file:
             value = row[key]
             if not value:
                 fail(f"{segments_path}:{line_no} blank enum value: {key}")
-            if value not in candidates:
+            normalized_value = segment_type_aliases.get(value, value) if key == "segmentType" else value
+            if normalized_value not in candidates:
                 fail(f"{segments_path}:{line_no} invalid {key}: {value}")
-            enum_counts[key][value] += 1
+            enum_counts[key][normalized_value] += 1
 
 print(f"CSV validation ok: nodes={node_rows}, segments={segment_rows}")
 for key in sorted(enum_counts):
@@ -332,7 +338,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM staging_road_segments
-    WHERE segment_type NOT IN ('CROSS_WALK', 'SIDE_LINE')
+    WHERE segment_type NOT IN ('CROSS_WALK', 'SIDE_LINE', 'SIDE_WALK', 'TRANSITION_CONNECTOR')
   ) THEN
     RAISE EXCEPTION 'staging_road_segments contains invalid segmentType';
   END IF;
@@ -386,7 +392,11 @@ SELECT
   surface_state,
   stairs_state,
   signal_state,
-  segment_type
+  CASE segment_type
+    WHEN 'SIDE_WALK' THEN 'CROSS_WALK'
+    WHEN 'TRANSITION_CONNECTOR' THEN 'SIDE_LINE'
+    ELSE segment_type
+  END
 FROM staging_road_segments;
 
 DO \$validate_loaded\$

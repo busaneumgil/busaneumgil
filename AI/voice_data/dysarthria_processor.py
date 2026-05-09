@@ -555,4 +555,3 @@ class DysarthriaProcessor:
             )
 
         return recs
-

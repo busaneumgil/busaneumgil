@@ -34,7 +34,7 @@ public class AuthController {
 	private final AuthService authService;
 
 	@SecurityRequirements()
-	@Operation(summary = "소셜 로그인", description = "소셜 provider 인증 정보로 로그인하고 신규 사용자 여부와 토큰을 반환합니다.")
+	@Operation(summary = "소셜 로그인", description = "카카오 소셜 access token을 검증하고 가입 완료 사용자에게 서비스 토큰을 발급한다. 신규 사용자는 signupToken을 반환한다.")
 	@PostMapping("/social-login")
 	public ApiResponse<SocialLoginResponse> socialLogin(
 		@Valid @RequestBody
@@ -43,7 +43,7 @@ public class AuthController {
 	}
 
 	@SecurityRequirements()
-	@Operation(summary = "회원가입", description = "소셜 로그인 후 신규 사용자 정보를 저장하고 가입 완료 토큰을 반환합니다.")
+	@Operation(summary = "회원가입", description = "signupToken, 필수 약관 동의, 사용자 유형을 검증한 뒤 가입 완료 사용자 계정을 생성하고 서비스 토큰을 발급한다.")
 	@PostMapping("/signup")
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<SignupResponse> signup(
@@ -53,7 +53,7 @@ public class AuthController {
 	}
 
 	@SecurityRequirements()
-	@Operation(summary = "토큰 재발급", description = "Refresh Token으로 Access Token과 Refresh Token을 재발급합니다.")
+	@Operation(summary = "토큰 재발급", description = "refresh token을 검증하고 access token과 refresh token을 새로 발급한다.")
 	@PostMapping("/reissue")
 	public ApiResponse<TokenResponse> reissue(
 		@Valid @RequestBody
@@ -61,7 +61,7 @@ public class AuthController {
 		return ApiResponse.success(authService.reissue(request));
 	}
 
-	@Operation(summary = "로그아웃", description = "현재 Access Token을 로그아웃 처리하고 Refresh Token을 제거합니다.")
+	@Operation(summary = "로그아웃", description = "현재 access token을 blacklist에 등록하고 사용자의 refresh token을 제거한다.")
 	@PostMapping("/logout")
 	public ApiResponse<Void> logout(
 		@Parameter(hidden = true) @AuthenticationPrincipal

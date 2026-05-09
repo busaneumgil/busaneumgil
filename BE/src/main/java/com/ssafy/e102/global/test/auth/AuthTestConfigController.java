@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "인증 테스트 설정", description = "로컬/테스트용 소셜 로그인 클라이언트 설정 조회 API")
+@Tag(name = "인증 테스트 설정", description = "로컬/테스트 환경에서 소셜 로그인 테스트에 필요한 클라이언트 설정 조회 API")
 @RestController
 @RequestMapping("/auth/test-config")
 @EnableConfigurationProperties(AuthTestConfigProperties.class)
@@ -22,7 +22,7 @@ public class AuthTestConfigController {
 		this.properties = properties;
 	}
 
-	@Operation(summary = "소셜 로그인 테스트 설정 조회", description = "테스트 환경에서 사용할 소셜 로그인 클라이언트 설정을 조회합니다.")
+	@Operation(summary = "소셜 로그인 테스트 설정 조회", description = "로컬/테스트 환경에서 소셜 로그인 테스트에 필요한 Kakao, Naver, Google 클라이언트 설정을 조회한다.")
 	@GetMapping
 	public AuthTestConfigResponse getConfig() {
 		return new AuthTestConfigResponse(

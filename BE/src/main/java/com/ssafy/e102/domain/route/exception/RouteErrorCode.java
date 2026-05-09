@@ -13,6 +13,7 @@ public enum RouteErrorCode implements ErrorCode {
 
 	INVALID_ROUTE_REQUEST(HttpStatus.BAD_REQUEST, "RT4000", "경로 요청값이 올바르지 않습니다."),
 	INVALID_REROUTE_REQUEST(HttpStatus.BAD_REQUEST, "RT4001", "재탐색 요청값이 올바르지 않습니다."),
+	INVALID_ROUTE_SELECT_REQUEST(HttpStatus.BAD_REQUEST, "RT4002", "경로 선택 요청값이 올바르지 않습니다."),
 	OUT_OF_SERVICE_AREA(HttpStatus.BAD_REQUEST, "RT4003", "부산광역시 안의 위치를 선택해 주세요."),
 	START_END_TOO_CLOSE(HttpStatus.BAD_REQUEST, "RT4004", "출발지와 도착지를 다르게 선택해 주세요."),
 	INVALID_CURRENT_POINT(HttpStatus.BAD_REQUEST, "RT4005", "현재 위치값이 올바르지 않습니다."),

@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.route.controller;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -8,9 +9,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.service.RerouteService;
+import com.ssafy.e102.domain.route.service.RouteSelectService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.global.response.ApiResponse;
@@ -33,6 +36,7 @@ public class RouteController {
 	private final WalkRouteSearchService walkRouteSearchService;
 	private final TransitRouteSearchService transitRouteSearchService;
 	private final RerouteService rerouteService;
+	private final RouteSelectService routeSelectService;
 
 	@PostMapping("/search/walk")
 	public ApiResponse<WalkRouteSearchResponse> searchWalkRoutes(
@@ -59,5 +63,17 @@ public class RouteController {
 		@Valid @RequestBody
 		RerouteRequest request) {
 		return ApiResponse.success(rerouteService.reroute(principal.userId(), request));
+	}
+
+	@PostMapping("/{routeId}/select")
+	public ApiResponse<Void> selectRoute(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@PathVariable
+		String routeId,
+		@Valid @RequestBody
+		SelectRouteRequest request) {
+		routeSelectService.select(principal.userId(), routeId, request);
+		return ApiResponse.success();
 	}
 }

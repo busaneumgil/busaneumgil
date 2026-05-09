@@ -30,6 +30,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
+import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
@@ -40,6 +41,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.exception.RouteExceptionHandler;
 import com.ssafy.e102.domain.route.service.RerouteService;
+import com.ssafy.e102.domain.route.service.RouteSelectService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.domain.route.type.RouteBadge;
@@ -54,6 +56,7 @@ class RouteControllerTest {
 	private WalkRouteSearchService walkRouteSearchService;
 	private TransitRouteSearchService transitRouteSearchService;
 	private RerouteService rerouteService;
+	private RouteSelectService routeSelectService;
 	private MockMvc mockMvc;
 
 	@BeforeEach
@@ -61,8 +64,11 @@ class RouteControllerTest {
 		walkRouteSearchService = Mockito.mock(WalkRouteSearchService.class);
 		transitRouteSearchService = Mockito.mock(TransitRouteSearchService.class);
 		rerouteService = Mockito.mock(RerouteService.class);
+		routeSelectService = Mockito.mock(RouteSelectService.class);
 		mockMvc = MockMvcBuilders
-			.standaloneSetup(new RouteController(walkRouteSearchService, transitRouteSearchService, rerouteService))
+			.standaloneSetup(
+				new RouteController(walkRouteSearchService, transitRouteSearchService, rerouteService,
+					routeSelectService))
 			.setCustomArgumentResolvers(new AuthPrincipalArgumentResolver())
 			.setControllerAdvice(new RouteExceptionHandler(), new GlobalExceptionHandler())
 			.build();
@@ -189,6 +195,67 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.data.rerouteType").doesNotExist());
 
 		verify(rerouteService).reroute(eq(userId), any(RerouteRequest.class));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("select 요청은 인증 사용자, routeId path, searchId body만 service로 넘긴다")
+	void selectRouteUsesAuthenticatedUserAndRouteId() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/rt_selected_001/select")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "searchId": "rs_walk_test"
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data").value(nullValue()));
+
+		verify(routeSelectService).select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("select searchId 누락은 RT4002로 반환한다")
+	void selectRouteMapsMissingSearchId() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/rt_selected_001/select")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4002"))
+			.andExpect(jsonPath("$.message").value("경로 선택 요청값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("select searchId blank는 RT4002로 반환한다")
+	void selectRouteMapsBlankSearchId() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/rt_selected_001/select")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "searchId": " "
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4002"))
+			.andExpect(jsonPath("$.message").value("경로 선택 요청값이 올바르지 않습니다."));
+
 		SecurityContextHolder.clearContext();
 	}
 

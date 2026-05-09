@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-internal const val VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS = 1_200L
+internal const val VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS = 2_000L
 
 class SearchViewModel(
     private val searchRepository: SearchRepository,

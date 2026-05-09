@@ -139,6 +139,29 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `voice input sheet replaces the example phrase with transcript preview once speech is recognized`() {
+        assertEquals(
+            false,
+            shouldShowSearchVoiceInputTranscriptPreview(
+                SearchVoiceInputUiState(
+                    isActive = true,
+                    transcript = "",
+                ),
+            ),
+        )
+        assertEquals(
+            true,
+            shouldShowSearchVoiceInputTranscriptPreview(
+                SearchVoiceInputUiState(
+                    isActive = true,
+                    transcript = "recognized speech",
+                    status = SearchVoiceInputStatus.Recognized,
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `verified search result remains selectable`() {
         val result =
             SearchResult(

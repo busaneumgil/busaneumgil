@@ -115,6 +115,10 @@ internal fun searchVoiceInputSheetTopCornerRadius(): Dp = EumRadius.scaleL
 
 internal fun searchVoiceInputSheetContainerColor(): Color = BusanEumgilLightColorScheme.surface
 
+internal fun shouldShowSearchVoiceInputTranscriptPreview(
+    voiceInputState: SearchVoiceInputUiState,
+): Boolean = voiceInputState.transcript.isNotBlank()
+
 internal data class SearchVoiceInputStatusContent(
     @StringRes val titleRes: Int,
     @StringRes val descriptionRes: Int? = null,
@@ -429,6 +433,7 @@ private fun SearchVoiceInputContent(
     modifier: Modifier = Modifier,
 ) {
     val statusContent = resolveSearchVoiceInputStatusContent(uiState.voiceInputState)
+    val showTranscriptPreview = shouldShowSearchVoiceInputTranscriptPreview(uiState.voiceInputState)
 
     Column(
         modifier = modifier,
@@ -460,17 +465,30 @@ private fun SearchVoiceInputContent(
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        Surface(
-            modifier = Modifier.padding(top = EumSpacing.medium),
-            shape = RoundedCornerShape(999.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
-        ) {
-            Text(
-                text = stringResource(id = R.string.search_voice_input_example_phrase),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (showTranscriptPreview) {
+            SearchStateCard(
+                title = stringResource(id = R.string.search_voice_input_transcript_title),
+                description = uiState.voiceInputState.transcript,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = EumSpacing.medium),
+                containerColor = MaterialTheme.colorScheme.surface,
+                borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
             )
+        } else {
+            Surface(
+                modifier = Modifier.padding(top = EumSpacing.medium),
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.search_voice_input_example_phrase),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Box(
@@ -522,18 +540,6 @@ private fun SearchVoiceInputContent(
             }
         }
 
-        if (uiState.voiceInputState.transcript.isNotBlank()) {
-            SearchStateCard(
-                title = stringResource(id = R.string.search_voice_input_transcript_title),
-                description = uiState.voiceInputState.transcript,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
-                containerColor = MaterialTheme.colorScheme.surface,
-                borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.72f),
-            )
-        }
     }
 }
 

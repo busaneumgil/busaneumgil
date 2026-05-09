@@ -179,20 +179,11 @@ internal object MapBrowseStateFactory {
                 emptySet()
             }
 
-        val hasAllCategoriesSelected = normalizedCategories == availableCategories
-        val isBrailleFilterReset =
-            normalizedBrailleBlockTypes.isEmpty() ||
-                normalizedBrailleBlockTypes == availableBrailleBlockTypes
-
-        return if (availableCategories.isNotEmpty() && hasAllCategoriesSelected && isBrailleFilterReset) {
-            MapFilterSelectionState()
-        } else {
-            MapFilterSelectionState(
-                isShowingAllCategories = false,
-                selectedFacilityCategories = normalizedCategories,
-                selectedBrailleBlockTypes = normalizedBrailleBlockTypes,
-            )
-        }
+        return MapFilterSelectionState(
+            isShowingAllCategories = false,
+            selectedFacilityCategories = normalizedCategories,
+            selectedBrailleBlockTypes = normalizedBrailleBlockTypes,
+        )
     }
 
     private fun FacilityMarkerSeed.matches(selection: MapFilterSelectionState): Boolean {

@@ -24,7 +24,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -240,7 +242,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `voice route entered shows idle voice sheet before capture starts`() =
+    fun `voice route entered immediately starts voice capture`() =
         runTest {
             val viewModel =
                 SearchViewModel(
@@ -255,10 +257,11 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.VoiceRouteEntered)
             advanceUntilIdle()
 
-            assertFalse(uiEvent.isCompleted)
-            assertEquals(SearchVoiceInputStatus.Idle, viewModel.uiState.value.voiceInputState.status)
+            assertEquals(SearchUiEvent.StartVoiceCapture, uiEvent.await())
+            assertEquals(SearchVoiceInputStatus.Listening, viewModel.uiState.value.voiceInputState.status)
             assertEquals(true, viewModel.uiState.value.voiceInputState.isActive)
-            uiEvent.cancel()
+            assertEquals(SearchVoiceInputGuidance.None, viewModel.uiState.value.voiceInputState.guidance)
+            assertEquals("", viewModel.uiState.value.voiceInputState.transcript)
         }
 
     @Test
@@ -282,7 +285,35 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `voice transcript submits search and emits results navigation`() =
+    fun `empty voice capture keeps the sheet open and shows retry guidance`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+            val unexpectedEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.drop(1).first() }
+
+            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.VoiceCaptureEmpty)
+            advanceUntilIdle()
+
+            assertEquals(SearchUiEvent.StartVoiceCapture, uiEvent.await())
+            assertFalse(unexpectedEvent.isCompleted)
+            assertEquals(true, viewModel.uiState.value.voiceInputState.isActive)
+            assertEquals(SearchVoiceInputStatus.Idle, viewModel.uiState.value.voiceInputState.status)
+            assertEquals(SearchVoiceInputGuidance.RetryRequired, viewModel.uiState.value.voiceInputState.guidance)
+            assertEquals("", viewModel.uiState.value.voiceInputState.transcript)
+            unexpectedEvent.cancel()
+        }
+
+    @Test
+    fun `voice transcript previews the recognized sentence before emitting results navigation`() =
         runTest {
             val result =
                 SearchResult(
@@ -296,11 +327,6 @@ class SearchViewModelTest {
             val searchRepository =
                 FakeSearchRepository(
                     searchResults = listOf(result),
-                    voiceAnalysis =
-                        SearchVoiceAnalysis(
-                            intent = SearchVoiceIntent.PLACE_SEARCH,
-                            placeName = "Busan Station",
-                        ),
                 )
             val viewModel =
                 SearchViewModel(
@@ -310,16 +336,32 @@ class SearchViewModelTest {
                 )
 
             advanceUntilIdle()
+            val startEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
             viewModel.onAction(SearchUiAction.VoiceRouteEntered)
-            viewModel.onAction(SearchUiAction.VoiceCaptureButtonClicked)
             advanceUntilIdle()
+            assertEquals(SearchUiEvent.StartVoiceCapture, startEvent.await())
             val firstEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
             val secondEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.drop(1).first() }
 
-            viewModel.onAction(SearchUiAction.VoiceTranscriptReceived(transcript = "Busan Station"))
-            advanceUntilIdle()
+            viewModel.onAction(
+                SearchUiAction.VoiceTranscriptReceived(
+                    transcript = "recognized speech",
+                    searchQuery = "Busan Station",
+                ),
+            )
+            runCurrent()
 
             assertEquals(SearchUiEvent.StopVoiceCapture, firstEvent.await())
+            assertFalse(secondEvent.isCompleted)
+            assertEquals(true, viewModel.uiState.value.voiceInputState.isActive)
+            assertEquals(SearchVoiceInputStatus.Recognized, viewModel.uiState.value.voiceInputState.status)
+            assertEquals(SearchVoiceInputGuidance.None, viewModel.uiState.value.voiceInputState.guidance)
+            assertEquals("recognized speech", viewModel.uiState.value.voiceInputState.transcript)
+            assertTrue(searchRepository.voiceAnalysisRequests.isEmpty())
+
+            advanceTimeBy(VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS)
+            runCurrent()
+
             assertEquals(
                 SearchUiEvent.NavigateToResults(
                     query = "Busan Station",
@@ -331,11 +373,50 @@ class SearchViewModelTest {
             assertTrue(resultState is SearchResultUiState.Success)
             assertEquals("Busan Station", (resultState as SearchResultUiState.Success).query)
             assertEquals(listOf(result), resultState.results)
-            assertEquals("Busan Station", viewModel.uiState.value.voiceInputState.transcript)
-            assertEquals(
-                listOf("Busan Station" to SearchVoiceMode.MOBILITY_IMPAIRED),
-                searchRepository.voiceAnalysisRequests,
+            assertEquals("recognized speech", viewModel.uiState.value.voiceInputState.transcript)
+        }
+
+    @Test
+    fun `dismissing voice input during transcript preview cancels delayed results navigation`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val startEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
+            advanceUntilIdle()
+            assertEquals(SearchUiEvent.StartVoiceCapture, startEvent.await())
+
+            val firstEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+            val secondEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.drop(1).first() }
+            val unexpectedEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.drop(2).first() }
+
+            viewModel.onAction(
+                SearchUiAction.VoiceTranscriptReceived(
+                    transcript = "recognized speech",
+                    searchQuery = "Busan Station",
+                ),
             )
+            runCurrent()
+            viewModel.onAction(SearchUiAction.VoiceInputDismissed)
+            runCurrent()
+
+            assertEquals(SearchUiEvent.StopVoiceCapture, firstEvent.await())
+            assertEquals(SearchUiEvent.NavigateBack, secondEvent.await())
+            assertEquals(SearchVoiceInputStatus.Recognized, viewModel.uiState.value.voiceInputState.status)
+            assertEquals(true, viewModel.uiState.value.voiceInputState.isActive)
+            assertEquals("recognized speech", viewModel.uiState.value.voiceInputState.transcript)
+
+            advanceTimeBy(VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS)
+            runCurrent()
+
+            assertFalse(unexpectedEvent.isCompleted)
+            unexpectedEvent.cancel()
         }
 
     @Test

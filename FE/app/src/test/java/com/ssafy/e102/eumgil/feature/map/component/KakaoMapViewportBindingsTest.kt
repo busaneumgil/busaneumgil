@@ -406,4 +406,34 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals("total=2 visible=1 rendered=1 selected=toilet", summary)
     }
+
+    @Test
+    fun `selected map pin is rendered as a kakao marker with dedicated icon and highest rank`() {
+        val markerStates =
+            createKakaoMarkerRenderStates(
+                markerOverlayState =
+                    MapMarkerOverlayState(
+                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
+                        markers =
+                            listOf(
+                                MapMarkerUiModel(
+                                    markerId = "toilet",
+                                    name = "Accessible toilet",
+                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.2),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
+                                ),
+                            ),
+                        visibleMarkerCount = 1,
+                        totalMarkerCount = 1,
+                    ),
+                selectedMarkerId = null,
+                currentLocation = null,
+                selectedMapPinCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771),
+            )
+
+        assertEquals(listOf("selected-map-pin", "toilet"), markerStates.map { it.markerId })
+        assertEquals(R.drawable.ic_map_selected_pin_blue, markerStates.first().iconResId)
+        assertEquals(2L, markerStates.first().rank)
+        assertEquals(null, markerStates.first().clickTargetId)
+    }
 }

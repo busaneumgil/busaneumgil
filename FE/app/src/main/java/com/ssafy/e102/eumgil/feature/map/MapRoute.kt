@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -51,9 +52,11 @@ fun MapRoute(
             ViewModelProvider(owner, viewModelFactory)[MapViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, viewModel) {
+        val lifecycle = lifecycleOwner.lifecycle
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
@@ -63,10 +66,13 @@ fun MapRoute(
                 }
             }
 
-        lifecycleOwner.lifecycle.addObserver(observer)
+        lifecycle.addObserver(observer)
+        if (shouldStartMapRouteImmediately(lifecycle.currentState)) {
+            viewModel.onRouteStarted()
+        }
 
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+            lifecycle.removeObserver(observer)
             viewModel.onRouteStopped()
         }
     }
@@ -77,6 +83,7 @@ fun MapRoute(
         appContainer,
         onNavigateToRouteSetting,
         onNavigateToSearch,
+        snackbarHostState,
     ) {
         viewModel.uiEvent.collect { event ->
             when (event) {
@@ -84,7 +91,7 @@ fun MapRoute(
                 MapUiEvent.NavigateToSearch -> onNavigateToSearch()
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
-                is MapUiEvent.ShowSnackbar -> Unit
+                is MapUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }
@@ -101,6 +108,7 @@ fun MapRoute(
 
     MapScreen(
         uiState = uiState,
+        snackbarHostState = snackbarHostState,
         onAction = viewModel::onAction,
         onNavigateToSavedRoutes = onNavigateToSavedRoutes,
         onNavigateToMyPage = onNavigateToMyPage,
@@ -114,3 +122,6 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
         is ContextWrapper -> baseContext.findComponentActivity()
         else -> null
     }
+
+internal fun shouldStartMapRouteImmediately(currentState: Lifecycle.State): Boolean =
+    currentState.isAtLeast(Lifecycle.State.STARTED)

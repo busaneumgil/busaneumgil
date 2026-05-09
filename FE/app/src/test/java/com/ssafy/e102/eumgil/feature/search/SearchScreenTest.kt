@@ -1,8 +1,9 @@
 package com.ssafy.e102.eumgil.feature.search
 
 import com.ssafy.e102.eumgil.app.navigation.SearchRoute
-import androidx.compose.ui.graphics.Color
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -83,9 +84,58 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `voice input sheet uses fe bottom sheet radius and white background`() {
+    fun `voice input sheet uses fe bottom sheet radius and app surface background`() {
         assertEquals(EumRadius.scaleL, searchVoiceInputSheetTopCornerRadius())
-        assertEquals(Color.White, searchVoiceInputSheetContainerColor())
+        assertEquals(BusanEumgilLightColorScheme.surface, searchVoiceInputSheetContainerColor())
+    }
+
+    @Test
+    fun `voice input sheet hides the initial start prompt until the mic button is tapped`() {
+        assertEquals(
+            null,
+            resolveSearchVoiceInputStatusContent(
+                SearchVoiceInputUiState(
+                    isActive = true,
+                    status = SearchVoiceInputStatus.Idle,
+                    guidance = SearchVoiceInputGuidance.None,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `voice input sheet shows retry guidance after an empty capture`() {
+        assertEquals(
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_retry_message,
+                descriptionRes = null,
+            ),
+            resolveSearchVoiceInputStatusContent(
+                SearchVoiceInputUiState(
+                    isActive = true,
+                    status = SearchVoiceInputStatus.Idle,
+                    guidance = SearchVoiceInputGuidance.RetryRequired,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `voice input sheet shows recognized status before moving to results`() {
+        assertEquals(
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_recognized_title,
+                descriptionRes = R.string.search_voice_input_status_recognized_description,
+            ),
+            resolveSearchVoiceInputStatusContent(
+                SearchVoiceInputUiState(
+                    isActive = true,
+                    transcript = "recognized speech",
+                    status = SearchVoiceInputStatus.Recognized,
+                    guidance = SearchVoiceInputGuidance.None,
+                ),
+            ),
+        )
     }
 
     @Test

@@ -73,7 +73,6 @@ class MapViewModel(
     private var selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
     private var facilityBrowseData: FacilityBrowseData? = null
     private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
-    private var selectedShortcutFilterKey: MapShortcutFilterKey? = null
     private var recentDestinations: List<RecentDestination> = emptyList()
     private var isRouteStarted = false
     private var locationLookupState: LocationLookupState = LocationLookupState.Idle
@@ -141,6 +140,11 @@ class MapViewModel(
             MapUiAction.ZoomOutClicked -> handleZoomAction(delta = -1)
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
             is MapUiAction.MapTapped -> handleMapTapped(action.coordinate)
+            is MapUiAction.ViewportCameraChanged ->
+                handleViewportCameraChanged(
+                    center = action.center,
+                    zoomLevel = action.zoomLevel,
+                )
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
@@ -180,14 +184,12 @@ class MapViewModel(
                     "Seed browse success markers=${browseData.facilityMarkers.size} categories=${browseData.availableCategories.size}",
                 )
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-                selectedShortcutFilterKey = null
                 renderMarkerBrowseState()
             }.onFailure {
                 safeLogError(MAP_VIEW_MODEL_LOG_TAG, "Seed browse load failed", it)
                 facilityBrowseData = null
                 updateSelectedFacility(markerId = null)
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-                selectedShortcutFilterKey = null
                 mutableUiState.update { state ->
                     state.copy(
                         selectedMarkerId = null,
@@ -243,7 +245,6 @@ class MapViewModel(
                     )
                 }
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-                selectedShortcutFilterKey = null
                 renderMarkerBrowseState()
             }.onFailure {
                 safeLogError(
@@ -255,7 +256,6 @@ class MapViewModel(
                 lastPlacesBrowseAnchorSource = null
                 updateSelectedFacility(markerId = null)
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-                selectedShortcutFilterKey = null
                 mutableUiState.update { state ->
                     state.copy(
                         selectedMarkerId = null,
@@ -370,7 +370,6 @@ class MapViewModel(
     private fun resetMarkerCategoryFilter() {
         if (facilityBrowseData == null) return
         markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-        selectedShortcutFilterKey = null
         renderMarkerBrowseState()
     }
 
@@ -382,30 +381,29 @@ class MapViewModel(
                 browseData = browseData,
                 category = category,
             )
-        selectedShortcutFilterKey = shortcutFilterKeyForSelection(markerFilterSelectionState)
         renderMarkerBrowseState()
     }
 
     private fun handleShortcutFilterClicked(key: MapShortcutFilterKey) {
         val browseData = facilityBrowseData ?: return
 
-        val category = key.toFacilityCategory(browseData.availableCategories.toSet()) ?: return
-        val isSameShortcut = selectedShortcutFilterKey == key
-        selectedShortcutFilterKey = if (isSameShortcut) null else key
+        val category = key.toFacilityCategory(browseData.availableCategories.toSet())
+        if (category == null) {
+            emitUiEvent(MapUiEvent.ShowSnackbar(SHORTCUT_FILTER_UNAVAILABLE_MESSAGE))
+            return
+        }
         markerFilterSelectionState =
-            if (isSameShortcut) {
-                MapBrowseStateFactory.resetSelection()
-            } else {
-                MapFilterSelectionState(
-                    isShowingAllCategories = false,
-                    selectedFacilityCategories = setOf(category),
-                )
-            }
+            MapBrowseStateFactory.toggleCategory(
+                selection = markerFilterSelectionState,
+                browseData = browseData,
+                category = category,
+            )
         renderMarkerBrowseState()
     }
 
     private fun renderMarkerBrowseState() {
         val browseData = facilityBrowseData ?: return
+        val availableCategories = browseData.availableCategories.toSet()
         val baseOverlayState =
             MapBrowseStateFactory.createMarkerOverlayState(
                 browseData = browseData,
@@ -429,7 +427,18 @@ class MapViewModel(
                 append(" emptyResult=")
                 append(overlayState.isEmptyResult)
                 append(" shortcut=")
-                append(selectedShortcutFilterKey?.name ?: "ALL")
+                append(
+                    SHORTCUT_FILTER_ORDER
+                        .filter { key -> key.isSelected(selection = filterState.selection, availableCategories = availableCategories) }
+                        .joinToString(",") { key -> key.name }
+                        .ifEmpty {
+                            if (filterState.selection.isShowingAllCategories) {
+                                "ALL"
+                            } else {
+                                "NONE"
+                            }
+                        },
+                )
                 append(" categories=")
                 append(filterState.selection.selectedFacilityCategories.joinToString(",") { category -> category.name }.ifEmpty {
                     if (filterState.selection.isShowingAllCategories) {
@@ -643,6 +652,32 @@ class MapViewModel(
                             requestId = state.cameraTarget.requestId + 1L,
                             zoomLevel = nextZoomLevel,
                         ),
+                )
+            }
+        }
+    }
+
+    private fun handleViewportCameraChanged(
+        center: MapCoordinate,
+        zoomLevel: Int,
+    ) {
+        mutableUiState.update { state ->
+            val currentTarget = state.cameraTarget
+            val hasCameraChanged =
+                currentTarget.center != center ||
+                    currentTarget.resolvedZoomLevel() != zoomLevel
+
+            if (!hasCameraChanged) {
+                state
+            } else {
+                isRecenterButtonActive = false
+                state.copy(
+                    cameraTarget =
+                        currentTarget.copy(
+                            center = center,
+                            zoomLevel = zoomLevel,
+                        ),
+                    isRecenterButtonActive = false,
                 )
             }
         }
@@ -1041,48 +1076,18 @@ class MapViewModel(
         browseData: FacilityBrowseData? = facilityBrowseData,
     ): MapShortcutFilterRowState {
         val availableCategories = browseData?.availableCategories?.toSet().orEmpty()
+        val selection = markerFilterSelectionState
 
         return MapShortcutFilterRowState(
             chips =
                 SHORTCUT_FILTER_ORDER.map { key ->
                     MapShortcutFilterChipState(
                         key = key,
-                        isSelected = selectedShortcutFilterKey == key,
-                        isEnabled =
-                            when (key) {
-                                MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET in availableCategories
-                                MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR in availableCategories
-                                MapShortcutFilterKey.CHARGING_STATION ->
-                                    FacilityCategory.CHARGING_STATION in availableCategories
-
-                                MapShortcutFilterKey.FOOD_CAFE ->
-                                    FacilityCategory.FOOD_CAFE in availableCategories ||
-                                        FacilityCategory.RESTAURANT in availableCategories
-
-                                MapShortcutFilterKey.TOURIST_SPOT ->
-                                    FacilityCategory.TOURIST_SPOT in availableCategories ||
-                                        FacilityCategory.TOURIST_ATTRACTION in availableCategories
-
-                                MapShortcutFilterKey.ACCOMMODATION ->
-                                    FacilityCategory.ACCOMMODATION in availableCategories
-
-                                MapShortcutFilterKey.HEALTHCARE ->
-                                    FacilityCategory.HEALTHCARE in availableCategories
-
-                                MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE in availableCategories
-                                MapShortcutFilterKey.PUBLIC_OFFICE ->
-                                    FacilityCategory.PUBLIC_OFFICE in availableCategories
-                            },
+                        isSelected = key.isSelected(selection = selection, availableCategories = availableCategories),
+                        isEnabled = key.toFacilityCategory(availableCategories) != null,
                     )
                 },
         )
-    }
-
-    private fun shortcutFilterKeyForSelection(selection: MapFilterSelectionState): MapShortcutFilterKey? {
-        if (selection.isShowingAllCategories) return null
-        if (selection.selectedBrailleBlockTypes.isNotEmpty()) return null
-        if (selection.selectedFacilityCategories.size != 1) return null
-        return selection.selectedFacilityCategories.single().toShortcutFilterKey()
     }
 
     private fun emitUiEvent(event: MapUiEvent) {
@@ -1131,6 +1136,7 @@ class MapViewModel(
         private const val BOOKMARK_SAVE_SUCCESS_MESSAGE = "북마크에 저장했습니다."
         private const val BOOKMARK_DELETE_SUCCESS_MESSAGE = "북마크를 해제했습니다."
         private const val BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크 저장에 실패했습니다. 다시 시도해 주세요."
+        private const val SHORTCUT_FILTER_UNAVAILABLE_MESSAGE = "근처에 해당 장소가 없어요"
 
         fun provideFactory(
             locationPermissionManager: LocationPermissionManager,
@@ -1214,42 +1220,34 @@ private data class SelectedFacilityBookmarkState(
 
 private fun MapShortcutFilterKey.toFacilityCategory(availableCategories: Set<FacilityCategory>): FacilityCategory? =
     when (this) {
-        MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET
-        MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR
-        MapShortcutFilterKey.CHARGING_STATION -> FacilityCategory.CHARGING_STATION
+        MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.CHARGING_STATION -> FacilityCategory.CHARGING_STATION.takeIf(availableCategories::contains)
         MapShortcutFilterKey.FOOD_CAFE ->
             when {
                 FacilityCategory.FOOD_CAFE in availableCategories -> FacilityCategory.FOOD_CAFE
                 FacilityCategory.RESTAURANT in availableCategories -> FacilityCategory.RESTAURANT
-                else -> FacilityCategory.FOOD_CAFE
+                else -> null
             }
 
         MapShortcutFilterKey.TOURIST_SPOT ->
             when {
                 FacilityCategory.TOURIST_SPOT in availableCategories -> FacilityCategory.TOURIST_SPOT
                 FacilityCategory.TOURIST_ATTRACTION in availableCategories -> FacilityCategory.TOURIST_ATTRACTION
-                else -> FacilityCategory.TOURIST_SPOT
+                else -> null
             }
 
-        MapShortcutFilterKey.ACCOMMODATION -> FacilityCategory.ACCOMMODATION
-        MapShortcutFilterKey.HEALTHCARE -> FacilityCategory.HEALTHCARE
-        MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE
-        MapShortcutFilterKey.PUBLIC_OFFICE -> FacilityCategory.PUBLIC_OFFICE
+        MapShortcutFilterKey.ACCOMMODATION -> FacilityCategory.ACCOMMODATION.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.HEALTHCARE -> FacilityCategory.HEALTHCARE.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.PUBLIC_OFFICE -> FacilityCategory.PUBLIC_OFFICE.takeIf(availableCategories::contains)
     }
 
-private fun FacilityCategory.toShortcutFilterKey(): MapShortcutFilterKey? =
-    when (this) {
-        FacilityCategory.TOILET -> MapShortcutFilterKey.TOILET
-        FacilityCategory.ELEVATOR -> MapShortcutFilterKey.ELEVATOR
-        FacilityCategory.CHARGING_STATION -> MapShortcutFilterKey.CHARGING_STATION
-        FacilityCategory.FOOD_CAFE -> MapShortcutFilterKey.FOOD_CAFE
-        FacilityCategory.TOURIST_SPOT -> MapShortcutFilterKey.TOURIST_SPOT
-        FacilityCategory.ACCOMMODATION -> MapShortcutFilterKey.ACCOMMODATION
-        FacilityCategory.HEALTHCARE -> MapShortcutFilterKey.HEALTHCARE
-        FacilityCategory.WELFARE -> MapShortcutFilterKey.WELFARE
-        FacilityCategory.PUBLIC_OFFICE -> MapShortcutFilterKey.PUBLIC_OFFICE
-        FacilityCategory.BRAILLE_BLOCK -> null
-        FacilityCategory.RESTAURANT -> MapShortcutFilterKey.FOOD_CAFE
-        FacilityCategory.TOURIST_ATTRACTION -> MapShortcutFilterKey.TOURIST_SPOT
-        FacilityCategory.OTHER -> null
-    }
+private fun MapShortcutFilterKey.isSelected(
+    selection: MapFilterSelectionState,
+    availableCategories: Set<FacilityCategory>,
+): Boolean {
+    if (selection.isShowingAllCategories) return false
+    val category = toFacilityCategory(availableCategories) ?: return false
+    return category in selection.selectedFacilityCategories
+}

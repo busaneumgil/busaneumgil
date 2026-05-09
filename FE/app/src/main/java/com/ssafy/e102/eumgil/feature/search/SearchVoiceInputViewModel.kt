@@ -22,7 +22,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 sealed interface SearchVoiceInputEvent {
-    data class TranscriptReady(val text: String) : SearchVoiceInputEvent
+    data class TranscriptReady(
+        val recognizedText: String,
+        val searchQuery: String,
+    ) : SearchVoiceInputEvent
     data object TranscriptEmpty : SearchVoiceInputEvent
     data class SpeakError(val text: String) : SearchVoiceInputEvent
 
@@ -191,7 +194,12 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
             )
             Log.d(TAG, "=== 음성 분석 완료: intent=${result.intent}, placeName=${result.placeName} ===")
             if (result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && !result.placeName.isNullOrBlank()) {
-                _uiEvent.send(SearchVoiceInputEvent.TranscriptReady(text = result.placeName))
+                _uiEvent.send(
+                    SearchVoiceInputEvent.TranscriptReady(
+                        recognizedText = sttText,
+                        searchQuery = result.placeName,
+                    ),
+                )
             } else {
                 Log.e(TAG, "음성 분석 API 호출 실패: intent=${result.intent}, placeName=${result.placeName}")
                 _uiEvent.send(SearchVoiceInputEvent.SpeakError(getApplication<Application>().getString(R.string.voice_input_retry)))

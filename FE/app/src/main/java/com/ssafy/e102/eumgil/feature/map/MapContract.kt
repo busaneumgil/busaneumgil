@@ -67,6 +67,11 @@ sealed interface MapUiAction {
         val coordinate: MapCoordinate,
     ) : MapUiAction
 
+    data class ViewportCameraChanged(
+        val center: MapCoordinate,
+        val zoomLevel: Int,
+    ) : MapUiAction
+
     data class MarkerCategoryFilterToggled(
         val category: FacilityCategory,
     ) : MapUiAction

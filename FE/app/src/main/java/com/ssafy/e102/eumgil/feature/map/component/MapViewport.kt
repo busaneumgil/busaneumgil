@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -78,6 +80,7 @@ sealed interface MapIntegrationState {
 internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
+    onCameraMoveEnd: (MapCoordinate, Int) -> Unit = { _, _ -> },
     onMapClick: (MapCoordinate) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -119,6 +122,7 @@ internal fun MapViewport(
                 integrationState = integrationState,
                 state = state,
                 onMarkerClick = onMarkerClick,
+                onCameraMoveEnd = onCameraMoveEnd,
                 onMapClick = onMapClick,
                 modifier = modifier,
             )
@@ -131,6 +135,7 @@ private fun MapContainer(
     integrationState: MapIntegrationState.Bound,
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
+    onCameraMoveEnd: (MapCoordinate, Int) -> Unit,
     onMapClick: (MapCoordinate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -139,6 +144,7 @@ private fun MapContainer(
             KakaoMapViewport(
                 state = state,
                 onMarkerClick = onMarkerClick,
+                onCameraMoveEnd = onCameraMoveEnd,
                 onMapClick = onMapClick,
                 modifier = modifier,
             )
@@ -297,6 +303,63 @@ internal fun MapFallbackSurface(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun MapRendererFallbackOverlay(
+    title: String,
+    description: String,
+    actionLabel: String? = null,
+    onActionClick: (() -> Unit)? = null,
+    isLoading: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier =
+                Modifier
+                    .widthIn(max = 320.dp)
+                    .padding(EumSpacing.large),
+            shape = RoundedCornerShape(EumRadius.large),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        ) {
+            Column(
+                modifier = Modifier.padding(EumSpacing.large),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator()
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                if (actionLabel != null && onActionClick != null) {
+                    Button(onClick = onActionClick) {
+                        Text(text = actionLabel)
+                    }
                 }
             }
         }

@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
+import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import java.util.Locale
@@ -50,6 +51,40 @@ internal fun createKakaoCameraDebugSummary(cameraTarget: MapCameraTarget): Strin
         append(cameraState.zoomLevel)
     }
 }
+
+internal fun shouldAnimateKakaoCameraTransition(
+    previousTarget: MapCameraTarget?,
+    nextTarget: MapCameraTarget,
+): Boolean {
+    if (previousTarget == null) return false
+    if (previousTarget.requestId == nextTarget.requestId) return false
+    if (previousTarget.source != nextTarget.source) return false
+    if (previousTarget.center != nextTarget.center) return false
+    return previousTarget.resolvedZoomLevel() != nextTarget.resolvedZoomLevel()
+}
+
+internal fun syncRenderedKakaoCameraTarget(
+    previousTarget: MapCameraTarget?,
+    latestStateTarget: MapCameraTarget?,
+    center: MapCoordinate,
+    zoomLevel: Int,
+): MapCameraTarget {
+    val baseTarget = latestStateTarget ?: previousTarget ?: MapCameraTarget.DefaultBusan
+    return baseTarget.copy(
+        center = center,
+        zoomLevel = zoomLevel,
+    )
+}
+
+internal data class KakaoMapScreenPoint(
+    val x: Int,
+    val y: Int,
+)
+
+internal fun resolveSelectedMapPinScreenPoint(
+    projectedScreenPoint: KakaoMapScreenPoint?,
+    fallbackScreenPoint: KakaoMapScreenPoint?,
+): KakaoMapScreenPoint? = projectedScreenPoint ?: fallbackScreenPoint
 
 internal data class KakaoMarkerRenderState(
     val markerId: String,
@@ -107,12 +142,31 @@ internal fun createKakaoRendererFailure(error: Throwable): KakaoRendererFailure 
     )
 }
 
+internal fun createKakaoRendererTimeoutFailure(): KakaoRendererFailure =
+    KakaoRendererFailure(
+        reasonLabel = KAKAO_RENDERER_TIMEOUT_REASON_LABEL,
+        detailMessage = KAKAO_RENDERER_TIMEOUT_DETAIL_FALLBACK,
+    )
+
 internal fun createKakaoMarkerRenderStates(
     markerOverlayState: MapMarkerOverlayState,
     selectedMarkerId: String?,
     currentLocation: com.ssafy.e102.eumgil.feature.map.model.MapCoordinate?,
+    selectedMapPinCoordinate: com.ssafy.e102.eumgil.feature.map.model.MapCoordinate? = null,
 ): List<KakaoMarkerRenderState> =
     buildList {
+        selectedMapPinCoordinate?.let { coordinate ->
+            add(
+                KakaoMarkerRenderState(
+                    markerId = "selected-map-pin",
+                    latitude = coordinate.latitude,
+                    longitude = coordinate.longitude,
+                    iconResId = R.drawable.ic_map_selected_pin_blue,
+                    rank = 2L,
+                    clickTargetId = null,
+                ),
+            )
+        }
         currentLocation?.let { coordinate ->
             add(
                 KakaoMarkerRenderState(
@@ -176,5 +230,8 @@ private fun categoryMarkerIconResId(category: FacilityCategory): Int =
 
 internal const val KAKAO_RENDERER_ERROR_REASON_FALLBACK = "MapError"
 internal const val KAKAO_RENDERER_ERROR_DETAIL_FALLBACK = "Unknown renderer failure"
+internal const val KAKAO_RENDERER_TIMEOUT_REASON_LABEL = "MapTimeout"
+internal const val KAKAO_RENDERER_TIMEOUT_DETAIL_FALLBACK = "Renderer did not become ready in time"
+internal const val KAKAO_ZOOM_CAMERA_ANIMATION_DURATION_MILLIS = 220
 
 private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", this)

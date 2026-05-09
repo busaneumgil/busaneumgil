@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
+import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RecentSearch
@@ -111,7 +113,36 @@ internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiS
 
 internal fun searchVoiceInputSheetTopCornerRadius(): Dp = EumRadius.scaleL
 
-internal fun searchVoiceInputSheetContainerColor(): Color = Color.White
+internal fun searchVoiceInputSheetContainerColor(): Color = BusanEumgilLightColorScheme.surface
+
+internal data class SearchVoiceInputStatusContent(
+    @StringRes val titleRes: Int,
+    @StringRes val descriptionRes: Int? = null,
+)
+
+internal fun resolveSearchVoiceInputStatusContent(
+    voiceInputState: SearchVoiceInputUiState,
+): SearchVoiceInputStatusContent? =
+    when {
+        voiceInputState.status == SearchVoiceInputStatus.Recognized ->
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_recognized_title,
+                descriptionRes = R.string.search_voice_input_status_recognized_description,
+            )
+
+        voiceInputState.status == SearchVoiceInputStatus.Listening ->
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_listening_title,
+                descriptionRes = R.string.search_voice_input_status_listening_description,
+            )
+
+        voiceInputState.guidance == SearchVoiceInputGuidance.RetryRequired ->
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_retry_message,
+            )
+
+        else -> null
+    }
 
 internal data class DestinationPromoBannerModel(
     @DrawableRes val imageRes: Int,
@@ -384,6 +415,7 @@ private fun SearchVoiceInputScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .background(searchVoiceInputSheetContainerColor())
                         .padding(horizontal = 24.dp, vertical = 12.dp),
             )
         }
@@ -396,16 +428,7 @@ private fun SearchVoiceInputContent(
     onAction: (SearchUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val statusTitleRes =
-        when (uiState.voiceInputState.status) {
-            SearchVoiceInputStatus.Idle -> R.string.search_voice_input_status_idle_title
-            SearchVoiceInputStatus.Listening -> R.string.search_voice_input_status_listening_title
-        }
-    val statusDescriptionRes =
-        when (uiState.voiceInputState.status) {
-            SearchVoiceInputStatus.Idle -> R.string.search_voice_input_status_idle_description
-            SearchVoiceInputStatus.Listening -> R.string.search_voice_input_status_listening_description
-        }
+    val statusContent = resolveSearchVoiceInputStatusContent(uiState.voiceInputState)
 
     Column(
         modifier = modifier,
@@ -482,18 +505,22 @@ private fun SearchVoiceInputContent(
             }
         }
 
-        Text(
-            text = stringResource(id = statusTitleRes),
-            modifier = Modifier.padding(top = 20.dp),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(id = statusDescriptionRes),
-            modifier = Modifier.padding(top = EumSpacing.xSmall),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (statusContent != null) {
+            Text(
+                text = stringResource(id = statusContent.titleRes),
+                modifier = Modifier.padding(top = 20.dp),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (statusContent.descriptionRes != null) {
+                Text(
+                    text = stringResource(id = statusContent.descriptionRes),
+                    modifier = Modifier.padding(top = EumSpacing.xSmall),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         if (uiState.voiceInputState.transcript.isNotBlank()) {
             SearchStateCard(

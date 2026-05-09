@@ -244,6 +244,46 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `zoom action keeps last viewport center after manual camera move`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1500, longitude = 129.1500)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val viewportCenter = MapCoordinate(latitude = 35.1705, longitude = 129.0832)
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = viewportCenter,
+                    zoomLevel = 14,
+                ),
+            )
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.ZoomInClicked)
+            advanceUntilIdle()
+
+            val updatedCamera = createKakaoCameraRenderState(viewModel.uiState.value.cameraTarget)
+
+            assertEquals(viewportCenter.latitude, updatedCamera.latitude, 0.0)
+            assertEquals(viewportCenter.longitude, updatedCamera.longitude, 0.0)
+            assertEquals(15, updatedCamera.zoomLevel)
+        }
+
+    @Test
     fun `browse state initializes with all markers visible and category options ready`() =
         runTest {
             val viewModel =
@@ -780,6 +820,144 @@ class MapViewModelTest {
                 },
             )
             assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.CHARGING_STATION }
+                    .isSelected,
+            )
+        }
+
+    @Test
+    fun `shortcut filter chips allow multi select without clearing earlier selections`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.CHARGING_STATION))
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.TOILET))
+            advanceUntilIdle()
+
+            val visibleMarkers = viewModel.uiState.value.markerOverlayState.visibleMarkers
+
+            assertTrue(visibleMarkers.isNotEmpty())
+            assertTrue(
+                visibleMarkers.all { marker ->
+                    marker.categoryType.category == FacilityCategory.CHARGING_STATION ||
+                        marker.categoryType.category == FacilityCategory.TOILET
+                },
+            )
+            assertEquals(
+                setOf(FacilityCategory.CHARGING_STATION, FacilityCategory.TOILET),
+                viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
+            )
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.CHARGING_STATION }
+                    .isSelected,
+            )
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.TOILET }
+                    .isSelected,
+            )
+        }
+
+    @Test
+    fun `shortcut filter keeps explicit multi select when all nearby shortcut categories are selected`() =
+        runTest {
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "toilet-1",
+                                name = "Accessible Toilet",
+                                address = "1 Toilet-ro, Busan",
+                                latitude = 35.1796,
+                                longitude = 129.0756,
+                                category = PlaceCategory.TOILET,
+                            ),
+                            PlaceSummary(
+                                placeId = "elevator-1",
+                                name = "Station Elevator",
+                                address = "2 Elevator-ro, Busan",
+                                latitude = 35.1802,
+                                longitude = 129.0762,
+                                category = PlaceCategory.ELEVATOR,
+                            ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.TOILET))
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.ELEVATOR))
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertEquals(
+                setOf(FacilityCategory.TOILET, FacilityCategory.ELEVATOR),
+                viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
+            )
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.TOILET }
+                    .isSelected,
+            )
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.ELEVATOR }
+                    .isSelected,
+            )
+        }
+
+    @Test
+    fun `shortcut filter disabled chip tap shows unavailable snackbar without changing selection`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = facilitySeedRepositoryWithOtherCategory(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.CHARGING_STATION))
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals(
+                MapUiEvent.ShowSnackbar("근처에 해당 장소가 없어요"),
+                event,
+            )
+            assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertFalse(
                 viewModel.uiState.value.shortcutFilterState.chips
                     .first { chip -> chip.key == MapShortcutFilterKey.CHARGING_STATION }
                     .isSelected,

@@ -20,6 +20,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -74,6 +76,7 @@ import kotlin.math.sqrt
 @Composable
 fun MapScreen(
     uiState: MapUiState,
+    snackbarHostState: SnackbarHostState,
     onAction: (MapUiAction) -> Unit,
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
@@ -84,112 +87,130 @@ fun MapScreen(
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
     val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
 
-    MapShellScaffold(
-        modifier = modifier,
-        mapContent = {
-            MapViewport(
-                state = viewportState,
-                onMarkerClick = { markerId ->
-                    onAction(MapUiAction.MarkerTapped(markerId))
-                },
-                onMapClick = { coordinate ->
-                    onAction(MapUiAction.MapTapped(coordinate))
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-        },
-        topOverlay = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                MapTopSearchBar(
-                    title = searchBarState.title,
-                    subtitle = searchBarState.subtitle,
-                    accessibilityLabel = searchBarState.accessibilityLabel,
-                    onClick = { onAction(MapUiAction.SearchEntryClicked) },
+    Box(modifier = modifier.fillMaxSize()) {
+        MapShellScaffold(
+            mapContent = {
+                MapViewport(
+                    state = viewportState,
+                    onMarkerClick = { markerId ->
+                        onAction(MapUiAction.MarkerTapped(markerId))
+                    },
+                    onCameraMoveEnd = { center, zoomLevel ->
+                        onAction(
+                            MapUiAction.ViewportCameraChanged(
+                                center = center,
+                                zoomLevel = zoomLevel,
+                            ),
+                        )
+                    },
+                    onMapClick = { coordinate ->
+                        onAction(MapUiAction.MapTapped(coordinate))
+                    },
+                    modifier = Modifier.fillMaxSize(),
                 )
+            },
+            topOverlay = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                ) {
+                    MapTopSearchBar(
+                        title = searchBarState.title,
+                        subtitle = searchBarState.subtitle,
+                        accessibilityLabel = searchBarState.accessibilityLabel,
+                        onClick = { onAction(MapUiAction.SearchEntryClicked) },
+                    )
 
-                MapShortcutFilterRow(
-                    state = uiState.shortcutFilterState,
-                    onChipClick = { key ->
-                        onAction(MapUiAction.ShortcutFilterClicked(key))
-                    },
+                    MapShortcutFilterRow(
+                        state = uiState.shortcutFilterState,
+                        onChipClick = { key ->
+                            onAction(MapUiAction.ShortcutFilterClicked(key))
+                        },
+                    )
+                }
+            },
+            controlOverlay = {
+                MapFloatingControls(
+                    recenterButtonState = uiState.recenterButtonState,
+                    isRecenterButtonActive = uiState.isRecenterButtonActive,
+                    onRecenterClick = { onAction(MapUiAction.LocationActionClicked) },
+                    onZoomInClick = { onAction(MapUiAction.ZoomInClicked) },
+                    onZoomOutClick = { onAction(MapUiAction.ZoomOutClicked) },
                 )
-            }
-        },
-        controlOverlay = {
-            MapFloatingControls(
-                recenterButtonState = uiState.recenterButtonState,
-                isRecenterButtonActive = uiState.isRecenterButtonActive,
-                onRecenterClick = { onAction(MapUiAction.LocationActionClicked) },
-                onZoomInClick = { onAction(MapUiAction.ZoomInClicked) },
-                onZoomOutClick = { onAction(MapUiAction.ZoomOutClicked) },
-            )
-        },
-        bottomOverlay = {
-            if (facilityDetailSheetUiState.isVisible) {
-                FacilityDetailBottomSheetShell(
-                    state = facilityDetailSheetUiState.toShellState(),
-                    onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
-                    modifier = Modifier.fillMaxSize(),
-                    headerActionContent = {
-                        FacilityDetailBookmarkActionButton(
-                            state = facilityDetailSheetUiState,
-                            onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
-                        )
-                    },
-                    detailContent = {
-                        FacilityDetailGuideMessageSection(
-                            message = facilityDetailSheetUiState.guideMessage,
-                        )
-                        FacilityDetailAccessibilityTagSection(
-                            tags = facilityDetailSheetUiState.accessibilityTags,
-                        )
-                    },
-                    actionContent = {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                        ) {
-                            Button(
-                                onClick = { onAction(MapUiAction.FacilitySetDestinationClicked) },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(56.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors =
-                                    ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                                    ),
+            },
+            bottomOverlay = {
+                if (facilityDetailSheetUiState.isVisible) {
+                    FacilityDetailBottomSheetShell(
+                        state = facilityDetailSheetUiState.toShellState(),
+                        onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
+                        modifier = Modifier.fillMaxSize(),
+                        headerActionContent = {
+                            FacilityDetailBookmarkActionButton(
+                                state = facilityDetailSheetUiState,
+                                onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
+                            )
+                        },
+                        detailContent = {
+                            FacilityDetailGuideMessageSection(
+                                message = facilityDetailSheetUiState.guideMessage,
+                            )
+                            FacilityDetailAccessibilityTagSection(
+                                tags = facilityDetailSheetUiState.accessibilityTags,
+                            )
+                        },
+                        actionContent = {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                             ) {
-                                IconTextButtonContent(
-                                    iconRes = R.drawable.ic_direction_destination,
-                                    label = stringResource(id = R.string.map_facility_detail_route_entry_action),
-                                )
+                                Button(
+                                    onClick = { onAction(MapUiAction.FacilitySetDestinationClicked) },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        ),
+                                ) {
+                                    IconTextButtonContent(
+                                        iconRes = R.drawable.ic_direction_destination,
+                                        label = stringResource(id = R.string.map_facility_detail_route_entry_action),
+                                    )
+                                }
+                                facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
+                                    Text(
+                                        text = message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                             }
-                            facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
-                                Text(
-                                    text = message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                    },
-                )
-            } else {
-                RecentDestinationBottomSheetShell(
-                    state = recentDestinationSheetState,
-                    onViewAllClick = onNavigateToSavedRoutes,
-                    onRouteClick = { placeId ->
-                        onAction(MapUiAction.RecentDestinationRouteClicked(placeId))
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        },
-    )
+                        },
+                    )
+                } else {
+                    RecentDestinationBottomSheetShell(
+                        state = recentDestinationSheetState,
+                        onViewAllClick = onNavigateToSavedRoutes,
+                        onRouteClick = { placeId ->
+                            onAction(MapUiAction.RecentDestinationRouteClicked(placeId))
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            },
+        )
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier =
+                Modifier
+                    .align(androidx.compose.ui.Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+        )
+    }
 }
 
 @Immutable

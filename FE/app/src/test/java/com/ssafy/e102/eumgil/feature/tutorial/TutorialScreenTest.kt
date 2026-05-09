@@ -25,18 +25,19 @@ class TutorialScreenTest {
     @Test
     fun `tutorial keeps concise visual cues while preserving key chips`() {
         assertEquals(3, TutorialLayoutDefaults.totalStepCount)
-        assertEquals(2, TutorialLayoutDefaults.supportingItemCount)
+        assertEquals(0, TutorialLayoutDefaults.supportingItemCount)
         assertEquals(3, TutorialLayoutDefaults.destinationFilterChipCount)
         assertEquals(3, TutorialLayoutDefaults.routeAccessibilityChipCount)
         assertEquals(3, TutorialLayoutDefaults.reportCategoryChipCount)
         assertEquals(false, TutorialLayoutDefaults.showsEmphasisChip)
+        assertEquals(true, TutorialLayoutDefaults.usesLayeredFlatIllustration)
     }
 
     @Test
     fun `tutorial uses readable header and panel text rhythm`() {
         assertEquals(34.sp, TutorialLayoutDefaults.headerHeadlineLineHeight)
         assertEquals(22.sp, TutorialLayoutDefaults.headerDescriptionLineHeight)
-        assertEquals(18.dp, TutorialLayoutDefaults.supportingItemGap)
+        assertEquals(22.dp, TutorialLayoutDefaults.illustrationContentGap)
         assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
     }
 }

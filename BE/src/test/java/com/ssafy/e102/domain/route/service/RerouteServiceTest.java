@@ -154,6 +154,23 @@ class RerouteServiceTest {
 	}
 
 	@Test
+	@DisplayName("기존 route의 어느 segment든 10m 이내면 새 route 없이 반환한다")
+	void returnsNoRerouteNeededWhenCurrentPointIsNearAnyRouteSegment() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+
+		RerouteResponse response = service.reroute(
+			userId,
+			new RerouteRequest("rt_001", new GeoPointRequest(35.12099, 128.93699)));
+
+		assertThat(response.route()).isNull();
+		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+		verifyNoInteractions(walkRouteSearchService, transitRouteSearchService);
+	}
+
+	@Test
 	@DisplayName("기존 route geometry 100m 이내 이탈은 복귀 WALK leg를 붙인 새 route를 반환한다")
 	void returnsWalkRepairWhenCurrentPointIsNearRouteGeometry() {
 		UUID userId = UUID.randomUUID();

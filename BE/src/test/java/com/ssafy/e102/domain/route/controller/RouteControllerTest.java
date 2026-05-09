@@ -215,6 +215,50 @@ class RouteControllerTest {
 	}
 
 	@Test
+	@DisplayName("reroute currentPoint 형식 오류는 RT4005로 반환한다")
+	void rerouteMapsMalformedCurrentPoint() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": "wrong", "lng": 128.936}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4005"))
+			.andExpect(jsonPath("$.message").value("현재 위치값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("reroute currentPoint 서비스 영역 오류는 RT4003으로 반환한다")
+	void rerouteMapsOutOfServiceAreaCurrentPoint() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(rerouteService.reroute(eq(userId), any(RerouteRequest.class)))
+			.thenThrow(new RouteException(RouteErrorCode.OUT_OF_SERVICE_AREA));
+
+		mockMvc.perform(post("/routes/reroute")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rt_existing_001",
+				  "currentPoint": {"lat": 37.5665, "lng": 126.9780}
+				}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("RT4003"))
+			.andExpect(jsonPath("$.message").value("부산광역시 안의 위치를 선택해 주세요."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
 	@DisplayName("GraphHopper 실패는 EX5020 에러 응답으로 매핑한다")
 	void searchWalkRoutesMapsExternalRouteApiFailed() throws Exception {
 		assertRouteError(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, 502, "EX5020", "외부 경로 정보를 불러오지 못했습니다.");

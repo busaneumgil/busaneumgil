@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason as PermissionUnavailableReason
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
@@ -65,7 +66,7 @@ class MapViewModel(
     val uiEvent: Flow<MapUiEvent> = mutableUiEvent.receiveAsFlow()
 
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
-    private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
+    private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
     private var selectedMarkerId: String? = null
     private var selectedMapPinCoordinate: MapCoordinate? = null
@@ -144,6 +145,7 @@ class MapViewModel(
                 handleViewportCameraChanged(
                     center = action.center,
                     zoomLevel = action.zoomLevel,
+                    isUserGesture = action.isUserGesture,
                 )
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
@@ -552,9 +554,10 @@ class MapViewModel(
         viewModelScope.launch {
             currentLocationManager.latestLocation.collectLatest { snapshot ->
                 val hadLocation = latestLocation != null
-                latestLocation = snapshot
+                latestLocation = snapshot.toFreshCurrentLocationOrNull()
+                val freshLocation = latestLocation
 
-                if (snapshot == null) {
+                if (freshLocation == null) {
                     isRecenterButtonActive = false
                     if (latestPermissionState is LocationPermissionState.Granted && isRouteStarted) {
                         startLocationLookup(forceRestart = false)
@@ -574,7 +577,7 @@ class MapViewModel(
                                 mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION
 
                         syncCameraToCurrentLocation(
-                            snapshot = snapshot,
+                            snapshot = freshLocation,
                             incrementRequestId = shouldIncrementRequestId,
                         )
                     }
@@ -660,6 +663,7 @@ class MapViewModel(
     private fun handleViewportCameraChanged(
         center: MapCoordinate,
         zoomLevel: Int,
+        isUserGesture: Boolean,
     ) {
         mutableUiState.update { state ->
             val currentTarget = state.cameraTarget
@@ -670,14 +674,16 @@ class MapViewModel(
             if (!hasCameraChanged) {
                 state
             } else {
-                isRecenterButtonActive = false
+                if (isUserGesture) {
+                    isRecenterButtonActive = false
+                }
                 state.copy(
                     cameraTarget =
                         currentTarget.copy(
                             center = center,
                             zoomLevel = zoomLevel,
                         ),
-                    isRecenterButtonActive = false,
+                    isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
                 )
             }
         }
@@ -688,7 +694,7 @@ class MapViewModel(
 
         currentLocationManager.startLocationUpdates()
         currentLocationManager.refreshLatestLocation()
-        latestLocation = currentLocationManager.latestLocation.value
+        latestLocation = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
 
         val snapshot = latestLocation
         if (snapshot == null) {
@@ -1103,6 +1109,9 @@ class MapViewModel(
         } else {
             PlacesBrowseAnchorSource.FALLBACK
         }
+
+    private fun LocationSnapshot?.toFreshCurrentLocationOrNull(): LocationSnapshot? =
+        this?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
 
     private enum class LocationLookupState {
         Idle,

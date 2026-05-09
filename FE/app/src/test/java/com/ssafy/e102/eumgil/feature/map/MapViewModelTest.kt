@@ -190,6 +190,38 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `stale last known location does not center map on route start`() =
+        runTest {
+            val staleLocation =
+                testLocationSnapshot(
+                    latitude = 35.1500,
+                    longitude = 129.1500,
+                    recordedAtEpochMillis = 1_000L,
+                )
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = staleLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            assertEquals(MapCameraSource.DEFAULT_BUSAN, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(MapDefaults.BUSAN_CENTER.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(MapDefaults.BUSAN_CENTER.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+            assertEquals(MapRecenterButtonState.LOADING, viewModel.uiState.value.recenterButtonState)
+        }
+
+    @Test
     fun `current location button becomes visually active after explicit recenter tap`() =
         runTest {
             val currentLocation = testLocationSnapshot(latitude = 35.1500, longitude = 129.1500)
@@ -213,6 +245,76 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.isRecenterButtonActive)
+        }
+
+    @Test
+    fun `programmatic viewport camera change keeps explicit recenter active`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1500, longitude = 129.1500)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.LocationActionClicked)
+            advanceUntilIdle()
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = 35.1501, longitude = 129.1501),
+                    zoomLevel = 17,
+                    isUserGesture = false,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isRecenterButtonActive)
+        }
+
+    @Test
+    fun `user viewport camera change clears explicit recenter active`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1500, longitude = 129.1500)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.LocationActionClicked)
+            advanceUntilIdle()
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = 35.1510, longitude = 129.1510),
+                    zoomLevel = 16,
+                    isUserGesture = true,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isRecenterButtonActive)
         }
 
     @Test
@@ -1347,12 +1449,13 @@ private fun testDestination(): PlaceDestination =
 private fun testLocationSnapshot(
     latitude: Double,
     longitude: Double,
+    recordedAtEpochMillis: Long = System.currentTimeMillis(),
 ): LocationSnapshot =
     LocationSnapshot(
         latitude = latitude,
         longitude = longitude,
         accuracyMeters = 5f,
-        recordedAtEpochMillis = 1_000L,
+        recordedAtEpochMillis = recordedAtEpochMillis,
     )
 
 private class FakeLocationPermissionManager(

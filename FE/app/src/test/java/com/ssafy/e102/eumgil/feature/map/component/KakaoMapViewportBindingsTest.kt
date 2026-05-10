@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -248,6 +249,57 @@ class KakaoMapViewportBindingsTest {
         assertEquals(R.drawable.ic_place_restroom, markerStates.last().iconResId)
         assertEquals(0L, markerStates.last().rank)
         assertEquals("toilet", markerStates.last().clickTargetId)
+    }
+
+    @Test
+    fun `facility projected overlays keep visible markers and selected emphasis`() {
+        val overlays =
+            createKakaoFacilityMarkerOverlays(
+                markerOverlayState =
+                    MapMarkerOverlayState(
+                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
+                        markers =
+                            listOf(
+                                MapMarkerUiModel(
+                                    markerId = "hidden",
+                                    name = "Hidden marker",
+                                    coordinate = MapCoordinate(latitude = 35.18, longitude = 129.07),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.OTHER),
+                                    displayState = MapMarkerDisplayState.HIDDEN_BY_FILTER,
+                                ),
+                                MapMarkerUiModel(
+                                    markerId = "toilet",
+                                    name = "Accessible toilet",
+                                    coordinate = MapCoordinate(latitude = 35.19, longitude = 129.08),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
+                                ),
+                                MapMarkerUiModel(
+                                    markerId = "elevator",
+                                    name = "Elevator",
+                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.09),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.ELEVATOR),
+                                ),
+                            ),
+                        visibleMarkerCount = 2,
+                        totalMarkerCount = 3,
+                    ),
+                selectedMarkerId = "elevator",
+            ) { coordinate ->
+                KakaoMapScreenPoint(
+                    x = (coordinate.latitude * 10).toInt(),
+                    y = (coordinate.longitude * 10).toInt(),
+                )
+            }
+
+        assertEquals(listOf("toilet", "elevator"), overlays.map { it.markerId })
+        assertEquals("Accessible toilet", overlays.first().contentDescription)
+        assertEquals("elevator", overlays.last().clickTargetId)
+        assertEquals(FacilityCategory.ELEVATOR, overlays.last().categoryType.category)
+        assertEquals(28, overlays.first().sizeDp)
+        assertEquals(34, overlays.last().sizeDp)
+        assertFalse(overlays.first().isSelected)
+        assertTrue(overlays.last().isSelected)
+        assertTrue(overlays.none { it.markerId == "hidden" })
     }
 
     @Test

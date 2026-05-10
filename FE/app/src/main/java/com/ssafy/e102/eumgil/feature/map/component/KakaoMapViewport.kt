@@ -4,11 +4,17 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -19,10 +25,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -38,11 +48,7 @@ import com.kakao.vectormap.MapView
 import com.kakao.vectormap.GestureType
 import com.kakao.vectormap.camera.CameraAnimation
 import com.kakao.vectormap.camera.CameraUpdateFactory
-import com.kakao.vectormap.label.CompetitionType
-import com.kakao.vectormap.label.LabelLayerOptions
-import com.kakao.vectormap.label.LabelOptions
-import com.kakao.vectormap.label.LabelStyle
-import com.kakao.vectormap.label.OrderingType
+import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -129,6 +135,13 @@ internal fun KakaoMapViewport(
             )
 
             if (controller.rendererStatus == KakaoRendererStatus.Ready) {
+                controller.projectedFacilityMarkerOverlays.forEach { overlay ->
+                    MapProjectedFacilityMarkerOverlay(
+                        overlay = overlay,
+                        onClick = onMarkerClick,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 controller.projectedMarkerOverlays.forEach { overlay ->
                     MapProjectedMarkerOverlay(
                         overlay = overlay,
@@ -184,6 +197,8 @@ private class KakaoMapViewportController {
     var rendererStatus by mutableStateOf(KakaoRendererStatus.Initializing)
         private set
     var rendererFailure by mutableStateOf<KakaoRendererFailure?>(null)
+        private set
+    var projectedFacilityMarkerOverlays by mutableStateOf<List<KakaoFacilityMarkerOverlay>>(emptyList())
         private set
     var projectedMarkerOverlays by mutableStateOf<List<KakaoProjectedMarkerOverlay>>(emptyList())
         private set
@@ -278,6 +293,7 @@ private class KakaoMapViewportController {
         mapView = null
         rendererStatus = KakaoRendererStatus.Initializing
         rendererFailure = null
+        projectedFacilityMarkerOverlays = emptyList()
         projectedMarkerOverlays = emptyList()
         lastRenderedCameraRequestId = null
         lastRenderedCameraTarget = null
@@ -318,6 +334,7 @@ private class KakaoMapViewportController {
                     rendererStatus = KakaoRendererStatus.Error
                     kakaoMap = null
                     stopProjectedMarkerTracking()
+                    projectedFacilityMarkerOverlays = emptyList()
                     projectedMarkerOverlays = emptyList()
                     hasMapLifecycleResumed = false
                     lifecycleDispatchRetryCount = 0
@@ -584,45 +601,7 @@ private class KakaoMapViewportController {
             )
         if (lastRenderedMarkers == markerRenderStates) return
 
-        val labelManager = readyMap.labelManager ?: return
-        labelManager.removeAllLabelLayer()
-        val mapContext = mapView?.context
-        val layer =
-            labelManager.addLayer(
-                LabelLayerOptions
-                    .from(KAKAO_MARKER_LAYER_ID)
-                    .setCompetitionType(CompetitionType.None)
-                    .setOrderingType(OrderingType.Rank)
-                    .setZOrder(KAKAO_MARKER_LAYER_Z_ORDER)
-                    .setVisible(true)
-                    .setClickable(true),
-            ) ?: return
-
-        markerRenderStates.forEach { marker ->
-            layer.addLabel(
-                LabelOptions
-                    .from(
-                        marker.markerId,
-                        LatLng.from(marker.latitude, marker.longitude),
-                    )
-                    .setStyles(
-                        (mapContext?.let { context ->
-                            LabelStyle.from(context, marker.iconResId)
-                        } ?: LabelStyle.from(marker.iconResId))
-                            .setApplyDpScale(true)
-                            .apply {
-                                if (marker.anchorPointX != null && marker.anchorPointY != null) {
-                                    setAnchorPoint(marker.anchorPointX, marker.anchorPointY)
-                                }
-                            },
-                    )
-                    .setClickable(true)
-                    .setRank(marker.rank)
-                    .apply {
-                        marker.clickTargetId?.let(::setTag)
-                    },
-            )
-        }
+        readyMap.labelManager?.removeAllLabelLayer()
         lastRenderedMarkers = markerRenderStates
         Log.d(
             KAKAO_MAP_LOG_TAG,
@@ -676,6 +655,24 @@ private class KakaoMapViewportController {
         readyMap: KakaoMap,
         state: MapViewportUiState?,
     ) {
+        projectedFacilityMarkerOverlays =
+            state?.let { currentState ->
+                createKakaoFacilityMarkerOverlays(
+                    markerOverlayState = currentState.markerOverlayState,
+                    selectedMarkerId = currentState.selectedMarkerId,
+                ) { coordinate ->
+                    readyMap
+                        .toScreenPoint(
+                            LatLng.from(
+                                coordinate.latitude,
+                                coordinate.longitude,
+                            ),
+                        )?.let { point ->
+                            KakaoMapScreenPoint(x = point.x, y = point.y)
+                        }
+                }
+            } ?: emptyList()
+
         val projectedMarkers =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = state?.currentLocation,
@@ -748,6 +745,80 @@ private fun GestureType.isUserDrivenCameraMove(): Boolean = this != GestureType.
 
 private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", this)
 
+private data class ProjectedFacilityMarkerPalette(
+    val container: Color,
+    val border: Color,
+    val content: Color,
+)
+
+@Composable
+private fun MapProjectedFacilityMarkerOverlay(
+    overlay: KakaoFacilityMarkerOverlay,
+    onClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val markerSize = overlay.sizeDp.dp
+    val markerSizePx = with(density) { markerSize.roundToPx() }
+    val isBrailleBlock = overlay.categoryType.category == FacilityCategory.BRAILLE_BLOCK
+    val palette = projectedFacilityMarkerPalette(overlay.categoryType.category)
+    val iconSize =
+        when (overlay.categoryType.category) {
+            FacilityCategory.ELEVATOR -> 16.dp
+            FacilityCategory.BRAILLE_BLOCK -> 15.dp
+            else -> 14.dp
+        }
+
+    Box(modifier = modifier.zIndex(overlay.zIndex)) {
+        Surface(
+            modifier =
+                Modifier
+                    .offset {
+                        IntOffset(
+                            x = overlay.screenPoint.x - (markerSizePx / 2),
+                            y = overlay.screenPoint.y - (markerSizePx / 2),
+                        )
+                    }.size(markerSize)
+                    .graphicsLayer {
+                        rotationZ = if (isBrailleBlock) 45f else 0f
+                    }.semantics {
+                        contentDescription = overlay.contentDescription
+                    }.clickable {
+                        onClick(overlay.clickTargetId)
+                    },
+            shape =
+                if (isBrailleBlock) {
+                    RoundedCornerShape(10.dp)
+                } else {
+                    CircleShape
+                },
+            color = palette.container,
+            border = BorderStroke(if (overlay.isSelected) 2.dp else 1.dp, if (overlay.isSelected) Color.White else palette.border),
+            shadowElevation = if (overlay.isSelected) 10.dp else 6.dp,
+        ) {
+            Box {
+                Icon(
+                    painter = painterResource(id = projectedFacilityMarkerGlyphResId(overlay.categoryType.category)),
+                    contentDescription = null,
+                    tint = palette.content,
+                    modifier =
+                        Modifier
+                            .size(iconSize)
+                            .offset {
+                                IntOffset(
+                                    x = (markerSizePx - with(density) { iconSize.roundToPx() }) / 2,
+                                    y = (markerSizePx - with(density) { iconSize.roundToPx() }) / 2,
+                                )
+                            }
+                            .graphicsLayer {
+                                rotationZ = if (isBrailleBlock) -45f else 0f
+                            },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun MapProjectedMarkerOverlay(
     overlay: KakaoProjectedMarkerOverlay,
@@ -789,4 +860,106 @@ private fun KakaoProjectedMarkerOverlay.resolveContentDescription(
 
         KakaoProjectedMarkerKind.SELECTED_MAP_PIN ->
             stringResource(id = R.string.map_viewport_description_selected)
+    }
+
+private fun projectedFacilityMarkerPalette(category: FacilityCategory): ProjectedFacilityMarkerPalette =
+    when (category) {
+        FacilityCategory.TOILET ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF00897B),
+                border = Color(0xFFBFEDE7),
+                content = Color.White,
+            )
+
+        FacilityCategory.ELEVATOR ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF5E7A2F),
+                border = Color(0xFFDDE8C8),
+                content = Color.White,
+            )
+
+        FacilityCategory.CHARGING_STATION ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF9C5F00),
+                border = Color(0xFFF1D6AA),
+                content = Color.White,
+            )
+
+        FacilityCategory.FOOD_CAFE,
+        FacilityCategory.RESTAURANT,
+        ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFFD96A39),
+                border = Color(0xFFF7D3C3),
+                content = Color.White,
+            )
+
+        FacilityCategory.TOURIST_SPOT,
+        FacilityCategory.TOURIST_ATTRACTION,
+        ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF1976D2),
+                border = Color(0xFFC7E0FF),
+                content = Color.White,
+            )
+
+        FacilityCategory.ACCOMMODATION ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF8D6E63),
+                border = Color(0xFFE5D4CD),
+                content = Color.White,
+            )
+
+        FacilityCategory.HEALTHCARE ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFFC62828),
+                border = Color(0xFFF5C4C4),
+                content = Color.White,
+            )
+
+        FacilityCategory.WELFARE ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF2E7D6B),
+                border = Color(0xFFC7E7DE),
+                content = Color.White,
+            )
+
+        FacilityCategory.PUBLIC_OFFICE ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF546E7A),
+                border = Color(0xFFD1DADF),
+                content = Color.White,
+            )
+
+        FacilityCategory.BRAILLE_BLOCK ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF7A5A1D),
+                border = Color(0xFFF0DEB7),
+                content = Color.White,
+            )
+
+        FacilityCategory.OTHER ->
+            ProjectedFacilityMarkerPalette(
+                container = Color(0xFF2563EB),
+                border = Color(0xFFDBEAFE),
+                content = Color.White,
+            )
+    }
+
+@androidx.annotation.DrawableRes
+private fun projectedFacilityMarkerGlyphResId(category: FacilityCategory): Int =
+    when (category) {
+        FacilityCategory.TOILET -> R.drawable.ic_place_restroom
+        FacilityCategory.ELEVATOR -> R.drawable.ic_lowvision_category_elevator
+        FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
+        FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_cafe
+        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
+        FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
+        FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
+        FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
+        FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
     }

@@ -99,22 +99,26 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
-    fun `kakao marker styles apply dp scale for visible map pin rendering`() {
+    fun `facility markers render through compose projection overlay while clearing legacy label layers`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
         assertTrue(
-            "Kakao marker styles should opt into dp scaling so vector pin assets render at an intended on-screen size.",
-            source.contains("setApplyDpScale(true)"),
+            "Facility markers should render through a dedicated Compose projection overlay so filtered facilities stay visible even when Kakao labels are unreliable.",
+            source.contains("MapProjectedFacilityMarkerOverlay("),
         )
         assertTrue(
-            "Custom map markers should not compete with base map labels, otherwise the dropped pin can be hidden even after it is rendered.",
-            source.contains("setCompetitionType(CompetitionType.None)"),
+            "The renderer should keep a distinct projected facility marker list alongside special markers.",
+            source.contains("projectedFacilityMarkerOverlays"),
         )
         assertTrue(
-            "Marker ordering should follow rank so the dropped pin can stay above lower-priority markers in the same layer.",
-            source.contains("setOrderingType(OrderingType.Rank)"),
+            "Projected facility markers should be derived from the current visible marker state instead of relying on Kakao label insertion.",
+            source.contains("createKakaoFacilityMarkerOverlays("),
+        )
+        assertTrue(
+            "Legacy Kakao label layers should be cleared so the new projected marker path does not double-render facilities.",
+            source.contains("removeAllLabelLayer()"),
         )
     }
 }

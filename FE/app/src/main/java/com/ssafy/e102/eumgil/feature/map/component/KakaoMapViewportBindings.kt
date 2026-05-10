@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import java.util.Locale
@@ -106,6 +107,17 @@ internal data class KakaoProjectedMarkerOverlay(
     val anchorPointX: Float,
     val anchorPointY: Float,
     val sizeDp: Int,
+    val zIndex: Float,
+)
+
+internal data class KakaoFacilityMarkerOverlay(
+    val markerId: String,
+    val screenPoint: KakaoMapScreenPoint,
+    val categoryType: MapMarkerCategoryType,
+    val contentDescription: String,
+    val clickTargetId: String,
+    val sizeDp: Int,
+    val isSelected: Boolean,
     val zIndex: Float,
 )
 
@@ -250,6 +262,32 @@ internal fun createKakaoProjectedMarkerRenderStates(
                     sizeDp = 32,
                     zIndex = 4f,
                 ),
+            )
+        }
+    }
+
+internal fun createKakaoFacilityMarkerOverlays(
+    markerOverlayState: MapMarkerOverlayState,
+    selectedMarkerId: String?,
+    projectScreenPoint: (MapCoordinate) -> KakaoMapScreenPoint?,
+): List<KakaoFacilityMarkerOverlay> =
+    markerOverlayState.visibleMarkers.mapNotNull { marker ->
+        projectScreenPoint(marker.coordinate)?.let { screenPoint ->
+            val isSelected = marker.markerId == selectedMarkerId
+            KakaoFacilityMarkerOverlay(
+                markerId = marker.markerId,
+                screenPoint = screenPoint,
+                categoryType = marker.categoryType,
+                contentDescription = marker.name,
+                clickTargetId = marker.markerId,
+                sizeDp =
+                    when {
+                        isSelected -> 34
+                        marker.categoryType.category == FacilityCategory.BRAILLE_BLOCK -> 30
+                        else -> 28
+                    },
+                isSelected = isSelected,
+                zIndex = if (isSelected) 2.5f else 1.5f,
             )
         }
     }

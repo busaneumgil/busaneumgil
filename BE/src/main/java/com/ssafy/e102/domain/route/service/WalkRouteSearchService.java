@@ -59,7 +59,7 @@ public class WalkRouteSearchService {
 		String searchId = "rs_walk_" + UUID.randomUUID();
 		WalkRouteSearchResponse response = new WalkRouteSearchResponse(searchId,
 			toRouteSummaries(searchId, candidates));
-		routeSearchCacheService.save(response);
+		routeSearchCacheService.save(userId, response);
 		return response;
 	}
 

@@ -156,7 +156,7 @@ public class TransitRouteSearchService {
 		List<TransitRouteCandidate> selectedCandidates = selectCandidates(candidates);
 		WalkRouteSearchResponse response = new WalkRouteSearchResponse(searchId,
 			selectedCandidates.stream().map(TransitRouteCandidate::route).toList());
-		routeSearchCacheService.save(response);
+		routeSearchCacheService.save(userId, response);
 		routeSearchCacheService.saveTransitMetadata(searchId,
 			selectedCandidates.stream().map(TransitRouteCandidate::snapshot).toList());
 		return response;

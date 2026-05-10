@@ -73,14 +73,14 @@ PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는�
 처리 순서:
 
 1. GitLab `develop` checkout
-2. Jenkins credential의 `.env.dev`, S1 override compose 복사
+2. S1에 mount된 `/opt/e102-server/.env.dev`, override compose 복사
 3. `docker compose config --quiet`
 4. `PostGIS`, `Redis`, `MinIO`, `AI` 기동
 5. GraphHopper graph-cache volume 확인
 6. cache가 비어 있으면 `graphhopper-build` profile로 PostgreSQL LineString 기반 cache 생성
 7. GraphHopper runtime 기동
 8. backend image build 및 컨테이너 재생성
-9. backend `/v3/api-docs`, GraphHopper `/healthcheck` smoke test
+9. AI `/health` payload, AI `/voice/analyze` invalid-request schema, backend `/v3/api-docs`, GraphHopper `/healthcheck` smoke test
 10. compose 상태 출력
 
 GraphHopper는 S1 dev stack에 포함한다. runtime은 graph-cache serve only 구조이며, Jenkins dev pipeline은 cache가 비어 있을 때만 build job을 실행한다.
@@ -91,28 +91,33 @@ Mattermost 알림:
 - 성공: 발송
 - 실패: 발송
 
-## Credentials
+## Secrets
 
-Jenkins job에서 사용하는 secret은 Jenkins Credentials로 관리한다.
+Jenkins job에서 사용하는 secret은 두 경로로 나뉜다.
+
+- 배포용 env 파일의 원본은 S1 host mounted secret file이다.
+- Jenkins Credentials는 GitLab checkout, S2 SSH, Mattermost webhook처럼 Jenkins가 직접 참조해야 하는 값만 관리한다.
 
 | Credential ID | 종류 | 용도 | 상태 |
 |---|---|---|---|
 | `gitlab-pat` | Username/Password 또는 Secret text | GitLab repository checkout | 적용 완료 |
-| `e102-dev-env-file` | Secret file | S1 dev 배포용 `.env.dev` | 적용 완료 |
-| `e102-prod-env-file` | Secret file | prod 배포용 `.env.prod` | 적용 완료 |
 | `e102-s2-host` | Secret text | S2 SSH host 또는 IP | 적용 완료 |
 | `e102-s2-ssh-key` | SSH Username with private key | S2 배포 SSH 접속 | 적용 완료 |
 | `e102-mattermost-webhook-url` | Secret text | Jenkins/MM 배포 알림 webhook | 적용 예정 |
 
-`e102-dev-env-file`은 서버의 `/home/ubuntu/e102/.env.dev`를 기준으로 생성한다. Jenkins 컨테이너 재시작 시 `/var/jenkins_home/init.groovy.d/02-e102-env-credentials.groovy`가 credential을 다시 동기화한다.
+dev 배포용 env 원본은 S1 host의 `/home/ubuntu/e102/.env.dev`이고, Jenkins 컨테이너에서는 `/opt/e102-server/.env.dev`로 read-only mount해 직접 사용한다.
 
-prod 배포용 secret 원본은 S1 `/home/ubuntu/e102/prod-secrets` 하위에서 관리한다. Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`가 `e102-prod-env-file`, `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url`를 동기화한다.
+prod 배포용 env 원본은 S1 host의 `/home/ubuntu/e102/prod-secrets/.env.prod`이고, Jenkins 컨테이너에서는 `/var/jenkins_home/prod-secrets/.env.prod`로 read-only mount해 직접 사용한다.
+
+이 구조로 바꾼 이유는 env file을 Jenkins credential로 한 번 더 복제하면 host file, Jenkins credential, workspace temp file이 서로 drift할 수 있기 때문이다. 현재 기준의 source of truth는 host mounted env file이고, Jenkins는 그 파일을 직접 읽는 consumer다.
+
+Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`는 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url`만 동기화한다.
 
 현재 prod는 초기 환경 bootstrap 단계이므로 `.env.prod`의 `JPA_DDL_AUTO`를 `update`로 두고 테이블/컬럼을 먼저 생성한다. 운영 모드로 전환하기 전에는 반드시 `.env.prod` 값을 `validate`로 되돌리고 한 번 더 배포해 schema drift를 차단한다.
 
 ## `e102-prod-deploy`
 
-prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Jenkinsfile`이다.
+prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Jenkinsfile`이다. Jenkins job 정의는 inline script를 저장하지 않고 GitLab SCM에서 이 파일을 직접 읽는다.
 
 처리 순서:
 

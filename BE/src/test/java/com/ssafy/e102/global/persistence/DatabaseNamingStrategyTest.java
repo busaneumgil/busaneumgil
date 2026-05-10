@@ -21,6 +21,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.util.StreamUtils;
 
+import com.ssafy.e102.domain.admin.entity.AdminArea;
 import com.ssafy.e102.domain.bookmark.entity.FavoriteRoute;
 import com.ssafy.e102.domain.place.entity.Bookmark;
 import com.ssafy.e102.domain.place.entity.Place;
@@ -57,6 +58,7 @@ class DatabaseNamingStrategyTest {
 		HazardReportImage.class,
 		RoadNode.class,
 		RoadSegment.class,
+		AdminArea.class,
 		SegmentFeature.class,
 		RouteSession.class,
 		SubwayStation.class,
@@ -196,6 +198,11 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(RoadSegment.class, "signalState")).isEqualTo("signal_state");
 		assertThat(physicalColumnName(RoadSegment.class, "segmentType")).isEqualTo("segment_type");
 
+		assertThat(physicalColumnName(AdminArea.class, "areaId")).isEqualTo("area_id");
+		assertThat(physicalColumnName(AdminArea.class, "gu")).isEqualTo("gu");
+		assertThat(physicalColumnName(AdminArea.class, "dong")).isEqualTo("dong");
+		assertThat(physicalColumnName(AdminArea.class, "geom")).isEqualTo("geom");
+
 		assertThat(physicalColumnName(SegmentFeature.class, "featureId")).isEqualTo("feature_id");
 		assertThat(physicalColumnName(SegmentFeature.class, "edgeId")).isEqualTo("edge_id");
 		assertThat(physicalColumnName(SegmentFeature.class, "featureType")).isEqualTo("feature_type");
@@ -210,11 +217,13 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(RouteSession.class, "sessionId")).isEqualTo("session_id");
 		assertThat(joinColumnName(RouteSession.class, "user")).isEqualTo("user_id");
 		assertThat(physicalColumnName(RouteSession.class, "routeId")).isEqualTo("route_id");
+		assertThat(physicalColumnName(RouteSession.class, "activeRouteKey")).isEqualTo("active_route_key");
 		assertThat(physicalColumnName(RouteSession.class, "startPoint")).isEqualTo("start_point");
 		assertThat(physicalColumnName(RouteSession.class, "endPoint")).isEqualTo("end_point");
 		assertThat(physicalColumnName(RouteSession.class, "routeSnapshotJson"))
 			.isEqualTo("route_snapshot_json");
 		assertThat(physicalColumnName(RouteSession.class, "status")).isEqualTo("status");
+		assertThat(uniqueColumnNames(RouteSession.class)).contains("user_id", "active_route_key");
 	}
 
 	@Test
@@ -272,6 +281,7 @@ class DatabaseNamingStrategyTest {
 			HazardReportImage.class,
 			RoadNode.class,
 			RoadSegment.class,
+			AdminArea.class,
 			SegmentFeature.class,
 			RouteSession.class,
 			SubwayStation.class,

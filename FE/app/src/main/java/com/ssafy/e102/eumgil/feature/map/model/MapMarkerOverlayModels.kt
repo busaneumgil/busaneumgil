@@ -40,6 +40,7 @@ data class MapMarkerOverlayState(
     val markers: List<MapMarkerUiModel> = emptyList(),
     val visibleMarkerCount: Int = 0,
     val totalMarkerCount: Int = 0,
+    val hasActiveFilterSelection: Boolean = false,
 ) {
     val isLoading: Boolean
         get() = loadStatus == MapMarkerLoadStatus.LOADING
@@ -60,7 +61,7 @@ data class MapMarkerOverlayState(
         get() = isReady && totalMarkerCount == 0
 
     val isEmptyResult: Boolean
-        get() = isReady && totalMarkerCount > 0 && visibleMarkerCount == 0
+        get() = isReady && hasActiveFilterSelection && totalMarkerCount > 0 && visibleMarkerCount == 0
 
     val hiddenMarkerCount: Int
         get() = (totalMarkerCount - visibleMarkerCount).coerceAtLeast(0)
@@ -70,25 +71,22 @@ data class MapMarkerOverlayState(
 }
 
 data class MapFilterSelectionState(
-    val isShowingAllCategories: Boolean = true,
+    val isShowingAllCategories: Boolean = false,
     val selectedFacilityCategories: Set<FacilityCategory> = emptySet(),
     val selectedBrailleBlockTypes: Set<BrailleBlockType> = emptySet(),
 ) {
     val hasCustomSelection: Boolean
-        get() = !isShowingAllCategories
+        get() = selectedFacilityCategories.isNotEmpty()
 
     val selectedCategoryCount: Int
-        get() = if (isShowingAllCategories) 0 else selectedFacilityCategories.size
+        get() = selectedFacilityCategories.size
 
     fun isCategorySelected(category: FacilityCategory): Boolean =
-        isShowingAllCategories || category in selectedFacilityCategories
+        category in selectedFacilityCategories
 
     fun isBrailleBlockTypeSelected(brailleBlockType: BrailleBlockType): Boolean =
-        isShowingAllCategories ||
-            (
-                FacilityCategory.BRAILLE_BLOCK in selectedFacilityCategories &&
-                    (selectedBrailleBlockTypes.isEmpty() || brailleBlockType in selectedBrailleBlockTypes)
-            )
+        FacilityCategory.BRAILLE_BLOCK in selectedFacilityCategories &&
+            (selectedBrailleBlockTypes.isEmpty() || brailleBlockType in selectedBrailleBlockTypes)
 }
 
 data class MapCategoryFilterOption(
@@ -129,5 +127,5 @@ data class MapMarkerFilterUiState(
         get() = isReady && totalMarkerCount == 0
 
     val isEmptyResult: Boolean
-        get() = isReady && totalMarkerCount > 0 && visibleMarkerCount == 0
+        get() = isReady && hasCustomSelection && totalMarkerCount > 0 && visibleMarkerCount == 0
 }

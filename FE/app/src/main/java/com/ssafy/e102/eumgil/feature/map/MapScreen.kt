@@ -49,7 +49,6 @@ import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
-import com.ssafy.e102.eumgil.feature.map.component.MapCategoryFilterBar
 import com.ssafy.e102.eumgil.feature.map.component.MapFloatingControls
 import com.ssafy.e102.eumgil.feature.map.component.MapIntegrationState
 import com.ssafy.e102.eumgil.feature.map.component.MapShortcutFilterRow
@@ -126,14 +125,6 @@ fun MapScreen(
                         state = uiState.shortcutFilterState,
                         onChipClick = { key ->
                             onAction(MapUiAction.ShortcutFilterClicked(key))
-                        },
-                    )
-
-                    MapCategoryFilterBar(
-                        state = uiState.markerFilterState,
-                        onReset = { onAction(MapUiAction.MarkerCategoryFilterReset) },
-                        onCategoryToggle = { category ->
-                            onAction(MapUiAction.MarkerCategoryFilterToggled(category))
                         },
                     )
                 }

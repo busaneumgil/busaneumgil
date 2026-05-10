@@ -12,6 +12,34 @@ import org.junit.Test
 
 class MapBrowseStateFactoryTest {
     @Test
+    fun `default selection hides markers without treating the state as an empty result`() {
+        val browseData =
+            FacilityBrowseData(
+                facilityMarkers =
+                    listOf(
+                        FacilityMarkerSeed(
+                            facilityId = "food-cafe-1",
+                            name = "Accessible Cafe",
+                            coordinate = GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
+                            category = FacilityCategory.FOOD_CAFE,
+                        ),
+                    ),
+                availableCategories = listOf(FacilityCategory.FOOD_CAFE),
+            )
+
+        val overlayState =
+            MapBrowseStateFactory.createMarkerOverlayState(
+                browseData = browseData,
+                selection = MapBrowseStateFactory.resetSelection(),
+            )
+
+        assertEquals(1, overlayState.totalMarkerCount)
+        assertEquals(0, overlayState.visibleMarkerCount)
+        assertFalse(overlayState.hasActiveFilterSelection)
+        assertFalse(overlayState.isEmptyResult)
+    }
+
+    @Test
     fun `toggleCategory keeps explicit single category selection when it is the only available category`() {
         val browseData =
             FacilityBrowseData(
@@ -39,7 +67,7 @@ class MapBrowseStateFactoryTest {
     }
 
     @Test
-    fun `toggleCategory still resets to all when the last explicit category is toggled off`() {
+    fun `toggleCategory clears the selection when the last explicit category is toggled off`() {
         val browseData =
             FacilityBrowseData(
                 facilityMarkers =
@@ -66,7 +94,7 @@ class MapBrowseStateFactoryTest {
                 category = FacilityCategory.FOOD_CAFE,
             )
 
-        assertTrue(selection.isShowingAllCategories)
+        assertFalse(selection.isShowingAllCategories)
         assertTrue(selection.selectedFacilityCategories.isEmpty())
     }
 

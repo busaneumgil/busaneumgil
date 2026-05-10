@@ -386,7 +386,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `browse state initializes with all markers visible and category options ready`() =
+    fun `browse state initializes with no active filters and hides markers by default`() =
         runTest {
             val viewModel =
                 MapViewModel(
@@ -401,9 +401,11 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertEquals(17, viewModel.uiState.value.markerOverlayState.totalMarkerCount)
-            assertEquals(17, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
-            assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertEquals(0, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertFalse(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertFalse(viewModel.uiState.value.markerOverlayState.isEmptyResult)
             assertEquals(10, viewModel.uiState.value.markerFilterState.categoryOptions.size)
+            assertTrue(viewModel.uiState.value.shortcutFilterState.chips.none { chip -> chip.isSelected })
         }
 
     @Test
@@ -503,7 +505,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `toggling last selected category returns filter state to all`() =
+    fun `toggling last selected category clears the filter selection`() =
         runTest {
             val viewModel =
                 MapViewModel(
@@ -521,8 +523,10 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.MarkerCategoryFilterToggled(FacilityCategory.TOILET))
             advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
-            assertEquals(17, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertFalse(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertTrue(viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories.isEmpty())
+            assertEquals(0, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertFalse(viewModel.uiState.value.markerOverlayState.isEmptyResult)
         }
 
     @Test
@@ -1058,7 +1062,8 @@ class MapViewModelTest {
                 MapUiEvent.ShowSnackbar("근처에 해당 장소가 없어요"),
                 event,
             )
-            assertTrue(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertFalse(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
+            assertEquals(0, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
             assertFalse(
                 viewModel.uiState.value.shortcutFilterState.chips
                     .first { chip -> chip.key == MapShortcutFilterKey.CHARGING_STATION }
@@ -1087,7 +1092,7 @@ class MapViewModelTest {
                 },
             )
             assertEquals(2, viewModel.uiState.value.markerOverlayState.totalMarkerCount)
-            assertEquals(2, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
+            assertEquals(0, viewModel.uiState.value.markerOverlayState.visibleMarkerCount)
         }
 
     @Test

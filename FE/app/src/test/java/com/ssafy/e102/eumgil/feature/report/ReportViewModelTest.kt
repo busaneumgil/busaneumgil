@@ -764,6 +764,110 @@ class ReportViewModelTest {
             assertEquals(ReportOutboxState.NotSaved, uiState.outboxState)
             assertTrue(uiState.isSubmitEnabled)
         }
+
+    @Test
+    fun `single photo attachment is preserved in outbox payload`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            val savedOutbox = requireNotNull(repository.savedOutbox)
+            val attachedPhoto = viewModel.uiState.value.photo.values.first()
+
+            assertEquals(attachedPhoto.localUri, savedOutbox.photoUri)
+            assertEquals(attachedPhoto.mimeType, savedOutbox.photoMimeType)
+            assertEquals(attachedPhoto.sizeBytes, savedOutbox.photoSizeBytes)
+        }
+
+    @Test
+    fun `location with out of range coordinate marks InvalidCoordinate error and blocks submit`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 200.0,
+                            longitude = 129.0756,
+                            address = "범위 밖 좌표",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+            assertEquals(ReportLocationError.InvalidCoordinate, uiState.location.error)
+            assertFalse(uiState.isSubmitEnabled)
+
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            assertNull(repository.savedOutbox)
+        }
+
+    @Test
+    fun `unauthorized server response maps to Unauthorized failure and keeps outbox saved`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    submitResultFactory = { outboxId ->
+                        ReportSubmitResult.Failure(
+                            outboxId = outboxId,
+                            reason = ReportSubmitFailureReason.Unauthorized,
+                        )
+                    },
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+            assertTrue(uiState.screenState is ReportScreenState.Failure)
+            assertEquals(
+                ReportFailureReason.Unauthorized,
+                (uiState.screenState as ReportScreenState.Failure).reason,
+            )
+            val submit = uiState.submitState
+            assertTrue(submit is ReportSubmitState.Failed)
+            assertEquals(
+                ReportFailureReason.Unauthorized,
+                (submit as ReportSubmitState.Failed).reason,
+            )
+            assertTrue(uiState.outboxState is ReportOutboxState.Saved)
+        }
 }
 
 private class FakeReportRepository(

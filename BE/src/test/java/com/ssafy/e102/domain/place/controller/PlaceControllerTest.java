@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.place.controller;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,15 +18,21 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.ssafy.e102.domain.place.dto.request.PlaceClickDetailRequest;
+import com.ssafy.e102.domain.place.dto.response.PlaceClickDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceMarkerResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.service.PlaceService;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
+import com.ssafy.e102.domain.place.type.PlaceClickType;
+import com.ssafy.e102.domain.place.type.PlaceDetailType;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
@@ -61,6 +68,29 @@ class PlaceControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.nextCursor").doesNotExist())
 			.andExpect(jsonPath("$.data.hasNext").value(false));
+	}
+
+	@Test
+	@DisplayName("좌표 주소 변환은 query parameter를 서비스에 전달한다")
+	void reverseGeocode() throws Exception {
+		when(placeService.reverseGeocode("35.1686", "129.0576"))
+			.thenReturn(new PlaceReverseGeocodeResponse(
+				"부산 부산진구 시민공원로 73",
+				"부산 부산진구 시민공원로 73",
+				"부산 부산진구 범전동 200",
+				"부산",
+				"부산진구",
+				"범전동"));
+
+		mockMvc.perform(get("/places/reverse-geocode")
+			.param("lat", "35.1686")
+			.param("lng", "129.0576"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.displayAddress").value("부산 부산진구 시민공원로 73"))
+			.andExpect(jsonPath("$.data.address").value("부산 부산진구 범전동 200"));
+
+		verify(placeService).reverseGeocode("35.1686", "129.0576");
 	}
 
 	@Test
@@ -122,6 +152,56 @@ class PlaceControllerTest {
 			.andExpect(jsonPath("$.data.isBookmarked").value(false));
 
 		verify(placeService).getPlace(userId, "10");
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("지도 클릭 상세 조회는 현재 사용자와 request body를 서비스에 전달한다")
+	void getPlaceDetail() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.1686,
+			129.0576,
+			PlaceClickType.POI,
+			"KAKAO",
+			"123456789",
+			"부산시민공원");
+		when(placeService.getPlaceDetail(userId, request))
+			.thenReturn(new PlaceClickDetailResponse(
+				"tgt_9d13f0b44d68abcd",
+				PlaceDetailType.EXTERNAL_POI,
+				null,
+				"KAKAO",
+				"123456789",
+				"부산시민공원",
+				null,
+				"여행 > 관광,명소 > 공원",
+				"부산광역시 부산진구 시민공원로 73",
+				new GeoPointResponse(35.1686, 129.0576),
+				List.of(),
+				false));
+
+		mockMvc.perform(post("/places/detail")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "lat": 35.1686,
+				  "lng": 129.0576,
+				  "clickType": "POI",
+				  "provider": "KAKAO",
+				  "providerPlaceId": "123456789",
+				  "nameHint": "부산시민공원"
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.bookmarkTargetId").value("tgt_9d13f0b44d68abcd"))
+			.andExpect(jsonPath("$.data.detailType").value("EXTERNAL_POI"))
+			.andExpect(jsonPath("$.data.name").value("부산시민공원"));
+
+		verify(placeService).getPlaceDetail(userId, request);
 		SecurityContextHolder.clearContext();
 	}
 

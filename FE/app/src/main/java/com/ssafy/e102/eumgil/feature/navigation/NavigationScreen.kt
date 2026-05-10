@@ -60,6 +60,8 @@ import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredT
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayBackdrop
+import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
 
 @Composable
@@ -394,204 +396,14 @@ private fun NavigationMapBackdrop(
     mapOverlay: NavigationMapOverlayUiState,
     modifier: Modifier = Modifier,
 ) {
-    val outline = MaterialTheme.colorScheme.outline
-    val focusedSegmentColor = MaterialTheme.colorScheme.primary
-    val activeSegmentColor = MaterialTheme.colorScheme.secondary
-    val originColor = MaterialTheme.colorScheme.secondary
-    val destinationColor = MaterialTheme.colorScheme.error
-    val projectionBounds = navigationProjectionBounds(mapOverlay)
     val mapDescription = stringResource(id = R.string.navigation_map_section_title)
-    val backgroundBrush =
-        Brush.verticalGradient(
-            colors =
-                listOf(
-                    MaterialTheme.colorScheme.surfaceVariant,
-                    MaterialTheme.colorScheme.surfaceContainerLowest,
-                ),
-        )
-
-    BoxWithConstraints(
-        modifier =
-            modifier
-                .background(backgroundBrush)
-                .semantics {
-                    contentDescription = mapDescription
-                },
-    ) {
-        val horizontalPadding = 28.dp
-        val verticalPadding = 24.dp
-        val markerAreaWidth = (maxWidth - (horizontalPadding * 2)).coerceAtLeast(0.dp)
-        val markerAreaHeight = (maxHeight - (verticalPadding * 2)).coerceAtLeast(0.dp)
-
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawNavigationMapGrid(outline = outline)
-            if (mapOverlay.selectedRoutePolyline.size >= 2) {
-                val routePreviewPath =
-                    mapOverlay.selectedRoutePolyline.toNavigationPreviewPath(
-                        bounds = projectionBounds,
-                        canvasSize = size,
-                    )
-                drawPath(
-                    path = routePreviewPath,
-                    color = outline.copy(alpha = 0.22f),
-                    style =
-                        Stroke(
-                            width = 10.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-                drawPath(
-                    path = routePreviewPath,
-                    color = focusedSegmentColor.copy(alpha = 0.16f),
-                    style =
-                        Stroke(
-                            width = 4.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-            }
-            if (mapOverlay.activeSegmentPolyline.size >= 2 &&
-                mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline
-            ) {
-                val activeSegmentPath =
-                    mapOverlay.activeSegmentPolyline.toNavigationPreviewPath(
-                        bounds = projectionBounds,
-                        canvasSize = size,
-                    )
-                drawPath(
-                    path = activeSegmentPath,
-                    color = activeSegmentColor.copy(alpha = 0.42f),
-                    style =
-                        Stroke(
-                            width = 9.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-                drawPath(
-                    path = activeSegmentPath,
-                    color = activeSegmentColor,
-                    style =
-                        Stroke(
-                            width = 4.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-            }
-            if (mapOverlay.focusedSegmentPolyline.size >= 2) {
-                val focusedSegmentPath =
-                    mapOverlay.focusedSegmentPolyline.toNavigationPreviewPath(
-                        bounds = projectionBounds,
-                        canvasSize = size,
-                    )
-                drawPath(
-                    path = focusedSegmentPath,
-                    color = focusedSegmentColor.copy(alpha = 0.24f),
-                    style =
-                        Stroke(
-                            width = 12.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-                drawPath(
-                    path = focusedSegmentPath,
-                    color = focusedSegmentColor,
-                    style =
-                        Stroke(
-                            width = 6.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
-            }
-            mapOverlay.origin?.let { point ->
-                drawCircle(
-                    color = originColor.copy(alpha = 0.18f),
-                    radius = 18.dp.toPx(),
-                    center = projectionBounds.project(point.coordinate).toCanvasOffset(size),
-                )
-            }
-            mapOverlay.destination?.let { point ->
-                drawCircle(
-                    color = destinationColor.copy(alpha = 0.16f),
-                    radius = 20.dp.toPx(),
-                    center = projectionBounds.project(point.coordinate).toCanvasOffset(size),
-                )
-            }
-            mapOverlay.currentLocation?.let { point ->
-                drawCircle(
-                    color = focusedSegmentColor.copy(alpha = 0.16f),
-                    radius = 16.dp.toPx(),
-                    center = projectionBounds.project(point.coordinate).toCanvasOffset(size),
-                )
-            }
-            if (mapOverlay.mapFocusMode == NavigationMapFocusMode.FOCUSED) {
-                mapOverlay.focusCoordinate?.let { coordinate ->
-                    drawCircle(
-                        color = focusedSegmentColor.copy(alpha = 0.18f),
-                        radius = 24.dp.toPx(),
-                        center = projectionBounds.project(coordinate).toCanvasOffset(size),
-                    )
-                }
-            }
-        }
-
-        mapOverlay.origin?.let { point ->
-            NavigationMapMarker(
-                label = stringResource(id = R.string.navigation_map_marker_origin),
-                containerColor = originColor,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .offsetWithinNavigationMap(
-                            point = projectionBounds.project(point.coordinate),
-                            areaWidth = markerAreaWidth,
-                            areaHeight = markerAreaHeight,
-                            horizontalPadding = horizontalPadding,
-                            verticalPadding = verticalPadding,
-                            elementSize = NavigationMapMarkerSize,
-                        ),
-            )
-        }
-        mapOverlay.destination?.let { point ->
-            NavigationMapMarker(
-                label = stringResource(id = R.string.navigation_map_marker_destination),
-                containerColor = destinationColor,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .offsetWithinNavigationMap(
-                            point = projectionBounds.project(point.coordinate),
-                            areaWidth = markerAreaWidth,
-                            areaHeight = markerAreaHeight,
-                            horizontalPadding = horizontalPadding,
-                            verticalPadding = verticalPadding,
-                            elementSize = NavigationMapMarkerSize,
-                        ),
-            )
-        }
-        mapOverlay.currentLocation?.let { point ->
-            NavigationMapMarker(
-                label = stringResource(id = R.string.navigation_map_marker_current),
-                containerColor = focusedSegmentColor,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .offsetWithinNavigationMap(
-                            point = projectionBounds.project(point.coordinate),
-                            areaWidth = markerAreaWidth,
-                            areaHeight = markerAreaHeight,
-                            horizontalPadding = horizontalPadding,
-                            verticalPadding = verticalPadding,
-                            elementSize = NavigationMapMarkerSize,
-                        ),
-            )
-        }
-    }
+    MapViewportOverlayBackdrop(
+        overlayState = createNavigationViewportOverlayState(mapOverlay),
+        modifier = modifier,
+        horizontalPadding = 28.dp,
+        verticalPadding = 24.dp,
+        contentDescription = mapDescription,
+    )
 }
 
 @Composable

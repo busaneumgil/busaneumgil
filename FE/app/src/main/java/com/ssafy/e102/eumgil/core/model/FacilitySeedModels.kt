@@ -31,6 +31,8 @@ enum class AccessibilityTag {
     WHEELCHAIR_TURNING_SPACE,
     TABLE_SPACING,
     ACCESSIBLE_PARKING,
+    GUIDANCE_FACILITY,
+    ACCESSIBLE_ROOM,
     LOW_HEIGHT_BUTTON,
     REST_AREA,
     OPEN_24_HOURS,
@@ -111,6 +113,7 @@ data class FacilityMarkerSeed(
     val name: String,
     val coordinate: GeoCoordinate,
     val category: FacilityCategory,
+    val filterCategories: Set<FacilityCategory> = setOf(category),
     val accessibilityTags: List<AccessibilityTag> = emptyList(),
     val brailleBlockType: BrailleBlockType? = null,
 )

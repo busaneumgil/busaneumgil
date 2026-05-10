@@ -46,6 +46,12 @@ internal object LowVisionMyPageLayoutDefaults {
     val actionMinHeight = 112.dp
 }
 
+internal object LowVisionAppInfoLayoutDefaults {
+    const val infoPanelCount = 2
+    const val withdrawActionCount = 1
+    val withdrawActionMinHeight = LowVisionMyPageLayoutDefaults.actionMinHeight
+}
+
 @Composable
 fun LowVisionMyPageScreen(
     isLogoutLoading: Boolean,
@@ -134,48 +140,78 @@ fun LowVisionMyPageScreen(
 
 @Composable
 fun LowVisionAppInfoScreen(
+    isWithdrawLoading: Boolean,
+    snackbarHostState: SnackbarHostState,
+    onWithdrawClick: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Box(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(Color.Black),
     ) {
         Column(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .statusBarsPadding()
-                    .padding(
-                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
-                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
-                    ),
-            verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
+            modifier = Modifier.fillMaxSize(),
         ) {
-            Text(
-                text = stringResource(id = R.string.low_vision_app_info_title),
-                modifier = Modifier.fillMaxWidth(),
-                color = LowVisionYellow,
-                fontSize = LowVisionScreenDefaults.headerFontSize,
-                fontWeight = FontWeight.Black,
-                lineHeight = LowVisionScreenDefaults.headerLineHeight,
-                textAlign = TextAlign.Center,
-            )
-            LowVisionInfoPanel(
-                titleRes = R.string.low_vision_app_info_service_title,
-                bodyRes = R.string.low_vision_app_info_service_body,
-            )
-            LowVisionInfoPanel(
-                titleRes = R.string.low_vision_app_info_support_title,
-                bodyRes = R.string.low_vision_app_info_support_body,
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .statusBarsPadding()
+                        .padding(
+                            horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                            vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.low_vision_app_info_title),
+                    modifier = Modifier.fillMaxWidth(),
+                    color = LowVisionYellow,
+                    fontSize = LowVisionScreenDefaults.headerFontSize,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = LowVisionScreenDefaults.headerLineHeight,
+                    textAlign = TextAlign.Center,
+                )
+                LowVisionInfoPanel(
+                    titleRes = R.string.low_vision_app_info_service_title,
+                    bodyRes = R.string.low_vision_app_info_service_body,
+                    modifier = Modifier.weight(1f),
+                )
+                LowVisionInfoPanel(
+                    titleRes = R.string.low_vision_app_info_support_title,
+                    bodyRes = R.string.low_vision_app_info_support_body,
+                    modifier = Modifier.weight(1f),
+                )
+                LowVisionMyPageAction(
+                    labelRes =
+                        if (isWithdrawLoading) {
+                            R.string.low_vision_app_info_withdraw_loading
+                        } else {
+                            R.string.low_vision_app_info_withdraw
+                        },
+                    iconRes = R.drawable.ic_lowvision_logout,
+                    filled = false,
+                    enabled = !isWithdrawLoading,
+                    onClick = onWithdrawClick,
+                    modifier = Modifier.heightIn(min = LowVisionAppInfoLayoutDefaults.withdrawActionMinHeight),
+                )
+            }
+
+            LowVisionBottomNav(
+                selectedTab = LowVisionBottomTab.MY_PAGE,
+                onTabSelected = onTabSelected,
             )
         }
 
-        LowVisionBottomNav(
-            selectedTab = LowVisionBottomTab.MY_PAGE,
-            onTabSelected = onTabSelected,
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 24.dp, vertical = 104.dp),
         )
     }
 }
@@ -255,10 +291,11 @@ private fun LowVisionMyPageAction(
 private fun LowVisionInfoPanel(
     @StringRes titleRes: Int,
     @StringRes bodyRes: Int,
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.Black)

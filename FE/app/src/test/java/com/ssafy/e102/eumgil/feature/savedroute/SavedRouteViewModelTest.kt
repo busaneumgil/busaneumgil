@@ -119,6 +119,30 @@ class SavedRouteViewModelTest {
         }
 
     @Test
+    fun `place briefing click stores destination and navigates to low vision route briefing`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.PlaceBriefingClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            val destination = destinationSelectionRepository.selectedDestination.value
+
+            assertEquals(SavedRouteUiEvent.NavigateToRouteBriefing, uiEvent.await())
+            assertEquals("bookmark-place-1", destination?.placeId)
+            assertEquals(PlaceCategory.ELEVATOR, destination?.category)
+        }
+
+    @Test
     fun `route guide click stores saved end point and navigates with saved route option`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()

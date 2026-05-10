@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.map
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,7 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason as PermissionUnavailableReason
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
@@ -17,17 +19,23 @@ import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
+import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
+import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MIN_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
+import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
+import com.ssafy.e102.eumgil.feature.map.model.defaultZoomLevel
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
@@ -40,6 +48,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class MapViewModel(
     private val locationPermissionManager: LocationPermissionManager,
@@ -48,6 +57,7 @@ class MapViewModel(
     private val facilitySeedRepository: FacilitySeedRepository,
     private val bookmarkRepository: BookmarkRepository,
     private val searchRepository: SearchRepository = NoOpSearchRepository,
+    private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
@@ -56,19 +66,21 @@ class MapViewModel(
     val uiEvent: Flow<MapUiEvent> = mutableUiEvent.receiveAsFlow()
 
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
-    private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value
+    private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
     private var selectedMarkerId: String? = null
+    private var selectedMapPinCoordinate: MapCoordinate? = null
     private var selectedFacilityDetail: FacilityDetailSeed? = null
     private var selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
     private var facilityBrowseData: FacilityBrowseData? = null
     private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
-    private var selectedShortcutFilterKey: MapShortcutFilterKey? = null
     private var recentDestinations: List<RecentDestination> = emptyList()
     private var isRouteStarted = false
     private var locationLookupState: LocationLookupState = LocationLookupState.Idle
     private var locationLookupTimeoutJob: Job? = null
     private var isRecenterButtonActive = false
+    private var lastPlacesBrowseAnchorSource: PlacesBrowseAnchorSource? = null
+    private var lastMarkerOverlayLogSnapshot: String? = null
 
     init {
         mutableUiState.update { state ->
@@ -125,7 +137,16 @@ class MapViewModel(
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
             MapUiAction.FacilitySetDestinationClicked -> handleFacilitySetDestinationClicked()
             MapUiAction.LocationActionClicked -> handleLocationAction()
+            MapUiAction.ZoomInClicked -> handleZoomAction(delta = 1)
+            MapUiAction.ZoomOutClicked -> handleZoomAction(delta = -1)
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
+            is MapUiAction.MapTapped -> handleMapTapped(action.coordinate)
+            is MapUiAction.ViewportCameraChanged ->
+                handleViewportCameraChanged(
+                    center = action.center,
+                    zoomLevel = action.zoomLevel,
+                    isUserGesture = action.isUserGesture,
+                )
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
@@ -142,19 +163,101 @@ class MapViewModel(
     }
 
     private fun loadMarkerBrowseState() {
+        val placesRepository = placesRepository
+        if (placesRepository != null) {
+            safeLogInfo(
+                MAP_VIEW_MODEL_LOG_TAG,
+                "Loading live places browse state source=${currentPlacesBrowseAnchorSource().name}",
+            )
+            loadLivePlaceBrowseState(
+                anchorSource = currentPlacesBrowseAnchorSource(),
+            )
+            return
+        }
+
+        safeLogInfo(MAP_VIEW_MODEL_LOG_TAG, "Loading facility seed browse state")
         viewModelScope.launch {
             runCatching {
                 facilitySeedRepository.getFacilityBrowseData()
             }.onSuccess { browseData ->
                 facilityBrowseData = browseData
+                safeLogInfo(
+                    MAP_VIEW_MODEL_LOG_TAG,
+                    "Seed browse success markers=${browseData.facilityMarkers.size} categories=${browseData.availableCategories.size}",
+                )
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-                selectedShortcutFilterKey = null
                 renderMarkerBrowseState()
             }.onFailure {
+                safeLogError(MAP_VIEW_MODEL_LOG_TAG, "Seed browse load failed", it)
                 facilityBrowseData = null
                 updateSelectedFacility(markerId = null)
                 markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-                selectedShortcutFilterKey = null
+                mutableUiState.update { state ->
+                    state.copy(
+                        selectedMarkerId = null,
+                        facilityDetailSheetState = currentFacilityDetailSheetState(),
+                        markerOverlayState = MapBrowseStateFactory.createErrorMarkerOverlayState(),
+                        markerFilterState = MapBrowseStateFactory.createErrorFilterUiState(),
+                        shortcutFilterState = createShortcutFilterState(),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadLivePlaceBrowseState(
+        anchorSource: PlacesBrowseAnchorSource,
+        force: Boolean = false,
+    ) {
+        val placesRepository = placesRepository ?: return
+        if (!force && lastPlacesBrowseAnchorSource == anchorSource && facilityBrowseData != null) {
+            safeLogDebug(
+                MAP_VIEW_MODEL_LOG_TAG,
+                "Skipping live places browse reload source=${anchorSource.name} reason=cached",
+            )
+            return
+        }
+
+        val anchor = currentPlacesBrowseAnchor()
+        safeLogInfo(
+            MAP_VIEW_MODEL_LOG_TAG,
+            "Requesting places browse source=${anchorSource.name} force=$force lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
+        )
+        viewModelScope.launch {
+            runCatching {
+                placesRepository.getPlaces(
+                    com.ssafy.e102.eumgil.core.model.PlaceQuery(
+                        latitude = anchor.latitude,
+                        longitude = anchor.longitude,
+                        radiusMeters = MAP_BROWSE_RADIUS_METERS,
+                    ),
+                )
+            }.onSuccess { places ->
+                val browseData = MapPlaceBrowseDataMapper.toBrowseData(places)
+                facilityBrowseData = browseData
+                lastPlacesBrowseAnchorSource = anchorSource
+                safeLogInfo(
+                    MAP_VIEW_MODEL_LOG_TAG,
+                    "Places browse success source=${anchorSource.name} places=${places.size} markers=${browseData.facilityMarkers.size} categories=${browseData.availableCategories.size}",
+                )
+                if (places.isEmpty()) {
+                    safeLogWarn(
+                        MAP_VIEW_MODEL_LOG_TAG,
+                        "Places browse returned no data source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
+                    )
+                }
+                markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+                renderMarkerBrowseState()
+            }.onFailure {
+                safeLogError(
+                    MAP_VIEW_MODEL_LOG_TAG,
+                    "Places browse failed source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
+                    it,
+                )
+                facilityBrowseData = null
+                lastPlacesBrowseAnchorSource = null
+                updateSelectedFacility(markerId = null)
+                markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
                 mutableUiState.update { state ->
                     state.copy(
                         selectedMarkerId = null,
@@ -171,10 +274,76 @@ class MapViewModel(
     private fun handleMarkerTapped(markerId: String) {
         if (selectedMarkerId == markerId) {
             updateSelectedFacility(markerId = null)
-        } else {
-            updateSelectedFacility(markerId = markerId)
+            renderSelectedFacilityState()
+            return
         }
+
+        val previewDetail = facilityBrowseData?.detailFor(markerId)
+        val placesRepository = placesRepository
+        if (placesRepository != null) {
+            if (previewDetail != null) {
+                updateSelectedFacility(
+                    markerId = markerId,
+                    detail = previewDetail,
+                    loadBookmarkState = false,
+                )
+            } else {
+                selectedMarkerId = markerId
+                selectedFacilityDetail = null
+                selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
+            }
+            renderSelectedFacilityState()
+            fetchSelectedFacilityDetail(
+                markerId = markerId,
+                fallbackDetail = previewDetail,
+            )
+            return
+        }
+
+        updateSelectedFacility(markerId = markerId)
         renderSelectedFacilityState()
+    }
+
+    private fun handleMapTapped(coordinate: MapCoordinate) {
+        safeLogInfo(
+            MAP_VIEW_MODEL_LOG_TAG,
+            "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()}",
+        )
+        selectedMapPinCoordinate = coordinate
+        clearSelectedFacilitySelection()
+        renderSelectedFacilityState()
+    }
+
+    private fun fetchSelectedFacilityDetail(
+        markerId: String,
+        fallbackDetail: FacilityDetailSeed?,
+    ) {
+        val placesRepository = placesRepository ?: return
+        viewModelScope.launch {
+            runCatching { placesRepository.getPlaceDetail(markerId) }
+                .onSuccess { placeDetail ->
+                    if (selectedMarkerId != markerId) return@onSuccess
+                    if (placeDetail == null) {
+                        fallbackDetail?.let(::loadSelectedFacilityBookmarkState)
+                        return@onSuccess
+                    }
+
+                    updateSelectedFacility(
+                        markerId = markerId,
+                        detail = MapPlaceBrowseDataMapper.toFacilityDetailSeed(placeDetail),
+                        loadBookmarkState = false,
+                    )
+                    selectedFacilityBookmarkState =
+                        SelectedFacilityBookmarkState(
+                            facilityId = markerId,
+                            isBookmarked = placeDetail.isBookmarked,
+                        )
+                    renderSelectedFacilityState()
+                }.onFailure {
+                    if (selectedMarkerId != markerId) return@onFailure
+                    fallbackDetail?.let(::loadSelectedFacilityBookmarkState)
+                }
+        }
     }
 
     private fun dismissFacilityDetailSheet() {
@@ -207,7 +376,6 @@ class MapViewModel(
     private fun resetMarkerCategoryFilter() {
         if (facilityBrowseData == null) return
         markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
-        selectedShortcutFilterKey = null
         renderMarkerBrowseState()
     }
 
@@ -219,30 +387,29 @@ class MapViewModel(
                 browseData = browseData,
                 category = category,
             )
-        selectedShortcutFilterKey = shortcutFilterKeyForSelection(markerFilterSelectionState)
         renderMarkerBrowseState()
     }
 
     private fun handleShortcutFilterClicked(key: MapShortcutFilterKey) {
         val browseData = facilityBrowseData ?: return
 
-        val category = key.toFacilityCategory(browseData.availableCategories.toSet()) ?: return
-        val isSameShortcut = selectedShortcutFilterKey == key
-        selectedShortcutFilterKey = if (isSameShortcut) null else key
+        val category = key.toFacilityCategory(browseData.availableCategories.toSet())
+        if (category == null) {
+            emitUiEvent(MapUiEvent.ShowSnackbar(SHORTCUT_FILTER_UNAVAILABLE_MESSAGE))
+            return
+        }
         markerFilterSelectionState =
-            if (isSameShortcut) {
-                MapBrowseStateFactory.resetSelection()
-            } else {
-                MapFilterSelectionState(
-                    isShowingAllCategories = false,
-                    selectedFacilityCategories = setOf(category),
-                )
-            }
+            MapBrowseStateFactory.toggleCategory(
+                selection = markerFilterSelectionState,
+                browseData = browseData,
+                category = category,
+            )
         renderMarkerBrowseState()
     }
 
     private fun renderMarkerBrowseState() {
         val browseData = facilityBrowseData ?: return
+        val availableCategories = browseData.availableCategories.toSet()
         val baseOverlayState =
             MapBrowseStateFactory.createMarkerOverlayState(
                 browseData = browseData,
@@ -255,6 +422,42 @@ class MapViewModel(
                 selection = markerFilterSelectionState,
                 overlayState = overlayState,
             )
+        val overlayLogSnapshot =
+            buildString {
+                append("total=")
+                append(overlayState.totalMarkerCount)
+                append(" visible=")
+                append(overlayState.visibleMarkerCount)
+                append(" emptyData=")
+                append(overlayState.isEmptyData)
+                append(" emptyResult=")
+                append(overlayState.isEmptyResult)
+                append(" shortcut=")
+                append(
+                    SHORTCUT_FILTER_ORDER
+                        .filter { key -> key.isSelected(selection = filterState.selection, availableCategories = availableCategories) }
+                        .joinToString(",") { key -> key.name }
+                        .ifEmpty {
+                            if (filterState.selection.isShowingAllCategories) {
+                                "ALL"
+                            } else {
+                                "NONE"
+                            }
+                        },
+                )
+                append(" categories=")
+                append(filterState.selection.selectedFacilityCategories.joinToString(",") { category -> category.name }.ifEmpty {
+                    if (filterState.selection.isShowingAllCategories) {
+                        "ALL"
+                    } else {
+                        "NONE"
+                    }
+                })
+            }
+        if (lastMarkerOverlayLogSnapshot != overlayLogSnapshot) {
+            lastMarkerOverlayLogSnapshot = overlayLogSnapshot
+            safeLogInfo(MAP_VIEW_MODEL_LOG_TAG, "Marker overlay state $overlayLogSnapshot")
+        }
 
         val nextSelectedMarkerId =
             selectedMarkerId?.takeIf { markerId ->
@@ -355,9 +558,10 @@ class MapViewModel(
         viewModelScope.launch {
             currentLocationManager.latestLocation.collectLatest { snapshot ->
                 val hadLocation = latestLocation != null
-                latestLocation = snapshot
+                latestLocation = snapshot.toFreshCurrentLocationOrNull()
+                val freshLocation = latestLocation
 
-                if (snapshot == null) {
+                if (freshLocation == null) {
                     isRecenterButtonActive = false
                     if (latestPermissionState is LocationPermissionState.Granted && isRouteStarted) {
                         startLocationLookup(forceRestart = false)
@@ -365,13 +569,19 @@ class MapViewModel(
                     applyFallbackCameraTarget()
                 } else {
                     stopLocationLookup()
+                    if (placesRepository != null && lastPlacesBrowseAnchorSource != PlacesBrowseAnchorSource.CURRENT_LOCATION) {
+                        loadLivePlaceBrowseState(
+                            anchorSource = PlacesBrowseAnchorSource.CURRENT_LOCATION,
+                            force = true,
+                        )
+                    }
                     if (shouldSyncCameraToCurrentLocation()) {
                         val shouldIncrementRequestId =
                             !hadLocation ||
                                 mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION
 
                         syncCameraToCurrentLocation(
-                            snapshot = snapshot,
+                            snapshot = freshLocation,
                             incrementRequestId = shouldIncrementRequestId,
                         )
                     }
@@ -434,12 +644,61 @@ class MapViewModel(
         }
     }
 
+    private fun handleZoomAction(delta: Int) {
+        mutableUiState.update { state ->
+            val currentZoomLevel = state.cameraTarget.resolvedZoomLevel()
+            val nextZoomLevel =
+                (currentZoomLevel + delta)
+                    .coerceIn(KAKAO_MAP_MIN_ZOOM_LEVEL, KAKAO_MAP_MAX_ZOOM_LEVEL)
+            if (nextZoomLevel == currentZoomLevel) {
+                state
+            } else {
+                state.copy(
+                    cameraTarget =
+                        state.cameraTarget.copy(
+                            requestId = state.cameraTarget.requestId + 1L,
+                            zoomLevel = nextZoomLevel,
+                        ),
+                )
+            }
+        }
+    }
+
+    private fun handleViewportCameraChanged(
+        center: MapCoordinate,
+        zoomLevel: Int,
+        isUserGesture: Boolean,
+    ) {
+        mutableUiState.update { state ->
+            val currentTarget = state.cameraTarget
+            val hasCameraChanged =
+                currentTarget.center != center ||
+                    currentTarget.resolvedZoomLevel() != zoomLevel
+
+            if (!hasCameraChanged) {
+                state
+            } else {
+                if (isUserGesture) {
+                    isRecenterButtonActive = false
+                }
+                state.copy(
+                    cameraTarget =
+                        currentTarget.copy(
+                            center = center,
+                            zoomLevel = zoomLevel,
+                        ),
+                    isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
+                )
+            }
+        }
+    }
+
     private fun startLocationTracking(forceLookupRestart: Boolean) {
         if (!isRouteStarted) return
 
         currentLocationManager.startLocationUpdates()
         currentLocationManager.refreshLatestLocation()
-        latestLocation = currentLocationManager.latestLocation.value
+        latestLocation = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
 
         val snapshot = latestLocation
         if (snapshot == null) {
@@ -507,6 +766,12 @@ class MapViewModel(
                 } else {
                     state.cameraTarget.requestId
                 }
+            val nextZoomLevel =
+                if (shouldIncrement) {
+                    MapCameraSource.CURRENT_LOCATION.defaultZoomLevel()
+                } else {
+                    state.cameraTarget.zoomLevel
+                }
 
             state.copy(
                 cameraTarget =
@@ -514,6 +779,7 @@ class MapViewModel(
                         center = coordinate,
                         source = MapCameraSource.CURRENT_LOCATION,
                         requestId = nextRequestId,
+                        zoomLevel = nextZoomLevel,
                     ),
             )
         }
@@ -538,6 +804,12 @@ class MapViewModel(
                 } else {
                     state.cameraTarget.requestId
                 }
+            val nextZoomLevel =
+                if (shouldIncrement) {
+                    MapCameraSource.SEARCH_RESULT.defaultZoomLevel()
+                } else {
+                    state.cameraTarget.zoomLevel
+                }
 
             state.copy(
                 cameraTarget =
@@ -545,6 +817,7 @@ class MapViewModel(
                         center = coordinate,
                         source = MapCameraSource.SEARCH_RESULT,
                         requestId = nextRequestId,
+                        zoomLevel = nextZoomLevel,
                     ),
                 selectedDestination = destination,
             )
@@ -586,6 +859,7 @@ class MapViewModel(
                             center = MapDefaults.BUSAN_CENTER,
                             source = MapCameraSource.DEFAULT_BUSAN,
                             requestId = state.cameraTarget.requestId + 1L,
+                            zoomLevel = MapCameraSource.DEFAULT_BUSAN.defaultZoomLevel(),
                         ),
                 )
             }
@@ -656,6 +930,7 @@ class MapViewModel(
         mutableUiState.update { state ->
             state.copy(
                 selectedMarkerId = selectedMarkerId,
+                selectedMapPinCoordinate = selectedMapPinCoordinate,
                 facilityDetailSheetState = currentFacilityDetailSheetState(),
             )
         }
@@ -673,6 +948,7 @@ class MapViewModel(
     private fun updateSelectedFacility(
         markerId: String?,
         detail: FacilityDetailSeed? = markerId?.let { facilityBrowseData?.detailFor(it) },
+        loadBookmarkState: Boolean = true,
     ) {
         if (markerId != null && detail == null) {
             selectedMarkerId = null
@@ -682,17 +958,28 @@ class MapViewModel(
         }
 
         val previousFacilityId = selectedFacilityDetail?.facilityId
+        if (markerId != null) {
+            selectedMapPinCoordinate = null
+        }
         selectedMarkerId = markerId
         selectedFacilityDetail = detail
         if (detail == null) {
             selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
         } else if (previousFacilityId != detail.facilityId) {
             selectedFacilityBookmarkState =
-                SelectedFacilityBookmarkState(
-                    facilityId = detail.facilityId,
-                    isUpdating = true,
-                )
-            loadSelectedFacilityBookmarkState(detail)
+                if (loadBookmarkState) {
+                    SelectedFacilityBookmarkState(
+                        facilityId = detail.facilityId,
+                        isUpdating = true,
+                    )
+                } else {
+                    SelectedFacilityBookmarkState(
+                        facilityId = detail.facilityId,
+                    )
+                }
+            if (loadBookmarkState) {
+                loadSelectedFacilityBookmarkState(detail)
+            }
         }
     }
 
@@ -799,53 +1086,36 @@ class MapViewModel(
         browseData: FacilityBrowseData? = facilityBrowseData,
     ): MapShortcutFilterRowState {
         val availableCategories = browseData?.availableCategories?.toSet().orEmpty()
+        val selection = markerFilterSelectionState
 
         return MapShortcutFilterRowState(
             chips =
                 SHORTCUT_FILTER_ORDER.map { key ->
                     MapShortcutFilterChipState(
                         key = key,
-                        isSelected = selectedShortcutFilterKey == key,
-                        isEnabled =
-                            when (key) {
-                                MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET in availableCategories
-                                MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR in availableCategories
-                                MapShortcutFilterKey.CHARGING_STATION ->
-                                    FacilityCategory.CHARGING_STATION in availableCategories
-
-                                MapShortcutFilterKey.FOOD_CAFE ->
-                                    FacilityCategory.FOOD_CAFE in availableCategories ||
-                                        FacilityCategory.RESTAURANT in availableCategories
-
-                                MapShortcutFilterKey.TOURIST_SPOT ->
-                                    FacilityCategory.TOURIST_SPOT in availableCategories ||
-                                        FacilityCategory.TOURIST_ATTRACTION in availableCategories
-
-                                MapShortcutFilterKey.ACCOMMODATION ->
-                                    FacilityCategory.ACCOMMODATION in availableCategories
-
-                                MapShortcutFilterKey.HEALTHCARE ->
-                                    FacilityCategory.HEALTHCARE in availableCategories
-
-                                MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE in availableCategories
-                                MapShortcutFilterKey.PUBLIC_OFFICE ->
-                                    FacilityCategory.PUBLIC_OFFICE in availableCategories
-                            },
+                        isSelected = key.isSelected(selection = selection, availableCategories = availableCategories),
+                        isEnabled = key.toFacilityCategory(availableCategories) != null,
                     )
                 },
         )
     }
 
-    private fun shortcutFilterKeyForSelection(selection: MapFilterSelectionState): MapShortcutFilterKey? {
-        if (selection.isShowingAllCategories) return null
-        if (selection.selectedBrailleBlockTypes.isNotEmpty()) return null
-        if (selection.selectedFacilityCategories.size != 1) return null
-        return selection.selectedFacilityCategories.single().toShortcutFilterKey()
-    }
-
     private fun emitUiEvent(event: MapUiEvent) {
         mutableUiEvent.trySend(event)
     }
+
+    private fun currentPlacesBrowseAnchor(): com.ssafy.e102.eumgil.feature.map.model.MapCoordinate =
+        latestLocation?.toMapCoordinate() ?: mutableUiState.value.cameraTarget.center
+
+    private fun currentPlacesBrowseAnchorSource(): PlacesBrowseAnchorSource =
+        if (latestLocation != null) {
+            PlacesBrowseAnchorSource.CURRENT_LOCATION
+        } else {
+            PlacesBrowseAnchorSource.FALLBACK
+        }
+
+    private fun LocationSnapshot?.toFreshCurrentLocationOrNull(): LocationSnapshot? =
+        this?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
 
     private enum class LocationLookupState {
         Idle,
@@ -853,7 +1123,13 @@ class MapViewModel(
         TimedOut,
     }
 
+    private enum class PlacesBrowseAnchorSource {
+        FALLBACK,
+        CURRENT_LOCATION,
+    }
+
     companion object {
+        private const val MAP_VIEW_MODEL_LOG_TAG = "MapViewModel"
         private val SHORTCUT_FILTER_ORDER =
             listOf(
                 MapShortcutFilterKey.TOILET,
@@ -867,11 +1143,13 @@ class MapViewModel(
                 MapShortcutFilterKey.PUBLIC_OFFICE,
             )
         private const val LOCATION_LOOKUP_TIMEOUT_MILLIS = 5_000L
+        private const val MAP_BROWSE_RADIUS_METERS = 1_000
         private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 3
         private const val BOOKMARK_LOAD_ERROR_MESSAGE = "북마크 상태를 확인하지 못했습니다."
         private const val BOOKMARK_SAVE_SUCCESS_MESSAGE = "북마크에 저장했습니다."
         private const val BOOKMARK_DELETE_SUCCESS_MESSAGE = "북마크를 해제했습니다."
         private const val BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크 저장에 실패했습니다. 다시 시도해 주세요."
+        private const val SHORTCUT_FILTER_UNAVAILABLE_MESSAGE = "근처에 해당 장소가 없어요"
 
         fun provideFactory(
             locationPermissionManager: LocationPermissionManager,
@@ -880,6 +1158,7 @@ class MapViewModel(
             facilitySeedRepository: FacilitySeedRepository,
             bookmarkRepository: BookmarkRepository,
             searchRepository: SearchRepository,
+            placesRepository: PlacesRepository? = null,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -892,6 +1171,7 @@ class MapViewModel(
                             facilitySeedRepository = facilitySeedRepository,
                             bookmarkRepository = bookmarkRepository,
                             searchRepository = searchRepository,
+                            placesRepository = placesRepository,
                         ) as T
                     }
 
@@ -899,6 +1179,37 @@ class MapViewModel(
                 }
             }
     }
+}
+
+private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", this)
+
+private fun safeLogDebug(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.d(tag, message) }
+}
+
+private fun safeLogInfo(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.i(tag, message) }
+}
+
+private fun safeLogWarn(
+    tag: String,
+    message: String,
+) {
+    runCatching { Log.w(tag, message) }
+}
+
+private fun safeLogError(
+    tag: String,
+    message: String,
+    throwable: Throwable,
+) {
+    runCatching { Log.e(tag, message, throwable) }
 }
 
 private object NoOpSearchRepository : SearchRepository {
@@ -922,42 +1233,34 @@ private data class SelectedFacilityBookmarkState(
 
 private fun MapShortcutFilterKey.toFacilityCategory(availableCategories: Set<FacilityCategory>): FacilityCategory? =
     when (this) {
-        MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET
-        MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR
-        MapShortcutFilterKey.CHARGING_STATION -> FacilityCategory.CHARGING_STATION
+        MapShortcutFilterKey.TOILET -> FacilityCategory.TOILET.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.ELEVATOR -> FacilityCategory.ELEVATOR.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.CHARGING_STATION -> FacilityCategory.CHARGING_STATION.takeIf(availableCategories::contains)
         MapShortcutFilterKey.FOOD_CAFE ->
             when {
                 FacilityCategory.FOOD_CAFE in availableCategories -> FacilityCategory.FOOD_CAFE
                 FacilityCategory.RESTAURANT in availableCategories -> FacilityCategory.RESTAURANT
-                else -> FacilityCategory.FOOD_CAFE
+                else -> null
             }
 
         MapShortcutFilterKey.TOURIST_SPOT ->
             when {
                 FacilityCategory.TOURIST_SPOT in availableCategories -> FacilityCategory.TOURIST_SPOT
                 FacilityCategory.TOURIST_ATTRACTION in availableCategories -> FacilityCategory.TOURIST_ATTRACTION
-                else -> FacilityCategory.TOURIST_SPOT
+                else -> null
             }
 
-        MapShortcutFilterKey.ACCOMMODATION -> FacilityCategory.ACCOMMODATION
-        MapShortcutFilterKey.HEALTHCARE -> FacilityCategory.HEALTHCARE
-        MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE
-        MapShortcutFilterKey.PUBLIC_OFFICE -> FacilityCategory.PUBLIC_OFFICE
+        MapShortcutFilterKey.ACCOMMODATION -> FacilityCategory.ACCOMMODATION.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.HEALTHCARE -> FacilityCategory.HEALTHCARE.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.WELFARE -> FacilityCategory.WELFARE.takeIf(availableCategories::contains)
+        MapShortcutFilterKey.PUBLIC_OFFICE -> FacilityCategory.PUBLIC_OFFICE.takeIf(availableCategories::contains)
     }
 
-private fun FacilityCategory.toShortcutFilterKey(): MapShortcutFilterKey? =
-    when (this) {
-        FacilityCategory.TOILET -> MapShortcutFilterKey.TOILET
-        FacilityCategory.ELEVATOR -> MapShortcutFilterKey.ELEVATOR
-        FacilityCategory.CHARGING_STATION -> MapShortcutFilterKey.CHARGING_STATION
-        FacilityCategory.FOOD_CAFE -> MapShortcutFilterKey.FOOD_CAFE
-        FacilityCategory.TOURIST_SPOT -> MapShortcutFilterKey.TOURIST_SPOT
-        FacilityCategory.ACCOMMODATION -> MapShortcutFilterKey.ACCOMMODATION
-        FacilityCategory.HEALTHCARE -> MapShortcutFilterKey.HEALTHCARE
-        FacilityCategory.WELFARE -> MapShortcutFilterKey.WELFARE
-        FacilityCategory.PUBLIC_OFFICE -> MapShortcutFilterKey.PUBLIC_OFFICE
-        FacilityCategory.BRAILLE_BLOCK -> null
-        FacilityCategory.RESTAURANT -> MapShortcutFilterKey.FOOD_CAFE
-        FacilityCategory.TOURIST_ATTRACTION -> MapShortcutFilterKey.TOURIST_SPOT
-        FacilityCategory.OTHER -> null
-    }
+private fun MapShortcutFilterKey.isSelected(
+    selection: MapFilterSelectionState,
+    availableCategories: Set<FacilityCategory>,
+): Boolean {
+    if (selection.isShowingAllCategories) return false
+    val category = toFacilityCategory(availableCategories) ?: return false
+    return category in selection.selectedFacilityCategories
+}

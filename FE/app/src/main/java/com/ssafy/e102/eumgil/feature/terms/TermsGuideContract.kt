@@ -28,6 +28,7 @@ enum class TermsGuideStep(
     @StringRes val hintRes: Int,
     val showMoreButton: Boolean,
     val iconText: String? = null,
+    val detailUrl: String? = null,
 ) {
     AGREE(
         sequence = 1,
@@ -36,6 +37,7 @@ enum class TermsGuideStep(
         cardLabelRes = R.string.terms_guide_step_agree_card,
         hintRes = R.string.terms_guide_hint_agree,
         showMoreButton = true,
+        detailUrl = SERVICE_AND_LOCATION_TERMS_URL,
     ),
     SENSITIVE(
         sequence = 2,
@@ -44,6 +46,7 @@ enum class TermsGuideStep(
         cardLabelRes = R.string.terms_guide_step_sensitive_card,
         hintRes = R.string.terms_guide_hint_agree,
         showMoreButton = true,
+        detailUrl = SENSITIVE_INFO_TERMS_URL,
     ),
     LOCATION(
         sequence = 3,
@@ -52,6 +55,7 @@ enum class TermsGuideStep(
         cardLabelRes = R.string.terms_guide_step_location_card,
         hintRes = R.string.terms_guide_hint_agree,
         showMoreButton = true,
+        detailUrl = PERSONAL_LOCATION_INFO_TERMS_URL,
     ),
     AGE(
         sequence = 4,
@@ -69,6 +73,7 @@ enum class TermsGuideStep(
         cardLabelRes = R.string.terms_guide_step_privacy_card,
         hintRes = R.string.terms_guide_hint_confirm,
         showMoreButton = true,
+        detailUrl = PERSONAL_LOCATION_INFO_TERMS_URL,
     ),
     ;
 
@@ -87,6 +92,13 @@ enum class TermsGuideStep(
             entries.firstOrNull { it.sequence == sequence }
     }
 }
+
+private const val SERVICE_AND_LOCATION_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be680ab9931f226486dac58?source=copy_link"
+private const val SENSITIVE_INFO_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link"
+private const val PERSONAL_LOCATION_INFO_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link"
 
 /**
  * UI state for the terms walkthrough. Driven by [step]; the screen reads everything

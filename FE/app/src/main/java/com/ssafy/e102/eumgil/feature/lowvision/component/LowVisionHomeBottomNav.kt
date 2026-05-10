@@ -60,6 +60,7 @@ fun LowVisionHomeBottomNav(
 fun LowVisionBottomNav(
     selectedTab: LowVisionBottomTab,
     onTabSelected: (LowVisionBottomTab) -> Unit,
+    backgroundColor: Color = Color.Black,
     modifier: Modifier = Modifier,
 ) {
     val items = listOf(
@@ -84,7 +85,7 @@ fun LowVisionBottomNav(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black),
+            .background(backgroundColor),
     ) {
         Row(
             modifier = Modifier

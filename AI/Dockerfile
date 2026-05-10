@@ -7,10 +7,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.docker.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY llm_test/server/requirements.txt /tmp/server-requirements.txt
+COPY requirements.docker.txt /tmp/docker-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/server-requirements.txt -r /tmp/docker-requirements.txt
 
-COPY app.py ./
+COPY llm_test/server ./llm_test/server
+
+WORKDIR /app/llm_test/server
 
 EXPOSE 5000
 

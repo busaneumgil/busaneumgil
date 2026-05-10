@@ -30,8 +30,9 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
 SERVER_ROOT = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, SERVER_ROOT)
 
-from dotenv import load_dotenv
-load_dotenv(os.path.join(SERVER_ROOT, ".env"))
+from env_loader import load_runtime_env
+
+load_runtime_env(default_env="dev")
 
 from providers.gemini_provider import GeminiProvider
 from providers.claude_provider import ClaudeProvider

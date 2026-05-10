@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.feature.mypage
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.InitSettings
-import com.ssafy.e102.eumgil.core.model.RepositoryDebugSettings
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutResult
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
@@ -36,34 +35,6 @@ import org.junit.Test
 class MyPageViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
-
-    @Test
-    fun `debug toggle action updates repository source setting`() =
-        runTest {
-            val settingsRepository =
-                FakeSettingsRepository(
-                    debugSettings =
-                        RepositoryDebugSettings(
-                            isRuntimeToggleAvailable = true,
-                            isRuntimeToggleEnabled = true,
-                            isForceMockEnabled = false,
-                        ),
-                )
-            val viewModel =
-                MyPageViewModel(
-                    settingsRepository = settingsRepository,
-                    authSessionRepository = FakeAuthSessionRepository(),
-                    authLogoutRepository = FakeAuthLogoutRepository(),
-                    userProfileRepository = FakeUserProfileRepository(),
-                )
-
-            advanceUntilIdle()
-
-            viewModel.onAction(MyPageUiAction.ForceMockToggled(isEnabled = true))
-            advanceUntilIdle()
-
-            assertEquals(true, settingsRepository.lastForceMockEnabled)
-        }
 
     @Test
     fun `user type change action emits onboarding navigation event`() =
@@ -312,16 +283,8 @@ class MyPageViewModelTest {
 
 private class FakeSettingsRepository(
     initSettings: InitSettings = InitSettings(),
-    debugSettings: RepositoryDebugSettings =
-        RepositoryDebugSettings(
-            isRuntimeToggleAvailable = false,
-            isRuntimeToggleEnabled = false,
-            isForceMockEnabled = false,
-        ),
 ) : SettingsRepository {
     private val initSettingsFlow = MutableStateFlow(initSettings)
-    private val debugSettingsFlow = MutableStateFlow(debugSettings)
-    var lastForceMockEnabled: Boolean? = null
 
     override fun observeInitSettings(): Flow<InitSettings> = initSettingsFlow
 
@@ -352,15 +315,6 @@ private class FakeSettingsRepository(
 
     override suspend fun clearInitSettings() {
         initSettingsFlow.value = InitSettings()
-    }
-
-    override fun observeRepositoryDebugSettings(): Flow<RepositoryDebugSettings> = debugSettingsFlow
-
-    override suspend fun getRepositoryDebugSettings(): RepositoryDebugSettings = debugSettingsFlow.value
-
-    override suspend fun setForceMockEnabled(isEnabled: Boolean) {
-        lastForceMockEnabled = isEnabled
-        debugSettingsFlow.value = debugSettingsFlow.value.copy(isForceMockEnabled = isEnabled)
     }
 }
 

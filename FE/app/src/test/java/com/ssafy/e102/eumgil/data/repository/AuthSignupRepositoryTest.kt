@@ -3,8 +3,8 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.InitSettings
-import com.ssafy.e102.eumgil.core.model.RepositoryDebugSettings
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.SignupResponseDto
 import kotlinx.coroutines.flow.Flow
@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -106,10 +107,53 @@ class AuthSignupRepositoryTest {
             assertNull(authSessionRepository.savedAuthSession)
             assertNull(settingsRepository.savedPrimaryUserType)
         }
+
+    @Test
+    fun `invalid signup token clears pending token and requires login again`() =
+        runTest {
+            val authSessionRepository =
+                RecordingSignupAuthSessionRepository(
+                    authGateState = AuthGateState(signupToken = "expired-signup-token"),
+                )
+            val settingsRepository =
+                RecordingSignupSettingsRepository(
+                    initialInitSettings =
+                        InitSettings(
+                            selectedPrimaryUserType = ROUTE_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED,
+                            selectedMobilitySubtype = "manual_wheelchair",
+                        ),
+                )
+            val authRemoteDataSource =
+                FakeSignupAuthRemoteDataSource(
+                    signupFailure =
+                        AuthApiException(
+                            httpStatusCode = 401,
+                            status = "A4013",
+                            message = "회원가입 토큰이 유효하지 않습니다.",
+                        ),
+                )
+            val repository =
+                ServerAuthSignupRepository(
+                    authRemoteDataSource = authRemoteDataSource,
+                    authSessionRepository = authSessionRepository,
+                    settingsRepository = settingsRepository,
+                )
+
+            val failure =
+                runCatching {
+                    repository.completePendingSignup(requiredTermsAccepted = true)
+                }.exceptionOrNull()
+
+            assertTrue(failure is PendingSignupTokenExpiredException)
+            assertTrue(authSessionRepository.clearSignupTokenCalled)
+            assertNull(authSessionRepository.savedAuthSession)
+            assertFalse(authSessionRepository.savedIsProfileCompleted)
+        }
 }
 
 private class FakeSignupAuthRemoteDataSource(
-    private val signupResponse: SignupResponseDto,
+    private val signupResponse: SignupResponseDto? = null,
+    private val signupFailure: Throwable? = null,
 ) : AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
     var latestSignupToken: String? = null
         private set
@@ -130,7 +174,8 @@ private class FakeSignupAuthRemoteDataSource(
         latestSelectedPrimaryUserType = selectedPrimaryUserType
         latestSelectedMobilitySubtype = selectedMobilitySubtype
         latestRequiredTermsAccepted = requiredTermsAccepted
-        return signupResponse
+        signupFailure?.let { throw it }
+        return checkNotNull(signupResponse)
     }
 }
 
@@ -140,6 +185,8 @@ private class RecordingSignupAuthSessionRepository(
     var savedAuthSession: AuthSession? = null
         private set
     var savedIsProfileCompleted: Boolean = false
+        private set
+    var clearSignupTokenCalled: Boolean = false
         private set
 
     override fun observeAuthGateState(): Flow<AuthGateState> = emptyFlow()
@@ -156,7 +203,9 @@ private class RecordingSignupAuthSessionRepository(
 
     override suspend fun saveSignupToken(signupToken: String) = Unit
 
-    override suspend fun clearSignupToken() = Unit
+    override suspend fun clearSignupToken() {
+        clearSignupTokenCalled = true
+    }
 
     override suspend fun markProfileCompleted() = Unit
 
@@ -223,15 +272,4 @@ private class RecordingSignupSettingsRepository(
     override suspend fun clearInitSettings() {
         initSettings = InitSettings()
     }
-
-    override fun observeRepositoryDebugSettings(): Flow<RepositoryDebugSettings> = emptyFlow()
-
-    override suspend fun getRepositoryDebugSettings(): RepositoryDebugSettings =
-        RepositoryDebugSettings(
-            isRuntimeToggleAvailable = false,
-            isRuntimeToggleEnabled = false,
-            isForceMockEnabled = false,
-        )
-
-    override suspend fun setForceMockEnabled(isEnabled: Boolean) = Unit
 }

@@ -21,6 +21,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.util.StreamUtils;
 
+import com.ssafy.e102.domain.admin.entity.AdminArea;
 import com.ssafy.e102.domain.bookmark.entity.FavoriteRoute;
 import com.ssafy.e102.domain.place.entity.Bookmark;
 import com.ssafy.e102.domain.place.entity.Place;
@@ -29,8 +30,12 @@ import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.entity.HazardReportImage;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.RouteRating;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
+import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
+import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.global.entity.BaseEntity;
 
@@ -54,8 +59,13 @@ class DatabaseNamingStrategyTest {
 		HazardReportImage.class,
 		RoadNode.class,
 		RoadSegment.class,
+		AdminArea.class,
 		SegmentFeature.class,
-		RouteSession.class);
+		RouteRating.class,
+		RouteSession.class,
+		SubwayStation.class,
+		SubwayStationElevator.class,
+		SubwayTimetable.class);
 
 	@Test
 	@DisplayName("Hibernate 물리 컬럼 네이밍은 snake_case 전략을 사용한다")
@@ -190,6 +200,11 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(RoadSegment.class, "signalState")).isEqualTo("signal_state");
 		assertThat(physicalColumnName(RoadSegment.class, "segmentType")).isEqualTo("segment_type");
 
+		assertThat(physicalColumnName(AdminArea.class, "areaId")).isEqualTo("area_id");
+		assertThat(physicalColumnName(AdminArea.class, "gu")).isEqualTo("gu");
+		assertThat(physicalColumnName(AdminArea.class, "dong")).isEqualTo("dong");
+		assertThat(physicalColumnName(AdminArea.class, "geom")).isEqualTo("geom");
+
 		assertThat(physicalColumnName(SegmentFeature.class, "featureId")).isEqualTo("feature_id");
 		assertThat(physicalColumnName(SegmentFeature.class, "edgeId")).isEqualTo("edge_id");
 		assertThat(physicalColumnName(SegmentFeature.class, "featureType")).isEqualTo("feature_type");
@@ -199,16 +214,61 @@ class DatabaseNamingStrategyTest {
 	}
 
 	@Test
-	@DisplayName("경로 세션 엔티티의 물리 컬럼명은 snake_case다")
-	void routeSessionColumnsUseSnakeCase() {
+	@DisplayName("경로 세션과 평가 엔티티의 물리 컬럼명은 snake_case다")
+	void routeSessionAndRatingColumnsUseSnakeCase() {
 		assertThat(physicalColumnName(RouteSession.class, "sessionId")).isEqualTo("session_id");
 		assertThat(joinColumnName(RouteSession.class, "user")).isEqualTo("user_id");
 		assertThat(physicalColumnName(RouteSession.class, "routeId")).isEqualTo("route_id");
+		assertThat(physicalColumnName(RouteSession.class, "activeRouteKey")).isEqualTo("active_route_key");
 		assertThat(physicalColumnName(RouteSession.class, "startPoint")).isEqualTo("start_point");
 		assertThat(physicalColumnName(RouteSession.class, "endPoint")).isEqualTo("end_point");
 		assertThat(physicalColumnName(RouteSession.class, "routeSnapshotJson"))
 			.isEqualTo("route_snapshot_json");
 		assertThat(physicalColumnName(RouteSession.class, "status")).isEqualTo("status");
+		assertThat(uniqueColumnNames(RouteSession.class)).contains("user_id", "active_route_key");
+
+		assertThat(physicalColumnName(RouteRating.class, "ratingId")).isEqualTo("rating_id");
+		assertThat(joinColumnName(RouteRating.class, "user")).isEqualTo("user_id");
+		assertThat(joinColumnName(RouteRating.class, "routeSession")).isEqualTo("session_id");
+		assertThat(physicalColumnName(RouteRating.class, "routeId")).isEqualTo("route_id");
+		assertThat(physicalColumnName(RouteRating.class, "score")).isEqualTo("score");
+		assertThat(physicalColumnName(RouteRating.class, "routeContextJson"))
+			.isEqualTo("route_context_json");
+		assertThat(uniqueColumnNames(RouteRating.class)).contains("session_id");
+	}
+
+	@Test
+	@DisplayName("지하철 시간표 엔티티의 물리 컬럼명은 snake_case다")
+	void subwayScheduleColumnsUseSnakeCase() {
+		assertThat(physicalColumnName(SubwayStation.class, "subwayStationId"))
+			.isEqualTo("subway_station_id");
+		assertThat(physicalColumnName(SubwayStation.class, "odsayStationId"))
+			.isEqualTo("odsay_station_id");
+		assertThat(physicalColumnName(SubwayStation.class, "stationName")).isEqualTo("station_name");
+		assertThat(physicalColumnName(SubwayStation.class, "lineName")).isEqualTo("line_name");
+		assertThat(physicalColumnName(SubwayStation.class, "point")).isEqualTo("point");
+		assertThat(uniqueColumnNames(SubwayStation.class)).contains("odsay_station_id");
+
+		assertThat(physicalColumnName(SubwayTimetable.class, "subwayTimetableId"))
+			.isEqualTo("subway_timetable_id");
+		assertThat(physicalColumnName(SubwayTimetable.class, "odsayStationId"))
+			.isEqualTo("odsay_station_id");
+		assertThat(physicalColumnName(SubwayTimetable.class, "serviceDayType"))
+			.isEqualTo("service_day_type");
+		assertThat(physicalColumnName(SubwayTimetable.class, "wayCode")).isEqualTo("way_code");
+		assertThat(physicalColumnName(SubwayTimetable.class, "departureTimeText"))
+			.isEqualTo("departure_time_text");
+		assertThat(physicalColumnName(SubwayTimetable.class, "departureSecondOfDay"))
+			.isEqualTo("departure_second_of_day");
+		assertThat(physicalColumnName(SubwayTimetable.class, "endStationName"))
+			.isEqualTo("end_station_name");
+		assertThat(uniqueColumnNames(SubwayTimetable.class))
+			.contains(
+				"odsay_station_id",
+				"service_day_type",
+				"way_code",
+				"departure_second_of_day",
+				"end_station_name");
 	}
 
 	@Test
@@ -232,8 +292,12 @@ class DatabaseNamingStrategyTest {
 			HazardReportImage.class,
 			RoadNode.class,
 			RoadSegment.class,
+			AdminArea.class,
 			SegmentFeature.class,
-			RouteSession.class);
+			RouteRating.class,
+			RouteSession.class,
+			SubwayStation.class,
+			SubwayTimetable.class);
 
 		for (Class<?> entity : entities) {
 			for (Field field : entity.getDeclaredFields()) {

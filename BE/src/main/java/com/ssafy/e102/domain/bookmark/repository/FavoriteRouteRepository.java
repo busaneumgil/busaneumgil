@@ -13,4 +13,6 @@ public interface FavoriteRouteRepository extends JpaRepository<FavoriteRoute, Lo
 	Slice<FavoriteRoute> findAllByUser_UserId(UUID userId, Pageable pageable);
 
 	Slice<FavoriteRoute> findAllByUser_UserIdAndFavRouteIdLessThan(UUID userId, Long favRouteId, Pageable pageable);
+
+	void deleteAllByUser_UserId(UUID userId);
 }

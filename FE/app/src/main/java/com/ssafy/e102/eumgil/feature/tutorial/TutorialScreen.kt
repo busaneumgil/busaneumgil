@@ -1,0 +1,904 @@
+package com.ssafy.e102.eumgil.feature.tutorial
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderInfo
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceInfo
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceSubtle
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextTertiary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
+
+@Composable
+fun TutorialScreen(
+    uiState: TutorialUiState,
+    onPrimaryActionClick: () -> Unit,
+    onPreviousActionClick: () -> Unit,
+    onPanelNextStepClick: () -> Unit,
+    onSkipClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val primaryActionLabelRes =
+        resolveTutorialPrimaryActionLabel(
+            entryPoint = uiState.entryPoint,
+            isLastStep = uiState.step.isLast,
+        )
+
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(EumSurfaceSubtle)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = EumSpacing.medium)
+                .padding(bottom = EumSpacing.medium),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(onClick = onSkipClick) {
+                Text(
+                    text = stringResource(id = R.string.tutorial_action_skip),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.headerVisualGap),
+        ) {
+            TutorialHeader(uiState = uiState)
+            TutorialVisualPanel(
+                step = uiState.step,
+                currentStep = uiState.currentStep,
+                totalSteps = uiState.totalSteps,
+                canMovePrevious = uiState.canMovePrevious,
+                canMoveNext = uiState.canMoveNext,
+                onPreviousActionClick = onPreviousActionClick,
+                onPanelNextStepClick = onPanelNextStepClick,
+                modifier = Modifier.weight(TutorialLayoutDefaults.visualPanelWeight),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(TutorialLayoutDefaults.visualPanelButtonGap))
+
+        TutorialBottomActions(
+            primaryActionLabel = primaryActionLabelRes,
+            canMovePrevious = uiState.canMovePrevious,
+            onPreviousActionClick = onPreviousActionClick,
+            onPrimaryActionClick = onPrimaryActionClick,
+        )
+    }
+}
+
+@Composable
+private fun TutorialBottomActions(
+    @StringRes primaryActionLabel: Int,
+    canMovePrevious: Boolean,
+    onPreviousActionClick: () -> Unit,
+    onPrimaryActionClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (canMovePrevious) {
+            OutlinedButton(
+                onClick = onPreviousActionClick,
+                modifier =
+                    Modifier
+                        .width(TutorialLayoutDefaults.previousButtonMinWidth)
+                        .heightIn(min = TutorialLayoutDefaults.primaryButtonMinHeight),
+                shape = RoundedCornerShape(EumRadius.small),
+                border = BorderStroke(TutorialLayoutDefaults.previousButtonBorderWidth, EumBorderInfo),
+                colors =
+                    ButtonDefaults.outlinedButtonColors(
+                        contentColor = EumPrimary600,
+                    ),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.tutorial_action_previous),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        Button(
+            onClick = onPrimaryActionClick,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = TutorialLayoutDefaults.primaryButtonMinHeight),
+            shape = RoundedCornerShape(EumRadius.small),
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = EumPrimary600,
+                    contentColor = EumWhite,
+                ),
+        ) {
+            Text(
+                text = stringResource(id = primaryActionLabel),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TutorialHeader(uiState: TutorialUiState) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.headerSectionGap),
+    ) {
+        Text(
+            text = stringResource(id = uiState.step.titleRes),
+            color = EumPrimary600,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center,
+            lineHeight = TutorialLayoutDefaults.headerTitleLineHeight,
+        )
+        Text(
+            text = stringResource(id = uiState.step.headlineRes),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+            lineHeight = TutorialLayoutDefaults.headerHeadlineLineHeight,
+        )
+        Text(
+            text = stringResource(id = uiState.step.descriptionRes),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            lineHeight = TutorialLayoutDefaults.headerDescriptionLineHeight,
+        )
+    }
+}
+
+@Composable
+private fun TutorialVisualPanel(
+    step: TutorialStep,
+    currentStep: Int,
+    totalSteps: Int,
+    canMovePrevious: Boolean,
+    canMoveNext: Boolean,
+    onPreviousActionClick: () -> Unit,
+    onPanelNextStepClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val content = step.visualContent()
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .widthIn(max = TutorialLayoutDefaults.visualPanelMaxWidth)
+                .pointerInput(canMovePrevious, canMoveNext) {
+                    detectTapGestures { offset ->
+                        val isLeftSide = offset.x < size.width / 2f
+                        when {
+                            isLeftSide && canMovePrevious -> onPreviousActionClick()
+                            !isLeftSide && canMoveNext -> onPanelNextStepClick()
+                        }
+                    }
+                },
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        horizontal = EumSpacing.medium,
+                        vertical = TutorialLayoutDefaults.visualPanelVerticalPadding,
+                    ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            TutorialFlatIllustration(
+                content = content,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+            )
+            TutorialPagerIndicator(currentStep = currentStep, totalSteps = totalSteps)
+        }
+    }
+}
+
+@Composable
+private fun TutorialFlatIllustration(
+    content: TutorialVisualContent,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        TutorialIllustrationScene(content = content)
+        if (content.scene != TutorialIllustrationSceneType.DESTINATION_SEARCH && content.chips.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(TutorialLayoutDefaults.illustrationContentGap))
+            TutorialFilterChipRow(chips = content.chips)
+        }
+    }
+}
+
+@Composable
+private fun TutorialIllustrationScene(content: TutorialVisualContent) {
+    when (content.scene) {
+        TutorialIllustrationSceneType.DESTINATION_SEARCH -> TutorialDestinationSearchScene(content = content)
+        TutorialIllustrationSceneType.ROUTE_COMPARISON -> TutorialRouteComparisonScene(content = content)
+        TutorialIllustrationSceneType.REPORT_SUBMISSION -> TutorialReportSubmissionScene(content = content)
+    }
+}
+
+@Composable
+private fun TutorialDestinationSearchScene(content: TutorialVisualContent) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.illustrationHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        TutorialSearchBar(
+            iconRes = content.heroIconRes,
+            labelRes = content.primaryLabelRes,
+            trailingIconRes = R.drawable.ic_permission_mic,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+        TutorialFilterChipRow(
+            chips = content.chips,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = TutorialLayoutDefaults.destinationFilterTopPadding),
+        )
+        TutorialDestinationMapPreview(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = TutorialLayoutDefaults.destinationMapTopPadding),
+        )
+    }
+}
+
+@Composable
+private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.illustrationHeight),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        TutorialRouteCard(
+            iconRes = content.heroIconRes,
+            labelRes = content.primaryLabelRes,
+            time = stringResource(id = R.string.tutorial_route_recommended_time),
+            selected = true,
+        )
+        Spacer(modifier = Modifier.height(EumSpacing.small))
+        TutorialRouteCard(
+            iconRes = R.drawable.ic_route_time,
+            labelRes = content.secondaryLabelRes,
+            time = stringResource(id = R.string.tutorial_route_efficient_time),
+            selected = false,
+        )
+    }
+}
+
+@Composable
+private fun TutorialReportSubmissionScene(content: TutorialVisualContent) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.illustrationHeight),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
+            TutorialReportTile(iconRes = R.drawable.ic_route_tactile_blocks, labelRes = R.string.tutorial_report_chip_tactile)
+            TutorialReportTile(iconRes = R.drawable.ic_report_sidewalk, labelRes = R.string.tutorial_report_chip_sidewalk)
+        }
+        Spacer(modifier = Modifier.height(EumSpacing.small))
+        Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
+            TutorialReportTile(iconRes = R.drawable.ic_status_warning, labelRes = R.string.tutorial_report_chip_damage)
+            TutorialReportTile(iconRes = content.heroIconRes, labelRes = R.string.tutorial_report_action_submit, selected = true)
+        }
+    }
+}
+
+@Composable
+private fun TutorialSearchBar(
+    @DrawableRes iconRes: Int,
+    @StringRes labelRes: Int,
+    @DrawableRes trailingIconRes: Int,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .width(TutorialLayoutDefaults.searchBarWidth)
+                .height(TutorialLayoutDefaults.searchBarHeight),
+        shape = RoundedCornerShape(EumRadius.full),
+        color = EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+        shadowElevation = TutorialLayoutDefaults.floatingPanelElevation,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.floatingPanelIconSize),
+                tint = EumPrimary600,
+            )
+            Text(
+                text = stringResource(id = labelRes),
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Icon(
+                painter = painterResource(id = trailingIconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.floatingPanelIconSize),
+                tint = EumPrimary600,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TutorialDestinationMapPreview(modifier: Modifier = Modifier) {
+    Surface(
+        modifier =
+            modifier
+                .width(TutorialLayoutDefaults.destinationMapWidth)
+                .height(TutorialLayoutDefaults.destinationMapHeight),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+        shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(EumSpacing.small),
+        ) {
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapRoadWidth,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 18.dp),
+            )
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapRoadWidth,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 78.dp),
+            )
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 52.dp),
+            )
+            TutorialMapRoad(
+                width = TutorialLayoutDefaults.destinationMapRoadWidth,
+                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 58.dp),
+            )
+            TutorialMapRoute(
+                width = 128.dp,
+                height = TutorialLayoutDefaults.destinationMapRouteWidth,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 56.dp, top = 52.dp),
+            )
+            TutorialMapRoute(
+                width = TutorialLayoutDefaults.destinationMapRouteWidth,
+                height = 42.dp,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 180.dp, top = 52.dp),
+            )
+            TutorialMapNode(
+                selected = false,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 42.dp, top = 42.dp),
+            )
+            TutorialMapNode(
+                selected = true,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 166.dp, top = 82.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TutorialMapRoad(
+    width: Dp,
+    height: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .width(width)
+                .height(height)
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(TutorialLayoutDefaults.destinationMapRoadColor),
+    )
+}
+
+@Composable
+private fun TutorialMapRoute(
+    width: Dp,
+    height: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .width(width)
+                .height(height)
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(EumPrimary600),
+    )
+}
+
+@Composable
+private fun TutorialMapNode(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(
+                    if (selected) {
+                        TutorialLayoutDefaults.destinationMapSelectedNodeSize
+                    } else {
+                        TutorialLayoutDefaults.destinationMapNodeSize
+                    },
+                )
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(if (selected) EumPrimary600 else EumWhite),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(TutorialLayoutDefaults.destinationMapNodeDotSize)
+                    .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                    .background(if (selected) EumWhite else EumPrimary600),
+        )
+    }
+}
+
+@Composable
+private fun TutorialRouteCard(
+    @DrawableRes iconRes: Int,
+    @StringRes labelRes: Int,
+    time: String,
+    selected: Boolean,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TutorialLayoutDefaults.routeCardHeight),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = EumWhite,
+        border =
+            BorderStroke(
+                width = TutorialLayoutDefaults.routeCardBorderWidth,
+                color = if (selected) EumPrimary600 else EumBorderInfo,
+            ),
+        shadowElevation = if (selected) TutorialLayoutDefaults.mockPhoneElevation else 0.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            TutorialRadioDot(selected = selected)
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.smallCardIconSize),
+                tint = EumPrimary600,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(id = labelRes),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = time,
+                    color = EumPrimary600,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TutorialRadioDot(selected: Boolean) {
+    Box(
+        modifier =
+            Modifier
+                .size(TutorialLayoutDefaults.radioDotOuterSize)
+                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                .background(if (selected) EumPrimary600.copy(alpha = 0.18f) else EumBorderInfo),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(TutorialLayoutDefaults.radioDotInnerSize)
+                    .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                    .background(if (selected) EumPrimary600 else EumWhite),
+        )
+    }
+}
+
+@Composable
+private fun TutorialReportTile(
+    @DrawableRes iconRes: Int,
+    @StringRes labelRes: Int,
+    selected: Boolean = false,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .width(TutorialLayoutDefaults.reportTileWidth)
+                .height(TutorialLayoutDefaults.reportTileHeight),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = if (selected) EumPrimary600 else EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, if (selected) EumPrimary600 else EumBorderInfo),
+        shadowElevation = if (selected) TutorialLayoutDefaults.mockPhoneElevation else 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.small),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.smallCardIconSize),
+                tint = if (selected) EumWhite else EumPrimary600,
+            )
+            Spacer(modifier = Modifier.height(TutorialLayoutDefaults.tightGap))
+            Text(
+                text = stringResource(id = labelRes),
+                color = if (selected) EumWhite else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TutorialFilterChipRow(
+    chips: List<TutorialFilterChip>,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+    ) {
+        chips.forEach { chip ->
+            TutorialFilterChip(chip = chip)
+        }
+    }
+}
+
+@Composable
+private fun TutorialFilterChip(chip: TutorialFilterChip) {
+    Surface(
+        shape = RoundedCornerShape(EumRadius.small),
+        color = EumSurfaceInfo,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+    ) {
+        Row(
+            modifier =
+                Modifier.padding(
+                    horizontal = TutorialLayoutDefaults.filterChipHorizontalPadding,
+                    vertical = TutorialLayoutDefaults.filterChipVerticalPadding,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+        ) {
+            Icon(
+                painter = painterResource(id = chip.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+                tint = EumPrimary600,
+            )
+            Text(
+                text = stringResource(id = chip.labelRes),
+                color = EumPrimary600,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+private data class TutorialVisualContent(
+    val scene: TutorialIllustrationSceneType,
+    @DrawableRes val heroIconRes: Int,
+    @StringRes val primaryLabelRes: Int,
+    @StringRes val secondaryLabelRes: Int,
+    val chips: List<TutorialFilterChip>,
+)
+
+private enum class TutorialIllustrationSceneType {
+    DESTINATION_SEARCH,
+    ROUTE_COMPARISON,
+    REPORT_SUBMISSION,
+}
+
+private data class TutorialFilterChip(
+    @DrawableRes val iconRes: Int,
+    @StringRes val labelRes: Int,
+)
+
+private fun TutorialStep.visualContent(): TutorialVisualContent =
+    when (this) {
+        TutorialStep.DESTINATION ->
+            TutorialVisualContent(
+                scene = TutorialIllustrationSceneType.DESTINATION_SEARCH,
+                heroIconRes = R.drawable.ic_nav_search,
+                primaryLabelRes = R.string.tutorial_destination_item_search_title,
+                secondaryLabelRes = R.string.tutorial_destination_item_filter_title,
+                chips =
+                    listOf(
+                        TutorialFilterChip(
+                            iconRes = R.drawable.ic_place_restroom,
+                            labelRes = R.string.tutorial_filter_toilet,
+                        ),
+                        TutorialFilterChip(
+                            iconRes = R.drawable.ic_lowvision_category_elevator,
+                            labelRes = R.string.tutorial_filter_elevator,
+                        ),
+                        TutorialFilterChip(
+                            iconRes = R.drawable.ic_place_parking,
+                            labelRes = R.string.tutorial_filter_parking,
+                        ),
+                    ),
+            )
+
+        TutorialStep.ROUTE_COMPARISON ->
+            TutorialVisualContent(
+                scene = TutorialIllustrationSceneType.ROUTE_COMPARISON,
+                heroIconRes = R.drawable.ic_route_start_navigation,
+                primaryLabelRes = R.string.tutorial_route_recommended,
+                secondaryLabelRes = R.string.tutorial_route_efficient,
+                chips = emptyList(),
+            )
+
+        TutorialStep.REPORT ->
+            TutorialVisualContent(
+                scene = TutorialIllustrationSceneType.REPORT_SUBMISSION,
+                heroIconRes = R.drawable.ic_nav_report,
+                primaryLabelRes = R.string.tutorial_report_item_location_title,
+                secondaryLabelRes = R.string.tutorial_report_item_type_title,
+                chips = emptyList(),
+            )
+    }
+
+@Composable
+private fun TutorialPagerIndicator(
+    currentStep: Int,
+    totalSteps: Int,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.tightGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(totalSteps) { index ->
+            val selected = index + 1 == currentStep
+            Box(
+                modifier =
+                    Modifier
+                        .width(
+                            if (selected) {
+                                TutorialLayoutDefaults.indicatorSelectedWidth
+                            } else {
+                                TutorialLayoutDefaults.indicatorDefaultWidth
+                            },
+                        )
+                        .height(TutorialLayoutDefaults.indicatorHeight)
+                        .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
+                        .background(if (selected) EumPrimary600 else TutorialLayoutDefaults.indicatorTrackColor),
+            )
+        }
+        Spacer(modifier = Modifier.width(TutorialLayoutDefaults.microGap))
+        Text(
+            text = stringResource(id = R.string.tutorial_progress_count, currentStep, totalSteps),
+            color = EumTextTertiary,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+internal object TutorialLayoutDefaults {
+    const val totalStepCount: Int = TutorialStep.TOTAL_STEPS
+    const val supportingItemCount: Int = 0
+    const val destinationFilterChipCount: Int = 3
+    const val routeAccessibilityChipCount: Int = 0
+    const val reportCategoryChipCount: Int = 0
+    const val showsEmphasisChip: Boolean = false
+    const val usesLayeredFlatIllustration: Boolean = true
+    const val usesWhitePanelFrame: Boolean = false
+    const val distinctIllustrationSceneCount: Int = 3
+    const val usesNavigationSafeZone: Boolean = true
+    const val usesIllustrationHalo: Boolean = false
+    const val destinationFiltersAttachToSearch: Boolean = true
+    const val destinationSearchShowsMic: Boolean = true
+    const val destinationShowsMapPreview: Boolean = true
+    const val destinationMapAttachesBelowFilters: Boolean = true
+    const val routeDescriptionBreaksAfterSettingComma: Boolean = true
+    const val reportDescriptionMentionsRouteContribution: Boolean = true
+    const val visualPanelWeight: Float = 1f
+    const val hasHeroIconBackground: Boolean = false
+    const val firstStepWithPreviousAction: Int = 2
+    const val panelTouchNavigationZoneWeight: Float = 1f
+
+    val primaryButtonMinHeight = 56.dp
+    val previousButtonMinWidth = 88.dp
+    val previousButtonBorderWidth = 1.dp
+    val visualPanelButtonGap = 12.dp
+    val visualPanelMaxWidth = 420.dp
+    val visualPanelVerticalPadding = 4.dp
+
+    val headerSectionGap = 8.dp
+    val headerVisualGap = 6.dp
+    val headerTitleLineHeight = 30.sp
+    val headerHeadlineLineHeight = 34.sp
+    val headerDescriptionLineHeight = 22.sp
+
+    val tightGap = 8.dp
+    val microGap = 4.dp
+    val hairlineWidth = 1.dp
+
+    val illustrationHeight = 260.dp
+    val illustrationContentGap = 12.dp
+    val heroIconSize = 56.dp
+    val mockPhoneElevation = 2.dp
+    val searchBarWidth = 270.dp
+    val searchBarHeight = 58.dp
+    val destinationFilterTopPadding = 66.dp
+    val destinationMapTopPadding = 116.dp
+    val destinationMapWidth = 300.dp
+    val destinationMapHeight = 128.dp
+    val destinationMapRoadWidth = 6.dp
+    val destinationMapRouteWidth = 7.dp
+    val destinationMapWideRoadWidth = 268.dp
+    val destinationMapTallRoadHeight = 104.dp
+    val destinationMapNodeSize = 18.dp
+    val destinationMapSelectedNodeSize = 22.dp
+    val destinationMapNodeDotSize = 8.dp
+    val floatingPanelHeight = 56.dp
+    val floatingPanelElevation = 3.dp
+    val floatingPanelIconSize = 22.dp
+    val smallCardWidth = 72.dp
+    val smallCardHeight = 60.dp
+    val smallCardIconSize = 28.dp
+    val routeCardHeight = 78.dp
+    val routeCardBorderWidth = 2.dp
+    val radioDotOuterSize = 24.dp
+    val radioDotInnerSize = 12.dp
+    val reportTileWidth = 132.dp
+    val reportTileHeight = 92.dp
+    val filterChipHorizontalPadding = 12.dp
+    val filterChipVerticalPadding = 8.dp
+    val filterChipIconSize = 18.dp
+    val filterChipGap = 6.dp
+
+    val indicatorSelectedWidth = 70.dp
+    val indicatorDefaultWidth = 54.dp
+    val indicatorHeight = 6.dp
+    val pillCorner = 99.dp
+
+    val destinationMapRoadColor = Color(0xFFE7ECF5)
+    val indicatorTrackColor = Color(0xFFD9DDE7)
+}

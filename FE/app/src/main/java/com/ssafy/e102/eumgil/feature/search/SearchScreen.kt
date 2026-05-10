@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
+import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RecentSearch
@@ -70,6 +72,9 @@ internal fun resolveSearchTrailingAction(query: String): SearchTrailingAction =
         SearchTrailingAction.ClearQuery
     }
 
+internal fun shouldShowSearchResultSection(resultState: SearchResultUiState): Boolean =
+    resultState != SearchResultUiState.EmptyQuery && resultState !is SearchResultUiState.Typing
+
 internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiState): SearchScreenDestination =
     when (resultState) {
         SearchResultUiState.Initial,
@@ -86,7 +91,40 @@ internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiS
 
 internal fun searchVoiceInputSheetTopCornerRadius(): Dp = EumRadius.scaleL
 
-internal fun searchVoiceInputSheetContainerColor(): Color = Color.White
+internal fun searchVoiceInputSheetContainerColor(): Color = BusanEumgilLightColorScheme.surface
+
+internal fun shouldShowSearchVoiceInputTranscriptPreview(
+    voiceInputState: SearchVoiceInputUiState,
+): Boolean = voiceInputState.transcript.isNotBlank()
+
+internal data class SearchVoiceInputStatusContent(
+    @StringRes val titleRes: Int,
+    @StringRes val descriptionRes: Int? = null,
+)
+
+internal fun resolveSearchVoiceInputStatusContent(
+    voiceInputState: SearchVoiceInputUiState,
+): SearchVoiceInputStatusContent? =
+    when {
+        voiceInputState.status == SearchVoiceInputStatus.Recognized ->
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_recognized_title,
+                descriptionRes = R.string.search_voice_input_status_recognized_description,
+            )
+
+        voiceInputState.status == SearchVoiceInputStatus.Listening ->
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_listening_title,
+                descriptionRes = R.string.search_voice_input_status_listening_description,
+            )
+
+        voiceInputState.guidance == SearchVoiceInputGuidance.RetryRequired ->
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_retry_message,
+            )
+
+        else -> null
+    }
 
 internal data class DestinationPromoBannerModel(
     @DrawableRes val imageRes: Int,
@@ -242,10 +280,12 @@ private fun SearchResultsContent(
         onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
         onSearch = { onAction(SearchUiAction.SearchSubmitted) },
     )
-    SearchResultSection(
-        resultState = uiState.resultState,
-        onAction = onAction,
-    )
+    if (shouldShowSearchResultSection(uiState.resultState)) {
+        SearchResultSection(
+            resultState = uiState.resultState,
+            onAction = onAction,
+        )
+    }
 }
 
 @Composable
@@ -357,6 +397,7 @@ private fun SearchVoiceInputScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .background(searchVoiceInputSheetContainerColor())
                         .padding(horizontal = 24.dp, vertical = 12.dp),
             )
         }
@@ -369,16 +410,8 @@ private fun SearchVoiceInputContent(
     onAction: (SearchUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val statusTitleRes =
-        when (uiState.voiceInputState.status) {
-            SearchVoiceInputStatus.Idle -> R.string.search_voice_input_status_idle_title
-            SearchVoiceInputStatus.Listening -> R.string.search_voice_input_status_listening_title
-        }
-    val statusDescriptionRes =
-        when (uiState.voiceInputState.status) {
-            SearchVoiceInputStatus.Idle -> R.string.search_voice_input_status_idle_description
-            SearchVoiceInputStatus.Listening -> R.string.search_voice_input_status_listening_description
-        }
+    val statusContent = resolveSearchVoiceInputStatusContent(uiState.voiceInputState)
+    val showTranscriptPreview = shouldShowSearchVoiceInputTranscriptPreview(uiState.voiceInputState)
 
     Column(
         modifier = modifier,
@@ -410,17 +443,30 @@ private fun SearchVoiceInputContent(
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        Surface(
-            modifier = Modifier.padding(top = EumSpacing.medium),
-            shape = RoundedCornerShape(999.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
-        ) {
-            Text(
-                text = stringResource(id = R.string.search_voice_input_example_phrase),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (showTranscriptPreview) {
+            SearchStateCard(
+                title = stringResource(id = R.string.search_voice_input_transcript_title),
+                description = uiState.voiceInputState.transcript,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = EumSpacing.medium),
+                containerColor = MaterialTheme.colorScheme.surface,
+                borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
             )
+        } else {
+            Surface(
+                modifier = Modifier.padding(top = EumSpacing.medium),
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.search_voice_input_example_phrase),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Box(
@@ -455,31 +501,23 @@ private fun SearchVoiceInputContent(
             }
         }
 
-        Text(
-            text = stringResource(id = statusTitleRes),
-            modifier = Modifier.padding(top = 20.dp),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(id = statusDescriptionRes),
-            modifier = Modifier.padding(top = EumSpacing.xSmall),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        if (uiState.voiceInputState.transcript.isNotBlank()) {
-            SearchStateCard(
-                title = stringResource(id = R.string.search_voice_input_transcript_title),
-                description = uiState.voiceInputState.transcript,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = EumSpacing.large, bottom = EumSpacing.medium),
-                containerColor = MaterialTheme.colorScheme.surface,
-                borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.72f),
+        if (statusContent != null) {
+            Text(
+                text = stringResource(id = statusContent.titleRes),
+                modifier = Modifier.padding(top = 20.dp),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
+            if (statusContent.descriptionRes != null) {
+                Text(
+                    text = stringResource(id = statusContent.descriptionRes),
+                    modifier = Modifier.padding(top = EumSpacing.xSmall),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+
     }
 }
 
@@ -506,13 +544,7 @@ private fun SearchResultSection(
                     borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
                 )
 
-            is SearchResultUiState.Typing ->
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_typing_title, resultState.query),
-                    description = stringResource(id = R.string.search_screen_typing_description),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
-                )
+            is SearchResultUiState.Typing -> Unit
 
             is SearchResultUiState.Loading ->
                 SearchStateCard(
@@ -532,7 +564,7 @@ private fun SearchResultSection(
                     SearchResultItem(
                         result = result,
                         onClick = {
-                            onAction(SearchUiAction.SearchResultClicked(result = result))
+                            onAction(SearchUiAction.SearchResultBriefingClicked(result = result))
                         },
                     )
                 }
@@ -578,6 +610,24 @@ private fun RecentVisitSection(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            if (recentSearches.isNotEmpty()) {
+                Box(
+                    modifier =
+                        Modifier
+                            .heightIn(min = 44.dp)
+                            .clickable(
+                                role = Role.Button,
+                                onClick = { onAction(SearchUiAction.RecentSearchClearAllClicked) },
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.search_screen_recent_clear_all),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         if (recentSearches.isEmpty()) {
@@ -596,6 +646,13 @@ private fun RecentVisitSection(
                             ),
                         )
                     },
+                    onDeleteClick = {
+                        onAction(
+                            SearchUiAction.RecentSearchDeleteClicked(
+                                keyword = recentSearch.keyword,
+                            ),
+                        )
+                    },
                 )
             }
         }
@@ -606,6 +663,7 @@ private fun RecentVisitSection(
 private fun RecentVisitItem(
     keyword: String,
     onClick: () -> Unit,
+    onDeleteClick: () -> Unit,
 ) {
     Surface(
         modifier =
@@ -619,15 +677,34 @@ private fun RecentVisitItem(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
     ) {
-        Text(
-            text = keyword,
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+                    .padding(start = EumSpacing.medium, end = EumSpacing.xSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = keyword,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(vertical = EumSpacing.medium),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            IconButton(onClick = onDeleteClick) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_close),
+                    contentDescription =
+                        stringResource(
+                            id = R.string.search_screen_recent_delete,
+                            keyword,
+                        ),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -659,7 +736,7 @@ private fun SearchResultItem(
     onClick: () -> Unit,
 ) {
     val actionLabel = stringResource(id = R.string.search_screen_result_action_label)
-    val selectableStateDescription = stringResource(id = R.string.search_screen_result_selectable)
+    val stateDescription = stringResource(id = resolveSearchResultStateDescriptionRes(result))
     val accessibilityDescription =
         if (result.subtitle.isBlank()) {
             stringResource(
@@ -673,6 +750,8 @@ private fun SearchResultItem(
                 result.subtitle,
             )
         }
+    val accessibilityTagUiState = resolveSearchResultAccessibilityTagUiState(result.accessibilityTagKeys)
+    val trimmedAddress = result.subtitle.trim()
 
     Surface(
         modifier =
@@ -684,7 +763,7 @@ private fun SearchResultItem(
                     onClick = onClick,
                 ).semantics(mergeDescendants = true) {
                     contentDescription = accessibilityDescription
-                    stateDescription = selectableStateDescription
+                    this.stateDescription = stateDescription
                 },
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
@@ -703,27 +782,81 @@ private fun SearchResultItem(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Text(
-                text = result.subtitle,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text =
-                    stringResource(
-                        id = R.string.search_screen_result_coordinates,
-                        result.latitude,
-                        result.longitude,
-                    ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(id = R.string.search_screen_result_id, result.placeId),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+            if (trimmedAddress.isNotEmpty()) {
+                Text(
+                    text = trimmedAddress,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (accessibilityTagUiState.hasLabels) {
+                SearchResultAccessibilityTagRow(uiState = accessibilityTagUiState)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultAccessibilityTagRow(
+    uiState: SearchResultAccessibilityTagUiState,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        uiState.labelResIds.forEach { labelResId ->
+            SearchResultAccessibilityTagChip(
+                text = stringResource(id = labelResId),
+                isOverflow = false,
             )
         }
+        if (uiState.overflowCount > 0) {
+            SearchResultAccessibilityTagChip(
+                text = stringResource(id = R.string.place_accessibility_label_overflow, uiState.overflowCount),
+                isOverflow = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchResultAccessibilityTagChip(
+    text: String,
+    isOverflow: Boolean,
+) {
+    val containerColor =
+        if (isOverflow) {
+            MaterialTheme.colorScheme.surfaceVariant
+        } else {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+        }
+    val contentColor =
+        if (isOverflow) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = containerColor,
+        border =
+            BorderStroke(
+                width = 1.dp,
+                color =
+                    if (isOverflow) {
+                        MaterialTheme.colorScheme.outlineVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                    },
+            ),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
+            style = MaterialTheme.typography.labelMedium,
+            color = contentColor,
+        )
     }
 }
 

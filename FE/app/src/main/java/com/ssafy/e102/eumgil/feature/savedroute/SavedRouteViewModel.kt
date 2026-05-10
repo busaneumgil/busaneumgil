@@ -62,6 +62,11 @@ class SavedRouteViewModel(
                     placeId = action.placeId,
                     event = SavedRouteUiEvent.NavigateToRouteSetting(),
                 )
+            is SavedRouteUiAction.PlaceBriefingClicked ->
+                handoffPlace(
+                    placeId = action.placeId,
+                    event = SavedRouteUiEvent.NavigateToRouteBriefing,
+                )
             is SavedRouteUiAction.PlaceDeleteClicked -> togglePlaceRemoval(action.placeId)
             is SavedRouteUiAction.PlaceRemoveClicked -> removePlaceBookmark(action.placeId)
             is SavedRouteUiAction.RouteGuideClicked -> handoffRouteBookmark(action.bookmarkId)

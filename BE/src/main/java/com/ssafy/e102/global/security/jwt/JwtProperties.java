@@ -16,14 +16,14 @@ public record JwtProperties(
 	public JwtProperties {
 		Assert.hasText(secret, "JWT secret은 필수입니다.");
 		Assert.hasText(issuer, "JWT issuer는 필수입니다.");
-		Assert.notNull(accessTokenTtl, "JWT access token 만료 시간은 필수입니다.");
-		Assert.notNull(refreshTokenTtl, "JWT refresh token 만료 시간은 필수입니다.");
-		Assert.notNull(signupTokenTtl, "JWT signup token 만료 시간은 필수입니다.");
+		Assert.notNull(accessTokenTtl, "JWT 액세스 토큰 만료 시간은 필수입니다.");
+		Assert.notNull(refreshTokenTtl, "JWT 리프레시 토큰 만료 시간은 필수입니다.");
+		Assert.notNull(signupTokenTtl, "JWT 회원가입 토큰 만료 시간은 필수입니다.");
 		Assert.isTrue(!accessTokenTtl.isNegative() && !accessTokenTtl.isZero(),
-			"JWT access token 만료 시간은 0보다 커야 합니다.");
+			"JWT 액세스 토큰 만료 시간은 0보다 커야 합니다.");
 		Assert.isTrue(!refreshTokenTtl.isNegative() && !refreshTokenTtl.isZero(),
-			"JWT refresh token 만료 시간은 0보다 커야 합니다.");
+			"JWT 리프레시 토큰 만료 시간은 0보다 커야 합니다.");
 		Assert.isTrue(!signupTokenTtl.isNegative() && !signupTokenTtl.isZero(),
-			"JWT signup token 만료 시간은 0보다 커야 합니다.");
+			"JWT 회원가입 토큰 만료 시간은 0보다 커야 합니다.");
 	}
 }

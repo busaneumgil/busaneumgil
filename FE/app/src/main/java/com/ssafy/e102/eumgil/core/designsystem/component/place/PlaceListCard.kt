@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.core.designsystem.component.place
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +44,24 @@ val PlaceListDivider  = Color(0xFF3A3A3C)
 val PlaceListOnAmber  = Color(0xFF1C1C1E)
 val PlaceListSubText  = Color(0xFFAEAEB2)
 val PlaceListTabInactive = Color(0xFF636366)
+
+internal object PlaceListCardDefaults {
+    @DrawableRes
+    val bookmarkIconRes: Int = R.drawable.ic_nav_bookmark_selected
+
+    @DrawableRes
+    val routeIconRes: Int = R.drawable.ic_nav_route
+
+    val actionOrder: List<PlaceListCardAction> = listOf(
+        PlaceListCardAction.Navigate,
+        PlaceListCardAction.Bookmark,
+    )
+}
+
+internal enum class PlaceListCardAction {
+    Navigate,
+    Bookmark,
+}
 
 /**
  * 다크 테마 장소 목록 카드.
@@ -156,18 +175,23 @@ fun PlaceListCard(
         Column(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            PlaceActionButton(
-                label = bookmarkLabel,
-                iconRes = R.drawable.ic_action_favorite,
-                onClick = onBookmarkClick,
-                contentDescription = bookmarkContentDescription ?: "$name $bookmarkLabel",
-            )
-            PlaceActionButton(
-                label = "길찾기",
-                iconRes = R.drawable.ic_nav_route,
-                onClick = onNavigateClick,
-                contentDescription = navigateContentDescription ?: "$name 길찾기",
-            )
+            PlaceListCardDefaults.actionOrder.forEach { action ->
+                when (action) {
+                    PlaceListCardAction.Navigate -> PlaceActionButton(
+                        label = "\uAE38\uCC3E\uAE30",
+                        iconRes = PlaceListCardDefaults.routeIconRes,
+                        onClick = onNavigateClick,
+                        contentDescription = navigateContentDescription ?: "$name \uAE38\uCC3E\uAE30",
+                    )
+
+                    PlaceListCardAction.Bookmark -> PlaceActionButton(
+                        label = bookmarkLabel,
+                        iconRes = PlaceListCardDefaults.bookmarkIconRes,
+                        onClick = onBookmarkClick,
+                        contentDescription = bookmarkContentDescription ?: "$name $bookmarkLabel",
+                    )
+                }
+            }
         }
     }
 }

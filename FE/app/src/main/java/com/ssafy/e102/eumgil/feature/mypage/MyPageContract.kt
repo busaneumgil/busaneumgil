@@ -4,9 +4,6 @@ data class MyPageUiState(
     val displayName: String? = null,
     val userMode: MyPageUserMode = MyPageUserMode.UNKNOWN,
     val mobilitySubtype: MyPageMobilitySubtype? = null,
-    val isDebugSectionVisible: Boolean = false,
-    val isRuntimeToggleEnabled: Boolean = false,
-    val isForceMockEnabled: Boolean = false,
     val isLogoutLoading: Boolean = false,
 )
 
@@ -29,10 +26,6 @@ enum class MyPageMenuItem {
 }
 
 sealed interface MyPageUiAction {
-    data class ForceMockToggled(
-        val isEnabled: Boolean,
-    ) : MyPageUiAction
-
     data object UserTypeChangeClicked : MyPageUiAction
 
     data object LogoutClicked : MyPageUiAction

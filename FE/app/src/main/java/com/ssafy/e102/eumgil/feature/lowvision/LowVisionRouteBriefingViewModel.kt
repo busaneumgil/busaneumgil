@@ -24,13 +24,7 @@ data class LowVisionRouteBriefingUiState(
     val errorMessage: String? = null,
 ) {
     val briefingText: String
-        get() =
-            buildString {
-                append("경로 브리핑. ")
-                steps.forEach { step ->
-                    append("${step.sequence}번. ${step.instruction}. ")
-                }
-            }.trim()
+        get() = steps.toBriefingSpeechText()
 }
 
 data class LowVisionRouteBriefingStepUiState(
@@ -44,6 +38,44 @@ enum class LowVisionRouteBriefingStepIcon {
     TRANSIT,
     TURN,
 }
+
+internal const val BRIEFING_VISIBLE_STEP_COUNT: Int = 3
+
+internal fun List<LowVisionRouteBriefingStepUiState>.visibleBriefingSteps(
+    startIndex: Int,
+): List<LowVisionRouteBriefingStepUiState> {
+    if (isEmpty()) return emptyList()
+
+    val clampedStartIndex = startIndex.coerceIn(0, lastIndex)
+    val windowStartIndex = clampedStartIndex - clampedStartIndex % BRIEFING_VISIBLE_STEP_COUNT
+    return drop(windowStartIndex).take(BRIEFING_VISIBLE_STEP_COUNT)
+}
+
+internal fun List<LowVisionRouteBriefingStepUiState>.nextBriefingWindowStart(
+    startIndex: Int,
+): Int? {
+    val nextStartIndex =
+        if (startIndex < 0) {
+            0
+        } else {
+            startIndex - startIndex % BRIEFING_VISIBLE_STEP_COUNT + BRIEFING_VISIBLE_STEP_COUNT
+        }
+
+    return nextStartIndex.takeIf { it < size }
+}
+
+internal fun List<LowVisionRouteBriefingStepUiState>.briefingSpeechTextFrom(
+    startIndex: Int,
+): String =
+    visibleBriefingSteps(startIndex).toBriefingSpeechText()
+
+internal fun List<LowVisionRouteBriefingStepUiState>.toBriefingSpeechText(): String =
+    buildString {
+        append("경로 브리핑. ")
+        this@toBriefingSpeechText.forEach { step ->
+            append("${step.sequence}번. ${step.instruction}. ")
+        }
+    }.trim()
 
 class LowVisionRouteBriefingViewModel(
     private val routeRepository: RouteRepository,
@@ -126,7 +158,7 @@ private fun PlaceDestination?.toBriefingDestinationWaypoint(): RouteWaypoint =
 private fun RouteSegment.toBriefingStepUiState(): LowVisionRouteBriefingStepUiState =
     LowVisionRouteBriefingStepUiState(
         sequence = sequence,
-        instruction = toBriefingInstruction(),
+        instruction = toCompactBriefingInstruction(),
         icon =
             when (sequence % 3) {
                 1 -> LowVisionRouteBriefingStepIcon.STRAIGHT
@@ -135,12 +167,44 @@ private fun RouteSegment.toBriefingStepUiState(): LowVisionRouteBriefingStepUiSt
             },
     )
 
-private fun RouteSegment.toBriefingInstruction(): String =
-    when (sequence) {
-        1 -> "${distanceMeters.coerceAtLeast(100)}미터 직진"
-        2 -> "지하도 입구"
-        3 -> "도착지 우측"
-        else -> guidanceMessage.ifBlank { "경로를 따라 이동" }
+internal fun RouteSegment.toCompactBriefingInstruction(): String {
+    val action = guidanceMessage.toCompactBriefingAction(sequence)
+    if (action == "\uB3C4\uCC29") return action
+
+    val distance = distanceMeters.toCompactBriefingDistance()
+    return if (distance.isBlank()) {
+        action
+    } else {
+        "$distance \uD6C4 $action"
+    }
+}
+
+private fun String.toCompactBriefingAction(sequence: Int): String {
+    val message = trim().lowercase()
+    return when {
+        message.contains("\uB3C4\uCC29") || sequence == 3 -> "\uB3C4\uCC29"
+        message.contains("\uC6B0\uD68C\uC804") ||
+            message.contains("\uC624\uB978\uCABD") ||
+            message.contains("right") -> "\uC6B0\uD68C\uC804"
+        message.contains("\uC88C\uD68C\uC804") ||
+            message.contains("\uC67C\uCABD") ||
+            message.contains("left") -> "\uC88C\uD68C\uC804"
+        message.contains("\uC9C1\uC9C4") ||
+            message.contains("straight") ||
+            message.contains("continue") -> "\uC9C1\uC9C4"
+        message.contains("\uD6A1\uB2E8") ||
+            message.contains("cross") -> "\uD6A1\uB2E8"
+        message.contains("\uC9C0\uD558\uB3C4") -> "\uC9C0\uD558\uB3C4"
+        else -> "\uC774\uB3D9"
+    }
+}
+
+private fun Int.toCompactBriefingDistance(): String =
+    when {
+        this <= 0 -> ""
+        this < 1_000 -> "${this}m"
+        this % 1_000 == 0 -> "${this / 1_000}km"
+        else -> String.format(java.util.Locale.US, "%.1fkm", this / 1_000.0)
     }
 
 private val DEFAULT_ORIGIN =

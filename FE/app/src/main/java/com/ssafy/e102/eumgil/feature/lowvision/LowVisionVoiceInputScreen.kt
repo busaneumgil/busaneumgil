@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 
+internal fun lowVisionVoiceInputBottomNavBackgroundColor(): Color = Color.White
+
 /**
  * 시각지원 모드 음성 입력(녹음 진행) 화면.
  *
@@ -104,6 +106,7 @@ fun LowVisionVoiceInputScreen(
         LowVisionBottomNav(
             selectedTab = uiState.selectedTab,
             onTabSelected = onTabSelected,
+            backgroundColor = lowVisionVoiceInputBottomNavBackgroundColor(),
         )
     }
 }

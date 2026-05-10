@@ -162,15 +162,16 @@ private fun DrawScope.drawViewportPolyline(
 
     val path = overlay.points.toViewportPath(bounds = bounds, canvasSize = canvasSize)
     val toneColor = overlay.tone.toColor(palette)
+    val casingColor = overlay.tone.toCasingColor(palette)
 
     when (overlay.style) {
         MapViewportPolylineStyle.ROUTE_PREVIEW -> {
             drawPath(
                 path = path,
-                color = toneColor.copy(alpha = 0.26f),
+                color = casingColor.copy(alpha = 0.9f),
                 style =
                     Stroke(
-                        width = 12.dp.toPx(),
+                        width = 9.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -190,20 +191,20 @@ private fun DrawScope.drawViewportPolyline(
         MapViewportPolylineStyle.ROUTE_BASELINE -> {
             drawPath(
                 path = path,
-                color = palette.outline.copy(alpha = 0.22f),
+                color = casingColor.copy(alpha = 0.82f),
                 style =
                     Stroke(
-                        width = 10.dp.toPx(),
+                        width = 7.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
             )
             drawPath(
                 path = path,
-                color = toneColor.copy(alpha = 0.16f),
+                color = toneColor.copy(alpha = 0.9f),
                 style =
                     Stroke(
-                        width = 4.dp.toPx(),
+                        width = 3.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -213,10 +214,10 @@ private fun DrawScope.drawViewportPolyline(
         MapViewportPolylineStyle.ACTIVE_SEGMENT -> {
             drawPath(
                 path = path,
-                color = toneColor.copy(alpha = 0.42f),
+                color = casingColor.copy(alpha = 0.88f),
                 style =
                     Stroke(
-                        width = 9.dp.toPx(),
+                        width = 8.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -236,10 +237,10 @@ private fun DrawScope.drawViewportPolyline(
         MapViewportPolylineStyle.FOCUSED_SEGMENT -> {
             drawPath(
                 path = path,
-                color = toneColor.copy(alpha = 0.24f),
+                color = casingColor.copy(alpha = 0.92f),
                 style =
                     Stroke(
-                        width = 12.dp.toPx(),
+                        width = 10.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -249,7 +250,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = toneColor,
                 style =
                     Stroke(
-                        width = 6.dp.toPx(),
+                        width = 5.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -287,6 +288,8 @@ private fun DrawScope.drawViewportPointHalo(
                 radius = 16.dp.toPx(),
                 center = projectedPoint,
             )
+
+        MapViewportPointKind.SEGMENT_JUNCTION -> Unit
 
         MapViewportPointKind.FOCUS_HALO ->
             drawCircle(
@@ -506,6 +509,14 @@ private fun MapViewportOverlayTone.toColor(palette: ViewportOverlayPalette): Col
         MapViewportOverlayTone.ERROR -> palette.error
     }
 
+private fun MapViewportOverlayTone.toCasingColor(palette: ViewportOverlayPalette): Color =
+    when (this) {
+        MapViewportOverlayTone.PRIMARY -> palette.primary.copy(red = 0.06f, green = 0.30f, blue = 0.78f)
+        MapViewportOverlayTone.SECONDARY -> palette.secondary.copy(red = 0.04f, green = 0.47f, blue = 0.36f)
+        MapViewportOverlayTone.TERTIARY -> palette.tertiary.copy(red = 0.72f, green = 0.36f, blue = 0.09f)
+        MapViewportOverlayTone.ERROR -> palette.error.copy(red = 0.62f, green = 0.16f, blue = 0.16f)
+    }
+
 @Composable
 private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMarkerSpec? =
     when (kind) {
@@ -538,6 +549,16 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
                 fontSize = 11.sp,
+            )
+
+        MapViewportPointKind.SEGMENT_JUNCTION ->
+            ViewportPointMarkerSpec(
+                label = "",
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.Transparent,
+                borderColor = MaterialTheme.colorScheme.surface,
+                size = 14.dp,
+                fontSize = 1.sp,
             )
 
         MapViewportPointKind.CAMERA_FOCUS ->

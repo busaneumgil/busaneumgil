@@ -76,7 +76,7 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
-import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayBackdrop
+import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOverlayState
 import java.util.Locale
 
@@ -1453,7 +1453,7 @@ private fun RouteMapStage(
             RouteMapBackdrop(
                 previewMap = previewMap,
                 routePath =
-                    if (isWalkMode && previewMap.isDisplayable) {
+                    if (previewMap.isDisplayable) {
                         previewMap.polyline
                     } else {
                         emptyList()

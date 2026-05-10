@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapFocusMode
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
+import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
 
 @Immutable
@@ -44,6 +45,7 @@ internal enum class MapViewportPointKind {
     ORIGIN,
     DESTINATION,
     CURRENT_LOCATION,
+    SEGMENT_JUNCTION,
     CAMERA_FOCUS,
     FOCUS_HALO,
 }
@@ -163,6 +165,7 @@ internal fun createNavigationViewportOverlayState(
                             overlayId = "navigation-current",
                             kind = MapViewportPointKind.CURRENT_LOCATION,
                             label = "C",
+                            includeInProjection = !useFocusedProjection,
                         ),
                     )
                 }
@@ -186,6 +189,17 @@ internal fun createNavigationViewportOverlayState(
                         ),
                     )
                 }
+                mapOverlay.routeSegments
+                    .toSegmentJunctionCoordinates()
+                    .forEachIndexed { index, coordinate ->
+                        add(
+                            coordinate.toOverlayPoint(
+                                overlayId = "navigation-junction-$index",
+                                kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                                includeInProjection = false,
+                            ),
+                        )
+                    }
                 if (useFocusedProjection) {
                     mapOverlay.focusCoordinate?.let { coordinate ->
                         add(
@@ -216,6 +230,7 @@ internal fun createNavigationViewportOverlayState(
                             points = mapOverlay.activeSegmentPolyline.map(GeoCoordinate::toMapCoordinate),
                             style = MapViewportPolylineStyle.ACTIVE_SEGMENT,
                             tone = MapViewportOverlayTone.SECONDARY,
+                            includeInProjection = !useFocusedProjection,
                         ),
                     )
                 }
@@ -275,6 +290,11 @@ private fun GeoCoordinate.toMapCoordinate(): MapCoordinate =
         latitude = latitude,
         longitude = longitude,
     )
+
+private fun List<NavigationMapSegmentUiState>.toSegmentJunctionCoordinates(): List<GeoCoordinate> =
+    dropLast(1)
+        .mapNotNull { segment -> segment.polyline.lastOrNull() }
+        .distinct()
 
 private fun RouteOption?.toViewportOverlayTone(): MapViewportOverlayTone =
     when (this) {

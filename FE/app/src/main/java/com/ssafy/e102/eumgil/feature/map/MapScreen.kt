@@ -1332,21 +1332,21 @@ private fun recentDestinationTagLabels(destination: RecentDestination): List<Str
 
 private fun recentDestinationTagLabel(rawKey: String): String? =
     when (rawKey.trim().lowercase()) {
-        "accessible-toilet" -> "장애인 화장실 있음"
-        "elevator" -> "엘리베이터 있음"
+        "accessible-toilet" -> "장애인 화장실"
+        "elevator" -> "엘리베이터"
         "accessible-parking" -> "장애인 주차 가능"
         "step-free-entrance" -> "단차 없음"
-        "guidance-facility" -> "안내시설 있음"
+        "guidance-facility" -> "안내시설"
         "accessible-room" -> "객실 이용 가능"
-        "ramp" -> "경사로 있음"
+        "ramp" -> "경사로"
         "auto-door" -> "출입 가능"
         "wide-entry" -> "출입 가능"
         "wheelchair-turning-space" -> "출입 가능"
         "table-spacing" -> "출입 가능"
-        "rest-area" -> "안내시설 있음"
-        "braille-block" -> "안내시설 있음"
-        "crosswalk" -> "안내시설 있음"
-        "low-height-button" -> "안내시설 있음"
+        "rest-area" -> "안내시설"
+        "braille-block" -> "안내시설"
+        "crosswalk" -> "안내시설"
+        "low-height-button" -> "안내시설"
         else -> null
     }
 

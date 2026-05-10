@@ -241,4 +241,30 @@ class MapFacilityDetailSheetConfigurationTest {
             File("src/main/res/drawable/ic_route_start_navigation_button.png").exists(),
         )
     }
+
+    @Test
+    fun `recent destination route button reuses the shared route entry icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/RecentDestinationBottomSheetShell.kt").readText()
+
+        assertTrue(
+            "Recent destination CTA should reuse the shared route-entry icon so the map home sheet matches the facility detail action.",
+            source.contains("R.drawable.ic_route_start_navigation_button"),
+        )
+    }
+
+    @Test
+    fun `recent destination accessibility chips use compact labels`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Recent destination accessible toilet chip should use the compact noun label without the trailing status suffix.",
+            source.contains("\"accessible-toilet\" -> \"장애인 화장실\""),
+        )
+        assertTrue(
+            "Recent destination elevator chip should use the compact noun label without the trailing status suffix.",
+            source.contains("\"elevator\" -> \"엘리베이터\""),
+        )
+    }
 }

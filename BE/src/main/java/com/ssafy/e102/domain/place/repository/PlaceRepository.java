@@ -22,6 +22,8 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 	@EntityGraph(attributePaths = "accessibilityFeatures")
 	List<Place> findAllByPlaceIdIn(Collection<Long> placeIds);
 
+	Optional<Place> findByProviderPlaceId(String providerPlaceId);
+
 	@Query(value = """
 		select p.place_id
 		from places p

@@ -1,11 +1,15 @@
 package com.ssafy.e102.domain.admin.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,15 +26,24 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.place.entity.Place;
+import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
+import com.ssafy.e102.domain.place.exception.PlaceException;
+import com.ssafy.e102.domain.place.repository.PlaceAccessibilityFeatureRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
+import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.global.geo.GeoPointConverter;
+import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 @ExtendWith(MockitoExtension.class)
 class AdminMapServiceTest {
@@ -46,12 +59,22 @@ class AdminMapServiceTest {
 	@Mock
 	private PlaceRepository placeRepository;
 
+	@Mock
+	private PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
+
 	private AdminMapService adminMapService;
 	private GeometryFactory geometryFactory;
+	private GeoPointConverter geoPointConverter;
 
 	@BeforeEach
 	void setUp() {
-		adminMapService = new AdminMapService(adminAreaRepository, roadSegmentRepository, placeRepository);
+		geoPointConverter = new GeoPointConverter();
+		adminMapService = new AdminMapService(
+			adminAreaRepository,
+			roadSegmentRepository,
+			placeRepository,
+			placeAccessibilityFeatureRepository,
+			geoPointConverter);
 		geometryFactory = new GeometryFactory();
 	}
 
@@ -99,6 +122,95 @@ class AdminMapServiceTest {
 			.isEqualTo(PlaceCategory.PUBLIC_OFFICE);
 	}
 
+	@Test
+	@DisplayName("관리자 장소 상세는 접근성 속성을 함께 반환한다")
+	void getPlace() throws Exception {
+		Place place = place();
+		ReflectionTestUtils.setField(place, "accessibilityFeatures",
+			List.of(feature(place, AccessibilityFeatureType.accessibleToilet, true)));
+		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
+
+		AdminPlaceDetailResponse response = adminMapService.getPlace(1L);
+
+		assertThat(response.placeId()).isEqualTo(1L);
+		assertThat(response.accessibilityFeatures()).hasSize(1);
+		assertThat(response.accessibilityFeatures().get(0).featureType())
+			.isEqualTo(AccessibilityFeatureType.accessibleToilet);
+	}
+
+	@Test
+	@DisplayName("관리자 장소 기본 정보를 부분 수정한다")
+	void updatePlace() throws Exception {
+		Place place = place();
+		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
+		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.empty());
+
+		AdminPlaceDetailResponse response = adminMapService.updatePlace(
+			1L,
+			new AdminPlaceUpdateRequest(
+				" 부산광역시청 ",
+				PlaceCategory.PUBLIC_OFFICE,
+				"",
+				new GeoPointRequest(35.1, 129.1),
+				"67890"));
+
+		assertThat(response.name()).isEqualTo("부산광역시청");
+		assertThat(response.address()).isNull();
+		assertThat(response.providerPlaceId()).isEqualTo("67890");
+		assertThat(response.point().lat()).isEqualTo(35.1);
+		assertThat(response.point().lng()).isEqualTo(129.1);
+	}
+
+	@Test
+	@DisplayName("관리자 장소 providerPlaceId는 다른 장소와 중복될 수 없다")
+	void updatePlaceDuplicateProviderPlaceId() throws Exception {
+		Place place = place();
+		Place otherPlace = place();
+		ReflectionTestUtils.setField(otherPlace, "placeId", 2L);
+		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
+		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.of(otherPlace));
+
+		assertThatThrownBy(() -> adminMapService.updatePlace(
+			1L,
+			new AdminPlaceUpdateRequest(null, null, null, null, "67890")))
+			.isInstanceOf(PlaceException.class);
+	}
+
+	@Test
+	@DisplayName("관리자 장소 접근성 속성은 요청 목록으로 전체 교체한다")
+	void updatePlaceAccessibilityFeatures() throws Exception {
+		Place place = place();
+		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
+		when(placeAccessibilityFeatureRepository.saveAll(any()))
+			.thenAnswer(invocation -> invocation.getArgument(0));
+
+		AdminPlaceDetailResponse response = adminMapService.updatePlaceAccessibilityFeatures(
+			1L,
+			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
+				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
+				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.accessibleToilet,
+					false))));
+
+		verify(placeAccessibilityFeatureRepository).deleteAllByPlace_PlaceId(1L);
+		assertThat(response.accessibilityFeatures())
+			.extracting("featureType")
+			.containsExactly(AccessibilityFeatureType.accessibleToilet, AccessibilityFeatureType.elevator);
+	}
+
+	@Test
+	@DisplayName("관리자 장소 접근성 속성은 같은 유형을 중복 요청할 수 없다")
+	void updatePlaceAccessibilityFeaturesDuplicateType() throws Exception {
+		Place place = place();
+		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
+
+		assertThatThrownBy(() -> adminMapService.updatePlaceAccessibilityFeatures(
+			1L,
+			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
+				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
+				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, false)))))
+			.isInstanceOf(PlaceException.class);
+	}
+
 	private RoadSegment roadSegment(Long edgeId) {
 		LineString geom = geometryFactory.createLineString(new Coordinate[] {
 			new Coordinate(129.0, 35.0),
@@ -121,5 +233,19 @@ class AdminMapServiceTest {
 		ReflectionTestUtils.setField(place, "point", point);
 		ReflectionTestUtils.setField(place, "providerPlaceId", "12345");
 		return place;
+	}
+
+	private PlaceAccessibilityFeature feature(
+		Place place,
+		AccessibilityFeatureType featureType,
+		boolean isAvailable) throws Exception {
+		Constructor<PlaceAccessibilityFeature> constructor = PlaceAccessibilityFeature.class.getDeclaredConstructor();
+		constructor.setAccessible(true);
+		PlaceAccessibilityFeature feature = constructor.newInstance();
+		ReflectionTestUtils.setField(feature, "id", 1);
+		ReflectionTestUtils.setField(feature, "place", place);
+		ReflectionTestUtils.setField(feature, "featureType", featureType);
+		ReflectionTestUtils.setField(feature, "isAvailable", isAvailable);
+		return feature;
 	}
 }

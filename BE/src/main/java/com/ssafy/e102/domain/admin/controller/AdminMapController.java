@@ -2,18 +2,27 @@ package com.ssafy.e102.domain.admin.controller;
 
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
 import com.ssafy.e102.global.response.ApiResponse;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -52,5 +61,33 @@ public class AdminMapController {
 		@Parameter(description = "조회 개수. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "20000") @Min(1) @Max(20000)
 		int limit) {
 		return ApiResponse.success(adminMapService.getFacilities(limit));
+	}
+
+	@Operation(summary = "관리자 장소 상세 조회", description = "관리자 페이지에서 장소 기본 정보와 접근성 속성 목록을 조회한다.")
+	@GetMapping("/places/{placeId}")
+	public ApiResponse<AdminPlaceDetailResponse> getPlace(
+		@Parameter(description = "조회할 장소 ID") @PathVariable @Positive
+		Long placeId) {
+		return ApiResponse.success(adminMapService.getPlace(placeId));
+	}
+
+	@Operation(summary = "관리자 장소 기본 정보 수정", description = "관리자 페이지에서 장소명, 카테고리, 주소, 좌표, providerPlaceId를 수정한다. null 필드는 기존 값을 유지한다.")
+	@PatchMapping("/places/{placeId}")
+	public ApiResponse<AdminPlaceDetailResponse> updatePlace(
+		@Parameter(description = "수정할 장소 ID") @PathVariable @Positive
+		Long placeId,
+		@RequestBody @Valid
+		AdminPlaceUpdateRequest request) {
+		return ApiResponse.success(adminMapService.updatePlace(placeId, request));
+	}
+
+	@Operation(summary = "관리자 장소 접근성 속성 교체", description = "관리자 페이지에서 해당 장소의 접근성 속성 목록을 요청 목록으로 전체 교체한다.")
+	@PutMapping("/places/{placeId}/accessibility-features")
+	public ApiResponse<AdminPlaceDetailResponse> updatePlaceAccessibilityFeatures(
+		@Parameter(description = "수정할 장소 ID") @PathVariable @Positive
+		Long placeId,
+		@RequestBody @Valid
+		AdminPlaceAccessibilityFeaturesUpdateRequest request) {
+		return ApiResponse.success(adminMapService.updatePlaceAccessibilityFeatures(placeId, request));
 	}
 }

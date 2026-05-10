@@ -13,6 +13,9 @@ import com.ssafy.e102.domain.admin.dto.response.AdminMeResponse;
 public class AdminService {
 
 	private static final List<String> ADMIN_PERMISSIONS = List.of(
+		"ADMIN_MAP_READ",
+		"ADMIN_PLACE_READ",
+		"ADMIN_PLACE_WRITE",
 		"HAZARD_REPORT_READ",
 		"HAZARD_REPORT_REVIEW");
 

@@ -1,20 +1,30 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
+import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
+import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
+import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.SearchApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryReadPlan
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SearchRepositoryTest {
@@ -167,6 +177,275 @@ class SearchRepositoryTest {
             val failure = runCatching { repository.search(query) }.exceptionOrNull()
 
             assertEquals("remote search failed", failure?.message)
+        }
+
+    @Test
+    fun `search retries with refreshed auth session when remote responds unauthorized`() =
+        runBlocking {
+            val query = SearchQuery(keyword = "Busan Tower", limit = 2)
+            val localDataSource = SearchLocalDataSource()
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val remoteResults =
+                listOf(
+                    SearchResult(
+                        placeId = "search-1",
+                        title = "Busan Tower",
+                        subtitle = "1 Yongdusan-gil, Busan",
+                        latitude = 35.1000,
+                        longitude = 129.0320,
+                    ),
+                )
+            var requestCount = 0
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource =
+                        object : SearchRemoteDataSource(
+                            getRequestExecutor = { _, _, _ -> error("unused") },
+                            postRequestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                                requestCount += 1
+                                return when (requestCount) {
+                                    1 ->
+                                        throw SearchApiException(
+                                            httpStatusCode = 401,
+                                            status = "AUTH_401",
+                                            message = "인증이 필요합니다.",
+                                        )
+
+                                    2 -> {
+                                        assertEquals(
+                                            "refreshed-access-token",
+                                            authSessionRepository.getAuthGateState().authSession?.accessToken,
+                                        )
+                                        remoteResults
+                                    }
+
+                                    else -> error("Unexpected search retry count: $requestCount")
+                                }
+                            }
+                        },
+                    localDataSource = localDataSource,
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy =
+                        SearchTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+                                assertEquals("refresh-token", refreshToken)
+                                return ReissueResponseDto(
+                                    accessToken = "refreshed-access-token",
+                                    refreshToken = "refreshed-refresh-token",
+                                )
+                            }
+                        },
+                )
+
+            val results = repository.search(query)
+
+            assertEquals(remoteResults, results)
+            assertEquals(2, requestCount)
+            assertEquals(remoteResults, localDataSource.getCachedResults(query))
+            assertEquals(
+                "refreshed-refresh-token",
+                authSessionRepository.getAuthGateState().authSession?.refreshToken,
+            )
+        }
+
+    @Test
+    fun `analyzeVoiceSearch retries with refreshed auth session when remote responds unauthorized`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val remoteAnalysis =
+                SearchVoiceAnalysis(
+                    intent = SearchVoiceIntent.PLACE_SEARCH,
+                    placeName = "Busan Station",
+                    confirmed = true,
+                )
+            var requestCount = 0
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource =
+                        object : SearchRemoteDataSource(
+                            getRequestExecutor = { _, _, _ -> error("unused") },
+                            postRequestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun analyzeVoiceSearch(
+                                text: String,
+                                mode: SearchVoiceMode,
+                            ): SearchVoiceAnalysis {
+                                requestCount += 1
+                                return when (requestCount) {
+                                    1 ->
+                                        throw SearchApiException(
+                                            httpStatusCode = 403,
+                                            status = "AUTH_403",
+                                            message = "인증이 필요합니다.",
+                                        )
+
+                                    2 -> {
+                                        assertEquals(
+                                            "refreshed-access-token",
+                                            authSessionRepository.getAuthGateState().authSession?.accessToken,
+                                        )
+                                        remoteAnalysis
+                                    }
+
+                                    else -> error("Unexpected analyze retry count: $requestCount")
+                                }
+                            }
+                        },
+                    localDataSource = SearchLocalDataSource(),
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy = SearchTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto =
+                                ReissueResponseDto(
+                                    accessToken = "refreshed-access-token",
+                                    refreshToken = "refreshed-refresh-token",
+                                )
+                        },
+                )
+
+            val analysis = repository.analyzeVoiceSearch(text = "Busan Station", mode = SearchVoiceMode.LOW_VISION)
+
+            assertEquals(remoteAnalysis, analysis)
+            assertEquals(2, requestCount)
+        }
+
+    @Test
+    fun `search falls back to local cache and clears auth session when token refresh fails`() =
+        runBlocking {
+            val query = SearchQuery(keyword = "custom")
+            val cachedResult =
+                SearchResult(
+                    placeId = "cached-search-1",
+                    title = "Cached Search Result",
+                    subtitle = "1 Cached-ro, Busan",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                )
+            val localDataSource =
+                SearchLocalDataSource().apply {
+                    updateCachedResults(query = query, results = listOf(cachedResult))
+                }
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource =
+                        object : SearchRemoteDataSource(
+                            getRequestExecutor = { _, _, _ -> error("unused") },
+                            postRequestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                                throw SearchApiException(
+                                    httpStatusCode = 401,
+                                    status = "AUTH_401",
+                                    message = "인증이 필요합니다.",
+                                )
+                            }
+                        },
+                    localDataSource = localDataSource,
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy =
+                        SearchTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+                                throw IllegalStateException("refresh failed")
+                            }
+                        },
+                )
+
+            val results = repository.search(query)
+
+            assertEquals(listOf(cachedResult), results)
+            assertNull(authSessionRepository.getAuthGateState().authSession)
+        }
+
+    @Test
+    fun `search throws auth failure when token refresh fails and no cached fallback exists`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource =
+                        object : SearchRemoteDataSource(
+                            getRequestExecutor = { _, _, _ -> error("unused") },
+                            postRequestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                                throw SearchApiException(
+                                    httpStatusCode = 401,
+                                    status = "AUTH_401",
+                                    message = "인증이 필요합니다.",
+                                )
+                            }
+                        },
+                    localDataSource = SearchLocalDataSource(),
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy =
+                        SearchTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+                                throw IllegalStateException("refresh failed")
+                            }
+                        },
+                )
+
+            val failure = runCatching { repository.search(SearchQuery(keyword = "custom")) }.exceptionOrNull() as? SearchApiException
+
+            requireNotNull(failure)
+            assertEquals(401, failure.httpStatusCode)
+            assertEquals("SEARCH_AUTHENTICATION_FAILED", failure.status)
+            assertEquals("인증이 필요합니다.", failure.message)
+            assertNull(authSessionRepository.getAuthGateState().authSession)
         }
 
     @Test

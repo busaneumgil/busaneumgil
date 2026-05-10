@@ -255,6 +255,8 @@ class AppContainer(
         RepositoryModule.provideRouteRepository(
             localDataSource = routeLocalDataSource,
             remoteDataSource = routeRemoteDataSource,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 
@@ -264,6 +266,8 @@ class AppContainer(
             localDataSource = searchLocalDataSource,
             mockDataSource = searchMockDataSource,
             sourcePolicy = repositorySourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 

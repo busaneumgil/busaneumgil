@@ -885,6 +885,7 @@ internal object TutorialLayoutDefaults {
     const val destinationFilterRowCount: Int = 1
     const val usesServiceLikeStatusStrip: Boolean = true
     const val statusStripUsesTransparentLayer: Boolean = true
+    const val statusStripUsesSoftBlueLayer: Boolean = true
     const val statusStripUsesBorder: Boolean = false
     const val statusStripUsesLowEmphasisValue: Boolean = true
     const val routeStatusUsesMapMarkerIcon: Boolean = true
@@ -930,6 +931,7 @@ internal object TutorialLayoutDefaults {
     val destinationResultPanelGap = 12.dp
     val statusStripMaxWidth = 340.dp
     val statusStripHeight = 40.dp
+    val statusStripContainerAlpha = 0.86f
     val statusStripValueAlpha = 0.72f
     val floatingPanelHeight = 56.dp
     val floatingPanelElevation = 3.dp
@@ -962,5 +964,5 @@ internal object TutorialLayoutDefaults {
 
     val filterChipBorderColor = EumPrimary600.copy(alpha = 0.28f)
     val indicatorTrackColor = Color(0xFFD9DDE7)
-    val statusStripContainerColor = EumWhite.copy(alpha = 0.62f)
+    val statusStripContainerColor = Color(0xFFEAF4FF).copy(alpha = statusStripContainerAlpha)
 }

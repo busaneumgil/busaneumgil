@@ -185,7 +185,7 @@
     <string name="map_filter_category_tourist_attraction">무장애 관광지</string>
     <string name="map_filter_category_toilet">장애인 화장실</string>
     <string name="map_filter_category_elevator">엘리베이터</string>
-    <string name="map_filter_category_charging_station">휠체어 충전</string>
+    <string name="map_filter_category_charging_station">전동보장구 충전소</string>
     <string name="map_filter_category_braille_block">점자블록</string>
     <string name="map_filter_category_other">기타</string>
     <string name="map_facility_detail_info_section_title">기본 안내</string>
@@ -206,6 +206,7 @@
     <string name="map_facility_detail_tag_wheelchair_turning_space">휠체어 회전 공간</string>
     <string name="map_facility_detail_tag_table_spacing">넓은 테이블 간격</string>
     <string name="map_facility_detail_tag_accessible_parking">장애인 주차</string>
+    <string name="map_facility_detail_tag_charging_station">전동보장구 충전 가능</string>
     <string name="map_facility_detail_tag_guidance_facility">안내시설 있음</string>
     <string name="map_facility_detail_tag_accessible_room">객실 이용 가능</string>
     <string name="map_facility_detail_tag_low_height_button">낮은 버튼</string>

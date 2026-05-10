@@ -23,6 +23,7 @@ import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.TransportMode;
+import com.ssafy.e102.domain.route.type.WalkRouteProfile;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperCoordinate;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperPathDetail;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
@@ -49,9 +50,7 @@ public class WalkRoutePayloadService {
 	private static final List<AlertRule> ALERT_RULES = List.of(
 		new AlertRule(RouteGuidanceEventType.STAIR, "stairs_state", Set.of("YES"), 1),
 		new AlertRule(RouteGuidanceEventType.NARROW_SIDEWALK, "width_state", Set.of("NARROW"), 2),
-		new AlertRule(RouteGuidanceEventType.UNPAVED, "surface_state", Set.of("UNPAVED"), 3),
-		new AlertRule(RouteGuidanceEventType.MIDDLE_SLOPE, "slope_state", Set.of("MODERATE", "STEEP", "RISK"), 4),
-		new AlertRule(RouteGuidanceEventType.LOW_SLOPE, "slope_state", Set.of("FLAT"), 5));
+		new AlertRule(RouteGuidanceEventType.UNPAVED, "surface_state", Set.of("UNPAVED"), 3));
 
 	private final RouteTurnInstructionService routeTurnInstructionService;
 
@@ -65,9 +64,10 @@ public class WalkRoutePayloadService {
 		int durationSecond = durationSecond(path.timeMs());
 		int estimatedTimeMinute = estimatedTimeMinute(durationSecond);
 		BigDecimal distanceMeter = scaleDistance(path.distanceMeter());
-		List<RouteBadge> badges = badges(path);
+		List<RouteBadge> badges = badges(path, candidate.profile());
 		List<RouteGuidanceEventResponse> guidanceEvents = toGuidanceEvents(
 			path,
+			candidate.profile(),
 			distanceMeter,
 			durationSecond,
 			null,
@@ -92,7 +92,7 @@ public class WalkRoutePayloadService {
 		RouteLegRole role,
 		String instruction,
 		GraphHopperRoutePath path) {
-		return toWalkLeg(sequence, role, instruction, path, null);
+		return toWalkLeg(sequence, role, instruction, path, WalkRouteProfile.PEDESTRIAN_SAFE, null, null);
 	}
 
 	public RouteLegResponse toWalkLeg(
@@ -101,7 +101,8 @@ public class WalkRoutePayloadService {
 		String instruction,
 		GraphHopperRoutePath path,
 		RouteGuidanceEventType destinationEventType) {
-		return toWalkLeg(sequence, role, instruction, path, null, destinationEventType);
+		return toWalkLeg(sequence, role, instruction, path, WalkRouteProfile.PEDESTRIAN_SAFE, null,
+			destinationEventType);
 	}
 
 	public RouteLegResponse toWalkLeg(
@@ -109,6 +110,18 @@ public class WalkRoutePayloadService {
 		RouteLegRole role,
 		String instruction,
 		GraphHopperRoutePath path,
+		RouteGuidanceEventType startEventType,
+		RouteGuidanceEventType destinationEventType) {
+		return toWalkLeg(sequence, role, instruction, path, WalkRouteProfile.PEDESTRIAN_SAFE, startEventType,
+			destinationEventType);
+	}
+
+	public RouteLegResponse toWalkLeg(
+		int sequence,
+		RouteLegRole role,
+		String instruction,
+		GraphHopperRoutePath path,
+		WalkRouteProfile profile,
 		RouteGuidanceEventType startEventType,
 		RouteGuidanceEventType destinationEventType) {
 		String geometry = toLineString(path.coordinates());
@@ -124,13 +137,13 @@ public class WalkRoutePayloadService {
 			durationSecond,
 			estimatedTimeMinute,
 			geometry,
-			toGuidanceEvents(path, distanceMeter, durationSecond, startEventType, destinationEventType),
+			toGuidanceEvents(path, profile, distanceMeter, durationSecond, startEventType, destinationEventType),
 			null,
 			List.of(),
 			null,
 			null,
 			null,
-			badges(path));
+			badges(path, profile));
 	}
 
 	private RouteLegResponse toWalkOnlyLeg(
@@ -160,6 +173,7 @@ public class WalkRoutePayloadService {
 
 	private List<RouteGuidanceEventResponse> toGuidanceEvents(
 		GraphHopperRoutePath path,
+		WalkRouteProfile profile,
 		BigDecimal totalDistanceMeter,
 		int totalDurationSecond,
 		RouteGuidanceEventType startEventType,
@@ -179,7 +193,7 @@ public class WalkRoutePayloadService {
 				-1));
 		}
 		candidates.addAll(turnEventCandidates(path, totalDistanceMeter, routeLength));
-		candidates.addAll(accessibilityEventCandidates(path, totalDistanceMeter, routeLength));
+		candidates.addAll(accessibilityEventCandidates(path, profile, totalDistanceMeter, routeLength));
 		if (destinationEventType != null && coordinates.size() > 1) {
 			int destinationIndex = coordinates.size() - 1;
 			candidates.add(new GuidanceEventCandidate(
@@ -272,10 +286,12 @@ public class WalkRoutePayloadService {
 
 	private List<GuidanceEventCandidate> accessibilityEventCandidates(
 		GraphHopperRoutePath path,
+		WalkRouteProfile profile,
 		BigDecimal totalDistanceMeter,
 		BigDecimal routeLength) {
 		List<GuidanceEventCandidate> candidates = new ArrayList<>();
 		candidates.addAll(crosswalkEventCandidates(path, totalDistanceMeter, routeLength));
+		candidates.addAll(slopeEventCandidates(path, profile, totalDistanceMeter, routeLength));
 		ALERT_RULES
 			.forEach(rule -> candidates.addAll(alertEventCandidates(path, rule, totalDistanceMeter, routeLength)));
 
@@ -306,6 +322,42 @@ public class WalkRoutePayloadService {
 						1))
 					.stream())
 			.toList();
+	}
+
+	private List<GuidanceEventCandidate> slopeEventCandidates(
+		GraphHopperRoutePath path,
+		WalkRouteProfile profile,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		return path.details()
+			.getOrDefault("avg_slope_percent", List.of())
+			.stream()
+			.flatMap(
+				detail -> slopeGuidanceEventType(profile, detail.value())
+					.flatMap(type -> eventDistanceMeter(
+						path.coordinates(),
+						detail.fromIndex(),
+						totalDistanceMeter,
+						routeLength)
+						.map(distanceMeter -> new GuidanceEventCandidate(
+							type,
+							detail.fromIndex(),
+							distanceMeter,
+							slopePriority(type),
+							1)))
+					.stream())
+			.toList();
+	}
+
+	private Optional<RouteGuidanceEventType> slopeGuidanceEventType(WalkRouteProfile profile, String value) {
+		return slopeSeverity(profile, value)
+			.map(severity -> severity == SlopeSeverity.LOW
+				? RouteGuidanceEventType.LOW_SLOPE
+				: RouteGuidanceEventType.MIDDLE_SLOPE);
+	}
+
+	private int slopePriority(RouteGuidanceEventType type) {
+		return type == RouteGuidanceEventType.MIDDLE_SLOPE ? 4 : 5;
 	}
 
 	private RouteGuidanceEventType crosswalkEventType(
@@ -454,12 +506,12 @@ public class WalkRoutePayloadService {
 			to.lng().doubleValue()));
 	}
 
-	private List<RouteBadge> badges(GraphHopperRoutePath path) {
+	private List<RouteBadge> badges(GraphHopperRoutePath path, WalkRouteProfile profile) {
 		Set<RouteBadge> badges = new LinkedHashSet<>();
-		if (hasAny(path, "slope_state", "MODERATE", "STEEP", "RISK")) {
+		if (hasSlopeSeverity(path, profile, SlopeSeverity.MIDDLE, SlopeSeverity.HIGH)) {
 			badges.add(RouteBadge.MIDDLE_SLOPE);
 		}
-		if (hasAny(path, "slope_state", "FLAT")) {
+		if (hasSlopeSeverity(path, profile, SlopeSeverity.LOW)) {
 			badges.add(RouteBadge.LOW_SLOPE);
 		}
 		if (hasAny(path, "stairs_state", "YES")) {
@@ -477,6 +529,52 @@ public class WalkRoutePayloadService {
 		return BADGE_PRIORITY.stream()
 			.filter(badges::contains)
 			.toList();
+	}
+
+	private boolean hasSlopeSeverity(GraphHopperRoutePath path, WalkRouteProfile profile, SlopeSeverity... severities) {
+		Set<SlopeSeverity> expected = Set.of(severities);
+		return path.details()
+			.getOrDefault("avg_slope_percent", List.of())
+			.stream()
+			.map(detail -> slopeSeverity(profile, detail.value()))
+			.flatMap(Optional::stream)
+			.anyMatch(expected::contains);
+	}
+
+	private Optional<SlopeSeverity> slopeSeverity(WalkRouteProfile profile, String value) {
+		BigDecimal slopePercent = parseSlopePercent(value);
+		if (slopePercent == null || slopePercent.compareTo(BigDecimal.ZERO) < 0) {
+			return Optional.empty();
+		}
+		SlopeThreshold threshold = slopeThreshold(profile);
+		if (slopePercent.compareTo(threshold.lowUpperExclusive()) < 0) {
+			return Optional.of(SlopeSeverity.LOW);
+		}
+		if (slopePercent.compareTo(threshold.middleUpperExclusive()) < 0) {
+			return Optional.of(SlopeSeverity.MIDDLE);
+		}
+		return Optional.of(SlopeSeverity.HIGH);
+	}
+
+	private SlopeThreshold slopeThreshold(WalkRouteProfile profile) {
+		WalkRouteProfile effectiveProfile = profile == null ? WalkRouteProfile.PEDESTRIAN_SAFE : profile;
+		return switch (effectiveProfile) {
+			case PEDESTRIAN_SAFE, PEDESTRIAN_FAST, WHEELCHAIR_AUTO_SAFE, WHEELCHAIR_AUTO_FAST ->
+				new SlopeThreshold(new BigDecimal("5.56"), new BigDecimal("8.33"));
+			case VISUAL_SAFE, VISUAL_FAST, WHEELCHAIR_MANUAL_SAFE, WHEELCHAIR_MANUAL_FAST ->
+				new SlopeThreshold(new BigDecimal("3.00"), new BigDecimal("5.56"));
+		};
+	}
+
+	private BigDecimal parseSlopePercent(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		try {
+			return new BigDecimal(value.trim());
+		} catch (NumberFormatException exception) {
+			return null;
+		}
 	}
 
 	private boolean hasAny(GraphHopperRoutePath path, String detailName, String... expectedValues) {
@@ -542,5 +640,16 @@ public class WalkRoutePayloadService {
 		BigDecimal distanceFromLegStartMeter,
 		int priority,
 		int kindOrder) {
+	}
+
+	private record SlopeThreshold(
+		BigDecimal lowUpperExclusive,
+		BigDecimal middleUpperExclusive) {
+	}
+
+	private enum SlopeSeverity {
+		LOW,
+		MIDDLE,
+		HIGH
 	}
 }

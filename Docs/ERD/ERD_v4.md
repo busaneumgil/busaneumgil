@@ -70,6 +70,7 @@
 - `road_nodes`
 - `road_segments`
 - `admin_areas`
+- `source_features`
 - `segment_features`
 
 ### 대중교통 도메인
@@ -192,7 +193,6 @@ erDiagram
         ENUM walk_access
         ENUM braille_block_state
         ENUM audio_signal_state
-        ENUM slope_state
         ENUM width_state
         VARCHAR surface_state
         ENUM stairs_state
@@ -205,6 +205,15 @@ erDiagram
         VARCHAR gu
         VARCHAR dong
         GEOMETRY geom
+    }
+
+    SOURCE_FEATURES {
+        BIGINT source_feature_id PK
+        VARCHAR feature_type
+        GEOMETRY geom
+        VARCHAR state
+        NUMERIC value_number
+        VARCHAR source_file
     }
 
     SEGMENT_FEATURES {
@@ -591,7 +600,6 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 보행 폭(미터) | width_meter | NUMERIC(6,2) | NULL |  |
 | 점자블록 상태 | braille_block_state | ENUM | NOT NULL | UNKNOWN |
 | 음향신호기 상태 | audio_signal_state | ENUM | NOT NULL | UNKNOWN |
-| 경사 상태 | slope_state | ENUM | NOT NULL | UNKNOWN |
 | 폭 상태 | width_state | ENUM | NOT NULL | UNKNOWN |
 | 노면 상태 | surface_state | VARCHAR(30) | NOT NULL | UNKNOWN |
 | 계단 상태 | stairs_state | ENUM | NOT NULL | UNKNOWN |
@@ -601,7 +609,6 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### enum 값
 
 - `walk_access`, `braille_block_state`, `audio_signal_state`, `stairs_state`, `signal_state`: `YES`, `NO`, `UNKNOWN`
-- `slope_state`: `FLAT`, `MODERATE`, `STEEP`, `RISK`, `UNKNOWN`
 - `width_state`: `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN`
 - `surface_state` 후보값: `PAVED`, `UNPAVED`, `UNKNOWN`
 - `segment_type` 후보값: `CROSS_WALK`, `SIDE_LINE`
@@ -611,8 +618,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `edge_id`가 downstream(CSV ETL, GraphHopper)에서 사용하는 유일한 surrogate key다.
 - `walk_access` 기본값은 SHP 소스에서 보행 전용 의미를 확정할 수 없으므로 `UNKNOWN`으로 시작한다. `NO`는 모든 프로필에서 통행 차단, `UNKNOWN`은 차단하지 않고 penalty로 처리한다.
 - `avg_slope_percent`, `width_meter`는 CSV ETL(`slope_analysis_staging.csv`) 보강값으로 채워진다.
-- `slope_state`는 경사 난이도 기반 경로 비용 계산에 사용하며, `avg_slope_percent` 또는 경사 관련 보강 데이터에서 파생한다.
-- `slope_state=RISK`는 `avg_slope_percent >= 12.00%` 구간을 의미하며, 경로 비용 계산에서 강한 회피 또는 차단 후보로 사용한다.
+- 경사 난이도는 단일 파생 상태 컬럼으로 저장하지 않는다. `avg_slope_percent` 원천 수치를 기준으로 GraphHopper profile 또는 backend 정책에서 사용자 유형별 threshold를 적용한다.
 - `surface_state`는 분류 기준이 확장될 수 있으므로 ENUM 대신 `VARCHAR`로 관리한다.
 - `crossing_state`는 별도 저장 컬럼으로 두지 않고 `segment_type`과 `signal_state`에서 파생한다.
   - `segment_type != CROSS_WALK`이면 `crossing_state=NONE`
@@ -620,7 +626,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
   - `segment_type = CROSS_WALK`이고 `signal_state=NO`이면 `crossing_state=UNSIGNALIZED`
   - `segment_type = CROSS_WALK`이고 `signal_state=UNKNOWN`이면 `crossing_state=UNKNOWN`
 - 엘리베이터는 보행 segment 상태값으로 두지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 장소 내부 엘리베이터는 `place_accessibility_features.feature_type=elevator`로 관리한다.
-- 상세 feature 객체(음향신호기, 횡단보도 등)는 `segment_features`에 저장하고, `road_segments`에는 최종 상태값만 반영한다.
+- 원천 feature 객체는 `source_features`에 저장하고, `road_segments`에는 최종 집계 상태값만 반영한다. `segment_features`는 라우팅/안내에 필요한 edge 매칭 결과만 저장한다.
 
 ---
 
@@ -649,13 +655,64 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 11) segment_features
+## 11) source_features *(v4 변경)*
+
+### 역할
+
+접근성 원천 CSV에서 읽은 feature를 영속 저장한다.
+
+관리자페이지에서 보행 네트워크 `road_segments`를 add/delete 할 때 CSV를 다시 순회하지 않고, `source_features.geom` 공간 인덱스로 새 segment 주변 feature만 빠르게 조회해 `segment_features`와 `road_segments` 접근성 집계 컬럼을 재계산한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 원천 feature ID | source_feature_id | BIGINT | NOT NULL | DB sequence |
+| feature 종류 | feature_type | VARCHAR(50) | NOT NULL |  |
+| 원천 위치/구간 | geom | GEOMETRY(GEOMETRY, 4326) | NOT NULL |  |
+| 문자 상태값 | state | VARCHAR(50) | NULL |  |
+| 수치값 | value_number | NUMERIC(10,2) | NULL |  |
+| 원천 파일명 | source_file | VARCHAR(255) | NOT NULL |  |
+
+### 제약과 인덱스
+
+- `source_feature_id` PK
+- `idx_source_features_geom`: `GIST (geom)`
+- `idx_source_features_type_file`: `(feature_type, source_file)`
+
+### feature_type 후보값
+
+| feature_type | state 정책 | value_number 정책 | 설명 |
+| --- | --- | --- | --- |
+| `CROSSWALK` | `YES`, `NO` | NULL | 횡단보도 |
+| `SIGNAL` | `YES`, `NO` | NULL | 횡단보도 신호기 |
+| `AUDIO_SIGNAL` | `YES`, `NO` | NULL | 음향신호기 |
+| `BRAILLE_BLOCK` | `YES`, `NO` | NULL | 점자블록 |
+| `STAIRS` | `YES`, `NO` | NULL | 계단 |
+| `WALK_ACCESS` | `YES`, `NO` | NULL | 도보 가능 여부 보강 |
+| `SLOPE` | NULL | 필수, 경사도 % | 경사 원천 수치 |
+| `WIDTH` | 필수, `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN` | 필수, 폭 m | 보행 폭 원천 수치와 등급 |
+| `SURFACE` | `PAVED`, `UNPAVED`, `UNKNOWN` | NULL | 노면 상태 |
+
+### 비고
+
+- `source_features`는 일회성 staging table이 아니라 dev/prod에 모두 존재하는 영속 원천 테이블이다.
+- `source_feature_id`는 DB sequence로 부여한다. CSV row 기반 deterministic id를 사용하지 않는다.
+- `feature_type`은 DB enum이 아니라 `VARCHAR(50)`로 저장하고, loader/application에서 허용값을 검증한다.
+- `state`와 `value_number`는 컬럼 자체로는 nullable이다. 다만 feature type별 필수 여부는 loader/application 정책으로 검증한다.
+- `SLOPE.state`는 항상 `NULL`로 둔다. 경사 판단은 `value_number` 또는 `road_segments.avg_slope_percent`를 기준으로 사용자 유형별 정책에서 수행한다.
+- `WIDTH.state`는 필수로 저장한다. 폭 등급을 재계산하지 않고 원천 적재 시 확정한 값을 `road_segments.width_state`에 반영한다.
+- `source_features`는 `road_segments`와 FK 관계를 갖지 않는다. 연결은 `ST_DWithin`, `ST_Equals`, `ST_Intersects` 같은 공간 연산으로 수행한다.
+
+---
+
+## 12) segment_features
 
 ### 역할
 
 `road_segments`에 매칭된 개별 feature 객체를 저장한다.
 
-횡단보도, 점자블록, 음향신호기, 경사 구간, 계단처럼 특정 edge에 귀속되는 원천 feature를 추적하거나 지도에 표시할 때 사용한다.
+횡단보도, 점자블록, 음향신호기, 계단처럼 특정 edge에 귀속된 위치 이벤트 feature를 추적하거나 지도에 표시할 때 사용한다.
 
 ### 컬럼 명세
 
@@ -670,11 +727,12 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `road_segments 1 : N segment_features` 관계를 가진다.
 - `geom`은 feature 성격에 따라 `POINT`, `LINESTRING` 등으로 저장할 수 있도록 범용 geometry 타입을 사용한다.
-- `feature_type` 후보값: `CROSSWALK`, `AUDIO_SIGNAL`, `BRAILLE_BLOCK`, `SLOPE`, `STAIRS`.
+- `feature_type` 후보값: `CROSSWALK`, `AUDIO_SIGNAL`, `BRAILLE_BLOCK`, `STAIRS`.
+- 경사, 폭, 노면, 도보 가능 여부, 신호기 같은 원천/집계 feature는 `source_features`와 `road_segments`에서 관리한다.
 
 ---
 
-## 12) route_ratings
+## 13) route_ratings
 
 ### 역할
 
@@ -716,7 +774,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 13) route_sessions
+## 14) route_sessions
 
 ### 역할
 
@@ -775,7 +833,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 13) subway_stations
+## 15) subway_stations
 
 ### 역할
 
@@ -812,7 +870,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 ---
 
-## 14) subway_timetables
+## 16) subway_timetables
 
 ### 역할
 
@@ -861,7 +919,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 ---
 
-## 15) subway_station_elevators
+## 17) subway_station_elevators
 
 ### 역할
 
@@ -957,6 +1015,12 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - `road_segments 1 : N segment_features`
 - 하나의 보행 segment는 0개 이상의 개별 feature를 가질 수 있다.
+
+### source_features - road_segments
+
+- FK 관계가 아니다.
+- `source_features`는 접근성 원천 feature 저장소이며, `road_segments`와의 연결은 `ST_DWithin`, `ST_Equals`, `ST_Intersects` 같은 공간 연산으로 계산한다.
+- 관리자페이지에서 segment가 추가되면 추가된 `road_segments.geom` 주변 `source_features`만 조회해 `segment_features`와 `road_segments` 집계 컬럼을 갱신한다.
 
 ### subway_stations - subway_timetables
 

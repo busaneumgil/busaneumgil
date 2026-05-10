@@ -47,8 +47,7 @@ class GraphHopperRouteClientTest {
 	void routeCallsGraphHopperAndParsesFirstPath() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=visual_safe&point=35.12,128.936&"
 			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
-			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
-			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andExpect(method(HttpMethod.GET))
 			.andExpect(queryParam("profile", "visual_safe"))
 			.andExpect(queryParam("points_encoded", "false"))
@@ -90,8 +89,7 @@ class GraphHopperRouteClientTest {
 	void routeMapsEmptyPathsToRouteNotFound() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
 			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
-			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
-			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withSuccess("{\"paths\":[]}", MediaType.APPLICATION_JSON));
 
 		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
@@ -108,8 +106,7 @@ class GraphHopperRouteClientTest {
 	void routeMapsHttpFailureToExternalRouteApiFailed() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
 			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
-			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
-			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withServerError());
 
 		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
@@ -126,8 +123,7 @@ class GraphHopperRouteClientTest {
 	void routeMapsConnectionNotFoundToRouteNotFound() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
 			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
-			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
-			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
 				.contentType(MediaType.APPLICATION_JSON)
 				.body("""
@@ -156,8 +152,7 @@ class GraphHopperRouteClientTest {
 	void routeKeepsBadRequestWithoutNoRouteHintAsExternalRouteApiFailed() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
 			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
-			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=slope_state&"
-			+ "details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
 				.contentType(MediaType.APPLICATION_JSON)
 				.body("""

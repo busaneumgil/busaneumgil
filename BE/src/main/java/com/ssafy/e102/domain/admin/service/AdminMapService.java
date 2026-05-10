@@ -161,7 +161,6 @@ public class AdminMapService {
 				roadSegment.getWalkAccess(),
 				roadSegment.getBrailleBlockState(),
 				roadSegment.getAudioSignalState(),
-				roadSegment.getSlopeState(),
 				roadSegment.getWidthState(),
 				roadSegment.getSurfaceState(),
 				roadSegment.getStairsState(),

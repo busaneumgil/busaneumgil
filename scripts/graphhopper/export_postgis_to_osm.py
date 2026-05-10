@@ -33,7 +33,6 @@ ROAD_SEGMENT_COLUMNS = {
     "width_meter": ("width_meter", "widthMeter"),
     "braille_block_state": ("braille_block_state", "brailleBlockState"),
     "audio_signal_state": ("audio_signal_state", "audioSignalState"),
-    "slope_state": ("slope_state", "slopeState"),
     "width_state": ("width_state", "widthState"),
     "surface_state": ("surface_state", "surfaceState"),
     "stairs_state": ("stairs_state", "stairsState"),
@@ -104,7 +103,6 @@ def build_road_segments_sql(available_columns):
     width_meter = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "width_meter")
     braille_block_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "braille_block_state")
     audio_signal_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "audio_signal_state")
-    slope_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "slope_state")
     width_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "width_state")
     surface_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "surface_state")
     stairs_state = resolve_column(available_columns, ROAD_SEGMENT_COLUMNS, "stairs_state")
@@ -121,7 +119,6 @@ SELECT
   COALESCE({width_meter}, 0.0) AS width_meter,
   COALESCE({braille_block_state}::text, 'UNKNOWN') AS braille_block_state,
   COALESCE({audio_signal_state}::text, 'UNKNOWN') AS audio_signal_state,
-  COALESCE({slope_state}::text, 'UNKNOWN') AS slope_state,
   COALESCE({width_state}::text, 'UNKNOWN') AS width_state,
   COALESCE({surface_state}::text, 'UNKNOWN') AS surface_state,
   COALESCE({stairs_state}::text, 'UNKNOWN') AS stairs_state,
@@ -174,7 +171,6 @@ REQUIRED_SEGMENT_FIELDS = {
     "width_meter",
     "braille_block_state",
     "audio_signal_state",
-    "slope_state",
     "width_state",
     "surface_state",
     "stairs_state",
@@ -186,7 +182,6 @@ ENUM_VALUES = {
     "walk_access": {"YES", "NO", "UNKNOWN"},
     "braille_block_state": {"YES", "NO", "UNKNOWN"},
     "audio_signal_state": {"YES", "NO", "UNKNOWN"},
-    "slope_state": {"FLAT", "MODERATE", "STEEP", "RISK", "UNKNOWN"},
     "width_state": {"ADEQUATE_150", "ADEQUATE_120", "NARROW", "UNKNOWN"},
     "surface_state": {"PAVED", "UNPAVED", "UNKNOWN"},
     "stairs_state": {"YES", "NO", "UNKNOWN"},
@@ -340,20 +335,6 @@ def parse_feature_number(value):
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
-
-
-def derive_slope_state(avg_slope_percent):
-    """원천 경사율을 GraphHopper 표준 slope enum으로 변환한다."""
-    number = parse_feature_number(avg_slope_percent)
-    if number is None:
-        return "UNKNOWN"
-    if number < 5.56:
-        return "FLAT"
-    if number < 8.33:
-        return "MODERATE"
-    if number < 12.0:
-        return "STEEP"
-    return "RISK"
 
 
 def derive_width_state(width_meter):
@@ -896,7 +877,6 @@ def write_osm(nodes, segments, output):
         tag(way, "ieum:width_meter", normalize_export_value(segment.get("width_meter"), "0.0"))
         tag(way, "ieum:braille_block_state", normalize_export_value(segment.get("braille_block_state"), "UNKNOWN"))
         tag(way, "ieum:audio_signal_state", normalize_export_value(segment.get("audio_signal_state"), "UNKNOWN"))
-        tag(way, "ieum:slope_state", normalize_export_value(segment.get("slope_state"), "UNKNOWN"))
         tag(way, "ieum:width_state", normalize_export_value(segment.get("width_state"), "UNKNOWN"))
         tag(way, "ieum:surface_state", normalize_export_value(segment.get("surface_state"), "UNKNOWN"))
         tag(way, "ieum:stairs_state", normalize_export_value(segment.get("stairs_state"), "UNKNOWN"))

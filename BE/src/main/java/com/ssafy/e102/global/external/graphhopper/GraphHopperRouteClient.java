@@ -39,7 +39,6 @@ public class GraphHopperRouteClient {
 		"segment_type",
 		"signal_state",
 		"audio_signal_state",
-		"slope_state",
 		"avg_slope_percent",
 		"width_state",
 		"surface_state",

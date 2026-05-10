@@ -49,6 +49,7 @@ class TutorialScreenTest {
         assertEquals(false, TutorialLayoutDefaults.usesGeneratedBitmapIllustration)
         assertEquals(true, TutorialLayoutDefaults.usesServiceLikeStatusStrip)
         assertEquals(true, TutorialLayoutDefaults.statusStripUsesTransparentLayer)
+        assertEquals(true, TutorialLayoutDefaults.statusStripUsesSoftBlueLayer)
         assertEquals(false, TutorialLayoutDefaults.statusStripUsesBorder)
         assertEquals(true, TutorialLayoutDefaults.statusStripUsesLowEmphasisValue)
         assertEquals(true, TutorialLayoutDefaults.routeStatusUsesMapMarkerIcon)
@@ -92,6 +93,7 @@ class TutorialScreenTest {
         assertEquals(12.dp, TutorialLayoutDefaults.destinationResultPanelGap)
         assertEquals(40.dp, TutorialLayoutDefaults.statusStripHeight)
         assertEquals(340.dp, TutorialLayoutDefaults.statusStripMaxWidth)
+        assertEquals(0.86f, TutorialLayoutDefaults.statusStripContainerAlpha, 0f)
     }
 
     @Test

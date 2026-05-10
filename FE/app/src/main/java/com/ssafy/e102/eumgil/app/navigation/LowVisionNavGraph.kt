@@ -311,7 +311,7 @@ private fun LowVisionKwsNavEffect(
     }
     val viewModel: LowVisionViewModel = viewModel(graphEntry)
 
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(backStackEntry) {
         delay(500) // STT AudioRecorder 해제 완료 대기
         // 탭 화면 진입 시마다 KWS 재시작 (VoiceInput 사용 후 복귀 포함)
         viewModel.resumeSpotting()

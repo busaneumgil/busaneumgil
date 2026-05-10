@@ -32,9 +32,9 @@ class TutorialScreenTest {
     fun `tutorial keeps concise visual cues while preserving key chips`() {
         assertEquals(3, TutorialLayoutDefaults.totalStepCount)
         assertEquals(0, TutorialLayoutDefaults.supportingItemCount)
-        assertEquals(3, TutorialLayoutDefaults.destinationFilterChipCount)
+        assertEquals(2, TutorialLayoutDefaults.destinationFilterChipCount)
         assertEquals(0, TutorialLayoutDefaults.routeAccessibilityChipCount)
-        assertEquals(0, TutorialLayoutDefaults.reportCategoryChipCount)
+        assertEquals(4, TutorialLayoutDefaults.reportCategoryChipCount)
         assertEquals(false, TutorialLayoutDefaults.showsEmphasisChip)
         assertEquals(true, TutorialLayoutDefaults.usesLayeredFlatIllustration)
         assertEquals(false, TutorialLayoutDefaults.usesIllustrationHalo)
@@ -47,6 +47,10 @@ class TutorialScreenTest {
         assertEquals(true, TutorialLayoutDefaults.destinationFilterUsesOriginalMapChipShape)
         assertEquals(true, TutorialLayoutDefaults.destinationShowsFilterResultPanel)
         assertEquals(false, TutorialLayoutDefaults.usesGeneratedBitmapIllustration)
+        assertEquals(true, TutorialLayoutDefaults.routeCopyUsesRouteWording)
+        assertEquals(true, TutorialLayoutDefaults.reportUsesLatestReportTypeIcons)
+        assertEquals(true, TutorialLayoutDefaults.reportHighlightsSelectedCategory)
+        assertEquals(true, TutorialLayoutDefaults.reportShowsSubmitButtonBelowGrid)
         assertEquals(true, TutorialLayoutDefaults.reportDescriptionMentionsRouteContribution)
     }
 
@@ -55,13 +59,16 @@ class TutorialScreenTest {
         assertEquals(34.sp, TutorialLayoutDefaults.headerHeadlineLineHeight)
         assertEquals(22.sp, TutorialLayoutDefaults.headerDescriptionLineHeight)
         assertEquals(12.dp, TutorialLayoutDefaults.illustrationContentGap)
-        assertEquals(4.dp, TutorialLayoutDefaults.headerVisualGap)
+        assertEquals(24.dp, TutorialLayoutDefaults.headerVisualGap)
         assertEquals(20.dp, TutorialLayoutDefaults.headerTopPadding)
         assertEquals(12.dp, TutorialLayoutDefaults.sceneContentVerticalGap)
+        assertEquals(TutorialLayoutDefaults.sceneContentVerticalGap, TutorialLayoutDefaults.destinationControlVerticalGap)
+        assertEquals(TutorialLayoutDefaults.sceneContentVerticalGap, TutorialLayoutDefaults.destinationResultPanelGap)
+        assertEquals(TutorialLayoutDefaults.sceneContentVerticalGap, TutorialLayoutDefaults.reportGridButtonGap)
         assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
         assertEquals(96.dp, TutorialLayoutDefaults.routeCardHeight)
-        assertEquals(148.dp, TutorialLayoutDefaults.reportTileWidth)
-        assertEquals(112.dp, TutorialLayoutDefaults.reportTileHeight)
+        assertEquals(152.dp, TutorialLayoutDefaults.reportTileWidth)
+        assertEquals(88.dp, TutorialLayoutDefaults.reportTileHeight)
     }
 
     @Test
@@ -74,8 +81,19 @@ class TutorialScreenTest {
         assertEquals(38.dp, TutorialLayoutDefaults.filterChipMinHeight)
         assertEquals(8.dp, TutorialLayoutDefaults.filterChipCornerRadius)
         assertEquals(2, TutorialLayoutDefaults.filterChipRowMaxItemCount)
+        assertEquals(1, TutorialLayoutDefaults.destinationFilterRowCount)
         assertEquals(340.dp, TutorialLayoutDefaults.destinationResultPanelMaxWidth)
         assertEquals(12.dp, TutorialLayoutDefaults.destinationResultPanelGap)
+    }
+
+    @Test
+    fun `route copy uses route instead of path wording`() {
+        val stringsFile = File("src/main/res/values/strings.xml")
+
+        assertEquals("내게 맞는 경로를\\n빠르게 고르기", stringsFile.readStringResource(name = "tutorial_route_headline"))
+        assertEquals("완전히 안전한 경로", stringsFile.readStringResource(name = "tutorial_route_recommended"))
+        assertEquals("효율적인 경로", stringsFile.readStringResource(name = "tutorial_route_efficient"))
+        assertEquals("경로 안내 시작", stringsFile.readStringResource(name = "tutorial_route_start_navigation"))
     }
 
     @Test
@@ -90,6 +108,17 @@ class TutorialScreenTest {
                 .readStringResource(name = "tutorial_route_efficient_time")
 
         assertEquals("35분", routeEfficientTime)
+    }
+
+    @Test
+    fun `report tutorial mirrors the visible report category grid`() {
+        val stringsFile = File("src/main/res/values/strings.xml")
+
+        assertEquals("계단·단차 있음", stringsFile.readStringResource(name = "tutorial_report_stairs_step"))
+        assertEquals("점자블록 문제", stringsFile.readStringResource(name = "tutorial_report_braille_block"))
+        assertEquals("인도 없음", stringsFile.readStringResource(name = "tutorial_report_sidewalk_missing"))
+        assertEquals("경사로 문제", stringsFile.readStringResource(name = "tutorial_report_ramp"))
+        assertEquals("제보하기", stringsFile.readStringResource(name = "tutorial_report_action_submit"))
     }
 
     private fun File.readStringResource(name: String): String {

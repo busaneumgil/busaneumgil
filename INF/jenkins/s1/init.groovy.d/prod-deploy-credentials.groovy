@@ -4,10 +4,8 @@ import com.cloudbees.plugins.credentials.CredentialsProvider
 import com.cloudbees.plugins.credentials.CredentialsScope
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider
 import com.cloudbees.plugins.credentials.domains.Domain
-import com.cloudbees.plugins.credentials.SecretBytes
 import com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey
 import hudson.util.Secret
-import org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl
 import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl
 
 def jenkins = Jenkins.get()
@@ -24,25 +22,6 @@ def removeIfExists = { String id ->
     if (existing != null) {
         store.removeCredentials(Domain.global(), existing)
     }
-}
-
-def upsertFileCredential = { String id, String description, String fileName, String sourcePath ->
-    File source = new File(sourcePath)
-    if (!source.isFile()) {
-        println("[e102] skip credential ${id}: missing file ${sourcePath}")
-        return
-    }
-
-    removeIfExists(id)
-    def credential = new FileCredentialsImpl(
-        CredentialsScope.GLOBAL,
-        id,
-        description,
-        fileName,
-        SecretBytes.fromBytes(source.bytes)
-    )
-    store.addCredentials(Domain.global(), credential)
-    println("[e102] upserted file credential ${id}")
 }
 
 def upsertStringCredential = { String id, String description, String value ->
@@ -82,12 +61,9 @@ def upsertSshKeyCredential = { String id, String description, String username, S
     println("[e102] upserted SSH key credential ${id}")
 }
 
-upsertFileCredential(
-    'e102-prod-env-file',
-    'E102 prod .env file for S2 production deploy',
-    '.env.prod',
-    '/var/jenkins_home/prod-secrets/.env.prod'
-)
+removeIfExists('e102-dev-env-file')
+removeIfExists('e102-prod-env-file')
+println('[e102] removed deprecated env-file credentials when present')
 
 upsertStringCredential(
     'e102-s2-host',

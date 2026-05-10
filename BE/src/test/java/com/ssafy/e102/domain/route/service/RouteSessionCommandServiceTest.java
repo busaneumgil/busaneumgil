@@ -24,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
@@ -55,11 +56,17 @@ class RouteSessionCommandServiceTest {
 	@DisplayName("ACTIVE route session 저장 시 activeRouteKey를 routeId로 채워 unique 제약 대상이 되게 한다")
 	void saveActiveSessionUsesActiveRouteKey() {
 		User user = user(USER_ID);
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.empty());
 		when(userRepository.getReferenceById(USER_ID)).thenReturn(user);
+		when(routeSessionRepository.saveAndFlush(any(RouteSession.class))).thenAnswer(invocation -> {
+			RouteSession session = invocation.getArgument(0);
+			ReflectionTestUtils.setField(session, "sessionId", sessionId);
+			return session;
+		});
 
-		service.saveActiveSessionIfAbsent(
+		RouteSessionResponse response = service.saveActiveSessionIfAbsent(
 			USER_ID,
 			"rt_selected_001",
 			point(128.936, 35.12),
@@ -68,6 +75,7 @@ class RouteSessionCommandServiceTest {
 
 		ArgumentCaptor<RouteSession> captor = ArgumentCaptor.forClass(RouteSession.class);
 		verify(routeSessionRepository).saveAndFlush(captor.capture());
+		assertThat(response.sessionId()).isEqualTo(captor.getValue().getSessionId());
 		assertThat(captor.getValue().getUser()).isEqualTo(user);
 		assertThat(captor.getValue().getRouteId()).isEqualTo("rt_selected_001");
 		assertThat(captor.getValue().getActiveRouteKey()).isEqualTo("rt_selected_001");
@@ -77,16 +85,20 @@ class RouteSessionCommandServiceTest {
 	@Test
 	@DisplayName("이미 ACTIVE session이 있으면 추가 저장하지 않는다")
 	void saveActiveSessionSkipsDuplicateActiveRoute() {
+		RouteSession activeSession = mock(RouteSession.class);
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+		when(activeSession.getSessionId()).thenReturn(sessionId);
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
-			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.of(mock(RouteSession.class)));
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.of(activeSession));
 
-		service.saveActiveSessionIfAbsent(
+		RouteSessionResponse response = service.saveActiveSessionIfAbsent(
 			USER_ID,
 			"rt_selected_001",
 			point(128.936, 35.12),
 			point(128.956, 35.14),
 			snapshot("rt_selected_001"));
 
+		assertThat(response.sessionId()).isEqualTo(sessionId);
 		verify(userRepository, never()).getReferenceById(any());
 		verify(routeSessionRepository, never()).saveAndFlush(any());
 	}
@@ -197,8 +209,9 @@ class RouteSessionCommandServiceTest {
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.of(session));
 
-		service.endSession(USER_ID, "rt_selected_001");
+		RouteSessionResponse response = service.endSession(USER_ID, "rt_selected_001");
 
+		assertThat(response.sessionId()).isEqualTo(session.getSessionId());
 		assertThat(session.getStatus()).isEqualTo(RouteSessionStatus.COMPLETED);
 		assertThat(session.getActiveRouteKey()).isNull();
 	}
@@ -216,8 +229,9 @@ class RouteSessionCommandServiceTest {
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
 			.thenReturn(Optional.of(session));
 
-		service.endSession(USER_ID, "rt_selected_001");
+		RouteSessionResponse response = service.endSession(USER_ID, "rt_selected_001");
 
+		assertThat(response.sessionId()).isEqualTo(session.getSessionId());
 		assertThat(session.getStatus()).isEqualTo(RouteSessionStatus.COMPLETED);
 	}
 

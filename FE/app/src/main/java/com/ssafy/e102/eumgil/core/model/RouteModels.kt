@@ -296,13 +296,12 @@ data class RouteSearchResult(
 }
 
 enum class RouteSearchSourceType {
-    MOCK_FIXTURE,
+    SERVER_API,
 }
 
 data class RouteSearchSource(
     val type: RouteSearchSourceType,
     val label: String,
-    val fixtureId: String? = null,
     val isFromCache: Boolean = false,
 ) {
     init {
@@ -312,15 +311,13 @@ data class RouteSearchSource(
     fun asCached(): RouteSearchSource = copy(isFromCache = true)
 
     companion object {
-        fun mockFixture(
-            fixtureId: String,
-            label: String,
+        fun serverApi(
+            label: String = "실시간 경로",
             isFromCache: Boolean = false,
         ): RouteSearchSource =
             RouteSearchSource(
-                type = RouteSearchSourceType.MOCK_FIXTURE,
+                type = RouteSearchSourceType.SERVER_API,
                 label = label,
-                fixtureId = fixtureId,
                 isFromCache = isFromCache,
             )
     }

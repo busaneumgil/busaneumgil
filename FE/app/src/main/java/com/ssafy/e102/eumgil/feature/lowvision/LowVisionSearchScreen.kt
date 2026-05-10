@@ -4,9 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -110,19 +110,19 @@ fun LowVisionSearchScreen(
     categoryLabel: String? = null,
 ) {
     Column(
-            modifier =
-                modifier
-                    .fillMaxSize()
-                    .background(PlaceListBg)
-                    .statusBarsPadding()
-                    .padding(
-                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
-                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
-                    ),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PlaceListBg)
+                .statusBarsPadding()
+                .padding(
+                    horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                    vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                ),
         verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
     ) {
         Text(
-            text = "검색 결과",
+            text = "\uAC80\uC0C9 \uACB0\uACFC",
             fontSize = LowVisionScreenDefaults.headerFontSize,
             fontWeight = FontWeight.ExtraBold,
             lineHeight = LowVisionScreenDefaults.headerLineHeight,
@@ -433,7 +433,9 @@ private fun LowVisionSearchActionButton(
 }
 
 @Composable
-private fun LowVisionSearchNoResultMessage() {
+private fun LowVisionSearchNoResultMessage(
+    message: String = LowVisionSearchLayoutDefaults.noResultText,
+) {
     Box(
         modifier =
             Modifier
@@ -444,7 +446,7 @@ private fun LowVisionSearchNoResultMessage() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = LowVisionSearchLayoutDefaults.noResultText,
+            text = message,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = PlaceListSubText,

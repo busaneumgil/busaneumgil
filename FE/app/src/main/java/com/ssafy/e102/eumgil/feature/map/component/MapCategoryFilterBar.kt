@@ -54,13 +54,7 @@ fun MapCategoryFilterBar(
             return
         }
 
-        state.isEmptyData -> {
-            FilterStatusCard(
-                message = stringResource(id = R.string.map_filter_summary_empty_data),
-                modifier = modifier,
-            )
-            return
-        }
+        state.isEmptyData -> return
     }
 
     Surface(

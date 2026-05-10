@@ -24,4 +24,6 @@ public interface RouteSessionRepository extends JpaRepository<RouteSession, UUID
 		RouteSessionStatus status);
 
 	Optional<RouteSession> findFirstByRouteIdOrderByUpdatedAtDesc(String routeId);
+
+	void deleteAllByUser_UserId(UUID userId);
 }

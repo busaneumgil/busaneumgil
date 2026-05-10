@@ -6,6 +6,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.e102.domain.auth.service.AuthSessionService;
+import com.ssafy.e102.domain.bookmark.repository.FavoriteRouteRepository;
+import com.ssafy.e102.domain.place.repository.BookmarkRepository;
+import com.ssafy.e102.domain.report.repository.HazardReportImageRepository;
+import com.ssafy.e102.domain.report.repository.HazardReportRepository;
+import com.ssafy.e102.domain.route.repository.RouteRatingRepository;
+import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
 import com.ssafy.e102.domain.user.dto.response.UserTypeResponse;
 import com.ssafy.e102.domain.user.entity.User;
@@ -21,10 +27,30 @@ public class UserService {
 
 	private final UserRepository userRepository;
 	private final AuthSessionService authSessionService;
+	private final RouteRatingRepository routeRatingRepository;
+	private final RouteSessionRepository routeSessionRepository;
+	private final BookmarkRepository bookmarkRepository;
+	private final FavoriteRouteRepository favoriteRouteRepository;
+	private final HazardReportImageRepository hazardReportImageRepository;
+	private final HazardReportRepository hazardReportRepository;
 
-	public UserService(UserRepository userRepository, AuthSessionService authSessionService) {
+	public UserService(
+		UserRepository userRepository,
+		AuthSessionService authSessionService,
+		RouteRatingRepository routeRatingRepository,
+		RouteSessionRepository routeSessionRepository,
+		BookmarkRepository bookmarkRepository,
+		FavoriteRouteRepository favoriteRouteRepository,
+		HazardReportImageRepository hazardReportImageRepository,
+		HazardReportRepository hazardReportRepository) {
 		this.userRepository = userRepository;
 		this.authSessionService = authSessionService;
+		this.routeRatingRepository = routeRatingRepository;
+		this.routeSessionRepository = routeSessionRepository;
+		this.bookmarkRepository = bookmarkRepository;
+		this.favoriteRouteRepository = favoriteRouteRepository;
+		this.hazardReportImageRepository = hazardReportImageRepository;
+		this.hazardReportRepository = hazardReportRepository;
 	}
 
 	public UserMeResponse getMe(UUID userId) {
@@ -48,6 +74,12 @@ public class UserService {
 		}
 
 		// 계정 삭제 후 남은 refresh token과 현재 access token을 함께 막아 재사용 여지를 줄인다.
+		routeRatingRepository.deleteAllByUser_UserId(userId);
+		routeSessionRepository.deleteAllByUser_UserId(userId);
+		bookmarkRepository.deleteAllByUser_UserId(userId);
+		favoriteRouteRepository.deleteAllByUser_UserId(userId);
+		hazardReportImageRepository.deleteAllByHazardReport_User_UserId(userId);
+		hazardReportRepository.deleteAllByUser_UserId(userId);
 		userRepository.deleteById(userId);
 		authSessionService.invalidateUserSession(userId, accessToken);
 	}

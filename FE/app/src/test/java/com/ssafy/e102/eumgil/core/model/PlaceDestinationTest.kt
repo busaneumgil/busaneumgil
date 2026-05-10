@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.core.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PlaceDestinationTest {
@@ -61,5 +62,26 @@ class PlaceDestinationTest {
         val destination = detail.toPlaceDestination()
 
         assertEquals(PlaceCategory.PUBLIC_OFFICE, destination.category)
+    }
+
+    @Test
+    fun `provider only search result does not produce route destination handoff`() {
+        val result =
+            SearchResult(
+                placeId = "provider:kakao:987654321",
+                title = "Provider Only Cafe",
+                subtitle = "2 Gwangbok-ro, Busan",
+                latitude = 35.1010,
+                longitude = 129.0330,
+                category = null,
+                serverPlaceId = null,
+                providerPlaceId = "987654321",
+                accessibilityTagKeys = listOf("step-free-entrance"),
+                matched = false,
+            )
+
+        val destination = result.toPlaceDestinationOrNull()
+
+        assertNull(destination)
     }
 }

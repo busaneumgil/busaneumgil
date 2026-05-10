@@ -92,6 +92,53 @@ class HazardReportTest {
 		assertThat(hazardReport.isOwner(UUID.randomUUID())).isFalse();
 	}
 
+	@Test
+	@DisplayName("PENDING 제보는 승인할 수 있다")
+	void approve() {
+		HazardReport hazardReport = HazardReport.create(
+			user(UUID.randomUUID()),
+			ReportType.SIDEWALK_MISSING,
+			null,
+			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)),
+			null);
+
+		hazardReport.approve();
+
+		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
+	}
+
+	@Test
+	@DisplayName("PENDING 제보는 반려할 수 있다")
+	void reject() {
+		HazardReport hazardReport = HazardReport.create(
+			user(UUID.randomUUID()),
+			ReportType.SIDEWALK_MISSING,
+			null,
+			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)),
+			null);
+
+		hazardReport.reject();
+
+		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.REJECTED);
+	}
+
+	@Test
+	@DisplayName("이미 처리된 제보는 다시 처리할 수 없다")
+	void rejectAlreadyProcessedReport() {
+		HazardReport hazardReport = HazardReport.create(
+			user(UUID.randomUUID()),
+			ReportType.SIDEWALK_MISSING,
+			null,
+			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)),
+			null);
+		hazardReport.approve();
+
+		assertThatThrownBy(hazardReport::reject)
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
+	}
+
 	private User user(UUID userId) {
 		User user = User.create(SocialProvider.KAKAO, "kakao-user-id", PrimaryUserType.LOW_VISION, null);
 		ReflectionTestUtils.setField(user, "userId", userId);

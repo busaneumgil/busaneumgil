@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.InitSettings
-import com.ssafy.e102.eumgil.core.model.RepositoryDebugSettings
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.SocialLoginResponseDto
@@ -220,15 +219,4 @@ private class RecordingSettingsRepository : SettingsRepository {
     override suspend fun clearInitSettings() {
         clearInitSettingsCalled = true
     }
-
-    override fun observeRepositoryDebugSettings() = emptyFlow<RepositoryDebugSettings>()
-
-    override suspend fun getRepositoryDebugSettings(): RepositoryDebugSettings =
-        RepositoryDebugSettings(
-            isRuntimeToggleAvailable = false,
-            isRuntimeToggleEnabled = false,
-            isForceMockEnabled = false,
-        )
-
-    override suspend fun setForceMockEnabled(isEnabled: Boolean) = Unit
 }

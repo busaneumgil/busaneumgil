@@ -36,6 +36,7 @@ import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitArrivalStatus;
 import com.ssafy.e102.domain.route.dto.response.TransitRefreshResponse;
@@ -211,7 +212,10 @@ class RouteControllerTest {
 	@DisplayName("select 요청은 인증 사용자, routeId path, searchId body만 service로 넘긴다")
 	void selectRouteUsesAuthenticatedUserAndRouteId() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(routeSelectService.select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class)))
+			.thenReturn(new RouteSessionResponse(sessionId));
 
 		mockMvc.perform(post("/routes/rt_selected_001/select")
 			.principal(authentication)
@@ -223,7 +227,7 @@ class RouteControllerTest {
 				"""))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
-			.andExpect(jsonPath("$.data").value(nullValue()))
+			.andExpect(jsonPath("$.data.sessionId").value(sessionId.toString()))
 			.andExpect(jsonPath("$.message").value("경로가 선택되었습니다."));
 
 		verify(routeSelectService).select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class));
@@ -234,13 +238,16 @@ class RouteControllerTest {
 	@DisplayName("경로 안내 종료는 routeId와 인증 사용자로 session 종료를 요청한다")
 	void endRouteCompletesRouteSession() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(routeSessionCommandService.endSession(userId, "rt_selected_001"))
+			.thenReturn(new RouteSessionResponse(sessionId));
 
 		mockMvc.perform(post("/routes/rt_selected_001/end")
 			.principal(authentication))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
-			.andExpect(jsonPath("$.data", nullValue()))
+			.andExpect(jsonPath("$.data.sessionId").value(sessionId.toString()))
 			.andExpect(jsonPath("$.message").value("안내가 종료되었습니다."));
 
 		verify(routeSessionCommandService).endSession(userId, "rt_selected_001");

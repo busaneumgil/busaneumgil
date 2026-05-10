@@ -108,6 +108,7 @@ class ArrivalViewModelTest {
                 "출근 경로",
                 routeBookmarkRepository.savedBookmarks.value.single().routeName,
             )
+            assertEquals("walk_rt_safe_001", routeBookmarkRepository.savedRequests.single().routeId)
             assertTrue(viewModel.uiState.value.isRouteSaveSelected)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
             assertFalse(viewModel.uiState.value.isRouteSaveDialogVisible)
@@ -205,6 +206,7 @@ private class FakeRouteBookmarkRepository(
     private val saveFailure: Throwable? = null,
 ) : RouteBookmarkRepository {
     val savedBookmarks = MutableStateFlow(savedBookmarks)
+    val savedRequests = mutableListOf<RouteBookmarkSaveRequest>()
 
     override fun observeRouteBookmarks(): Flow<List<RouteBookmark>> = savedBookmarks
 
@@ -217,6 +219,7 @@ private class FakeRouteBookmarkRepository(
 
     override suspend fun saveRouteBookmark(request: RouteBookmarkSaveRequest): RouteBookmark {
         saveFailure?.let { throw it }
+        savedRequests.add(request)
         val savedBookmark = testRouteBookmark(request = request)
         savedBookmarks.value = listOf(savedBookmark)
         return savedBookmark
@@ -227,6 +230,7 @@ private class FakeRouteBookmarkRepository(
 
 private fun testRouteBookmarkDraft(): RouteBookmarkDraft =
     RouteBookmarkDraft(
+        routeId = "walk_rt_safe_001",
         startLabel = "부산시청",
         endLabel = "해운대해수욕장",
         startPoint = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),

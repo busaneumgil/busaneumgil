@@ -6,7 +6,6 @@ import com.ssafy.e102.eumgil.data.route.RoutePointDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.parseRouteSearchResponseDto
-import org.json.JSONArray
 import org.json.JSONObject
 
 open class RouteRemoteDataSource internal constructor(
@@ -48,7 +47,6 @@ open class RouteRemoteDataSource internal constructor(
         JSONObject()
             .put("startPoint", request.startPoint.toJsonObject())
             .put("endPoint", request.endPoint.toJsonObject())
-            .put("routeOptions", JSONArray(request.routeOptions))
             .toString()
 
     private fun RoutePointDto.toJsonObject(): JSONObject =

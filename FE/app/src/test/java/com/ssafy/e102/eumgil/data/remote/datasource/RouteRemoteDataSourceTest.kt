@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.data.route.RoutePointDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -90,7 +91,7 @@ class RouteRemoteDataSourceTest {
             assertEquals("Bearer access-token", capturedHeaders["Authorization"])
             assertTrue(capturedBody.orEmpty().contains("\"lat\":35.1796"))
             assertTrue(capturedBody.orEmpty().contains("\"lng\":129.0414"))
-            assertTrue(capturedBody.orEmpty().contains("\"routeOptions\":[\"SAFE\",\"SHORTEST\"]"))
+            assertFalse(capturedBody.orEmpty().contains("routeOptions"))
             assertEquals("rs_walk_server_001", response.searchId)
             assertEquals(1, response.routes.size)
             assertEquals("walk_rt_safe_001", response.routes.single().routeId)

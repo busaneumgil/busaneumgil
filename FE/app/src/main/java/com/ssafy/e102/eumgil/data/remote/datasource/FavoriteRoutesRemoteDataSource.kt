@@ -10,8 +10,43 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 open class FavoriteRoutesRemoteDataSource(
-    private val httpJsonClient: HttpJsonClient,
+    private val getRequestExecutor: suspend (String, Map<String, String>, Map<String, String>) -> HttpJsonResponse,
+    private val postRequestExecutor: suspend (String, String, Map<String, String>) -> HttpJsonResponse,
+    private val patchRequestExecutor: suspend (String, String, Map<String, String>) -> HttpJsonResponse,
+    private val deleteRequestExecutor: suspend (String, Map<String, String>) -> HttpJsonResponse,
 ) {
+    constructor(
+        httpJsonClient: HttpJsonClient,
+    ) : this(
+        getRequestExecutor = { path, queryParams, headers ->
+            httpJsonClient.getJson(
+                path = path,
+                queryParams = queryParams,
+                headers = headers,
+            )
+        },
+        postRequestExecutor = { path, body, headers ->
+            httpJsonClient.postJson(
+                path = path,
+                body = body,
+                headers = headers,
+            )
+        },
+        patchRequestExecutor = { path, body, headers ->
+            httpJsonClient.patchJson(
+                path = path,
+                body = body,
+                headers = headers,
+            )
+        },
+        deleteRequestExecutor = { path, headers ->
+            httpJsonClient.deleteJson(
+                path = path,
+                headers = headers,
+            )
+        },
+    )
+
     open suspend fun getFavoriteRoutes(
         accessToken: String,
         cursor: Long? = null,
@@ -24,10 +59,10 @@ open class FavoriteRoutesRemoteDataSource(
             }
 
         val response =
-            httpJsonClient.getJson(
-                path = "/favorite-routes",
-                queryParams = queryParams,
-                headers = bearerHeader(accessToken),
+            getRequestExecutor(
+                "/favorite-routes",
+                queryParams,
+                bearerHeader(accessToken),
             )
         val responseJson = response.body.toJsonObjectOrNull()
         val dataJson = response.requireDataJson(responseJson)
@@ -37,25 +72,21 @@ open class FavoriteRoutesRemoteDataSource(
 
     open suspend fun createFavoriteRoute(
         accessToken: String,
+        routeId: String,
         startLabel: String,
         endLabel: String,
-        startPoint: FavoriteRoutePointDto,
-        endPoint: FavoriteRoutePointDto,
-        routeOption: String,
     ): CreateFavoriteRouteResponseDto {
         val requestJson =
             JSONObject()
+                .put("routeId", routeId)
                 .put("startLabel", startLabel)
                 .put("endLabel", endLabel)
-                .put("startPoint", JSONObject().put("lat", startPoint.lat).put("lng", startPoint.lng))
-                .put("endPoint", JSONObject().put("lat", endPoint.lat).put("lng", endPoint.lng))
-                .put("routeOption", routeOption)
 
         val response =
-            httpJsonClient.postJson(
-                path = "/favorite-routes",
-                body = requestJson.toString(),
-                headers = bearerHeader(accessToken),
+            postRequestExecutor(
+                "/favorite-routes",
+                requestJson.toString(),
+                bearerHeader(accessToken),
             )
         val responseJson = response.body.toJsonObjectOrNull()
         val dataJson = response.requireDataJson(responseJson)
@@ -72,26 +103,16 @@ open class FavoriteRoutesRemoteDataSource(
         favRouteId: Long,
         startLabel: String? = null,
         endLabel: String? = null,
-        startPoint: FavoriteRoutePointDto? = null,
-        endPoint: FavoriteRoutePointDto? = null,
-        routeOption: String? = null,
     ) {
         val requestJson = JSONObject()
         startLabel?.let { requestJson.put("startLabel", it) }
         endLabel?.let { requestJson.put("endLabel", it) }
-        startPoint?.let {
-            requestJson.put("startPoint", JSONObject().put("lat", it.lat).put("lng", it.lng))
-        }
-        endPoint?.let {
-            requestJson.put("endPoint", JSONObject().put("lat", it.lat).put("lng", it.lng))
-        }
-        routeOption?.let { requestJson.put("routeOption", it) }
 
         val response =
-            httpJsonClient.patchJson(
-                path = "/favorite-routes/$favRouteId",
-                body = requestJson.toString(),
-                headers = bearerHeader(accessToken),
+            patchRequestExecutor(
+                "/favorite-routes/$favRouteId",
+                requestJson.toString(),
+                bearerHeader(accessToken),
             )
 
         if (response.statusCode !in 200..299) {
@@ -105,9 +126,9 @@ open class FavoriteRoutesRemoteDataSource(
         favRouteId: Long,
     ) {
         val response =
-            httpJsonClient.deleteJson(
-                path = "/favorite-routes/$favRouteId",
-                headers = bearerHeader(accessToken),
+            deleteRequestExecutor(
+                "/favorite-routes/$favRouteId",
+                bearerHeader(accessToken),
             )
 
         if (response.statusCode !in 200..299) {

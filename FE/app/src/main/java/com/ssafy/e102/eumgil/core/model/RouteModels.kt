@@ -252,6 +252,7 @@ data class RouteSegment(
 
 data class RouteCandidate(
     val routeId: String = "",
+    val serverRouteId: String? = null,
     val transportMode: RouteTransportMode = RouteTransportMode.WALK,
     val routeOption: RouteOption,
     val title: String,

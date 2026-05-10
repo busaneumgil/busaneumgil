@@ -380,6 +380,7 @@ private fun RouteNavigationRequest.toDestinationBookmarkData(): BookmarkData {
 
 private fun RouteNavigationRequest.toRouteBookmarkDraft(): RouteBookmarkDraft =
     RouteBookmarkDraft(
+        routeId = selectedRoute.serverRouteId,
         startLabel = origin.name.orEmpty().ifBlank { "출발지" },
         endLabel = destination.name.orEmpty().ifBlank { "도착지" },
         startPoint = origin.coordinate,

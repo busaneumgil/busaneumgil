@@ -95,6 +95,7 @@ private fun RouteDto.toDomain(
 
     return RouteCandidate(
         routeId = normalizedRouteId(resolvedTransportMode, resolvedOption, fallbackIndex),
+        serverRouteId = normalizedServerRouteId(),
         transportMode = resolvedTransportMode,
         routeOption = resolvedOption,
         title = normalizedTitle().ifEmpty { defaultTitle(resolvedOption) },
@@ -370,6 +371,8 @@ private fun JSONObject.toRouteDto(): RouteDto =
     )
 
 private fun RouteDto.normalizedTitle(): String = title?.trim().orEmpty()
+
+private fun RouteDto.normalizedServerRouteId(): String? = routeId?.trim()?.takeIf(String::isNotEmpty)
 
 private fun RouteDto.normalizedRouteId(
     transportMode: RouteTransportMode,

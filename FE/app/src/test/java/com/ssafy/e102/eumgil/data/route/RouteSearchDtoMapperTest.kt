@@ -76,6 +76,7 @@ class RouteSearchDtoMapperTest {
 
         val route = result.routes.single()
         assertEquals("walk_rt_safe_001", route.routeId)
+        assertEquals("walk_rt_safe_001", route.serverRouteId)
         assertEquals(RouteTransportMode.WALK, route.transportMode)
         assertEquals(RouteOption.SAFE, route.routeOption)
         assertEquals(listOf("LOW_SLOPE"), route.badges.map { badge -> badge.name })

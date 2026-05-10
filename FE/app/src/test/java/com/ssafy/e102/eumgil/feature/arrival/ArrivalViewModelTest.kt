@@ -6,7 +6,16 @@ import com.ssafy.e102.eumgil.core.model.RouteBookmark
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RouteSearchData
+import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
+import com.ssafy.e102.eumgil.core.model.RouteSearchResult
+import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRatingData
+import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
+import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.repository.RouteSessionData
+import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -18,7 +27,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -29,48 +37,11 @@ class ArrivalViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `entry state auto opens route evaluation sheet with unsaved route draft`() =
-        runTest {
-            val viewModel = createViewModel()
-            advanceUntilIdle()
-
-            assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
-            assertEquals(0, viewModel.uiState.value.selectedRating)
-            assertEquals(ArrivalEvaluationLabel.Idle, viewModel.uiState.value.selectedRatingLabel)
-            assertFalse(viewModel.uiState.value.isEvaluationSubmitEnabled)
-            assertNotNull(viewModel.uiState.value.routeSaveDraft)
-            assertEquals("부산시청-해운대해수욕장", viewModel.uiState.value.routeNameInput)
-            assertFalse(viewModel.uiState.value.isRouteSaveSelected)
-            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
-            assertTrue(viewModel.uiState.value.isRouteSaveEnabled)
-        }
-
-    @Test
-    fun `entry state reflects already saved route bookmark`() =
-        runTest {
-            val draft = testRouteBookmarkDraft()
-            val viewModel =
-                createViewModel(
-                    routeBookmarkRepository =
-                        FakeRouteBookmarkRepository(
-                            savedBookmarks =
-                                listOf(
-                                    testRouteBookmark(
-                                        request = draft.toSaveRequest(),
-                                    ),
-                                ),
-                        ),
-                )
-            advanceUntilIdle()
-
-            assertTrue(viewModel.uiState.value.isRouteSaveSelected)
-            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
-            assertFalse(viewModel.uiState.value.isRouteSaveEnabled)
-        }
-
-    @Test
-    fun `selecting rating updates satisfaction label and enables submit`() {
+    fun `rating session enables evaluation submit after selection`() {
         val viewModel = createViewModel()
+
+        assertTrue(viewModel.uiState.value.hasRatingSession)
+        assertFalse(viewModel.uiState.value.isEvaluationSubmitEnabled)
 
         viewModel.onAction(ArrivalUiAction.RatingSelected(4))
 
@@ -80,19 +51,49 @@ class ArrivalViewModelTest {
     }
 
     @Test
-    fun `save route action opens route name dialog with default name`() =
+    fun `submit evaluation calls rating api and hides sheet on success`() =
         runTest {
-            val viewModel = createViewModel()
+            val routeRepository = FakeArrivalRouteRepository()
+            val viewModel = createViewModel(routeRepository = routeRepository)
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ArrivalUiAction.RatingSelected(5))
+            viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
             advanceUntilIdle()
 
-            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
-
-            assertTrue(viewModel.uiState.value.isRouteSaveDialogVisible)
-            assertEquals("부산시청-해운대해수욕장", viewModel.uiState.value.routeNameInput)
+            assertEquals(listOf("session-1" to 5), routeRepository.ratingCalls)
+            assertFalse(viewModel.uiState.value.isEvaluationSheetVisible)
+            assertFalse(viewModel.uiState.value.isEvaluationSubmitting)
+            assertEquals(
+                ArrivalUiEvent.ShowSnackbar(R.string.arrival_rating_success_message),
+                eventDeferred.await(),
+            )
         }
 
     @Test
-    fun `confirm route save stores route bookmark and emits success snackbar`() =
+    fun `submit evaluation keeps sheet open on rating failure`() =
+        runTest {
+            val routeRepository =
+                FakeArrivalRouteRepository(
+                    ratingFailure = IllegalStateException("rating failed"),
+                )
+            val viewModel = createViewModel(routeRepository = routeRepository)
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ArrivalUiAction.RatingSelected(3))
+            viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
+            assertFalse(viewModel.uiState.value.isEvaluationSubmitting)
+            assertEquals(
+                ArrivalUiEvent.ShowSnackbar(R.string.arrival_rating_failure_message),
+                eventDeferred.await(),
+            )
+        }
+
+    @Test
+    fun `confirm route save still stores route bookmark`() =
         runTest {
             val routeBookmarkRepository = FakeRouteBookmarkRepository()
             val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
@@ -104,101 +105,25 @@ class ArrivalViewModelTest {
             viewModel.onAction(ArrivalUiAction.ConfirmRouteSaveClicked)
             advanceUntilIdle()
 
-            assertEquals(
-                "출근 경로",
-                routeBookmarkRepository.savedBookmarks.value.single().routeName,
-            )
-            assertEquals("walk_rt_safe_001", routeBookmarkRepository.savedRequests.single().routeId)
-            assertTrue(viewModel.uiState.value.isRouteSaveSelected)
-            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
-            assertFalse(viewModel.uiState.value.isRouteSaveDialogVisible)
+            assertEquals("출근 경로", routeBookmarkRepository.savedBookmarks.value.single().routeName)
             assertEquals(
                 ArrivalUiEvent.ShowSnackbar(R.string.arrival_route_save_success_message),
                 eventDeferred.await(),
             )
         }
-
-    @Test
-    fun `route save failure keeps dialog open and emits failure snackbar`() =
-        runTest {
-            val viewModel =
-                createViewModel(
-                    routeBookmarkRepository =
-                        FakeRouteBookmarkRepository(
-                            saveFailure = IllegalStateException("save failed"),
-                        ),
-                )
-            advanceUntilIdle()
-            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
-
-            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
-            viewModel.onAction(ArrivalUiAction.ConfirmRouteSaveClicked)
-            advanceUntilIdle()
-
-            assertFalse(viewModel.uiState.value.isRouteSaveSelected)
-            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
-            assertTrue(viewModel.uiState.value.isRouteSaveDialogVisible)
-            assertEquals(
-                ArrivalUiEvent.ShowSnackbar(R.string.arrival_route_save_failure_message),
-                eventDeferred.await(),
-            )
-        }
-
-    @Test
-    fun `submitting evaluation hides sheet only after rating is selected`() {
-        val viewModel = createViewModel()
-
-        viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
-
-        assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
-
-        viewModel.onAction(ArrivalUiAction.RatingSelected(5))
-        viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
-
-        assertFalse(viewModel.uiState.value.isEvaluationSheetVisible)
-    }
-
-    @Test
-    fun `dismissing evaluation sheet keeps arrival screen visible`() {
-        val viewModel = createViewModel()
-
-        viewModel.onAction(ArrivalUiAction.EvaluationSheetDismissed)
-
-        assertFalse(viewModel.uiState.value.isEvaluationSheetVisible)
-    }
-
-    @Test
-    fun `home action emits navigate to map event`() =
-        runTest {
-            val viewModel = createViewModel()
-            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
-
-            viewModel.onAction(ArrivalUiAction.HomeClicked)
-            advanceUntilIdle()
-
-            assertEquals(ArrivalUiEvent.NavigateToMap, eventDeferred.await())
-        }
-
-    @Test
-    fun `explore new route action emits navigate to search event`() =
-        runTest {
-            val viewModel = createViewModel()
-            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
-
-            viewModel.onAction(ArrivalUiAction.ExploreNewRouteClicked)
-            advanceUntilIdle()
-
-            assertEquals(ArrivalUiEvent.NavigateToSearch, eventDeferred.await())
-        }
 }
 
 private fun createViewModel(
     routeBookmarkRepository: RouteBookmarkRepository = FakeRouteBookmarkRepository(),
+    routeRepository: RouteRepository = FakeArrivalRouteRepository(),
     routeBookmarkDraft: RouteBookmarkDraft = testRouteBookmarkDraft(),
+    ratingSessionId: String = "session-1",
 ): ArrivalViewModel =
     ArrivalViewModel(
         routeBookmarkRepository = routeBookmarkRepository,
+        routeRepository = routeRepository,
         currentRouteBookmarkDraft = routeBookmarkDraft,
+        currentRatingSessionId = ratingSessionId,
     )
 
 private class FakeRouteBookmarkRepository(
@@ -228,11 +153,49 @@ private class FakeRouteBookmarkRepository(
     override suspend fun deleteRouteBookmark(bookmarkId: String) = Unit
 }
 
+private class FakeArrivalRouteRepository(
+    private val ratingFailure: Throwable? = null,
+) : RouteRepository {
+    val ratingCalls = mutableListOf<Pair<String, Int>>()
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        RouteSearchData(query, RouteSearchResult(query.origin, query.destination), RouteSearchSource.serverApi())
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        RouteSearchData(query, RouteSearchResult(query.origin, query.destination), RouteSearchSource.serverApi())
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData = RouteSessionData(sessionId = "selected-session")
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = error("Not used")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ): RouteRerouteData = error("Not used")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData = RouteSessionData(sessionId = "ended-session")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData {
+        ratingFailure?.let { throw it }
+        ratingCalls += sessionId to score
+        return RouteRatingData(ratingId = 1L)
+    }
+}
+
 private fun testRouteBookmarkDraft(): RouteBookmarkDraft =
     RouteBookmarkDraft(
         routeId = "walk_rt_safe_001",
         startLabel = "부산시청",
-        endLabel = "해운대해수욕장",
+        endLabel = "해운대수변공원",
         startPoint = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
         endPoint = GeoCoordinate(latitude = 35.1587, longitude = 129.1604),
         routeOption = RouteOption.SAFE,

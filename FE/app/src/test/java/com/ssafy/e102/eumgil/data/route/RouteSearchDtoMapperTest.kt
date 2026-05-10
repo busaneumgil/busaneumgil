@@ -1,7 +1,10 @@
 package com.ssafy.e102.eumgil.data.route
 
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteLegRole
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteTransportMode
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -11,121 +14,128 @@ class RouteSearchDtoMapperTest {
     private val geometryParser: RouteGeometryParser = DefaultRouteGeometryParser()
 
     @Test
-    fun `toDomain maps walk route payload into search id legs steps and compatibility segments`() {
-        val result =
-            RouteSearchResponseDto(
-                searchId = "rs_walk_123",
-                routes =
-                    listOf(
-                        RouteDto(
-                            routeId = "walk_rt_safe_001",
-                            transportMode = "WALK",
-                            routeOption = "SAFE",
-                            title = "Accessible Walk",
-                            distanceMeter = 120.0,
-                            estimatedTimeMinute = 2,
-                            badges = listOf("LOW_SLOPE"),
-                            geometry = "LINESTRING(129.075600 35.179600, 129.076800 35.180600)",
-                            legs =
-                                listOf(
-                                    RouteLegDto(
-                                        sequence = 1,
-                                        type = "WALK",
-                                        role = "WALK_ONLY",
-                                        instruction = "Walk to destination",
-                                        distanceMeter = 120.0,
-                                        estimatedTimeMinute = 2,
-                                        geometry = "LINESTRING(129.075600 35.179600, 129.076800 35.180600)",
-                                        steps =
-                                            listOf(
-                                                RouteStepDto(
-                                                    sequence = 1,
-                                                    instruction = "Go straight",
-                                                    distanceMeter = 80.0,
-                                                    geometry =
-                                                        "LINESTRING(129.075600 35.179600, 129.076000 35.179900)",
-                                                    badges = listOf("LOW_SLOPE"),
-                                                    alerts =
-                                                        listOf(
-                                                            RouteAlertDto(
-                                                                type = "CROSSWALK",
-                                                                distanceMeter = 15.0,
-                                                            ),
-                                                        ),
-                                                    slopePercent = 1.8,
-                                                    widthState = "WIDE",
-                                                ),
-                                                RouteStepDto(
-                                                    sequence = 2,
-                                                    instruction = "Cross the street",
-                                                    distanceMeter = 40.0,
-                                                    geometry = "POINT(129.076800 35.180600)",
-                                                    badges = listOf("CROSSWALK"),
-                                                ),
-                                            ),
-                                    ),
-                                ),
-                        ),
-                    ),
-            ).toDomain(
-                query = testRouteSearchQuery(routeOptions = listOf("SAFE")),
-                geometryParser = geometryParser,
+    fun `parseRouteSearchResponseDto reads transit payload fields from data envelope`() {
+        val response =
+            parseRouteSearchResponseDto(
+                """
+                {
+                  "status": "S2000",
+                  "data": {
+                    "searchId": "rs_transit_server_001",
+                    "routes": [
+                      {
+                        "routeId": "pt_rt_001",
+                        "transportMode": "PUBLIC_TRANSIT",
+                        "routeOption": "RECOMMENDED",
+                        "routeOptions": ["RECOMMENDED", "MIN_WALK"],
+                        "title": "Transit Route",
+                        "distanceMeter": 4200.0,
+                        "estimatedTimeMinute": 28,
+                        "transferCount": 1,
+                        "legs": [
+                          {
+                            "sequence": 1,
+                            "type": "WALK",
+                            "role": "WALK_TO_TRANSIT",
+                            "instruction": "Walk to Stop A",
+                            "geometry": "LINESTRING(129.075600 35.179600, 129.076000 35.179900)",
+                            "guidanceEvents": [
+                              {
+                                "sequence": 1,
+                                "type": "TURN_RIGHT",
+                                "distanceFromLegStartMeter": 40.0,
+                                "durationFromLegStartSecond": 40,
+                                "distanceFromRouteStartMeter": 40.0,
+                                "durationFromRouteStartSecond": 40,
+                                "geometry": "POINT(129.076000 35.179900)"
+                              }
+                            ]
+                          },
+                          {
+                            "sequence": 2,
+                            "type": "BUS",
+                            "role": "TRANSIT",
+                            "instruction": "Take bus 100",
+                            "routeNo": "100",
+                            "laneOptions": [
+                              {
+                                "routeNo": "100",
+                                "remainingMinute": 3,
+                                "durationSecond": 660,
+                                "estimatedTimeMinute": 11,
+                                "isLowFloor": true
+                              }
+                            ],
+                            "boardingStop": {
+                              "name": "Stop A",
+                              "lat": 35.1799,
+                              "lng": 129.0760
+                            },
+                            "arrivingStop": {
+                              "name": "Stop B",
+                              "lat": 35.1650,
+                              "lng": 129.0600
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent(),
             )
 
-        assertEquals("rs_walk_123", result.searchId)
-
-        val route = result.routes.single()
-        assertEquals("walk_rt_safe_001", route.routeId)
-        assertEquals("walk_rt_safe_001", route.serverRouteId)
-        assertEquals(RouteTransportMode.WALK, route.transportMode)
-        assertEquals(RouteOption.SAFE, route.routeOption)
-        assertEquals(listOf("LOW_SLOPE"), route.badges.map { badge -> badge.name })
-        assertEquals(1, route.legs.size)
-        assertEquals(2, route.legs.single().steps.size)
-        assertEquals(2, route.segments.size)
-        assertEquals("Go straight", route.segments.first().guidanceMessage)
-        assertEquals(2, route.preview.segmentCount)
-        assertEquals(1, route.preview.renderableSegmentCount)
-        assertEquals(1, route.preview.fallbackSegmentCount)
-        assertTrue(route.hasRenderablePreview)
+        assertEquals("rs_transit_server_001", response.searchId)
+        val route = response.routes.single()
+        assertEquals(listOf("RECOMMENDED", "MIN_WALK"), route.routeOptions)
+        assertEquals(1, route.transferCount)
+        assertEquals("TURN_RIGHT", route.legs.first().guidanceEvents.single().type)
+        assertEquals("100", route.legs[1].laneOptions.single().routeNo)
+        assertEquals("Stop B", route.legs[1].arrivingStop?.name)
     }
 
     @Test
-    fun `toDomain maps public transit routes with transfer count and transit leg metadata`() {
+    fun `toDomain maps guidance events route options and transit to walk role`() {
         val result =
             RouteSearchResponseDto(
-                searchId = "rs_transit_123",
+                searchId = "rs_transit_guidance_001",
                 routes =
                     listOf(
                         RouteDto(
-                            routeId = "pt_rt_001",
+                            routeId = "pt_rt_guidance_001",
                             transportMode = "PUBLIC_TRANSIT",
-                            routeOption = "RECOMMENDED",
-                            title = "Bus plus walk",
+                            routeOptions = listOf("RECOMMENDED", "MIN_WALK"),
+                            title = "Transit Route",
                             distanceMeter = 4200.0,
-                            estimatedTimeMinute = 27,
+                            estimatedTimeMinute = 28,
                             transferCount = 1,
-                            badges = listOf("LOW_SLOPE", "CROSSWALK"),
+                            badges = listOf("ELEVATOR"),
+                            geometry =
+                                "LINESTRING(129.075600 35.179600, 129.076000 35.179900, 129.076500 35.180200)",
                             legs =
                                 listOf(
                                     RouteLegDto(
                                         sequence = 1,
                                         type = "WALK",
                                         role = "WALK_TO_TRANSIT",
-                                        instruction = "Walk to stop A",
+                                        instruction = "Walk to Stop A",
                                         distanceMeter = 180.0,
                                         estimatedTimeMinute = 3,
                                         geometry =
                                             "LINESTRING(129.075600 35.179600, 129.076000 35.179900)",
-                                        steps =
+                                        guidanceEvents =
                                             listOf(
-                                                RouteStepDto(
+                                                RouteGuidanceEventDto(
                                                     sequence = 1,
-                                                    instruction = "Walk to stop A",
-                                                    distanceMeter = 180.0,
-                                                    geometry =
-                                                        "LINESTRING(129.075600 35.179600, 129.076000 35.179900)",
-                                                    badges = listOf("LOW_SLOPE"),
+                                                    type = "TURN_LEFT",
+                                                    distanceFromLegStartMeter = 40.0,
+                                                    geometry = "POINT(129.075800 35.179700)",
+                                                ),
+                                                RouteGuidanceEventDto(
+                                                    sequence = 2,
+                                                    type = "BUS_STOP",
+                                                    distanceFromLegStartMeter = 180.0,
+                                                    geometry = "POINT(129.076000 35.179900)",
                                                 ),
                                             ),
                                     ),
@@ -136,129 +146,51 @@ class RouteSearchDtoMapperTest {
                                         instruction = "Take bus 100",
                                         estimatedTimeMinute = 11,
                                         routeNo = "100",
+                                        laneOptions =
+                                            listOf(
+                                                RouteTransitLaneOptionDto(
+                                                    routeNo = "100",
+                                                    remainingMinute = 3,
+                                                    durationSecond = 660,
+                                                    estimatedTimeMinute = 11,
+                                                    isLowFloor = true,
+                                                ),
+                                            ),
                                         boardingStop =
                                             RouteTransitStopDto(
                                                 name = "Stop A",
                                                 lat = 35.1799,
                                                 lng = 129.0760,
                                             ),
-                                        alightingStop =
+                                        arrivingStop =
                                             RouteTransitStopDto(
                                                 name = "Stop B",
                                                 lat = 35.1650,
                                                 lng = 129.0600,
                                             ),
                                     ),
-                                ),
-                        ),
-                    ),
-            ).toDomain(
-                query = testRouteSearchQuery(routeOptions = listOf("SAFE")),
-                geometryParser = geometryParser,
-            )
-
-        assertEquals("rs_transit_123", result.searchId)
-
-        val route = result.routes.single()
-        assertEquals("pt_rt_001", route.routeId)
-        assertEquals(RouteTransportMode.PUBLIC_TRANSIT, route.transportMode)
-        assertEquals(RouteOption.RECOMMENDED, route.routeOption)
-        assertEquals(1, route.transferCount)
-        assertEquals(2, route.legs.size)
-        assertEquals("BUS", route.legs.last().type.name)
-        assertEquals("100", route.legs.last().routeNo)
-        assertEquals("Stop A", route.legs.last().boardingStop?.name)
-        assertEquals("Stop B", route.legs.last().alightingStop?.name)
-        assertEquals(2, route.segments.size)
-        assertEquals("Take bus 100", route.segments.last().guidanceMessage)
-    }
-
-    @Test
-    fun `toDomain falls back to leg geometry when walk payload omits steps`() {
-        val result =
-            RouteSearchResponseDto(
-                searchId = "rs_walk_leg_only",
-                routes =
-                    listOf(
-                        RouteDto(
-                            routeId = "walk_rt_safe_fallback",
-                            transportMode = "WALK",
-                            routeOption = "SAFE",
-                            title = "Leg fallback route",
-                            distanceMeter = 120.0,
-                            estimatedTimeMinute = 2,
-                            geometry =
-                                "LINESTRING(129.075600 35.179600, 129.076100 35.180000)",
-                            legs =
-                                listOf(
                                     RouteLegDto(
-                                        sequence = 1,
+                                        sequence = 3,
                                         type = "WALK",
-                                        role = "WALK_ONLY",
-                                        instruction = "Continue straight",
-                                        distanceMeter = 120.0,
-                                        estimatedTimeMinute = 2,
+                                        role = "TRANSIT_TO_WALK",
+                                        instruction = "Walk to destination",
+                                        distanceMeter = 220.0,
+                                        estimatedTimeMinute = 4,
                                         geometry =
-                                            "LINESTRING(129.075600 35.179600, 129.076100 35.180000)",
-                                    ),
-                                ),
-                        ),
-                    ),
-            ).toDomain(
-                query =
-                    testRouteSearchQuery(
-                        routeOptions = listOf("SAFE"),
-                    ),
-                geometryParser = geometryParser,
-            )
-
-        val route = result.routes.single()
-        assertEquals("rs_walk_leg_only", result.searchId)
-        assertEquals(1, route.segments.size)
-        assertEquals("Continue straight", route.segments.single().guidanceMessage)
-        assertEquals(1, route.preview.segmentCount)
-        assertEquals(1, route.preview.renderableSegmentCount)
-        assertEquals(0, route.preview.fallbackSegmentCount)
-        assertTrue(route.hasRenderablePreview)
-        assertEquals(route.preview.polyline, route.previewPolyline)
-    }
-
-    @Test
-    fun `toDomain maps walk step alert crosswalk variants to safety flags`() {
-        val result =
-            RouteSearchResponseDto(
-                routes =
-                    listOf(
-                        RouteDto(
-                            routeOption = "SAFE",
-                            title = "안전 경로",
-                            distanceMeter = 90.0,
-                            estimatedTimeMinute = 2,
-                            legs =
-                                listOf(
-                                    RouteLegDto(
-                                        steps =
+                                            "LINESTRING(129.076000 35.179900, 129.076500 35.180200)",
+                                        guidanceEvents =
                                             listOf(
-                                                RouteStepDto(
+                                                RouteGuidanceEventDto(
                                                     sequence = 1,
-                                                    instruction = "직진하세요.",
-                                                    geometry = "LINESTRING(129.075600 35.179600, 129.076000 35.179900)",
-                                                    distanceMeter = 30.0,
-                                                    alert = RouteStepAlertDto(type = "CROSSWALK"),
+                                                    type = "CROSSWALK_AUDIO",
+                                                    distanceFromLegStartMeter = 70.0,
+                                                    geometry = "POINT(129.076200 35.180000)",
                                                 ),
-                                                RouteStepDto(
+                                                RouteGuidanceEventDto(
                                                     sequence = 2,
-                                                    instruction = "직진하세요.",
-                                                    geometry = "LINESTRING(129.076000 35.179900, 129.077000 35.180500)",
-                                                    distanceMeter = 30.0,
-                                                    alert = RouteStepAlertDto(type = "CROSSWALK_SIGNAL"),
-                                                ),
-                                                RouteStepDto(
-                                                    sequence = 3,
-                                                    instruction = "직진하세요.",
-                                                    geometry = "LINESTRING(129.077000 35.180500, 129.078000 35.181000)",
-                                                    distanceMeter = 30.0,
-                                                    alert = RouteStepAlertDto(type = "CROSSWALK_AUDIO"),
+                                                    type = "DESTINATION",
+                                                    distanceFromLegStartMeter = 220.0,
+                                                    geometry = "POINT(129.076500 35.180200)",
                                                 ),
                                             ),
                                     ),
@@ -266,7 +198,152 @@ class RouteSearchDtoMapperTest {
                         ),
                     ),
             ).toDomain(
-                query = testRouteSearchQuery(routeOptions = listOf("SAFE")),
+                query = testRouteSearchQuery(routeOptions = listOf(RouteOption.RECOMMENDED)),
+                geometryParser = geometryParser,
+            )
+
+        assertEquals("rs_transit_guidance_001", result.searchId)
+        val route = result.routes.single()
+        assertEquals("pt_rt_guidance_001", route.routeId)
+        assertEquals(RouteTransportMode.PUBLIC_TRANSIT, route.transportMode)
+        assertEquals(RouteOption.RECOMMENDED, route.routeOption)
+        assertEquals(3, route.legs.size)
+        assertEquals(RouteLegRole.WALK_TO_DESTINATION, route.legs.last().role)
+        assertEquals("Stop B", route.legs[1].alightingStop?.name)
+        assertEquals("Turn left.", route.legs.first().steps.first().instruction)
+        assertEquals("Arrive at destination.", route.legs.last().steps.last().instruction)
+        assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Audio signal crosswalk ahead." })
+        assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Arrive at destination." })
+    }
+
+    @Test
+    fun `parse helper functions read session refresh reroute and rating envelopes`() {
+        val session =
+            parseRouteSessionResponseDto(
+                """
+                {
+                  "status": "S2000",
+                  "data": {
+                    "sessionId": "session-1"
+                  }
+                }
+                """.trimIndent(),
+            )
+        val refresh =
+            parseRouteTransitRefreshResponseDto(
+                """
+                {
+                  "status": "S2000",
+                  "data": {
+                    "type": "BUS",
+                    "arrivalStatus": "ARRIVING_SOON",
+                    "transits": [
+                      {
+                        "routeNo": "100",
+                        "remainingMinute": 2,
+                        "isLowFloor": true
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent(),
+            )
+        val reroute =
+            parseRouteRerouteResponseDto(
+                """
+                {
+                  "status": "S2000",
+                  "data": {
+                    "route": {
+                      "routeId": "walk_rt_reroute_1",
+                      "transportMode": "WALK",
+                      "routeOption": "SAFE",
+                      "title": "Rerouted Walk",
+                      "distanceMeter": 180.0,
+                      "estimatedTimeMinute": 3,
+                      "geometry": "LINESTRING(129.075600 35.179600, 129.076000 35.180100)",
+                      "legs": [
+                        {
+                          "sequence": 1,
+                          "type": "WALK",
+                          "role": "WALK_ONLY",
+                          "instruction": "Continue straight",
+                          "distanceMeter": 180.0,
+                          "estimatedTimeMinute": 3,
+                          "geometry": "LINESTRING(129.075600 35.179600, 129.076000 35.180100)"
+                        }
+                      ]
+                    }
+                  }
+                }
+                """.trimIndent(),
+            )
+        val rating =
+            parseRouteRatingResponseDto(
+                """
+                {
+                  "status": "S2000",
+                  "data": {
+                    "ratingId": 77
+                  }
+                }
+                """.trimIndent(),
+            )
+
+        assertEquals("session-1", session.sessionId)
+        assertEquals("BUS", refresh.type)
+        assertEquals("ARRIVING_SOON", refresh.arrivalStatus)
+        assertEquals("100", refresh.transits.single().routeNo)
+        assertEquals("walk_rt_reroute_1", reroute.route?.routeId)
+        assertEquals(77L, rating.ratingId)
+    }
+
+    @Test
+    fun `guidance event crosswalk variants map to compatibility segment safety flags`() {
+        val result =
+            RouteSearchResponseDto(
+                routes =
+                    listOf(
+                        RouteDto(
+                            routeOption = "SAFE",
+                            title = "Accessible Walk",
+                            distanceMeter = 90.0,
+                            estimatedTimeMinute = 2,
+                            legs =
+                                listOf(
+                                    RouteLegDto(
+                                        sequence = 1,
+                                        type = "WALK",
+                                        role = "WALK_ONLY",
+                                        instruction = "Walk to destination",
+                                        distanceMeter = 90.0,
+                                        guidanceEvents =
+                                            listOf(
+                                                RouteGuidanceEventDto(
+                                                    sequence = 1,
+                                                    type = "CROSSWALK",
+                                                    distanceFromLegStartMeter = 30.0,
+                                                    geometry = "POINT(129.076000 35.179900)",
+                                                ),
+                                                RouteGuidanceEventDto(
+                                                    sequence = 2,
+                                                    type = "CROSSWALK_SIGNAL",
+                                                    distanceFromLegStartMeter = 60.0,
+                                                    geometry = "POINT(129.077000 35.180500)",
+                                                ),
+                                                RouteGuidanceEventDto(
+                                                    sequence = 3,
+                                                    type = "CROSSWALK_AUDIO",
+                                                    distanceFromLegStartMeter = 90.0,
+                                                    geometry = "POINT(129.078000 35.181000)",
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).toDomain(
+                query = testRouteSearchQuery(routeOptions = listOf(RouteOption.SAFE)),
                 geometryParser = geometryParser,
             )
 
@@ -284,28 +361,25 @@ class RouteSearchDtoMapperTest {
     }
 }
 
-private fun testRouteSearchQuery(routeOptions: List<String>): com.ssafy.e102.eumgil.core.model.RouteSearchQuery =
+private fun testRouteSearchQuery(routeOptions: List<RouteOption>): com.ssafy.e102.eumgil.core.model.RouteSearchQuery =
     com.ssafy.e102.eumgil.core.model.RouteSearchQuery(
         origin =
-            com.ssafy.e102.eumgil.core.model.RouteWaypoint(
+            RouteWaypoint(
                 name = "Origin",
                 coordinate =
-                    com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+                    GeoCoordinate(
                         latitude = 35.1796,
                         longitude = 129.0756,
                     ),
             ),
         destination =
-            com.ssafy.e102.eumgil.core.model.RouteWaypoint(
+            RouteWaypoint(
                 name = "Destination",
                 coordinate =
-                    com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+                    GeoCoordinate(
                         latitude = 35.1151,
                         longitude = 129.0414,
                     ),
             ),
-        requestedOptions =
-            routeOptions.map { option ->
-                com.ssafy.e102.eumgil.core.model.RouteOption.valueOf(option)
-            },
+        requestedOptions = routeOptions,
     )

@@ -139,6 +139,106 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `search preview keeps preview camera when map route restarts with current location available`() =
+        runTest {
+            val initialLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = initialLocation)
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-restart",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+            viewModel.onRouteStopped()
+
+            destinationPreviewRepository.requestPreview(
+                destination = destination,
+                accessibilityTagKeys = listOf("elevator"),
+            )
+            advanceUntilIdle()
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(destination.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+            assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.selectedMapPinCoordinate?.longitude ?: 0.0, 0.0)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
+    fun `search preview keeps preview camera when map route restarts without location permission`() =
+        runTest {
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val locationManager = FakeCurrentLocationManager()
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-no-permission",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+            viewModel.onRouteStopped()
+
+            destinationPreviewRepository.requestPreview(
+                destination = destination,
+                accessibilityTagKeys = listOf("elevator"),
+            )
+            advanceUntilIdle()
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(destination.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+            assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.selectedMapPinCoordinate?.longitude ?: 0.0, 0.0)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
     fun `search preview CTA confirms selection and dismissal does not mutate route state`() =
         runTest {
             val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)

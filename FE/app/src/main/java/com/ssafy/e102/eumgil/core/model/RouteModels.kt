@@ -153,6 +153,7 @@ data class RouteSummary(
     val distanceMeters: Int,
     val estimatedTimeMinutes: Int,
     val riskLevel: RouteRiskLevel,
+    val durationSeconds: Int? = null,
 )
 
 data class RoutePolyline(
@@ -194,10 +195,19 @@ data class RouteTransitStop(
     val coordinate: GeoCoordinate,
 )
 
+data class RouteTransitLaneOption(
+    val routeNo: String? = null,
+    val remainingMinute: Int? = null,
+    val estimatedTimeMinutes: Int? = null,
+    val durationSeconds: Int? = null,
+    val isLowFloor: Boolean? = null,
+)
+
 data class RouteStep(
     val sequence: Int,
     val instruction: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
     val distanceMeters: Int = 0,
+    val durationSeconds: Int? = null,
     val polyline: RoutePolyline = RoutePolyline(),
     val badges: List<RouteBadge> = emptyList(),
     val alerts: List<RouteAlert> = emptyList(),
@@ -214,9 +224,11 @@ data class RouteLeg(
     val role: RouteLegRole = RouteLegRole.WALK_ONLY,
     val instruction: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
     val distanceMeters: Int? = null,
+    val durationSeconds: Int? = null,
     val estimatedTimeMinutes: Int? = null,
     val polyline: RoutePolyline = RoutePolyline(),
     val steps: List<RouteStep> = emptyList(),
+    val laneOptions: List<RouteTransitLaneOption> = emptyList(),
     val routeNo: String? = null,
     val boardingStop: RouteTransitStop? = null,
     val alightingStop: RouteTransitStop? = null,

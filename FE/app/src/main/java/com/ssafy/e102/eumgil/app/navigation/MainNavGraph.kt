@@ -547,10 +547,14 @@ private fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {
     val bookmarkRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
-    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository) {
+    val routeRepository = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.routeRepository
+    }
+    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
         NavigationGuidanceViewModel.provideFactory(
             currentLocationManager = currentLocationManager,
             bookmarkRepository = bookmarkRepository,
+            routeRepository = routeRepository,
         )
     }
 

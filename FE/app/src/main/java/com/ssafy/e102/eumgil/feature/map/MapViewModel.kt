@@ -662,7 +662,10 @@ class MapViewModel(
                 isBookmarked = selectedMapTapDetail?.isBookmarked ?: false,
             )
         isRecenterButtonActive = false
-        syncCameraToDestinationPreview(coordinate = coordinate)
+        syncCameraToDestinationPreview(
+            coordinate = coordinate,
+            incrementRequestId = true,
+        )
         renderSelectedFacilityState()
         renderUiState()
     }
@@ -861,6 +864,7 @@ class MapViewModel(
         when {
             mutableUiState.value.cameraTarget.source == MapCameraSource.CURRENT_LOCATION -> true
             selectedDestination != null -> false
+            selectedDestinationPreview != null -> false
             else -> true
         }
 
@@ -937,21 +941,53 @@ class MapViewModel(
         }
     }
 
-    private fun syncCameraToDestinationPreview(coordinate: MapCoordinate) {
+    private fun syncCameraToDestinationPreview(
+        coordinate: MapCoordinate,
+        incrementRequestId: Boolean,
+    ) {
         mutableUiState.update { state ->
+            val shouldIncrement =
+                incrementRequestId ||
+                    state.cameraTarget.source != MapCameraSource.SEARCH_RESULT ||
+                    state.cameraTarget.center != coordinate
+            val nextRequestId =
+                if (shouldIncrement) {
+                    state.cameraTarget.requestId + 1L
+                } else {
+                    state.cameraTarget.requestId
+                }
+            val nextZoomLevel =
+                if (shouldIncrement) {
+                    MapCameraSource.SEARCH_RESULT.defaultZoomLevel()
+                } else {
+                    state.cameraTarget.zoomLevel
+                }
+
             state.copy(
                 cameraTarget =
                     MapCameraTarget(
                         center = coordinate,
                         source = MapCameraSource.SEARCH_RESULT,
-                        requestId = state.cameraTarget.requestId + 1L,
-                        zoomLevel = MapCameraSource.SEARCH_RESULT.defaultZoomLevel(),
+                        requestId = nextRequestId,
+                        zoomLevel = nextZoomLevel,
                     ),
             )
         }
     }
 
     private fun applyFallbackCameraTarget() {
+        selectedDestinationPreview?.let { preview ->
+            syncCameraToDestinationPreview(
+                coordinate =
+                    MapCoordinate(
+                        latitude = preview.destination.latitude,
+                        longitude = preview.destination.longitude,
+                    ),
+                incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.SEARCH_RESULT,
+            )
+            return
+        }
+
         selectedDestination?.let { destination ->
             syncCameraToSelectedDestination(
                 destination = destination,

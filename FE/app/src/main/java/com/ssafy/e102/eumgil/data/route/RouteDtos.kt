@@ -20,6 +20,7 @@ data class RouteDto(
     val routeId: String? = null,
     val transportMode: String? = null,
     val routeOption: String? = null,
+    val routeOptions: List<String> = emptyList(),
     val title: String? = null,
     val distanceMeter: Double? = null,
     val durationSecond: Int? = null,
@@ -43,11 +44,33 @@ data class RouteLegDto(
     val estimatedTimeMinute: Int? = null,
     val geometry: String? = null,
     val steps: List<RouteStepDto> = emptyList(),
+    val guidanceEvents: List<RouteGuidanceEventDto> = emptyList(),
+    val laneOptions: List<RouteTransitLaneOptionDto> = emptyList(),
     val routeNo: String? = null,
     val boardingStop: RouteTransitStopDto? = null,
+    val arrivingStop: RouteTransitStopDto? = null,
+    // Legacy compatibility field kept for older fixtures and transitional payloads.
     val alightingStop: RouteTransitStopDto? = null,
     val isLowFloor: Boolean? = null,
     val badges: List<String> = emptyList(),
+)
+
+data class RouteGuidanceEventDto(
+    val sequence: Int? = null,
+    val type: String? = null,
+    val distanceFromLegStartMeter: Double? = null,
+    val durationFromLegStartSecond: Int? = null,
+    val distanceFromRouteStartMeter: Double? = null,
+    val durationFromRouteStartSecond: Int? = null,
+    val geometry: String? = null,
+)
+
+data class RouteTransitLaneOptionDto(
+    val routeNo: String? = null,
+    val remainingMinute: Int? = null,
+    val durationSecond: Int? = null,
+    val estimatedTimeMinute: Int? = null,
+    val isLowFloor: Boolean? = null,
 )
 
 data class RouteStepDto(
@@ -98,13 +121,17 @@ data class RouteSelectRequestDto(
     val searchId: String,
 )
 
+data class RouteSessionResponseDto(
+    val sessionId: String,
+)
+
 data class RouteTransitRefreshRequestDto(
     val legSequence: Int,
 )
 
 data class RouteTransitRefreshResponseDto(
-    val type: String? = null,
-    val arrivalStatus: String? = null,
+    val type: String,
+    val arrivalStatus: String,
     val transits: List<RouteTransitArrivalDto> = emptyList(),
 )
 
@@ -120,15 +147,14 @@ data class RouteRerouteRequestDto(
 )
 
 data class RouteRerouteResponseDto(
-    val rerouteType: String? = null,
     val route: RouteDto? = null,
 )
 
 data class RouteRatingRequestDto(
-    val routeId: String,
+    val sessionId: String,
     val score: Int,
 )
 
 data class RouteRatingResponseDto(
-    val ratingId: Long? = null,
+    val ratingId: Long,
 )

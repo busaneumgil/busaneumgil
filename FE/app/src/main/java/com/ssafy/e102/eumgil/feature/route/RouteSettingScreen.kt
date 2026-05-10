@@ -86,7 +86,6 @@ fun RouteSettingScreen(
     onAction: (RouteSettingUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
     val supportingMessage =
         when (uiState.destinationHandoffState) {
             RouteDestinationHandoffState.DIRECT ->

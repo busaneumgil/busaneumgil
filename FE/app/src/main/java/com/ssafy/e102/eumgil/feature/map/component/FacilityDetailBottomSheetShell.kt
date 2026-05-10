@@ -1,14 +1,23 @@
-﻿package com.ssafy.e102.eumgil.feature.map.component
+package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -16,8 +25,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,13 +36,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import kotlin.math.roundToInt
 
 @Immutable
 data class FacilityDetailBottomSheetShellState(
@@ -51,29 +77,47 @@ fun FacilityDetailBottomSheetShell(
     headerActionContent: (@Composable () -> Unit)? = null,
     actionContent: @Composable ColumnScope.() -> Unit,
 ) {
+    val density = LocalDensity.current
+    val dragSettleVelocityThresholdPx = with(density) { 320.dp.toPx() }
+    val dismissThresholdMinPx = with(density) { 72.dp.toPx() }
+    val handleInteractionSource = remember { MutableInteractionSource() }
+    var sheetHeightPx by remember(state.isVisible) { mutableIntStateOf(0) }
+    var sheetOffsetPx by remember(state.isVisible) { mutableFloatStateOf(0f) }
+    var isDragging by remember(state.isVisible) { mutableStateOf(false) }
+
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
         val detailScrollState = rememberScrollState()
         val sheetMaxHeight = maxHeight * 0.9f
+        val maxSheetOffsetPx = sheetHeightPx.toFloat().coerceAtLeast(0f)
+        val dismissThresholdPx = (sheetHeightPx * 0.35f).coerceAtLeast(dismissThresholdMinPx)
+        val animatedSheetOffsetPx by animateFloatAsState(
+            targetValue = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx),
+            animationSpec =
+                if (isDragging) {
+                    snap()
+                } else {
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    )
+                },
+            label = "facilityDetailSheetOffset",
+        )
+        val dragState =
+            rememberDraggableState { delta ->
+                isDragging = true
+                sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
+            }
 
-        AnimatedVisibility(
-            visible = state.isVisible,
-            enter = fadeIn(animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)),
-            exit = fadeOut(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.26f))
-                        .clickable(
-                            interactionSource = scrimInteractionSource,
-                            indication = null,
-                            onClick = onDismiss,
-                        ),
-            )
+        LaunchedEffect(state.isVisible, maxSheetOffsetPx) {
+            if (!state.isVisible) {
+                isDragging = false
+                sheetOffsetPx = 0f
+            } else {
+                sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
+            }
         }
 
         AnimatedVisibility(
@@ -101,7 +145,44 @@ fun FacilityDetailBottomSheetShell(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = sheetMaxHeight),
+                        .heightIn(max = sheetMaxHeight)
+                        .onSizeChanged { size ->
+                            sheetHeightPx = size.height
+                            sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
+                        }
+                        .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
+                handleModifier =
+                    Modifier
+                        .height(24.dp)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "장소 상세 시트 닫기"
+                        }
+                        .clickable(
+                            interactionSource = handleInteractionSource,
+                            indication = null,
+                            onClick = {
+                                isDragging = false
+                                sheetOffsetPx = 0f
+                                onDismiss()
+                            },
+                        )
+                        .draggable(
+                            state = dragState,
+                            orientation = Orientation.Vertical,
+                            onDragStopped = { velocity ->
+                                isDragging = false
+                                if (
+                                    velocity >= dragSettleVelocityThresholdPx ||
+                                    sheetOffsetPx >= dismissThresholdPx
+                                ) {
+                                    sheetOffsetPx = 0f
+                                    onDismiss()
+                                } else {
+                                    sheetOffsetPx = 0f
+                                }
+                            },
+                        ),
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -176,4 +257,3 @@ fun FacilityDetailBottomSheetShell(
         }
     }
 }
-

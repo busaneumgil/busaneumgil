@@ -560,8 +560,9 @@ private class FakeBookmarkRepository(
     override suspend fun isBookmarked(placeId: String): Boolean =
         bookmarks.value.any { bookmark -> bookmark.placeId == placeId }
 
-    override suspend fun saveBookmark(bookmark: BookmarkData) {
+    override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData {
         bookmarks.value = bookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
+        return bookmark
     }
 
     override suspend fun deleteBookmark(placeId: String) {

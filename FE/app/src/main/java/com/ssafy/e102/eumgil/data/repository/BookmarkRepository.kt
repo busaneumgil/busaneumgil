@@ -5,16 +5,20 @@ import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.BookmarkListItemDto
+import com.ssafy.e102.eumgil.data.remote.dto.BookmarkPointDto
+import com.ssafy.e102.eumgil.data.remote.dto.CreateBookmarkRequestDto
+import com.ssafy.e102.eumgil.data.remote.dto.CreateBookmarkResponseDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import java.util.Locale
 
 interface BookmarkRepository {
     fun observeBookmarks(): Flow<List<BookmarkData>>
 
     suspend fun isBookmarked(placeId: String): Boolean
 
-    suspend fun saveBookmark(bookmark: BookmarkData)
+    suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData
 
     suspend fun deleteBookmark(placeId: String)
 }
@@ -27,9 +31,12 @@ data class BookmarkData(
     val longitude: Double,
     val category: String?,
     val bookmarkId: Long? = null,
+    val bookmarkTargetId: String? = null,
+    val targetType: String? = null,
     val serverPlaceId: Long? = null,
     val provider: String? = null,
     val providerPlaceId: String? = null,
+    val providerCategory: String? = null,
 )
 
 class DefaultBookmarkRepository(
@@ -54,28 +61,44 @@ class DefaultBookmarkRepository(
 
     override suspend fun isBookmarked(placeId: String): Boolean = bookmarkDao.getBookmark(placeId) != null
 
-    override suspend fun saveBookmark(bookmark: BookmarkData) {
-        runCatching { trySaveOnServer(bookmark) }
-        cacheBookmark(bookmark)
+    override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData {
+        val serverResponse = trySaveOnServer(bookmark)
+        val resolvedBookmark = bookmark.withServerResponse(serverResponse)
+        cacheBookmark(resolvedBookmark)
+        return resolvedBookmark
     }
 
     override suspend fun deleteBookmark(placeId: String) {
-        runCatching { tryDeleteOnServer(placeId) }
-        bookmarkDao.deleteBookmark(placeId)
+        val cachedBookmark = bookmarkDao.getBookmark(placeId) ?: bookmarkDao.getBookmarkByTargetId(placeId)
+        tryDeleteOnServer(placeId = placeId, cachedBookmark = cachedBookmark)
+        if (cachedBookmark?.bookmarkTargetId == placeId) {
+            bookmarkDao.deleteBookmarkByTargetId(placeId)
+        } else {
+            bookmarkDao.deleteBookmark(placeId)
+        }
     }
 
-    private suspend fun trySaveOnServer(bookmark: BookmarkData) {
-        val datasource = bookmarksRemoteDataSource ?: return
-        val token = accessTokenProvider() ?: return
-        val numericPlaceId = bookmark.serverPlaceId ?: bookmark.placeId.toLongOrNull() ?: return
+    private suspend fun trySaveOnServer(bookmark: BookmarkData): CreateBookmarkResponseDto? {
+        val datasource = bookmarksRemoteDataSource ?: return null
+        val token = accessTokenProvider() ?: return null
+        val request = bookmark.toCreateBookmarkRequestDto() ?: return null
 
-        datasource.createBookmark(accessToken = token, placeId = numericPlaceId)
+        return datasource.createBookmark(accessToken = token, request = request)
     }
 
-    private suspend fun tryDeleteOnServer(placeId: String) {
+    private suspend fun tryDeleteOnServer(
+        placeId: String,
+        cachedBookmark: BookmarkEntity?,
+    ) {
         val datasource = bookmarksRemoteDataSource ?: return
         val token = accessTokenProvider() ?: return
-        val numericPlaceId = placeId.toLongOrNull() ?: return
+        val bookmarkTargetId = cachedBookmark?.bookmarkTargetId?.takeIf { it.isNotBlank() }
+        if (bookmarkTargetId != null) {
+            datasource.deleteBookmarkByTargetId(accessToken = token, bookmarkTargetId = bookmarkTargetId)
+            return
+        }
+
+        val numericPlaceId = cachedBookmark?.serverPlaceId ?: placeId.toLongOrNull() ?: return
 
         datasource.deleteBookmark(accessToken = token, placeId = numericPlaceId)
     }
@@ -88,6 +111,13 @@ class DefaultBookmarkRepository(
             BookmarkEntity(
                 bookmarkId = existingBookmark?.bookmarkId ?: 0L,
                 placeId = bookmark.placeId,
+                serverBookmarkId = bookmark.bookmarkId,
+                bookmarkTargetId = bookmark.bookmarkTargetId,
+                targetType = bookmark.targetType,
+                serverPlaceId = bookmark.serverPlaceId,
+                provider = bookmark.provider,
+                providerPlaceId = bookmark.providerPlaceId,
+                providerCategory = bookmark.providerCategory,
                 placeName = bookmark.placeName,
                 address = bookmark.address,
                 latitude = bookmark.latitude,
@@ -104,19 +134,35 @@ class DefaultBookmarkRepository(
             val datasource = bookmarksRemoteDataSource ?: return@runCatching
             val token = accessTokenProvider() ?: return@runCatching
 
-            val page =
-                datasource.getBookmarks(
-                    accessToken = token,
-                    page = 0,
-                    size = DEFAULT_PAGE_SIZE,
-                )
+            val serverBookmarks = fetchAllBookmarksFromServer(datasource = datasource, token = token)
 
             val now = clock()
             bookmarkDao.clearBookmarks()
             bookmarkDao.upsertBookmarks(
-                page.content.map { item -> item.toBookmarkEntity(createdAt = now, updatedAt = now) },
+                serverBookmarks.map { item -> item.toBookmarkEntity(createdAt = now, updatedAt = now) },
             )
         }
+    }
+
+    private suspend fun fetchAllBookmarksFromServer(
+        datasource: BookmarksRemoteDataSource,
+        token: String,
+    ): List<BookmarkListItemDto> {
+        val bookmarks = mutableListOf<BookmarkListItemDto>()
+        var cursor: Long? = null
+
+        do {
+            val page =
+                datasource.getBookmarks(
+                    accessToken = token,
+                    cursor = cursor,
+                    size = DEFAULT_PAGE_SIZE,
+                )
+            bookmarks += page.content
+            cursor = page.nextCursor
+        } while (page.hasNext && cursor != null)
+
+        return bookmarks
     }
 
     private suspend fun seedInitialBookmarksIfNeeded() {
@@ -146,6 +192,13 @@ private fun BookmarkEntity.toBookmarkData(): BookmarkData =
         latitude = latitude,
         longitude = longitude,
         category = category,
+        bookmarkId = serverBookmarkId,
+        bookmarkTargetId = bookmarkTargetId,
+        targetType = targetType,
+        serverPlaceId = serverPlaceId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
     )
 
 fun FacilityDetailSeed.toBookmarkData(): BookmarkData =
@@ -164,6 +217,13 @@ private fun BookmarkData.toBookmarkEntity(
 ): BookmarkEntity =
     BookmarkEntity(
         placeId = placeId,
+        serverBookmarkId = bookmarkId,
+        bookmarkTargetId = bookmarkTargetId,
+        targetType = targetType,
+        serverPlaceId = serverPlaceId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
         placeName = placeName,
         address = address,
         latitude = latitude,
@@ -178,7 +238,14 @@ private fun BookmarkListItemDto.toBookmarkEntity(
     updatedAt: Long,
 ): BookmarkEntity =
     BookmarkEntity(
-        placeId = placeId.toString(),
+        placeId = localCachePlaceId(),
+        serverBookmarkId = bookmarkId,
+        bookmarkTargetId = bookmarkTargetId,
+        targetType = targetType,
+        serverPlaceId = placeId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
         placeName = name,
         address = address,
         latitude = point.lat,
@@ -187,3 +254,40 @@ private fun BookmarkListItemDto.toBookmarkEntity(
         createdAt = createdAt,
         updatedAt = updatedAt,
     )
+
+private fun BookmarkData.toCreateBookmarkRequestDto(): CreateBookmarkRequestDto? {
+    val numericPlaceId = serverPlaceId ?: placeId.toLongOrNull()
+    if (numericPlaceId != null) {
+        return CreateBookmarkRequestDto(placeId = numericPlaceId)
+    }
+
+    val snapshotProvider = provider?.takeIf { it.isNotBlank() } ?: return null
+    return CreateBookmarkRequestDto(
+        provider = snapshotProvider,
+        providerPlaceId = providerPlaceId,
+        name = placeName,
+        providerCategory = providerCategory ?: category,
+        address = address,
+        point = BookmarkPointDto(lat = latitude, lng = longitude),
+    )
+}
+
+private fun BookmarkData.withServerResponse(response: CreateBookmarkResponseDto?): BookmarkData {
+    if (response == null) return this
+
+    val resolvedServerPlaceId = response.placeId ?: serverPlaceId
+
+    return copy(
+        bookmarkId = response.bookmarkId,
+        bookmarkTargetId = response.bookmarkTargetId,
+        targetType = response.targetType,
+        serverPlaceId = resolvedServerPlaceId,
+    )
+}
+
+private fun BookmarkListItemDto.localCachePlaceId(): String =
+    placeId?.toString()
+        ?: providerPlaceId
+            ?.takeIf { it.isNotBlank() }
+            ?.let { externalPlaceId -> "provider:${provider.orEmpty().trim().lowercase(Locale.US)}:$externalPlaceId" }
+        ?: bookmarkTargetId

@@ -24,6 +24,7 @@ data class SearchResult(
     val longitude: Double,
     val category: PlaceCategory? = null,
     val serverPlaceId: String? = placeId,
+    val provider: String? = null,
     val providerPlaceId: String? = null,
     val accessibilityTagKeys: List<String> = emptyList(),
     val matched: Boolean = true,
@@ -34,6 +35,14 @@ data class SearchResult(
     val isVerifiedPlace: Boolean
         get() = matched && !serverPlaceId.isNullOrBlank()
 }
+
+data class SearchPage(
+    val results: List<SearchResult>,
+    val nextCursor: String? = null,
+    val hasNext: Boolean = false,
+    val size: Int = results.size,
+    val totalElements: Long? = null,
+)
 
 enum class SearchVoiceMode {
     MOBILITY_IMPAIRED,

@@ -96,10 +96,25 @@ internal object PlaceDtoMapper {
         )
     }
 
-    fun PlaceCategory.toApiValue(): String =
+    fun PlaceCategory.toServerCategoryApiValueOrNull(): String? =
         when (this) {
+            PlaceCategory.TOILET,
+            PlaceCategory.ELEVATOR,
+            PlaceCategory.CHARGING_STATION,
+            PlaceCategory.BRAILLE_BLOCK,
+            -> null
+            PlaceCategory.RESTAURANT -> "FOOD_CAFE"
+            PlaceCategory.TOURIST_ATTRACTION -> "TOURIST_SPOT"
             PlaceCategory.OTHER -> "ETC"
             else -> name
+        }
+
+    fun PlaceCategory.toFeatureTypeApiValueOrNull(): String? =
+        when (this) {
+            PlaceCategory.TOILET -> PlaceFeatureType.ACCESSIBLE_TOILET.toApiValue()
+            PlaceCategory.ELEVATOR -> PlaceFeatureType.ELEVATOR.toApiValue()
+            PlaceCategory.CHARGING_STATION -> PlaceFeatureType.CHARGING_STATION.toApiValue()
+            else -> null
         }
 
     fun PlaceFeatureType.toApiValue(): String =

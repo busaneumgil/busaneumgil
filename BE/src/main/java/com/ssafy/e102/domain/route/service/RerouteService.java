@@ -15,7 +15,6 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -37,7 +36,6 @@ import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 @Service
-@Transactional(readOnly = true)
 public class RerouteService {
 
 	private static final double BUSAN_MIN_LAT = 34.85;
@@ -51,6 +49,7 @@ public class RerouteService {
 	private static final int SRID = 4326;
 
 	private final RouteSessionRepository routeSessionRepository;
+	private final RouteSessionCommandService routeSessionCommandService;
 	private final ObjectMapper objectMapper;
 	private final WalkRouteSearchService walkRouteSearchService;
 	private final TransitRouteSearchService transitRouteSearchService;
@@ -59,16 +58,17 @@ public class RerouteService {
 
 	public RerouteService(
 		RouteSessionRepository routeSessionRepository,
+		RouteSessionCommandService routeSessionCommandService,
 		ObjectMapper objectMapper,
 		WalkRouteSearchService walkRouteSearchService,
 		TransitRouteSearchService transitRouteSearchService) {
 		this.routeSessionRepository = routeSessionRepository;
+		this.routeSessionCommandService = routeSessionCommandService;
 		this.objectMapper = objectMapper;
 		this.walkRouteSearchService = walkRouteSearchService;
 		this.transitRouteSearchService = transitRouteSearchService;
 	}
 
-	@Transactional
 	public RerouteResponse reroute(UUID userId, RerouteRequest request) {
 		validateRequest(request);
 		validateCurrentPoint(request.currentPoint());
@@ -80,29 +80,30 @@ public class RerouteService {
 		}
 		if (projection.distanceMeter() <= WALK_REPAIR_MAX_DISTANCE_METER) {
 			RouteSummaryResponse repairedRoute = walkRepair(userId, request.currentPoint(), route, projection);
-			saveRerouteSession(routeSession, request.currentPoint(), repairedRoute);
+			saveRerouteSession(userId, routeSession, request.currentPoint(), repairedRoute);
 			return new RerouteResponse(repairedRoute);
 		}
 		if (projection.distanceMeter() <= FULL_REROUTE_MAX_DISTANCE_METER) {
 			RouteSummaryResponse reroutedRoute = withNewRouteId(
 				fullReroute(userId, request.currentPoint(), routeSession, route),
 				newRouteId("rr_full"));
-			saveRerouteSession(routeSession, request.currentPoint(), reroutedRoute);
+			saveRerouteSession(userId, routeSession, request.currentPoint(), reroutedRoute);
 			return new RerouteResponse(reroutedRoute);
 		}
 		throw new RouteException(RouteErrorCode.ROUTE_TOO_FAR_FOR_REROUTE);
 	}
 
 	private void saveRerouteSession(
+		UUID userId,
 		RouteSession previousSession,
 		GeoPointRequest currentPoint,
 		RouteSummaryResponse route) {
-		routeSessionRepository.save(RouteSession.create(
-			previousSession.getUser(),
+		routeSessionCommandService.saveActiveSessionIfAbsent(
+			userId,
 			route.routeId(),
 			toPoint(currentPoint),
 			previousSession.getEndPoint(),
-			objectMapper.valueToTree(route)));
+			objectMapper.valueToTree(route));
 	}
 
 	private Point toPoint(GeoPointRequest request) {

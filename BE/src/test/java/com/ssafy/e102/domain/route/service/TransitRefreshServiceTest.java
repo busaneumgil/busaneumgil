@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -112,6 +113,46 @@ class TransitRefreshServiceTest {
 		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.REALTIME_AVAILABLE);
 		assertThat(response.transits().get(0).remainingMinute()).isEqualTo(2);
 		verify(busanBimsClient, never()).findArrival("507700000", "5200177000", "100");
+	}
+
+	@Test
+	@DisplayName("BUS Redis cache 조회가 실패하면 BIMS 직접 호출로 우회한다")
+	void refreshBusFallsBackToBimsWhenCacheReadFails() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
+			.thenReturn(Optional.of(routeSession));
+		when(bimsArrivalCacheService.find("507700000", "5200177000"))
+			.thenThrow(new IllegalStateException("redis unavailable"));
+		when(busanBimsClient.findArrival("507700000", "5200177000", "100"))
+			.thenReturn(new BusanBimsArrival("507700000", "5200177000", "100", 4, true));
+
+		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
+
+		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.REALTIME_AVAILABLE);
+		assertThat(response.transits().get(0).remainingMinute()).isEqualTo(4);
+		verify(busanBimsClient).findArrival("507700000", "5200177000", "100");
+	}
+
+	@Test
+	@DisplayName("BUS Redis cache 저장이 실패해도 BIMS 응답은 성공으로 반환한다")
+	void refreshBusIgnoresCacheSaveFailure() {
+		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
+		BusanBimsArrival arrival = new BusanBimsArrival("507700000", "5200177000", "100", 5, true);
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
+			.thenReturn(Optional.of(routeSession));
+		when(bimsArrivalCacheService.find("507700000", "5200177000"))
+			.thenReturn(Optional.empty());
+		when(busanBimsClient.findArrival("507700000", "5200177000", "100"))
+			.thenReturn(arrival);
+		doThrow(new IllegalStateException("redis unavailable"))
+			.when(bimsArrivalCacheService).save(arrival);
+
+		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
+
+		assertThat(response.arrivalStatus()).isEqualTo(TransitArrivalStatus.REALTIME_AVAILABLE);
+		assertThat(response.transits().get(0).remainingMinute()).isEqualTo(5);
 	}
 
 	@Test

@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
 
@@ -283,7 +284,7 @@ public class TransitRefreshService {
 				"missingLineId");
 			return new BusArrivalResult(busanBimsClient.findArrival(stopId, null, lane.routeNo()));
 		}
-		return bimsArrivalCacheService.find(stopId, lane.lineId())
+		return findCachedBusArrival(stopId, lane)
 			.map(arrival -> {
 				log.info("bims arrival cache hit stopId={} lineId={} routeNo={}", stopId, lane.lineId(),
 					lane.routeNo());
@@ -294,10 +295,35 @@ public class TransitRefreshService {
 					lane.routeNo());
 				BusanBimsArrival arrival = busanBimsClient.findArrival(stopId, lane.lineId(), lane.routeNo());
 				if (StringUtils.hasText(arrival.stopId()) && StringUtils.hasText(arrival.lineId())) {
-					bimsArrivalCacheService.save(arrival);
+					saveBusArrivalCache(arrival);
 				}
 				return new BusArrivalResult(arrival);
 			});
+	}
+
+	private Optional<BusanBimsArrival> findCachedBusArrival(String stopId, BusLane lane) {
+		try {
+			return bimsArrivalCacheService.find(stopId, lane.lineId());
+		} catch (RuntimeException exception) {
+			log.warn("bims arrival cache read failed stopId={} lineId={} routeNo={}",
+				stopId,
+				lane.lineId(),
+				lane.routeNo(),
+				exception);
+			return Optional.empty();
+		}
+	}
+
+	private void saveBusArrivalCache(BusanBimsArrival arrival) {
+		try {
+			bimsArrivalCacheService.save(arrival);
+		} catch (RuntimeException exception) {
+			log.warn("bims arrival cache save failed stopId={} lineId={} routeNo={}",
+				arrival.stopId(),
+				arrival.lineId(),
+				arrival.routeNo(),
+				exception);
+		}
 	}
 
 	private String text(JsonNode node, String fieldName) {

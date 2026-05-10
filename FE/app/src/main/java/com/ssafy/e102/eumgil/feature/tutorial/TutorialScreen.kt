@@ -338,7 +338,7 @@ private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
         )
         Spacer(modifier = Modifier.height(TutorialLayoutDefaults.sceneContentVerticalGap))
         TutorialStatusStrip(
-            iconRes = R.drawable.ic_nav_route,
+            iconRes = R.drawable.ic_map_selected_pin_blue,
             titleRes = R.string.tutorial_route_status_title,
             valueRes = R.string.tutorial_route_status_value,
         )
@@ -537,8 +537,7 @@ private fun TutorialStatusStrip(
                 .widthIn(max = TutorialLayoutDefaults.statusStripMaxWidth)
                 .height(TutorialLayoutDefaults.statusStripHeight),
         shape = RoundedCornerShape(EumRadius.small),
-        color = EumWhite,
-        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+        color = TutorialLayoutDefaults.statusStripContainerColor,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = EumSpacing.medium),
@@ -560,8 +559,8 @@ private fun TutorialStatusStrip(
             Text(
                 text = stringResource(id = valueRes),
                 modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = TutorialLayoutDefaults.statusStripValueAlpha),
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.End,
             )
@@ -885,6 +884,10 @@ internal object TutorialLayoutDefaults {
     const val destinationShowsFilterResultPanel: Boolean = true
     const val destinationFilterRowCount: Int = 1
     const val usesServiceLikeStatusStrip: Boolean = true
+    const val statusStripUsesTransparentLayer: Boolean = true
+    const val statusStripUsesBorder: Boolean = false
+    const val statusStripUsesLowEmphasisValue: Boolean = true
+    const val routeStatusUsesMapMarkerIcon: Boolean = true
     const val statusStripCountPerScene: Int = 1
     const val routeDescriptionBreaksAfterSettingComma: Boolean = true
     const val routeCopyUsesRouteWording: Boolean = true
@@ -926,7 +929,8 @@ internal object TutorialLayoutDefaults {
     val destinationResultPanelMaxWidth = 340.dp
     val destinationResultPanelGap = 12.dp
     val statusStripMaxWidth = 340.dp
-    val statusStripHeight = 44.dp
+    val statusStripHeight = 40.dp
+    val statusStripValueAlpha = 0.72f
     val floatingPanelHeight = 56.dp
     val floatingPanelElevation = 3.dp
     val floatingPanelIconSize = 22.dp
@@ -938,7 +942,7 @@ internal object TutorialLayoutDefaults {
     val radioDotOuterSize = 24.dp
     val radioDotInnerSize = 12.dp
     val reportTileWidth = 152.dp
-    val reportTileHeight = 88.dp
+    val reportTileHeight = 100.dp
     val reportGridButtonGap = 12.dp
     val reportSubmitButtonMaxWidth = 340.dp
     val reportSubmitButtonHeight = 50.dp
@@ -958,4 +962,5 @@ internal object TutorialLayoutDefaults {
 
     val filterChipBorderColor = EumPrimary600.copy(alpha = 0.28f)
     val indicatorTrackColor = Color(0xFFD9DDE7)
+    val statusStripContainerColor = EumWhite.copy(alpha = 0.62f)
 }

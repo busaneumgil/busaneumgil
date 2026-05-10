@@ -96,7 +96,7 @@ terraform plan -out=prod.tfplan
 - RDS와 Redis는 public endpoint를 열지 않고 S2 security group에서만 접근하게 둔다.
 - Redis는 AUTH token과 transit encryption을 사용한다. `.env.terraform`의 `TF_VAR_redis_auth_token`과 `.env.prod`의 `REDIS_PASSWORD`는 같은 값으로 맞춘다.
 - 따라서 운영 WAS와 prod GraphHopper runtime은 S2에서 실행하는 것을 기준으로 한다.
-- `api.${root_domain}`과 `ai.${root_domain}`은 S2 Elastic IP로 연결한다.
+- `api.${root_domain}`, `ai.${root_domain}`, `admin.${root_domain}`은 S2 Elastic IP로 연결한다.
 - `api.dev.${root_domain}`과 `ai.dev.${root_domain}`은 S1 dev stack으로 연결한다.
 - AI Flask 원 포트는 외부에 직접 열지 않고 S2 Nginx 또는 backend 내부 호출로 제어한다.
 - HTTPS 인증서는 Terraform apply 이후 DNS 전파와 S2 서비스 기동을 확인한 뒤 S2에서 `certbot --nginx`로 발급한다.
@@ -109,6 +109,7 @@ terraform plan -out=prod.tfplan
 - prod Terraform backend는 S3 remote state 기준으로 초기화 완료
 - S2 prod primary, RDS, ElastiCache, S3, Route53 운영 리소스 apply 완료
 - `api.busaneumgil.com`, `ai.busaneumgil.com`은 S2 Elastic IP로 연결 완료
+- `admin.busaneumgil.com`은 관리자 웹 운영 전환 시 S2 Elastic IP로 연결한다.
 - `jenkins/grafana/portainer/sonarqube/plg.busaneumgil.com`은 S1 도메인 CNAME으로 연결 완료
 - `api.dev.busaneumgil.com`, `ai.dev.busaneumgil.com`은 S1 dev stack CNAME으로 연결 완료
 - Terraform apply는 반드시 plan 검토 후 수동 승인으로 진행한다.

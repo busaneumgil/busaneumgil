@@ -405,7 +405,7 @@ private fun FacilityDetailBookmarkActionButton(
     val bookmarkButtonLabel = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
     val bookmarkStateDescription =
         when {
-            state.isBookmarkEnabled.not() -> "Bookmark is only available for internal places."
+            state.isBookmarkEnabled.not() -> "Bookmark is unavailable for this place."
 
             state.isBookmarkUpdating ->
                 stringResource(id = R.string.map_facility_detail_bookmark_state_updating)
@@ -699,11 +699,11 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 address = mapTapDetailAddressLabel(mapTapDetail),
                 guideMessage = mapTapDetailGuideMessage(mapTapDetail),
                 accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
-                isBookmarked = mapTapDetail.isBookmarked,
-                isBookmarkUpdating = false,
-                isBookmarkEnabled = false,
-                isRouteActionEnabled = false,
-                bookmarkErrorMessage = null,
+                isBookmarked = sheetState.isBookmarked,
+                isBookmarkUpdating = sheetState.isBookmarkUpdating,
+                isBookmarkEnabled = true,
+                isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
+                bookmarkErrorMessage = sheetState.bookmarkErrorMessage,
             )
 
         shouldDelayPoiSheetUntilDetail -> null
@@ -786,11 +786,11 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             address = mapTapDetailAddressLabel(mapTapDetail),
             guideMessage = mapTapDetailGuideMessage(mapTapDetail),
             accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
-            isBookmarked = mapTapDetail.isBookmarked,
-            isBookmarkUpdating = false,
-            isBookmarkEnabled = false,
-            isRouteActionEnabled = false,
-            bookmarkErrorMessage = null,
+            isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
+            isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
+            isBookmarkEnabled = true,
+            isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
+            bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     } else if (uiState.facilityDetailSheetState.isMapTapDetailLoading) {
         MapFacilityDetailSheetUiState(
@@ -1086,6 +1086,12 @@ private fun mapTapDetailAccessibilityLabels(detail: MapTappedPlaceDetail): List<
         .mapNotNull(::recentDestinationTagLabel)
         .distinct()
         .take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
+
+private fun MapTappedPlaceDetail.hasValidCoordinate(): Boolean =
+    latitude.isFinite() &&
+        longitude.isFinite() &&
+        latitude in -90.0..90.0 &&
+        longitude in -180.0..180.0
 
 @Composable
 private fun mapTapDetailTypeLabel(detailType: MapPlaceDetailType): String =

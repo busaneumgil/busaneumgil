@@ -38,6 +38,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.GoogleSocialAccessTokenProvider
@@ -144,6 +145,10 @@ class AppContainer(
 
     val destinationSelectionRepository: DestinationSelectionRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideDestinationSelectionRepository()
+    }
+
+    val destinationPreviewRepository: DestinationPreviewRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideDestinationPreviewRepository()
     }
 
     val authSessionRepository: AuthSessionRepository by lazy(LazyThreadSafetyMode.NONE) {

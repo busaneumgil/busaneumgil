@@ -133,6 +133,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToMapPreview = {
+                val didReturnToMap = navController.popBackStack(
+                    route = TopLevelRoute.Map.route,
+                    inclusive = false,
+                )
+                if (!didReturnToMap) {
+                    navController.navigateToTopLevel(TopLevelDestination.Map)
+                }
+            },
             onNavigateToRouteBriefing = {
                 navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
@@ -186,6 +195,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
+                }
+            },
+            onNavigateToMapPreview = {
+                val didReturnToMap = navController.popBackStack(
+                    route = TopLevelRoute.Map.route,
+                    inclusive = false,
+                )
+                if (!didReturnToMap) {
+                    navController.navigateToTopLevel(TopLevelDestination.Map)
                 }
             },
             onNavigateToRouteBriefing = {

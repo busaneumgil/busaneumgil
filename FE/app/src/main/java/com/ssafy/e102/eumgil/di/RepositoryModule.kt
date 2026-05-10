@@ -41,7 +41,9 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyUserProfileRepository
@@ -65,6 +67,9 @@ import com.ssafy.e102.eumgil.data.repository.provideAuthLogoutRepository as prov
 object RepositoryModule {
     fun provideDestinationSelectionRepository(): DestinationSelectionRepository =
         InMemoryDestinationSelectionRepository()
+
+    fun provideDestinationPreviewRepository(): DestinationPreviewRepository =
+        InMemoryDestinationPreviewRepository()
 
     fun provideAuthSessionRepository(
         authSessionLocalDataSource: AuthSessionLocalDataSource,

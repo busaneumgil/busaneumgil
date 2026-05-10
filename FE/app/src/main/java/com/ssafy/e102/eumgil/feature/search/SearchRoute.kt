@@ -27,6 +27,7 @@ fun SearchEntryRoute(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     preserveEntryStateOnReentry: Boolean = false,
@@ -41,6 +42,7 @@ fun SearchEntryRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToMapPreview = onNavigateToMapPreview,
         onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
@@ -53,6 +55,7 @@ fun SearchResultsRoute(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     modifier: Modifier = Modifier,
@@ -65,6 +68,7 @@ fun SearchResultsRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToMapPreview = onNavigateToMapPreview,
         onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
@@ -146,6 +150,7 @@ fun SearchVoiceInputRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = {},
         onNavigateToRouteSetting = {},
+        onNavigateToMapPreview = {},
         onNavigateToRouteBriefing = {},
         onStartVoiceCapture = { sttViewModel.startListening() },
         onStopVoiceCapture = { sttViewModel.stopListening() },
@@ -163,6 +168,7 @@ private fun SearchRouteContent(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit = {},
     onStartVoiceCapture: () -> Unit = {},
     onStopVoiceCapture: () -> Unit = {},
@@ -197,6 +203,7 @@ private fun SearchRouteContent(
         onNavigateToResults,
         onNavigateToVoiceInput,
         onNavigateToRouteSetting,
+        onNavigateToMapPreview,
         onNavigateToRouteBriefing,
         onStartVoiceCapture,
         onStopVoiceCapture,
@@ -209,6 +216,7 @@ private fun SearchRouteContent(
                 SearchUiEvent.StartVoiceCapture -> onStartVoiceCapture()
                 SearchUiEvent.StopVoiceCapture -> onStopVoiceCapture()
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                SearchUiEvent.NavigateToMapPreview -> onNavigateToMapPreview()
                 SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
             }
@@ -237,6 +245,7 @@ private fun rememberSearchViewModel(): SearchViewModel {
                 searchRepository = appContainer.searchRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 placesRepository = appContainer.placesRepository,
             )
         }

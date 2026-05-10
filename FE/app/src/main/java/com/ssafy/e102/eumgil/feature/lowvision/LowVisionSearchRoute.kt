@@ -44,6 +44,7 @@ fun LowVisionSearchRoute(
                 searchRepository = lowVisionSearchRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 placesRepository = appContainer.placesRepository,
             )
         }
@@ -66,6 +67,7 @@ fun LowVisionSearchRoute(
                 is SearchUiEvent.NavigateToResults -> Unit
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
+                SearchUiEvent.NavigateToMapPreview -> Unit
                 SearchUiEvent.NavigateToLowVisionBookmark -> onNavigateToBookmark()
                 SearchUiEvent.NavigateToVoiceInput -> Unit
                 SearchUiEvent.StartVoiceCapture -> Unit

@@ -196,7 +196,6 @@ class RouteSelectFlowTest {
 			BigDecimal.valueOf(2500),
 			900,
 			15,
-			0,
 			List.of(RouteBadge.CROSSWALK),
 			"LINESTRING(128.936 35.12, 128.956 35.14)",
 			List.of(new RouteLegResponse(

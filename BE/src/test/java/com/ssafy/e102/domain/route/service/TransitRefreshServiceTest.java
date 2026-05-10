@@ -401,7 +401,6 @@ class TransitRefreshServiceTest {
 			BigDecimal.valueOf(1200),
 			900,
 			15,
-			0,
 			List.of(),
 			"LINESTRING(128.936 35.12, 128.956 35.14)",
 			List.of(

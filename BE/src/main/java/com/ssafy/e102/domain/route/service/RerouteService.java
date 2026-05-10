@@ -121,7 +121,6 @@ public class RerouteService {
 			route.distanceMeter(),
 			route.durationSecond(),
 			route.estimatedTimeMinute(),
-			route.transferCount(),
 			route.badges(),
 			route.geometry(),
 			route.legs());
@@ -168,7 +167,6 @@ public class RerouteService {
 			distanceMeter,
 			durationSecond,
 			estimatedMinute(durationSecond),
-			previousRoute.transferCount(),
 			mergeBadges(repairRoute.badges(), previousRoute.badges(), offsetLegs),
 			mergeGeometry(offsetLegs),
 			offsetLegs);

@@ -62,6 +62,8 @@ class RouteDtoJsonTest {
 		assertThat(route.get("routeId").asText()).isEqualTo("walk_rt_safe_001");
 		assertThat(route.get("transportMode").asText()).isEqualTo("WALK");
 		assertThat(route.get("routeOption").asText()).isEqualTo("SAFE");
+		assertThat(route.get("routeOptions").get(0).asText()).isEqualTo("SAFE");
+		assertThat(route.has("transferCount")).isFalse();
 		assertThat(route.get("badges").get(0).asText()).isEqualTo("LOW_SLOPE");
 		JsonNode leg = route.get("legs").get(0);
 		assertThat(leg.get("type").asText()).isEqualTo("WALK");

@@ -47,6 +47,8 @@ class TutorialScreenTest {
         assertEquals(true, TutorialLayoutDefaults.destinationFilterUsesOriginalMapChipShape)
         assertEquals(true, TutorialLayoutDefaults.destinationShowsFilterResultPanel)
         assertEquals(false, TutorialLayoutDefaults.usesGeneratedBitmapIllustration)
+        assertEquals(true, TutorialLayoutDefaults.usesServiceLikeStatusStrip)
+        assertEquals(1, TutorialLayoutDefaults.statusStripCountPerScene)
         assertEquals(true, TutorialLayoutDefaults.routeCopyUsesRouteWording)
         assertEquals(true, TutorialLayoutDefaults.reportUsesLatestReportTypeIcons)
         assertEquals(true, TutorialLayoutDefaults.reportHighlightsSelectedCategory)
@@ -73,7 +75,7 @@ class TutorialScreenTest {
 
     @Test
     fun `destination controls sit close together with equal vertical rhythm`() {
-        assertEquals(300.dp, TutorialLayoutDefaults.illustrationHeight)
+        assertEquals(316.dp, TutorialLayoutDefaults.illustrationHeight)
         assertEquals(340.dp, TutorialLayoutDefaults.searchBarMaxWidth)
         assertEquals(12.dp, TutorialLayoutDefaults.destinationControlVerticalGap)
         assertEquals(13.dp, TutorialLayoutDefaults.filterChipHorizontalPadding)
@@ -84,6 +86,20 @@ class TutorialScreenTest {
         assertEquals(1, TutorialLayoutDefaults.destinationFilterRowCount)
         assertEquals(340.dp, TutorialLayoutDefaults.destinationResultPanelMaxWidth)
         assertEquals(12.dp, TutorialLayoutDefaults.destinationResultPanelGap)
+        assertEquals(44.dp, TutorialLayoutDefaults.statusStripHeight)
+        assertEquals(340.dp, TutorialLayoutDefaults.statusStripMaxWidth)
+    }
+
+    @Test
+    fun `status strips use product-like short result copy`() {
+        val stringsFile = File("src/main/res/values/strings.xml")
+
+        assertEquals("필터 적용됨", stringsFile.readStringResource(name = "tutorial_destination_status_title"))
+        assertEquals("화장실 · 엘리베이터", stringsFile.readStringResource(name = "tutorial_destination_status_value"))
+        assertEquals("비교 기준", stringsFile.readStringResource(name = "tutorial_route_status_title"))
+        assertEquals("안전 우선 · 효율 경로", stringsFile.readStringResource(name = "tutorial_route_status_value"))
+        assertEquals("선택 유형", stringsFile.readStringResource(name = "tutorial_report_status_title"))
+        assertEquals("점자블록 문제", stringsFile.readStringResource(name = "tutorial_report_status_value"))
     }
 
     @Test

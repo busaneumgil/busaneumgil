@@ -404,10 +404,9 @@ private class KakaoMapViewportController {
                                 position = position,
                             )
                         } else if (poiId.isNotBlank()) {
-                            dispatchExternalPoiTap(
-                                position = position,
-                                providerPlaceId = poiId,
-                                nameHint = null,
+                            Log.d(
+                                KAKAO_MAP_LOG_TAG,
+                                "Skipping external POI tap without nameHint providerPlaceId=$poiId",
                             )
                         }
                     }

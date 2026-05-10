@@ -55,6 +55,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -686,6 +687,7 @@ class MapViewModelTest {
             assertEquals("KAKAO", request.provider)
             assertEquals("poi-123", request.providerPlaceId)
             assertEquals("Cafe Hint", request.nameHint)
+            assertEquals("Cafe Hint", viewModel.uiState.value.facilityDetailSheetState.mapTapNameHint)
             val detail = requireNotNull(viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
             assertEquals(MapPlaceDetailType.EXTERNAL_POI, detail.detailType)
             assertEquals("kakao:poi-123", detail.bookmarkTargetId)
@@ -720,11 +722,16 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, placesRepository.mapTapDetailRequests.size)
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
             assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
             assertFalse(viewModel.uiState.value.facilityDetailSheetState.isMapTapDetailLoading)
             assertTrue(viewModel.uiState.value.facilityDetailSheetState.mapTapDetailErrorMessage?.isNotBlank() == true)
             assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertNull(event)
         }
 
     @Test

@@ -75,6 +75,7 @@ class MapViewModel(
     private var selectedMapPinCoordinate: MapCoordinate? = null
     private var selectedFacilityDetail: FacilityDetailSeed? = null
     private var selectedMapTapDetail: MapTappedPlaceDetail? = null
+    private var selectedMapTapNameHint: String? = null
     private var isMapTapDetailLoading = false
     private var mapTapDetailErrorMessage: String? = null
     private var mapTapDetailRequestId: Long = 0L
@@ -325,6 +326,7 @@ class MapViewModel(
         selectedMapPinCoordinate = coordinate
         clearSelectedFacilitySelection(clearMapTapSelection = false)
         selectedMapTapDetail = null
+        selectedMapTapNameHint = payload.nameHint?.takeIf { it.isNotBlank() }
         mapTapDetailErrorMessage = null
         isMapTapDetailLoading = placesRepository != null
         renderSelectedFacilityState()
@@ -352,7 +354,6 @@ class MapViewModel(
                     selectedMapTapDetail = null
                     mapTapDetailErrorMessage = MAP_TAP_DETAIL_LOAD_FAILURE_MESSAGE
                     renderSelectedFacilityState()
-                    emitUiEvent(MapUiEvent.ShowSnackbar(MAP_TAP_DETAIL_LOAD_FAILURE_MESSAGE))
                 }
             }
     }
@@ -1011,6 +1012,7 @@ class MapViewModel(
             selectedMapPinCoordinate = null
         }
         selectedMapTapDetail = null
+        selectedMapTapNameHint = null
         isMapTapDetailLoading = false
         mapTapDetailErrorMessage = null
     }
@@ -1057,6 +1059,7 @@ class MapViewModel(
         MapFacilityDetailSheetState(
             detail = selectedFacilityDetail,
             mapTapDetail = selectedMapTapDetail,
+            mapTapNameHint = selectedMapTapNameHint,
             isMapTapDetailLoading = isMapTapDetailLoading,
             mapTapDetailErrorMessage = mapTapDetailErrorMessage,
             isBookmarked = selectedFacilityBookmarkState.isBookmarked,

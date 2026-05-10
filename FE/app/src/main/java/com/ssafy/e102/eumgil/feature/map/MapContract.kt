@@ -30,6 +30,7 @@ data class MapUiState(
 data class MapFacilityDetailSheetState(
     val detail: FacilityDetailSeed? = null,
     val mapTapDetail: MapTappedPlaceDetail? = null,
+    val mapTapNameHint: String? = null,
     val isMapTapDetailLoading: Boolean = false,
     val mapTapDetailErrorMessage: String? = null,
     val isBookmarked: Boolean = false,

@@ -60,6 +60,8 @@ data class NavigationMapOverlayUiState(
     val selectedRoutePolyline: List<GeoCoordinate> = emptyList(),
     val activeSegmentPolyline: List<GeoCoordinate> = emptyList(),
     val focusedSegmentPolyline: List<GeoCoordinate> = emptyList(),
+    val activeSegmentTravelKind: NavigationSegmentTravelKind = NavigationSegmentTravelKind.WALK,
+    val focusedSegmentTravelKind: NavigationSegmentTravelKind = NavigationSegmentTravelKind.WALK,
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
@@ -79,6 +81,7 @@ data class NavigationMapSegmentUiState(
     val distanceMeters: Int,
     val riskLevel: RouteRiskLevel,
     val guidanceMessage: String,
+    val travelKind: NavigationSegmentTravelKind = NavigationSegmentTravelKind.WALK,
     val isActive: Boolean = false,
     val isFocused: Boolean = false,
     val isCompleted: Boolean = false,
@@ -86,6 +89,11 @@ data class NavigationMapSegmentUiState(
 ) {
     val isRenderable: Boolean
         get() = polyline.size >= 2
+}
+
+enum class NavigationSegmentTravelKind {
+    WALK,
+    TRANSIT,
 }
 
 data class NavigationSegmentSyncUiState(

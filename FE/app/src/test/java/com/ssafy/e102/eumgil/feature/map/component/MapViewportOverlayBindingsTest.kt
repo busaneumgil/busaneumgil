@@ -15,6 +15,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationMapFocusMode
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapPointUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
+import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentTravelKind
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapStatus
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
 import org.junit.Assert.assertEquals
@@ -287,7 +288,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding adds interior segment junction markers without affecting projection`() {
+    fun `navigation binding adds segment markers for every renderable segment without affecting projection`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -333,14 +334,76 @@ class MapViewportOverlayBindingsTest {
             )
 
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
-        assertEquals(2, junctionPoints.size)
+        assertEquals(3, junctionPoints.size)
         assertEquals(
             listOf(
-                MapCoordinate(latitude = 35.175, longitude = 129.058),
-                MapCoordinate(latitude = 35.181, longitude = 129.068),
+                MapCoordinate(latitude = 35.1725, longitude = 129.054),
+                MapCoordinate(latitude = 35.178, longitude = 129.063),
+                MapCoordinate(latitude = 35.1855, longitude = 129.074),
             ),
             junctionPoints.map { it.coordinate },
         )
         assertTrue(junctionPoints.none { it.includeInProjection })
+    }
+
+    @Test
+    fun `navigation binding colors transit segments differently from walking segments`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Walk",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                            GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                                        ),
+                                    distanceMeters = 320,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Transit",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                ),
+                            ),
+                        activeSegmentPolyline =
+                            listOf(
+                                GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                            ),
+                        focusedSegmentPolyline =
+                            listOf(
+                                GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                            ),
+                        activeSegmentTravelKind = NavigationSegmentTravelKind.TRANSIT,
+                        focusedSegmentTravelKind = NavigationSegmentTravelKind.TRANSIT,
+                    ),
+            )
+
+        val baselineTones =
+            overlayState.polylines
+                .filter { it.style == MapViewportPolylineStyle.ROUTE_BASELINE }
+                .map { it.tone }
+
+        assertEquals(
+            listOf(MapViewportOverlayTone.PRIMARY, MapViewportOverlayTone.TERTIARY),
+            baselineTones,
+        )
+        assertEquals(MapViewportOverlayTone.TERTIARY, overlayState.polylines.last().tone)
     }
 }

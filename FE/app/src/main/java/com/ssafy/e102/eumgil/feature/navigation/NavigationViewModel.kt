@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
+import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteLegRole
 import com.ssafy.e102.eumgil.core.model.RouteLegType
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -141,7 +142,7 @@ class NavigationViewModel(
                 if (uiState.value.isExitEnabled) {
                     isExitConfirmDialogVisible = false
                     publishNavigationState()
-                    finishNavigation(NavigationUiEvent.NavigateToMap)
+                    finishNavigation(NavigationUiEvent.NavigateToArrival)
                 }
             }
             NavigationUiAction.SaveBookmarkClicked -> {
@@ -853,6 +854,23 @@ private fun RouteCandidate.navigationPolylinePoints(): List<GeoCoordinate> {
     }
 }
 
+private fun RouteCandidate.resolveSegmentTravelKind(
+    segment: RouteSegment?,
+): NavigationSegmentTravelKind {
+    val legType =
+        legs.firstOrNull { leg ->
+            leg.sequence == segment?.sourceLegSequence
+        }?.type
+
+    return when (legType) {
+        RouteLegType.BUS,
+        RouteLegType.SUBWAY,
+            -> NavigationSegmentTravelKind.TRANSIT
+
+        else -> NavigationSegmentTravelKind.WALK
+    }
+}
+
 private fun RoutePolyline.totalDistanceWeight(): Double? =
     points.totalPolylineDistanceMeters().takeIf { distanceMeters -> distanceMeters > 0.0 }
 
@@ -1033,8 +1051,10 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     mapFocusMode: NavigationMapFocusMode,
 ): NavigationMapOverlayUiState {
     val selectedRoutePolyline = selectedRoute.previewPolyline.points
-    val activeSegmentPolyline = selectedRoute.segments.getOrNull(activeSegmentIndex)?.polyline?.points.orEmpty()
-    val focusedSegmentPolyline = selectedRoute.segments.getOrNull(focusedSegmentIndex)?.polyline?.points.orEmpty()
+    val activeSegment = selectedRoute.segments.getOrNull(activeSegmentIndex)
+    val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex)
+    val activeSegmentPolyline = activeSegment?.polyline?.points.orEmpty()
+    val focusedSegmentPolyline = focusedSegment?.polyline?.points.orEmpty()
     val routeSegments =
         selectedRoute.segments.mapIndexed { index, segment ->
             NavigationMapSegmentUiState(
@@ -1043,6 +1063,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
                 distanceMeters = segment.distanceMeters,
                 riskLevel = segment.riskLevel,
                 guidanceMessage = segment.guidanceMessage,
+                travelKind = selectedRoute.resolveSegmentTravelKind(segment),
                 isActive = index == activeSegmentIndex,
                 isFocused = index == focusedSegmentIndex,
                 isCompleted = index < activeSegmentIndex,
@@ -1064,11 +1085,13 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         selectedRoutePolyline = selectedRoutePolyline,
         activeSegmentPolyline = activeSegmentPolyline,
         focusedSegmentPolyline = focusedSegmentPolyline,
+        activeSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(activeSegment),
+        focusedSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(focusedSegment),
         focusCoordinate =
             when (mapFocusMode) {
                 NavigationMapFocusMode.ACTIVE -> currentLocationCoordinate
                 NavigationMapFocusMode.FOCUSED ->
-                    focusedSegmentPolyline.toNavigationFocusCoordinate() ?: currentLocationCoordinate
+                    selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex) ?: currentLocationCoordinate
             },
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,
@@ -1126,14 +1149,97 @@ private fun RouteWaypoint.toNavigationMapPointUiState(fallbackLabel: String): Na
         coordinate = coordinate,
     )
 
-private fun List<GeoCoordinate>.toNavigationFocusCoordinate(): GeoCoordinate? {
-    val firstPoint = firstOrNull() ?: return null
-    val lastPoint = lastOrNull() ?: return null
-    return GeoCoordinate(
-        latitude = (firstPoint.latitude + lastPoint.latitude) / 2.0,
-        longitude = (firstPoint.longitude + lastPoint.longitude) / 2.0,
-    )
+private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): GeoCoordinate? {
+    val segment = segments.getOrNull(segmentIndex) ?: return null
+
+    segment.polyline.points.toNavigationFocusCoordinate()?.let { return it }
+    val sourceLeg =
+        segment.sourceLegSequence?.let { sourceLegSequence ->
+            legs.firstOrNull { leg -> leg.sequence == sourceLegSequence }
+        }
+    sourceLeg?.toNavigationFocusCoordinate()?.let { return it }
+
+    val fallbackPolyline = navigationPolylinePoints()
+    if (fallbackPolyline.isEmpty()) return null
+
+    val segmentWeights =
+        segments.map { candidateSegment ->
+            candidateSegment.polyline.totalDistanceWeight()
+                ?: candidateSegment.distanceMeters.toDouble().takeIf { distanceMeters -> distanceMeters > 0 }
+                ?: 1.0
+        }
+    val progressRatio = resolveSegmentMidProgressRatio(segmentIndex = segmentIndex, weights = segmentWeights)
+    return fallbackPolyline.coordinateAtProgressRatio(progressRatio)
 }
+
+private fun RouteLeg.toNavigationFocusCoordinate(): GeoCoordinate? =
+    polyline.points.toNavigationFocusCoordinate()
+        ?: listOfNotNull(boardingStop?.coordinate, alightingStop?.coordinate).toNavigationFocusCoordinate()
+
+private fun List<GeoCoordinate>.toNavigationFocusCoordinate(): GeoCoordinate? {
+    if (isEmpty()) return null
+    if (size == 1) return single()
+    return coordinateAtProgressRatio(progressRatio = 0.5)
+}
+
+private fun resolveSegmentMidProgressRatio(
+    segmentIndex: Int,
+    weights: List<Double>,
+): Double {
+    if (weights.isEmpty()) return 0.5
+
+    val sanitizedWeights =
+        weights.map { weight ->
+            if (weight > 0.0) {
+                weight
+            } else {
+                1.0
+            }
+        }
+    val safeSegmentIndex = segmentIndex.coerceIn(0, sanitizedWeights.lastIndex)
+    val totalWeight = sanitizedWeights.sum().takeIf { total -> total > 0.0 } ?: sanitizedWeights.size.toDouble()
+    val accumulatedWeightBefore = sanitizedWeights.take(safeSegmentIndex).sum()
+    val targetWeight = sanitizedWeights[safeSegmentIndex]
+    return ((accumulatedWeightBefore + (targetWeight / 2.0)) / totalWeight).coerceIn(0.0, 1.0)
+}
+
+private fun List<GeoCoordinate>.coordinateAtProgressRatio(progressRatio: Double): GeoCoordinate? {
+    if (isEmpty()) return null
+    if (size == 1) return single()
+
+    val clampedRatio = progressRatio.coerceIn(0.0, 1.0)
+    val totalDistanceMeters = totalPolylineDistanceMeters()
+    if (totalDistanceMeters <= 0.0) {
+        return first().interpolateTo(last(), 0.5)
+    }
+
+    val targetDistanceMeters = totalDistanceMeters * clampedRatio
+    var cumulativeDistanceMeters = 0.0
+    zipWithNext().forEach { (start, end) ->
+        val segmentDistanceMeters = haversineDistanceMeters(start, end)
+        val nextCumulativeDistanceMeters = cumulativeDistanceMeters + segmentDistanceMeters
+        if (segmentDistanceMeters <= 0.0) {
+            cumulativeDistanceMeters = nextCumulativeDistanceMeters
+            return@forEach
+        }
+        if (targetDistanceMeters <= nextCumulativeDistanceMeters) {
+            val segmentRatio = ((targetDistanceMeters - cumulativeDistanceMeters) / segmentDistanceMeters).coerceIn(0.0, 1.0)
+            return start.interpolateTo(end, segmentRatio)
+        }
+        cumulativeDistanceMeters = nextCumulativeDistanceMeters
+    }
+
+    return last()
+}
+
+private fun GeoCoordinate.interpolateTo(
+    other: GeoCoordinate,
+    progressRatio: Double,
+): GeoCoordinate =
+    GeoCoordinate(
+        latitude = latitude + ((other.latitude - latitude) * progressRatio),
+        longitude = longitude + ((other.longitude - longitude) * progressRatio),
+    )
 
 private fun RouteNavigationRequest.toStepCardUiState(
     screenState: NavigationScreenState,

@@ -32,7 +32,7 @@ internal class KeywordSpottingManager(context: Context) {
     }
 
     private val appContext = context.applicationContext
-    private val audioRecorder = AudioRecorder()
+    private val audioRecorder = AudioRecorder(appContext)
     private val keywordSpotter: KeywordSpotter
 
     init {

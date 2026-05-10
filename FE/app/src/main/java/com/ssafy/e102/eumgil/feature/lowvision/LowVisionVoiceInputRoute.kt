@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,6 +55,7 @@ fun LowVisionVoiceInputRoute(
         if (lastCompletedCount.intValue >= 0 &&
             ttsState.completedUtteranceCount > lastCompletedCount.intValue
         ) {
+            delay(300) // TTS 잔향 + AEC 안정화 대기
             viewModel.beginRecording()
         }
         lastCompletedCount.intValue = ttsState.completedUtteranceCount

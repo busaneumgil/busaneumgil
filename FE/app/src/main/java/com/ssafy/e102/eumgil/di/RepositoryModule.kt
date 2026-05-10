@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
@@ -213,10 +214,14 @@ object RepositoryModule {
     fun provideReportRepository(
         reportDraftDao: ReportDraftDao,
         reportOutboxDao: ReportOutboxDao,
+        hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
+        accessTokenProvider: suspend () -> String? = { null },
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
+            hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
+            accessTokenProvider = accessTokenProvider,
         )
 
     fun provideVoiceAnalyzeRepository(

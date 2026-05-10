@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteDefaults
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -10,8 +12,11 @@ import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockRouteFixtures
+import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteAlertDto
 import com.ssafy.e102.eumgil.data.route.RouteDto
 import com.ssafy.e102.eumgil.data.route.RouteLegDto
@@ -202,6 +207,111 @@ class RouteRepositoryTest {
             assertEquals(404, error?.httpStatusCode)
             assertEquals("RT4040", error?.status)
             assertEquals("탐색 가능한 경로가 없습니다.", error?.message)
+            assertNull(localDataSource.getCachedSearchData(query))
+        }
+    @Test
+    fun `getRouteSearchData retries with refreshed auth session when remote responds unauthorized`() =
+        runBlocking {
+            val localDataSource = RouteLocalDataSource()
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            var requestCount = 0
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource { request ->
+                            requestCount += 1
+                            when (requestCount) {
+                                1 ->
+                                    throw RouteApiException(
+                                        httpStatusCode = 401,
+                                        status = "AUTH_401",
+                                        message = "인증이 필요합니다.",
+                                    )
+
+                                2 -> {
+                                    assertEquals(
+                                        "refreshed-access-token",
+                                        authSessionRepository.getAuthGateState().authSession?.accessToken,
+                                    )
+                                    MockRouteFixtures.searchRoutes(request)
+                                }
+
+                                else -> error("Unexpected route retry count: $requestCount")
+                            }
+                        },
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+                                assertEquals("refresh-token", refreshToken)
+                                return ReissueResponseDto(
+                                    accessToken = "refreshed-access-token",
+                                    refreshToken = "refreshed-refresh-token",
+                                )
+                            }
+                        },
+                )
+            val query = testRouteQuery()
+
+            val searchData = repository.getRouteSearchData(query)
+
+            assertEquals("rs_walk_busan_demo", searchData.result.searchId)
+            assertEquals(2, requestCount)
+            assertEquals(
+                "refreshed-refresh-token",
+                authSessionRepository.getAuthGateState().authSession?.refreshToken,
+            )
+            assertEquals(searchData, localDataSource.getCachedSearchData(query))
+        }
+
+    @Test
+    fun `getRouteSearchData clears auth session and propagates auth failure when token refresh fails`() =
+        runBlocking {
+            val localDataSource = RouteLocalDataSource()
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "expired-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource {
+                            throw RouteApiException(
+                                httpStatusCode = 403,
+                                status = "AUTH_403",
+                                message = "인증이 필요합니다.",
+                            )
+                        },
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource =
+                        object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
+                            override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+                                throw IllegalStateException("refresh failed")
+                            }
+                        },
+                )
+            val query = testRouteQuery()
+
+            val failure = runCatching { repository.getRouteSearchData(query) }.exceptionOrNull() as? RouteApiException
+
+            requireNotNull(failure)
+            assertEquals(401, failure.httpStatusCode)
+            assertEquals("ROUTE_AUTHENTICATION_FAILED", failure.status)
+            assertEquals("인증이 필요합니다.", failure.message)
+            assertNull(authSessionRepository.getAuthGateState().authSession)
             assertNull(localDataSource.getCachedSearchData(query))
         }
 }

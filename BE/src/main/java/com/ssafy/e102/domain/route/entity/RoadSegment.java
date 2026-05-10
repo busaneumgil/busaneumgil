@@ -6,7 +6,6 @@ import org.locationtech.jts.geom.LineString;
 
 import com.ssafy.e102.domain.route.type.AccessibilityState;
 import com.ssafy.e102.domain.route.type.SegmentType;
-import com.ssafy.e102.domain.route.type.SlopeState;
 import com.ssafy.e102.domain.route.type.SurfaceState;
 import com.ssafy.e102.domain.route.type.WidthState;
 
@@ -59,10 +58,6 @@ public class RoadSegment {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "audio_signal_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
 	private AccessibilityState audioSignalState = AccessibilityState.UNKNOWN;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "slope_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")
-	private SlopeState slopeState = SlopeState.UNKNOWN;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "width_state", nullable = false, length = 30, columnDefinition = "varchar(30) default 'UNKNOWN'")

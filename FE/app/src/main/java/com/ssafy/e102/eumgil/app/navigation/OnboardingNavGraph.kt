@@ -19,6 +19,7 @@ import com.ssafy.e102.eumgil.data.repository.PendingSignupTokenExpiredException
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateRepository
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateResult
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsItem
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LowVisionFollowUpRoute
 import com.ssafy.e102.eumgil.feature.onboarding.PermissionRoute
@@ -136,6 +137,17 @@ fun NavGraphBuilder.onboardingNavGraph(
         LocationTermsRoute(
             initialLocationTermsChecked = initSettings.isLocationTermsAgreed,
             initialPrivacyPolicyChecked = initSettings.isPrivacyPolicyAgreed,
+            onRequestDetails = { item ->
+                val intent = createLocationTermsDetailIntent(item) ?: return@LocationTermsRoute
+                runCatching { context.startActivity(intent) }.onFailure {
+                    Toast
+                        .makeText(
+                            context,
+                            DEFAULT_TERMS_DETAIL_OPEN_FAILURE_MESSAGE,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
+            },
             onConsentCompleted = { agreement ->
                 coroutineScope.launch {
                     runCatching {
@@ -413,8 +425,33 @@ internal fun createTermsGuideDetailIntent(step: TermsGuideStep): Intent? =
 
 internal fun resolveTermsGuideDetailUrl(step: TermsGuideStep): String? = step.detailUrl
 
+internal fun createLocationTermsDetailIntent(item: LocationTermsItem): Intent? =
+    resolveLocationTermsDetailUrl(item)?.let { url ->
+        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+internal fun resolveLocationTermsDetailUrl(item: LocationTermsItem): String? =
+    when (item) {
+        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> SERVICE_AND_LOCATION_TERMS_URL
+        LocationTermsItem.SENSITIVE_INFO -> SENSITIVE_INFO_TERMS_URL
+        LocationTermsItem.PERSONAL_LOCATION_INFO -> PERSONAL_LOCATION_INFO_TERMS_URL
+        LocationTermsItem.PRIVACY_POLICY_CONFIRMATION -> PERSONAL_LOCATION_INFO_TERMS_URL
+        LocationTermsItem.OVER_FOURTEEN -> null
+    }
+
+private const val SERVICE_AND_LOCATION_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be680ab9931f226486dac58?source=copy_link"
+private const val SENSITIVE_INFO_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link"
+private const val PERSONAL_LOCATION_INFO_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link"
+
 private const val DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE: String =
     "온보딩 완료 처리에 실패했습니다. 다시 시도해주세요."
+
+private const val DEFAULT_TERMS_DETAIL_OPEN_FAILURE_MESSAGE: String =
+    "약관 페이지를 열 수 없습니다. 잠시 후 다시 시도해주세요."
 
 private const val DEFAULT_PROFILE_EDIT_COMPLETION_ERROR_MESSAGE: String =
     "프로필 변경에 실패했습니다. 다시 시도해주세요."

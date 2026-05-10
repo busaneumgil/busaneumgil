@@ -47,7 +47,6 @@ class GraphhopperExportTest(unittest.TestCase):
                 "width_meter": "",
                 "braille_block_state": "UNKNOWN",
                 "audio_signal_state": "UNKNOWN",
-                "slope_state": "UNKNOWN",
                 "width_state": "UNKNOWN",
                 "surface_state": "UNKNOWN",
                 "stairs_state": "UNKNOWN",
@@ -64,7 +63,6 @@ class GraphhopperExportTest(unittest.TestCase):
                 "width_meter": "3.0",
                 "braille_block_state": "UNKNOWN",
                 "audio_signal_state": "UNKNOWN",
-                "slope_state": "RISK",
                 "width_state": "ADEQUATE_120",
                 "surface_state": "PAVED",
                 "stairs_state": "NO",
@@ -96,7 +94,7 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual(first_way_tags["ieum:width_meter"], "0.0")
         self.assertEqual(first_way_tags["ieum:segment_type"], "SIDE_LINE")
         self.assertEqual(second_way_tags["ieum:segment_type"], "CROSS_WALK")
-        self.assertEqual(second_way_tags["ieum:slope_state"], "RISK")
+        self.assertNotIn("ieum:slope_state", second_way_tags)
         self.assertEqual(second_way_tags["ieum:width_state"], "ADEQUATE_120")
         self.assertEqual(second_way_tags["ieum:surface_state"], "PAVED")
         self.assertNotIn("e102:edge_id", first_way_tags)
@@ -117,7 +115,6 @@ class GraphhopperExportTest(unittest.TestCase):
             "width_meter",
             "braille_block_state",
             "audio_signal_state",
-            "slope_state",
             "width_state",
             "surface_state",
             "stairs_state",
@@ -146,7 +143,6 @@ class GraphhopperExportTest(unittest.TestCase):
             "widthMeter",
             "brailleBlockState",
             "audioSignalState",
-            "slopeState",
             "widthState",
             "surfaceState",
             "stairsState",
@@ -269,7 +265,6 @@ class GraphhopperExportTest(unittest.TestCase):
                 "width_meter": "2.0",
                 "braille_block_state": "UNKNOWN",
                 "audio_signal_state": "UNKNOWN",
-                "slope_state": "FLAT",
                 "width_state": "ADEQUATE_150",
                 "surface_state": "PAVED",
                 "stairs_state": "NO",
@@ -303,7 +298,6 @@ class GraphhopperExportTest(unittest.TestCase):
         self.assertEqual([segment["from_node_id"] for segment in output_segments], [1, 3, 4])
         self.assertEqual([segment["to_node_id"] for segment in output_segments], [3, 4, 2])
         self.assertEqual(output_segments[1]["stairs_state"], "YES")
-        self.assertTrue(all(segment["slope_state"] == "FLAT" for segment in output_segments))
         self.assertTrue(all(segment["avg_slope_percent"] == "0.0" for segment in output_segments))
 
         report = module.validate_graph(output_nodes, output_segments, "road-network.osm")
@@ -328,7 +322,6 @@ class GraphhopperExportTest(unittest.TestCase):
                 "width_meter": "0.0",
                 "braille_block_state": "UNKNOWN",
                 "audio_signal_state": "UNKNOWN",
-                "slope_state": "FLAT",
                 "width_state": "UNKNOWN",
                 "surface_state": "PAVED",
                 "stairs_state": "NO",
@@ -392,7 +385,6 @@ class GraphhopperExportTest(unittest.TestCase):
                 "width_meter": "2.0",
                 "braille_block_state": "UNKNOWN",
                 "audio_signal_state": "UNKNOWN",
-                "slope_state": "FLAT",
                 "width_state": "ADEQUATE_150",
                 "surface_state": "PAVED",
                 "stairs_state": "NO",
@@ -447,7 +439,6 @@ class GraphhopperExportTest(unittest.TestCase):
                 "width_meter": "0.0",
                 "braille_block_state": "UNKNOWN",
                 "audio_signal_state": "UNKNOWN",
-                "slope_state": "FLAT",
                 "width_state": "UNKNOWN",
                 "surface_state": "PAVED",
                 "stairs_state": "NO",
@@ -512,7 +503,6 @@ class GraphhopperExportTest(unittest.TestCase):
                     "width_meter": "0.0",
                     "braille_block_state": "UNKNOWN",
                     "audio_signal_state": "UNKNOWN",
-                    "slope_state": "FLAT",
                     "width_state": "UNKNOWN",
                     "surface_state": "PAVED",
                     "stairs_state": "NO",
@@ -563,7 +553,7 @@ class GraphhopperExportTest(unittest.TestCase):
             ]
             joined_conditions = "\n".join(conditions)
 
-            self.assertIn("slope_state == RISK", joined_conditions, model_path.name)
+            self.assertIn("avg_slope_percent", joined_conditions, model_path.name)
             width_conditions = {
                 condition for condition in conditions
                 if condition.startswith("width_state == ")

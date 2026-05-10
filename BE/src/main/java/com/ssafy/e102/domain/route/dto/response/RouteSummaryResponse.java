@@ -21,7 +21,6 @@ public record RouteSummaryResponse(
 	BigDecimal distanceMeter,
 	int durationSecond,
 	int estimatedTimeMinute,
-	int transferCount,
 	List<RouteBadge> badges,
 	String geometry,
 	List<RouteLegResponse> legs) {
@@ -46,7 +45,6 @@ public record RouteSummaryResponse(
 			distanceMeter,
 			durationSecond,
 			estimatedTimeMinute,
-			0,
 			badges,
 			geometry,
 			legs);

@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 
 import com.ssafy.e102.domain.route.type.AccessibilityState;
 import com.ssafy.e102.domain.route.type.SegmentType;
-import com.ssafy.e102.domain.route.type.SlopeState;
 import com.ssafy.e102.domain.route.type.SurfaceState;
 import com.ssafy.e102.domain.route.type.WidthState;
 
@@ -25,7 +24,6 @@ public record AdminRoadSegmentPropertiesResponse(
 	AccessibilityState walkAccess,
 	AccessibilityState brailleBlockState,
 	AccessibilityState audioSignalState,
-	SlopeState slopeState,
 	WidthState widthState,
 	SurfaceState surfaceState,
 	AccessibilityState stairsState,

@@ -89,4 +89,12 @@ public class RouteSession extends BaseEntity {
 		this.status = RouteSessionStatus.COMPLETED;
 		this.activeRouteKey = null;
 	}
+
+	public boolean ensureActiveRouteKey() {
+		if (status != RouteSessionStatus.ACTIVE || routeId.equals(activeRouteKey)) {
+			return false;
+		}
+		this.activeRouteKey = routeId;
+		return true;
+	}
 }

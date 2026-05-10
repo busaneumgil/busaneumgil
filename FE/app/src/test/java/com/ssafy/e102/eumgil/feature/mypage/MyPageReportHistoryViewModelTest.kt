@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.mypage
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
+import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
 import com.ssafy.e102.eumgil.feature.report.ReportType
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -120,6 +121,9 @@ private class FakeReportHistoryRepository : ReportRepository {
     override suspend fun deleteDraft(draftId: String) = Unit
 
     override suspend fun saveOutbox(outbox: ReportOutboxData): ReportOutboxData = outbox
+
+    override suspend fun submitOutboxToServer(outboxId: String): ReportSubmitResult =
+        ReportSubmitResult.Skipped
 
     override fun observeReportHistory(): Flow<List<ReportOutboxData>> =
         reports.map { emission ->

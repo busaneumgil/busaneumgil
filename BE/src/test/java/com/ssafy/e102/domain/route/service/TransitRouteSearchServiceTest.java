@@ -203,7 +203,7 @@ class TransitRouteSearchServiceTest {
 			.thenAnswer(invocation -> walkPathWithDetails(
 				invocation.getArgument(0),
 				Map.of(
-					"slope_state", List.of(new GraphHopperPathDetail(0, 1, "MODERATE")),
+					"avg_slope_percent", List.of(new GraphHopperPathDetail(0, 1, "6.25")),
 					"segment_type", List.of(new GraphHopperPathDetail(0, 1, "CROSS_WALK")))))
 			.thenAnswer(invocation -> walkPathWithDetails(
 				invocation.getArgument(0),

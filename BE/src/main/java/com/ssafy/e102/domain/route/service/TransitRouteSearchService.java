@@ -40,6 +40,7 @@ import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
+import com.ssafy.e102.domain.route.type.WalkRouteProfile;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteClient;
@@ -176,6 +177,14 @@ public class TransitRouteSearchService {
 			return java.util.Optional.empty();
 		}
 		List<RouteLegResponse> offsetLegs = withRouteGuidanceOffsets(legs);
+		if (hasMissingGeometry(offsetLegs)) {
+			return java.util.Optional.empty();
+		}
+		String geometry = mergeGeometry(offsetLegs);
+		if (geometry == null || geometry.isBlank()) {
+			return java.util.Optional.empty();
+		}
+		int transferCount = transferCount(path);
 		RouteSummaryResponse route = new RouteSummaryResponse(
 			routeId,
 			TransportMode.PUBLIC_TRANSIT,
@@ -185,14 +194,18 @@ public class TransitRouteSearchService {
 			scale(path.totalDistanceMeter()),
 			path.totalTimeMinute() * 60,
 			Math.max(1, path.totalTimeMinute()),
-			transferCount(path),
 			routeBadges(offsetLegs),
-			mergeGeometry(offsetLegs),
+			geometry,
 			offsetLegs);
 		return java.util.Optional.of(new TransitRouteCandidate(
 			route,
 			new TransitRouteSnapshot(routeId, path.mapObj(), snapshotLegs(path)),
-			path.totalWalkMeter()));
+			path.totalWalkMeter(),
+			transferCount));
+	}
+
+	private boolean hasMissingGeometry(List<RouteLegResponse> legs) {
+		return legs.stream().anyMatch(leg -> leg.geometry() == null || leg.geometry().isBlank());
 	}
 
 	private List<RouteLegResponse> withRouteGuidanceOffsets(List<RouteLegResponse> legs) {
@@ -274,12 +287,12 @@ public class TransitRouteSearchService {
 	private Comparator<TransitRouteCandidate> recommendedComparator() {
 		return Comparator.comparing(this::hasLowFloorBus).reversed()
 			.thenComparing(candidate -> candidate.route().durationSecond())
-			.thenComparing(candidate -> candidate.route().transferCount())
+			.thenComparing(TransitRouteCandidate::transferCount)
 			.thenComparing(TransitRouteCandidate::totalWalkMeter);
 	}
 
 	private Comparator<TransitRouteCandidate> minTransferComparator() {
-		return Comparator.comparingInt((TransitRouteCandidate candidate) -> candidate.route().transferCount())
+		return Comparator.comparingInt(TransitRouteCandidate::transferCount)
 			.thenComparing(candidate -> candidate.route().durationSecond())
 			.thenComparing(TransitRouteCandidate::totalWalkMeter);
 	}
@@ -287,7 +300,7 @@ public class TransitRouteSearchService {
 	private Comparator<TransitRouteCandidate> minWalkComparator() {
 		return Comparator.comparingInt(TransitRouteCandidate::totalWalkMeter)
 			.thenComparing(candidate -> candidate.route().durationSecond())
-			.thenComparing(candidate -> candidate.route().transferCount());
+			.thenComparing(TransitRouteCandidate::transferCount);
 	}
 
 	private void addSelected(
@@ -353,11 +366,14 @@ public class TransitRouteSearchService {
 				route.distanceMeter(),
 				route.durationSecond(),
 				route.estimatedTimeMinute(),
-				route.transferCount(),
 				route.badges(),
 				route.geometry(),
 				route.legs());
-			return new TransitRouteCandidate(routeWithOptions, candidate.snapshot(), candidate.totalWalkMeter());
+			return new TransitRouteCandidate(
+				routeWithOptions,
+				candidate.snapshot(),
+				candidate.totalWalkMeter(),
+				candidate.transferCount());
 		}
 	}
 
@@ -475,18 +491,20 @@ public class TransitRouteSearchService {
 				List.of());
 		}
 		try {
+			WalkRouteProfile resolvedProfile = walkRouteProfileService.resolve(
+				profile.primaryUserType(),
+				profile.mobilitySubtype(),
+				RouteOption.SAFE);
 			GraphHopperRoutePath path = graphHopperRouteClient.route(new GraphHopperRouteRequest(
 				from,
 				to,
-				walkRouteProfileService.resolve(
-					profile.primaryUserType(),
-					profile.mobilitySubtype(),
-					RouteOption.SAFE)));
+				resolvedProfile));
 			return walkRoutePayloadService.toWalkLeg(
 				sequence,
 				walkRole(hasNextTransit),
 				instruction,
 				path,
+				resolvedProfile,
 				null,
 				destinationEventType(nextTransitType));
 		} catch (RouteException exception) {

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-접근성 원천 CSV를 road_segments와 공간 매칭해 segment_features와 집계 컬럼에 반영한다.
+접근성 원천 CSV를 source_features에 영속 저장하고 road_segments와 공간 매칭해 segment_features와 집계 컬럼에 반영한다.
 
 흐름은 csv매핑.md 기준이다. .ai/LOCAL의 여러 원천 CSV를 읽어 feature 단위 staging
 row로 정규화하고, PostGIS transaction 안에서 ST_DWithin 매칭, ambiguous 분리,
-segment_features 전체 교체, road_segments 접근성 컬럼 update, JSON report 생성을
+source_features 전체 교체, segment_features 전체 교체, road_segments 접근성 컬럼 update, JSON report 생성을
 한 번에 처리한다.
 """
 
@@ -30,9 +30,11 @@ FEATURE_TYPES = {
     "CROSSWALK",
     "AUDIO_SIGNAL",
     "BRAILLE_BLOCK",
+    "SIGNAL",
     "SLOPE",
     "STAIRS",
     "SURFACE",
+    "WALK_ACCESS",
     "WIDTH",
 }
 POSITION_EVENT_FEATURE_TYPES = {
@@ -43,7 +45,6 @@ POSITION_EVENT_FEATURE_TYPES = {
 }
 
 YES_NO_UNKNOWN = {"YES", "NO", "UNKNOWN"}
-SLOPE_STATES = {"FLAT", "MODERATE", "STEEP", "RISK", "UNKNOWN"}
 WIDTH_STATES = {"ADEQUATE_150", "ADEQUATE_120", "NARROW", "UNKNOWN"}
 SURFACE_STATES = {"PAVED", "UNPAVED", "UNKNOWN"}
 
@@ -51,6 +52,7 @@ SURFACE_STATES = {"PAVED", "UNPAVED", "UNKNOWN"}
 @dataclass(frozen=True)
 class SourceFeatureRow:
     source_row_id: int
+    match_source_id: int
     source_file: str
     source_id: str
     csv_line_no: int
@@ -87,7 +89,7 @@ SOURCE_DEFINITIONS = [
     SourceDefinition("횡단보도_신호등.csv", Decimal("20"), True, "crosswalk_signal"),
     SourceDefinition("횡단보도_음향신호기.csv", Decimal("30"), True, "audio_signal"),
     SourceDefinition("계단.csv", Decimal("2"), False, "stairs"),
-    SourceDefinition("점자블록.csv", Decimal("20"), True, "braille_block"),
+    SourceDefinition("점자블록.csv", Decimal("0"), True, "braille_block"),
 ]
 
 REQUIRED_HEADER_GROUPS = {
@@ -153,18 +155,6 @@ def derive_width_state(width_meter: Decimal | None) -> str:
     if width_meter >= Decimal("1.20"):
         return "ADEQUATE_120"
     return "NARROW"
-
-
-def derive_slope_state(slope_percent: Decimal | None) -> str:
-    if slope_percent is None:
-        return "UNKNOWN"
-    if slope_percent < Decimal("5.56"):
-        return "FLAT"
-    if slope_percent < Decimal("8.33"):
-        return "MODERATE"
-    if slope_percent < Decimal("12.00"):
-        return "STEEP"
-    return "RISK"
 
 
 def normalize_surface_state(*values: Any) -> str:
@@ -259,9 +249,13 @@ class FeatureBuilder:
     def __init__(self) -> None:
         self.next_id = 1
 
+    def match_source_id(self) -> int:
+        return self.next_id
+
     def row(
         self,
         *,
+        match_source_id: int,
         source_file: str,
         source_id: str,
         csv_line_no: int,
@@ -277,6 +271,7 @@ class FeatureBuilder:
             raise ValueError(f"unsupported feature_type: {feature_type}")
         row = SourceFeatureRow(
             source_row_id=self.next_id,
+            match_source_id=match_source_id,
             source_file=source_file,
             source_id=source_id,
             csv_line_no=csv_line_no,
@@ -303,15 +298,17 @@ def parse_sidewalk_width(
     source_id = source_id_from_row(row, line_no)
     if geom is None:
         return [], ParseIssue(definition.file_name, line_no, source_id, "geometry not found")
+    match_source_id = builder.match_source_id()
 
     features = [
         builder.row(
+            match_source_id=match_source_id,
             source_file=definition.file_name,
             source_id=source_id,
             csv_line_no=line_no,
-            feature_type=None,
+            feature_type="WALK_ACCESS",
             geom_ewkt=geom,
-            state=None,
+            state="YES",
             value_number=None,
             threshold_meter=definition.threshold_meter,
             prefer_crosswalk=definition.prefer_crosswalk,
@@ -322,6 +319,7 @@ def parse_sidewalk_width(
     if width is not None:
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
@@ -337,6 +335,7 @@ def parse_sidewalk_width(
     if surface != "UNKNOWN":
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
@@ -361,15 +360,17 @@ def parse_shared_local_road(
     source_id = source_id_from_row(row, line_no)
     if geom is None:
         return [], ParseIssue(definition.file_name, line_no, source_id, "geometry not found")
+    match_source_id = builder.match_source_id()
 
     features = [
         builder.row(
+            match_source_id=match_source_id,
             source_file=definition.file_name,
             source_id=source_id,
             csv_line_no=line_no,
-            feature_type=None,
+            feature_type="WALK_ACCESS",
             geom_ewkt=geom,
-            state=None,
+            state="YES",
             value_number=None,
             threshold_meter=definition.threshold_meter,
             prefer_crosswalk=definition.prefer_crosswalk,
@@ -380,12 +381,13 @@ def parse_shared_local_road(
     if slope is not None:
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
                 feature_type="SLOPE",
                 geom_ewkt=geom,
-                state=derive_slope_state(slope),
+                state=None,
                 value_number=slope,
                 threshold_meter=definition.threshold_meter,
                 prefer_crosswalk=definition.prefer_crosswalk,
@@ -395,6 +397,7 @@ def parse_shared_local_road(
     if surface != "UNKNOWN":
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
@@ -410,6 +413,7 @@ def parse_shared_local_road(
     if width is not None:
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
@@ -437,17 +441,19 @@ def parse_slope_surface(
 
     width = parse_decimal(row.get("widthMeter"))
     threshold = width_threshold(width)
+    match_source_id = builder.match_source_id()
     features: list[SourceFeatureRow] = []
     slope = parse_decimal(row.get("slopeMean"))
     if slope is not None:
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
                 feature_type="SLOPE",
                 geom_ewkt=geom,
-                state=derive_slope_state(slope),
+                state=None,
                 value_number=slope,
                 threshold_meter=threshold,
                 prefer_crosswalk=definition.prefer_crosswalk,
@@ -457,6 +463,7 @@ def parse_slope_surface(
     if surface != "UNKNOWN":
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
@@ -471,6 +478,7 @@ def parse_slope_surface(
     if width is not None:
         features.append(
             builder.row(
+                match_source_id=match_source_id,
                 source_file=definition.file_name,
                 source_id=source_id,
                 csv_line_no=line_no,
@@ -497,8 +505,10 @@ def parse_crosswalk_signal(
     source_id = source_id_from_row(row, line_no)
     if geom is None:
         return [], ParseIssue(definition.file_name, line_no, source_id, "geometry not found")
+    match_source_id = builder.match_source_id()
     return [
         builder.row(
+            match_source_id=match_source_id,
             source_file=definition.file_name,
             source_id=source_id,
             csv_line_no=line_no,
@@ -508,7 +518,19 @@ def parse_crosswalk_signal(
             value_number=None,
             threshold_meter=definition.threshold_meter,
             prefer_crosswalk=definition.prefer_crosswalk,
-        )
+        ),
+        builder.row(
+            match_source_id=match_source_id,
+            source_file=definition.file_name,
+            source_id=source_id,
+            csv_line_no=line_no,
+            feature_type="SIGNAL",
+            geom_ewkt=geom,
+            state="YES",
+            value_number=None,
+            threshold_meter=definition.threshold_meter,
+            prefer_crosswalk=definition.prefer_crosswalk,
+        ),
     ], None
 
 
@@ -525,8 +547,10 @@ def parse_audio_signal(
     state = normalize_bool_state(first_value(row, "audioSignalState", "state", "stat"))
     if state != "YES":
         return [], ParseIssue(definition.file_name, line_no, source_id, "audio signal state is not YES")
+    match_source_id = builder.match_source_id()
     return [
         builder.row(
+            match_source_id=match_source_id,
             source_file=definition.file_name,
             source_id=source_id,
             csv_line_no=line_no,
@@ -553,8 +577,10 @@ def parse_stairs(
     state = normalize_bool_state(first_value(row, "stairsState", "state"))
     if state != "YES":
         return [], ParseIssue(definition.file_name, line_no, source_id, "stairs state is not YES")
+    match_source_id = builder.match_source_id()
     return [
         builder.row(
+            match_source_id=match_source_id,
             source_file=definition.file_name,
             source_id=source_id,
             csv_line_no=line_no,
@@ -581,8 +607,10 @@ def parse_braille_block(
     state = normalize_bool_state(first_value(row, "brailleBlockState", "state"))
     if state not in {"YES", "NO"}:
         return [], ParseIssue(definition.file_name, line_no, source_id, "braille block state is not YES/NO")
+    match_source_id = builder.match_source_id()
     return [
         builder.row(
+            match_source_id=match_source_id,
             source_file=definition.file_name,
             source_id=source_id,
             csv_line_no=line_no,
@@ -640,7 +668,7 @@ def parse_source_features(source_dir: Path, require_files: bool = True) -> tuple
                     issues.append(issue)
         source_counts[definition.file_name] = row_count
 
-    feature_counts = Counter(feature.feature_type or "ROAD_UPDATE_ONLY" for feature in features)
+    feature_counts = Counter(feature.feature_type for feature in features)
     report = {
         "sourceRows": source_counts,
         "parsedFeatureRows": len(features),
@@ -687,6 +715,15 @@ def ensure_schema(cursor) -> None:
         """
         CREATE EXTENSION IF NOT EXISTS postgis;
 
+        CREATE TABLE IF NOT EXISTS source_features (
+          source_feature_id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+          feature_type varchar(50) NOT NULL,
+          "geom" geometry(Geometry, 4326) NOT NULL,
+          state varchar(50),
+          value_number numeric(10, 2),
+          source_file varchar(255) NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS segment_features (
           feature_id bigint PRIMARY KEY,
           edge_id bigint NOT NULL REFERENCES road_segments(edge_id),
@@ -698,6 +735,10 @@ def ensure_schema(cursor) -> None:
 
         CREATE INDEX IF NOT EXISTS road_segments_geom_gix
           ON road_segments USING GIST ("geom");
+        CREATE INDEX IF NOT EXISTS idx_source_features_geom
+          ON source_features USING GIST ("geom");
+        CREATE INDEX IF NOT EXISTS idx_source_features_type_file
+          ON source_features(feature_type, source_file);
         CREATE INDEX IF NOT EXISTS segment_features_edge_id_idx
           ON segment_features(edge_id);
         CREATE INDEX IF NOT EXISTS segment_features_geom_gix
@@ -711,6 +752,7 @@ def copy_staging_rows(cursor, rows: list[SourceFeatureRow]) -> None:
         """
         CREATE TEMP TABLE accessibility_feature_source_raw (
           source_row_id bigint PRIMARY KEY,
+          match_source_id bigint NOT NULL,
           source_file text NOT NULL,
           source_id text NOT NULL,
           csv_line_no integer NOT NULL,
@@ -731,6 +773,7 @@ def copy_staging_rows(cursor, rows: list[SourceFeatureRow]) -> None:
         writer.writerow(
             [
                 row.source_row_id,
+                row.match_source_id,
                 row.source_file,
                 row.source_id,
                 row.csv_line_no,
@@ -748,7 +791,7 @@ def copy_staging_rows(cursor, rows: list[SourceFeatureRow]) -> None:
     cursor.copy_expert(
         """
         COPY accessibility_feature_source_raw (
-          source_row_id, source_file, source_id, csv_line_no, feature_type,
+          source_row_id, match_source_id, source_file, source_id, csv_line_no, feature_type,
           geom_ewkt, state, value_number, threshold_meter, prefer_crosswalk,
           update_walk_access, geometry_kind
         ) FROM STDIN WITH (FORMAT csv)
@@ -760,6 +803,7 @@ def copy_staging_rows(cursor, rows: list[SourceFeatureRow]) -> None:
         CREATE TEMP TABLE accessibility_feature_source AS
         SELECT
           source_row_id,
+          match_source_id,
           source_file,
           source_id,
           csv_line_no,
@@ -775,28 +819,68 @@ def copy_staging_rows(cursor, rows: list[SourceFeatureRow]) -> None:
 
         CREATE INDEX accessibility_feature_source_geom_gix
           ON accessibility_feature_source USING GIST (geom);
+        CREATE INDEX accessibility_feature_source_match_source_idx
+          ON accessibility_feature_source(match_source_id, source_row_id);
         """
     )
 
 
-def build_matching_tables(cursor) -> None:
-    # 거리 계산용 EPSG:5179 geometry를 temp table에 만들고 GiST index를 걸어 대량 join 비용을 낮춘다.
+def replace_source_features(cursor, dry_run: bool) -> int:
+    cursor.execute("SELECT count(*) FROM accessibility_feature_source")
+    source_feature_count = int(cursor.fetchone()[0])
+    if dry_run:
+        return source_feature_count
+
     cursor.execute(
         """
-        CREATE TEMP TABLE accessibility_feature_source_projected AS
+        TRUNCATE TABLE source_features RESTART IDENTITY;
+
+        INSERT INTO source_features (feature_type, "geom", state, value_number, source_file)
         SELECT
-          *,
+          feature_type,
+          geom,
+          state,
+          value_number,
+          source_file
+        FROM accessibility_feature_source
+        WHERE feature_type IS NOT NULL
+          AND ST_IsValid(geom)
+        ORDER BY source_row_id;
+        """
+    )
+    return source_feature_count
+
+
+def build_matching_tables(cursor) -> None:
+    # 거리 계산용 EPSG:5179 geometry를 temp table에 만들고 GiST index를 걸어 대량 join 비용을 낮춘다.
+    # 점자블록 CSV는 횡단보도 segment LineString에 점자블록 여부를 보강한 입력이다.
+    # 거리 buffer 없이 같은 CROSS_WALK geometry에만 붙인다.
+    cursor.execute(
+        """
+        CREATE TEMP TABLE accessibility_match_source_projected AS
+        SELECT
+          match_source_id,
+          source_file,
+          source_id,
+          csv_line_no,
+          feature_type,
+          geom,
+          threshold_meter,
+          prefer_crosswalk,
+          geometry_kind,
+          feature_type = 'BRAILLE_BLOCK' AS has_braille_block,
           ST_Transform(geom, 5179) AS geom_5179
         FROM accessibility_feature_source
-        WHERE ST_IsValid(geom);
+        WHERE source_row_id = match_source_id;
 
-        CREATE INDEX accessibility_feature_source_projected_geom_gix
-          ON accessibility_feature_source_projected USING GIST (geom_5179);
+        CREATE INDEX accessibility_match_source_projected_geom_gix
+          ON accessibility_match_source_projected USING GIST (geom_5179);
 
         CREATE TEMP TABLE road_segments_projected AS
         SELECT
           edge_id,
           segment_type,
+          "geom",
           ST_Transform("geom", 5179) AS geom_5179
         FROM road_segments
         WHERE "geom" IS NOT NULL
@@ -823,27 +907,44 @@ def build_matching_tables(cursor) -> None:
               ))
             ELSE 0
           END AS overlap_meter
-        FROM accessibility_feature_source_projected f
+        FROM accessibility_match_source_projected f
         JOIN road_segments_projected s
-          ON ST_DWithin(f.geom_5179, s.geom_5179, f.threshold_meter);
+          ON ST_DWithin(f.geom_5179, s.geom_5179, f.threshold_meter)
+        WHERE NOT (
+          f.has_braille_block
+          AND f.geometry_kind IN ('LINESTRING', 'MULTILINESTRING')
+        )
+        UNION ALL
+        SELECT
+          f.*,
+          s.edge_id,
+          0::double precision AS match_distance_meter,
+          0 AS preference_rank,
+          ST_Length(ST_Intersection(f.geom_5179, s.geom_5179)) AS overlap_meter
+        FROM accessibility_match_source_projected f
+        JOIN road_segments_projected s
+          ON s.segment_type = 'CROSS_WALK'
+         AND ST_Equals(f.geom, s."geom")
+        WHERE f.has_braille_block
+          AND f.geometry_kind IN ('LINESTRING', 'MULTILINESTRING');
 
         CREATE TEMP TABLE accessibility_feature_ranked AS
         SELECT
           *,
           row_number() OVER (
-            PARTITION BY source_row_id
+            PARTITION BY match_source_id
             ORDER BY preference_rank ASC, overlap_meter DESC, match_distance_meter ASC, edge_id ASC
           ) AS rn,
           lead(preference_rank) OVER (
-            PARTITION BY source_row_id
+            PARTITION BY match_source_id
             ORDER BY preference_rank ASC, overlap_meter DESC, match_distance_meter ASC, edge_id ASC
           ) AS second_preference_rank,
           lead(overlap_meter) OVER (
-            PARTITION BY source_row_id
+            PARTITION BY match_source_id
             ORDER BY preference_rank ASC, overlap_meter DESC, match_distance_meter ASC, edge_id ASC
           ) AS second_overlap_meter,
           lead(match_distance_meter) OVER (
-            PARTITION BY source_row_id
+            PARTITION BY match_source_id
             ORDER BY preference_rank ASC, overlap_meter DESC, match_distance_meter ASC, edge_id ASC
           ) AS second_match_distance_meter
         FROM accessibility_feature_candidates;
@@ -858,19 +959,16 @@ def build_matching_tables(cursor) -> None:
           AND ABS(second_match_distance_meter - match_distance_meter) <= 1
           AND ABS(second_overlap_meter - overlap_meter) <= 1;
 
-        CREATE TEMP TABLE accessibility_feature_matches AS
+        CREATE TEMP TABLE accessibility_match_edges AS
         SELECT
-          source_row_id,
+          match_source_id,
           source_file,
           source_id,
           csv_line_no,
           feature_type,
           geom,
-          state,
-          value_number,
           threshold_meter,
           prefer_crosswalk,
-          update_walk_access,
           geometry_kind,
           geom_5179,
           edge_id,
@@ -882,17 +980,14 @@ def build_matching_tables(cursor) -> None:
           AND overlap_meter > 0
         UNION ALL
         SELECT
-          r.source_row_id,
+          r.match_source_id,
           r.source_file,
           r.source_id,
           r.csv_line_no,
           r.feature_type,
           r.geom,
-          r.state,
-          r.value_number,
           r.threshold_meter,
           r.prefer_crosswalk,
-          r.update_walk_access,
           r.geometry_kind,
           r.geom_5179,
           r.edge_id,
@@ -901,10 +996,41 @@ def build_matching_tables(cursor) -> None:
           r.overlap_meter
         FROM accessibility_feature_ranked r
         LEFT JOIN accessibility_feature_ambiguous a
-          ON a.source_row_id = r.source_row_id
+          ON a.match_source_id = r.match_source_id
         WHERE r.rn = 1
           AND r.geometry_kind NOT IN ('LINESTRING', 'MULTILINESTRING')
-          AND a.source_row_id IS NULL;
+          AND a.match_source_id IS NULL;
+
+        CREATE TEMP TABLE accessibility_feature_matches AS
+        SELECT
+          source.source_row_id,
+          source.source_file,
+          source.source_id,
+          source.csv_line_no,
+          source.feature_type,
+          source.geom,
+          source.state,
+          source.value_number,
+          source.threshold_meter,
+          source.prefer_crosswalk,
+          source.update_walk_access,
+          source.geometry_kind,
+          edge.geom_5179,
+          edge.edge_id,
+          edge.match_distance_meter,
+          edge.preference_rank,
+          edge.overlap_meter
+        FROM accessibility_match_edges edge
+        JOIN accessibility_match_source_projected match_source
+          ON match_source.match_source_id = edge.match_source_id
+        JOIN accessibility_feature_source source
+          ON source.source_file = match_source.source_file
+         AND source.source_id = match_source.source_id
+         AND source.csv_line_no = match_source.csv_line_no
+         AND source.threshold_meter = match_source.threshold_meter
+         AND source.prefer_crosswalk = match_source.prefer_crosswalk
+         AND source.geometry_kind = match_source.geometry_kind
+        WHERE source.feature_type IS NOT NULL;
         """
     )
 
@@ -953,8 +1079,15 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
     cursor.execute(
         f"""
         SELECT count(*)
-        FROM accessibility_feature_matches
-        WHERE feature_type IN ({position_event_feature_type_sql()})
+        FROM (
+          SELECT DISTINCT ON (edge_id, feature_type, COALESCE(state, ''))
+            edge_id,
+            feature_type,
+            state
+          FROM accessibility_feature_matches
+          WHERE feature_type IN ({position_event_feature_type_sql()})
+          ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id, match_distance_meter
+        ) deduped_segment_features
         """
     )
     insert_count = int(cursor.fetchone()[0])
@@ -970,21 +1103,33 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
 
         INSERT INTO segment_features (feature_id, edge_id, feature_type, "geom", state, value_number)
         SELECT
-          row_number() OVER (ORDER BY source_row_id, edge_id)::bigint AS feature_id,
+          row_number() OVER (ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id)::bigint AS feature_id,
           edge_id,
           feature_type,
           geom,
           state,
           value_number
-        FROM accessibility_feature_matches
-        WHERE feature_type IN ({position_event_feature_type_sql()})
-        ORDER BY source_row_id, edge_id;
+        FROM (
+          SELECT DISTINCT ON (edge_id, feature_type, COALESCE(state, ''))
+            source_row_id,
+            edge_id,
+            feature_type,
+            geom,
+            state,
+            value_number,
+            match_distance_meter
+          FROM accessibility_feature_matches
+          WHERE feature_type IN ({position_event_feature_type_sql()})
+          ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id, match_distance_meter
+        ) deduped_segment_features
+        ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id;
 
         CREATE TEMP TABLE accessibility_edge_updates AS
         SELECT
           edge_id,
-          bool_or(update_walk_access) AS walk_access_yes,
+          bool_or(update_walk_access OR (feature_type = 'WALK_ACCESS' AND state = 'YES')) AS walk_access_yes,
           bool_or(feature_type = 'CROSSWALK' AND state = 'YES') AS crosswalk_yes,
+          bool_or(feature_type = 'SIGNAL' AND state = 'YES') AS signal_yes,
           bool_or(feature_type = 'AUDIO_SIGNAL' AND state = 'YES') AS audio_signal_yes,
           bool_or(feature_type = 'STAIRS' AND state = 'YES') AS stairs_yes,
           CASE
@@ -1013,13 +1158,6 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
             WHEN u.audio_signal_yes THEN 'YES'
             ELSE s.audio_signal_state
           END,
-          slope_state = CASE
-            WHEN u.avg_slope_percent IS NULL THEN s.slope_state
-            WHEN u.avg_slope_percent < 5.56 THEN 'FLAT'
-            WHEN u.avg_slope_percent < 8.33 THEN 'MODERATE'
-            WHEN u.avg_slope_percent < 12.00 THEN 'STEEP'
-            ELSE 'RISK'
-          END,
           width_state = CASE
             WHEN u.width_meter IS NULL THEN s.width_state
             WHEN u.width_meter >= 1.50 THEN 'ADEQUATE_150'
@@ -1036,7 +1174,7 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
             ELSE s.stairs_state
           END,
           signal_state = CASE
-            WHEN u.crosswalk_yes THEN 'YES'
+            WHEN u.signal_yes THEN 'YES'
             ELSE s.signal_state
           END,
           segment_type = CASE
@@ -1059,16 +1197,29 @@ def post_load_checks(cursor, dry_run: bool) -> dict[str, int]:
             SELECT count(*)
             FROM accessibility_feature_matches
             WHERE feature_type IS NOT NULL
-              AND feature_type NOT IN ({position_event_feature_type_sql()}, 'SLOPE', 'SURFACE', 'WIDTH')
+              AND feature_type NOT IN ({position_event_feature_type_sql()}, 'SIGNAL', 'SLOPE', 'SURFACE', 'WALK_ACCESS', 'WIDTH')
             """
         )
         unsupported_feature_rows = int(cursor.fetchone()[0])
+        cursor.execute("SELECT count(*) FROM accessibility_feature_source WHERE feature_type = 'SLOPE' AND state IS NOT NULL")
+        slope_state_rows = int(cursor.fetchone()[0])
+        cursor.execute(
+            """
+            SELECT count(*)
+            FROM accessibility_feature_source
+            WHERE feature_type = 'WIDTH'
+              AND (state IS NULL OR value_number IS NULL)
+            """
+        )
+        invalid_width_rows = int(cursor.fetchone()[0])
         return {
             "duplicateSegmentFeatureIds": 0,
             "invalidSourceGeometry": invalid_geom,
             "invalidSegmentFeatureGeometry": 0,
             "nonPositionSegmentFeatureRows": 0,
             "orphanSegmentFeatureEdges": 0,
+            "slopeRowsWithState": slope_state_rows,
+            "widthRowsMissingStateOrValue": invalid_width_rows,
             "unsupportedMatchedFeatureRows": unsupported_feature_rows,
         }
 
@@ -1104,19 +1255,38 @@ def post_load_checks(cursor, dry_run: bool) -> dict[str, int]:
         """
     )
     orphan_edges = int(cursor.fetchone()[0])
-    if duplicate_ids or invalid_geom or non_position_rows or orphan_edges:
+    cursor.execute("SELECT count(*) FROM source_features WHERE NOT ST_IsValid(\"geom\")")
+    invalid_source_geom = int(cursor.fetchone()[0])
+    cursor.execute("SELECT count(*) FROM source_features WHERE feature_type = 'SLOPE' AND state IS NOT NULL")
+    slope_state_rows = int(cursor.fetchone()[0])
+    cursor.execute(
+        """
+        SELECT count(*)
+        FROM source_features
+        WHERE feature_type = 'WIDTH'
+          AND (state IS NULL OR value_number IS NULL)
+        """
+    )
+    invalid_width_rows = int(cursor.fetchone()[0])
+    if duplicate_ids or invalid_geom or non_position_rows or orphan_edges or invalid_source_geom or slope_state_rows or invalid_width_rows:
         raise RuntimeError(
             "post load validation failed: "
             f"duplicateSegmentFeatureIds={duplicate_ids}, "
+            f"invalidSourceGeometry={invalid_source_geom}, "
             f"invalidSegmentFeatureGeometry={invalid_geom}, "
             f"nonPositionSegmentFeatureRows={non_position_rows}, "
-            f"orphanSegmentFeatureEdges={orphan_edges}"
+            f"orphanSegmentFeatureEdges={orphan_edges}, "
+            f"slopeRowsWithState={slope_state_rows}, "
+            f"widthRowsMissingStateOrValue={invalid_width_rows}"
         )
     return {
         "duplicateSegmentFeatureIds": duplicate_ids,
+        "invalidSourceGeometry": invalid_source_geom,
         "invalidSegmentFeatureGeometry": invalid_geom,
         "nonPositionSegmentFeatureRows": non_position_rows,
         "orphanSegmentFeatureEdges": orphan_edges,
+        "slopeRowsWithState": slope_state_rows,
+        "widthRowsMissingStateOrValue": invalid_width_rows,
     }
 
 
@@ -1158,6 +1328,7 @@ def run_load(args: argparse.Namespace) -> dict[str, Any]:
 
         ensure_schema(cursor)
         copy_staging_rows(cursor, rows)
+        source_feature_count = replace_source_features(cursor, args.dry_run)
         build_matching_tables(cursor)
         unmatched_samples, ambiguous_samples = collect_samples(cursor)
 
@@ -1194,8 +1365,15 @@ def run_load(args: argparse.Namespace) -> dict[str, Any]:
             "matchedRows": matched_count,
             "unmatchedRows": unmatched_count,
             "ambiguousRows": ambiguous_count,
+            "replacedSourceFeatures": source_feature_count,
             "insertedSegmentFeatures": inserted_count,
             "updatedRoadSegments": updated_edge_count,
+            "sourceFeatureTypeCounts": count_by(cursor, "accessibility_feature_source", "feature_type")
+            if args.dry_run
+            else count_by(cursor, "source_features", "feature_type"),
+            "sourceFeatureFileCounts": count_by(cursor, "accessibility_feature_source", "source_file")
+            if args.dry_run
+            else count_by(cursor, "source_features", "source_file"),
             "matchedFeatureTypeCounts": count_by(cursor, "accessibility_feature_matches", "feature_type"),
             "postLoadChecks": validation,
             "unmatchedSamples": unmatched_samples,

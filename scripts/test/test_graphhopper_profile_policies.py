@@ -64,13 +64,19 @@ class GraphhopperProfilePolicyTest(unittest.TestCase):
             ("wheelchair_auto_safe", "wheelchair_auto_fast"),
             ("wheelchair_manual_safe", "wheelchair_manual_fast"),
         ]
-        risk_conditions = [
-            "width_state == NARROW",
-            "surface_state == UNPAVED",
-            "slope_state == RISK",
-        ]
+        high_slope_conditions = {
+            "pedestrian_safe": "avg_slope_percent >= 12.0",
+            "visual_safe": "avg_slope_percent >= 8.33",
+            "wheelchair_auto_safe": "avg_slope_percent >= 10.0",
+            "wheelchair_manual_safe": "avg_slope_percent >= 8.33 && avg_slope_percent < 15.0",
+        }
 
         for safe_profile, fast_profile in profile_pairs:
+            risk_conditions = [
+                "width_state == NARROW",
+                "surface_state == UNPAVED",
+                high_slope_conditions[safe_profile],
+            ]
             for condition in risk_conditions:
                 with self.subTest(safe=safe_profile, fast=fast_profile, condition=condition):
                     self.assertLess(

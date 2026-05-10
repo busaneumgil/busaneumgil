@@ -80,7 +80,7 @@ class GraphhopperProfileSmokeTest(unittest.TestCase):
             "details": {
                 "walk_access": [[0, 1, "YES"]],
                 "stairs_state": [[0, 1, "NO"]],
-                "slope_state": [[0, 1, "FLAT"]],
+                "avg_slope_percent": [[0, 1, "2.5"]],
                 "width_state": [[0, 1, "ADEQUATE_150"]],
                 "surface_state": [[0, 1, "PAVED"]],
                 "signal_state": [[0, 1, "YES"]],

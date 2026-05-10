@@ -31,7 +31,7 @@ DEFAULT_PROFILES = [
 POLICY_DETAILS = [
     "walk_access",
     "stairs_state",
-    "slope_state",
+    "avg_slope_percent",
     "width_state",
     "surface_state",
     "signal_state",

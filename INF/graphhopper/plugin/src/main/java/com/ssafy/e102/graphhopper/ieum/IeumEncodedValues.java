@@ -8,7 +8,6 @@ import com.graphhopper.routing.ev.ImportUnit;
 import com.graphhopper.routing.util.parsers.TagParser;
 import com.graphhopper.util.PMap;
 import com.ssafy.e102.graphhopper.ieum.IeumEnum.SegmentType;
-import com.ssafy.e102.graphhopper.ieum.IeumEnum.SlopeState;
 import com.ssafy.e102.graphhopper.ieum.IeumEnum.SurfaceState;
 import com.ssafy.e102.graphhopper.ieum.IeumEnum.WidthState;
 import com.ssafy.e102.graphhopper.ieum.IeumEnum.YesNoUnknown;
@@ -31,7 +30,6 @@ public final class IeumEncodedValues {
     public static final String WIDTH_METER = "width_meter";
     public static final String BRAILLE_BLOCK_STATE = "braille_block_state";
     public static final String AUDIO_SIGNAL_STATE = "audio_signal_state";
-    public static final String SLOPE_STATE = "slope_state";
     public static final String WIDTH_STATE = "width_state";
     public static final String SURFACE_STATE = "surface_state";
     public static final String STAIRS_STATE = "stairs_state";
@@ -46,7 +44,6 @@ public final class IeumEncodedValues {
         Map.entry(WIDTH_METER, ignored -> new DecimalEncodedValueImpl(WIDTH_METER, 10, 0.1, false)),
         Map.entry(BRAILLE_BLOCK_STATE, ignored -> new EnumEncodedValue<>(BRAILLE_BLOCK_STATE, YesNoUnknown.class)),
         Map.entry(AUDIO_SIGNAL_STATE, ignored -> new EnumEncodedValue<>(AUDIO_SIGNAL_STATE, YesNoUnknown.class)),
-        Map.entry(SLOPE_STATE, ignored -> new EnumEncodedValue<>(SLOPE_STATE, SlopeState.class)),
         Map.entry(WIDTH_STATE, ignored -> new EnumEncodedValue<>(WIDTH_STATE, WidthState.class)),
         Map.entry(SURFACE_STATE, ignored -> new EnumEncodedValue<>(SURFACE_STATE, SurfaceState.class)),
         Map.entry(STAIRS_STATE, ignored -> new EnumEncodedValue<>(STAIRS_STATE, YesNoUnknown.class)),
@@ -84,13 +81,6 @@ public final class IeumEncodedValues {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static TagParser createEnumTagParser(String name, EncodedValueLookup lookup) {
-        if (SLOPE_STATE.equals(name)) {
-            return new IeumEnumTagParser(
-                lookup.getEnumEncodedValue(name, SlopeState.class),
-                tagName(name),
-                SlopeState.UNKNOWN
-            );
-        }
         if (WIDTH_STATE.equals(name)) {
             return new IeumEnumTagParser(
                 lookup.getEnumEncodedValue(name, WidthState.class),

@@ -32,7 +32,7 @@
 
 - 기준 문서: `2026-04-10 최종_프로젝트_기획서.md`, `2026-04-11_MVP_화면명세서.md`, `2026-04-09_기능명세서.md`, `2026-04-16_ACCESSIBLE_ROUTING_POC_RESTART_BLUEPRINT.md`
 - `created_at`, `updated_at`은 JPA Auditing 기반 `BaseEntity` 공통 컬럼으로 관리하므로 테이블별 상세 명세에서는 생략한다.
-- 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 필요 시 `deletedAt`을 공통 컬럼으로 관리한다.
+- 현재 회원 탈퇴 구현은 사용자 row를 물리 삭제한다. FK 제약을 피하기 위해 사용자 종속 데이터는 명시 삭제 순서로 먼저 정리한다.
 - 모든 물리 DB 컬럼 네이밍은 `snake_case`를 사용한다. Java 엔티티 필드와 API 응답 필드는 `camelCase`를 유지한다.
 - 숫자 ID를 참조하는 외래키 컬럼은 자동 증가 컬럼이 아니므로 `SERIAL/BIGSERIAL`이 아니라 `INT/BIGINT`로 표기한다.
 - PK는 테이블별 데이터 증가량 기준으로 구분한다. 대량 적재 또는 로그성 테이블은 `BIGINT`, 일반 관리성 테이블은 `INT`를 우선 검토한다.
@@ -70,6 +70,7 @@
 - `road_nodes`
 - `road_segments`
 - `admin_areas`
+- `source_features`
 - `segment_features`
 
 ### 대중교통 도메인
@@ -95,6 +96,7 @@ erDiagram
     USERS ||--o{ HAZARD_REPORTS : reports
     USERS ||--o{ ROUTE_RATINGS : rates
     USERS ||--o{ ROUTE_SESSIONS : starts
+    ROUTE_SESSIONS ||--o| ROUTE_RATINGS : rated
 
     HAZARD_REPORTS ||--o{ HAZARD_REPORT_IMAGES : has
 
@@ -191,7 +193,6 @@ erDiagram
         ENUM walk_access
         ENUM braille_block_state
         ENUM audio_signal_state
-        ENUM slope_state
         ENUM width_state
         VARCHAR surface_state
         ENUM stairs_state
@@ -206,6 +207,15 @@ erDiagram
         GEOMETRY geom
     }
 
+    SOURCE_FEATURES {
+        BIGINT source_feature_id PK
+        VARCHAR feature_type
+        GEOMETRY geom
+        VARCHAR state
+        NUMERIC value_number
+        VARCHAR source_file
+    }
+
     SEGMENT_FEATURES {
         BIGINT feature_id PK
         BIGINT edge_id FK
@@ -215,6 +225,7 @@ erDiagram
 
     ROUTE_RATINGS {
         BIGINT rating_id PK
+        UUID session_id FK
         UUID user_id FK
         VARCHAR route_id
         SMALLINT score
@@ -299,7 +310,7 @@ erDiagram
 - `role` 후보값은 `USER`, `ADMIN`이다. 가입 시 기본값은 `USER`이며, 백엔드는 `users.role=ADMIN`인 사용자에게 Spring Security `ROLE_ADMIN`을 부여한다.
 - 필수 약관 동의는 가입 완료 조건으로 검증하지만, `users` 테이블에 별도 동의 여부 필드를 저장하지 않는다.
 - 푸시 알림, 진동 알림, TTS, 경로 데이터 수집 설정은 서버에 저장하지 않고 앱 내부 설정 또는 후순위 정책으로 관리한다.
-- 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 동일 사용자 재가입 시 기존 계정 복구 또는 재활성화 정책을 별도로 둔다.
+- 현재 회원 탈퇴는 `users` row 물리 삭제 기준이다. 동일 사용자 재가입은 신규 계정 생성으로 처리하며, 기존 계정 복구 또는 재활성화 정책은 별도 soft delete 도입 시 재정의한다.
 - `user_id`는 외부 응답과 JWT subject에서 `userId`로 노출되는 UUID다.
 
 ---
@@ -393,7 +404,7 @@ erDiagram
 
 사용자가 등록한 도로 위험 요소 제보 데이터를 저장한다.
 
-도로 상태 제보는 로그인 사용자 계정과 연결한다. 회원 탈퇴 후에도 제보 내역은 운영 검토 기록으로 보관한다.
+도로 상태 제보는 로그인 사용자 계정과 연결한다. 현재 회원 탈퇴 구현에서는 FK 정합성을 위해 제보 이미지와 제보 내역도 함께 삭제한다.
 
 ### 컬럼 명세
 
@@ -589,7 +600,6 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 보행 폭(미터) | width_meter | NUMERIC(6,2) | NULL |  |
 | 점자블록 상태 | braille_block_state | ENUM | NOT NULL | UNKNOWN |
 | 음향신호기 상태 | audio_signal_state | ENUM | NOT NULL | UNKNOWN |
-| 경사 상태 | slope_state | ENUM | NOT NULL | UNKNOWN |
 | 폭 상태 | width_state | ENUM | NOT NULL | UNKNOWN |
 | 노면 상태 | surface_state | VARCHAR(30) | NOT NULL | UNKNOWN |
 | 계단 상태 | stairs_state | ENUM | NOT NULL | UNKNOWN |
@@ -599,7 +609,6 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### enum 값
 
 - `walk_access`, `braille_block_state`, `audio_signal_state`, `stairs_state`, `signal_state`: `YES`, `NO`, `UNKNOWN`
-- `slope_state`: `FLAT`, `MODERATE`, `STEEP`, `RISK`, `UNKNOWN`
 - `width_state`: `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN`
 - `surface_state` 후보값: `PAVED`, `UNPAVED`, `UNKNOWN`
 - `segment_type` 후보값: `CROSS_WALK`, `SIDE_LINE`
@@ -609,8 +618,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `edge_id`가 downstream(CSV ETL, GraphHopper)에서 사용하는 유일한 surrogate key다.
 - `walk_access` 기본값은 SHP 소스에서 보행 전용 의미를 확정할 수 없으므로 `UNKNOWN`으로 시작한다. `NO`는 모든 프로필에서 통행 차단, `UNKNOWN`은 차단하지 않고 penalty로 처리한다.
 - `avg_slope_percent`, `width_meter`는 CSV ETL(`slope_analysis_staging.csv`) 보강값으로 채워진다.
-- `slope_state`는 경사 난이도 기반 경로 비용 계산에 사용하며, `avg_slope_percent` 또는 경사 관련 보강 데이터에서 파생한다.
-- `slope_state=RISK`는 `avg_slope_percent >= 12.00%` 구간을 의미하며, 경로 비용 계산에서 강한 회피 또는 차단 후보로 사용한다.
+- 경사 난이도는 단일 파생 상태 컬럼으로 저장하지 않는다. `avg_slope_percent` 원천 수치를 기준으로 GraphHopper profile 또는 backend 정책에서 사용자 유형별 threshold를 적용한다.
 - `surface_state`는 분류 기준이 확장될 수 있으므로 ENUM 대신 `VARCHAR`로 관리한다.
 - `crossing_state`는 별도 저장 컬럼으로 두지 않고 `segment_type`과 `signal_state`에서 파생한다.
   - `segment_type != CROSS_WALK`이면 `crossing_state=NONE`
@@ -618,7 +626,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
   - `segment_type = CROSS_WALK`이고 `signal_state=NO`이면 `crossing_state=UNSIGNALIZED`
   - `segment_type = CROSS_WALK`이고 `signal_state=UNKNOWN`이면 `crossing_state=UNKNOWN`
 - 엘리베이터는 보행 segment 상태값으로 두지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 장소 내부 엘리베이터는 `place_accessibility_features.feature_type=elevator`로 관리한다.
-- 상세 feature 객체(음향신호기, 횡단보도 등)는 `segment_features`에 저장하고, `road_segments`에는 최종 상태값만 반영한다.
+- 원천 feature 객체는 `source_features`에 저장하고, `road_segments`에는 최종 집계 상태값만 반영한다. `segment_features`는 라우팅/안내에 필요한 edge 매칭 결과만 저장한다.
 
 ---
 
@@ -647,13 +655,64 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 11) segment_features
+## 11) source_features *(v4 변경)*
+
+### 역할
+
+접근성 원천 CSV에서 읽은 feature를 영속 저장한다.
+
+관리자페이지에서 보행 네트워크 `road_segments`를 add/delete 할 때 CSV를 다시 순회하지 않고, `source_features.geom` 공간 인덱스로 새 segment 주변 feature만 빠르게 조회해 `segment_features`와 `road_segments` 접근성 집계 컬럼을 재계산한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 원천 feature ID | source_feature_id | BIGINT | NOT NULL | DB sequence |
+| feature 종류 | feature_type | VARCHAR(50) | NOT NULL |  |
+| 원천 위치/구간 | geom | GEOMETRY(GEOMETRY, 4326) | NOT NULL |  |
+| 문자 상태값 | state | VARCHAR(50) | NULL |  |
+| 수치값 | value_number | NUMERIC(10,2) | NULL |  |
+| 원천 파일명 | source_file | VARCHAR(255) | NOT NULL |  |
+
+### 제약과 인덱스
+
+- `source_feature_id` PK
+- `idx_source_features_geom`: `GIST (geom)`
+- `idx_source_features_type_file`: `(feature_type, source_file)`
+
+### feature_type 후보값
+
+| feature_type | state 정책 | value_number 정책 | 설명 |
+| --- | --- | --- | --- |
+| `CROSSWALK` | `YES`, `NO` | NULL | 횡단보도 |
+| `SIGNAL` | `YES`, `NO` | NULL | 횡단보도 신호기 |
+| `AUDIO_SIGNAL` | `YES`, `NO` | NULL | 음향신호기 |
+| `BRAILLE_BLOCK` | `YES`, `NO` | NULL | 점자블록 |
+| `STAIRS` | `YES`, `NO` | NULL | 계단 |
+| `WALK_ACCESS` | `YES`, `NO` | NULL | 도보 가능 여부 보강 |
+| `SLOPE` | NULL | 필수, 경사도 % | 경사 원천 수치 |
+| `WIDTH` | 필수, `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN` | 필수, 폭 m | 보행 폭 원천 수치와 등급 |
+| `SURFACE` | `PAVED`, `UNPAVED`, `UNKNOWN` | NULL | 노면 상태 |
+
+### 비고
+
+- `source_features`는 일회성 staging table이 아니라 dev/prod에 모두 존재하는 영속 원천 테이블이다.
+- `source_feature_id`는 DB sequence로 부여한다. CSV row 기반 deterministic id를 사용하지 않는다.
+- `feature_type`은 DB enum이 아니라 `VARCHAR(50)`로 저장하고, loader/application에서 허용값을 검증한다.
+- `state`와 `value_number`는 컬럼 자체로는 nullable이다. 다만 feature type별 필수 여부는 loader/application 정책으로 검증한다.
+- `SLOPE.state`는 항상 `NULL`로 둔다. 경사 판단은 `value_number` 또는 `road_segments.avg_slope_percent`를 기준으로 사용자 유형별 정책에서 수행한다.
+- `WIDTH.state`는 필수로 저장한다. 폭 등급을 재계산하지 않고 원천 적재 시 확정한 값을 `road_segments.width_state`에 반영한다.
+- `source_features`는 `road_segments`와 FK 관계를 갖지 않는다. 연결은 `ST_DWithin`, `ST_Equals`, `ST_Intersects` 같은 공간 연산으로 수행한다.
+
+---
+
+## 12) segment_features
 
 ### 역할
 
 `road_segments`에 매칭된 개별 feature 객체를 저장한다.
 
-횡단보도, 점자블록, 음향신호기, 경사 구간, 계단처럼 특정 edge에 귀속되는 원천 feature를 추적하거나 지도에 표시할 때 사용한다.
+횡단보도, 점자블록, 음향신호기, 계단처럼 특정 edge에 귀속된 위치 이벤트 feature를 추적하거나 지도에 표시할 때 사용한다.
 
 ### 컬럼 명세
 
@@ -668,11 +727,12 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `road_segments 1 : N segment_features` 관계를 가진다.
 - `geom`은 feature 성격에 따라 `POINT`, `LINESTRING` 등으로 저장할 수 있도록 범용 geometry 타입을 사용한다.
-- `feature_type` 후보값: `CROSSWALK`, `AUDIO_SIGNAL`, `BRAILLE_BLOCK`, `SLOPE`, `STAIRS`.
+- `feature_type` 후보값: `CROSSWALK`, `AUDIO_SIGNAL`, `BRAILLE_BLOCK`, `STAIRS`.
+- 경사, 폭, 노면, 도보 가능 여부, 신호기 같은 원천/집계 feature는 `source_features`와 `road_segments`에서 관리한다.
 
 ---
 
-## 12) route_ratings
+## 13) route_ratings
 
 ### 역할
 
@@ -685,10 +745,11 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 경로 평가 ID | rating_id | BIGINT | NOT NULL |  |
+| 세션 ID | session_id | UUID | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
 | 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
 | 별점 | score | SMALLINT | NOT NULL |  |
-| 경로 문맥 JSON | route_context_json | JSONB | NULL |  |
+| 경로 문맥 JSON | route_context_json | JSONB | NOT NULL |  |
 
 ### 후보값
 
@@ -697,21 +758,23 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### 제약
 
 - `rating_id` PK
-- `UNIQUE (user_id, route_id)`
+- `session_id` FK -> `route_sessions.session_id`
+- `UNIQUE (session_id)`
 
 ### 비고
 
 - 경로 평가에는 별점만 저장한다.
 - 평가 대상은 사용자가 방금 안내받은 경로다.
-- `route_id`는 `POST /route-ratings` 요청의 평가 대상 경로 ID다.
-- `route_context_json`은 평가 시점에 route session이 있으면 `route_sessions.route_snapshot_json`을 복사해 저장한다.
-- `route_context_json`이 `NULL`이어도 rating 자체는 저장할 수 있다.
+- `session_id`는 평가 대상 route session이다. route session 하나는 평가가 없거나 최대 하나만 가진다.
+- `route_id`는 평가 대상 route session의 대표 경로 ID이며, 조회와 운영 확인을 위해 중복 저장한다. `POST /route-ratings` 요청은 정확한 평가 대상을 위해 `sessionId`를 받는다.
+- `route_context_json`은 평가 시점에 같은 사용자의 `route_sessions.route_snapshot_json`을 복사해 저장한다.
+- 같은 사용자의 route session이 없으면 평가를 저장하지 않는다.
 - 평가 생성 시각은 DB `created_at` 공통 감사 컬럼으로 관리하고, Java/API에서는 `createdAt`으로 노출할 수 있다.
 - 회원 탈퇴 시 경로 평가는 삭제한다.
 
 ---
 
-## 13) route_sessions
+## 14) route_sessions
 
 ### 역할
 
@@ -744,21 +807,22 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `route_id`는 프론트와 API에서 참조하는 대표 경로 ID다.
 - `active_route_key`는 같은 사용자의 같은 route가 동시에 여러 ACTIVE session으로 저장되는 것을 막는 내부 키다. `ACTIVE` 상태에서는 `route_id`와 같은 값을 저장하고, `COMPLETED`로 전환할 때 `NULL`로 비운다.
 - DB는 `(user_id, active_route_key)` unique 제약으로 ACTIVE 중복 선택을 최종 방어한다. PostgreSQL unique 제약은 `NULL`을 서로 다른 값으로 취급하므로 완료된 과거 session은 같은 route라도 여러 건 보관할 수 있다.
-- 기존 DB에 이 컬럼을 추가하는 배포에서는 기존 `ACTIVE` row의 `active_route_key`를 `route_id`로 보정한 뒤 unique 제약을 적용한다. 중복 ACTIVE row가 이미 있으면 최신 row만 유지하거나 나머지를 `COMPLETED`로 정리한 뒤 제약을 적용한다.
+- 별도 DB migration을 사용하지 않는 배포에서는 select/end 애플리케이션 경계에서 기존 `ACTIVE` row의 `active_route_key`를 `route_id`로 보정한다. 같은 사용자/route에 중복 ACTIVE row가 있으면 최신 row만 ACTIVE로 유지하고 나머지는 `COMPLETED`로 정리한다.
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
   - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `arrivingStop`, `isLowFloor`
-  - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
+  - guidanceEvents 단위: `sequence`, `type`, `instruction`, `distanceMeter`, `geometry`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
 - 접근성 요약은 route 단위 `badges`에 저장하고, leg 단위 상세 안내는 `guidanceEvents`를 기준으로 복구한다. `RouteLegResponse.badges`는 API 응답과 snapshot JSON에 노출하지 않는다.
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
-  - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
-  - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
-  - SUBWAY metadata: ODsay `startID`, ODsay `endID`, ODsay `wayCode`, 내부 지하철역 식별자, 선택된 승차/하차 엘리베이터 식별자와 좌표
-  - reroute/refresh 판단용 metadata: leg별 geometry, BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표
+  - 공통 transit metadata: `type`, `lanes`, `passStops`
+  - BUS metadata: `lanes[].busNo`, `lanes[].busLocalBlID`, `passStops[].localStationID`
+  - SUBWAY metadata: ODsay `odsayStationId`, `endOdsayStationId`, `lineName`, `wayCode`, 선택된 승차/하차 엘리베이터 좌표, `nextDeparture`
+  - reroute/refresh 판단용 metadata: BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표, 원본 대중교통 path metadata
 - `route_snapshot_json`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
-- 실시간 도착정보는 외부 API 또는 Redis TTL cache에서만 관리한다.
+- BUS 실시간 도착정보는 BIMS 외부 API 또는 Redis `bims:arrival:{bstopid}:{lineid}` TTL 1분 cache에서만 관리한다.
+- SUBWAY 도착정보는 refresh 시점에 `subway_timetables` 시간표를 조회해 계산하며, 1차 구현에서는 지하철 외부 API를 직접 호출하지 않는다.
 - `status=ACTIVE`는 현재 안내 중이거나 재탐색 가능한 세션이다.
 - `status=COMPLETED`는 사용자가 도착 또는 안내 종료를 명시한 세션이다.
 - `EXPIRED`는 `status`로 두지 않는다. 만료는 JPA auditing의 수정일시 또는 별도 정책으로 판단한다.
@@ -769,7 +833,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 13) subway_stations
+## 15) subway_stations
 
 ### 역할
 
@@ -806,7 +870,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 ---
 
-## 14) subway_timetables
+## 16) subway_timetables
 
 ### 역할
 
@@ -846,6 +910,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 - `departure_second_of_day`는 조회용 정규화 값이다. 24시 이후 표현도 허용한다.
 - `transit-refresh`는 선택된 SUBWAY leg snapshot의 `odsay_station_id`, `way_code`와 현재 날짜의 `service_day_type`으로 시간표를 조회한다.
 - 현재 시각 이후 `departure_second_of_day`가 가장 작은 row를 다음 열차로 본다.
+- 현재 날짜에 남은 출발 row가 없으면 다음 날짜의 `service_day_type`으로 가장 이른 row를 조회하고, 자정 경계를 넘어선 남은 분을 계산한다.
 - 공휴일 판정 테이블이 없으면 MVP에서는 일요일을 `HOLIDAY`, 토요일을 `SATURDAY`, 나머지를 `WEEKDAY`로 처리한다.
 
 ### 관계
@@ -854,7 +919,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 ---
 
-## 15) subway_station_elevators
+## 17) subway_station_elevators
 
 ### 역할
 
@@ -909,17 +974,24 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 ### users - hazard_reports
 
 - `users 1 : N hazard_reports`
-- 회원 탈퇴 후에도 제보 내역은 보관하되 사용자 식별 처리 정책은 별도 운영 정책을 따른다.
+- 현재 회원 탈퇴 구현에서는 제보 이미지와 제보 내역도 삭제한다. 제보 보관/익명화가 필요하면 `hazard_reports.user_id` nullable 또는 별도 익명 사용자 정책을 먼저 정의한다.
 
 ### users - route_ratings
 
 - `users 1 : N route_ratings`
 - 회원 탈퇴 시 별점 평가 내역은 삭제한다.
 
+### route_sessions - route_ratings
+
+- `route_sessions 1 : 0..1 route_ratings`
+- 하나의 안내 세션은 평가가 없을 수 있고, 평가가 있다면 최대 1개만 가진다.
+- `route_ratings.session_id`는 `route_sessions.session_id`를 참조하며 `UNIQUE` 제약으로 같은 세션 중복 평가를 막는다.
+
 ### users - route_sessions
 
 - `users 1 : N route_sessions`
 - `route_sessions.user_id`와 `route_sessions.route_id` 또는 `route_sessions.session_id` 기준으로 경로 세션 소유권을 검증한다.
+- 회원 탈퇴 시 route session은 route rating 삭제 후 삭제한다.
 
 ### hazard_reports - hazard_report_images
 
@@ -943,6 +1015,12 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - `road_segments 1 : N segment_features`
 - 하나의 보행 segment는 0개 이상의 개별 feature를 가질 수 있다.
+
+### source_features - road_segments
+
+- FK 관계가 아니다.
+- `source_features`는 접근성 원천 feature 저장소이며, `road_segments`와의 연결은 `ST_DWithin`, `ST_Equals`, `ST_Intersects` 같은 공간 연산으로 계산한다.
+- 관리자페이지에서 segment가 추가되면 추가된 `road_segments.geom` 주변 `source_features`만 조회해 `segment_features`와 `road_segments` 집계 컬럼을 갱신한다.
 
 ### subway_stations - subway_timetables
 

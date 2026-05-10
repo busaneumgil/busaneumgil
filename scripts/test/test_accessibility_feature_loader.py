@@ -1,4 +1,5 @@
 import csv
+import inspect
 import tempfile
 import unittest
 from decimal import Decimal
@@ -17,11 +18,6 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
         self.assertEqual(loader.derive_width_state(Decimal("1.50")), "ADEQUATE_150")
         self.assertEqual(loader.derive_width_state(Decimal("1.20")), "ADEQUATE_120")
         self.assertEqual(loader.derive_width_state(Decimal("1.19")), "NARROW")
-
-        self.assertEqual(loader.derive_slope_state(Decimal("5.55")), "FLAT")
-        self.assertEqual(loader.derive_slope_state(Decimal("5.56")), "MODERATE")
-        self.assertEqual(loader.derive_slope_state(Decimal("8.33")), "STEEP")
-        self.assertEqual(loader.derive_slope_state(Decimal("12.00")), "RISK")
 
         self.assertEqual(loader.normalize_surface_state("비포장"), "UNPAVED")
         self.assertEqual(loader.normalize_surface_state("아스팔트"), "PAVED")
@@ -62,8 +58,8 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
             )
             self.write_csv(
                 source_dir / "점자블록.csv",
-                ["sourceId", "geom", "brailleBlockState"],
-                [["braille-1", "POINT(129.1 35.1)", "no"]],
+                ["sourceId", "geom", "brailleBlockState", "signalState"],
+                [["braille-1", "LINESTRING(129.1 35.1,129.2 35.2)", "no", "UNKNOWN"]],
             )
             self.write_csv(
                 source_dir / "지하철_엘리베이터.csv",
@@ -75,23 +71,35 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
 
         self.assertFalse(issues)
         feature_counts = report["parsedFeatureTypeCounts"]
-        self.assertEqual(feature_counts["ROAD_UPDATE_ONLY"], 2)
+        self.assertEqual(feature_counts["WALK_ACCESS"], 2)
         self.assertEqual(feature_counts["WIDTH"], 3)
         self.assertEqual(feature_counts["SURFACE"], 3)
         self.assertEqual(feature_counts["SLOPE"], 2)
         self.assertEqual(feature_counts["CROSSWALK"], 1)
+        self.assertEqual(feature_counts["SIGNAL"], 1)
         self.assertEqual(feature_counts["AUDIO_SIGNAL"], 1)
         self.assertEqual(feature_counts["STAIRS"], 1)
         self.assertEqual(feature_counts["BRAILLE_BLOCK"], 1)
-        self.assertEqual(len(rows), 14)
+        self.assertEqual(len(rows), 15)
         self.assertNotIn("지하철_엘리베이터.csv", {row.source_file for row in rows})
 
+        walk_access = [row for row in rows if row.feature_type == "WALK_ACCESS"]
+        self.assertEqual(len(walk_access), 2)
+        self.assertTrue(all(row.state == "YES" for row in walk_access))
+        self.assertTrue(all(row.update_walk_access for row in walk_access))
         braille = next(row for row in rows if row.feature_type == "BRAILLE_BLOCK")
         self.assertEqual(braille.state, "NO")
+        self.assertEqual(braille.geometry_kind, "LINESTRING")
+        self.assertEqual(braille.threshold_meter, Decimal("0"))
         audio = next(row for row in rows if row.feature_type == "AUDIO_SIGNAL")
         self.assertEqual(audio.geom_ewkt, "SRID=4326;POINT(129.1 35.1)")
         crosswalk = next(row for row in rows if row.feature_type == "CROSSWALK")
         self.assertTrue(crosswalk.prefer_crosswalk)
+        signal = next(row for row in rows if row.feature_type == "SIGNAL")
+        self.assertEqual(signal.state, "YES")
+        slope = next(row for row in rows if row.feature_type == "SLOPE")
+        self.assertIsNone(slope.state)
+        self.assertIsNotNone(slope.value_number)
 
     def test_position_event_feature_types_exclude_segment_attributes(self):
         self.assertEqual(
@@ -99,6 +107,7 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
             {"CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"},
         )
         self.assertTrue({"SLOPE", "SURFACE", "WIDTH"}.isdisjoint(loader.POSITION_EVENT_FEATURE_TYPES))
+        self.assertTrue({"SIGNAL", "WALK_ACCESS"}.isdisjoint(loader.POSITION_EVENT_FEATURE_TYPES))
 
     def test_reports_missing_required_csv_header_before_row_parsing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -128,6 +137,31 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
             loader.position_event_feature_type_sql(),
             "'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'CROSSWALK', 'STAIRS'",
         )
+
+    def test_braille_block_lines_match_only_same_crosswalk_geometry(self):
+        source = inspect.getsource(loader.build_matching_tables)
+
+        self.assertIn("feature_type = 'BRAILLE_BLOCK' AS has_braille_block", source)
+        self.assertIn("f.has_braille_block", source)
+        self.assertIn("s.segment_type = 'CROSS_WALK'", source)
+        self.assertIn('ST_Equals(f.geom, s."geom")', source)
+        self.assertIn("ST_DWithin(f.geom_5179, s.geom_5179, f.threshold_meter)", source)
+
+    def test_segment_feature_insert_dedupes_by_edge_type_and_state(self):
+        source = inspect.getsource(loader.insert_and_update)
+
+        self.assertIn("DISTINCT ON (edge_id, feature_type, COALESCE(state, ''))", source)
+        self.assertIn("deduped_segment_features", source)
+
+    def test_source_features_schema_and_replacement_are_persistent(self):
+        schema_source = inspect.getsource(loader.ensure_schema)
+        replace_source = inspect.getsource(loader.replace_source_features)
+
+        self.assertIn("CREATE TABLE IF NOT EXISTS source_features", schema_source)
+        self.assertIn("idx_source_features_geom", schema_source)
+        self.assertIn("USING GIST", schema_source)
+        self.assertIn("TRUNCATE TABLE source_features RESTART IDENTITY", replace_source)
+        self.assertIn("INSERT INTO source_features", replace_source)
 
     @staticmethod
     def write_csv(path, headers, rows):

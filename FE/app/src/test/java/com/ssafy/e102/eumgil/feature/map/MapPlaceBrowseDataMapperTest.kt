@@ -53,6 +53,14 @@ class MapPlaceBrowseDataMapperTest {
             ),
             marker.filterCategories,
         )
+        assertEquals(
+            listOf(
+                AccessibilityTag.ACCESSIBLE_PARKING,
+                AccessibilityTag.CHARGING_STATION,
+                AccessibilityTag.ACCESSIBLE_TOILET,
+            ),
+            marker.accessibilityTags,
+        )
     }
 
     @Test
@@ -100,5 +108,24 @@ class MapPlaceBrowseDataMapperTest {
             detail.accessibilityTags,
         )
         assertEquals("Front desk can confirm the accessible room on arrival.", detail.description)
+    }
+
+    @Test
+    fun `toFacilityDetailSeed restores charging tag from raw accessibility keys`() {
+        val detail =
+            MapPlaceBrowseDataMapper.toFacilityDetailSeed(
+                PlaceDetail(
+                    placeId = "place-office-1",
+                    name = "Charging Enabled Office",
+                    address = "7 Center Plaza, Busan",
+                    latitude = 35.1663,
+                    longitude = 129.1631,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                    accessibilityTags = listOf("charging-station"),
+                ),
+            )
+
+        assertEquals(FacilityCategory.PUBLIC_OFFICE, detail.category)
+        assertEquals(listOf(AccessibilityTag.CHARGING_STATION), detail.accessibilityTags)
     }
 }

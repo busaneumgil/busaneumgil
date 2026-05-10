@@ -1,9 +1,12 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.content.Intent
+import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsItem
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,6 +35,63 @@ class OnboardingNavGraphRoutingTest {
             "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link",
             resolveTermsGuideDetailUrl(TermsGuideStep.SENSITIVE),
         )
+    }
+
+    @Test
+    fun `location terms details resolves notion url for required terms items`() {
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be680ab9931f226486dac58?source=copy_link",
+            resolveLocationTermsDetailUrl(LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE),
+        )
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link",
+            resolveLocationTermsDetailUrl(LocationTermsItem.SENSITIVE_INFO),
+        )
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link",
+            resolveLocationTermsDetailUrl(LocationTermsItem.PERSONAL_LOCATION_INFO),
+        )
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link",
+            resolveLocationTermsDetailUrl(LocationTermsItem.PRIVACY_POLICY_CONFIRMATION),
+        )
+    }
+
+    @Test
+    fun `location terms details has no url for over fourteen item`() {
+        assertNull(resolveLocationTermsDetailUrl(LocationTermsItem.OVER_FOURTEEN))
+    }
+
+    @Test
+    fun `terms guide intent opens the configured notion page with new task flag`() {
+        val intent = requireNotNull(createTermsGuideDetailIntent(TermsGuideStep.SENSITIVE))
+
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link",
+            intent.dataString,
+        )
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+    }
+
+    @Test
+    fun `location terms intent opens the configured notion page with new task flag`() {
+        val intent =
+            requireNotNull(
+                createLocationTermsDetailIntent(LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE),
+            )
+
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals(
+            "https://www.notion.so/ryuwon-project/350a58d49be680ab9931f226486dac58?source=copy_link",
+            intent.dataString,
+        )
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+    }
+
+    @Test
+    fun `location terms intent returns null for over fourteen item without detail url`() {
+        assertNull(createLocationTermsDetailIntent(LocationTermsItem.OVER_FOURTEEN))
     }
 
     @Test

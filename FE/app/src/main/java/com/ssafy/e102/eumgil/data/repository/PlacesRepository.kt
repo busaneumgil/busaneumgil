@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceQuery
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
@@ -16,6 +18,8 @@ interface PlacesRepository {
     suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary>
 
     suspend fun getPlaceDetail(placeId: String): PlaceDetail?
+
+    suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? = null
 }
 
 class DefaultPlacesRepository(
@@ -107,6 +111,31 @@ class DefaultPlacesRepository(
         }
 
         throw remoteFailure ?: IllegalStateException("No place detail source matched the current policy.")
+    }
+
+    override suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? {
+        val readPlan = sourcePolicy.readPlan(RepositoryDomain.PLACES)
+        var remoteFailure: Throwable? = null
+
+        for (source in readPlan.sources) {
+            when (source) {
+                RepositorySource.REMOTE -> {
+                    val remoteResult =
+                        runCatching {
+                            runAuthenticatedRemoteRequest { remoteDataSource.getMapTappedPlaceDetail(request) }
+                        }
+                    if (remoteResult.isSuccess) {
+                        return remoteResult.getOrNull()
+                    }
+                    remoteFailure = remoteResult.exceptionOrNull()
+                }
+
+                RepositorySource.LOCAL -> Unit
+                RepositorySource.MOCK -> return null
+            }
+        }
+
+        throw remoteFailure ?: IllegalStateException("No map-tap place detail source matched the current policy.")
     }
 
     private suspend fun <T> runAuthenticatedRemoteRequest(execute: suspend () -> T): T {

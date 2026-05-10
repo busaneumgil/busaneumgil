@@ -46,6 +46,7 @@ class RerouteServiceTest {
 	private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
 
 	private RouteSessionRepository routeSessionRepository;
+	private RouteSessionCommandService routeSessionCommandService;
 	private WalkRouteSearchService walkRouteSearchService;
 	private TransitRouteSearchService transitRouteSearchService;
 	private RerouteService service;
@@ -53,9 +54,11 @@ class RerouteServiceTest {
 	@BeforeEach
 	void setUp() {
 		routeSessionRepository = mock(RouteSessionRepository.class);
+		routeSessionCommandService = mock(RouteSessionCommandService.class);
 		walkRouteSearchService = mock(WalkRouteSearchService.class);
 		transitRouteSearchService = mock(TransitRouteSearchService.class);
-		service = new RerouteService(routeSessionRepository, objectMapper, walkRouteSearchService,
+		service = new RerouteService(routeSessionRepository, routeSessionCommandService, objectMapper,
+			walkRouteSearchService,
 			transitRouteSearchService);
 	}
 
@@ -165,7 +168,12 @@ class RerouteServiceTest {
 			new RerouteRequest("rt_001", new GeoPointRequest(35.12001, 128.93601)));
 
 		assertThat(response.route()).isNull();
-		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+		verify(routeSessionCommandService, never()).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any());
 		verify(walkRouteSearchService, never()).search(org.mockito.ArgumentMatchers.any(),
 			org.mockito.ArgumentMatchers.any());
 		verify(transitRouteSearchService, never()).search(org.mockito.ArgumentMatchers.any(),
@@ -185,7 +193,12 @@ class RerouteServiceTest {
 			new RerouteRequest("rt_001", new GeoPointRequest(35.12099, 128.93699)));
 
 		assertThat(response.route()).isNull();
-		verify(routeSessionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+		verify(routeSessionCommandService, never()).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.any());
 		verifyNoInteractions(walkRouteSearchService, transitRouteSearchService);
 	}
 
@@ -335,13 +348,19 @@ class RerouteServiceTest {
 	}
 
 	private void assertSavedRerouteSession(String routeId, double expectedLat, double expectedLng) {
-		ArgumentCaptor<RouteSession> routeSessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
-		verify(routeSessionRepository).save(routeSessionCaptor.capture());
-		RouteSession savedRouteSession = routeSessionCaptor.getValue();
-		assertThat(savedRouteSession.getRouteId()).isEqualTo(routeId);
-		assertThat(savedRouteSession.getStartPoint().getY()).isEqualTo(expectedLat);
-		assertThat(savedRouteSession.getStartPoint().getX()).isEqualTo(expectedLng);
-		assertThat(savedRouteSession.getRouteSnapshotJson().get("routeId").asText()).isEqualTo(routeId);
+		ArgumentCaptor<org.locationtech.jts.geom.Point> startPointCaptor = ArgumentCaptor
+			.forClass(org.locationtech.jts.geom.Point.class);
+		ArgumentCaptor<com.fasterxml.jackson.databind.JsonNode> snapshotCaptor = ArgumentCaptor
+			.forClass(com.fasterxml.jackson.databind.JsonNode.class);
+		verify(routeSessionCommandService).saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.any(),
+			org.mockito.ArgumentMatchers.eq(routeId),
+			startPointCaptor.capture(),
+			org.mockito.ArgumentMatchers.any(),
+			snapshotCaptor.capture());
+		assertThat(startPointCaptor.getValue().getY()).isEqualTo(expectedLat);
+		assertThat(startPointCaptor.getValue().getX()).isEqualTo(expectedLng);
+		assertThat(snapshotCaptor.getValue().get("routeId").asText()).isEqualTo(routeId);
 	}
 
 	private void assertRouteError(Runnable action, RouteErrorCode expectedErrorCode) {

@@ -117,7 +117,7 @@ class SearchRemoteDataSourceTest {
             assertNull(unmatchedResult.serverPlaceId)
             assertEquals("987654321", unmatchedResult.displayPlaceId)
             assertNull(unmatchedResult.category)
-            assertTrue(unmatchedResult.accessibilityTagKeys.isEmpty())
+            assertEquals(listOf("step-free-entrance"), unmatchedResult.accessibilityTagKeys)
             assertTrue(unmatchedResult.matched.not())
         }
 

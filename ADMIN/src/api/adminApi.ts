@@ -18,7 +18,7 @@ function defaultBackendApiUrl() {
   if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
     return "http://localhost:8080";
   }
-  return "https://api.prod.busaneumgil.com";
+  return "https://api.busaneumgil.com";
 }
 
 export const backendApiUrl = (configuredBackendApiUrl || defaultBackendApiUrl()).replace(/\/$/, "");

@@ -30,8 +30,10 @@ import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.entity.HazardReportImage;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.RouteRating;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
+import com.ssafy.e102.domain.route.entity.SourceFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
 import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
@@ -60,6 +62,8 @@ class DatabaseNamingStrategyTest {
 		RoadSegment.class,
 		AdminArea.class,
 		SegmentFeature.class,
+		SourceFeature.class,
+		RouteRating.class,
 		RouteSession.class,
 		SubwayStation.class,
 		SubwayStationElevator.class,
@@ -191,7 +195,6 @@ class DatabaseNamingStrategyTest {
 			.isEqualTo("braille_block_state");
 		assertThat(physicalColumnName(RoadSegment.class, "audioSignalState"))
 			.isEqualTo("audio_signal_state");
-		assertThat(physicalColumnName(RoadSegment.class, "slopeState")).isEqualTo("slope_state");
 		assertThat(physicalColumnName(RoadSegment.class, "widthState")).isEqualTo("width_state");
 		assertThat(physicalColumnName(RoadSegment.class, "surfaceState")).isEqualTo("surface_state");
 		assertThat(physicalColumnName(RoadSegment.class, "stairsState")).isEqualTo("stairs_state");
@@ -209,11 +212,18 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(SegmentFeature.class, "geom")).isEqualTo("geom");
 		assertThat(physicalColumnName(SegmentFeature.class, "state")).isEqualTo("state");
 		assertThat(physicalColumnName(SegmentFeature.class, "valueNumber")).isEqualTo("value_number");
+
+		assertThat(physicalColumnName(SourceFeature.class, "sourceFeatureId")).isEqualTo("source_feature_id");
+		assertThat(physicalColumnName(SourceFeature.class, "featureType")).isEqualTo("feature_type");
+		assertThat(physicalColumnName(SourceFeature.class, "geom")).isEqualTo("geom");
+		assertThat(physicalColumnName(SourceFeature.class, "state")).isEqualTo("state");
+		assertThat(physicalColumnName(SourceFeature.class, "valueNumber")).isEqualTo("value_number");
+		assertThat(physicalColumnName(SourceFeature.class, "sourceFile")).isEqualTo("source_file");
 	}
 
 	@Test
-	@DisplayName("경로 세션 엔티티의 물리 컬럼명은 snake_case다")
-	void routeSessionColumnsUseSnakeCase() {
+	@DisplayName("경로 세션과 평가 엔티티의 물리 컬럼명은 snake_case다")
+	void routeSessionAndRatingColumnsUseSnakeCase() {
 		assertThat(physicalColumnName(RouteSession.class, "sessionId")).isEqualTo("session_id");
 		assertThat(joinColumnName(RouteSession.class, "user")).isEqualTo("user_id");
 		assertThat(physicalColumnName(RouteSession.class, "routeId")).isEqualTo("route_id");
@@ -224,6 +234,15 @@ class DatabaseNamingStrategyTest {
 			.isEqualTo("route_snapshot_json");
 		assertThat(physicalColumnName(RouteSession.class, "status")).isEqualTo("status");
 		assertThat(uniqueColumnNames(RouteSession.class)).contains("user_id", "active_route_key");
+
+		assertThat(physicalColumnName(RouteRating.class, "ratingId")).isEqualTo("rating_id");
+		assertThat(joinColumnName(RouteRating.class, "user")).isEqualTo("user_id");
+		assertThat(joinColumnName(RouteRating.class, "routeSession")).isEqualTo("session_id");
+		assertThat(physicalColumnName(RouteRating.class, "routeId")).isEqualTo("route_id");
+		assertThat(physicalColumnName(RouteRating.class, "score")).isEqualTo("score");
+		assertThat(physicalColumnName(RouteRating.class, "routeContextJson"))
+			.isEqualTo("route_context_json");
+		assertThat(uniqueColumnNames(RouteRating.class)).contains("session_id");
 	}
 
 	@Test
@@ -283,6 +302,8 @@ class DatabaseNamingStrategyTest {
 			RoadSegment.class,
 			AdminArea.class,
 			SegmentFeature.class,
+			SourceFeature.class,
+			RouteRating.class,
 			RouteSession.class,
 			SubwayStation.class,
 			SubwayTimetable.class);

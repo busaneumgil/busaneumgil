@@ -4,6 +4,10 @@ import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.entity.ReportDraftEntity
 import com.ssafy.e102.eumgil.data.local.entity.ReportOutboxEntity
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsApiException
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.dto.CreateHazardReportRequestDto
+import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPointDto
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,6 +22,8 @@ interface ReportRepository {
     suspend fun deleteDraft(draftId: String)
 
     suspend fun saveOutbox(outbox: ReportOutboxData): ReportOutboxData
+
+    suspend fun submitOutboxToServer(outboxId: String): ReportSubmitResult
 }
 
 data class ReportDraftData(
@@ -46,17 +52,45 @@ data class ReportOutboxData(
     val photoMimeType: String?,
     val photoSizeBytes: Long?,
     val status: ReportOutboxStatus = ReportOutboxStatus.Pending,
+    val serverReportId: Long? = null,
+    val lastFailureReason: String? = null,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
 )
 
 enum class ReportOutboxStatus {
     Pending,
+    Submitting,
+    Submitted,
+    Failed,
+}
+
+sealed interface ReportSubmitResult {
+    data class Success(
+        val outboxId: String,
+        val serverReportId: Long,
+    ) : ReportSubmitResult
+
+    data class Failure(
+        val outboxId: String,
+        val reason: ReportSubmitFailureReason,
+    ) : ReportSubmitResult
+
+    data object Skipped : ReportSubmitResult
+}
+
+enum class ReportSubmitFailureReason {
+    Unauthorized,
+    InvalidInput,
+    Network,
+    Unknown,
 }
 
 class DefaultReportRepository(
     private val reportDraftDao: ReportDraftDao,
     private val reportOutboxDao: ReportOutboxDao,
+    private val hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
+    private val accessTokenProvider: suspend () -> String? = { null },
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : ReportRepository {
@@ -101,7 +135,98 @@ class DefaultReportRepository(
         reportOutboxDao.upsertReportOutbox(savedOutbox.toEntity())
         return savedOutbox
     }
+
+    override suspend fun submitOutboxToServer(outboxId: String): ReportSubmitResult {
+        val datasource = hazardReportsRemoteDataSource ?: return ReportSubmitResult.Skipped
+        val token = accessTokenProvider() ?: return failOutbox(outboxId, ReportSubmitFailureReason.Unauthorized)
+
+        val outboxEntity =
+            reportOutboxDao.getReportOutbox(outboxId) ?: return ReportSubmitResult.Skipped
+
+        if (outboxEntity.status == ReportOutboxStatus.Submitted.name && outboxEntity.serverReportId != null) {
+            return ReportSubmitResult.Success(
+                outboxId = outboxEntity.outboxId,
+                serverReportId = outboxEntity.serverReportId,
+            )
+        }
+
+        markOutboxStatus(outboxEntity, ReportOutboxStatus.Submitting, lastFailureReason = null)
+
+        return runCatching {
+            datasource.createHazardReport(
+                accessToken = token,
+                request =
+                    CreateHazardReportRequestDto(
+                        reportType = outboxEntity.reportCategory,
+                        description = outboxEntity.description.takeIf(String::isNotBlank),
+                        reportPoint =
+                            HazardReportPointDto(
+                                lat = outboxEntity.latitude,
+                                lng = outboxEntity.longitude,
+                            ),
+                        imageUrls = emptyList(),
+                    ),
+            )
+        }.fold(
+            onSuccess = { response ->
+                val now = clock()
+                reportOutboxDao.upsertReportOutbox(
+                    outboxEntity.copy(
+                        status = ReportOutboxStatus.Submitted.name,
+                        serverReportId = response.reportId,
+                        lastFailureReason = null,
+                        updatedAt = now,
+                    ),
+                )
+                ReportSubmitResult.Success(
+                    outboxId = outboxEntity.outboxId,
+                    serverReportId = response.reportId,
+                )
+            },
+            onFailure = { throwable ->
+                failOutbox(outboxId, throwable.toSubmitFailureReason())
+            },
+        )
+    }
+
+    private suspend fun failOutbox(
+        outboxId: String,
+        reason: ReportSubmitFailureReason,
+    ): ReportSubmitResult.Failure {
+        val outboxEntity = reportOutboxDao.getReportOutbox(outboxId)
+        if (outboxEntity != null) {
+            markOutboxStatus(outboxEntity, ReportOutboxStatus.Failed, lastFailureReason = reason.name)
+        }
+        return ReportSubmitResult.Failure(outboxId = outboxId, reason = reason)
+    }
+
+    private suspend fun markOutboxStatus(
+        outboxEntity: ReportOutboxEntity,
+        status: ReportOutboxStatus,
+        lastFailureReason: String?,
+    ) {
+        val now = clock()
+        reportOutboxDao.upsertReportOutbox(
+            outboxEntity.copy(
+                status = status.name,
+                lastFailureReason = lastFailureReason,
+                updatedAt = now,
+            ),
+        )
+    }
 }
+
+private fun Throwable.toSubmitFailureReason(): ReportSubmitFailureReason =
+    when (this) {
+        is HazardReportsApiException ->
+            when {
+                httpStatusCode == 401 -> ReportSubmitFailureReason.Unauthorized
+                httpStatusCode in 400..499 -> ReportSubmitFailureReason.InvalidInput
+                else -> ReportSubmitFailureReason.Unknown
+            }
+        is java.io.IOException -> ReportSubmitFailureReason.Network
+        else -> ReportSubmitFailureReason.Unknown
+    }
 
 private fun ReportDraftEntity.toData(): ReportDraftData =
     ReportDraftData(
@@ -147,6 +272,8 @@ private fun ReportOutboxEntity.toData(): ReportOutboxData =
         photoMimeType = photoMimeType,
         photoSizeBytes = photoSizeBytes,
         status = runCatching { ReportOutboxStatus.valueOf(status) }.getOrDefault(ReportOutboxStatus.Pending),
+        serverReportId = serverReportId,
+        lastFailureReason = lastFailureReason,
         createdAtMillis = createdAt,
         updatedAtMillis = updatedAt,
     )
@@ -163,6 +290,8 @@ private fun ReportOutboxData.toEntity(): ReportOutboxEntity =
         photoMimeType = photoMimeType,
         photoSizeBytes = photoSizeBytes,
         status = status.name,
+        serverReportId = serverReportId,
+        lastFailureReason = lastFailureReason,
         createdAt = createdAtMillis,
         updatedAt = updatedAtMillis,
     )

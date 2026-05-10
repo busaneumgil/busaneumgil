@@ -44,6 +44,7 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.feature.map.MapTapPayload
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -83,7 +84,7 @@ internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
     onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit = { _, _, _ -> },
-    onMapClick: (MapCoordinate) -> Unit = {},
+    onMapClick: (MapTapPayload) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(state.integrationState) {
@@ -138,7 +139,7 @@ private fun MapContainer(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
     onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
-    onMapClick: (MapCoordinate) -> Unit,
+    onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (integrationState.providerName) {

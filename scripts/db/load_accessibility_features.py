@@ -743,6 +743,25 @@ def ensure_schema(cursor) -> None:
           ON segment_features(edge_id);
         CREATE INDEX IF NOT EXISTS segment_features_geom_gix
           ON segment_features USING GIST ("geom");
+
+        CREATE SEQUENCE IF NOT EXISTS segment_features_feature_id_seq;
+        ALTER TABLE segment_features
+          ALTER COLUMN feature_id SET DEFAULT nextval('segment_features_feature_id_seq');
+
+        CREATE OR REPLACE FUNCTION source_match_threshold_meter(source_file text)
+        RETURNS double precision
+        LANGUAGE sql
+        IMMUTABLE
+        AS $$
+            SELECT CASE
+                WHEN source_file = '점자블록.csv' THEN 0.0
+                WHEN source_file = '계단.csv' THEN 2.0
+                WHEN source_file = '횡단보도_음향신호기.csv' THEN 30.0
+                WHEN source_file = '횡단보도_신호등.csv' THEN 20.0
+                WHEN source_file = '경사도&표면타입.csv' THEN 20.0
+                ELSE 10.0
+            END
+        $$;
         """
     )
 
@@ -1183,6 +1202,12 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
           END
         FROM accessibility_edge_updates u
         WHERE s.edge_id = u.edge_id;
+
+        SELECT setval(
+          'segment_features_feature_id_seq',
+          COALESCE((SELECT MAX(feature_id) FROM segment_features), 0) + 1,
+          false
+        );
         """
     )
     return insert_count, update_candidate_count

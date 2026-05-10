@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.controller;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,11 +13,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminRoadNetworkEditApplyRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
+import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditService;
 import com.ssafy.e102.global.response.ApiResponse;
 
 import jakarta.validation.Valid;
@@ -36,6 +40,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminMapController {
 
 	private final AdminMapService adminMapService;
+	private final AdminRoadNetworkEditService adminRoadNetworkEditService;
 
 	@Operation(summary = "관리자 검수 구/동 목록 조회", description = "DB에 적재된 admin_areas의 gu/dong 목록을 조회한다.")
 	@GetMapping("/areas")
@@ -53,6 +58,14 @@ public class AdminMapController {
 		@Parameter(description = "조회 개수. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "10000") @Min(1) @Max(20000)
 		int limit) {
 		return ApiResponse.success(adminMapService.getRoadNetwork(gu, dong, limit));
+	}
+
+	@Operation(summary = "관리자 보행 네트워크 편집 반영", description = "관리자 페이지의 add/delete draft를 DB road_nodes, road_segments, segment_features에 반영한다.")
+	@PostMapping("/road-network/edits/apply")
+	public ApiResponse<AdminRoadNetworkEditApplyResponse> applyRoadNetworkEdits(
+		@RequestBody @Valid
+		AdminRoadNetworkEditApplyRequest request) {
+		return ApiResponse.success(adminRoadNetworkEditService.apply(request));
 	}
 
 	@Operation(summary = "관리자 편의시설 조회", description = "DB에 적재된 places를 GeoJSON 형태로 조회한다.")

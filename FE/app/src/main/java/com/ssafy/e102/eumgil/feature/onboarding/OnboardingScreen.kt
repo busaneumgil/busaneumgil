@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -298,6 +299,7 @@ fun LocationTermsScreen(
     onOverFourteenCheckedChange: (Boolean) -> Unit,
     onPrivacyPolicyCheckedChange: (Boolean) -> Unit,
     onPrimaryActionClick: () -> Unit,
+    onRequestDetails: (LocationTermsItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     OnboardingStepScaffold(
@@ -341,6 +343,7 @@ fun LocationTermsScreen(
                     item = locationTermsItem,
                     checked = checked,
                     onCheckedChange = onCheckedChange,
+                    onRequestDetails = { onRequestDetails(locationTermsItem) },
                 )
             }
         }
@@ -430,28 +433,16 @@ private fun LocationTermsAgreementRow(
     item: LocationTermsItem,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    onRequestDetails: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
     val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
+    val showDetailDisclosure = item != LocationTermsItem.OVER_FOURTEEN
+    val detailContentDescription = stringResource(id = R.string.a11y_terms_detail_open)
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {
-                role = Role.Checkbox
-                stateDescription =
-                    if (checked) {
-                        selectedStateDescription
-                    } else {
-                        unselectedStateDescription
-                    }
-            }
-            .toggleable(
-                value = checked,
-                onValueChange = onCheckedChange,
-                role = Role.Checkbox,
-            ),
+        modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.scaleM),
         border =
@@ -473,26 +464,53 @@ private fun LocationTermsAgreementRow(
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(
-                checked = checked,
-                onCheckedChange = null,
-                colors = locationTermsCheckboxColors(),
-            )
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics(mergeDescendants = true) {
+                        role = Role.Checkbox
+                        stateDescription =
+                            if (checked) {
+                                selectedStateDescription
+                            } else {
+                                unselectedStateDescription
+                            }
+                    }
+                    .toggleable(
+                        value = checked,
+                        onValueChange = onCheckedChange,
+                        role = Role.Checkbox,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = null,
+                    colors = locationTermsCheckboxColors(),
+                )
 
-            Text(
-                text = buildLocationTermsLabel(stringResource(id = item.titleRes).stabilizeOnboardingWrap()),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+                Text(
+                    text = buildLocationTermsLabel(stringResource(id = item.titleRes).stabilizeOnboardingWrap()),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
 
-            // Keep the disclosure affordance so detailed terms can be wired later.
-            Icon(
-                painter = painterResource(id = R.drawable.ic_control_next),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-            )
+            if (showDetailDisclosure) {
+                IconButton(
+                    onClick = onRequestDetails,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_control_next),
+                        contentDescription = detailContentDescription,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    )
+                }
+            }
         }
     }
 }

@@ -46,8 +46,9 @@ output "s3_bucket_name" {
 output "route53_records" {
   description = "Route53 records created by this environment."
   value = {
-    api       = local.create_dns ? "api.${var.root_domain}" : null
-    ai        = local.create_dns ? "ai.${var.root_domain}" : null
+    api       = local.create_dns ? local.api_domain : null
+    ai        = local.create_dns ? local.ai_domain : null
+    admin     = local.create_dns ? local.admin_domain : null
     jenkins   = local.create_s1_dns ? "jenkins.${var.root_domain}" : null
     api_dev   = local.create_s1_dns ? "api.dev.${var.root_domain}" : null
     ai_dev    = local.create_s1_dns ? "ai.dev.${var.root_domain}" : null

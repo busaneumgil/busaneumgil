@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
@@ -191,10 +192,14 @@ object RepositoryModule {
     fun provideRouteRepository(
         localDataSource: RouteLocalDataSource,
         remoteDataSource: RouteRemoteDataSource,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): RouteRepository =
         DefaultRouteRepository(
             localDataSource = localDataSource,
             remoteDataSource = remoteDataSource,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideSearchRepository(
@@ -202,21 +207,29 @@ object RepositoryModule {
         localDataSource: SearchLocalDataSource,
         mockDataSource: SearchMockDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): SearchRepository =
         DefaultSearchRepository(
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideReportRepository(
         reportDraftDao: ReportDraftDao,
         reportOutboxDao: ReportOutboxDao,
+        hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
+        accessTokenProvider: suspend () -> String? = { null },
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
+            hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
+            accessTokenProvider = accessTokenProvider,
         )
 
     fun provideVoiceAnalyzeRepository(

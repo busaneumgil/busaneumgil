@@ -56,6 +56,7 @@ fun LocationTermsRoute(
     initialLocationTermsChecked: Boolean = false,
     initialPrivacyPolicyChecked: Boolean = false,
     onConsentCompleted: (LocationTermsAgreement) -> Unit,
+    onRequestDetails: (LocationTermsItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var isServiceTermsChecked by rememberSaveable(initialLocationTermsChecked) {
@@ -120,6 +121,7 @@ fun LocationTermsRoute(
                 onConsentCompleted(uiState.toAgreement())
             }
         },
+        onRequestDetails = onRequestDetails,
         modifier = modifier,
     )
 }

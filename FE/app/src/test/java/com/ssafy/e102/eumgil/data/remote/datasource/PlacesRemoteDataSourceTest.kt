@@ -1,11 +1,15 @@
 package com.ssafy.e102.eumgil.data.remote.datasource
 
+import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
 import com.ssafy.e102.eumgil.core.model.PlaceQuery
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -169,5 +173,89 @@ class PlacesRemoteDataSourceTest {
             assertEquals(listOf("step-free-entrance", "accessible-toilet"), detail?.accessibilityTags)
             assertTrue(detail?.isBookmarked == true)
             assertNull(detail?.description)
+        }
+
+    @Test
+    fun `getMapTappedPlaceDetail posts provider payload and maps external detail response`() =
+        runBlocking {
+            var capturedPath: String? = null
+            var capturedBody: JSONObject? = null
+            var capturedHeaders: Map<String, String> = emptyMap()
+            val dataSource =
+                PlacesRemoteDataSource(
+                    requestExecutor = { _, _, _ ->
+                        error("GET should not be used for map tap detail.")
+                    },
+                    postRequestExecutor = { path, body, headers ->
+                        capturedPath = path
+                        capturedBody = JSONObject(body)
+                        capturedHeaders = headers
+                        HttpJsonResponse(
+                            statusCode = 200,
+                            body =
+                                """
+                                {
+                                  "status": "S2000",
+                                  "data": {
+                                    "bookmarkTargetId": "kakao:poi-123",
+                                    "detailType": "EXTERNAL_POI",
+                                    "placeId": null,
+                                    "provider": "KAKAO",
+                                    "providerPlaceId": "poi-123",
+                                    "name": "Kakao Cafe",
+                                    "category": null,
+                                    "providerCategory": "Cafe",
+                                    "address": "10 Cafe-ro, Busan",
+                                    "point": {
+                                      "lat": 35.1799,
+                                      "lng": 129.0752
+                                    },
+                                    "accessibilityFeatures": [
+                                      {
+                                        "featureType": "accessibleEntrance",
+                                        "isAvailable": true
+                                      }
+                                    ],
+                                    "isBookmarked": false,
+                                    "description": "External Kakao POI"
+                                  },
+                                  "message": "ok"
+                                }
+                                """.trimIndent(),
+                        )
+                    },
+                    accessTokenProvider = { "access-token" },
+                )
+
+            val detail =
+                dataSource.getMapTappedPlaceDetail(
+                    MapPlaceDetailRequest(
+                        latitude = 35.1799,
+                        longitude = 129.0752,
+                        clickType = MapPlaceClickType.POI,
+                        provider = "KAKAO",
+                        providerPlaceId = "poi-123",
+                        nameHint = "Cafe Hint",
+                    ),
+                )
+
+            assertEquals("/places/detail", capturedPath)
+            assertEquals(35.1799, capturedBody?.getDouble("lat") ?: Double.NaN, 0.0)
+            assertEquals(129.0752, capturedBody?.getDouble("lng") ?: Double.NaN, 0.0)
+            assertEquals("POI", capturedBody?.getString("clickType"))
+            assertEquals("KAKAO", capturedBody?.getString("provider"))
+            assertEquals("poi-123", capturedBody?.getString("providerPlaceId"))
+            assertEquals("Cafe Hint", capturedBody?.getString("nameHint"))
+            assertEquals("Bearer access-token", capturedHeaders["Authorization"])
+
+            assertEquals("kakao:poi-123", detail?.bookmarkTargetId)
+            assertEquals(MapPlaceDetailType.EXTERNAL_POI, detail?.detailType)
+            assertEquals("KAKAO", detail?.provider)
+            assertEquals("poi-123", detail?.providerPlaceId)
+            assertEquals("Cafe", detail?.providerCategory)
+            assertEquals("Kakao Cafe", detail?.name)
+            assertEquals("10 Cafe-ro, Busan", detail?.address)
+            assertEquals(listOf("step-free-entrance"), detail?.accessibilityTags)
+            assertEquals("External Kakao POI", detail?.description)
         }
 }

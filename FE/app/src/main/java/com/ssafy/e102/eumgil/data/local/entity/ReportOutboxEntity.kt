@@ -23,6 +23,8 @@ data class ReportOutboxEntity(
     val photoMimeType: String? = null,
     val photoSizeBytes: Long? = null,
     val status: String,
+    val serverReportId: Long? = null,
+    val lastFailureReason: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
 )

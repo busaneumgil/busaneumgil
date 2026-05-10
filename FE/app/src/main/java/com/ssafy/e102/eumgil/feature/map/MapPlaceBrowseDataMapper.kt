@@ -100,9 +100,9 @@ internal object MapPlaceBrowseDataMapper {
                     PlaceFeatureType.ELEVATOR -> AccessibilityTag.ELEVATOR
                     PlaceFeatureType.ACCESSIBLE_TOILET -> AccessibilityTag.ACCESSIBLE_TOILET
                     PlaceFeatureType.ACCESSIBLE_PARKING -> AccessibilityTag.ACCESSIBLE_PARKING
+                    PlaceFeatureType.CHARGING_STATION -> AccessibilityTag.CHARGING_STATION
                     PlaceFeatureType.GUIDANCE_FACILITY -> AccessibilityTag.GUIDANCE_FACILITY
                     PlaceFeatureType.ACCESSIBLE_ROOM -> AccessibilityTag.ACCESSIBLE_ROOM
-                    PlaceFeatureType.CHARGING_STATION -> null
                 }
             }.distinct()
             .sortedBy(::accessibilityTagPriority)
@@ -117,6 +117,9 @@ internal object MapPlaceBrowseDataMapper {
             "elevator" -> AccessibilityTag.ELEVATOR
             "accessible-toilet" -> AccessibilityTag.ACCESSIBLE_TOILET
             "accessible-parking" -> AccessibilityTag.ACCESSIBLE_PARKING
+            "charging-station",
+            "chargingstation",
+            -> AccessibilityTag.CHARGING_STATION
             "guidance-facility" -> AccessibilityTag.GUIDANCE_FACILITY
             "accessible-room" -> AccessibilityTag.ACCESSIBLE_ROOM
             else -> null
@@ -130,14 +133,15 @@ internal object MapPlaceBrowseDataMapper {
             AccessibilityTag.WIDE_ENTRY -> 3
             AccessibilityTag.ELEVATOR -> 4
             AccessibilityTag.ACCESSIBLE_PARKING -> 5
-            AccessibilityTag.ACCESSIBLE_TOILET -> 6
-            AccessibilityTag.GUIDANCE_FACILITY -> 7
-            AccessibilityTag.ACCESSIBLE_ROOM -> 8
-            AccessibilityTag.WHEELCHAIR_TURNING_SPACE -> 9
-            AccessibilityTag.TABLE_SPACING -> 10
-            AccessibilityTag.LOW_HEIGHT_BUTTON -> 11
-            AccessibilityTag.REST_AREA -> 12
-            AccessibilityTag.OPEN_24_HOURS -> 13
+            AccessibilityTag.CHARGING_STATION -> 6
+            AccessibilityTag.ACCESSIBLE_TOILET -> 7
+            AccessibilityTag.GUIDANCE_FACILITY -> 8
+            AccessibilityTag.ACCESSIBLE_ROOM -> 9
+            AccessibilityTag.WHEELCHAIR_TURNING_SPACE -> 10
+            AccessibilityTag.TABLE_SPACING -> 11
+            AccessibilityTag.LOW_HEIGHT_BUTTON -> 12
+            AccessibilityTag.REST_AREA -> 13
+            AccessibilityTag.OPEN_24_HOURS -> 14
         }
 
     private fun PlaceCategory.toFacilityCategory(): FacilityCategory =

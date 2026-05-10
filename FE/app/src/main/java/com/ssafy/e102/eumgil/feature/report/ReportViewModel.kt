@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
+import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
+import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -347,69 +349,157 @@ class ReportViewModel(
             validatedState.copy(
                 screenState = ReportScreenState.Submitting,
                 submitState = ReportSubmitState.Submitting,
-                outboxState = ReportOutboxState.Saving,
+                outboxState =
+                    when (val current = validatedState.outboxState) {
+                        is ReportOutboxState.Saved -> current
+                        else -> ReportOutboxState.Saving
+                    },
             )
 
         viewModelScope.launch {
-            runCatching { reportRepository.saveOutbox(validatedState.toOutboxData()) }
-                .onSuccess { outbox ->
-                    val draftDeleteResult =
-                        validatedState.draftId?.let { draftId ->
-                            runCatching { reportRepository.deleteDraft(draftId) }
-                        }
-                    val isDraftDeleted = draftDeleteResult?.isSuccess ?: true
-                    if (isDraftDeleted) {
-                        latestDraft = null
+            val savedOutbox =
+                when (val current = validatedState.outboxState) {
+                    is ReportOutboxState.Saved -> {
+                        validatedState.toOutboxData().copy(outboxId = current.outboxId)
                     }
-                    mutableUiState.value =
-                        validatedState.copy(
-                            screenState = ReportScreenState.Completed,
-                            currentStep = ReportStep.Complete,
-                            draftId = if (isDraftDeleted) null else validatedState.draftId,
-                            hasExistingDraft = !isDraftDeleted && validatedState.hasExistingDraft,
-                            draftSaveState =
-                                if (isDraftDeleted) {
-                                    ReportDraftSaveState.Idle
-                                } else {
-                                    ReportDraftSaveState.Failed(
-                                        reason = ReportFailureReason.LocalSaveFailed,
-                                    )
-                                },
-                            outboxState = ReportOutboxState.Saved(outboxId = outbox.outboxId),
-                            submitState = ReportSubmitState.Success(reportId = null),
-                            submittedAtMillis = System.currentTimeMillis(),
-                        )
-                    if (isDraftDeleted) {
-                        emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))
-                    } else {
-                        emitUiEvent(ReportUiEvent.ShowSnackbar("제보는 저장됐지만 임시저장 삭제에 실패했습니다."))
+                    else -> {
+                        runCatching { reportRepository.saveOutbox(validatedState.toOutboxData()) }
+                            .getOrElse {
+                                handleLocalSaveFailure(validatedState)
+                                return@launch
+                            }
                     }
-                    emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
-                    emitUiEvent(
-                        ReportUiEvent.NavigateToReportComplete(
-                            reportId = null,
-                            outboxId = outbox.outboxId,
-                        ),
-                    )
-                }.onFailure {
-                    mutableUiState.value =
-                        validatedState.copy(
-                            screenState =
-                                ReportScreenState.Failure(
-                                    reason = ReportFailureReason.LocalSaveFailed,
-                                ),
-                            submitState =
-                                ReportSubmitState.Failed(
-                                    reason = ReportFailureReason.LocalSaveFailed,
-                                ),
-                            outboxState =
-                                ReportOutboxState.Failed(
-                                    reason = ReportFailureReason.LocalSaveFailed,
-                                ),
-                        )
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("제보 저장에 실패했습니다. 다시 시도해 주세요."))
                 }
+
+            val submitResult =
+                runCatching { reportRepository.submitOutboxToServer(savedOutbox.outboxId) }
+                    .getOrElse {
+                        ReportSubmitResult.Failure(
+                            outboxId = savedOutbox.outboxId,
+                            reason = ReportSubmitFailureReason.Unknown,
+                        )
+                    }
+
+            when (submitResult) {
+                is ReportSubmitResult.Success ->
+                    handleServerSubmitSuccess(
+                        validatedState = validatedState,
+                        outboxId = savedOutbox.outboxId,
+                        serverReportId = submitResult.serverReportId,
+                    )
+                is ReportSubmitResult.Skipped ->
+                    handleServerSubmitSkipped(
+                        validatedState = validatedState,
+                        outboxId = savedOutbox.outboxId,
+                    )
+                is ReportSubmitResult.Failure ->
+                    handleServerSubmitFailure(
+                        validatedState = validatedState,
+                        outboxId = savedOutbox.outboxId,
+                        reason = submitResult.reason,
+                    )
+            }
         }
+    }
+
+    private fun handleLocalSaveFailure(validatedState: ReportUiState) {
+        mutableUiState.value =
+            validatedState.copy(
+                screenState =
+                    ReportScreenState.Failure(reason = ReportFailureReason.LocalSaveFailed),
+                submitState =
+                    ReportSubmitState.Failed(reason = ReportFailureReason.LocalSaveFailed),
+                outboxState =
+                    ReportOutboxState.Failed(reason = ReportFailureReason.LocalSaveFailed),
+            )
+        emitUiEvent(ReportUiEvent.ShowSnackbar("제보 저장에 실패했습니다. 다시 시도해 주세요."))
+    }
+
+    private suspend fun handleServerSubmitSuccess(
+        validatedState: ReportUiState,
+        outboxId: String,
+        serverReportId: Long,
+    ) {
+        val isDraftDeleted = deleteDraftIfPresent(validatedState.draftId)
+        mutableUiState.value =
+            validatedState.copy(
+                screenState = ReportScreenState.Completed,
+                currentStep = ReportStep.Complete,
+                draftId = if (isDraftDeleted) null else validatedState.draftId,
+                hasExistingDraft = !isDraftDeleted && validatedState.hasExistingDraft,
+                draftSaveState =
+                    if (isDraftDeleted) {
+                        ReportDraftSaveState.Idle
+                    } else {
+                        ReportDraftSaveState.Failed(reason = ReportFailureReason.LocalSaveFailed)
+                    },
+                outboxState = ReportOutboxState.Saved(outboxId = outboxId),
+                submitState = ReportSubmitState.Success(reportId = serverReportId),
+                submittedAtMillis = System.currentTimeMillis(),
+            )
+        emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 등록했습니다."))
+        emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 서버에 등록되었습니다."))
+        emitUiEvent(
+            ReportUiEvent.NavigateToReportComplete(
+                reportId = serverReportId,
+                outboxId = outboxId,
+            ),
+        )
+    }
+
+    private suspend fun handleServerSubmitSkipped(
+        validatedState: ReportUiState,
+        outboxId: String,
+    ) {
+        val isDraftDeleted = deleteDraftIfPresent(validatedState.draftId)
+        mutableUiState.value =
+            validatedState.copy(
+                screenState = ReportScreenState.Completed,
+                currentStep = ReportStep.Complete,
+                draftId = if (isDraftDeleted) null else validatedState.draftId,
+                hasExistingDraft = !isDraftDeleted && validatedState.hasExistingDraft,
+                draftSaveState =
+                    if (isDraftDeleted) {
+                        ReportDraftSaveState.Idle
+                    } else {
+                        ReportDraftSaveState.Failed(reason = ReportFailureReason.LocalSaveFailed)
+                    },
+                outboxState = ReportOutboxState.Saved(outboxId = outboxId),
+                submitState = ReportSubmitState.Success(reportId = null),
+                submittedAtMillis = System.currentTimeMillis(),
+            )
+        emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))
+        emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
+        emitUiEvent(
+            ReportUiEvent.NavigateToReportComplete(
+                reportId = null,
+                outboxId = outboxId,
+            ),
+        )
+    }
+
+    private fun handleServerSubmitFailure(
+        validatedState: ReportUiState,
+        outboxId: String,
+        reason: ReportSubmitFailureReason,
+    ) {
+        val mappedReason = reason.toFailureReason()
+        mutableUiState.value =
+            validatedState.copy(
+                screenState = ReportScreenState.Failure(reason = mappedReason),
+                outboxState = ReportOutboxState.Saved(outboxId = outboxId),
+                submitState = ReportSubmitState.Failed(reason = mappedReason),
+            )
+        emitUiEvent(ReportUiEvent.ShowSnackbar(mappedReason.toSubmitFailureMessage()))
+    }
+
+    private suspend fun deleteDraftIfPresent(draftId: String?): Boolean {
+        if (draftId.isNullOrBlank()) return true
+        val deleteResult = runCatching { reportRepository.deleteDraft(draftId) }
+        if (deleteResult.isSuccess) {
+            latestDraft = null
+        }
+        return deleteResult.isSuccess
     }
 
     private fun markSubmitValidationFailed(validatedState: ReportUiState) {
@@ -751,4 +841,22 @@ private fun validateDescription(description: String): ReportDescriptionError? =
         ReportDescriptionError.TooLong
     } else {
         null
+    }
+
+private fun ReportSubmitFailureReason.toFailureReason(): ReportFailureReason =
+    when (this) {
+        ReportSubmitFailureReason.Unauthorized -> ReportFailureReason.Unauthorized
+        ReportSubmitFailureReason.InvalidInput -> ReportFailureReason.InvalidInput
+        ReportSubmitFailureReason.Network -> ReportFailureReason.NetworkUnavailable
+        ReportSubmitFailureReason.Unknown -> ReportFailureReason.ServerSubmitFailed
+    }
+
+private fun ReportFailureReason.toSubmitFailureMessage(): String =
+    when (this) {
+        ReportFailureReason.Unauthorized -> "로그인이 만료되었습니다. 다시 로그인 후 시도해 주세요."
+        ReportFailureReason.InvalidInput -> "입력값을 확인해 주세요."
+        ReportFailureReason.NetworkUnavailable -> "네트워크 연결을 확인하고 다시 시도해 주세요."
+        ReportFailureReason.ServerSubmitFailed -> "제보 등록에 실패했습니다. 잠시 후 다시 시도해 주세요."
+        ReportFailureReason.LocalSaveFailed -> "제보 저장에 실패했습니다. 다시 시도해 주세요."
+        else -> "제보 등록에 실패했습니다. 다시 시도해 주세요."
     }

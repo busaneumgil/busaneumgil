@@ -226,4 +226,19 @@ class MapFacilityDetailSheetConfigurationTest {
             File("src/main/res/drawable/ic_place_food_cafe.png").exists(),
         )
     }
+
+    @Test
+    fun `facility detail route entry button reuses the active current location icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Facility detail route entry CTA should reuse the active current-location button icon asset so it renders as a filled white icon on the primary CTA.",
+            source.contains("iconRes = R.drawable.ic_route_start_navigation_button"),
+        )
+        assertTrue(
+            "The active current-location button asset should exist before the facility detail CTA reuses it.",
+            File("src/main/res/drawable/ic_route_start_navigation_button.png").exists(),
+        )
+    }
 }

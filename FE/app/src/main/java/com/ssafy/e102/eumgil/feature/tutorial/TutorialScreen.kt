@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.feature.tutorial
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -41,7 +39,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
@@ -49,7 +46,6 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderInfo
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceInfo
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceSubtle
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextTertiary
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
@@ -95,7 +91,8 @@ fun TutorialScreen(
         Column(
             modifier =
                 Modifier
-                    .weight(1f),
+                    .weight(1f)
+                    .padding(top = TutorialLayoutDefaults.headerTopPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.headerVisualGap),
         ) {
@@ -248,7 +245,7 @@ private fun TutorialVisualPanel(
                         vertical = TutorialLayoutDefaults.visualPanelVerticalPadding,
                     ),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.sceneContentVerticalGap),
         ) {
             TutorialFlatIllustration(
                 content = content,
@@ -270,7 +267,7 @@ private fun TutorialFlatIllustration(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
     ) {
         TutorialIllustrationScene(content = content)
         if (content.scene != TutorialIllustrationSceneType.DESTINATION_SEARCH && content.chips.isNotEmpty()) {
@@ -285,37 +282,33 @@ private fun TutorialIllustrationScene(content: TutorialVisualContent) {
     when (content.scene) {
         TutorialIllustrationSceneType.DESTINATION_SEARCH -> TutorialDestinationSearchScene(content = content)
         TutorialIllustrationSceneType.ROUTE_COMPARISON -> TutorialRouteComparisonScene(content = content)
-        TutorialIllustrationSceneType.REPORT_SUBMISSION -> TutorialReportSubmissionScene(content = content)
+        TutorialIllustrationSceneType.REPORT_SUBMISSION -> TutorialReportSubmissionScene()
     }
 }
 
 @Composable
 private fun TutorialDestinationSearchScene(content: TutorialVisualContent) {
-    Box(
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .height(TutorialLayoutDefaults.illustrationHeight),
-        contentAlignment = Alignment.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.destinationControlVerticalGap),
     ) {
         TutorialSearchBar(
             iconRes = content.heroIconRes,
             labelRes = content.primaryLabelRes,
             trailingIconRes = R.drawable.ic_permission_mic,
-            modifier = Modifier.align(Alignment.TopCenter),
         )
         TutorialFilterChipRow(
             chips = content.chips,
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = TutorialLayoutDefaults.destinationFilterTopPadding),
         )
-        TutorialDestinationMapPreview(
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = TutorialLayoutDefaults.destinationMapTopPadding),
+        TutorialDestinationResultPanel(content = content)
+        TutorialStatusStrip(
+            iconRes = R.drawable.ic_nav_category_grid,
+            titleRes = R.string.tutorial_destination_status_title,
+            valueRes = R.string.tutorial_destination_status_value,
         )
     }
 }
@@ -328,7 +321,7 @@ private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
                 .fillMaxWidth()
                 .height(TutorialLayoutDefaults.illustrationHeight),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
     ) {
         TutorialRouteCard(
             iconRes = content.heroIconRes,
@@ -336,35 +329,64 @@ private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
             time = stringResource(id = R.string.tutorial_route_recommended_time),
             selected = true,
         )
-        Spacer(modifier = Modifier.height(EumSpacing.small))
+        Spacer(modifier = Modifier.height(TutorialLayoutDefaults.sceneContentVerticalGap))
         TutorialRouteCard(
             iconRes = R.drawable.ic_route_time,
             labelRes = content.secondaryLabelRes,
             time = stringResource(id = R.string.tutorial_route_efficient_time),
             selected = false,
         )
+        Spacer(modifier = Modifier.height(TutorialLayoutDefaults.sceneContentVerticalGap))
+        TutorialStatusStrip(
+            iconRes = R.drawable.ic_map_selected_pin_blue,
+            titleRes = R.string.tutorial_route_status_title,
+            valueRes = R.string.tutorial_route_status_value,
+        )
     }
 }
 
 @Composable
-private fun TutorialReportSubmissionScene(content: TutorialVisualContent) {
+private fun TutorialReportSubmissionScene() {
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .height(TutorialLayoutDefaults.illustrationHeight),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.reportGridButtonGap),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
-            TutorialReportTile(iconRes = R.drawable.ic_route_tactile_blocks, labelRes = R.string.tutorial_report_chip_tactile)
-            TutorialReportTile(iconRes = R.drawable.ic_report_sidewalk, labelRes = R.string.tutorial_report_chip_sidewalk)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.sceneContentVerticalGap),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.sceneContentVerticalGap)) {
+                TutorialReportTile(
+                    iconRes = R.drawable.ic_report_stairs,
+                    labelRes = R.string.tutorial_report_stairs_step,
+                )
+                TutorialReportTile(
+                    iconRes = R.drawable.ic_report_tactile_damage,
+                    labelRes = R.string.tutorial_report_braille_block,
+                    selected = true,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.sceneContentVerticalGap)) {
+                TutorialReportTile(
+                    iconRes = R.drawable.ic_report_sidewalk,
+                    labelRes = R.string.tutorial_report_sidewalk_missing,
+                )
+                TutorialReportTile(
+                    iconRes = R.drawable.ic_report_ramp,
+                    labelRes = R.string.tutorial_report_ramp,
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(EumSpacing.small))
-        Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
-            TutorialReportTile(iconRes = R.drawable.ic_status_warning, labelRes = R.string.tutorial_report_chip_damage)
-            TutorialReportTile(iconRes = content.heroIconRes, labelRes = R.string.tutorial_report_action_submit, selected = true)
-        }
+        TutorialStatusStrip(
+            iconRes = R.drawable.ic_report_tactile_damage,
+            titleRes = R.string.tutorial_report_status_title,
+            valueRes = R.string.tutorial_report_status_value,
+        )
+        TutorialReportSubmitButton()
     }
 }
 
@@ -378,7 +400,8 @@ private fun TutorialSearchBar(
     Surface(
         modifier =
             modifier
-                .width(TutorialLayoutDefaults.searchBarWidth)
+                .fillMaxWidth()
+                .widthIn(max = TutorialLayoutDefaults.searchBarMaxWidth)
                 .height(TutorialLayoutDefaults.searchBarHeight),
         shape = RoundedCornerShape(EumRadius.full),
         color = EumWhite,
@@ -414,147 +437,134 @@ private fun TutorialSearchBar(
 }
 
 @Composable
-private fun TutorialDestinationMapPreview(modifier: Modifier = Modifier) {
+private fun TutorialDestinationResultPanel(content: TutorialVisualContent) {
     Surface(
         modifier =
-            modifier
-                .width(TutorialLayoutDefaults.destinationMapWidth)
-                .height(TutorialLayoutDefaults.destinationMapHeight),
-        shape = RoundedCornerShape(EumRadius.large),
+            Modifier
+                .fillMaxWidth()
+                .widthIn(max = TutorialLayoutDefaults.destinationResultPanelMaxWidth),
+        shape = RoundedCornerShape(EumRadius.small),
         color = EumWhite,
         border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
         shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(EumSpacing.small),
+        Column(
+            modifier = Modifier.padding(EumSpacing.small),
+            verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.destinationResultPanelGap),
         ) {
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapRoadWidth,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 18.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_nav_facility),
+                    contentDescription = null,
+                    modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+                    tint = EumPrimary600,
+                )
+                Text(
+                    text = stringResource(id = content.secondaryLabelRes),
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(id = R.string.tutorial_destination_result_count),
+                    color = EumPrimary600,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            TutorialDestinationResultRow(
+                iconRes = content.chips[0].iconRes,
+                labelRes = content.chips[0].labelRes,
+                statusRes = R.string.tutorial_destination_result_nearby,
             )
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapRoadWidth,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 78.dp),
-            )
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 52.dp),
-            )
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 58.dp),
-            )
-            TutorialMapRoute(
-                width = 128.dp,
-                height = TutorialLayoutDefaults.destinationMapRouteWidth,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 56.dp, top = 52.dp),
-            )
-            TutorialMapRoute(
-                width = TutorialLayoutDefaults.destinationMapRouteWidth,
-                height = 42.dp,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 180.dp, top = 52.dp),
-            )
-            TutorialMapNode(
-                selected = false,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 42.dp, top = 42.dp),
-            )
-            TutorialMapNode(
-                selected = true,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 166.dp, top = 82.dp),
+            TutorialDestinationResultRow(
+                iconRes = content.chips[1].iconRes,
+                labelRes = content.chips[1].labelRes,
+                statusRes = R.string.tutorial_destination_result_available,
             )
         }
     }
 }
 
 @Composable
-private fun TutorialMapRoad(
-    width: Dp,
-    height: Dp,
-    modifier: Modifier = Modifier,
+private fun TutorialDestinationResultRow(
+    @DrawableRes iconRes: Int,
+    @StringRes labelRes: Int,
+    @StringRes statusRes: Int,
 ) {
-    Box(
-        modifier =
-            modifier
-                .width(width)
-                .height(height)
-                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                .background(TutorialLayoutDefaults.destinationMapRoadColor),
-    )
-}
-
-@Composable
-private fun TutorialMapRoute(
-    width: Dp,
-    height: Dp,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .width(width)
-                .height(height)
-                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                .background(EumPrimary600),
-    )
-}
-
-@Composable
-private fun TutorialMapNode(
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .size(
-                    if (selected) {
-                        TutorialLayoutDefaults.destinationMapSelectedNodeSize
-                    } else {
-                        TutorialLayoutDefaults.destinationMapNodeSize
-                    },
-                )
-                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                .background(if (selected) EumPrimary600 else EumWhite),
-        contentAlignment = Alignment.Center,
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(TutorialLayoutDefaults.destinationMapNodeDotSize)
-                    .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                    .background(if (selected) EumWhite else EumPrimary600),
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+            tint = EumPrimary600,
         )
+        Text(
+            text = stringResource(id = labelRes),
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = stringResource(id = statusRes),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun TutorialStatusStrip(
+    @DrawableRes iconRes: Int,
+    @StringRes titleRes: Int,
+    @StringRes valueRes: Int,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .widthIn(max = TutorialLayoutDefaults.statusStripMaxWidth)
+                .height(TutorialLayoutDefaults.statusStripHeight),
+        shape = RoundedCornerShape(EumRadius.small),
+        color = TutorialLayoutDefaults.statusStripContainerColor,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+                tint = EumPrimary600,
+            )
+            Text(
+                text = stringResource(id = titleRes),
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = stringResource(id = valueRes),
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = TutorialLayoutDefaults.statusStripValueAlpha),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.End,
+            )
+        }
     }
 }
 
@@ -672,6 +682,29 @@ private fun TutorialReportTile(
 }
 
 @Composable
+private fun TutorialReportSubmitButton() {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .widthIn(max = TutorialLayoutDefaults.reportSubmitButtonMaxWidth)
+                .height(TutorialLayoutDefaults.reportSubmitButtonHeight),
+        shape = RoundedCornerShape(EumRadius.small),
+        color = EumPrimary600,
+        shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = stringResource(id = R.string.tutorial_report_action_submit),
+                color = EumWhite,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
 private fun TutorialFilterChipRow(
     chips: List<TutorialFilterChip>,
     modifier: Modifier = Modifier,
@@ -679,9 +712,14 @@ private fun TutorialFilterChipRow(
     Row(
         modifier =
             modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+                .widthIn(max = TutorialLayoutDefaults.searchBarMaxWidth)
+                .fillMaxWidth(),
+        horizontalArrangement =
+            Arrangement.spacedBy(
+                space = TutorialLayoutDefaults.filterChipGap,
+                alignment = Alignment.CenterHorizontally,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         chips.forEach { chip ->
             TutorialFilterChip(chip = chip)
@@ -690,11 +728,16 @@ private fun TutorialFilterChipRow(
 }
 
 @Composable
-private fun TutorialFilterChip(chip: TutorialFilterChip) {
+private fun TutorialFilterChip(
+    chip: TutorialFilterChip,
+    modifier: Modifier = Modifier,
+) {
     Surface(
-        shape = RoundedCornerShape(EumRadius.small),
-        color = EumSurfaceInfo,
-        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+        modifier = modifier.heightIn(min = TutorialLayoutDefaults.filterChipMinHeight),
+        shape = RoundedCornerShape(TutorialLayoutDefaults.filterChipCornerRadius),
+        color = EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, TutorialLayoutDefaults.filterChipBorderColor),
+        shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
     ) {
         Row(
             modifier =
@@ -716,6 +759,8 @@ private fun TutorialFilterChip(chip: TutorialFilterChip) {
                 color = EumPrimary600,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                lineHeight = TutorialLayoutDefaults.filterChipLabelLineHeight,
             )
         }
     }
@@ -751,16 +796,12 @@ private fun TutorialStep.visualContent(): TutorialVisualContent =
                 chips =
                     listOf(
                         TutorialFilterChip(
-                            iconRes = R.drawable.ic_place_restroom,
+                            iconRes = R.drawable.ic_user_wheelchair_compact,
                             labelRes = R.string.tutorial_filter_toilet,
                         ),
                         TutorialFilterChip(
-                            iconRes = R.drawable.ic_lowvision_category_elevator,
+                            iconRes = R.drawable.ic_place_elevator,
                             labelRes = R.string.tutorial_filter_elevator,
-                        ),
-                        TutorialFilterChip(
-                            iconRes = R.drawable.ic_place_parking,
-                            labelRes = R.string.tutorial_filter_parking,
                         ),
                     ),
             )
@@ -823,20 +864,38 @@ private fun TutorialPagerIndicator(
 internal object TutorialLayoutDefaults {
     const val totalStepCount: Int = TutorialStep.TOTAL_STEPS
     const val supportingItemCount: Int = 0
-    const val destinationFilterChipCount: Int = 3
+    const val destinationFilterChipCount: Int = 2
     const val routeAccessibilityChipCount: Int = 0
-    const val reportCategoryChipCount: Int = 0
+    const val reportCategoryChipCount: Int = 4
     const val showsEmphasisChip: Boolean = false
     const val usesLayeredFlatIllustration: Boolean = true
+    const val usesGeneratedBitmapIllustration: Boolean = false
     const val usesWhitePanelFrame: Boolean = false
     const val distinctIllustrationSceneCount: Int = 3
     const val usesNavigationSafeZone: Boolean = true
     const val usesIllustrationHalo: Boolean = false
     const val destinationFiltersAttachToSearch: Boolean = true
     const val destinationSearchShowsMic: Boolean = true
-    const val destinationShowsMapPreview: Boolean = true
-    const val destinationMapAttachesBelowFilters: Boolean = true
-    const val routeDescriptionBreaksAfterSettingComma: Boolean = true
+    const val destinationShowsMapPreview: Boolean = false
+    const val destinationUsesSearchAndFilterOnly: Boolean = true
+    const val destinationFilterRowScrollable: Boolean = false
+    const val destinationFilterUsesLatestMapIcons: Boolean = true
+    const val destinationFilterUsesOriginalMapChipShape: Boolean = true
+    const val destinationShowsFilterResultPanel: Boolean = true
+    const val destinationFilterRowCount: Int = 1
+    const val usesServiceLikeStatusStrip: Boolean = true
+    const val statusStripUsesTransparentLayer: Boolean = true
+    const val statusStripUsesSoftBlueLayer: Boolean = true
+    const val statusStripUsesBorder: Boolean = false
+    const val statusStripUsesLowEmphasisValue: Boolean = true
+    const val routeStatusUsesMapMarkerIcon: Boolean = true
+    const val statusStripCountPerScene: Int = 1
+    const val routeDescriptionBreaksAfterSettingComma: Boolean = false
+    const val routeDescriptionUsesSingleLine: Boolean = true
+    const val routeCopyUsesRouteWording: Boolean = true
+    const val reportUsesLatestReportTypeIcons: Boolean = true
+    const val reportHighlightsSelectedCategory: Boolean = true
+    const val reportShowsSubmitButtonBelowGrid: Boolean = true
     const val reportDescriptionMentionsRouteContribution: Boolean = true
     const val visualPanelWeight: Float = 1f
     const val hasHeroIconBackground: Boolean = false
@@ -849,9 +908,10 @@ internal object TutorialLayoutDefaults {
     val visualPanelButtonGap = 12.dp
     val visualPanelMaxWidth = 420.dp
     val visualPanelVerticalPadding = 4.dp
+    val headerTopPadding = 20.dp
 
     val headerSectionGap = 8.dp
-    val headerVisualGap = 6.dp
+    val headerVisualGap = 24.dp
     val headerTitleLineHeight = 30.sp
     val headerHeadlineLineHeight = 34.sp
     val headerDescriptionLineHeight = 22.sp
@@ -860,45 +920,50 @@ internal object TutorialLayoutDefaults {
     val microGap = 4.dp
     val hairlineWidth = 1.dp
 
-    val illustrationHeight = 260.dp
+    val illustrationHeight = 316.dp
     val illustrationContentGap = 12.dp
+    val sceneContentVerticalGap = 12.dp
     val heroIconSize = 56.dp
     val mockPhoneElevation = 2.dp
-    val searchBarWidth = 270.dp
+    val searchBarMaxWidth = 340.dp
     val searchBarHeight = 58.dp
-    val destinationFilterTopPadding = 66.dp
-    val destinationMapTopPadding = 116.dp
-    val destinationMapWidth = 300.dp
-    val destinationMapHeight = 128.dp
-    val destinationMapRoadWidth = 6.dp
-    val destinationMapRouteWidth = 7.dp
-    val destinationMapWideRoadWidth = 268.dp
-    val destinationMapTallRoadHeight = 104.dp
-    val destinationMapNodeSize = 18.dp
-    val destinationMapSelectedNodeSize = 22.dp
-    val destinationMapNodeDotSize = 8.dp
+    val destinationControlVerticalGap = 12.dp
+    val destinationResultPanelMaxWidth = 340.dp
+    val destinationResultPanelGap = 12.dp
+    val statusStripMaxWidth = 340.dp
+    val statusStripHeight = 40.dp
+    val statusStripContainerAlpha = 0.86f
+    val statusStripValueAlpha = 0.72f
     val floatingPanelHeight = 56.dp
     val floatingPanelElevation = 3.dp
     val floatingPanelIconSize = 22.dp
     val smallCardWidth = 72.dp
     val smallCardHeight = 60.dp
     val smallCardIconSize = 28.dp
-    val routeCardHeight = 78.dp
+    val routeCardHeight = 96.dp
     val routeCardBorderWidth = 2.dp
     val radioDotOuterSize = 24.dp
     val radioDotInnerSize = 12.dp
-    val reportTileWidth = 132.dp
-    val reportTileHeight = 92.dp
-    val filterChipHorizontalPadding = 12.dp
-    val filterChipVerticalPadding = 8.dp
+    val reportTileWidth = 152.dp
+    val reportTileHeight = 100.dp
+    val reportGridButtonGap = 12.dp
+    val reportSubmitButtonMaxWidth = 340.dp
+    val reportSubmitButtonHeight = 50.dp
+    val filterChipHorizontalPadding = 13.dp
+    val filterChipVerticalPadding = 9.dp
     val filterChipIconSize = 18.dp
-    val filterChipGap = 6.dp
+    val filterChipGap = 8.dp
+    val filterChipMinHeight = 38.dp
+    val filterChipCornerRadius = 8.dp
+    val filterChipLabelLineHeight = 16.sp
+    val filterChipRowMaxItemCount: Int = 2
 
     val indicatorSelectedWidth = 70.dp
     val indicatorDefaultWidth = 54.dp
     val indicatorHeight = 6.dp
     val pillCorner = 99.dp
 
-    val destinationMapRoadColor = Color(0xFFE7ECF5)
+    val filterChipBorderColor = EumPrimary600.copy(alpha = 0.28f)
     val indicatorTrackColor = Color(0xFFD9DDE7)
+    val statusStripContainerColor = Color(0xFFEAF4FF).copy(alpha = statusStripContainerAlpha)
 }

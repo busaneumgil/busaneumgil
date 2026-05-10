@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.map
 
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
@@ -28,12 +29,29 @@ data class MapUiState(
 
 data class MapFacilityDetailSheetState(
     val detail: FacilityDetailSeed? = null,
+    val mapTapDetail: MapTappedPlaceDetail? = null,
+    val mapTapNameHint: String? = null,
+    val isMapTapDetailLoading: Boolean = false,
+    val mapTapDetailErrorMessage: String? = null,
     val isBookmarked: Boolean = false,
     val isBookmarkUpdating: Boolean = false,
     val bookmarkErrorMessage: String? = null,
 ) {
     val isVisible: Boolean
-        get() = detail != null
+        get() = detail != null || mapTapDetail != null || isMapTapDetailLoading || mapTapDetailErrorMessage != null
+}
+
+data class MapTapPayload(
+    val coordinate: MapCoordinate,
+    val clickType: MapTapClickType = MapTapClickType.ADDRESS,
+    val provider: String? = null,
+    val providerPlaceId: String? = null,
+    val nameHint: String? = null,
+)
+
+enum class MapTapClickType {
+    POI,
+    ADDRESS,
 }
 
 sealed interface MapUiAction {
@@ -64,7 +82,7 @@ sealed interface MapUiAction {
     ) : MapUiAction
 
     data class MapTapped(
-        val coordinate: MapCoordinate,
+        val payload: MapTapPayload,
     ) : MapUiAction
 
     data class ViewportCameraChanged(

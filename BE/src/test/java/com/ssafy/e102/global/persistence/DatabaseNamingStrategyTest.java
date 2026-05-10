@@ -30,6 +30,7 @@ import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.entity.HazardReportImage;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.RouteRating;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
@@ -60,6 +61,7 @@ class DatabaseNamingStrategyTest {
 		RoadSegment.class,
 		AdminArea.class,
 		SegmentFeature.class,
+		RouteRating.class,
 		RouteSession.class,
 		SubwayStation.class,
 		SubwayStationElevator.class,
@@ -212,8 +214,8 @@ class DatabaseNamingStrategyTest {
 	}
 
 	@Test
-	@DisplayName("경로 세션 엔티티의 물리 컬럼명은 snake_case다")
-	void routeSessionColumnsUseSnakeCase() {
+	@DisplayName("경로 세션과 평가 엔티티의 물리 컬럼명은 snake_case다")
+	void routeSessionAndRatingColumnsUseSnakeCase() {
 		assertThat(physicalColumnName(RouteSession.class, "sessionId")).isEqualTo("session_id");
 		assertThat(joinColumnName(RouteSession.class, "user")).isEqualTo("user_id");
 		assertThat(physicalColumnName(RouteSession.class, "routeId")).isEqualTo("route_id");
@@ -224,6 +226,15 @@ class DatabaseNamingStrategyTest {
 			.isEqualTo("route_snapshot_json");
 		assertThat(physicalColumnName(RouteSession.class, "status")).isEqualTo("status");
 		assertThat(uniqueColumnNames(RouteSession.class)).contains("user_id", "active_route_key");
+
+		assertThat(physicalColumnName(RouteRating.class, "ratingId")).isEqualTo("rating_id");
+		assertThat(joinColumnName(RouteRating.class, "user")).isEqualTo("user_id");
+		assertThat(joinColumnName(RouteRating.class, "routeSession")).isEqualTo("session_id");
+		assertThat(physicalColumnName(RouteRating.class, "routeId")).isEqualTo("route_id");
+		assertThat(physicalColumnName(RouteRating.class, "score")).isEqualTo("score");
+		assertThat(physicalColumnName(RouteRating.class, "routeContextJson"))
+			.isEqualTo("route_context_json");
+		assertThat(uniqueColumnNames(RouteRating.class)).contains("session_id");
 	}
 
 	@Test
@@ -283,6 +294,7 @@ class DatabaseNamingStrategyTest {
 			RoadSegment.class,
 			AdminArea.class,
 			SegmentFeature.class,
+			RouteRating.class,
 			RouteSession.class,
 			SubwayStation.class,
 			SubwayTimetable.class);

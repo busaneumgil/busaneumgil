@@ -47,4 +47,6 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Integer> {
 		UUID userId,
 		@Param("placeIds")
 		Collection<Long> placeIds);
+
+	void deleteAllByUser_UserId(UUID userId);
 }

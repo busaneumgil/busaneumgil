@@ -30,5 +30,8 @@ class RouteExceptionTest {
 		assertThat(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus()).isEqualTo("EX5020");
 		assertThat(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT.getHttpStatus()).isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
 		assertThat(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT.getStatus()).isEqualTo("EX5040");
+		assertThat(RouteErrorCode.ROUTE_SESSION_NOT_COMPLETED.getHttpStatus()).isEqualTo(HttpStatus.CONFLICT);
+		assertThat(RouteErrorCode.ROUTE_SESSION_NOT_COMPLETED.getStatus()).isEqualTo("RT4092");
+		assertThat(RouteErrorCode.ROUTE_SESSION_NOT_COMPLETED.getMessage()).isEqualTo("종료된 안내 세션만 평가할 수 있습니다.");
 	}
 }

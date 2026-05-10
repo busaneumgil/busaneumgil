@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import {
+  applyAdminRoadNetworkEdits,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
   fetchAdminRoadNetworkPayload,
@@ -19,7 +20,7 @@ import type { AdminMeResponse, AdminPage, FacilityFeature, SegmentFeature } from
 const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
     label: "보행 네트워크",
-    description: "SIDE_LINE/CROSS_WALK를 구·동 단위로 편집하고 CSV 반영 전 draft를 검수합니다.",
+    description: "SIDE_LINE/CROSS_WALK를 구·동 단위로 편집하고 DB 반영 전 draft를 검수합니다.",
   },
   facilities: {
     label: "편의시설",
@@ -64,10 +65,12 @@ function AdminApp() {
     clearDraft,
     requestReview,
     addDraftEdit,
+    markApplied,
   } = useAdminStore();
 
   const hasToken = Boolean(accessToken);
   const isAdminAuthenticated = hasToken && adminPrincipal?.role === "ADMIN";
+  const currentAdmin = adminPrincipal;
 
   useEffect(() => {
     setRoadviewDock({
@@ -100,6 +103,24 @@ function AdminApp() {
     retry: false,
   });
 
+  const applyRoadNetworkMutation = useMutation({
+    mutationFn: () => applyAdminRoadNetworkEdits({
+      version: "ADMIN-draft-v1",
+      assignmentId: `${selectedGu}:${selectedDong}`,
+      gu: selectedGu,
+      dong: selectedDong,
+      role: currentAdmin?.role ?? "ADMIN",
+      createdAt: new Date().toISOString(),
+      edits: draftEdits,
+    }, accessToken),
+    onSuccess: () => {
+      markApplied();
+      setSelectedSegment(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
+    },
+  });
+
   const filteredDongs = useMemo(() => {
     const areas = areasQuery.data ?? [];
     return areas.filter((area) => area.gu === selectedGu);
@@ -111,8 +132,6 @@ function AdminApp() {
     setTokenInput("");
     setAdminPrincipal(null);
   }
-
-  const currentAdmin = adminPrincipal;
 
   if (!isAdminAuthenticated || !currentAdmin) {
     return (
@@ -281,10 +300,26 @@ function AdminApp() {
               </section>
               <section className="panel-section">
                 <h3>검수 흐름</h3>
-                <button className="primary" onClick={requestReview}>
+                <button
+                  className="primary"
+                  onClick={() => applyRoadNetworkMutation.mutate()}
+                  disabled={!draftEdits.length || applyRoadNetworkMutation.isPending}
+                >
+                  {applyRoadNetworkMutation.isPending ? "DB 반영 중" : "DB 반영"}
+                </button>
+                <button onClick={requestReview} disabled={!draftEdits.length || applyRoadNetworkMutation.isPending}>
                   Request Review
                 </button>
-                <p className="muted">DB 수정 반영은 후속 API에서 처리합니다. 현재 화면은 DB 조회와 로컬 draft 확인만 지원합니다.</p>
+                {applyRoadNetworkMutation.data && (
+                  <p className="muted">
+                    반영 완료: 추가 {applyRoadNetworkMutation.data.addedSegments}, 삭제 {applyRoadNetworkMutation.data.deletedSegments},
+                    생성 node {applyRoadNetworkMutation.data.createdNodes}, snap {applyRoadNetworkMutation.data.snappedNodes}
+                  </p>
+                )}
+                {applyRoadNetworkMutation.error && (
+                  <p className="error-box">{applyRoadNetworkMutation.error.message}</p>
+                )}
+                <p className="muted">로컬 draft를 DB road_nodes, road_segments, segment_features에 트랜잭션으로 반영합니다.</p>
               </section>
             </aside>
           </div>

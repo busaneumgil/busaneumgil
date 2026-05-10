@@ -253,6 +253,20 @@ export interface ManualEditDocument {
   edits: EditAction[];
 }
 
+export interface RoadNetworkEditApplyResponse {
+  addedSegments: number;
+  deletedSegments: number;
+  createdNodes: number;
+  snappedNodes: number;
+  removedOrphanNodes: number;
+  createdSegmentFeatures: number;
+  updatedSegmentAttributes: number;
+  addedEdgeIds: number[];
+  deletedEdgeIds: number[];
+  createdNodeIds: number[];
+  snappedNodeIds: number[];
+}
+
 export type HazardReportStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type HazardReportType =

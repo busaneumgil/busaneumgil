@@ -18,6 +18,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteRatingRepository;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
+import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.repository.UserRepository;
 
@@ -45,6 +46,9 @@ public class RouteRatingService {
 	public RouteRatingResponse rate(UUID userId, RouteRatingRequest request) {
 		RouteSession routeSession = getRouteSession(userId, request.sessionId());
 		JsonNode routeContextJson = routeSession.getRouteSnapshotJson();
+		if (routeContextJson == null || routeContextJson.isNull()) {
+			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+		}
 
 		RouteRating routeRating = routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId())
 			.map(existingRating -> {
@@ -61,6 +65,9 @@ public class RouteRatingService {
 			.orElseThrow(() -> new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND));
 		if (!Objects.equals(routeSession.getUser().getUserId(), userId)) {
 			throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
+		}
+		if (routeSession.getStatus() != RouteSessionStatus.COMPLETED) {
+			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_COMPLETED);
 		}
 		return routeSession;
 	}

@@ -973,8 +973,15 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
     cursor.execute(
         f"""
         SELECT count(*)
-        FROM accessibility_feature_matches
-        WHERE feature_type IN ({position_event_feature_type_sql()})
+        FROM (
+          SELECT DISTINCT ON (edge_id, feature_type, COALESCE(state, ''))
+            edge_id,
+            feature_type,
+            state
+          FROM accessibility_feature_matches
+          WHERE feature_type IN ({position_event_feature_type_sql()})
+          ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id, match_distance_meter
+        ) deduped_segment_features
         """
     )
     insert_count = int(cursor.fetchone()[0])
@@ -990,15 +997,26 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
 
         INSERT INTO segment_features (feature_id, edge_id, feature_type, "geom", state, value_number)
         SELECT
-          row_number() OVER (ORDER BY source_row_id, edge_id)::bigint AS feature_id,
+          row_number() OVER (ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id)::bigint AS feature_id,
           edge_id,
           feature_type,
           geom,
           state,
           value_number
-        FROM accessibility_feature_matches
-        WHERE feature_type IN ({position_event_feature_type_sql()})
-        ORDER BY source_row_id, edge_id;
+        FROM (
+          SELECT DISTINCT ON (edge_id, feature_type, COALESCE(state, ''))
+            source_row_id,
+            edge_id,
+            feature_type,
+            geom,
+            state,
+            value_number,
+            match_distance_meter
+          FROM accessibility_feature_matches
+          WHERE feature_type IN ({position_event_feature_type_sql()})
+          ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id, match_distance_meter
+        ) deduped_segment_features
+        ORDER BY edge_id, feature_type, COALESCE(state, ''), source_row_id;
 
         CREATE TEMP TABLE accessibility_edge_updates AS
         SELECT

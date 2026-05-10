@@ -34,7 +34,12 @@ import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
 import com.ssafy.e102.domain.bookmark.service.PlaceBookmarkService;
 import com.ssafy.e102.domain.report.service.AdminHazardReportService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
+import com.ssafy.e102.domain.route.service.RerouteService;
 import com.ssafy.e102.domain.route.service.RouteRatingService;
+import com.ssafy.e102.domain.route.service.RouteSelectService;
+import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
+import com.ssafy.e102.domain.route.service.TransitRefreshService;
+import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
 import com.ssafy.e102.domain.user.repository.UserRepository;
@@ -87,6 +92,21 @@ class SecurityConfigTest {
 
 	@MockitoBean
 	private WalkRouteSearchService walkRouteSearchService;
+
+	@MockitoBean
+	private TransitRouteSearchService transitRouteSearchService;
+
+	@MockitoBean
+	private RerouteService rerouteService;
+
+	@MockitoBean
+	private RouteSelectService routeSelectService;
+
+	@MockitoBean
+	private RouteSessionCommandService routeSessionCommandService;
+
+	@MockitoBean
+	private TransitRefreshService transitRefreshService;
 
 	@MockitoBean
 	private RouteRatingService routeRatingService;
@@ -170,6 +190,22 @@ class SecurityConfigTest {
 				{
 				  "startPoint": {"lat": 35.12, "lng": 128.936},
 				  "endPoint": {"lat": 35.1315, "lng": 128.8823}
+				}
+				"""))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 API는 인증이 필요하다")
+	void transitRefreshRequiresAuthentication() throws Exception {
+		mockMvc.perform(post("/routes/rt_selected_001/transit-refresh")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "legSequence": 2
 				}
 				"""))
 			.andExpect(status().isUnauthorized())

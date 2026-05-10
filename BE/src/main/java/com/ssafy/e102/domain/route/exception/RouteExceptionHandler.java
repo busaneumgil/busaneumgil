@@ -34,6 +34,11 @@ public class RouteExceptionHandler {
 				.status(RouteErrorCode.INVALID_ROUTE_SELECT_REQUEST.getHttpStatus())
 				.body(ErrorResponse.from(RouteErrorCode.INVALID_ROUTE_SELECT_REQUEST));
 		}
+		if (isTransitRefreshRequest(request)) {
+			return ResponseEntity
+				.status(RouteErrorCode.INVALID_TRANSIT_REFRESH_REQUEST.getHttpStatus())
+				.body(ErrorResponse.from(RouteErrorCode.INVALID_TRANSIT_REFRESH_REQUEST));
+		}
 		if (isRerouteRequest(request) && exception instanceof MethodArgumentNotValidException validationException) {
 			RouteErrorCode errorCode = rerouteValidationErrorCode(validationException);
 			return ResponseEntity
@@ -56,6 +61,10 @@ public class RouteExceptionHandler {
 
 	private boolean isSelectRequest(HttpServletRequest request) {
 		return request.getRequestURI().matches("^/routes/[^/]+/select$");
+	}
+
+	private boolean isTransitRefreshRequest(HttpServletRequest request) {
+		return request.getRequestURI().matches("^/routes/[^/]+/transit-refresh$");
 	}
 
 	private boolean isRatingRequest(HttpServletRequest request) {

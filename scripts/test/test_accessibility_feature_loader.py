@@ -140,6 +140,12 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
         self.assertIn('ST_Equals(f.geom, s."geom")', source)
         self.assertIn("ST_DWithin(f.geom_5179, s.geom_5179, f.threshold_meter)", source)
 
+    def test_segment_feature_insert_dedupes_by_edge_type_and_state(self):
+        source = inspect.getsource(loader.insert_and_update)
+
+        self.assertIn("DISTINCT ON (edge_id, feature_type, COALESCE(state, ''))", source)
+        self.assertIn("deduped_segment_features", source)
+
     @staticmethod
     def write_csv(path, headers, rows):
         with path.open("w", newline="", encoding="utf-8") as file:

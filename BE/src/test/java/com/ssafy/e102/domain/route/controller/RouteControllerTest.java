@@ -31,12 +31,15 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
+import com.ssafy.e102.domain.route.dto.request.TransitRefreshRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
+import com.ssafy.e102.domain.route.dto.response.TransitArrivalStatus;
+import com.ssafy.e102.domain.route.dto.response.TransitRefreshResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
@@ -44,6 +47,7 @@ import com.ssafy.e102.domain.route.exception.RouteExceptionHandler;
 import com.ssafy.e102.domain.route.service.RerouteService;
 import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
 import com.ssafy.e102.domain.route.service.RouteSelectService;
+import com.ssafy.e102.domain.route.service.TransitRefreshService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.domain.route.type.RouteBadge;
@@ -60,6 +64,7 @@ class RouteControllerTest {
 	private RerouteService rerouteService;
 	private RouteSelectService routeSelectService;
 	private RouteSessionCommandService routeSessionCommandService;
+	private TransitRefreshService transitRefreshService;
 	private MockMvc mockMvc;
 
 	@BeforeEach
@@ -69,10 +74,11 @@ class RouteControllerTest {
 		rerouteService = Mockito.mock(RerouteService.class);
 		routeSelectService = Mockito.mock(RouteSelectService.class);
 		routeSessionCommandService = Mockito.mock(RouteSessionCommandService.class);
+		transitRefreshService = Mockito.mock(TransitRefreshService.class);
 		mockMvc = MockMvcBuilders
 			.standaloneSetup(
 				new RouteController(walkRouteSearchService, transitRouteSearchService, rerouteService,
-					routeSelectService, routeSessionCommandService))
+					routeSelectService, routeSessionCommandService, transitRefreshService))
 			.setCustomArgumentResolvers(new AuthPrincipalArgumentResolver())
 			.setControllerAdvice(new RouteExceptionHandler(), new GlobalExceptionHandler())
 			.build();
@@ -246,6 +252,82 @@ class RouteControllerTest {
 
 		verify(routeSessionCommandService).endSession(userId, "rt_selected_001");
 		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신은 routeId, legSequence, 인증 사용자로 service를 호출한다")
+	void refreshTransitUsesAuthenticatedUserAndLegSequence() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(transitRefreshService.refresh(eq(userId), eq("rt_selected_001"), any(TransitRefreshRequest.class)))
+			.thenReturn(new TransitRefreshResponse(TransportMode.BUS, TransitArrivalStatus.ARRIVAL_UNKNOWN, List.of()));
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/rt_selected_001/transit-refresh")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "legSequence": 2
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.type").value("BUS"))
+			.andExpect(jsonPath("$.data.arrivalStatus").value("ARRIVAL_UNKNOWN"))
+			.andExpect(jsonPath("$.data.transits").isArray())
+			.andExpect(jsonPath("$.message").value("대중교통 도착정보를 갱신했습니다."));
+
+		verify(transitRefreshService).refresh(eq(userId), eq("rt_selected_001"), any(TransitRefreshRequest.class));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 legSequence 누락은 PT4000을 반환한다")
+	void refreshTransitRejectsMissingLegSequence() throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+
+		mockMvc.perform(post("/routes/rt_selected_001/transit-refresh")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{}
+				"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("PT4000"))
+			.andExpect(jsonPath("$.message").value("도착정보 갱신 요청값이 올바르지 않습니다."));
+
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 대상 session이 없으면 RT4043을 반환한다")
+	void refreshTransitMapsMissingRouteSession() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.ROUTE_SESSION_NOT_FOUND, 404, "RT4043", "선택한 경로 정보를 찾을 수 없습니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 다른 사용자 route 접근은 A4030을 반환한다")
+	void refreshTransitMapsAccessDenied() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.ROUTE_ACCESS_DENIED, 403, "A4030", "접근할 수 없는 경로입니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 비대상 leg는 PT4090을 반환한다")
+	void refreshTransitMapsNotTransitLeg() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.NOT_TRANSIT_LEG, 409, "PT4090", "대중교통 구간이 아닙니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 외부 API 실패는 EX5020을 반환한다")
+	void refreshTransitMapsExternalRouteApiFailed() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, 502, "EX5020", "외부 경로 정보를 불러오지 못했습니다.");
+	}
+
+	@Test
+	@DisplayName("대중교통 도착정보 갱신 외부 API timeout은 EX5040을 반환한다")
+	void refreshTransitMapsExternalRouteApiTimeout() throws Exception {
+		assertTransitRefreshError(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT, 504, "EX5040", "외부 경로 정보 응답이 지연되고 있습니다.");
 	}
 
 	@Test
@@ -559,6 +641,29 @@ class RouteControllerTest {
 			.content("""
 				{
 				  "searchId": "rs_walk_test"
+				}
+				"""))
+			.andExpect(status().is(httpStatus))
+			.andExpect(jsonPath("$.status").value(status))
+			.andExpect(jsonPath("$.message").value(message))
+			.andExpect(jsonPath("$.data").doesNotExist());
+
+		SecurityContextHolder.clearContext();
+	}
+
+	private void assertTransitRefreshError(RouteErrorCode errorCode, int httpStatus, String status, String message)
+		throws Exception {
+		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		Mockito.doThrow(new RouteException(errorCode))
+			.when(transitRefreshService)
+			.refresh(eq(userId), eq("rt_selected_001"), any(TransitRefreshRequest.class));
+
+		mockMvc.perform(post("/routes/rt_selected_001/transit-refresh")
+			.principal(authentication(userId))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "legSequence": 2
 				}
 				"""))
 			.andExpect(status().is(httpStatus))

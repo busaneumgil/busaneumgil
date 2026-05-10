@@ -754,16 +754,17 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
   - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `arrivingStop`, `isLowFloor`
-  - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
+  - guidanceEvents 단위: `sequence`, `type`, `instruction`, `distanceMeter`, `geometry`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
 - 접근성 요약은 route 단위 `badges`에 저장하고, leg 단위 상세 안내는 `guidanceEvents`를 기준으로 복구한다. `RouteLegResponse.badges`는 API 응답과 snapshot JSON에 노출하지 않는다.
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
-  - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
-  - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
-  - SUBWAY metadata: ODsay `startID`, ODsay `endID`, ODsay `wayCode`, 내부 지하철역 식별자, 선택된 승차/하차 엘리베이터 식별자와 좌표
-  - reroute/refresh 판단용 metadata: leg별 geometry, BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표
+  - 공통 transit metadata: `type`, `lanes`, `passStops`
+  - BUS metadata: `lanes[].busNo`, `lanes[].busLocalBlID`, `passStops[].localStationID`
+  - SUBWAY metadata: ODsay `odsayStationId`, `endOdsayStationId`, `lineName`, `wayCode`, 선택된 승차/하차 엘리베이터 좌표, `nextDeparture`
+  - reroute/refresh 판단용 metadata: BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표, 원본 대중교통 path metadata
 - `route_snapshot_json`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
-- 실시간 도착정보는 외부 API 또는 Redis TTL cache에서만 관리한다.
+- BUS 실시간 도착정보는 BIMS 외부 API 또는 Redis `bims:arrival:{bstopid}:{lineid}` TTL 1분 cache에서만 관리한다.
+- SUBWAY 도착정보는 refresh 시점에 `subway_timetables` 시간표를 조회해 계산하며, 1차 구현에서는 지하철 외부 API를 직접 호출하지 않는다.
 - `status=ACTIVE`는 현재 안내 중이거나 재탐색 가능한 세션이다.
 - `status=COMPLETED`는 사용자가 도착 또는 안내 종료를 명시한 세션이다.
 - `EXPIRED`는 `status`로 두지 않는다. 만료는 JPA auditing의 수정일시 또는 별도 정책으로 판단한다.
@@ -851,6 +852,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 - `departure_second_of_day`는 조회용 정규화 값이다. 24시 이후 표현도 허용한다.
 - `transit-refresh`는 선택된 SUBWAY leg snapshot의 `odsay_station_id`, `way_code`와 현재 날짜의 `service_day_type`으로 시간표를 조회한다.
 - 현재 시각 이후 `departure_second_of_day`가 가장 작은 row를 다음 열차로 본다.
+- 현재 날짜에 남은 출발 row가 없으면 다음 날짜의 `service_day_type`으로 가장 이른 row를 조회하고, 자정 경계를 넘어선 남은 분을 계산한다.
 - 공휴일 판정 테이블이 없으면 MVP에서는 일요일을 `HOLIDAY`, 토요일을 `SATURDAY`, 나머지를 `WEEKDAY`로 처리한다.
 
 ### 관계

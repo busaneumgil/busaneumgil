@@ -48,6 +48,10 @@ class TutorialScreenTest {
         assertEquals(true, TutorialLayoutDefaults.destinationShowsFilterResultPanel)
         assertEquals(false, TutorialLayoutDefaults.usesGeneratedBitmapIllustration)
         assertEquals(true, TutorialLayoutDefaults.usesServiceLikeStatusStrip)
+        assertEquals(true, TutorialLayoutDefaults.statusStripUsesTransparentLayer)
+        assertEquals(false, TutorialLayoutDefaults.statusStripUsesBorder)
+        assertEquals(true, TutorialLayoutDefaults.statusStripUsesLowEmphasisValue)
+        assertEquals(true, TutorialLayoutDefaults.routeStatusUsesMapMarkerIcon)
         assertEquals(1, TutorialLayoutDefaults.statusStripCountPerScene)
         assertEquals(true, TutorialLayoutDefaults.routeCopyUsesRouteWording)
         assertEquals(true, TutorialLayoutDefaults.reportUsesLatestReportTypeIcons)
@@ -70,7 +74,7 @@ class TutorialScreenTest {
         assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
         assertEquals(96.dp, TutorialLayoutDefaults.routeCardHeight)
         assertEquals(152.dp, TutorialLayoutDefaults.reportTileWidth)
-        assertEquals(88.dp, TutorialLayoutDefaults.reportTileHeight)
+        assertEquals(100.dp, TutorialLayoutDefaults.reportTileHeight)
     }
 
     @Test
@@ -86,7 +90,7 @@ class TutorialScreenTest {
         assertEquals(1, TutorialLayoutDefaults.destinationFilterRowCount)
         assertEquals(340.dp, TutorialLayoutDefaults.destinationResultPanelMaxWidth)
         assertEquals(12.dp, TutorialLayoutDefaults.destinationResultPanelGap)
-        assertEquals(44.dp, TutorialLayoutDefaults.statusStripHeight)
+        assertEquals(40.dp, TutorialLayoutDefaults.statusStripHeight)
         assertEquals(340.dp, TutorialLayoutDefaults.statusStripMaxWidth)
     }
 
@@ -94,12 +98,12 @@ class TutorialScreenTest {
     fun `status strips use product-like short result copy`() {
         val stringsFile = File("src/main/res/values/strings.xml")
 
-        assertEquals("필터 적용됨", stringsFile.readStringResource(name = "tutorial_destination_status_title"))
+        assertEquals("적용", stringsFile.readStringResource(name = "tutorial_destination_status_title"))
         assertEquals("화장실 · 엘리베이터", stringsFile.readStringResource(name = "tutorial_destination_status_value"))
-        assertEquals("비교 기준", stringsFile.readStringResource(name = "tutorial_route_status_title"))
-        assertEquals("안전 우선 · 효율 경로", stringsFile.readStringResource(name = "tutorial_route_status_value"))
-        assertEquals("선택 유형", stringsFile.readStringResource(name = "tutorial_report_status_title"))
-        assertEquals("점자블록 문제", stringsFile.readStringResource(name = "tutorial_report_status_value"))
+        assertEquals("기준", stringsFile.readStringResource(name = "tutorial_route_status_title"))
+        assertEquals("안전 · 효율", stringsFile.readStringResource(name = "tutorial_route_status_value"))
+        assertEquals("선택", stringsFile.readStringResource(name = "tutorial_report_status_title"))
+        assertEquals("점자블록", stringsFile.readStringResource(name = "tutorial_report_status_value"))
     }
 
     @Test

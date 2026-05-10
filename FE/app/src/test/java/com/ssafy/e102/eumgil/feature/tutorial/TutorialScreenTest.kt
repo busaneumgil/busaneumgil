@@ -42,6 +42,8 @@ class TutorialScreenTest {
         assertEquals(true, TutorialLayoutDefaults.destinationSearchShowsMic)
         assertEquals(true, TutorialLayoutDefaults.destinationShowsMapPreview)
         assertEquals(true, TutorialLayoutDefaults.destinationMapAttachesBelowFilters)
+        assertEquals(false, TutorialLayoutDefaults.destinationFilterRowScrollable)
+        assertEquals(true, TutorialLayoutDefaults.destinationFilterUsesLatestMapIcons)
         assertEquals(true, TutorialLayoutDefaults.reportDescriptionMentionsRouteContribution)
     }
 
@@ -50,8 +52,17 @@ class TutorialScreenTest {
         assertEquals(34.sp, TutorialLayoutDefaults.headerHeadlineLineHeight)
         assertEquals(22.sp, TutorialLayoutDefaults.headerDescriptionLineHeight)
         assertEquals(12.dp, TutorialLayoutDefaults.illustrationContentGap)
-        assertEquals(6.dp, TutorialLayoutDefaults.headerVisualGap)
+        assertEquals(4.dp, TutorialLayoutDefaults.headerVisualGap)
         assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
+    }
+
+    @Test
+    fun `destination preview fills the first tutorial stage without dead space`() {
+        assertEquals(304.dp, TutorialLayoutDefaults.illustrationHeight)
+        assertEquals(340.dp, TutorialLayoutDefaults.searchBarMaxWidth)
+        assertEquals(340.dp, TutorialLayoutDefaults.destinationMapMaxWidth)
+        assertEquals(166.dp, TutorialLayoutDefaults.destinationMapHeight)
+        assertEquals(10.dp, TutorialLayoutDefaults.filterChipHorizontalPadding)
     }
 
     @Test

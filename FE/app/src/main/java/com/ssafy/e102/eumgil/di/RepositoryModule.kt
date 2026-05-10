@@ -192,10 +192,14 @@ object RepositoryModule {
     fun provideRouteRepository(
         localDataSource: RouteLocalDataSource,
         remoteDataSource: RouteRemoteDataSource,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): RouteRepository =
         DefaultRouteRepository(
             localDataSource = localDataSource,
             remoteDataSource = remoteDataSource,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideSearchRepository(
@@ -203,12 +207,16 @@ object RepositoryModule {
         localDataSource: SearchLocalDataSource,
         mockDataSource: SearchMockDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): SearchRepository =
         DefaultSearchRepository(
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideReportRepository(

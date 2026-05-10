@@ -31,6 +31,10 @@ internal object SearchDtoMapper {
             val serverPlaceId = placeDto.placeId?.toString()
             val providerPlaceId = placeDto.providerPlaceId?.takeIf { providerPlaceId -> providerPlaceId.isNotBlank() }
             val isVerifiedPlace = placeDto.matched && !serverPlaceId.isNullOrBlank()
+            val accessibilityTagKeys =
+                PlaceApiFieldMapper.toAccessibilityTagKeys(
+                    PlaceApiFieldMapper.toPlaceFeatureAvailabilities(placeDto.accessibilityFeatures),
+                )
             SearchResult(
                 placeId =
                     serverPlaceId
@@ -47,14 +51,7 @@ internal object SearchDtoMapper {
                 category = PlaceApiFieldMapper.toPlaceCategoryOrNull(placeDto.category).takeIf { isVerifiedPlace },
                 serverPlaceId = serverPlaceId,
                 providerPlaceId = providerPlaceId,
-                accessibilityTagKeys =
-                    if (isVerifiedPlace) {
-                        PlaceApiFieldMapper.toAccessibilityTagKeys(
-                            PlaceApiFieldMapper.toPlaceFeatureAvailabilities(placeDto.accessibilityFeatures),
-                        )
-                    } else {
-                        emptyList()
-                    },
+                accessibilityTagKeys = accessibilityTagKeys,
                 matched = isVerifiedPlace,
             )
         }

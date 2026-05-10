@@ -26,6 +26,22 @@ data class PlaceDetailDto(
     val description: String?,
 )
 
+data class MapPlaceDetailDto(
+    val bookmarkTargetId: String,
+    val detailType: String,
+    val placeId: Long?,
+    val provider: String?,
+    val providerPlaceId: String?,
+    val name: String,
+    val category: String?,
+    val providerCategory: String?,
+    val address: String?,
+    val point: PlacePointDto,
+    val accessibilityFeatures: List<PlaceAccessibilityFeatureDto>,
+    val isBookmarked: Boolean,
+    val description: String?,
+)
+
 data class PlacePointDto(
     val lat: Double,
     val lng: Double,

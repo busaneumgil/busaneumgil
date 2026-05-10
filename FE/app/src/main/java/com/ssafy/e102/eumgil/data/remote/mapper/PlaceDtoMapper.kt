@@ -5,11 +5,14 @@ import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceAccessibilityFeatureDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlacePointDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceSummaryDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlacesBrowseDto
+import com.ssafy.e102.eumgil.data.remote.dto.MapPlaceDetailDto
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -49,6 +52,12 @@ internal object PlaceDtoMapper {
         return dataJson.toPlaceDetailDto()
     }
 
+    fun parseMapPlaceDetailDto(body: String): MapPlaceDetailDto {
+        val responseJson = JSONObject(body)
+        val dataJson = responseJson.optJSONObject("data") ?: error("map place detail response missing data object")
+        return dataJson.toMapPlaceDetailDto()
+    }
+
     fun toPlaceDetail(dto: PlaceDetailDto): PlaceDetail {
         val features = PlaceApiFieldMapper.toPlaceFeatureAvailabilities(dto.accessibilityFeatures)
         return PlaceDetail(
@@ -62,6 +71,27 @@ internal object PlaceDtoMapper {
             isBookmarked = dto.isBookmarked,
             accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
             providerPlaceId = dto.providerPlaceId?.takeIf { providerPlaceId -> providerPlaceId.isNotBlank() },
+            description = dto.description?.takeIf { description -> description.isNotBlank() },
+        )
+    }
+
+    fun toMapTappedPlaceDetail(dto: MapPlaceDetailDto): MapTappedPlaceDetail {
+        val features = PlaceApiFieldMapper.toPlaceFeatureAvailabilities(dto.accessibilityFeatures)
+        return MapTappedPlaceDetail(
+            bookmarkTargetId = dto.bookmarkTargetId,
+            detailType = dto.detailType.toMapPlaceDetailType(),
+            placeId = dto.placeId?.toString(),
+            provider = dto.provider?.takeIf { provider -> provider.isNotBlank() },
+            providerPlaceId = dto.providerPlaceId?.takeIf { providerPlaceId -> providerPlaceId.isNotBlank() },
+            name = dto.name,
+            category = PlaceApiFieldMapper.toPlaceCategoryOrNull(dto.category),
+            providerCategory = dto.providerCategory?.takeIf { providerCategory -> providerCategory.isNotBlank() },
+            address = dto.address.orEmpty(),
+            latitude = dto.point.lat,
+            longitude = dto.point.lng,
+            features = features,
+            isBookmarked = dto.isBookmarked,
+            accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
             description = dto.description?.takeIf { description -> description.isNotBlank() },
         )
     }
@@ -127,6 +157,33 @@ internal object PlaceDtoMapper {
         )
     }
 
+    private fun JSONObject.toMapPlaceDetailDto(): MapPlaceDetailDto {
+        val pointJson = optJSONObject("point") ?: error("map place detail response missing point object")
+
+        return MapPlaceDetailDto(
+            bookmarkTargetId = optString("bookmarkTargetId"),
+            detailType = optString("detailType"),
+            placeId = optNullableLong("placeId"),
+            provider = optNullableString("provider"),
+            providerPlaceId = optNullableString("providerPlaceId"),
+            name = optString("name"),
+            category = optNullableString("category"),
+            providerCategory = optNullableString("providerCategory"),
+            address = optNullableString("address"),
+            point =
+                PlacePointDto(
+                    lat = pointJson.optDouble("lat"),
+                    lng = pointJson.optDouble("lng"),
+                ),
+            accessibilityFeatures =
+                optJSONArray("accessibilityFeatures")
+                    ?.let(::toAccessibilityFeatureDtos)
+                    .orEmpty(),
+            isBookmarked = optBoolean("isBookmarked"),
+            description = optNullableString("description"),
+        )
+    }
+
     private fun toAccessibilityFeatureDtos(featuresJson: JSONArray): List<PlaceAccessibilityFeatureDto> =
         List(featuresJson.length()) { index ->
             featuresJson.getJSONObject(index).let { featureJson ->
@@ -142,5 +199,20 @@ internal object PlaceDtoMapper {
             null
         } else {
             optString(name).takeIf { value -> value.isNotBlank() }
+        }
+
+    private fun JSONObject.optNullableLong(name: String): Long? =
+        if (isNull(name) || has(name).not()) {
+            null
+        } else {
+            optLong(name)
+        }
+
+    private fun String.toMapPlaceDetailType(): MapPlaceDetailType =
+        when (trim().uppercase()) {
+            "INTERNAL_PLACE" -> MapPlaceDetailType.INTERNAL_PLACE
+            "EXTERNAL_POI" -> MapPlaceDetailType.EXTERNAL_POI
+            "EXTERNAL_ADDRESS" -> MapPlaceDetailType.EXTERNAL_ADDRESS
+            else -> MapPlaceDetailType.EXTERNAL_ADDRESS
         }
 }

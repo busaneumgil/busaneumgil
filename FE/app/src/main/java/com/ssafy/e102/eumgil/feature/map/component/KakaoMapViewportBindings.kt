@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import java.util.Locale
@@ -113,11 +114,14 @@ internal data class KakaoMarkerRenderState(
     val markerId: String,
     val latitude: Double,
     val longitude: Double,
-    @DrawableRes val iconResId: Int,
+    val category: FacilityCategory,
+    @DrawableRes val glyphResId: Int,
     val rank: Long,
     val clickTargetId: String?,
-    val anchorPointX: Float? = null,
-    val anchorPointY: Float? = null,
+    val isSelected: Boolean,
+    val sizeDp: Int,
+    val anchorPointX: Float,
+    val anchorPointY: Float,
 )
 
 internal data class KakaoRendererFailure(
@@ -190,13 +194,19 @@ internal fun createKakaoMarkerRenderStates(
     buildList {
         addAll(
             markerOverlayState.visibleMarkers.map { marker ->
+                val isSelected = marker.markerId == selectedMarkerId
                 KakaoMarkerRenderState(
                     markerId = marker.markerId,
                     latitude = marker.coordinate.latitude,
                     longitude = marker.coordinate.longitude,
-                    iconResId = categoryMarkerIconResId(marker.categoryType.category),
-                    rank = if (marker.markerId == selectedMarkerId) 1L else 0L,
+                    category = marker.categoryType.category,
+                    glyphResId = facilityMarkerGlyphResId(marker.categoryType.category),
+                    rank = if (isSelected) KAKAO_SELECTED_MARKER_RANK else KAKAO_DEFAULT_MARKER_RANK,
                     clickTargetId = marker.markerId,
+                    isSelected = isSelected,
+                    sizeDp = resolveKakaoFacilityMarkerSizeDp(marker.categoryType.category, isSelected),
+                    anchorPointX = KAKAO_FACILITY_MARKER_ANCHOR_POINT_X,
+                    anchorPointY = KAKAO_FACILITY_MARKER_ANCHOR_POINT_Y,
                 )
             },
         )
@@ -291,22 +301,37 @@ internal fun createKakaoMarkerDebugSummary(
 
 // Kakao labels render raw drawable bounds, so map markers must use compact icon assets.
 @DrawableRes
-private fun categoryMarkerIconResId(category: FacilityCategory): Int =
+internal fun facilityMarkerGlyphResId(category: FacilityCategory): Int =
     when (category) {
         FacilityCategory.TOILET -> R.drawable.ic_place_restroom
         FacilityCategory.ELEVATOR -> R.drawable.ic_lowvision_category_elevator
         FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
         FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_cafe
         FacilityCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
-        FacilityCategory.ACCOMMODATION -> R.drawable.ic_nav_facility
-        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_hospital
-        FacilityCategory.WELFARE -> R.drawable.ic_nav_facility
-        FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_nav_facility
+        FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
+        FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
+        FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
         FacilityCategory.OTHER -> R.drawable.ic_nav_facility
     }
+
+internal fun resolveKakaoFacilityMarkerSizeDp(
+    category: FacilityCategory,
+    isSelected: Boolean,
+): Int =
+    when {
+        isSelected -> 34
+        category == FacilityCategory.BRAILLE_BLOCK -> 30
+        else -> 28
+    }
+
+private const val KAKAO_DEFAULT_MARKER_RANK = 0L
+private const val KAKAO_SELECTED_MARKER_RANK = 10L
+private const val KAKAO_FACILITY_MARKER_ANCHOR_POINT_X = 0.5f
+private const val KAKAO_FACILITY_MARKER_ANCHOR_POINT_Y = 0.5f
 
 internal const val KAKAO_RENDERER_ERROR_REASON_FALLBACK = "MapError"
 internal const val KAKAO_RENDERER_ERROR_DETAIL_FALLBACK = "Unknown renderer failure"

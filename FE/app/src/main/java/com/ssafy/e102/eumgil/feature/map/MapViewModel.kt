@@ -13,6 +13,9 @@ import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
+import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
@@ -71,6 +74,12 @@ class MapViewModel(
     private var selectedMarkerId: String? = null
     private var selectedMapPinCoordinate: MapCoordinate? = null
     private var selectedFacilityDetail: FacilityDetailSeed? = null
+    private var selectedMapTapDetail: MapTappedPlaceDetail? = null
+    private var selectedMapTapNameHint: String? = null
+    private var isMapTapDetailLoading = false
+    private var mapTapDetailErrorMessage: String? = null
+    private var mapTapDetailRequestId: Long = 0L
+    private var mapTapDetailLookupJob: Job? = null
     private var selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
     private var facilityBrowseData: FacilityBrowseData? = null
     private var markerFilterSelectionState: MapFilterSelectionState = MapFilterSelectionState()
@@ -140,7 +149,7 @@ class MapViewModel(
             MapUiAction.ZoomInClicked -> handleZoomAction(delta = 1)
             MapUiAction.ZoomOutClicked -> handleZoomAction(delta = -1)
             is MapUiAction.MarkerTapped -> handleMarkerTapped(action.markerId)
-            is MapUiAction.MapTapped -> handleMapTapped(action.coordinate)
+            is MapUiAction.MapTapped -> handleMapTapped(action.payload)
             is MapUiAction.ViewportCameraChanged ->
                 handleViewportCameraChanged(
                     center = action.center,
@@ -157,6 +166,7 @@ class MapViewModel(
 
     override fun onCleared() {
         stopLocationLookup()
+        mapTapDetailLookupJob?.cancel()
         currentLocationManager.stopLocationUpdates()
         mutableUiEvent.close()
         super.onCleared()
@@ -288,6 +298,7 @@ class MapViewModel(
                     loadBookmarkState = false,
                 )
             } else {
+                clearMapTapSelectionState(clearPin = true)
                 selectedMarkerId = markerId
                 selectedFacilityDetail = null
                 selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
@@ -304,14 +315,47 @@ class MapViewModel(
         renderSelectedFacilityState()
     }
 
-    private fun handleMapTapped(coordinate: MapCoordinate) {
+    private fun handleMapTapped(payload: MapTapPayload) {
+        val coordinate = payload.coordinate
         safeLogInfo(
             MAP_VIEW_MODEL_LOG_TAG,
-            "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()}",
+            "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()} clickType=${payload.clickType.name} provider=${payload.provider.orEmpty()} providerPlaceId=${payload.providerPlaceId.orEmpty()}",
         )
+        mapTapDetailRequestId += 1L
+        val requestId = mapTapDetailRequestId
         selectedMapPinCoordinate = coordinate
-        clearSelectedFacilitySelection()
+        clearSelectedFacilitySelection(clearMapTapSelection = false)
+        selectedMapTapDetail = null
+        selectedMapTapNameHint = payload.nameHint?.takeIf { it.isNotBlank() }
+        mapTapDetailErrorMessage = null
+        isMapTapDetailLoading = placesRepository != null
         renderSelectedFacilityState()
+
+        val placesRepository = placesRepository ?: return
+        mapTapDetailLookupJob?.cancel()
+        mapTapDetailLookupJob =
+            viewModelScope.launch {
+                runCatching {
+                    placesRepository.getMapTappedPlaceDetail(payload.toMapPlaceDetailRequest())
+                }.onSuccess { detail ->
+                    if (requestId != mapTapDetailRequestId) return@onSuccess
+                    isMapTapDetailLoading = false
+                    selectedMapTapDetail = detail
+                    mapTapDetailErrorMessage =
+                        if (detail == null) {
+                            MAP_TAP_DETAIL_EMPTY_MESSAGE
+                        } else {
+                            null
+                        }
+                    renderSelectedFacilityState()
+                }.onFailure {
+                    if (requestId != mapTapDetailRequestId) return@onFailure
+                    isMapTapDetailLoading = false
+                    selectedMapTapDetail = null
+                    mapTapDetailErrorMessage = MAP_TAP_DETAIL_LOAD_FAILURE_MESSAGE
+                    renderSelectedFacilityState()
+                }
+            }
     }
 
     private fun fetchSelectedFacilityDetail(
@@ -936,13 +980,41 @@ class MapViewModel(
         }
     }
 
-    private fun clearSelectedFacilitySelection(): Boolean {
-        if (selectedMarkerId == null && selectedFacilityDetail == null) return false
+    private fun clearSelectedFacilitySelection(clearMapTapSelection: Boolean = true): Boolean {
+        val hadSelection =
+            selectedMarkerId != null ||
+                selectedFacilityDetail != null ||
+                (
+                    clearMapTapSelection &&
+                        (
+                            selectedMapPinCoordinate != null ||
+                                selectedMapTapDetail != null ||
+                                isMapTapDetailLoading ||
+                                mapTapDetailErrorMessage != null
+                        )
+                )
+        if (!hadSelection) return false
 
         selectedMarkerId = null
         selectedFacilityDetail = null
         selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
+        if (clearMapTapSelection) {
+            clearMapTapSelectionState(clearPin = true)
+        }
         return true
+    }
+
+    private fun clearMapTapSelectionState(clearPin: Boolean) {
+        mapTapDetailLookupJob?.cancel()
+        mapTapDetailLookupJob = null
+        mapTapDetailRequestId += 1L
+        if (clearPin) {
+            selectedMapPinCoordinate = null
+        }
+        selectedMapTapDetail = null
+        selectedMapTapNameHint = null
+        isMapTapDetailLoading = false
+        mapTapDetailErrorMessage = null
     }
 
     private fun updateSelectedFacility(
@@ -959,7 +1031,7 @@ class MapViewModel(
 
         val previousFacilityId = selectedFacilityDetail?.facilityId
         if (markerId != null) {
-            selectedMapPinCoordinate = null
+            clearMapTapSelectionState(clearPin = true)
         }
         selectedMarkerId = markerId
         selectedFacilityDetail = detail
@@ -986,6 +1058,10 @@ class MapViewModel(
     private fun currentFacilityDetailSheetState(): MapFacilityDetailSheetState =
         MapFacilityDetailSheetState(
             detail = selectedFacilityDetail,
+            mapTapDetail = selectedMapTapDetail,
+            mapTapNameHint = selectedMapTapNameHint,
+            isMapTapDetailLoading = isMapTapDetailLoading,
+            mapTapDetailErrorMessage = mapTapDetailErrorMessage,
             isBookmarked = selectedFacilityBookmarkState.isBookmarked,
             isBookmarkUpdating = selectedFacilityBookmarkState.isUpdating,
             bookmarkErrorMessage = selectedFacilityBookmarkState.errorMessage,
@@ -1151,6 +1227,9 @@ class MapViewModel(
         private const val BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크 저장에 실패했습니다. 다시 시도해 주세요."
         private const val SHORTCUT_FILTER_UNAVAILABLE_MESSAGE = "근처에 해당 장소가 없어요"
 
+        private const val MAP_TAP_DETAIL_LOAD_FAILURE_MESSAGE = "선택한 위치의 상세 정보를 불러오지 못했습니다."
+        private const val MAP_TAP_DETAIL_EMPTY_MESSAGE = "선택한 위치의 상세 정보가 없습니다."
+
         fun provideFactory(
             locationPermissionManager: LocationPermissionManager,
             currentLocationManager: CurrentLocationManager,
@@ -1223,6 +1302,20 @@ private object NoOpSearchRepository : SearchRepository {
 
     override suspend fun saveRecentDestination(destination: RecentDestination) = Unit
 }
+
+private fun MapTapPayload.toMapPlaceDetailRequest(): MapPlaceDetailRequest =
+    MapPlaceDetailRequest(
+        latitude = coordinate.latitude,
+        longitude = coordinate.longitude,
+        clickType =
+            when (clickType) {
+                MapTapClickType.POI -> MapPlaceClickType.POI
+                MapTapClickType.ADDRESS -> MapPlaceClickType.ADDRESS
+            },
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        nameHint = nameHint,
+    )
 
 private data class SelectedFacilityBookmarkState(
     val facilityId: String? = null,

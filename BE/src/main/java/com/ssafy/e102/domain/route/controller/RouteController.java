@@ -11,8 +11,10 @@ import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.service.RerouteService;
+import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
 import com.ssafy.e102.domain.route.service.RouteSelectService;
 import com.ssafy.e102.domain.route.service.TransitRouteSearchService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
@@ -41,6 +43,7 @@ public class RouteController {
 	private final TransitRouteSearchService transitRouteSearchService;
 	private final RerouteService rerouteService;
 	private final RouteSelectService routeSelectService;
+	private final RouteSessionCommandService routeSessionCommandService;
 
 	@Operation(summary = "도보 경로 검색", description = "출발지와 도착지 좌표를 기준으로 보행 경로 후보를 검색합니다.")
 	@PostMapping("/search/walk")
@@ -71,14 +74,28 @@ public class RouteController {
 	}
 
 	@PostMapping("/{routeId}/select")
-	public ApiResponse<Void> selectRoute(
+	public ApiResponse<RouteSessionResponse> selectRoute(
 		@AuthenticationPrincipal
 		AuthPrincipal principal,
 		@PathVariable
 		String routeId,
 		@Valid @RequestBody
 		SelectRouteRequest request) {
-		routeSelectService.select(principal.userId(), routeId, request);
-		return ApiResponse.successMessage("경로가 선택되었습니다.");
+		return new ApiResponse<>(
+			"S2000",
+			routeSelectService.select(principal.userId(), routeId, request),
+			"경로가 선택되었습니다.");
+	}
+
+	@PostMapping("/{routeId}/end")
+	public ApiResponse<RouteSessionResponse> endRoute(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@PathVariable
+		String routeId) {
+		return new ApiResponse<>(
+			"S2000",
+			routeSessionCommandService.endSession(principal.userId(), routeId),
+			"안내가 종료되었습니다.");
 	}
 }

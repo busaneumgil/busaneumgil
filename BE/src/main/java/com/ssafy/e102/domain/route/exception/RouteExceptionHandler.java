@@ -10,12 +10,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.ssafy.e102.domain.route.controller.RouteController;
+import com.ssafy.e102.domain.route.controller.RouteRatingController;
 import com.ssafy.e102.global.response.ErrorResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = RouteController.class)
+@RestControllerAdvice(assignableTypes = {RouteController.class, RouteRatingController.class})
 public class RouteExceptionHandler {
 
 	@ExceptionHandler({
@@ -23,6 +24,11 @@ public class RouteExceptionHandler {
 		HttpMessageNotReadableException.class
 	})
 	public ResponseEntity<ErrorResponse> handleInvalidRouteRequest(Exception exception, HttpServletRequest request) {
+		if (isRatingRequest(request)) {
+			return ResponseEntity
+				.status(RouteErrorCode.INVALID_ROUTE_RATING_REQUEST.getHttpStatus())
+				.body(ErrorResponse.from(RouteErrorCode.INVALID_ROUTE_RATING_REQUEST));
+		}
 		if (isSelectRequest(request)) {
 			return ResponseEntity
 				.status(RouteErrorCode.INVALID_ROUTE_SELECT_REQUEST.getHttpStatus())
@@ -50,6 +56,10 @@ public class RouteExceptionHandler {
 
 	private boolean isSelectRequest(HttpServletRequest request) {
 		return request.getRequestURI().matches("^/routes/[^/]+/select$");
+	}
+
+	private boolean isRatingRequest(HttpServletRequest request) {
+		return "/route-ratings".equals(request.getRequestURI());
 	}
 
 	private RouteErrorCode rerouteValidationErrorCode(MethodArgumentNotValidException exception) {

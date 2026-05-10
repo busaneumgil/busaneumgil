@@ -26,6 +26,7 @@ PROD_DEPLOY = ROOT_DIR / "scripts" / "deploy" / "prod-deploy.sh"
 PROD_ROLLBACK = ROOT_DIR / "scripts" / "deploy" / "prod-rollback.sh"
 PROD_SMOKE = ROOT_DIR / "scripts" / "deploy" / "prod-smoke.sh"
 PROD_UP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up.sh"
+PROD_GRAPHHOPPER_BOOTSTRAP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-graphhopper-bootstrap.sh"
 
 
 class ProdDeployScriptsTest(unittest.TestCase):
@@ -122,6 +123,21 @@ class ProdDeployScriptsTest(unittest.TestCase):
 
         self.assertIn('up -d backend ai', content)
         self.assertIn('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"', content)
+
+    def test_prod_graphhopper_bootstrap_applies_accessibility_features_before_graph_build(self):
+        content = PROD_GRAPHHOPPER_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn('"$ROOT_DIR/scripts/db/load_road_network_prod.sh"', content)
+        self.assertIn('"$ROOT_DIR/scripts/db/load_accessibility_features_prod.sh" --apply', content)
+        self.assertIn('"$ROOT_DIR/scripts/make/docker/graphhopper-prod-build.sh"', content)
+        self.assertLess(
+            content.index('"$ROOT_DIR/scripts/db/load_road_network_prod.sh"'),
+            content.index('"$ROOT_DIR/scripts/db/load_accessibility_features_prod.sh" --apply'),
+        )
+        self.assertLess(
+            content.index('"$ROOT_DIR/scripts/db/load_accessibility_features_prod.sh" --apply'),
+            content.index('"$ROOT_DIR/scripts/make/docker/graphhopper-prod-build.sh"'),
+        )
 
     def test_prod_jenkinsfile_collects_remote_logs_on_failure(self):
         content = JENKINSFILE.read_text(encoding="utf-8")

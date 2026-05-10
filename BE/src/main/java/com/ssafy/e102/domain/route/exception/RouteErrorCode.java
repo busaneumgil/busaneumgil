@@ -17,6 +17,7 @@ public enum RouteErrorCode implements ErrorCode {
 	OUT_OF_SERVICE_AREA(HttpStatus.BAD_REQUEST, "RT4003", "부산광역시 안의 위치를 선택해 주세요."),
 	START_END_TOO_CLOSE(HttpStatus.BAD_REQUEST, "RT4004", "출발지와 도착지를 다르게 선택해 주세요."),
 	INVALID_CURRENT_POINT(HttpStatus.BAD_REQUEST, "RT4005", "현재 위치값이 올바르지 않습니다."),
+	INVALID_ROUTE_RATING_REQUEST(HttpStatus.BAD_REQUEST, "RR4000", "경로 평가 요청값이 올바르지 않습니다."),
 	ROUTE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "A4030", "접근할 수 없는 경로입니다."),
 	ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, "RT4040", "탐색 가능한 경로가 없습니다."),
 	ROUTE_SEARCH_EXPIRED(HttpStatus.NOT_FOUND, "RT4041", "검색 결과가 만료되었습니다."),

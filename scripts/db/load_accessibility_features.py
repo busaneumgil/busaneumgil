@@ -87,7 +87,7 @@ SOURCE_DEFINITIONS = [
     SourceDefinition("횡단보도_신호등.csv", Decimal("20"), True, "crosswalk_signal"),
     SourceDefinition("횡단보도_음향신호기.csv", Decimal("30"), True, "audio_signal"),
     SourceDefinition("계단.csv", Decimal("2"), False, "stairs"),
-    SourceDefinition("점자블록.csv", Decimal("20"), True, "braille_block"),
+    SourceDefinition("점자블록.csv", Decimal("0"), True, "braille_block"),
 ]
 
 REQUIRED_HEADER_GROUPS = {
@@ -781,6 +781,8 @@ def copy_staging_rows(cursor, rows: list[SourceFeatureRow]) -> None:
 
 def build_matching_tables(cursor) -> None:
     # 거리 계산용 EPSG:5179 geometry를 temp table에 만들고 GiST index를 걸어 대량 join 비용을 낮춘다.
+    # 점자블록 CSV는 횡단보도 segment LineString에 점자블록 여부를 보강한 입력이다.
+    # 거리 buffer 없이 같은 CROSS_WALK geometry에만 붙인다.
     cursor.execute(
         """
         CREATE TEMP TABLE accessibility_feature_source_projected AS
@@ -797,6 +799,7 @@ def build_matching_tables(cursor) -> None:
         SELECT
           edge_id,
           segment_type,
+          "geom",
           ST_Transform("geom", 5179) AS geom_5179
         FROM road_segments
         WHERE "geom" IS NOT NULL
@@ -825,7 +828,24 @@ def build_matching_tables(cursor) -> None:
           END AS overlap_meter
         FROM accessibility_feature_source_projected f
         JOIN road_segments_projected s
-          ON ST_DWithin(f.geom_5179, s.geom_5179, f.threshold_meter);
+          ON ST_DWithin(f.geom_5179, s.geom_5179, f.threshold_meter)
+        WHERE NOT (
+          f.feature_type = 'BRAILLE_BLOCK'
+          AND f.geometry_kind IN ('LINESTRING', 'MULTILINESTRING')
+        )
+        UNION ALL
+        SELECT
+          f.*,
+          s.edge_id,
+          0::double precision AS match_distance_meter,
+          0 AS preference_rank,
+          ST_Length(ST_Intersection(f.geom_5179, s.geom_5179)) AS overlap_meter
+        FROM accessibility_feature_source_projected f
+        JOIN road_segments_projected s
+          ON s.segment_type = 'CROSS_WALK'
+         AND ST_Equals(f.geom, s."geom")
+        WHERE f.feature_type = 'BRAILLE_BLOCK'
+          AND f.geometry_kind IN ('LINESTRING', 'MULTILINESTRING');
 
         CREATE TEMP TABLE accessibility_feature_ranked AS
         SELECT

@@ -648,7 +648,7 @@
     <string name="tutorial_current_location">현 위치</string>
     <string name="tutorial_route_title">경로 비교하기</string>
     <string name="tutorial_route_headline">내게 맞는 경로를\n빠르게 고르기</string>
-    <string name="tutorial_route_description">부산이음길만의 경로 설정으로,\n상황에 맞는 경로를 이용하세요.</string>
+    <string name="tutorial_route_description">상황에 맞는 경로를 선택해 이용하세요.</string>
     <string name="tutorial_route_item_compare_title">추천 경로 비교</string>
     <string name="tutorial_route_item_compare_description">시간과 환승을 비교해요.</string>
     <string name="tutorial_route_item_accessibility_title">접근성 정보 확인</string>

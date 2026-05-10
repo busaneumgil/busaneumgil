@@ -890,7 +890,8 @@ internal object TutorialLayoutDefaults {
     const val statusStripUsesLowEmphasisValue: Boolean = true
     const val routeStatusUsesMapMarkerIcon: Boolean = true
     const val statusStripCountPerScene: Int = 1
-    const val routeDescriptionBreaksAfterSettingComma: Boolean = true
+    const val routeDescriptionBreaksAfterSettingComma: Boolean = false
+    const val routeDescriptionUsesSingleLine: Boolean = true
     const val routeCopyUsesRouteWording: Boolean = true
     const val reportUsesLatestReportTypeIcons: Boolean = true
     const val reportHighlightsSelectedCategory: Boolean = true

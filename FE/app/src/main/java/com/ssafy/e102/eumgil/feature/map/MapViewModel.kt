@@ -57,6 +57,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.abs
 
 class MapViewModel(
     private val locationPermissionManager: LocationPermissionManager,
@@ -787,8 +788,14 @@ class MapViewModel(
     ) {
         mutableUiState.update { state ->
             val currentTarget = state.cameraTarget
+            val isAlignedWithRequestedCenter = currentTarget.center.isApproximatelySameCoordinate(center)
+
+            // Ignore stale programmatic move-end callbacks that arrive after a newer camera target won.
+            if (!isUserGesture && !isAlignedWithRequestedCenter) {
+                return@update state
+            }
             val hasCameraChanged =
-                currentTarget.center != center ||
+                !isAlignedWithRequestedCenter ||
                     currentTarget.resolvedZoomLevel() != zoomLevel
 
             if (!hasCameraChanged) {
@@ -800,7 +807,7 @@ class MapViewModel(
                 state.copy(
                     cameraTarget =
                         currentTarget.copy(
-                            center = center,
+                            center = if (isAlignedWithRequestedCenter) currentTarget.center else center,
                             zoomLevel = zoomLevel,
                         ),
                     isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
@@ -1599,6 +1606,11 @@ private fun Double.isValidLatitude(): Boolean = isFinite() && this in -90.0..90.
 
 private fun Double.isValidLongitude(): Boolean = isFinite() && this in -180.0..180.0
 
+private fun MapCoordinate.isApproximatelySameCoordinate(
+    other: MapCoordinate,
+    tolerance: Double = CAMERA_CALLBACK_COORDINATE_TOLERANCE,
+): Boolean = abs(latitude - other.latitude) <= tolerance && abs(longitude - other.longitude) <= tolerance
+
 private data class SelectedFacilityBookmarkState(
     val facilityId: String? = null,
     val isBookmarked: Boolean = false,
@@ -1640,4 +1652,5 @@ private fun MapShortcutFilterKey.isSelected(
     return category in selection.selectedFacilityCategories
 }
 
+private const val CAMERA_CALLBACK_COORDINATE_TOLERANCE = 0.00001
 private const val DEFAULT_EXTERNAL_BOOKMARK_PROVIDER = "KAKAO"

@@ -854,6 +854,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
 private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     val cameraTarget = uiState.cameraTarget
     val currentLocationMarker = resolveCurrentLocationMarker(uiState.locationStatus)
+    val viewportDestination = uiState.facilityDetailSheetState.destinationPreview?.destination ?: uiState.selectedDestination
     val integrationState =
         resolveMapIntegrationState(
             hasNativeAppKey = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(),
@@ -890,7 +891,7 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
             MapCameraSource.SEARCH_RESULT ->
                 stringResource(
                     id = R.string.map_viewport_title_selected,
-                    uiState.selectedDestination?.name
+                    viewportDestination?.name
                         ?: stringResource(id = R.string.map_shell_search_hint_selected_fallback),
                 )
 
@@ -917,7 +918,7 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
                 )
 
             MapCameraSource.SEARCH_RESULT ->
-                selectedDestinationSummaryText(destination = uiState.selectedDestination)
+                selectedDestinationSummaryText(destination = viewportDestination)
 
             MapCameraSource.DEFAULT_BUSAN ->
                 stringResource(
@@ -931,13 +932,13 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
         cameraTarget = cameraTarget,
         currentLocation = currentLocationMarker,
         selectedDestinationCoordinate =
-            uiState.selectedDestination?.let { destination ->
+            viewportDestination?.let { destination ->
                 MapCoordinate(
                     latitude = destination.latitude,
                     longitude = destination.longitude,
                 )
             },
-        selectedDestinationName = uiState.selectedDestination?.name,
+        selectedDestinationName = viewportDestination?.name,
         markerOverlayState = uiState.markerOverlayState,
         overlayState =
             createMapMarkerViewportOverlayState(

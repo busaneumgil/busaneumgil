@@ -98,6 +98,25 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `map viewport state uses destination preview metadata before route destination`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Map viewport state should derive display metadata from the active destination preview before falling back to the persisted route destination.",
+            source.contains("val viewportDestination = uiState.facilityDetailSheetState.destinationPreview?.destination ?: uiState.selectedDestination"),
+        )
+        assertTrue(
+            "Selected destination summary should use the effective viewport destination so preview screens announce the searched place name.",
+            source.contains("selectedDestinationSummaryText(destination = viewportDestination)"),
+        )
+        assertTrue(
+            "Projected destination metadata should use the effective viewport destination so preview pins reuse the searched place name.",
+            source.contains("selectedDestinationName = viewportDestination?.name"),
+        )
+    }
+
+    @Test
     fun `facility detail and recent destinations use dedicated public office icon asset`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()

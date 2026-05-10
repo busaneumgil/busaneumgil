@@ -45,6 +45,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -236,6 +237,56 @@ class MapViewModelTest {
             assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
             assertEquals(destination.longitude, viewModel.uiState.value.selectedMapPinCoordinate?.longitude ?: 0.0, 0.0)
             assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
+    fun `search preview ignores stale programmatic current location camera callback`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-stale-callback",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = currentLocation.latitude, longitude = currentLocation.longitude),
+                    zoomLevel = viewModel.uiState.value.cameraTarget.resolvedZoomLevel(),
+                    isUserGesture = false,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(destination.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
         }
 
     @Test

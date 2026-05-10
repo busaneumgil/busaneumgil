@@ -658,7 +658,7 @@
     <string name="tutorial_route_recommended_time">42분</string>
     <string name="tutorial_route_recommended_transfer">1회 환승</string>
     <string name="tutorial_route_efficient">효율적인 길</string>
-    <string name="tutorial_route_efficient_time">51분</string>
+    <string name="tutorial_route_efficient_time">35분</string>
     <string name="tutorial_route_efficient_transfer">2회 환승</string>
     <string name="tutorial_route_badge_elevator">엘리베이터 있음</string>
     <string name="tutorial_route_badge_access">출입 가능</string>

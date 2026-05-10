@@ -639,6 +639,8 @@
     <string name="tutorial_destination_result_count">2개 표시</string>
     <string name="tutorial_destination_result_nearby">가까운 시설</string>
     <string name="tutorial_destination_result_available">이용 가능</string>
+    <string name="tutorial_destination_status_title">필터 적용됨</string>
+    <string name="tutorial_destination_status_value">화장실 · 엘리베이터</string>
     <string name="tutorial_filter_toilet">장애인 화장실</string>
     <string name="tutorial_filter_elevator">엘리베이터</string>
     <string name="tutorial_filter_parking">장애인 주차장</string>
@@ -669,6 +671,8 @@
     <string name="tutorial_route_badge_plus_two">+2</string>
     <string name="tutorial_route_badge_plus_one">+1</string>
     <string name="tutorial_route_start_navigation">경로 안내 시작</string>
+    <string name="tutorial_route_status_title">비교 기준</string>
+    <string name="tutorial_route_status_value">안전 우선 · 효율 경로</string>
     <string name="tutorial_report_title">제보하기</string>
     <string name="tutorial_report_headline">불편한 길은\n바로 공유하기</string>
     <string name="tutorial_report_description">몇 번의 터치로 경로 설정에 참여하세요.</string>
@@ -687,6 +691,8 @@
     <string name="tutorial_report_braille_block">점자블록 문제</string>
     <string name="tutorial_report_sidewalk_missing">인도 없음</string>
     <string name="tutorial_report_ramp">경사로 문제</string>
+    <string name="tutorial_report_status_title">선택 유형</string>
+    <string name="tutorial_report_status_value">점자블록 문제</string>
     <string name="tutorial_report_tactile_block">점자블록 문제</string>
     <string name="tutorial_report_guiding_block">유도블록 문제</string>
     <string name="tutorial_report_facility_damage">시설 파손/노후</string>

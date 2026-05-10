@@ -305,6 +305,11 @@ private fun TutorialDestinationSearchScene(content: TutorialVisualContent) {
             chips = content.chips,
         )
         TutorialDestinationResultPanel(content = content)
+        TutorialStatusStrip(
+            iconRes = R.drawable.ic_nav_category_grid,
+            titleRes = R.string.tutorial_destination_status_title,
+            valueRes = R.string.tutorial_destination_status_value,
+        )
     }
 }
 
@@ -330,6 +335,12 @@ private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
             labelRes = content.secondaryLabelRes,
             time = stringResource(id = R.string.tutorial_route_efficient_time),
             selected = false,
+        )
+        Spacer(modifier = Modifier.height(TutorialLayoutDefaults.sceneContentVerticalGap))
+        TutorialStatusStrip(
+            iconRes = R.drawable.ic_nav_route,
+            titleRes = R.string.tutorial_route_status_title,
+            valueRes = R.string.tutorial_route_status_value,
         )
     }
 }
@@ -370,6 +381,11 @@ private fun TutorialReportSubmissionScene() {
                 )
             }
         }
+        TutorialStatusStrip(
+            iconRes = R.drawable.ic_report_tactile_damage,
+            titleRes = R.string.tutorial_report_status_title,
+            valueRes = R.string.tutorial_report_status_value,
+        )
         TutorialReportSubmitButton()
     }
 }
@@ -505,6 +521,51 @@ private fun TutorialDestinationResultRow(
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
         )
+    }
+}
+
+@Composable
+private fun TutorialStatusStrip(
+    @DrawableRes iconRes: Int,
+    @StringRes titleRes: Int,
+    @StringRes valueRes: Int,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .widthIn(max = TutorialLayoutDefaults.statusStripMaxWidth)
+                .height(TutorialLayoutDefaults.statusStripHeight),
+        shape = RoundedCornerShape(EumRadius.small),
+        color = EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+                tint = EumPrimary600,
+            )
+            Text(
+                text = stringResource(id = titleRes),
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = stringResource(id = valueRes),
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.End,
+            )
+        }
     }
 }
 
@@ -823,6 +884,8 @@ internal object TutorialLayoutDefaults {
     const val destinationFilterUsesOriginalMapChipShape: Boolean = true
     const val destinationShowsFilterResultPanel: Boolean = true
     const val destinationFilterRowCount: Int = 1
+    const val usesServiceLikeStatusStrip: Boolean = true
+    const val statusStripCountPerScene: Int = 1
     const val routeDescriptionBreaksAfterSettingComma: Boolean = true
     const val routeCopyUsesRouteWording: Boolean = true
     const val reportUsesLatestReportTypeIcons: Boolean = true
@@ -852,7 +915,7 @@ internal object TutorialLayoutDefaults {
     val microGap = 4.dp
     val hairlineWidth = 1.dp
 
-    val illustrationHeight = 300.dp
+    val illustrationHeight = 316.dp
     val illustrationContentGap = 12.dp
     val sceneContentVerticalGap = 12.dp
     val heroIconSize = 56.dp
@@ -862,6 +925,8 @@ internal object TutorialLayoutDefaults {
     val destinationControlVerticalGap = 12.dp
     val destinationResultPanelMaxWidth = 340.dp
     val destinationResultPanelGap = 12.dp
+    val statusStripMaxWidth = 340.dp
+    val statusStripHeight = 44.dp
     val floatingPanelHeight = 56.dp
     val floatingPanelElevation = 3.dp
     val floatingPanelIconSize = 22.dp

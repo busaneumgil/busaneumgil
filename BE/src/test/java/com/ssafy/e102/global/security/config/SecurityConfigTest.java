@@ -155,7 +155,7 @@ class SecurityConfigTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "routeId": "rt_selected_001",
+				  "sessionId": "00000000-0000-0000-0000-000000000099",
 				  "score": 5
 				}
 				"""))

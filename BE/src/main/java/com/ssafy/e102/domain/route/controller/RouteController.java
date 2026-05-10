@@ -11,6 +11,7 @@ import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
 import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.service.RerouteService;
 import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
@@ -68,24 +69,28 @@ public class RouteController {
 	}
 
 	@PostMapping("/{routeId}/select")
-	public ApiResponse<Void> selectRoute(
+	public ApiResponse<RouteSessionResponse> selectRoute(
 		@AuthenticationPrincipal
 		AuthPrincipal principal,
 		@PathVariable
 		String routeId,
 		@Valid @RequestBody
 		SelectRouteRequest request) {
-		routeSelectService.select(principal.userId(), routeId, request);
-		return ApiResponse.successMessage("경로가 선택되었습니다.");
+		return new ApiResponse<>(
+			"S2000",
+			routeSelectService.select(principal.userId(), routeId, request),
+			"경로가 선택되었습니다.");
 	}
 
 	@PostMapping("/{routeId}/end")
-	public ApiResponse<Void> endRoute(
+	public ApiResponse<RouteSessionResponse> endRoute(
 		@AuthenticationPrincipal
 		AuthPrincipal principal,
 		@PathVariable
 		String routeId) {
-		routeSessionCommandService.endSession(principal.userId(), routeId);
-		return ApiResponse.successMessage("안내가 종료되었습니다.");
+		return new ApiResponse<>(
+			"S2000",
+			routeSessionCommandService.endSession(principal.userId(), routeId),
+			"안내가 종료되었습니다.");
 	}
 }

@@ -31,7 +31,7 @@
 
 - 기준 문서: `2026-04-10 최종_프로젝트_기획서.md`, `2026-04-11_MVP_화면명세서.md`, `2026-04-09_기능명세서.md`, `2026-04-16_ACCESSIBLE_ROUTING_POC_RESTART_BLUEPRINT.md`
 - `created_at`, `updated_at`은 JPA Auditing 기반 `BaseEntity` 공통 컬럼으로 관리하므로 테이블별 상세 명세에서는 생략한다.
-- 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 필요 시 `deletedAt`을 공통 컬럼으로 관리한다.
+- 현재 회원 탈퇴 구현은 사용자 row를 물리 삭제한다. FK 제약을 피하기 위해 사용자 종속 데이터는 명시 삭제 순서로 먼저 정리한다.
 - 모든 물리 DB 컬럼 네이밍은 `snake_case`를 사용한다. Java 엔티티 필드와 API 응답 필드는 `camelCase`를 유지한다.
 - 숫자 ID를 참조하는 외래키 컬럼은 자동 증가 컬럼이 아니므로 `SERIAL/BIGSERIAL`이 아니라 `INT/BIGINT`로 표기한다.
 - PK는 테이블별 데이터 증가량 기준으로 구분한다. 대량 적재 또는 로그성 테이블은 `BIGINT`, 일반 관리성 테이블은 `INT`를 우선 검토한다.
@@ -285,7 +285,7 @@ erDiagram
 - `role` 후보값은 `USER`, `ADMIN`이다. 가입 시 기본값은 `USER`이며, 백엔드는 `users.role=ADMIN`인 사용자에게 Spring Security `ROLE_ADMIN`을 부여한다.
 - 필수 약관 동의는 가입 완료 조건으로 검증하지만, `users` 테이블에 별도 동의 여부 필드를 저장하지 않는다.
 - 푸시 알림, 진동 알림, TTS, 경로 데이터 수집 설정은 서버에 저장하지 않고 앱 내부 설정 또는 후순위 정책으로 관리한다.
-- 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 동일 사용자 재가입 시 기존 계정 복구 또는 재활성화 정책을 별도로 둔다.
+- 현재 회원 탈퇴는 `users` row 물리 삭제 기준이다. 동일 사용자 재가입은 신규 계정 생성으로 처리하며, 기존 계정 복구 또는 재활성화 정책은 별도 soft delete 도입 시 재정의한다.
 - `user_id`는 외부 응답과 JWT subject에서 `userId`로 노출되는 UUID다.
 
 ---
@@ -365,7 +365,7 @@ erDiagram
 
 사용자가 등록한 도로 위험 요소 제보 데이터를 저장한다.
 
-도로 상태 제보는 로그인 사용자 계정과 연결한다. 회원 탈퇴 후에도 제보 내역은 운영 검토 기록으로 보관한다.
+도로 상태 제보는 로그인 사용자 계정과 연결한다. 현재 회원 탈퇴 구현에서는 FK 정합성을 위해 제보 이미지와 제보 내역도 함께 삭제한다.
 
 ### 컬럼 명세
 
@@ -652,7 +652,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - 경로 평가에는 별점만 저장한다.
 - 평가 대상은 사용자가 방금 안내받은 경로다.
 - `session_id`는 평가 대상 route session이다. route session 하나는 평가가 없거나 최대 하나만 가진다.
-- `route_id`는 `POST /route-ratings` 요청의 평가 대상 경로 ID이며, 조회와 운영 확인을 위해 route session의 대표 경로 ID를 중복 저장한다.
+- `route_id`는 평가 대상 route session의 대표 경로 ID이며, 조회와 운영 확인을 위해 중복 저장한다. `POST /route-ratings` 요청은 정확한 평가 대상을 위해 `sessionId`를 받는다.
 - `route_context_json`은 평가 시점에 같은 사용자의 `route_sessions.route_snapshot_json`을 복사해 저장한다.
 - 같은 사용자의 route session이 없으면 평가를 저장하지 않는다.
 - 평가 생성 시각은 DB `created_at` 공통 감사 컬럼으로 관리하고, Java/API에서는 `createdAt`으로 노출할 수 있다.
@@ -857,7 +857,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 ### users - hazard_reports
 
 - `users 1 : N hazard_reports`
-- 회원 탈퇴 후에도 제보 내역은 보관하되 사용자 식별 처리 정책은 별도 운영 정책을 따른다.
+- 현재 회원 탈퇴 구현에서는 제보 이미지와 제보 내역도 삭제한다. 제보 보관/익명화가 필요하면 `hazard_reports.user_id` nullable 또는 별도 익명 사용자 정책을 먼저 정의한다.
 
 ### users - route_ratings
 
@@ -874,6 +874,7 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - `users 1 : N route_sessions`
 - `route_sessions.user_id`와 `route_sessions.route_id` 또는 `route_sessions.session_id` 기준으로 경로 세션 소유권을 검증한다.
+- 회원 탈퇴 시 route session은 route rating 삭제 후 삭제한다.
 
 ### hazard_reports - hazard_report_images
 

@@ -49,6 +49,7 @@ class RouteRatingControllerTest {
 	@DisplayName("경로 평가는 인증 사용자와 request body를 service로 넘기고 201을 반환한다")
 	void rateRouteReturnsCreatedResponse() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		when(routeRatingService.rate(eq(userId), any(RouteRatingRequest.class)))
 			.thenReturn(new RouteRatingResponse(1L));
@@ -58,10 +59,10 @@ class RouteRatingControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "routeId": "rt_selected_001",
+				  "sessionId": "%s",
 				  "score": 5
 				}
-				"""))
+				""".formatted(sessionId)))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("S2010"))
 			.andExpect(jsonPath("$.data.ratingId").value(1))
@@ -75,6 +76,7 @@ class RouteRatingControllerTest {
 	@DisplayName("경로 평가 score 최솟값 1은 성공한다")
 	void rateRouteAcceptsMinimumScore() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		when(routeRatingService.rate(eq(userId), any(RouteRatingRequest.class)))
 			.thenReturn(new RouteRatingResponse(2L));
@@ -84,10 +86,10 @@ class RouteRatingControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "routeId": "rt_selected_001",
+				  "sessionId": "%s",
 				  "score": 1
 				}
-				"""))
+				""".formatted(sessionId)))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("S2010"))
 			.andExpect(jsonPath("$.data.ratingId").value(2));
@@ -96,8 +98,8 @@ class RouteRatingControllerTest {
 	}
 
 	@Test
-	@DisplayName("경로 평가 routeId 누락은 RR4000을 반환한다")
-	void rateRouteRejectsBlankRouteId() throws Exception {
+	@DisplayName("경로 평가 sessionId 누락은 RR4000을 반환한다")
+	void rateRouteRejectsMissingSessionId() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 
@@ -106,7 +108,6 @@ class RouteRatingControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "routeId": "",
 				  "score": 5
 				}
 				"""))
@@ -121,6 +122,7 @@ class RouteRatingControllerTest {
 	@DisplayName("경로 평가 score 범위 오류는 RR4000을 반환한다")
 	void rateRouteRejectsInvalidScore() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 
 		mockMvc.perform(post("/route-ratings")
@@ -128,10 +130,10 @@ class RouteRatingControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "routeId": "rt_selected_001",
+				  "sessionId": "%s",
 				  "score": 0
 				}
-				"""))
+				""".formatted(sessionId)))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value("RR4000"));
 
@@ -142,6 +144,7 @@ class RouteRatingControllerTest {
 	@DisplayName("다른 사용자의 route 평가는 A4030을 반환한다")
 	void rateRouteRejectsOtherUserRoute() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		Mockito.doThrow(new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED))
 			.when(routeRatingService)
@@ -152,10 +155,10 @@ class RouteRatingControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "routeId": "other_route",
+				  "sessionId": "%s",
 				  "score": 5
 				}
-				"""))
+				""".formatted(sessionId)))
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.status").value("A4030"))
 			.andExpect(jsonPath("$.message").value("접근할 수 없는 경로입니다."));
@@ -167,6 +170,7 @@ class RouteRatingControllerTest {
 	@DisplayName("route session 없는 경로 평가는 RT4043을 반환한다")
 	void rateRouteRejectsMissingRouteSession() throws Exception {
 		UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		Mockito.doThrow(new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND))
 			.when(routeRatingService)
@@ -177,10 +181,10 @@ class RouteRatingControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
-				  "routeId": "missing_route",
+				  "sessionId": "%s",
 				  "score": 5
 				}
-				"""))
+				""".formatted(sessionId)))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.status").value("RT4043"))
 			.andExpect(jsonPath("$.message").value("선택한 경로 정보를 찾을 수 없습니다."));

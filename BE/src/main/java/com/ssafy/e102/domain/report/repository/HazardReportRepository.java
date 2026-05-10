@@ -18,4 +18,6 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 
 	@EntityGraph(attributePaths = "images")
 	Optional<HazardReport> findWithImagesByReportId(Long reportId);
+
+	void deleteAllByUser_UserId(UUID userId);
 }

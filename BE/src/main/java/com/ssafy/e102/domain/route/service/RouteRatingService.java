@@ -1,7 +1,7 @@
 package com.ssafy.e102.domain.route.service;
 
 import java.sql.SQLException;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -43,7 +43,7 @@ public class RouteRatingService {
 
 	@Transactional
 	public RouteRatingResponse rate(UUID userId, RouteRatingRequest request) {
-		RouteSession routeSession = getRouteSession(userId, request.routeId());
+		RouteSession routeSession = getRouteSession(userId, request.sessionId());
 		JsonNode routeContextJson = routeSession.getRouteSnapshotJson();
 
 		RouteRating routeRating = routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId())
@@ -56,16 +56,13 @@ public class RouteRatingService {
 		return new RouteRatingResponse(routeRating.getRatingId());
 	}
 
-	private RouteSession getRouteSession(UUID userId, String routeId) {
-		Optional<RouteSession> routeSession = routeSessionRepository
-			.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, routeId);
-		if (routeSession.isPresent()) {
-			return routeSession.get();
-		}
-		if (routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc(routeId).isPresent()) {
+	private RouteSession getRouteSession(UUID userId, UUID sessionId) {
+		RouteSession routeSession = routeSessionRepository.findById(sessionId)
+			.orElseThrow(() -> new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND));
+		if (!Objects.equals(routeSession.getUser().getUserId(), userId)) {
 			throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
 		}
-		throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+		return routeSession;
 	}
 
 	private RouteRating createRatingOrUpdateAfterUniqueConflict(

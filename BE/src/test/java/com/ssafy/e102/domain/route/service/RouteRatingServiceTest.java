@@ -36,6 +36,7 @@ import com.ssafy.e102.domain.user.type.SocialProvider;
 class RouteRatingServiceTest {
 
 	private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+	private static final UUID SESSION_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private RouteRatingRepository routeRatingRepository;
@@ -56,7 +57,7 @@ class RouteRatingServiceTest {
 	void rateStoresRouteContextFromSession() {
 		JsonNode snapshot = snapshot("rt_selected_001");
 		RouteSession routeSession = routeSession("rt_selected_001", snapshot);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findById(SESSION_ID))
 			.thenReturn(Optional.of(routeSession));
 		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.empty());
@@ -68,7 +69,7 @@ class RouteRatingServiceTest {
 				return rating;
 			});
 
-		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5));
+		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 5));
 
 		ArgumentCaptor<RouteRating> ratingCaptor = ArgumentCaptor.forClass(RouteRating.class);
 		verify(routeRatingRepository).saveAndFlush(ratingCaptor.capture());
@@ -80,33 +81,31 @@ class RouteRatingServiceTest {
 	}
 
 	@Test
-	@DisplayName("route session이 없으면 RT4043으로 평가를 차단한다")
+	@DisplayName("sessionId에 해당하는 route session이 없으면 RT4043으로 평가를 차단한다")
 	void rateRejectsMissingRouteSession() {
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_without_session"))
-			.thenReturn(Optional.empty());
-		when(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc("rt_without_session"))
+		when(routeSessionRepository.findById(SESSION_ID))
 			.thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest("rt_without_session", 4)))
+		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 4)))
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 	}
 
 	@Test
-	@DisplayName("같은 사용자의 같은 routeId 평가는 최신 score로 갱신한다")
+	@DisplayName("같은 route session 평가는 최신 score로 갱신한다")
 	void rateUpdatesExistingRating() {
 		RouteSession routeSession = routeSession("rt_selected_001", snapshot("old"));
 		RouteRating existingRating = RouteRating.create(user(USER_ID), routeSession, 3, snapshot("old"));
 		ReflectionTestUtils.setField(existingRating, "ratingId", 3L);
 		JsonNode snapshot = snapshot("rt_selected_001");
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findById(SESSION_ID))
 			.thenReturn(Optional.of(routeSession));
 		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.of(existingRating));
 
-		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5));
+		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 5));
 
 		assertThat(response.ratingId()).isEqualTo(3L);
 		assertThat(existingRating.getScore()).isEqualTo((short)5);
@@ -116,12 +115,11 @@ class RouteRatingServiceTest {
 	@Test
 	@DisplayName("다른 사용자의 route session은 A4030으로 차단한다")
 	void rateRejectsOtherUserRoute() {
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "other_route"))
-			.thenReturn(Optional.empty());
-		when(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc("other_route"))
-			.thenReturn(Optional.of(mock(RouteSession.class)));
+		RouteSession otherUserSession = routeSession("other_route", snapshot("other_route"));
+		when(otherUserSession.getUser()).thenReturn(user(UUID.fromString("00000000-0000-0000-0000-000000000002")));
+		when(routeSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(otherUserSession));
 
-		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest("other_route", 5)))
+		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 5)))
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_ACCESS_DENIED);
@@ -134,7 +132,7 @@ class RouteRatingServiceTest {
 		RouteSession routeSession = routeSession("rt_selected_001", snapshot);
 		RouteRating existingRating = RouteRating.create(user(USER_ID), routeSession, 2, snapshot("old"));
 		ReflectionTestUtils.setField(existingRating, "ratingId", 4L);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findById(SESSION_ID))
 			.thenReturn(Optional.of(routeSession));
 		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.empty(), Optional.of(existingRating));
@@ -142,7 +140,7 @@ class RouteRatingServiceTest {
 		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
 			.thenThrow(routeRatingUniqueViolation());
 
-		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5));
+		RouteRatingResponse response = service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 5));
 
 		assertThat(response.ratingId()).isEqualTo(4L);
 		assertThat(existingRating.getScore()).isEqualTo((short)5);
@@ -155,7 +153,8 @@ class RouteRatingServiceTest {
 		RouteSession routeSession = mock(RouteSession.class);
 		when(routeSession.getSessionId()).thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000099"));
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot("rt_selected_001"));
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSession.getUser()).thenReturn(user(USER_ID));
+		when(routeSessionRepository.findById(SESSION_ID))
 			.thenReturn(Optional.of(routeSession));
 		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
 			.thenReturn(Optional.empty());
@@ -163,7 +162,7 @@ class RouteRatingServiceTest {
 		when(routeRatingRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(RouteRating.class)))
 			.thenThrow(new DataIntegrityViolationException("unknown constraint"));
 
-		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest("rt_selected_001", 5)))
+		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 5)))
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
@@ -190,9 +189,10 @@ class RouteRatingServiceTest {
 
 	private RouteSession routeSession(String routeId, JsonNode snapshot) {
 		RouteSession routeSession = mock(RouteSession.class);
-		when(routeSession.getSessionId()).thenReturn(UUID.randomUUID());
+		when(routeSession.getSessionId()).thenReturn(SESSION_ID);
 		when(routeSession.getRouteId()).thenReturn(routeId);
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
+		when(routeSession.getUser()).thenReturn(user(USER_ID));
 		return routeSession;
 	}
 }

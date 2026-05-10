@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
@@ -29,23 +30,25 @@ public class RouteSessionCommandService {
 	}
 
 	@Transactional
-	public void saveActiveSessionIfAbsent(
+	public RouteSessionResponse saveActiveSessionIfAbsent(
 		UUID userId,
 		String routeId,
 		Point startPoint,
 		Point endPoint,
 		JsonNode routeSnapshotJson) {
 		normalizeActiveSessions(userId, routeId);
-		if (hasActiveSession(userId, routeId)) {
-			return;
+		Optional<RouteSession> existingActiveSession = findActiveSession(userId, routeId);
+		if (existingActiveSession.isPresent()) {
+			return RouteSessionResponse.from(existingActiveSession.get());
 		}
 		User user = userRepository.getReferenceById(userId);
-		routeSessionRepository.saveAndFlush(RouteSession.create(
+		RouteSession routeSession = routeSessionRepository.saveAndFlush(RouteSession.create(
 			user,
 			routeId,
 			startPoint,
 			endPoint,
 			routeSnapshotJson));
+		return RouteSessionResponse.from(routeSession);
 	}
 
 	@Transactional(readOnly = true)
@@ -53,16 +56,25 @@ public class RouteSessionCommandService {
 		return findActiveSession(userId, routeId).isPresent();
 	}
 
+	@Transactional(readOnly = true)
+	public RouteSessionResponse getActiveSession(UUID userId, String routeId) {
+		return findActiveSession(userId, routeId)
+			.map(RouteSessionResponse::from)
+			.orElseThrow(() -> new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND));
+	}
+
 	@Transactional
-	public void endSession(UUID userId, String routeId) {
+	public RouteSessionResponse endSession(UUID userId, String routeId) {
 		normalizeActiveSessions(userId, routeId);
 		Optional<RouteSession> activeSession = findActiveSession(userId, routeId);
 		if (activeSession.isPresent()) {
-			activeSession.get().complete();
-			return;
+			RouteSession routeSession = activeSession.get();
+			routeSession.complete();
+			return RouteSessionResponse.from(routeSession);
 		}
-		if (findOwnedSession(userId, routeId).isPresent()) {
-			return;
+		Optional<RouteSession> ownedSession = findOwnedSession(userId, routeId);
+		if (ownedSession.isPresent()) {
+			return RouteSessionResponse.from(ownedSession.get());
 		}
 		if (findAnySession(routeId).isPresent()) {
 			throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);

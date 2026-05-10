@@ -81,6 +81,11 @@ class RouteSelectFlowTest {
 		userRepository = mock(UserRepository.class);
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 			any(), anyString(), any())).thenReturn(Optional.empty());
+		when(routeSessionRepository.saveAndFlush(any(RouteSession.class))).thenAnswer(invocation -> {
+			RouteSession session = invocation.getArgument(0);
+			ReflectionTestUtils.setField(session, "sessionId", UUID.randomUUID());
+			return session;
+		});
 		routeSessionCommandService = new RouteSessionCommandService(routeSessionRepository, userRepository);
 		routeSelectService = new RouteSelectService(routeSearchCacheService,
 			routeSessionCommandService, objectMapper);
@@ -150,8 +155,7 @@ class RouteSelectFlowTest {
 		ArgumentCaptor<RouteSession> sessionCaptor = ArgumentCaptor.forClass(RouteSession.class);
 		verify(routeSessionRepository).saveAndFlush(sessionCaptor.capture());
 		RouteSession selectedSession = sessionCaptor.getValue();
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, route.routeId()))
-			.thenReturn(Optional.of(selectedSession));
+		when(routeSessionRepository.findById(selectedSession.getSessionId())).thenReturn(Optional.of(selectedSession));
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 			USER_ID, route.routeId(), RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(selectedSession));
@@ -159,7 +163,7 @@ class RouteSelectFlowTest {
 			.thenReturn(Optional.empty());
 
 		routeSessionCommandService.endSession(USER_ID, route.routeId());
-		routeRatingService.rate(USER_ID, new RouteRatingRequest(route.routeId(), 5));
+		routeRatingService.rate(USER_ID, new RouteRatingRequest(selectedSession.getSessionId(), 5));
 
 		ArgumentCaptor<RouteRating> ratingCaptor = ArgumentCaptor.forClass(RouteRating.class);
 		verify(routeRatingRepository).saveAndFlush(ratingCaptor.capture());

@@ -305,8 +305,8 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals(listOf("route-preview"), routeLineStates.map { it.routeLineId })
         assertEquals(2, routeLineStates.first().points.size)
-        assertEquals(5.5f, routeLineStates.first().lineWidth, 0f)
-        assertEquals(7.5f, routeLineStates.first().strokeWidth, 0f)
+        assertEquals(5f, routeLineStates.first().lineWidth, 0f)
+        assertEquals(6.5f, routeLineStates.first().strokeWidth, 0f)
         assertEquals(0xFF2A7BFF.toInt(), routeLineStates.first().lineColor)
         assertEquals(0xFF0F4FC6.toInt(), routeLineStates.first().strokeColor)
     }

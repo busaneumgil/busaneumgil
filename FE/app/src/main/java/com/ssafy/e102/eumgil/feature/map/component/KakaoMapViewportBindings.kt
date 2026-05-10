@@ -452,33 +452,33 @@ private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineSt
     return when (style) {
         MapViewportPolylineStyle.ROUTE_PREVIEW ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 5.5f,
-                lineColor = palette.lineColor,
-                strokeWidth = 7.5f,
-                strokeColor = palette.casingColor,
-            )
-
-        MapViewportPolylineStyle.ROUTE_BASELINE ->
-            KakaoRouteLineStyleSpec(
-                lineWidth = 4f,
-                lineColor = palette.lineColor,
-                strokeWidth = 6f,
-                strokeColor = palette.casingColor,
-            )
-
-        MapViewportPolylineStyle.ACTIVE_SEGMENT ->
-            KakaoRouteLineStyleSpec(
-                lineWidth = 4.5f,
+                lineWidth = 5f,
                 lineColor = palette.lineColor,
                 strokeWidth = 6.5f,
                 strokeColor = palette.casingColor,
             )
 
+        MapViewportPolylineStyle.ROUTE_BASELINE ->
+            KakaoRouteLineStyleSpec(
+                lineWidth = 3.5f,
+                lineColor = palette.lineColor,
+                strokeWidth = 5f,
+                strokeColor = palette.casingColor,
+            )
+
+        MapViewportPolylineStyle.ACTIVE_SEGMENT ->
+            KakaoRouteLineStyleSpec(
+                lineWidth = 4f,
+                lineColor = palette.lineColor,
+                strokeWidth = 5.5f,
+                strokeColor = palette.casingColor,
+            )
+
         MapViewportPolylineStyle.FOCUSED_SEGMENT ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 5f,
+                lineWidth = 4.5f,
                 lineColor = palette.lineColor,
-                strokeWidth = 7f,
+                strokeWidth = 6f,
                 strokeColor = palette.casingColor,
             )
     }

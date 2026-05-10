@@ -106,6 +106,51 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `segment tap resolves focused map coordinate even when the segment polyline is missing`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testSparseSegmentNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 0))
+            advanceUntilIdle()
+
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertTrue(viewModel.uiState.value.mapOverlay.focusedSegmentPolyline.isEmpty())
+            assertEquals(
+                GeoCoordinate(latitude = 35.1800, longitude = 129.0720),
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+        }
+
+    @Test
+    fun `confirming exit navigation routes to arrival flow`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository = FakeRouteRepository(endSessionId = "ended-session")
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                )
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(2).toList() }
+
+            viewModel.onAction(NavigationUiAction.ExitNavigationClicked)
+            viewModel.onAction(NavigationUiAction.ConfirmExitNavigationClicked)
+            advanceUntilIdle()
+
+            assertEquals(listOf("walk-route-1"), routeRepository.endRouteCalls)
+            assertEquals("ended-session", viewModel.currentRatingSessionId())
+            assertEquals(
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
     fun `accurate repeated off route updates reroute and end latest route id on completion`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -419,6 +464,94 @@ private fun testTransitNavigationRequest(): RouteNavigationRequest =
                 searchId = "search-2",
                 routeId = "transit-route-1",
                 sessionId = "session-2",
+            ),
+    )
+
+private fun testSparseSegmentNavigationRequest(): RouteNavigationRequest =
+    RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = "Origin",
+                coordinate = GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
+            ),
+        destination =
+            RouteWaypoint(
+                name = "Destination",
+                coordinate = GeoCoordinate(latitude = 35.1800, longitude = 129.0780),
+            ),
+        selectedRoute =
+            RouteCandidate(
+                serverRouteId = "sparse-route-1",
+                routeOption = RouteOption.RECOMMENDED,
+                title = "Sparse Route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 800,
+                        estimatedTimeMinutes = 12,
+                        riskLevel = RouteRiskLevel.LOW,
+                        durationSeconds = 720,
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
+                                        GeoCoordinate(latitude = 35.1800, longitude = 129.0740),
+                                        GeoCoordinate(latitude = 35.1800, longitude = 129.0780),
+                                    ),
+                            ),
+                        segmentCount = 2,
+                        renderableSegmentCount = 1,
+                    ),
+                legs =
+                    listOf(
+                        RouteLeg(
+                            sequence = 1,
+                            role = RouteLegRole.WALK_TO_TRANSIT,
+                            distanceMeters = 400,
+                            durationSeconds = 300,
+                        ),
+                        RouteLeg(
+                            sequence = 2,
+                            role = RouteLegRole.TRANSIT,
+                            type = RouteLegType.BUS,
+                            distanceMeters = 400,
+                            durationSeconds = 420,
+                        ),
+                    ),
+                segments =
+                    listOf(
+                        RouteSegment(
+                            sequence = 1,
+                            polyline = RoutePolyline(),
+                            distanceMeters = 400,
+                            guidanceMessage = "Walk to boarding stop",
+                            sourceLegSequence = 1,
+                        ),
+                        RouteSegment(
+                            sequence = 2,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.1800, longitude = 129.0740),
+                                            GeoCoordinate(latitude = 35.1800, longitude = 129.0780),
+                                        ),
+                                ),
+                            distanceMeters = 400,
+                            guidanceMessage = "Ride the bus",
+                            sourceLegSequence = 2,
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Sparse navigation test route"),
+        selectionHandoff =
+            RouteNavigationSelectionHandoff(
+                searchId = "search-3",
+                routeId = "sparse-route-1",
+                sessionId = "session-3",
             ),
     )
 

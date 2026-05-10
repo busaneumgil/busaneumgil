@@ -171,52 +171,6 @@ private fun DrawScope.drawViewportPolyline(
                 color = casingColor.copy(alpha = 0.9f),
                 style =
                     Stroke(
-                        width = 7.5.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-            drawPath(
-                path = path,
-                color = toneColor,
-                style =
-                    Stroke(
-                        width = 4.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-        }
-
-        MapViewportPolylineStyle.ROUTE_BASELINE -> {
-            drawPath(
-                path = path,
-                color = casingColor.copy(alpha = 0.82f),
-                style =
-                    Stroke(
-                        width = 6.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-            drawPath(
-                path = path,
-                color = toneColor.copy(alpha = 0.9f),
-                style =
-                    Stroke(
-                        width = 2.5.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-        }
-
-        MapViewportPolylineStyle.ACTIVE_SEGMENT -> {
-            drawPath(
-                path = path,
-                color = casingColor.copy(alpha = 0.88f),
-                style =
-                    Stroke(
                         width = 6.5.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
@@ -234,13 +188,36 @@ private fun DrawScope.drawViewportPolyline(
             )
         }
 
-        MapViewportPolylineStyle.FOCUSED_SEGMENT -> {
+        MapViewportPolylineStyle.ROUTE_BASELINE -> {
             drawPath(
                 path = path,
-                color = casingColor.copy(alpha = 0.92f),
+                color = casingColor.copy(alpha = 0.82f),
                 style =
                     Stroke(
-                        width = 8.dp.toPx(),
+                        width = 5.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+            drawPath(
+                path = path,
+                color = toneColor.copy(alpha = 0.9f),
+                style =
+                    Stroke(
+                        width = 2.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+        }
+
+        MapViewportPolylineStyle.ACTIVE_SEGMENT -> {
+            drawPath(
+                path = path,
+                color = casingColor.copy(alpha = 0.88f),
+                style =
+                    Stroke(
+                        width = 5.5.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -250,7 +227,30 @@ private fun DrawScope.drawViewportPolyline(
                 color = toneColor,
                 style =
                     Stroke(
-                        width = 4.dp.toPx(),
+                        width = 3.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+        }
+
+        MapViewportPolylineStyle.FOCUSED_SEGMENT -> {
+            drawPath(
+                path = path,
+                color = casingColor.copy(alpha = 0.92f),
+                style =
+                    Stroke(
+                        width = 6.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+            drawPath(
+                path = path,
+                color = toneColor,
+                style =
+                    Stroke(
+                        width = 3.5.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),

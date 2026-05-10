@@ -15,6 +15,10 @@ import com.ssafy.e102.eumgil.core.model.FacilitySeed
 import com.ssafy.e102.eumgil.core.model.FacilitySeedCatalog
 import com.ssafy.e102.eumgil.core.model.FacilitySeedQuery
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
@@ -577,12 +581,192 @@ class MapViewModelTest {
 
             viewModel.onAction(MapUiAction.MarkerTapped(markerId))
             advanceUntilIdle()
-            viewModel.onAction(MapUiAction.MapTapped(tappedCoordinate))
+            viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
             advanceUntilIdle()
 
             assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
+        }
+
+    @Test
+    fun `blank map tap requests address detail and exposes map tap sheet state`() =
+        runTest {
+            val tappedCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771)
+            val placesRepository =
+                FakePlacesRepository(
+                    mapTapDetail =
+                        testMapTappedDetail(
+                            bookmarkTargetId = "external-address:35.1775,129.0771",
+                            detailType = MapPlaceDetailType.EXTERNAL_ADDRESS,
+                            name = "Selected Address",
+                            address = "100 Jungang-daero, Busan",
+                            latitude = tappedCoordinate.latitude,
+                            longitude = tappedCoordinate.longitude,
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
+            advanceUntilIdle()
+
+            val request = placesRepository.mapTapDetailRequests.single()
+            assertEquals(tappedCoordinate.latitude, request.latitude, 0.0)
+            assertEquals(tappedCoordinate.longitude, request.longitude, 0.0)
+            assertEquals(MapPlaceClickType.ADDRESS, request.clickType)
+            assertEquals(null, request.provider)
+            assertEquals(null, request.providerPlaceId)
+            assertEquals(null, request.nameHint)
+            assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
+            assertEquals("Selected Address", viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.name)
+            assertEquals("100 Jungang-daero, Busan", viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.address)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isMapTapDetailLoading)
+            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.mapTapDetailErrorMessage)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
+    fun `external poi tap requests provider detail and preserves provider metadata`() =
+        runTest {
+            val tappedCoordinate = MapCoordinate(latitude = 35.1799, longitude = 129.0752)
+            val placesRepository =
+                FakePlacesRepository(
+                    mapTapDetail =
+                        testMapTappedDetail(
+                            bookmarkTargetId = "kakao:poi-123",
+                            detailType = MapPlaceDetailType.EXTERNAL_POI,
+                            provider = "KAKAO",
+                            providerPlaceId = "poi-123",
+                            name = "Kakao Cafe",
+                            providerCategory = "Cafe",
+                            address = "10 Cafe-ro, Busan",
+                            latitude = tappedCoordinate.latitude,
+                            longitude = tappedCoordinate.longitude,
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(
+                MapUiAction.MapTapped(
+                    MapTapPayload(
+                        coordinate = tappedCoordinate,
+                        clickType = MapTapClickType.POI,
+                        provider = "KAKAO",
+                        providerPlaceId = "poi-123",
+                        nameHint = "Cafe Hint",
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            val request = placesRepository.mapTapDetailRequests.single()
+            assertEquals(MapPlaceClickType.POI, request.clickType)
+            assertEquals("KAKAO", request.provider)
+            assertEquals("poi-123", request.providerPlaceId)
+            assertEquals("Cafe Hint", request.nameHint)
+            val detail = requireNotNull(viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
+            assertEquals(MapPlaceDetailType.EXTERNAL_POI, detail.detailType)
+            assertEquals("kakao:poi-123", detail.bookmarkTargetId)
+            assertEquals("KAKAO", detail.provider)
+            assertEquals("poi-123", detail.providerPlaceId)
+            assertEquals("Cafe", detail.providerCategory)
+            assertEquals("Kakao Cafe", detail.name)
+        }
+
+    @Test
+    fun `map tap detail failure clears loading and keeps sheet error state`() =
+        runTest {
+            val tappedCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771)
+            val placesRepository =
+                FakePlacesRepository(
+                    mapTapDetailFailure = IllegalStateException("detail failed"),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
+            advanceUntilIdle()
+
+            assertEquals(1, placesRepository.mapTapDetailRequests.size)
+            assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
+            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isMapTapDetailLoading)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.mapTapDetailErrorMessage?.isNotBlank() == true)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
+    fun `marker tap clears previous map tap detail before loading internal detail`() =
+        runTest {
+            val tappedCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771)
+            val placesRepository =
+                FakePlacesRepository(
+                    mapTapDetail =
+                        testMapTappedDetail(
+                            bookmarkTargetId = "external-address:35.1775,129.0771",
+                            detailType = MapPlaceDetailType.EXTERNAL_ADDRESS,
+                            name = "Selected Address",
+                            latitude = tappedCoordinate.latitude,
+                            longitude = tappedCoordinate.longitude,
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
+            advanceUntilIdle()
+            assertEquals("Selected Address", viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.name)
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.selectedMapPinCoordinate)
+            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
+            assertEquals(markerId, viewModel.uiState.value.selectedMarkerId)
+            assertEquals(markerId, viewModel.uiState.value.facilityDetailSheetState.detail?.facilityId)
         }
 
     @Test
@@ -1463,6 +1647,36 @@ private fun testLocationSnapshot(
         recordedAtEpochMillis = recordedAtEpochMillis,
     )
 
+private fun testMapTappedDetail(
+    bookmarkTargetId: String,
+    detailType: MapPlaceDetailType,
+    provider: String? = null,
+    providerPlaceId: String? = null,
+    name: String,
+    category: PlaceCategory? = null,
+    providerCategory: String? = null,
+    address: String = "",
+    latitude: Double,
+    longitude: Double,
+    isBookmarked: Boolean = false,
+    accessibilityTags: List<String> = emptyList(),
+): MapTappedPlaceDetail =
+    MapTappedPlaceDetail(
+        bookmarkTargetId = bookmarkTargetId,
+        detailType = detailType,
+        placeId = null,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        name = name,
+        category = category,
+        providerCategory = providerCategory,
+        address = address,
+        latitude = latitude,
+        longitude = longitude,
+        isBookmarked = isBookmarked,
+        accessibilityTags = accessibilityTags,
+    )
+
 private class FakeLocationPermissionManager(
     initialState: LocationPermissionState,
 ) : LocationPermissionManager {
@@ -1532,11 +1746,14 @@ private class FakeSearchRepository(
 private class FakePlacesRepository(
     private val places: List<PlaceSummary> = emptyList(),
     private val placeDetailsById: Map<String, PlaceDetail> = emptyMap(),
+    private val mapTapDetail: MapTappedPlaceDetail? = null,
     private val placesFailure: Throwable? = null,
     private val detailFailureById: Map<String, Throwable> = emptyMap(),
+    private val mapTapDetailFailure: Throwable? = null,
 ) : PlacesRepository {
     val queries = mutableListOf<PlaceQuery>()
     val detailRequests = mutableListOf<String>()
+    val mapTapDetailRequests = mutableListOf<MapPlaceDetailRequest>()
 
     override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
         queries += query
@@ -1548,6 +1765,12 @@ private class FakePlacesRepository(
         detailRequests += placeId
         detailFailureById[placeId]?.let { throw it }
         return placeDetailsById[placeId]
+    }
+
+    override suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? {
+        mapTapDetailRequests += request
+        mapTapDetailFailure?.let { throw it }
+        return mapTapDetail
     }
 }
 

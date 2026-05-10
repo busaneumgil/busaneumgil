@@ -108,7 +108,7 @@ class KakaoMapViewportConfigurationTest {
             "Facility markers should recreate a dedicated Kakao label layer instead of projecting every facility marker through Compose.",
             source.contains("LabelLayerOptions") &&
                 source.contains("from(KAKAO_MARKER_LAYER_ID)") &&
-                source.contains("addLabels(labelOptions)"),
+                source.contains("markerLayer.addLabel("),
         )
         assertTrue(
             "Facility labels should use runtime-generated bitmap styles so vector drawables are not handed to Kakao labels directly.",
@@ -131,6 +131,29 @@ class KakaoMapViewportConfigurationTest {
         assertFalse(
             "Facility markers should no longer be derived from createKakaoFacilityMarkerOverlays.",
             source.contains("createKakaoFacilityMarkerOverlays("),
+        )
+    }
+
+    @Test
+    fun `external kakao poi taps are forwarded as provider map tap payloads`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Kakao POI taps should be converted into POI map tap payloads instead of being treated as blank terrain taps.",
+            source.contains("dispatchExternalPoiTap(") &&
+                source.contains("MapTapClickType.POI") &&
+                source.contains("KAKAO_PROVIDER_NAME"),
+        )
+        assertTrue(
+            "The generic map click callback should pass Kakao's POI name when the SDK exposes it.",
+            source.contains("nameHint = poi.name"),
+        )
+        assertTrue(
+            "The POI callback should still fall back to providerPlaceId when Kakao does not expose a name in that callback.",
+            source.contains("providerPlaceId = poiId") &&
+                source.contains("nameHint = null"),
         )
     }
 }

@@ -44,6 +44,8 @@ import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
@@ -104,8 +106,8 @@ fun MapScreen(
                             ),
                         )
                     },
-                    onMapClick = { coordinate ->
-                        onAction(MapUiAction.MapTapped(coordinate))
+                    onMapClick = { payload ->
+                        onAction(MapUiAction.MapTapped(payload))
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -164,6 +166,7 @@ fun MapScreen(
                             ) {
                                 Button(
                                     onClick = { onAction(MapUiAction.FacilitySetDestinationClicked) },
+                                    enabled = facilityDetailSheetUiState.isRouteActionEnabled,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
@@ -176,7 +179,7 @@ fun MapScreen(
                                         ),
                                 ) {
                                     IconTextButtonContent(
-                                        iconRes = R.drawable.ic_direction_destination,
+                                        iconRes = R.drawable.ic_map_current_location_disabled,
                                         label = stringResource(id = R.string.map_facility_detail_route_entry_action),
                                     )
                                 }
@@ -245,6 +248,8 @@ private data class MapFacilityDetailSheetUiState(
     val accessibilityTags: List<String>,
     val isBookmarked: Boolean,
     val isBookmarkUpdating: Boolean,
+    val isBookmarkEnabled: Boolean,
+    val isRouteActionEnabled: Boolean,
     val bookmarkErrorMessage: String?,
 ) {
     fun toShellState(): FacilityDetailBottomSheetShellState =
@@ -397,6 +402,8 @@ private fun FacilityDetailBookmarkActionButton(
     val bookmarkButtonLabel = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
     val bookmarkStateDescription =
         when {
+            state.isBookmarkEnabled.not() -> "Bookmark is only available for internal places."
+
             state.isBookmarkUpdating ->
                 stringResource(id = R.string.map_facility_detail_bookmark_state_updating)
 
@@ -406,10 +413,10 @@ private fun FacilityDetailBookmarkActionButton(
             else -> stringResource(id = R.string.map_facility_detail_bookmark_state_unsaved)
         }
     val contentColor =
-        if (state.isBookmarked) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+        when {
+            state.isBookmarkEnabled.not() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+            state.isBookmarked -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
 
     Surface(
@@ -419,7 +426,7 @@ private fun FacilityDetailBookmarkActionButton(
     ) {
         IconButton(
             onClick = onToggle,
-            enabled = state.isBookmarkUpdating.not(),
+            enabled = state.isBookmarkEnabled && state.isBookmarkUpdating.not(),
             modifier =
                 Modifier
                     .size(44.dp)
@@ -663,7 +670,78 @@ private fun mapRecentDestinationBottomSheetState(uiState: MapUiState): RecentDes
     ).toShellState()
 
 @Composable
+private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDetailSheetUiState? {
+    val sheetState = uiState.facilityDetailSheetState
+    val mapTapDetail = sheetState.mapTapDetail
+    return when {
+        mapTapDetail != null ->
+            MapFacilityDetailSheetUiState(
+                isVisible = true,
+                placeIconRes = mapTapDetailPlaceIconRes(mapTapDetail),
+                metaLabel =
+                    mapTapDetailMetaLabel(
+                        detail = mapTapDetail,
+                        locationStatus = uiState.locationStatus,
+                    ),
+                title = mapTapDetail.name,
+                address = mapTapDetailAddressLabel(mapTapDetail),
+                guideMessage = mapTapDetailGuideMessage(mapTapDetail),
+                accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
+                isBookmarked = mapTapDetail.isBookmarked,
+                isBookmarkUpdating = false,
+                isBookmarkEnabled = false,
+                isRouteActionEnabled = false,
+                bookmarkErrorMessage = null,
+            )
+
+        sheetState.isMapTapDetailLoading ->
+            MapFacilityDetailSheetUiState(
+                isVisible = true,
+                placeIconRes = R.drawable.ic_nav_facility,
+                metaLabel = "Location detail",
+                title = "Selected location",
+                address =
+                    uiState.selectedMapPinCoordinate
+                        ?.let { coordinate -> coordinateText(coordinate) }
+                        .orEmpty(),
+                guideMessage = "Loading location detail.",
+                accessibilityTags = emptyList(),
+                isBookmarked = false,
+                isBookmarkUpdating = true,
+                isBookmarkEnabled = false,
+                isRouteActionEnabled = false,
+                bookmarkErrorMessage = null,
+            )
+
+        sheetState.mapTapDetailErrorMessage != null ->
+            MapFacilityDetailSheetUiState(
+                isVisible = true,
+                placeIconRes = R.drawable.ic_nav_facility,
+                metaLabel = "Location detail",
+                title = "Location detail unavailable",
+                address =
+                    uiState.selectedMapPinCoordinate
+                        ?.let { coordinate -> coordinateText(coordinate) }
+                        .orEmpty(),
+                guideMessage = sheetState.mapTapDetailErrorMessage,
+                accessibilityTags = emptyList(),
+                isBookmarked = false,
+                isBookmarkUpdating = false,
+                isBookmarkEnabled = false,
+                isRouteActionEnabled = false,
+                bookmarkErrorMessage = null,
+            )
+
+        else -> null
+    }
+}
+
+@Composable
 private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityDetailSheetUiState {
+    mapTapFacilityDetailSheetState(uiState)?.let { sheetState ->
+        return sheetState
+    }
+
     val detail = uiState.facilityDetailSheetState.detail
     return if (detail == null) {
         MapFacilityDetailSheetUiState(
@@ -676,6 +754,64 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             accessibilityTags = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = false,
+            isBookmarkEnabled = false,
+            isRouteActionEnabled = false,
+            bookmarkErrorMessage = null,
+        )
+    } else if (uiState.facilityDetailSheetState.mapTapDetail != null) {
+        val mapTapDetail = uiState.facilityDetailSheetState.mapTapDetail
+        MapFacilityDetailSheetUiState(
+            isVisible = true,
+            placeIconRes = mapTapDetailPlaceIconRes(mapTapDetail),
+            metaLabel =
+                mapTapDetailMetaLabel(
+                    detail = mapTapDetail,
+                    locationStatus = uiState.locationStatus,
+                ),
+            title = mapTapDetail.name,
+            address = mapTapDetailAddressLabel(mapTapDetail),
+            guideMessage = mapTapDetailGuideMessage(mapTapDetail),
+            accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
+            isBookmarked = mapTapDetail.isBookmarked,
+            isBookmarkUpdating = false,
+            isBookmarkEnabled = false,
+            isRouteActionEnabled = false,
+            bookmarkErrorMessage = null,
+        )
+    } else if (uiState.facilityDetailSheetState.isMapTapDetailLoading) {
+        MapFacilityDetailSheetUiState(
+            isVisible = true,
+            placeIconRes = R.drawable.ic_nav_facility,
+            metaLabel = "위치 상세",
+            title = "선택한 위치",
+            address =
+                uiState.selectedMapPinCoordinate
+                    ?.let { coordinate -> coordinateText(coordinate) }
+                    .orEmpty(),
+            guideMessage = "상세 정보를 불러오는 중입니다.",
+            accessibilityTags = emptyList(),
+            isBookmarked = false,
+            isBookmarkUpdating = true,
+            isBookmarkEnabled = false,
+            isRouteActionEnabled = false,
+            bookmarkErrorMessage = null,
+        )
+    } else if (uiState.facilityDetailSheetState.mapTapDetailErrorMessage != null) {
+        MapFacilityDetailSheetUiState(
+            isVisible = true,
+            placeIconRes = R.drawable.ic_nav_facility,
+            metaLabel = "위치 상세",
+            title = "상세 정보를 불러오지 못했습니다",
+            address =
+                uiState.selectedMapPinCoordinate
+                    ?.let { coordinate -> coordinateText(coordinate) }
+                    .orEmpty(),
+            guideMessage = uiState.facilityDetailSheetState.mapTapDetailErrorMessage,
+            accessibilityTags = emptyList(),
+            isBookmarked = false,
+            isBookmarkUpdating = false,
+            isBookmarkEnabled = false,
+            isRouteActionEnabled = false,
             bookmarkErrorMessage = null,
         )
     } else {
@@ -693,6 +829,8 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             accessibilityTags = facilityDetailAccessibilityLabels(detail),
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
+            isBookmarkEnabled = true,
+            isRouteActionEnabled = true,
             bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     }
@@ -881,6 +1019,78 @@ private fun coordinateText(location: MapCoordinate): String =
         location.longitude,
     )
 
+@DrawableRes
+private fun mapTapDetailPlaceIconRes(detail: MapTappedPlaceDetail): Int =
+    recentDestinationIcon(detail.category)
+
+@Composable
+private fun mapTapDetailMetaLabel(
+    detail: MapTappedPlaceDetail,
+    locationStatus: MapLocationStatus,
+): String {
+    val categoryLabel =
+        detail.providerCategory
+            ?.takeIf { providerCategory -> providerCategory.isNotBlank() }
+            ?: detail.category?.let(::placeCategoryFallbackLabel)
+            ?: mapTapDetailTypeLabel(detail.detailType)
+    val distanceMeters =
+        facilityDistanceMeters(
+            coordinate = GeoCoordinate(latitude = detail.latitude, longitude = detail.longitude),
+            locationStatus = locationStatus,
+        )
+    if (distanceMeters == null) {
+        return categoryLabel
+    }
+
+    return "$categoryLabel / ${facilityDistanceValueLabel(distanceMeters)}"
+}
+
+@Composable
+private fun mapTapDetailAddressLabel(detail: MapTappedPlaceDetail): String =
+    detail.address
+        .takeIf { address -> address.isNotBlank() }
+        ?: stringResource(id = R.string.map_facility_detail_address_fallback)
+
+private fun mapTapDetailGuideMessage(detail: MapTappedPlaceDetail): String =
+    detail.description
+        ?.trim()
+        ?.takeIf { description -> description.isNotEmpty() }
+        ?: when (detail.detailType) {
+            MapPlaceDetailType.INTERNAL_PLACE -> "Internal place detail."
+            MapPlaceDetailType.EXTERNAL_POI -> "Kakao place detail."
+            MapPlaceDetailType.EXTERNAL_ADDRESS -> "Selected address detail."
+        }
+
+private fun mapTapDetailAccessibilityLabels(detail: MapTappedPlaceDetail): List<String> =
+    detail.accessibilityTags
+        .mapNotNull(::recentDestinationTagLabel)
+        .distinct()
+        .take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
+
+private fun mapTapDetailTypeLabel(detailType: MapPlaceDetailType): String =
+    when (detailType) {
+        MapPlaceDetailType.INTERNAL_PLACE -> "Place"
+        MapPlaceDetailType.EXTERNAL_POI -> "Kakao POI"
+        MapPlaceDetailType.EXTERNAL_ADDRESS -> "Address"
+    }
+
+private fun placeCategoryFallbackLabel(category: PlaceCategory): String =
+    when (category) {
+        PlaceCategory.TOILET -> "Toilet"
+        PlaceCategory.ELEVATOR -> "Elevator"
+        PlaceCategory.CHARGING_STATION -> "Charging station"
+        PlaceCategory.FOOD_CAFE -> "Food and cafe"
+        PlaceCategory.TOURIST_SPOT -> "Tourist spot"
+        PlaceCategory.ACCOMMODATION -> "Accommodation"
+        PlaceCategory.HEALTHCARE -> "Healthcare"
+        PlaceCategory.WELFARE -> "Welfare"
+        PlaceCategory.PUBLIC_OFFICE -> "Public office"
+        PlaceCategory.BRAILLE_BLOCK -> "Braille block"
+        PlaceCategory.RESTAURANT -> "Restaurant"
+        PlaceCategory.TOURIST_ATTRACTION -> "Tourist attraction"
+        PlaceCategory.OTHER -> "Place"
+    }
+
 @Composable
 private fun facilityDetailCategoryLabel(category: FacilityCategory): String =
     when (category) {
@@ -1009,6 +1219,8 @@ private fun accessibilityTagLabel(tag: AccessibilityTag): String =
         AccessibilityTag.TABLE_SPACING -> stringResource(id = R.string.map_facility_detail_tag_table_spacing)
         AccessibilityTag.ACCESSIBLE_PARKING ->
             stringResource(id = R.string.map_facility_detail_tag_accessible_parking)
+        AccessibilityTag.CHARGING_STATION ->
+            stringResource(id = R.string.map_facility_detail_tag_charging_station)
 
         AccessibilityTag.GUIDANCE_FACILITY ->
             stringResource(id = R.string.map_facility_detail_tag_guidance_facility)
@@ -1031,14 +1243,15 @@ private fun accessibilityTagDisplayPriority(tag: AccessibilityTag): Int =
         AccessibilityTag.WIDE_ENTRY -> 3
         AccessibilityTag.ELEVATOR -> 4
         AccessibilityTag.ACCESSIBLE_PARKING -> 5
-        AccessibilityTag.ACCESSIBLE_TOILET -> 6
-        AccessibilityTag.GUIDANCE_FACILITY -> 7
-        AccessibilityTag.ACCESSIBLE_ROOM -> 8
-        AccessibilityTag.WHEELCHAIR_TURNING_SPACE -> 9
-        AccessibilityTag.TABLE_SPACING -> 10
-        AccessibilityTag.LOW_HEIGHT_BUTTON -> 11
-        AccessibilityTag.REST_AREA -> 12
-        AccessibilityTag.OPEN_24_HOURS -> 13
+        AccessibilityTag.CHARGING_STATION -> 6
+        AccessibilityTag.ACCESSIBLE_TOILET -> 7
+        AccessibilityTag.GUIDANCE_FACILITY -> 8
+        AccessibilityTag.ACCESSIBLE_ROOM -> 9
+        AccessibilityTag.WHEELCHAIR_TURNING_SPACE -> 10
+        AccessibilityTag.TABLE_SPACING -> 11
+        AccessibilityTag.LOW_HEIGHT_BUTTON -> 12
+        AccessibilityTag.REST_AREA -> 13
+        AccessibilityTag.OPEN_24_HOURS -> 14
     }
 
 @Composable

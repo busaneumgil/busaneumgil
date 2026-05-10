@@ -1,7 +1,9 @@
 package com.ssafy.e102.eumgil.data.remote.mapper
 
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
+import com.ssafy.e102.eumgil.data.remote.dto.MapPlaceDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceAccessibilityFeatureDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlacePointDto
@@ -95,5 +97,49 @@ class PlaceDtoMapperTest {
         assertEquals(listOf("elevator"), detail.accessibilityTags)
         assertEquals("Wheelchair-friendly lobby and rooms", detail.description)
         assertNull(detail.providerPlaceId)
+    }
+
+    @Test
+    fun `toMapTappedPlaceDetail preserves external target metadata and nullable category`() {
+        val detail =
+            PlaceDtoMapper.toMapTappedPlaceDetail(
+                MapPlaceDetailDto(
+                    bookmarkTargetId = "kakao:poi-123",
+                    detailType = "EXTERNAL_POI",
+                    placeId = null,
+                    provider = "KAKAO",
+                    providerPlaceId = "poi-123",
+                    name = "Kakao Cafe",
+                    category = null,
+                    providerCategory = "Cafe",
+                    address = "10 Cafe-ro, Busan",
+                    point = PlacePointDto(lat = 35.1799, lng = 129.0752),
+                    accessibilityFeatures =
+                        listOf(
+                            PlaceAccessibilityFeatureDto(
+                                featureType = "accessibleEntrance",
+                                isAvailable = true,
+                            ),
+                            PlaceAccessibilityFeatureDto(
+                                featureType = "accessibleParking",
+                                isAvailable = false,
+                            ),
+                        ),
+                    isBookmarked = false,
+                    description = "External Kakao POI",
+                ),
+            )
+
+        assertEquals("kakao:poi-123", detail.bookmarkTargetId)
+        assertEquals(MapPlaceDetailType.EXTERNAL_POI, detail.detailType)
+        assertNull(detail.placeId)
+        assertEquals("KAKAO", detail.provider)
+        assertEquals("poi-123", detail.providerPlaceId)
+        assertEquals("Cafe", detail.providerCategory)
+        assertNull(detail.category)
+        assertEquals("Kakao Cafe", detail.name)
+        assertEquals(PlaceFeatureType.ACCESSIBLE_ENTRANCE, detail.features.single().featureType)
+        assertEquals(listOf("step-free-entrance"), detail.accessibilityTags)
+        assertEquals("External Kakao POI", detail.description)
     }
 }

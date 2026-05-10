@@ -54,6 +54,8 @@ import com.kakao.vectormap.label.LabelStyles
 import com.kakao.vectormap.label.LabelManager
 import com.kakao.vectormap.label.OrderingType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.feature.map.MapTapClickType
+import com.ssafy.e102.eumgil.feature.map.MapTapPayload
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -65,7 +67,7 @@ internal fun KakaoMapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
     onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
-    onMapClick: (MapCoordinate) -> Unit,
+    onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -204,7 +206,7 @@ private class KakaoMapViewportController {
     private var latestState: MapViewportUiState? = null
     private var markerClickHandler: ((String) -> Unit)? = null
     private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean) -> Unit)? = null
-    private var mapClickHandler: ((MapCoordinate) -> Unit)? = null
+    private var mapClickHandler: ((MapTapPayload) -> Unit)? = null
     private var facilityMarkerStyleCache: KakaoFacilityMarkerStyleCache? = null
     private var lastRenderedCameraRequestId: Long? = null
     private var lastRenderedCameraTarget: com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget? = null
@@ -237,7 +239,7 @@ private class KakaoMapViewportController {
         initialState: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
-        onMapClick: (MapCoordinate) -> Unit,
+        onMapClick: (MapTapPayload) -> Unit,
     ): MapView {
         latestState = initialState
         markerClickHandler = onMarkerClick
@@ -260,7 +262,7 @@ private class KakaoMapViewportController {
         state: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
-        onMapClick: (MapCoordinate) -> Unit,
+        onMapClick: (MapTapPayload) -> Unit,
     ) {
         latestState = state
         markerClickHandler = onMarkerClick
@@ -401,10 +403,20 @@ private class KakaoMapViewportController {
                                 markerId = poiId,
                                 position = position,
                             )
+                        } else if (poiId.isNotBlank()) {
+                            dispatchExternalPoiTap(
+                                position = position,
+                                providerPlaceId = poiId,
+                                nameHint = null,
+                            )
                         }
                     }
                     readyMap.setOnTerrainClickListener { _, position, _ ->
-                        dispatchMapTap(source = "terrain", position = position)
+                        dispatchMapTap(
+                            source = "terrain",
+                            position = position,
+                            clickType = MapTapClickType.ADDRESS,
+                        )
                     }
                     readyMap.setOnMapClickListener { _, position, _, poi ->
                         if (poi?.isPoi == true && poi.layerId == KAKAO_MARKER_LAYER_ID && poi.poiId.isNotBlank()) {
@@ -412,8 +424,14 @@ private class KakaoMapViewportController {
                                 markerId = poi.poiId,
                                 position = position,
                             )
+                        } else if (poi?.isPoi == true && poi.poiId.isNotBlank()) {
+                            dispatchExternalPoiTap(
+                                position = position,
+                                providerPlaceId = poi.poiId,
+                                nameHint = poi.name,
+                            )
                         } else if (poi == null) {
-                            dispatchMapTap(source = "map", position = position)
+                            dispatchMapTap(source = "map", position = position, clickType = MapTapClickType.ADDRESS)
                         }
                     }
                     readyMap.setOnCameraMoveStartListener { _, _ ->
@@ -671,6 +689,9 @@ private class KakaoMapViewportController {
     private fun dispatchMapTap(
         source: String,
         position: LatLng,
+        clickType: MapTapClickType,
+        providerPlaceId: String? = null,
+        nameHint: String? = null,
     ) {
         val coordinate =
             MapCoordinate(
@@ -691,7 +712,29 @@ private class KakaoMapViewportController {
         if (isDuplicate) return
         lastDispatchedMapTapCoordinate = coordinate
         lastDispatchedMapTapUptimeMillis = now
-        mapClickHandler?.invoke(coordinate)
+        mapClickHandler?.invoke(
+            MapTapPayload(
+                coordinate = coordinate,
+                clickType = clickType,
+                provider = if (clickType == MapTapClickType.POI) KAKAO_PROVIDER_NAME else null,
+                providerPlaceId = providerPlaceId,
+                nameHint = nameHint?.takeIf { it.isNotBlank() },
+            ),
+        )
+    }
+
+    private fun dispatchExternalPoiTap(
+        position: LatLng,
+        providerPlaceId: String,
+        nameHint: String?,
+    ) {
+        dispatchMapTap(
+            source = "poi",
+            position = position,
+            clickType = MapTapClickType.POI,
+            providerPlaceId = providerPlaceId,
+            nameHint = nameHint,
+        )
     }
 
     private fun dispatchMarkerTap(
@@ -788,6 +831,7 @@ private enum class KakaoRendererStatus {
 }
 
 private const val KAKAO_MARKER_LAYER_ID = "eumgil-map-markers"
+private const val KAKAO_PROVIDER_NAME = "KAKAO"
 private const val KAKAO_MAP_LOG_TAG = "KakaoMapViewport"
 private const val MAX_LIFECYCLE_DISPATCH_RETRIES = 30
 private const val LIFECYCLE_DISPATCH_RETRY_DELAY_MILLIS = 50L

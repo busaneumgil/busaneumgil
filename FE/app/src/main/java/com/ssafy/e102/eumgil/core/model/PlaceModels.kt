@@ -66,4 +66,42 @@ data class PlaceDetail(
     val description: String? = null,
 )
 
+enum class MapPlaceClickType {
+    POI,
+    ADDRESS,
+}
+
+enum class MapPlaceDetailType {
+    INTERNAL_PLACE,
+    EXTERNAL_POI,
+    EXTERNAL_ADDRESS,
+}
+
+data class MapPlaceDetailRequest(
+    val latitude: Double,
+    val longitude: Double,
+    val clickType: MapPlaceClickType,
+    val provider: String? = null,
+    val providerPlaceId: String? = null,
+    val nameHint: String? = null,
+)
+
+data class MapTappedPlaceDetail(
+    val bookmarkTargetId: String,
+    val detailType: MapPlaceDetailType,
+    val placeId: String?,
+    val provider: String?,
+    val providerPlaceId: String?,
+    val name: String,
+    val category: PlaceCategory?,
+    val providerCategory: String?,
+    val address: String,
+    val latitude: Double,
+    val longitude: Double,
+    val features: List<PlaceFeatureAvailability> = emptyList(),
+    val isBookmarked: Boolean = false,
+    val accessibilityTags: List<String> = emptyList(),
+    val description: String? = null,
+)
+
 private const val DEFAULT_PLACE_BROWSE_RADIUS_METERS = 1_000

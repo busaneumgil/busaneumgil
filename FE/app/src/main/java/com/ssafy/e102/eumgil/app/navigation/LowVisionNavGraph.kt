@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -311,6 +312,7 @@ private fun LowVisionKwsNavEffect(
     val viewModel: LowVisionViewModel = viewModel(graphEntry)
 
     LaunchedEffect(viewModel) {
+        delay(500) // STT AudioRecorder 해제 완료 대기
         // 탭 화면 진입 시마다 KWS 재시작 (VoiceInput 사용 후 복귀 포함)
         viewModel.resumeSpotting()
         viewModel.uiEvent.collect { event ->

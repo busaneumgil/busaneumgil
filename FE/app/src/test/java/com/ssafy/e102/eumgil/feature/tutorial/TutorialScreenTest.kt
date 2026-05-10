@@ -2,8 +2,11 @@ package com.ssafy.e102.eumgil.feature.tutorial
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.w3c.dom.Element
 
 class TutorialScreenTest {
     @Test
@@ -54,5 +57,29 @@ class TutorialScreenTest {
     @Test
     fun `route description keeps the setting phrase on its own line`() {
         assertEquals(true, TutorialLayoutDefaults.routeDescriptionBreaksAfterSettingComma)
+    }
+
+    @Test
+    fun `route efficient time copy is thirty five minutes`() {
+        val routeEfficientTime =
+            File("src/main/res/values/strings.xml")
+                .readStringResource(name = "tutorial_route_efficient_time")
+
+        assertEquals("35분", routeEfficientTime)
+    }
+
+    private fun File.readStringResource(name: String): String {
+        val document =
+            DocumentBuilderFactory
+                .newInstance()
+                .newDocumentBuilder()
+                .parse(this)
+        val strings = document.getElementsByTagName("string")
+
+        return (0 until strings.length)
+            .asSequence()
+            .map { strings.item(it) as Element }
+            .first { it.getAttribute("name") == name }
+            .textContent
     }
 }

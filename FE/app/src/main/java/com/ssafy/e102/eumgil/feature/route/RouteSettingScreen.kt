@@ -2488,7 +2488,7 @@ private data class RoutePreviewProjectionPoint(
 )
 
 private const val METERS_PER_KILOMETER = 1_000
-private const val MAX_VISIBLE_OPTION_CARD_COUNT = 2
+private const val MAX_VISIBLE_OPTION_CARD_COUNT = 3
 private const val MAX_VISIBLE_ROUTE_CHIP_COUNT = 2
 private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 1
 private const val DEFAULT_PREVIEW_CENTER_LATITUDE = 35.1796

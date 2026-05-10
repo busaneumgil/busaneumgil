@@ -280,7 +280,7 @@ class KakaoMapViewportBindingsTest {
         assertEquals(listOf("overlay-junction-1"), markerStates.map { it.markerId })
         assertEquals(KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION, markerStates.first().kind)
         assertEquals(0, markerStates.first().iconResId)
-        assertEquals(14, markerStates.first().sizeDp)
+        assertEquals(16, markerStates.first().sizeDp)
         assertEquals(0.5f, markerStates.first().anchorPointX)
         assertEquals(0.5f, markerStates.first().anchorPointY)
     }
@@ -305,8 +305,8 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals(listOf("route-preview"), routeLineStates.map { it.routeLineId })
         assertEquals(2, routeLineStates.first().points.size)
-        assertEquals(7f, routeLineStates.first().lineWidth, 0f)
-        assertEquals(9f, routeLineStates.first().strokeWidth, 0f)
+        assertEquals(5.5f, routeLineStates.first().lineWidth, 0f)
+        assertEquals(7.5f, routeLineStates.first().strokeWidth, 0f)
         assertEquals(0xFF2A7BFF.toInt(), routeLineStates.first().lineColor)
         assertEquals(0xFF0F4FC6.toInt(), routeLineStates.first().strokeColor)
     }

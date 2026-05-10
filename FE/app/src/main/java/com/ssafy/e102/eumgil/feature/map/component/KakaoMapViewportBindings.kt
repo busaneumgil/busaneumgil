@@ -424,9 +424,9 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
                 KakaoOverlayPointMarkerSpec(
                     kind = KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION,
                     iconResId = 0,
-                    sizeDp = 14,
+                    sizeDp = 16,
                     anchorPointY = 0.5f,
-                    zIndex = 3.2f,
+                    zIndex = 3.6f,
                 )
 
             MapViewportPointKind.FACILITY,
@@ -452,33 +452,33 @@ private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineSt
     return when (style) {
         MapViewportPolylineStyle.ROUTE_PREVIEW ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 7f,
+                lineWidth = 5.5f,
                 lineColor = palette.lineColor,
-                strokeWidth = 9f,
+                strokeWidth = 7.5f,
                 strokeColor = palette.casingColor,
             )
 
         MapViewportPolylineStyle.ROUTE_BASELINE ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 5f,
+                lineWidth = 4f,
                 lineColor = palette.lineColor,
-                strokeWidth = 7f,
+                strokeWidth = 6f,
                 strokeColor = palette.casingColor,
             )
 
         MapViewportPolylineStyle.ACTIVE_SEGMENT ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 6f,
+                lineWidth = 4.5f,
                 lineColor = palette.lineColor,
-                strokeWidth = 8f,
+                strokeWidth = 6.5f,
                 strokeColor = palette.casingColor,
             )
 
         MapViewportPolylineStyle.FOCUSED_SEGMENT ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 7f,
+                lineWidth = 5f,
                 lineColor = palette.lineColor,
-                strokeWidth = 9f,
+                strokeWidth = 7f,
                 strokeColor = palette.casingColor,
             )
     }

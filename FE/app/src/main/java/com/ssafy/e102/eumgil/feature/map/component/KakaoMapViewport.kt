@@ -28,7 +28,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -949,13 +951,23 @@ private fun MapProjectedMarkerOverlay(
             .size(markerSize)
 
     if (overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION) {
-        Surface(
+        Box(
             modifier = markerModifier,
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
-            shadowElevation = 3.dp,
-        ) {}
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 4.dp,
+            ) {}
+            Surface(
+                modifier = Modifier.size((overlay.sizeDp * 0.58f).dp),
+                shape = CircleShape,
+                color = Color(0xFF2A7BFF),
+                border = BorderStroke(1.dp, Color(0xFF0F4FC6)),
+            ) {}
+        }
         return
     }
 

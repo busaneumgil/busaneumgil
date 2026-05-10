@@ -2072,7 +2072,7 @@ private fun RouteMapBackdrop(
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.route_setting_preview_title)
-    MapViewportOverlayBackdrop(
+    MapOverlayViewport(
         overlayState =
             createRoutePreviewViewportOverlayState(
                 previewMap =
@@ -2086,8 +2086,6 @@ private fun RouteMapBackdrop(
                     ),
             ),
         modifier = modifier,
-        horizontalPadding = 28.dp,
-        verticalPadding = 24.dp,
         contentDescription = mapDescription,
     )
 }

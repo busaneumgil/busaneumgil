@@ -171,53 +171,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = casingColor.copy(alpha = 0.9f),
                 style =
                     Stroke(
-                        width = 9.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-            drawPath(
-                path = path,
-                color = toneColor,
-                style =
-                    Stroke(
-                        width = 5.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-        }
-
-        MapViewportPolylineStyle.ROUTE_BASELINE -> {
-            drawPath(
-                path = path,
-                color = casingColor.copy(alpha = 0.82f),
-                style =
-                    Stroke(
-                        width = 7.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-            drawPath(
-                path = path,
-                color = toneColor.copy(alpha = 0.9f),
-                style =
-                    Stroke(
-                        width = 3.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
-        }
-
-        MapViewportPolylineStyle.ACTIVE_SEGMENT -> {
-            drawPath(
-                path = path,
-                color = casingColor.copy(alpha = 0.88f),
-                style =
-                    Stroke(
-                        width = 8.dp.toPx(),
+                        width = 7.5.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -234,13 +188,36 @@ private fun DrawScope.drawViewportPolyline(
             )
         }
 
-        MapViewportPolylineStyle.FOCUSED_SEGMENT -> {
+        MapViewportPolylineStyle.ROUTE_BASELINE -> {
             drawPath(
                 path = path,
-                color = casingColor.copy(alpha = 0.92f),
+                color = casingColor.copy(alpha = 0.82f),
                 style =
                     Stroke(
-                        width = 10.dp.toPx(),
+                        width = 6.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+            drawPath(
+                path = path,
+                color = toneColor.copy(alpha = 0.9f),
+                style =
+                    Stroke(
+                        width = 2.5.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+        }
+
+        MapViewportPolylineStyle.ACTIVE_SEGMENT -> {
+            drawPath(
+                path = path,
+                color = casingColor.copy(alpha = 0.88f),
+                style =
+                    Stroke(
+                        width = 6.5.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -250,7 +227,30 @@ private fun DrawScope.drawViewportPolyline(
                 color = toneColor,
                 style =
                     Stroke(
-                        width = 5.dp.toPx(),
+                        width = 3.5.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+        }
+
+        MapViewportPolylineStyle.FOCUSED_SEGMENT -> {
+            drawPath(
+                path = path,
+                color = casingColor.copy(alpha = 0.92f),
+                style =
+                    Stroke(
+                        width = 8.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+            drawPath(
+                path = path,
+                color = toneColor,
+                style =
+                    Stroke(
+                        width = 4.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -469,7 +469,12 @@ private fun ViewportPointMarker(
         color = spec.containerColor,
         tonalElevation = if (point.isSelected) 4.dp else 0.dp,
         shadowElevation = if (point.isSelected) 10.dp else 6.dp,
-        border = BorderStroke(if (point.isSelected) 2.dp else 1.dp, spec.borderColor),
+        border =
+            if (point.kind == MapViewportPointKind.SEGMENT_JUNCTION) {
+                null
+            } else {
+                BorderStroke(if (point.isSelected) 2.dp else 1.dp, spec.borderColor)
+            },
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (point.kind == MapViewportPointKind.CAMERA_FOCUS) {
@@ -477,6 +482,13 @@ private fun ViewportPointMarker(
                     modifier = Modifier.size(6.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f),
+                ) {}
+            } else if (point.kind == MapViewportPointKind.SEGMENT_JUNCTION) {
+                Surface(
+                    modifier = Modifier.size((spec.size.value * 0.58f).dp),
+                    shape = CircleShape,
+                    color = spec.contentColor,
+                    border = BorderStroke(1.dp, spec.borderColor),
                 ) {}
             } else {
                 Text(
@@ -553,11 +565,11 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.SEGMENT_JUNCTION ->
             ViewportPointMarkerSpec(
-                label = "",
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.Transparent,
-                borderColor = MaterialTheme.colorScheme.surface,
-                size = 14.dp,
+                label = null,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = Color(0xFF2A7BFF),
+                borderColor = Color(0xFF0F4FC6),
+                size = 16.dp,
                 fontSize = 1.sp,
             )
 

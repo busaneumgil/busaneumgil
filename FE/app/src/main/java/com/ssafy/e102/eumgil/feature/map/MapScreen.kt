@@ -179,7 +179,7 @@ fun MapScreen(
                                         ),
                                 ) {
                                     IconTextButtonContent(
-                                        iconRes = R.drawable.ic_map_current_location_disabled,
+                                        iconRes = R.drawable.ic_route_start_navigation_button,
                                         label = stringResource(id = R.string.map_facility_detail_route_entry_action),
                                     )
                                 }

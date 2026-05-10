@@ -9,9 +9,11 @@ fun LowVisionCategoryRoute(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LowVisionCategoryScreen(
-        onCategorySelected = onCategorySelected,
-        onTabSelected = onTabSelected,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionCategoryScreen(
+            onCategorySelected = onCategorySelected,
+            onTabSelected = onTabSelected,
+            modifier = modifier,
+        )
+    }
 }

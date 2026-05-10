@@ -16,6 +16,7 @@ public record RouteSummaryResponse(
 	String routeId,
 	TransportMode transportMode,
 	RouteOption routeOption,
+	List<RouteOption> routeOptions,
 	String title,
 	BigDecimal distanceMeter,
 	int durationSecond,
@@ -23,4 +24,29 @@ public record RouteSummaryResponse(
 	List<RouteBadge> badges,
 	String geometry,
 	List<RouteLegResponse> legs) {
+
+	public RouteSummaryResponse(
+		String routeId,
+		TransportMode transportMode,
+		RouteOption routeOption,
+		String title,
+		BigDecimal distanceMeter,
+		int durationSecond,
+		int estimatedTimeMinute,
+		List<RouteBadge> badges,
+		String geometry,
+		List<RouteLegResponse> legs) {
+		this(
+			routeId,
+			transportMode,
+			routeOption,
+			List.of(routeOption),
+			title,
+			distanceMeter,
+			durationSecond,
+			estimatedTimeMinute,
+			badges,
+			geometry,
+			legs);
+	}
 }

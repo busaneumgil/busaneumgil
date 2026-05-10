@@ -9,6 +9,10 @@ public record ApiResponse<T>(
 		return new ApiResponse<>("S2000", data, "정상 처리되었습니다.");
 	}
 
+	public static <T> ApiResponse<T> successMessage(T data, String message) {
+		return new ApiResponse<>("S2000", data, message);
+	}
+
 	public static <T> ApiResponse<T> created(T data) {
 		return new ApiResponse<>("S2010", data, "생성되었습니다.");
 	}

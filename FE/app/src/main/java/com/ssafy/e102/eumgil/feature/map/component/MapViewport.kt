@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -15,11 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,6 +44,7 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.feature.map.MapTapPayload
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -48,11 +53,16 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
 
 @Immutable
-data class MapViewportUiState(
+internal data class MapViewportUiState(
     val integrationState: MapIntegrationState,
     val cameraTarget: MapCameraTarget,
+    val currentLocation: MapCoordinate?,
+    val selectedDestinationCoordinate: MapCoordinate? = null,
+    val selectedDestinationName: String? = null,
     val markerOverlayState: MapMarkerOverlayState,
+    val overlayState: MapViewportOverlayState = MapViewportOverlayState(),
     val selectedMarkerId: String?,
+    val selectedMapPinCoordinate: MapCoordinate?,
     val regionLabel: String,
     val statusLabel: String,
     val title: String,
@@ -70,17 +80,36 @@ sealed interface MapIntegrationState {
 }
 
 @Composable
-fun MapViewport(
+internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit = { _, _, _ -> },
+    onMapClick: (MapTapPayload) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    LaunchedEffect(state.integrationState) {
+        when (val integrationState = state.integrationState) {
+            MapIntegrationState.Unbound -> {
+                Log.w(
+                    MAP_VIEWPORT_LOG_TAG,
+                    "Map integration unavailable; rendering fallback surface",
+                )
+            }
+
+            is MapIntegrationState.Bound -> {
+                Log.i(
+                    MAP_VIEWPORT_LOG_TAG,
+                    "Map integration bound provider=${integrationState.providerName}",
+                )
+            }
+        }
+    }
+
     when (val integrationState = state.integrationState) {
         MapIntegrationState.Unbound -> {
             MapFallbackSurface(
-                cameraTarget = state.cameraTarget,
                 markerOverlayState = state.markerOverlayState,
-                selectedMarkerId = state.selectedMarkerId,
+                overlayState = state.overlayState,
                 regionLabel = state.regionLabel,
                 statusLabel = state.statusLabel,
                 title = state.title,
@@ -96,6 +125,8 @@ fun MapViewport(
                 integrationState = integrationState,
                 state = state,
                 onMarkerClick = onMarkerClick,
+                onCameraMoveEnd = onCameraMoveEnd,
+                onMapClick = onMapClick,
                 modifier = modifier,
             )
         }
@@ -107,28 +138,39 @@ private fun MapContainer(
     integrationState: MapIntegrationState.Bound,
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
+    onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Reuse the fallback surface until a provider-backed container is bound.
-    MapFallbackSurface(
-        cameraTarget = state.cameraTarget,
-        markerOverlayState = state.markerOverlayState,
-        selectedMarkerId = state.selectedMarkerId,
-        regionLabel = state.regionLabel,
-        statusLabel = integrationState.providerName,
-        title = state.title,
-        description = state.description,
-        supportingText = state.supportingText,
-        onMarkerClick = onMarkerClick,
-        modifier = modifier,
-    )
+    when (integrationState.providerName) {
+        KAKAO_MAP_PROVIDER_NAME ->
+            KakaoMapViewport(
+                state = state,
+                onMarkerClick = onMarkerClick,
+                onCameraMoveEnd = onCameraMoveEnd,
+                onMapClick = onMapClick,
+                modifier = modifier,
+            )
+
+        else ->
+            MapFallbackSurface(
+                markerOverlayState = state.markerOverlayState,
+                overlayState = state.overlayState,
+                regionLabel = state.regionLabel,
+                statusLabel = integrationState.providerName,
+                title = state.title,
+                description = state.description,
+                supportingText = state.supportingText,
+                onMarkerClick = onMarkerClick,
+                modifier = modifier,
+            )
+    }
 }
 
 @Composable
-private fun MapFallbackSurface(
-    cameraTarget: MapCameraTarget,
+internal fun MapFallbackSurface(
     markerOverlayState: MapMarkerOverlayState,
-    selectedMarkerId: String?,
+    overlayState: MapViewportOverlayState,
     regionLabel: String,
     statusLabel: String,
     title: String,
@@ -193,12 +235,10 @@ private fun MapFallbackSurface(
             )
         }
 
-        MapMarkerOverlay(
-            cameraTarget = cameraTarget,
-            markerOverlayState = markerOverlayState,
-            selectedMarkerId = selectedMarkerId,
-            onMarkerClick = onMarkerClick,
+        MapViewportOverlayBackdrop(
+            overlayState = overlayState,
             modifier = Modifier.fillMaxSize(),
+            onPointClick = onMarkerClick,
         )
 
         markerOverlayStatusMessage(markerOverlayState)?.let { message ->
@@ -271,6 +311,65 @@ private fun MapFallbackSurface(
         }
     }
 }
+
+@Composable
+internal fun MapRendererFallbackOverlay(
+    title: String,
+    description: String,
+    actionLabel: String? = null,
+    onActionClick: (() -> Unit)? = null,
+    isLoading: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier =
+                Modifier
+                    .widthIn(max = 320.dp)
+                    .padding(EumSpacing.large),
+            shape = RoundedCornerShape(EumRadius.large),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        ) {
+            Column(
+                modifier = Modifier.padding(EumSpacing.large),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator()
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                if (actionLabel != null && onActionClick != null) {
+                    Button(onClick = onActionClick) {
+                        Text(text = actionLabel)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val MAP_VIEWPORT_LOG_TAG = "MapViewport"
 
 @Composable
 private fun MapMarkerOverlay(
@@ -367,7 +466,7 @@ private fun MarkerOverlayStatusCard(
 private fun markerOverlayStatusMessage(markerOverlayState: MapMarkerOverlayState): String? =
     when {
         markerOverlayState.isLoadFailed -> stringResource(id = R.string.map_viewport_marker_status_error)
-        markerOverlayState.isEmptyData -> stringResource(id = R.string.map_viewport_marker_status_empty_data)
+        markerOverlayState.isEmptyData -> null
         markerOverlayState.isEmptyResult -> stringResource(id = R.string.map_viewport_marker_status_empty_result)
         else -> null
     }

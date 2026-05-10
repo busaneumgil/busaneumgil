@@ -25,6 +25,12 @@ require_env_value() {
 }
 
 require_env_value JWT_SECRET
+require_env_value CORS_ALLOWED_ORIGINS
+require_env_value VITE_BACKEND_API_URL
+require_env_value VITE_ADMIN_KAKAO_JAVASCRIPT_KEY
+require_env_value VITE_ADMIN_NAVER_CLIENT_ID
+require_env_value VITE_ADMIN_GOOGLE_CLIENT_ID
+require_env_value VITE_KAKAO_MAP_KEY
 
 mkdir -p "$DEPLOY_STATE_DIR"
 if [ -f "$DEPLOY_STATE_DIR/current-app-image" ]; then
@@ -38,8 +44,8 @@ export APP_IMAGE_TAG GRAPHHOPPER_IMAGE_TAG
 
 docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
 
-docker compose --env-file .env.prod -f docker-compose.prod.yml build backend ai
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d backend ai
+docker compose --env-file .env.prod -f docker-compose.prod.yml build backend ai admin
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d backend ai admin
 
 graphhopper_cache_fingerprint="$(bash "$ROOT_DIR/scripts/graphhopper/cache_fingerprint.sh" "$ROOT_DIR")"
 needs_graphhopper_build="$BUILD_GRAPHHOPPER"

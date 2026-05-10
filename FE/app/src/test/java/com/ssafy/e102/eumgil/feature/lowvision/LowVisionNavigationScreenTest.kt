@@ -56,6 +56,18 @@ class LowVisionNavigationScreenTest {
     }
 
     @Test
+    fun `navigation current location card uses the gps coordinate display`() {
+        val display = lowVisionCurrentLocationDisplay(latitude = 35.179612, longitude = 129.075634)
+
+        assertEquals("\uD604\uC7AC \uC704\uCE58", display.title)
+        assertEquals("", display.supportingText)
+        assertEquals(
+            "\uD604\uC7AC \uC704\uCE58 \uC704\uB3C4 35.17961\uB3C4 \uACBD\uB3C4 129.07563\uB3C4",
+            display.talkBackText,
+        )
+    }
+
+    @Test
     fun `navigation card content is sized to avoid clipping current location label`() {
         assertEquals(74.dp, LowVisionNavigationLayoutDefaults.currentLocationIconSize)
         assertEquals(44.sp, LowVisionNavigationLayoutDefaults.currentLocationLabelFontSize)

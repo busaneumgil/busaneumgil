@@ -5,7 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -54,13 +52,7 @@ fun MapCategoryFilterBar(
             return
         }
 
-        state.isEmptyData -> {
-            FilterStatusCard(
-                message = stringResource(id = R.string.map_filter_summary_empty_data),
-                modifier = modifier,
-            )
-            return
-        }
+        state.isEmptyData -> return
     }
 
     Surface(
@@ -74,28 +66,6 @@ fun MapCategoryFilterBar(
             modifier = Modifier.padding(vertical = EumSpacing.small),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = EumSpacing.medium),
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.map_filter_section_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = selectionSummaryText(state = state),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
             LazyRow(
                 contentPadding = PaddingValues(horizontal = EumSpacing.medium),
                 horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
@@ -139,47 +109,6 @@ fun MapCategoryFilterBar(
         }
     }
 }
-
-@Composable
-private fun selectionSummaryText(state: MapMarkerFilterUiState): String {
-    if (state.isEmptyResult) {
-        return buildString {
-            append(selectedCategorySummaryLabel(state = state))
-            append(" / ")
-            append(stringResource(id = R.string.map_filter_summary_empty_result))
-        }
-    }
-
-    return buildString {
-        append(selectedCategorySummaryLabel(state = state))
-        append(" / ")
-        append(
-            stringResource(
-                id = R.string.map_filter_summary,
-                state.visibleMarkerCount,
-                state.totalMarkerCount,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun selectedCategorySummaryLabel(state: MapMarkerFilterUiState): String =
-    when {
-        state.selection.isShowingAllCategories -> stringResource(id = R.string.map_filter_chip_all)
-        else -> {
-            val selectedLabels =
-                state.categoryOptions
-                    .filter { option -> option.isSelected }
-                    .map { option -> categoryFilterLabel(option.category) }
-
-            when {
-                selectedLabels.isEmpty() -> stringResource(id = R.string.map_filter_chip_all)
-                selectedLabels.size <= 2 -> selectedLabels.joinToString(separator = " / ")
-                else -> selectedLabels.take(2).joinToString(separator = " / ") + " +${selectedLabels.size - 2}"
-            }
-        }
-    }
 
 @Composable
 private fun FilterStatusCard(

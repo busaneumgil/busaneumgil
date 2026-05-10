@@ -6,22 +6,24 @@ import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
-import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
-import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.VoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
@@ -46,8 +48,10 @@ import com.ssafy.e102.eumgil.data.repository.LocalOnlyUserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.DefaultVoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.ServerAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.ServerAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
@@ -152,31 +156,28 @@ object RepositoryModule {
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,
-        debugSettingsLocalDataSourceProvider: () -> DebugSettingsLocalDataSource,
     ): SettingsRepository =
         DefaultSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
-            debugSettingsLocalDataSourceProvider = debugSettingsLocalDataSourceProvider,
         )
 
-    fun provideRepositorySourcePolicy(
-        debugSettingsLocalDataSource: DebugSettingsLocalDataSource,
-    ): RepositorySourcePolicy =
-        DefaultRepositorySourcePolicy(
-            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
-        )
+    fun provideRepositorySourcePolicy(): RepositorySourcePolicy = DefaultRepositorySourcePolicy()
 
     fun providePlacesRepository(
         remoteDataSource: PlacesRemoteDataSource,
         localDataSource: PlacesLocalDataSource,
         mockDataSource: PlacesMockDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): PlacesRepository =
         DefaultPlacesRepository(
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideFacilitySeedRepository(
@@ -190,11 +191,15 @@ object RepositoryModule {
 
     fun provideRouteRepository(
         localDataSource: RouteLocalDataSource,
-        mockDataSource: RouteMockDataSource,
+        remoteDataSource: RouteRemoteDataSource,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): RouteRepository =
         DefaultRouteRepository(
             localDataSource = localDataSource,
-            mockDataSource = mockDataSource,
+            remoteDataSource = remoteDataSource,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideSearchRepository(
@@ -202,20 +207,39 @@ object RepositoryModule {
         localDataSource: SearchLocalDataSource,
         mockDataSource: SearchMockDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): SearchRepository =
         DefaultSearchRepository(
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideReportRepository(
         reportDraftDao: ReportDraftDao,
         reportOutboxDao: ReportOutboxDao,
+        hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
+        accessTokenProvider: suspend () -> String? = { null },
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
+            hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
+            accessTokenProvider = accessTokenProvider,
+        )
+
+    fun provideVoiceAnalyzeRepository(
+        remoteDataSource: VoiceAnalyzeRemoteDataSource,
+        mockDataSource: MockVoiceAnalyzeRemoteDataSource,
+        sourcePolicy: RepositorySourcePolicy,
+    ): VoiceAnalyzeRepository =
+        DefaultVoiceAnalyzeRepository(
+            remoteDataSource = remoteDataSource,
+            mockDataSource = mockDataSource,
+            sourcePolicy = sourcePolicy,
         )
 }

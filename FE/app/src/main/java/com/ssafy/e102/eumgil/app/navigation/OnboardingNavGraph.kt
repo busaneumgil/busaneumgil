@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -13,16 +15,21 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
+import com.ssafy.e102.eumgil.data.repository.PendingSignupTokenExpiredException
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateRepository
 import com.ssafy.e102.eumgil.data.repository.ProfileUserTypeUpdateResult
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsItem
 import com.ssafy.e102.eumgil.feature.onboarding.LocationTermsRoute
 import com.ssafy.e102.eumgil.feature.onboarding.LowVisionFollowUpRoute
+import com.ssafy.e102.eumgil.feature.onboarding.PermissionRoute
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
+import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
+import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.onboardingNavGraph(
@@ -130,6 +137,17 @@ fun NavGraphBuilder.onboardingNavGraph(
         LocationTermsRoute(
             initialLocationTermsChecked = initSettings.isLocationTermsAgreed,
             initialPrivacyPolicyChecked = initSettings.isPrivacyPolicyAgreed,
+            onRequestDetails = { item ->
+                val intent = createLocationTermsDetailIntent(item) ?: return@LocationTermsRoute
+                runCatching { context.startActivity(intent) }.onFailure {
+                    Toast
+                        .makeText(
+                            context,
+                            DEFAULT_TERMS_DETAIL_OPEN_FAILURE_MESSAGE,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
+            },
             onConsentCompleted = { agreement ->
                 coroutineScope.launch {
                     runCatching {
@@ -137,13 +155,27 @@ fun NavGraphBuilder.onboardingNavGraph(
                             isLocationTermsAgreed = agreement.isLocationTermsAgreed,
                             isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
                         )
-                        authSignupRepository.completePendingSignup(
-                            requiredTermsAccepted = agreement.isLocationTermsAgreed,
-                        )
                         val completedSettings = settingsRepository.getInitSettings()
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
-                        )
+                        val nextRoute = resolveOnboardingTermsCompletedRoute(completedSettings.selectedPrimaryUserType)
+                        val shouldCompleteSignupBeforeTutorial =
+                            shouldCompletePendingSignupBeforeOnboardingTutorial(
+                                completedSettings.selectedPrimaryUserType,
+                            )
+                        if (shouldCompleteSignupBeforeTutorial || nextRoute != TutorialRoute.Onboarding.route) {
+                            authSignupRepository.completePendingSignup(
+                                requiredTermsAccepted = agreement.isLocationTermsAgreed,
+                            )
+                        }
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                nextRoute,
+                            ),
+                        ) {
+                            launchSingleTop = true
+                            popUpTo(OnboardingRoute.Terms.route) {
+                                inclusive = true
+                            }
+                        }
                     }.onFailure { throwable ->
                         Toast
                             .makeText(
@@ -151,8 +183,22 @@ fun NavGraphBuilder.onboardingNavGraph(
                                 throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        if (throwable is PendingSignupTokenExpiredException) {
+                            navController.navigateToLoginAfterAuthenticationFailure()
+                        }
                     }
                 }
+            },
+        )
+    }
+
+    composable(route = TutorialRoute.Onboarding.route) {
+        MobilityTutorialRoute(
+            entryPoint = TutorialEntryPoint.ONBOARDING,
+            onCompleted = {
+                navController.navigateToCompletedOnboarding(
+                    route = resolveTutorialOnboardingCompletedRoute(),
+                )
             },
         )
     }
@@ -188,9 +234,13 @@ fun NavGraphBuilder.onboardingNavGraph(
                         )
                         authSignupRepository.completePendingSignup(requiredTermsAccepted = true)
                         val completedSettings = settingsRepository.getInitSettings()
-                        navController.navigateToCompletedOnboarding(
-                            route = resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
-                        )
+                        navController.navigate(
+                            OnboardingRoute.Permission.createRoute(
+                                resolveOnboardingCompletedRoute(completedSettings.selectedPrimaryUserType),
+                            ),
+                        ) {
+                            launchSingleTop = true
+                        }
                     }.onFailure { throwable ->
                         Toast
                             .makeText(
@@ -198,13 +248,33 @@ fun NavGraphBuilder.onboardingNavGraph(
                                 throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        if (throwable is PendingSignupTokenExpiredException) {
+                            navController.navigateToLoginAfterAuthenticationFailure()
+                        }
                     }
                 }
             },
-            onRequestDetails = { _ ->
-                // 모든 단계의 "자세히 보기"는 기존 정식 약관 화면을 재사용한다.
-                // 항목별 상세 화면이 별도로 생기면 step 분기로 라우팅을 갈라주면 됨.
-                navController.navigate(OnboardingRoute.Terms.route)
+            onRequestDetails = { step ->
+                createTermsGuideDetailIntent(step)?.let(context::startActivity)
+            },
+        )
+    }
+
+    composable(
+        route = OnboardingRoute.Permission.route,
+        arguments = listOf(
+            navArgument(OnboardingRoute.Permission.ARG_NEXT_ROUTE) {
+                type = NavType.StringType
+            },
+        ),
+    ) { backStackEntry ->
+        val nextRoute = backStackEntry.arguments
+            ?.getString(OnboardingRoute.Permission.ARG_NEXT_ROUTE)
+            .orEmpty()
+
+        PermissionRoute(
+            onPermissionHandled = {
+                navController.navigateToCompletedOnboarding(route = nextRoute)
             },
         )
     }
@@ -239,6 +309,22 @@ internal fun resolveOnboardingCompletedRoute(selectedPrimaryUserType: String?): 
     } else {
         TopLevelRoute.Map.route
     }
+
+internal fun resolveMobilityOnboardingAfterTermsRoute(): String = TutorialRoute.Onboarding.route
+
+internal fun shouldCompletePendingSignupBeforeOnboardingTutorial(selectedPrimaryUserType: String?): Boolean =
+    selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue
+
+internal fun resolveOnboardingTermsCompletedRoute(selectedPrimaryUserType: String?): String =
+    if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
+        resolveMobilityOnboardingAfterTermsRoute()
+    } else {
+        resolveOnboardingCompletedRoute(selectedPrimaryUserType)
+    }
+
+internal fun resolveTutorialOnboardingCompletedRoute(): String = TopLevelRoute.Map.route
+
+internal fun resolveTutorialGuideCompletedRoute(): String = MyPageSubRoute.AppInfo.route
 
 internal fun resolveProfileEditCompletedRoute(selectedPrimaryUserType: String?): String =
     if (selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {
@@ -331,8 +417,41 @@ private fun NavHostController.navigateToLoginAfterAuthenticationFailure() {
     }
 }
 
+internal fun createTermsGuideDetailIntent(step: TermsGuideStep): Intent? =
+    resolveTermsGuideDetailUrl(step)?.let { url ->
+        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+internal fun resolveTermsGuideDetailUrl(step: TermsGuideStep): String? = step.detailUrl
+
+internal fun createLocationTermsDetailIntent(item: LocationTermsItem): Intent? =
+    resolveLocationTermsDetailUrl(item)?.let { url ->
+        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+internal fun resolveLocationTermsDetailUrl(item: LocationTermsItem): String? =
+    when (item) {
+        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> SERVICE_AND_LOCATION_TERMS_URL
+        LocationTermsItem.SENSITIVE_INFO -> SENSITIVE_INFO_TERMS_URL
+        LocationTermsItem.PERSONAL_LOCATION_INFO -> PERSONAL_LOCATION_INFO_TERMS_URL
+        LocationTermsItem.PRIVACY_POLICY_CONFIRMATION -> PERSONAL_LOCATION_INFO_TERMS_URL
+        LocationTermsItem.OVER_FOURTEEN -> null
+    }
+
+private const val SERVICE_AND_LOCATION_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be680ab9931f226486dac58?source=copy_link"
+private const val SENSITIVE_INFO_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be6804a925ef3e41000c3cd?source=copy_link"
+private const val PERSONAL_LOCATION_INFO_TERMS_URL =
+    "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link"
+
 private const val DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE: String =
     "온보딩 완료 처리에 실패했습니다. 다시 시도해주세요."
+
+private const val DEFAULT_TERMS_DETAIL_OPEN_FAILURE_MESSAGE: String =
+    "약관 페이지를 열 수 없습니다. 잠시 후 다시 시도해주세요."
 
 private const val DEFAULT_PROFILE_EDIT_COMPLETION_ERROR_MESSAGE: String =
     "프로필 변경에 실패했습니다. 다시 시도해주세요."

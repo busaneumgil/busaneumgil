@@ -2,7 +2,7 @@
 
 > **작성일:** 2026-04-23
 > **기준 문서:** `docs/erd.md` (원본 OSM 기반)
-> **최종 수정일:** 2026-05-07
+> **최종 수정일:** 2026-05-09
 > **변경 사유:** canonical source를 `busan.osm.pbf`에서 `N3L_A0020000_26` SHP(국토교통부 도로 중심선)로 전환함에 따라 `road_nodes`와 `road_segments`의 source identity 컬럼을 재정의하고, 편의시설 PoC 채택본 기준으로 장소 카테고리를 최신화했으며, 선택된 경로 안내 세션 복구를 위한 `route_sessions`를 추가
 > **참조 계획:** `.ai/PLANS/current-sprint/02-osm-schema-and-network-load.md`
 
@@ -21,8 +21,10 @@
 | `route_logs`, `route_log_points` | 실제 이동 로그 수집 | MVP ERD에서 제외 |
 | `route_ratings` | - | 도착 직후 별점 평가 저장 |
 | `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
+| `bookmarks` | `user_id`, `place_id`만 저장하는 내부 장소 전용 구조 | `bookmark_target_id`, 선택적 `place_id`, 외부 snapshot 컬럼을 갖는 hybrid 북마크 구조 |
+| `subway_stations`, `subway_timetables` | 지하철 시간표/역 정보 테이블 없음 | ODsay 역 식별자 기반 지하철 역 마스터와 시간표 저장 |
 
-장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
+장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 전역 `places` 마스터 컬럼으로는 보존하지 않고, 외부 북마크 snapshot의 `bookmarks.provider_category`에서만 제한적으로 보존한다. 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
 
 ---
 
@@ -30,7 +32,7 @@
 
 - 기준 문서: `2026-04-10 최종_프로젝트_기획서.md`, `2026-04-11_MVP_화면명세서.md`, `2026-04-09_기능명세서.md`, `2026-04-16_ACCESSIBLE_ROUTING_POC_RESTART_BLUEPRINT.md`
 - `created_at`, `updated_at`은 JPA Auditing 기반 `BaseEntity` 공통 컬럼으로 관리하므로 테이블별 상세 명세에서는 생략한다.
-- 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 필요 시 `deletedAt`을 공통 컬럼으로 관리한다.
+- 현재 회원 탈퇴 구현은 사용자 row를 물리 삭제한다. FK 제약을 피하기 위해 사용자 종속 데이터는 명시 삭제 순서로 먼저 정리한다.
 - 모든 물리 DB 컬럼 네이밍은 `snake_case`를 사용한다. Java 엔티티 필드와 API 응답 필드는 `camelCase`를 유지한다.
 - 숫자 ID를 참조하는 외래키 컬럼은 자동 증가 컬럼이 아니므로 `SERIAL/BIGSERIAL`이 아니라 `INT/BIGINT`로 표기한다.
 - PK는 테이블별 데이터 증가량 기준으로 구분한다. 대량 적재 또는 로그성 테이블은 `BIGINT`, 일반 관리성 테이블은 `INT`를 우선 검토한다.
@@ -42,7 +44,7 @@
 - 지도/장소 검색 API는 MVP 기준 카카오 단일 사용을 전제로 한다.
 - 대중교통 경로 후보는 ODsay 같은 외부 대중교통 길찾기 API를 우선 사용하고, 버스/저상버스 정보는 부산광역시_부산버스정보시스템 OpenAPI를 실시간 조회한다.
 - 사용자가 실제 선택해 안내를 시작한 route만 `route_sessions`에 영속 저장한다. 검색 후보 묶음은 Redis `routeSearch:{searchId}`에만 저장한다.
-- 실시간 도착정보는 DB에 저장하지 않고 Redis TTL cache 또는 외부 API 재조회로 처리한다.
+- 실시간 도착정보는 DB에 저장하지 않고 Redis TTL cache 또는 외부 API 재조회로 처리한다. 지하철 시간표 기반 도착 예정 계산은 정적 `subway_timetables`를 조회한다.
 
 ---
 
@@ -67,10 +69,13 @@
 
 - `road_nodes`
 - `road_segments`
+- `admin_areas`
 - `segment_features`
 
 ### 대중교통 도메인
 
+- `subway_stations`
+- `subway_timetables`
 - `subway_station_elevators`
 - Redis `routeSearch:{searchId}`는 검색 후보 묶음 임시 저장소로 사용
 - Redis `bims:arrival:{bstopid}:{lineid}`는 BUS 실시간 도착정보 TTL cache로 사용
@@ -90,15 +95,18 @@ erDiagram
     USERS ||--o{ HAZARD_REPORTS : reports
     USERS ||--o{ ROUTE_RATINGS : rates
     USERS ||--o{ ROUTE_SESSIONS : starts
+    ROUTE_SESSIONS ||--o| ROUTE_RATINGS : rated
 
     HAZARD_REPORTS ||--o{ HAZARD_REPORT_IMAGES : has
 
-    PLACES ||--o{ BOOKMARKS : bookmarked
+    PLACES o|--o{ BOOKMARKS : canonicalLink
     PLACES ||--o{ PLACE_ACCESSIBILITY_FEATURES : has
 
     ROAD_NODES ||--o{ ROAD_SEGMENTS : fromNode
     ROAD_NODES ||--o{ ROAD_SEGMENTS : toNode
     ROAD_SEGMENTS ||--o{ SEGMENT_FEATURES : has
+    SUBWAY_STATIONS ||--o{ SUBWAY_TIMETABLES : has
+    SUBWAY_STATIONS ||--o{ SUBWAY_STATION_ELEVATORS : maps
 
     USERS {
         UUID user_id PK
@@ -112,7 +120,14 @@ erDiagram
     BOOKMARKS {
         INT bookmark_id PK
         UUID user_id FK
+        VARCHAR bookmark_target_id
         BIGINT place_id FK
+        VARCHAR provider
+        VARCHAR provider_place_id
+        VARCHAR name
+        VARCHAR provider_category
+        VARCHAR address
+        GEOMETRY point
     }
 
     FAVORITE_ROUTES {
@@ -185,6 +200,13 @@ erDiagram
         VARCHAR segment_type
     }
 
+    ADMIN_AREAS {
+        BIGINT area_id PK
+        VARCHAR gu
+        VARCHAR dong
+        GEOMETRY geom
+    }
+
     SEGMENT_FEATURES {
         BIGINT feature_id PK
         BIGINT edge_id FK
@@ -194,6 +216,7 @@ erDiagram
 
     ROUTE_RATINGS {
         BIGINT rating_id PK
+        UUID session_id FK
         UUID user_id FK
         VARCHAR route_id
         SMALLINT score
@@ -210,9 +233,28 @@ erDiagram
         ENUM status
     }
 
+    SUBWAY_STATIONS {
+        BIGINT subway_station_id PK
+        VARCHAR odsay_station_id
+        VARCHAR station_name
+        VARCHAR line_name
+        GEOMETRY point
+    }
+
+    SUBWAY_TIMETABLES {
+        BIGINT subway_timetable_id PK
+        VARCHAR odsay_station_id
+        ENUM service_day_type
+        SMALLINT way_code
+        VARCHAR departure_time_text
+        INT departure_second_of_day
+        VARCHAR end_station_name
+    }
+
     SUBWAY_STATION_ELEVATORS {
         INT elevator_id PK
         VARCHAR station_id
+        VARCHAR odsay_station_id
         VARCHAR station_name
         VARCHAR line_name
         VARCHAR entrance_no
@@ -259,7 +301,7 @@ erDiagram
 - `role` 후보값은 `USER`, `ADMIN`이다. 가입 시 기본값은 `USER`이며, 백엔드는 `users.role=ADMIN`인 사용자에게 Spring Security `ROLE_ADMIN`을 부여한다.
 - 필수 약관 동의는 가입 완료 조건으로 검증하지만, `users` 테이블에 별도 동의 여부 필드를 저장하지 않는다.
 - 푸시 알림, 진동 알림, TTS, 경로 데이터 수집 설정은 서버에 저장하지 않고 앱 내부 설정 또는 후순위 정책으로 관리한다.
-- 회원 탈퇴는 물리 삭제 대신 soft delete를 기본으로 하며, 동일 사용자 재가입 시 기존 계정 복구 또는 재활성화 정책을 별도로 둔다.
+- 현재 회원 탈퇴는 `users` row 물리 삭제 기준이다. 동일 사용자 재가입은 신규 계정 생성으로 처리하며, 기존 계정 복구 또는 재활성화 정책은 별도 soft delete 도입 시 재정의한다.
 - `user_id`는 외부 응답과 JWT subject에서 `userId`로 노출되는 UUID다.
 
 ---
@@ -270,17 +312,31 @@ erDiagram
 
 사용자가 찜한 장소를 저장한다.
 
+내부 장소는 `places`와 canonical link를 연결하고, 내부 매칭되지 않은 외부 대상은 사용자별 snapshot으로 저장한다.
+
 ### 컬럼 명세
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 북마크 ID | bookmark_id | INT | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
-| 장소 ID | place_id | BIGINT | NOT NULL |  |
+| 북마크 대상 식별자 | bookmark_target_id | VARCHAR(32) | NULL |  |
+| 장소 ID | place_id | BIGINT | NULL |  |
+| 외부 제공자 | provider | VARCHAR(30) | NULL |  |
+| 외부 제공자 장소 ID | provider_place_id | VARCHAR(100) | NULL |  |
+| 표시명 | name | VARCHAR(255) | NULL |  |
+| 외부 원본 카테고리 | provider_category | VARCHAR(255) | NULL |  |
+| 표시 주소 | address | VARCHAR(255) | NULL |  |
+| 표시 좌표 | point | GEOMETRY(POINT, 4326) | NULL |  |
 
 ### 비고
 
-- `UNIQUE (user_id, place_id)` 제약을 둔다.
+- `UNIQUE (user_id, bookmark_target_id)` 제약을 둔다.
+- 신규 생성 row는 `bookmark_target_id`를 항상 채운다. 다만 기존 내부 북마크 legacy row를 흡수하는 전환 구간을 고려해 현재 스키마 자체는 nullable로 둔다.
+- 내부 장소 북마크는 `place_id`를 채우고, 목록 응답 시에는 `places` canonical 데이터를 우선 사용한다. 따라서 `name`, `address`, `point` snapshot은 비워둘 수 있다.
+- 내부 매칭되지 않은 외부 북마크는 `place_id=NULL`이며 `provider`, `provider_place_id`, `name`, `provider_category`, `address`, `point` snapshot만 가진다.
+- `bookmark_target_id`는 서버가 생성하는 opaque 식별자다. 삭제 API와 중복 방지 기준으로 사용한다.
+- 외부 snapshot row는 사용자 북마크 데이터일 뿐, 전역 `places` 마스터 데이터로 승격하지 않는다.
 
 ---
 
@@ -339,7 +395,7 @@ erDiagram
 
 사용자가 등록한 도로 위험 요소 제보 데이터를 저장한다.
 
-도로 상태 제보는 로그인 사용자 계정과 연결한다. 회원 탈퇴 후에도 제보 내역은 운영 검토 기록으로 보관한다.
+도로 상태 제보는 로그인 사용자 계정과 연결한다. 현재 회원 탈퇴 구현에서는 FK 정합성을 위해 제보 이미지와 제보 내역도 함께 삭제한다.
 
 ### 컬럼 명세
 
@@ -360,7 +416,7 @@ erDiagram
 ### 비고
 
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
-- `APPROVED`, `REJECTED` 상태 변경은 후속 관리자 API에서 처리한다.
+- `APPROVED`, `REJECTED` 상태 변경은 `/admin/hazard-reports/{reportId}/approve`, `/admin/hazard-reports/{reportId}/reject`에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
 - 제보 위치의 기준 데이터는 `report_point`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
 - 사용자별 제보 목록은 최신순으로 제공한다.
@@ -444,7 +500,7 @@ erDiagram
 - `ELEVATOR`는 장소 카테고리로 사용하지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 일반 장소의 엘리베이터 보유 여부는 `place_accessibility_features.feature_type = elevator`로 관리한다.
 - `TOILET`은 장소 카테고리로 사용하지 않는다. 장애인 이용 가능 화장실은 `place_accessibility_features.feature_type = accessibleToilet`로 관리한다.
 - `CHARGING_STATION`은 장소 카테고리로 사용하지 않는다. 전동보장구 충전소 장소는 `category=ETC`로 저장하고 반드시 `feature_type=chargingStation`, `is_available=true`를 가진다.
-- 최종 정제 산출물은 `place/erd_ready/place_merged_broad_category_final.csv` 기준 13,564개 장소이며, `TOILET`, `CHARGING_STATION`, `MOBILITY`, `FOOD`, `PUBLIC`, `MEDICAL_WELFARE` 구 카테고리는 남기지 않는다.
+- 최종 정제 산출물은 `places_erd.csv` 기준 12,309개 장소이며, `TOILET`, `CHARGING_STATION`, `MOBILITY`, `FOOD`, `PUBLIC`, `MEDICAL_WELFARE` 구 카테고리는 남기지 않는다.
 
 ---
 
@@ -477,6 +533,7 @@ erDiagram
 
 - `UNIQUE (place_id, feature_type)` 제약을 둔다.
 - `accessibleEntrance`는 주출입구 접근 가능, 무단차 진입, 경사로형 접근로를 통합한 접근성 속성이다. 기존 `ramp`, `stepFree`는 별도 featureType으로 분리하지 않는다.
+- `place_accessibility_features_erd.csv` 원천은 42,565개 feature row이며, DB 적재 시 `ramp`, `stepFree`를 `accessibleEntrance`로 통합하고 `(place_id, feature_type)` 단위로 병합한다.
 - 지도 홈 상단 빠른 필터는 장소 카테고리가 아니라 `accessibleToilet`, `elevator`, `chargingStation` 접근성 속성을 기준으로 조회한다.
 - `chargingStation`은 전동보장구 충전 가능 여부를 뜻한다. 전동보장구 충전소 원천 장소는 `places.category=ETC`와 `chargingStation=true`를 함께 가져야 한다.
 
@@ -567,7 +624,32 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 10) segment_features
+## 10) admin_areas *(관리자 운영용)*
+
+### 역할
+
+관리자 보행 네트워크 검수 화면에서 사용할 구/동 경계를 저장한다.
+
+`road_segments`에 구/동 컬럼을 중복 저장하지 않고, `admin_areas.geom`과 `road_segments.geom`의 공간 관계로 특정 구/동의 보행 네트워크를 조회한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 행정구역 ID | area_id | BIGINT | NOT NULL |  |
+| 구 | gu | VARCHAR(50) | NOT NULL |  |
+| 동 | dong | VARCHAR(50) | NOT NULL |  |
+| 행정동 경계 | geom | GEOMETRY(GEOMETRY, 4326) | NOT NULL |  |
+
+### 비고
+
+- `gu`, `dong`은 관리자 화면 selector와 검수용 공간 필터에만 사용한다.
+- 보행 네트워크 라우팅 계약은 `road_segments`의 그래프 구조와 상태값을 기준으로 유지한다.
+- `road_segments`와의 연결은 FK가 아니라 `ST_Intersects` 같은 공간 연산으로 처리한다.
+
+---
+
+## 11) segment_features
 
 ### 역할
 
@@ -592,7 +674,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 11) route_ratings
+## 12) route_ratings
 
 ### 역할
 
@@ -605,10 +687,11 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 경로 평가 ID | rating_id | BIGINT | NOT NULL |  |
+| 세션 ID | session_id | UUID | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
 | 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
 | 별점 | score | SMALLINT | NOT NULL |  |
-| 경로 문맥 JSON | route_context_json | JSONB | NULL |  |
+| 경로 문맥 JSON | route_context_json | JSONB | NOT NULL |  |
 
 ### 후보값
 
@@ -617,21 +700,23 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### 제약
 
 - `rating_id` PK
-- `UNIQUE (user_id, route_id)`
+- `session_id` FK -> `route_sessions.session_id`
+- `UNIQUE (session_id)`
 
 ### 비고
 
 - 경로 평가에는 별점만 저장한다.
 - 평가 대상은 사용자가 방금 안내받은 경로다.
-- `route_id`는 `POST /route-ratings` 요청의 평가 대상 경로 ID다.
-- `route_context_json`은 평가 시점에 route session이 있으면 `route_sessions.route_snapshot_json`을 복사해 저장한다.
-- `route_context_json`이 `NULL`이어도 rating 자체는 저장할 수 있다.
+- `session_id`는 평가 대상 route session이다. route session 하나는 평가가 없거나 최대 하나만 가진다.
+- `route_id`는 평가 대상 route session의 대표 경로 ID이며, 조회와 운영 확인을 위해 중복 저장한다. `POST /route-ratings` 요청은 정확한 평가 대상을 위해 `sessionId`를 받는다.
+- `route_context_json`은 평가 시점에 같은 사용자의 `route_sessions.route_snapshot_json`을 복사해 저장한다.
+- 같은 사용자의 route session이 없으면 평가를 저장하지 않는다.
 - 평가 생성 시각은 DB `created_at` 공통 감사 컬럼으로 관리하고, Java/API에서는 `createdAt`으로 노출할 수 있다.
 - 회원 탈퇴 시 경로 평가는 삭제한다.
 
 ---
 
-## 12) route_sessions
+## 13) route_sessions
 
 ### 역할
 
@@ -648,6 +733,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 | 세션 ID | session_id | UUID | NOT NULL |  |
 | 사용자 ID | user_id | UUID | NOT NULL |  |
 | 대표 경로 ID | route_id | VARCHAR(120) | NOT NULL |  |
+| 활성 경로 중복 방지 키 | active_route_key | VARCHAR(120) | NULL |  |
 | 출발지 좌표 | start_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 도착지 좌표 | end_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 경로 스냅샷 JSON | route_snapshot_json | JSONB | NOT NULL |  |
@@ -661,19 +747,24 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `session_id`는 실제 안내 세션의 식별자다.
 - `route_id`는 프론트와 API에서 참조하는 대표 경로 ID다.
+- `active_route_key`는 같은 사용자의 같은 route가 동시에 여러 ACTIVE session으로 저장되는 것을 막는 내부 키다. `ACTIVE` 상태에서는 `route_id`와 같은 값을 저장하고, `COMPLETED`로 전환할 때 `NULL`로 비운다.
+- DB는 `(user_id, active_route_key)` unique 제약으로 ACTIVE 중복 선택을 최종 방어한다. PostgreSQL unique 제약은 `NULL`을 서로 다른 값으로 취급하므로 완료된 과거 session은 같은 route라도 여러 건 보관할 수 있다.
+- 별도 DB migration을 사용하지 않는 배포에서는 select/end 애플리케이션 경계에서 기존 `ACTIVE` row의 `active_route_key`를 `route_id`로 보정한다. 같은 사용자/route에 중복 ACTIVE row가 있으면 최신 row만 ACTIVE로 유지하고 나머지는 `COMPLETED`로 정리한다.
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
-  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `alightingStop`, `isLowFloor`, `badges`
-  - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
+  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `arrivingStop`, `isLowFloor`
+  - guidanceEvents 단위: `sequence`, `type`, `instruction`, `distanceMeter`, `geometry`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
+- 접근성 요약은 route 단위 `badges`에 저장하고, leg 단위 상세 안내는 `guidanceEvents`를 기준으로 복구한다. `RouteLegResponse.badges`는 API 응답과 snapshot JSON에 노출하지 않는다.
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
-  - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
-  - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
-  - SUBWAY metadata: ODsay `startID`, ODsay `endID`, 내부 지하철역 식별자, 선택된 승차/하차 엘리베이터 식별자와 좌표
-  - reroute/refresh 판단용 metadata: leg별 geometry, BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표
+  - 공통 transit metadata: `type`, `lanes`, `passStops`
+  - BUS metadata: `lanes[].busNo`, `lanes[].busLocalBlID`, `passStops[].localStationID`
+  - SUBWAY metadata: ODsay `odsayStationId`, `endOdsayStationId`, `lineName`, `wayCode`, 선택된 승차/하차 엘리베이터 좌표, `nextDeparture`
+  - reroute/refresh 판단용 metadata: BUS/SUBWAY leg의 탑승 지점 좌표, 하차 지점 좌표, 원본 대중교통 path metadata
 - `route_snapshot_json`에는 실시간 도착분 `remainingMinute`을 저장하지 않는다.
-- 실시간 도착정보는 외부 API 또는 Redis TTL cache에서만 관리한다.
+- BUS 실시간 도착정보는 BIMS 외부 API 또는 Redis `bims:arrival:{bstopid}:{lineid}` TTL 1분 cache에서만 관리한다.
+- SUBWAY 도착정보는 refresh 시점에 `subway_timetables` 시간표를 조회해 계산하며, 1차 구현에서는 지하철 외부 API를 직접 호출하지 않는다.
 - `status=ACTIVE`는 현재 안내 중이거나 재탐색 가능한 세션이다.
 - `status=COMPLETED`는 사용자가 도착 또는 안내 종료를 명시한 세션이다.
 - `EXPIRED`는 `status`로 두지 않는다. 만료는 JPA auditing의 수정일시 또는 별도 정책으로 판단한다.
@@ -684,7 +775,93 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 13) subway_station_elevators
+## 13) subway_stations
+
+### 역할
+
+ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하기 위한 역 마스터다.
+
+대중교통 경로 검색의 SUBWAY leg, 지하철 시간표, 지하철 엘리베이터 정보를 같은 ODsay 역 기준으로 묶는 데 사용한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 지하철역 ID | subway_station_id | BIGSERIAL | NOT NULL |  |
+| ODsay 역 식별자 | odsay_station_id | VARCHAR(30) | NOT NULL |  |
+| 역명 | station_name | VARCHAR(100) | NOT NULL |  |
+| 호선명 | line_name | VARCHAR(50) | NOT NULL |  |
+| 역 중심 좌표 | point | GEOMETRY(POINT, 4326) | NULL |  |
+
+### 제약
+
+- `subway_station_id` PK
+- `UNIQUE (odsay_station_id)`
+- `INDEX (station_name, line_name)`
+
+### 비고
+
+- `odsay_station_id`는 ODsay `stationID`를 문자열로 저장한다.
+- `point`는 ODsay 역 좌표다. 시간표 응답만으로 생성해 좌표를 알 수 없는 경우 NULL을 허용한다.
+- 역 제외/검수 정책은 적재 대상 CSV 또는 배치 검증에서 처리하고, MVP DB 컬럼으로 활성 여부를 따로 저장하지 않는다.
+
+### 관계
+
+- `subway_stations 1 : N subway_timetables` (`odsay_station_id` 기준)
+- `subway_stations 1 : N subway_station_elevators` (`odsay_station_id` 기준 논리 관계)
+
+---
+
+## 14) subway_timetables
+
+### 역할
+
+지하철역별 시간표를 저장한다.
+
+`transit-refresh`에서 현재 시각 이후 가장 가까운 지하철 출발시각을 찾는 데 사용한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 지하철 시간표 ID | subway_timetable_id | BIGSERIAL | NOT NULL |  |
+| ODsay 역 식별자 | odsay_station_id | VARCHAR(30) | NOT NULL |  |
+| 운행일 유형 | service_day_type | ENUM | NOT NULL |  |
+| 방면 코드 | way_code | SMALLINT | NOT NULL |  |
+| 출발시각 원문 | departure_time_text | VARCHAR(10) | NOT NULL |  |
+| 출발시각 초 환산값 | departure_second_of_day | INT | NOT NULL |  |
+| 종착역명 | end_station_name | VARCHAR(100) | NOT NULL |  |
+
+### enum 값
+
+- `service_day_type`: `WEEKDAY`, `SATURDAY`, `HOLIDAY`
+
+### 코드 값
+
+- `way_code`: `1=상행`, `2=하행`
+
+### 제약
+
+- `subway_timetable_id` PK
+- `INDEX (odsay_station_id, service_day_type, way_code, departure_second_of_day)`
+- `UNIQUE (odsay_station_id, service_day_type, way_code, departure_second_of_day, end_station_name)`
+
+### 비고
+
+- `departure_time_text`는 ODsay `departureTime` 원문 보존용이다.
+- `departure_second_of_day`는 조회용 정규화 값이다. 24시 이후 표현도 허용한다.
+- `transit-refresh`는 선택된 SUBWAY leg snapshot의 `odsay_station_id`, `way_code`와 현재 날짜의 `service_day_type`으로 시간표를 조회한다.
+- 현재 시각 이후 `departure_second_of_day`가 가장 작은 row를 다음 열차로 본다.
+- 현재 날짜에 남은 출발 row가 없으면 다음 날짜의 `service_day_type`으로 가장 이른 row를 조회하고, 자정 경계를 넘어선 남은 분을 계산한다.
+- 공휴일 판정 테이블이 없으면 MVP에서는 일요일을 `HOLIDAY`, 토요일을 `SATURDAY`, 나머지를 `WEEKDAY`로 처리한다.
+
+### 관계
+
+- `subway_timetables N : 1 subway_stations` (`odsay_station_id` 기준)
+
+---
+
+## 15) subway_station_elevators
 
 ### 역할
 
@@ -721,8 +898,8 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ### 관계
 
-- 별도 `station` 테이블과 FK 관계를 두지 않는다.
-- `station_id`는 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
+- `subway_stations`와 물리 FK는 두지 않고, `odsay_station_id` 기준 논리 관계로 연결한다.
+- `station_id`는 부산교통공사 기준 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
 
 ---
 
@@ -739,17 +916,24 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### users - hazard_reports
 
 - `users 1 : N hazard_reports`
-- 회원 탈퇴 후에도 제보 내역은 보관하되 사용자 식별 처리 정책은 별도 운영 정책을 따른다.
+- 현재 회원 탈퇴 구현에서는 제보 이미지와 제보 내역도 삭제한다. 제보 보관/익명화가 필요하면 `hazard_reports.user_id` nullable 또는 별도 익명 사용자 정책을 먼저 정의한다.
 
 ### users - route_ratings
 
 - `users 1 : N route_ratings`
 - 회원 탈퇴 시 별점 평가 내역은 삭제한다.
 
+### route_sessions - route_ratings
+
+- `route_sessions 1 : 0..1 route_ratings`
+- 하나의 안내 세션은 평가가 없을 수 있고, 평가가 있다면 최대 1개만 가진다.
+- `route_ratings.session_id`는 `route_sessions.session_id`를 참조하며 `UNIQUE` 제약으로 같은 세션 중복 평가를 막는다.
+
 ### users - route_sessions
 
 - `users 1 : N route_sessions`
 - `route_sessions.user_id`와 `route_sessions.route_id` 또는 `route_sessions.session_id` 기준으로 경로 세션 소유권을 검증한다.
+- 회원 탈퇴 시 route session은 route rating 삭제 후 삭제한다.
 
 ### hazard_reports - hazard_report_images
 
@@ -757,7 +941,8 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ### places - bookmarks
 
-- `places 1 : N bookmarks`
+- `places 0..1 : N bookmarks`
+- `bookmarks.place_id`는 내부 장소와 연결된 경우에만 채운다. 외부 snapshot 북마크는 `place_id=NULL`이다.
 
 ### places - place_accessibility_features
 
@@ -772,3 +957,18 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 - `road_segments 1 : N segment_features`
 - 하나의 보행 segment는 0개 이상의 개별 feature를 가질 수 있다.
+
+### subway_stations - subway_timetables
+
+- `subway_stations 1 : N subway_timetables`
+- `odsay_station_id` 기준 논리 관계로 연결한다.
+
+### subway_stations - subway_station_elevators
+
+- `subway_stations 1 : N subway_station_elevators`
+- `odsay_station_id` 기준 논리 관계로 연결한다.
+
+### admin_areas - road_segments
+
+- FK 관계가 아니다.
+- 관리자 검수 화면에서 `admin_areas.geom`과 `road_segments.geom`의 공간 교차 여부로 구/동별 보행 네트워크를 조회한다.

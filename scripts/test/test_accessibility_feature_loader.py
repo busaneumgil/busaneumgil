@@ -1,4 +1,5 @@
 import csv
+import inspect
 import tempfile
 import unittest
 from decimal import Decimal
@@ -62,8 +63,8 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
             )
             self.write_csv(
                 source_dir / "점자블록.csv",
-                ["sourceId", "geom", "brailleBlockState"],
-                [["braille-1", "POINT(129.1 35.1)", "no"]],
+                ["sourceId", "geom", "brailleBlockState", "signalState"],
+                [["braille-1", "LINESTRING(129.1 35.1,129.2 35.2)", "no", "UNKNOWN"]],
             )
             self.write_csv(
                 source_dir / "지하철_엘리베이터.csv",
@@ -88,6 +89,8 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
 
         braille = next(row for row in rows if row.feature_type == "BRAILLE_BLOCK")
         self.assertEqual(braille.state, "NO")
+        self.assertEqual(braille.geometry_kind, "LINESTRING")
+        self.assertEqual(braille.threshold_meter, Decimal("0"))
         audio = next(row for row in rows if row.feature_type == "AUDIO_SIGNAL")
         self.assertEqual(audio.geom_ewkt, "SRID=4326;POINT(129.1 35.1)")
         crosswalk = next(row for row in rows if row.feature_type == "CROSSWALK")
@@ -128,6 +131,20 @@ class AccessibilityFeatureLoaderTest(unittest.TestCase):
             loader.position_event_feature_type_sql(),
             "'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'CROSSWALK', 'STAIRS'",
         )
+
+    def test_braille_block_lines_match_only_same_crosswalk_geometry(self):
+        source = inspect.getsource(loader.build_matching_tables)
+
+        self.assertIn("f.feature_type = 'BRAILLE_BLOCK'", source)
+        self.assertIn("s.segment_type = 'CROSS_WALK'", source)
+        self.assertIn('ST_Equals(f.geom, s."geom")', source)
+        self.assertIn("ST_DWithin(f.geom_5179, s.geom_5179, f.threshold_meter)", source)
+
+    def test_segment_feature_insert_dedupes_by_edge_type_and_state(self):
+        source = inspect.getsource(loader.insert_and_update)
+
+        self.assertIn("DISTINCT ON (edge_id, feature_type, COALESCE(state, ''))", source)
+        self.assertIn("deduped_segment_features", source)
 
     @staticmethod
     def write_csv(path, headers, rows):

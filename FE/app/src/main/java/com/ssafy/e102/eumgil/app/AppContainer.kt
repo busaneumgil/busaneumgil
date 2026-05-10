@@ -9,7 +9,6 @@ import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
-import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
@@ -18,15 +17,18 @@ import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datastore.initSettingsDataStore
 import com.ssafy.e102.eumgil.data.local.db.EumgilDatabase
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
+import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
-import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.KtorVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
@@ -47,6 +49,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import com.ssafy.e102.eumgil.di.RepositoryModule
@@ -77,10 +80,6 @@ class AppContainer(
         )
     }
 
-    private val debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        DebugSettingsLocalDataSource(appSettingDao = localDatabase.appSettingDao())
-    }
-
     private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesLocalDataSource() }
     private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
@@ -98,25 +97,49 @@ class AppContainer(
     private val favoriteRoutesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         FavoriteRoutesRemoteDataSource(httpJsonClient = httpJsonClient)
     }
+    private val hazardReportsRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        HazardReportsRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        PlacesRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+        PlacesRemoteDataSource(
+            baseUrl = AppEnvironment.baseUrl,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
     }
     private val searchRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        SearchRemoteDataSource(baseUrl = AppEnvironment.baseUrl)
+        SearchRemoteDataSource(
+            baseUrl = AppEnvironment.baseUrl,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
+    }
+    private val routeRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        RouteRemoteDataSource(
+            baseUrl = AppEnvironment.baseUrl,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
     }
     private val userRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         UserRemoteDataSource(httpJsonClient = httpJsonClient)
     }
+    private val voiceAnalyzeRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        KtorVoiceAnalyzeRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
 
     private val placesMockDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesMockDataSource() }
     private val facilitySeedMockDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedMockDataSource() }
-    private val routeMockDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteMockDataSource() }
     private val searchMockDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchMockDataSource() }
+    private val mockVoiceAnalyzeRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        MockVoiceAnalyzeRemoteDataSource()
+    }
 
     private val repositorySourcePolicy: RepositorySourcePolicy by lazy(LazyThreadSafetyMode.NONE) {
-        RepositoryModule.provideRepositorySourcePolicy(
-            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
-        )
+        RepositoryModule.provideRepositorySourcePolicy()
     }
 
     val destinationSelectionRepository: DestinationSelectionRepository by lazy(LazyThreadSafetyMode.NONE) {
@@ -211,7 +234,6 @@ class AppContainer(
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
-            debugSettingsLocalDataSourceProvider = { debugSettingsLocalDataSource },
         )
     }
 
@@ -221,6 +243,8 @@ class AppContainer(
             localDataSource = placesLocalDataSource,
             mockDataSource = placesMockDataSource,
             sourcePolicy = repositorySourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 
@@ -234,7 +258,9 @@ class AppContainer(
     val routeRepository: RouteRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideRouteRepository(
             localDataSource = routeLocalDataSource,
-            mockDataSource = routeMockDataSource,
+            remoteDataSource = routeRemoteDataSource,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 
@@ -244,6 +270,8 @@ class AppContainer(
             localDataSource = searchLocalDataSource,
             mockDataSource = searchMockDataSource,
             sourcePolicy = repositorySourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 
@@ -251,6 +279,19 @@ class AppContainer(
         RepositoryModule.provideReportRepository(
             reportDraftDao = localDatabase.reportDraftDao(),
             reportOutboxDao = localDatabase.reportOutboxDao(),
+            hazardReportsRemoteDataSource =
+                if (AppEnvironment.isMockMode) null else hazardReportsRemoteDataSource,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
+    }
+
+    val voiceAnalyzeRepository: VoiceAnalyzeRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideVoiceAnalyzeRepository(
+            remoteDataSource = voiceAnalyzeRemoteDataSource,
+            mockDataSource = mockVoiceAnalyzeRemoteDataSource,
+            sourcePolicy = repositorySourcePolicy,
         )
     }
 

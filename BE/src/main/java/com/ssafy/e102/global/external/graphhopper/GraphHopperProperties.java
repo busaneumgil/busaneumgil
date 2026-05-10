@@ -17,7 +17,7 @@ public record GraphHopperProperties(
 	Duration readTimeout) {
 
 	public GraphHopperProperties {
-		Assert.hasText(baseUrl, "GraphHopper base URL은 필수입니다.");
+		Assert.hasText(baseUrl, "GraphHopper 기본 URL은 필수입니다.");
 		// 환경별 설정 누락 시에도 외부 호출이 무제한 대기하지 않도록 5초 기본값을 고정한다.
 		connectTimeout = defaultIfNull(connectTimeout, Duration.ofSeconds(5));
 		readTimeout = defaultIfNull(readTimeout, Duration.ofSeconds(5));

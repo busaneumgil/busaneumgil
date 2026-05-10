@@ -37,19 +37,11 @@ class MyPageViewModel(
 
     init {
         observeInitSettings()
-        observeRepositoryDebugSettings()
         refreshMyProfile()
     }
 
     fun onAction(action: MyPageUiAction) {
         when (action) {
-            is MyPageUiAction.ForceMockToggled -> {
-                if (!mutableUiState.value.isRuntimeToggleEnabled) return
-
-                viewModelScope.launch {
-                    settingsRepository.setForceMockEnabled(action.isEnabled)
-                }
-            }
             MyPageUiAction.UserTypeChangeClicked -> {
                 viewModelScope.launch {
                     uiEventChannel.send(MyPageUiEvent.NavigateToUserTypePrimary)
@@ -95,20 +87,6 @@ class MyPageViewModel(
                     currentState.copy(
                         userMode = initSettings.toMyPageUserMode(),
                         mobilitySubtype = initSettings.toMyPageMobilitySubtype(),
-                    )
-                }
-            }
-        }
-    }
-
-    private fun observeRepositoryDebugSettings() {
-        viewModelScope.launch {
-            settingsRepository.observeRepositoryDebugSettings().collectLatest { debugSettings ->
-                mutableUiState.update { currentState ->
-                    currentState.copy(
-                        isDebugSectionVisible = debugSettings.isRuntimeToggleAvailable,
-                        isRuntimeToggleEnabled = debugSettings.isRuntimeToggleEnabled,
-                        isForceMockEnabled = debugSettings.isForceMockEnabled,
                     )
                 }
             }

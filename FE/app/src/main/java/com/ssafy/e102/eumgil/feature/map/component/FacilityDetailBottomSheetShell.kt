@@ -2,6 +2,8 @@ package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -64,8 +66,8 @@ fun FacilityDetailBottomSheetShell(
 
         AnimatedVisibility(
             visible = state.isVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)),
+            exit = fadeOut(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)),
             modifier = Modifier.fillMaxSize(),
         ) {
             Box(
@@ -83,8 +85,20 @@ fun FacilityDetailBottomSheetShell(
 
         AnimatedVisibility(
             visible = state.isVisible,
-            enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut(),
+            enter =
+                slideInVertically(
+                    initialOffsetY = { fullHeight -> fullHeight },
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                ) + fadeIn(
+                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                ),
+            exit =
+                slideOutVertically(
+                    targetOffsetY = { fullHeight -> fullHeight },
+                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                ) + fadeOut(
+                    animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
+                ),
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)

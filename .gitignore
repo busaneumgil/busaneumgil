@@ -3,6 +3,8 @@
 .gradle/
 build/
 out/
+__pycache__/
+*.py[cod]
 HELP.md
 .env
 .env.*
@@ -18,6 +20,13 @@ HELP.md
 .gstack/
 FE/awesome-design-md/
 FE/analytics.settings
+
+# ADMIN local artifacts
+ADMIN/node_modules/
+ADMIN/dist/
+ADMIN/.vite/
+ADMIN/.tmp/
+ADMIN/*.tsbuildinfo
 
 .omx
 .tmp

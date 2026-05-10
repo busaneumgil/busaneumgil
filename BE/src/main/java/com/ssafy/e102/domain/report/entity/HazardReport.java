@@ -87,6 +87,22 @@ public class HazardReport extends BaseEntity {
 		return user != null && Objects.equals(user.getUserId(), userId);
 	}
 
+	public void approve() {
+		validatePendingStatus();
+		status = ReportStatus.APPROVED;
+	}
+
+	public void reject() {
+		validatePendingStatus();
+		status = ReportStatus.REJECTED;
+	}
+
+	private void validatePendingStatus() {
+		if (status != ReportStatus.PENDING) {
+			throw new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
+		}
+	}
+
 	private void addImages(List<String> imageUrls) {
 		if (imageUrls.size() > MAX_IMAGE_COUNT) {
 			throw invalidRequest("제보 이미지는 최대 5장까지 등록할 수 있습니다.");

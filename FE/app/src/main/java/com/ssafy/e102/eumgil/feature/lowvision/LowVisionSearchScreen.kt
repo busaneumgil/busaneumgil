@@ -4,8 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,13 +31,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
@@ -71,8 +76,31 @@ internal object LowVisionSearchLayoutDefaults {
     val actionIconTextGap = 16.dp
     val actionLabelFontSize = 28.sp
     val actionLabelLineHeight = 32.sp
+    const val noResultText = "결과없음"
+    const val noResultTalkBackText = "결과없음. 다시 검색하시겠습니까"
+    val roomyPhoneBreakpoint = 390.dp
+    const val compactTextMaxLines = 2
+    const val roomyTextMaxLines = 3
     const val actionButtonCount = 2
+
+    fun resultCardMetrics(maxWidth: Dp): LowVisionSearchResultCardMetrics =
+        if (maxWidth >= roomyPhoneBreakpoint) {
+            LowVisionSearchResultCardMetrics(
+                titleMaxLines = roomyTextMaxLines,
+                addressMaxLines = roomyTextMaxLines,
+            )
+        } else {
+            LowVisionSearchResultCardMetrics(
+                titleMaxLines = compactTextMaxLines,
+                addressMaxLines = compactTextMaxLines,
+            )
+        }
 }
+
+internal data class LowVisionSearchResultCardMetrics(
+    val titleMaxLines: Int,
+    val addressMaxLines: Int,
+)
 
 @Composable
 fun LowVisionSearchScreen(
@@ -82,19 +110,19 @@ fun LowVisionSearchScreen(
     categoryLabel: String? = null,
 ) {
     Column(
-            modifier =
-                modifier
-                    .fillMaxSize()
-                    .background(PlaceListBg)
-                    .statusBarsPadding()
-                    .padding(
-                        horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
-                        vertical = LowVisionScreenDefaults.screenVerticalPadding,
-                    ),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PlaceListBg)
+                .statusBarsPadding()
+                .padding(
+                    horizontal = LowVisionScreenDefaults.screenHorizontalPadding,
+                    vertical = LowVisionScreenDefaults.screenVerticalPadding,
+                ),
         verticalArrangement = Arrangement.spacedBy(LowVisionScreenDefaults.headerGap),
     ) {
         Text(
-            text = "검색 결과",
+            text = "\uAC80\uC0C9 \uACB0\uACFC",
             fontSize = LowVisionScreenDefaults.headerFontSize,
             fontWeight = FontWeight.ExtraBold,
             lineHeight = LowVisionScreenDefaults.headerLineHeight,
@@ -178,33 +206,44 @@ private fun LowVisionSearchResultList(
     onNavigateClick: (SearchResult) -> Unit,
     onBriefingClick: (SearchResult) -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding =
-            PaddingValues(
-                start = EumSpacing.medium,
-                top = EumSpacing.medium,
-                end = EumSpacing.medium,
-                bottom = LowVisionSearchLayoutDefaults.resultListBottomPadding,
-            ),
-        verticalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.resultCardGap),
-    ) {
-        itemsIndexed(
-            items = results,
-            key = { _, result -> result.placeId },
-        ) { index, result ->
-            LowVisionSearchResultCard(
-                index = index + 1,
-                name = result.title,
-                address = result.subtitle.ifBlank { null },
-                onBookmarkClick = { onBookmarkClick(result) },
-                onNavigateClick = { onNavigateClick(result) },
-                onContentClick = { onBriefingClick(result) },
-                contentClickDescription = "${result.title} 경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
-                bookmarkContentDescription = "${result.title} 저장. 저장 후 북마크로 이동합니다.",
-                navigateContentDescription = "${result.title} 길찾기. 저시력 안내 화면으로 이동합니다.",
-                modifier = Modifier.height(LowVisionSearchLayoutDefaults.resultCardMinHeight),
-            )
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val cardMetrics = LowVisionSearchLayoutDefaults.resultCardMetrics(maxWidth)
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding =
+                PaddingValues(
+                    start = EumSpacing.medium,
+                    top = EumSpacing.medium,
+                    end = EumSpacing.medium,
+                    bottom = LowVisionSearchLayoutDefaults.resultListBottomPadding,
+                ),
+            verticalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.resultCardGap),
+        ) {
+            itemsIndexed(
+                items = results,
+                key = { _, result -> result.placeId },
+            ) { index, result ->
+                LowVisionSearchResultCard(
+                    index = index + 1,
+                    name = result.title,
+                    address = result.subtitle.ifBlank { null },
+                    latitude = result.latitude,
+                    longitude = result.longitude,
+                    onBookmarkClick = { onBookmarkClick(result) },
+                    onNavigateClick = { onNavigateClick(result) },
+                    onContentClick = { onBriefingClick(result) },
+                    contentClickDescription = "${result.title} 경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
+                    bookmarkContentDescription = "${result.title} 저장. 저장 후 북마크로 이동합니다.",
+                    navigateContentDescription = "${result.title} 길찾기. 저시력 안내 화면으로 이동합니다.",
+                    titleMaxLines = cardMetrics.titleMaxLines,
+                    addressMaxLines = cardMetrics.addressMaxLines,
+                    modifier =
+                        Modifier.heightIn(
+                            min = LowVisionSearchLayoutDefaults.resultCardMinHeight,
+                        ),
+                )
+            }
         }
     }
 }
@@ -214,14 +253,33 @@ private fun LowVisionSearchResultCard(
     index: Int,
     name: String,
     address: String?,
+    latitude: Double,
+    longitude: Double,
     onBookmarkClick: () -> Unit,
     onNavigateClick: () -> Unit,
     onContentClick: () -> Unit,
     contentClickDescription: String,
     bookmarkContentDescription: String,
     navigateContentDescription: String,
+    titleMaxLines: Int,
+    addressMaxLines: Int,
     modifier: Modifier = Modifier,
 ) {
+    val view = LocalView.current
+    val addressText = lowVisionBriefAddress(address)
+    val placeInfoContentDescription =
+        lowVisionPlaceInfoA11yLabel(
+            name = name,
+            address = address,
+        )
+    val placeInfoSpeechText =
+        lowVisionPlaceInfoSpeechText(
+            name = name,
+            address = address,
+            latitude = latitude,
+            longitude = longitude,
+        )
+
     Column(
         modifier =
             modifier
@@ -269,7 +327,18 @@ private fun LowVisionSearchResultCard(
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clickable(
+                            role = Role.Button,
+                            onClick = {
+                                view.announceForAccessibility(placeInfoSpeechText)
+                            },
+                        )
+                        .semantics {
+                            contentDescription = placeInfoContentDescription
+                        },
             ) {
                 Text(
                     text = name,
@@ -278,37 +347,40 @@ private fun LowVisionSearchResultCard(
                     color = Color.White,
                     lineHeight = LowVisionSearchLayoutDefaults.titleLineHeight,
                     letterSpacing = 0.sp,
-                    maxLines = 2,
+                    maxLines = titleMaxLines,
                 )
-                if (!address.isNullOrBlank()) {
-                    Text(
-                        text = address,
-                        fontSize = LowVisionSearchLayoutDefaults.addressFontSize,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        lineHeight = LowVisionSearchLayoutDefaults.addressLineHeight,
-                        letterSpacing = 0.sp,
-                        maxLines = 2,
-                    )
-                }
+                Text(
+                    text = addressText,
+                    fontSize = LowVisionSearchLayoutDefaults.addressFontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    lineHeight = LowVisionSearchLayoutDefaults.addressLineHeight,
+                    letterSpacing = 0.sp,
+                    maxLines = addressMaxLines,
+                )
             }
         }
 
         Column(
             verticalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.actionButtonGap),
         ) {
-            LowVisionSearchActionButton(
-                label = "\uC800\uC7A5",
-                iconRes = R.drawable.ic_action_favorite,
-                onClick = onBookmarkClick,
-                contentDescription = bookmarkContentDescription,
-            )
-            LowVisionSearchActionButton(
-                label = "\uAE38\uCC3E\uAE30",
-                iconRes = R.drawable.ic_nav_route,
-                onClick = onNavigateClick,
-                contentDescription = navigateContentDescription,
-            )
+            LowVisionPlaceCardDefaults.actionOrder.forEach { action ->
+                when (action) {
+                    LowVisionPlaceCardAction.Navigate -> LowVisionSearchActionButton(
+                        label = "\uAE38\uCC3E\uAE30",
+                        iconRes = LowVisionPlaceCardDefaults.routeIconRes,
+                        onClick = onNavigateClick,
+                        contentDescription = navigateContentDescription,
+                    )
+
+                    LowVisionPlaceCardAction.Bookmark -> LowVisionSearchActionButton(
+                        label = "\uC800\uC7A5",
+                        iconRes = LowVisionPlaceCardDefaults.saveIconRes,
+                        onClick = onBookmarkClick,
+                        contentDescription = bookmarkContentDescription,
+                    )
+                }
+            }
         }
     }
 }
@@ -327,7 +399,7 @@ private fun LowVisionSearchActionButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(LowVisionSearchLayoutDefaults.actionButtonHeight)
+                .heightIn(min = LowVisionSearchLayoutDefaults.actionButtonHeight)
                 .clip(RoundedCornerShape(12.dp))
                 .background(PlaceListAmber)
                 .clickable(
@@ -361,13 +433,20 @@ private fun LowVisionSearchActionButton(
 }
 
 @Composable
-private fun LowVisionSearchNoResultMessage() {
+private fun LowVisionSearchNoResultMessage(
+    message: String = LowVisionSearchLayoutDefaults.noResultText,
+) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .clearAndSetSemantics {
+                    contentDescription = LowVisionSearchLayoutDefaults.noResultTalkBackText
+                },
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "목록 없음.",
+            text = message,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = PlaceListSubText,

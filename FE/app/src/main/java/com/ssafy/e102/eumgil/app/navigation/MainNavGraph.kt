@@ -1,11 +1,17 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.Manifest
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -33,6 +39,8 @@ import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
+import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
@@ -103,6 +111,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments
                 ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val preserveEntryStateOnReentry =
+            backStackEntry.savedStateHandle.get<Boolean>(SEARCH_PRESERVE_ENTRY_STATE_KEY) == true
+        backStackEntry.savedStateHandle.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, false)
         SearchEntryRoute(
             onNavigateBack = {
                 navController.popBackStack()
@@ -122,7 +133,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToRouteBriefing = {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
             initialEditingTarget = initialEditingTarget,
+            preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         )
     }
 
@@ -147,6 +166,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
         SearchResultsRoute(
             initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
             onNavigateBack = {
+                navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
             onNavigateToResults = { query, editingTarget ->
@@ -161,6 +183,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToRouteSetting = {
                 navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                    popUpTo(SearchRoute.Entry.route) {
+                        inclusive = true
+                    }
+                }
+            },
+            onNavigateToRouteBriefing = {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -185,8 +214,26 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments
                 ?.getString(SearchRoute.VoiceInput.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val context = LocalContext.current
+        val micPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (!isGranted) navController.popBackStack()
+        }
+        LaunchedEffect(Unit) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO,
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
         SearchVoiceInputRoute(
             onNavigateBack = {
+                navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
             onNavigateToResults = { query, editingTarget ->
@@ -332,6 +379,27 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToGuide = {
+                navController.navigate(resolveAppInfoGuideRoute())
+            },
+        )
+    }
+
+    composable(route = TutorialRoute.Guide.route) {
+        MobilityTutorialRoute(
+            entryPoint = TutorialEntryPoint.GUIDE,
+            onCompleted = {
+                val didPopToAppInfo =
+                    navController.popBackStack(
+                        route = resolveTutorialGuideCompletedRoute(),
+                        inclusive = false,
+                    )
+                if (!didPopToAppInfo) {
+                    navController.navigate(resolveTutorialGuideCompletedRoute()) {
+                        launchSingleTop = true
+                    }
+                }
+            },
         )
     }
 
@@ -404,8 +472,14 @@ internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): Stri
         TopLevelRoute.SavedRoute.route
     }
 
+internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
+
+internal fun resolveAppInfoGuideRoute(): String = TutorialRoute.Guide.route
+
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue
+
+private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntryState"
 
 internal data class TopLevelNavigationPolicy(
     val launchSingleTop: Boolean,

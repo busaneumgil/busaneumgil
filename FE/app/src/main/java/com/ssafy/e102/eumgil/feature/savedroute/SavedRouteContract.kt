@@ -81,6 +81,10 @@ sealed interface SavedRouteUiAction {
         val placeId: String,
     ) : SavedRouteUiAction
 
+    data class PlaceBriefingClicked(
+        val placeId: String,
+    ) : SavedRouteUiAction
+
     data class PlaceDeleteClicked(
         val placeId: String,
     ) : SavedRouteUiAction
@@ -108,6 +112,8 @@ sealed interface SavedRouteUiEvent {
     data class NavigateToRouteSetting(
         val initialRouteOption: RouteOption? = null,
     ) : SavedRouteUiEvent
+
+    data object NavigateToRouteBriefing : SavedRouteUiEvent
 
     data class ShowSnackbar(
         val message: String,

@@ -6,16 +6,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -24,7 +33,12 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.repository.provideProfileUserTypeUpdateRepository
+import com.ssafy.e102.eumgil.feature.map.MapKwsEvent
+import com.ssafy.e102.eumgil.feature.map.MapKwsViewModel
+import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 
 internal val AppNavHostContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
@@ -45,10 +59,14 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
         }
     var appStartDestination by remember { mutableStateOf<AppStartDestination?>(null) }
+    var bootstrappedAuthGateState by remember { mutableStateOf<AuthGateState?>(null) }
+    var bootstrappedInitSettings by remember { mutableStateOf<InitSettings?>(null) }
 
     LaunchedEffect(authSessionRepository, settingsRepository) {
         val authGateState = authSessionRepository.getAuthGateState()
         val savedSettings = settingsRepository.getInitSettings()
+        bootstrappedAuthGateState = authGateState
+        bootstrappedInitSettings = savedSettings
         appStartDestination =
             resolveAppStartDestination(
                 authGateState = authGateState,
@@ -57,17 +75,52 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             )
     }
 
-    if (appStartDestination == null) {
+    if (appStartDestination == null || bootstrappedAuthGateState == null || bootstrappedInitSettings == null) {
         AppEntryLoadingScreen(modifier = modifier)
         return
     }
 
     val startDestination = appStartDestination ?: return
+    val initialAuthGateState = bootstrappedAuthGateState ?: return
+    val initialInitSettings = bootstrappedInitSettings ?: return
     val navController = rememberNavController()
+    val authGateState by
+        remember(authSessionRepository) {
+            authSessionRepository.observeAuthGateState()
+        }.collectAsStateWithLifecycle(initialValue = initialAuthGateState)
+    val initSettings by
+        remember(settingsRepository) {
+            settingsRepository.observeInitSettings()
+        }.collectAsStateWithLifecycle(initialValue = initialInitSettings)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
     val currentTopLevelRoute = currentRoute.toCurrentTopLevelRoute()
     val showTopLevelBar = currentTopLevelRoute != null
+
+    val selectedPrimaryUserType = initSettings.selectedPrimaryUserType
+
+    LaunchedEffect(navController, authGateState, currentRoute) {
+        if (authGateState.hasSession || authGateState.hasPendingSignup || currentRoute == null) return@LaunchedEffect
+        if (currentRoute == AuthRoute.Login.route) return@LaunchedEffect
+
+        navController.navigate(AuthRoute.Login.route) {
+            launchSingleTop = true
+            popUpTo(navController.graph.findStartDestination().id) {
+                inclusive = true
+            }
+        }
+    }
+
+    if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
+        MobilityKwsEffect(
+            navController = navController,
+            onNavigateToVoiceInput = {
+                navController.navigate(SearchRoute.VoiceInput.createRoute()) {
+                    launchSingleTop = true
+                }
+            },
+        )
+    }
 
     Scaffold(
         contentWindowInsets = AppNavHostContentWindowInsets,
@@ -119,6 +172,49 @@ internal fun String?.toCurrentTopLevelRoute(): String? =
         this?.startsWith("route_setting") == true -> null
         else -> null
     }
+
+@Composable
+private fun MobilityKwsEffect(
+    navController: NavController,
+    onNavigateToVoiceInput: () -> Unit,
+) {
+    val kwsViewModel: MapKwsViewModel = viewModel()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnNavigateToVoiceInput by rememberUpdatedState(onNavigateToVoiceInput)
+
+    // 앱 백그라운드 전환 시 마이크 해제 / 복귀 시 재시작
+    DisposableEffect(lifecycleOwner, kwsViewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> kwsViewModel.resumeSpotting()
+                Lifecycle.Event.ON_PAUSE -> kwsViewModel.pauseSpotting()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // VoiceInput 바텀시트 닫힐 때 KWS 재시작
+    // (Activity ON_RESUME은 같은 앱 내 화면 전환 시 발생하지 않으므로 별도 처리)
+    LaunchedEffect(navController) {
+        navController.currentBackStackEntryFlow.collect { entry ->
+            if (entry.destination.route != SearchRoute.VoiceInput.route) {
+                kwsViewModel.resumeSpotting()
+            } else {
+                kwsViewModel.pauseSpotting()
+            }
+        }
+    }
+
+    LaunchedEffect(kwsViewModel) {
+        kwsViewModel.uiEvent.collect { event ->
+            when (event) {
+                MapKwsEvent.NavigateToVoiceInput -> currentOnNavigateToVoiceInput()
+            }
+        }
+    }
+}
 
 @Composable
 private fun AppEntryLoadingScreen(modifier: Modifier = Modifier) {

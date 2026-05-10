@@ -37,6 +37,7 @@ internal object MapBrowseStateFactory {
             markers = markers,
             visibleMarkerCount = markers.count { marker -> marker.displayState == MapMarkerDisplayState.VISIBLE },
             totalMarkerCount = markers.size,
+            hasActiveFilterSelection = normalizedSelection.selectedFacilityCategories.isNotEmpty(),
         )
     }
 
@@ -47,26 +48,25 @@ internal object MapBrowseStateFactory {
     ): MapMarkerFilterUiState {
         val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
         val allMarkers = browseData.allMarkers
-        val visibleMarkers =
-            overlayState.markers.filter { marker ->
-                marker.displayState == MapMarkerDisplayState.VISIBLE
-            }
         val totalMarkerCountByCategory =
-            allMarkers
-                .groupingBy { marker -> marker.category }
-                .eachCount()
+            browseData.availableCategories.associateWith { category ->
+                allMarkers.count { marker -> category in marker.filterCategories }
+            }
         val visibleMarkerCountByCategory =
-            visibleMarkers
-                .groupingBy { marker -> marker.categoryType.category }
-                .eachCount()
+            browseData.availableCategories.associateWith { category ->
+                allMarkers.count { marker ->
+                    category in marker.filterCategories && marker.matches(normalizedSelection)
+                }
+            }
         val totalBrailleBlockCountByType =
             browseData.brailleBlockMarkers
                 .mapNotNull { marker -> marker.brailleBlockType }
                 .groupingBy { brailleBlockType -> brailleBlockType }
                 .eachCount()
         val visibleBrailleBlockCountByType =
-            visibleMarkers
-                .mapNotNull { marker -> marker.categoryType.brailleBlockType }
+            browseData.brailleBlockMarkers
+                .filter { marker -> marker.matches(normalizedSelection) }
+                .mapNotNull { marker -> marker.brailleBlockType }
                 .groupingBy { brailleBlockType -> brailleBlockType }
                 .eachCount()
 
@@ -129,7 +129,7 @@ internal object MapBrowseStateFactory {
                 if (category in selection.selectedFacilityCategories) {
                     val updatedCategories = selection.selectedFacilityCategories - category
                     if (updatedCategories.isEmpty()) {
-                        MapFilterSelectionState()
+                        resetSelection()
                     } else {
                         val selectedBrailleBlockTypes =
                             if (FacilityCategory.BRAILLE_BLOCK in updatedCategories) {
@@ -158,19 +158,24 @@ internal object MapBrowseStateFactory {
 
     fun resetSelection(): MapFilterSelectionState = MapFilterSelectionState()
 
+    private fun showAllSelection(): MapFilterSelectionState =
+        MapFilterSelectionState(
+            isShowingAllCategories = true,
+        )
+
     private fun normalizeSelection(
         selection: MapFilterSelectionState,
         browseData: FacilityBrowseData,
     ): MapFilterSelectionState {
         if (selection.isShowingAllCategories) {
-            return MapFilterSelectionState()
+            return showAllSelection()
         }
 
         val availableCategories = browseData.availableCategories.toSet()
         val availableBrailleBlockTypes = browseData.availableBrailleBlockTypes.toSet()
         val normalizedCategories = selection.selectedFacilityCategories intersect availableCategories
         if (normalizedCategories.isEmpty()) {
-            return MapFilterSelectionState()
+            return resetSelection()
         }
 
         val normalizedBrailleBlockTypes =
@@ -180,25 +185,16 @@ internal object MapBrowseStateFactory {
                 emptySet()
             }
 
-        val hasAllCategoriesSelected = normalizedCategories == availableCategories
-        val isBrailleFilterReset =
-            normalizedBrailleBlockTypes.isEmpty() ||
-                normalizedBrailleBlockTypes == availableBrailleBlockTypes
-
-        return if (availableCategories.isNotEmpty() && hasAllCategoriesSelected && isBrailleFilterReset) {
-            MapFilterSelectionState()
-        } else {
-            MapFilterSelectionState(
-                isShowingAllCategories = false,
-                selectedFacilityCategories = normalizedCategories,
-                selectedBrailleBlockTypes = normalizedBrailleBlockTypes,
-            )
-        }
+        return MapFilterSelectionState(
+            isShowingAllCategories = false,
+            selectedFacilityCategories = normalizedCategories,
+            selectedBrailleBlockTypes = normalizedBrailleBlockTypes,
+        )
     }
 
     private fun FacilityMarkerSeed.matches(selection: MapFilterSelectionState): Boolean {
         if (selection.isShowingAllCategories) return true
-        if (category !in selection.selectedFacilityCategories) return false
+        if (filterCategories.intersect(selection.selectedFacilityCategories).isEmpty()) return false
         if (category != FacilityCategory.BRAILLE_BLOCK) return true
         return selection.selectedBrailleBlockTypes.isEmpty() || brailleBlockType in selection.selectedBrailleBlockTypes
     }

@@ -7,8 +7,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,9 +38,12 @@ import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.RouteWarningCode;
 import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.route.type.WalkRouteProfile;
+import com.ssafy.e102.domain.user.type.MobilitySubtype;
+import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteClient;
@@ -66,6 +69,11 @@ public class TransitRouteSearchService {
 	private static final double BUSAN_MIN_LNG = 128.70;
 	private static final double BUSAN_MAX_LNG = 129.40;
 	private static final double START_END_MIN_DISTANCE_METER = 20.0;
+	private static final int BUS_TRANSFER_BUFFER_SECOND = 3 * 60;
+	private static final int SUBWAY_TRANSFER_BUFFER_SECOND = 5 * 60;
+	private static final int WHEELCHAIR_SUBWAY_TRANSFER_BUFFER_SECOND = 8 * 60;
+	private static final int DEFAULT_BUS_BOARDING_PREP_SECOND = 2 * 60;
+	private static final int ACCESSIBLE_BUS_BOARDING_PREP_SECOND = 3 * 60;
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
 		RouteBadge.STAIR,
@@ -185,6 +193,7 @@ public class TransitRouteSearchService {
 			return java.util.Optional.empty();
 		}
 		int transferCount = transferCount(path);
+		int durationSecond = totalDurationSecond(path.totalTimeMinute(), offsetLegs, profile);
 		RouteSummaryResponse route = new RouteSummaryResponse(
 			routeId,
 			TransportMode.PUBLIC_TRANSIT,
@@ -192,9 +201,10 @@ public class TransitRouteSearchService {
 			List.of(RouteOption.RECOMMENDED),
 			title(path.legs()),
 			scale(path.totalDistanceMeter()),
-			path.totalTimeMinute() * 60,
-			Math.max(1, path.totalTimeMinute()),
+			durationSecond,
+			estimatedMinute(durationSecond),
 			routeBadges(offsetLegs),
+			routeWarnings(offsetLegs, profile),
 			geometry,
 			offsetLegs);
 		return java.util.Optional.of(new TransitRouteCandidate(
@@ -334,6 +344,67 @@ public class TransitRouteSearchService {
 			.anyMatch(option -> Boolean.TRUE.equals(option.isLowFloor()));
 	}
 
+	private List<RouteWarningCode> routeWarnings(List<RouteLegResponse> legs, WalkRouteUserProfile profile) {
+		if (!isWheelchairUser(profile) || legs.stream().noneMatch(leg -> leg.type() == TransportMode.BUS)) {
+			return List.of();
+		}
+		boolean hasLowFloorBus = legs.stream()
+			.filter(leg -> leg.type() == TransportMode.BUS)
+			.flatMap(leg -> leg.laneOptions().stream())
+			.anyMatch(option -> Boolean.TRUE.equals(option.isLowFloor()));
+		if (hasLowFloorBus) {
+			return List.of();
+		}
+		return List.of(RouteWarningCode.LOW_FLOOR_BUS_UNAVAILABLE);
+	}
+
+	private int totalDurationSecond(int odsayTotalTimeMinute, List<RouteLegResponse> legs,
+		WalkRouteUserProfile profile) {
+		return Math.max(0, odsayTotalTimeMinute) * 60
+			+ transferBufferSecond(legs, profile)
+			+ busBoardingPrepSecond(legs, profile);
+	}
+
+	private int transferBufferSecond(List<RouteLegResponse> legs, WalkRouteUserProfile profile) {
+		int bufferSecond = 0;
+		boolean hasPreviousTransit = false;
+		for (RouteLegResponse leg : legs) {
+			if (leg.type() != TransportMode.BUS && leg.type() != TransportMode.SUBWAY) {
+				continue;
+			}
+			if (hasPreviousTransit) {
+				bufferSecond += transitTransferBufferSecond(leg.type(), profile);
+			}
+			hasPreviousTransit = true;
+		}
+		return bufferSecond;
+	}
+
+	private int transitTransferBufferSecond(TransportMode nextTransitType, WalkRouteUserProfile profile) {
+		if (nextTransitType == TransportMode.SUBWAY) {
+			return isWheelchairUser(profile) ? WHEELCHAIR_SUBWAY_TRANSFER_BUFFER_SECOND : SUBWAY_TRANSFER_BUFFER_SECOND;
+		}
+		return BUS_TRANSFER_BUFFER_SECOND;
+	}
+
+	private int busBoardingPrepSecond(List<RouteLegResponse> legs, WalkRouteUserProfile profile) {
+		long busLegCount = legs.stream().filter(leg -> leg.type() == TransportMode.BUS).count();
+		return Math.toIntExact(busLegCount * (long)busBoardingPrepSecond(profile));
+	}
+
+	private int busBoardingPrepSecond(WalkRouteUserProfile profile) {
+		if (profile.primaryUserType() == PrimaryUserType.LOW_VISION || isWheelchairUser(profile)) {
+			return ACCESSIBLE_BUS_BOARDING_PREP_SECOND;
+		}
+		return DEFAULT_BUS_BOARDING_PREP_SECOND;
+	}
+
+	private boolean isWheelchairUser(WalkRouteUserProfile profile) {
+		return profile.primaryUserType() == PrimaryUserType.MOBILITY_IMPAIRED
+			&& (profile.mobilitySubtype() == MobilitySubtype.POWER_WHEELCHAIR
+				|| profile.mobilitySubtype() == MobilitySubtype.MANUAL_WHEELCHAIR);
+	}
+
 	private record SelectedTransitRoute(
 		TransitRouteCandidate candidate,
 		Set<RouteOption> routeOptions) {
@@ -359,6 +430,7 @@ public class TransitRouteSearchService {
 				route.durationSecond(),
 				route.estimatedTimeMinute(),
 				route.badges(),
+				route.warnings(),
 				route.geometry(),
 				route.legs());
 			return new TransitRouteCandidate(
@@ -884,7 +956,7 @@ public class TransitRouteSearchService {
 		if (durationSecond <= 0) {
 			return 0;
 		}
-		return Math.max(1, (int)Math.ceil(durationSecond / 60.0));
+		return Math.max(1, durationSecond / 60);
 	}
 
 	private List<Map<String, Object>> snapshotLegs(OdsayTransitPath path) {

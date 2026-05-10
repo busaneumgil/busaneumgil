@@ -38,6 +38,7 @@ import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.RouteWarningCode;
 import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
@@ -289,11 +290,31 @@ class TransitRouteSearchServiceTest {
 		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
 
 		assertThat(response.routes()).hasSize(1);
+		assertThat(response.routes().get(0).durationSecond()).isEqualTo(1380);
+		assertThat(response.routes().get(0).estimatedTimeMinute()).isEqualTo(23);
+		assertThat(response.routes().get(0).warnings())
+			.containsExactly(RouteWarningCode.LOW_FLOOR_BUS_UNAVAILABLE);
 		assertThat(response.routes().get(0).legs())
 			.filteredOn(leg -> leg.type() == TransportMode.BUS)
 			.first()
 			.extracting(leg -> leg.laneOptions().get(0).remainingMinute(), leg -> leg.laneOptions().get(0).isLowFloor())
 			.containsExactly(null, null);
+	}
+
+	@Test
+	@DisplayName("휠체어 사용자 경로에 저상버스 후보가 있으면 warning을 노출하지 않는다")
+	void omitsLowFloorWarningWhenLowFloorBusExists() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(busPath("map-1", "100", 20, 300))));
+		when(odsayClient.loadLane("map-1"))
+			.thenReturn(List.of(new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes().get(0).warnings()).isEmpty();
 	}
 
 	@Test

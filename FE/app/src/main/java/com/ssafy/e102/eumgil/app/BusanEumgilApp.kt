@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.app
 
 import android.app.Application
 import com.kakao.sdk.common.KakaoSdk
+import com.kakao.vectormap.KakaoMapSdk
 import com.navercorp.nid.NaverIdLoginSDK
 import com.ssafy.e102.eumgil.BuildConfig
 
@@ -13,6 +14,7 @@ class BusanEumgilApp : Application() {
         super.onCreate()
         registerActivityLifecycleCallbacks(ForegroundActivityProvider)
         if (BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()) {
+            KakaoMapSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
             KakaoSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
         }
         if (isNaverLoginConfigured()) {

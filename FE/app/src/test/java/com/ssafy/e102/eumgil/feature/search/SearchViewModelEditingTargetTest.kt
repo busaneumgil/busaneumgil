@@ -21,8 +21,10 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelEditingTargetTest {
@@ -105,6 +107,47 @@ class SearchViewModelEditingTargetTest {
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
             assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
             assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
+        }
+
+    @Test
+    fun `provider only search result stays blocked even when editing target is origin`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    setEditingTarget(RouteEditingTarget.ORIGIN)
+                }
+            val result =
+                SearchResult(
+                    placeId = "provider:kakao:987654321",
+                    serverPlaceId = null,
+                    providerPlaceId = "987654321",
+                    title = "Provider Only Cafe",
+                    subtitle = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    matched = false,
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(
+                null,
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                },
+            )
+            assertTrue(viewModel.uiState.value.resultState is SearchResultUiState.Error)
         }
 }
 

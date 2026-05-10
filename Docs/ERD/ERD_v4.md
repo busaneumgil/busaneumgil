@@ -2,7 +2,7 @@
 
 > **작성일:** 2026-04-23
 > **기준 문서:** `docs/erd.md` (원본 OSM 기반)
-> **최종 수정일:** 2026-05-07
+> **최종 수정일:** 2026-05-09
 > **변경 사유:** canonical source를 `busan.osm.pbf`에서 `N3L_A0020000_26` SHP(국토교통부 도로 중심선)로 전환함에 따라 `road_nodes`와 `road_segments`의 source identity 컬럼을 재정의하고, 편의시설 PoC 채택본 기준으로 장소 카테고리를 최신화했으며, 선택된 경로 안내 세션 복구를 위한 `route_sessions`를 추가
 > **참조 계획:** `.ai/PLANS/current-sprint/02-osm-schema-and-network-load.md`
 
@@ -21,9 +21,10 @@
 | `route_logs`, `route_log_points` | 실제 이동 로그 수집 | MVP ERD에서 제외 |
 | `route_ratings` | - | 도착 직후 별점 평가 저장 |
 | `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
+| `bookmarks` | `user_id`, `place_id`만 저장하는 내부 장소 전용 구조 | `bookmark_target_id`, 선택적 `place_id`, 외부 snapshot 컬럼을 갖는 hybrid 북마크 구조 |
 | `subway_stations`, `subway_timetables` | 지하철 시간표/역 정보 테이블 없음 | ODsay 역 식별자 기반 지하철 역 마스터와 시간표 저장 |
 
-장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 MVP DB 컬럼으로 보존하지 않고, 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
+장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 전역 `places` 마스터 컬럼으로는 보존하지 않고, 외부 북마크 snapshot의 `bookmarks.provider_category`에서만 제한적으로 보존한다. 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
 
 ---
 
@@ -68,6 +69,7 @@
 
 - `road_nodes`
 - `road_segments`
+- `admin_areas`
 - `segment_features`
 
 ### 대중교통 도메인
@@ -97,7 +99,7 @@ erDiagram
 
     HAZARD_REPORTS ||--o{ HAZARD_REPORT_IMAGES : has
 
-    PLACES ||--o{ BOOKMARKS : bookmarked
+    PLACES o|--o{ BOOKMARKS : canonicalLink
     PLACES ||--o{ PLACE_ACCESSIBILITY_FEATURES : has
 
     ROAD_NODES ||--o{ ROAD_SEGMENTS : fromNode
@@ -118,7 +120,14 @@ erDiagram
     BOOKMARKS {
         INT bookmark_id PK
         UUID user_id FK
+        VARCHAR bookmark_target_id
         BIGINT place_id FK
+        VARCHAR provider
+        VARCHAR provider_place_id
+        VARCHAR name
+        VARCHAR provider_category
+        VARCHAR address
+        GEOMETRY point
     }
 
     FAVORITE_ROUTES {
@@ -189,6 +198,13 @@ erDiagram
         ENUM stairs_state
         ENUM signal_state
         VARCHAR segment_type
+    }
+
+    ADMIN_AREAS {
+        BIGINT area_id PK
+        VARCHAR gu
+        VARCHAR dong
+        GEOMETRY geom
     }
 
     SEGMENT_FEATURES {
@@ -296,17 +312,31 @@ erDiagram
 
 사용자가 찜한 장소를 저장한다.
 
+내부 장소는 `places`와 canonical link를 연결하고, 내부 매칭되지 않은 외부 대상은 사용자별 snapshot으로 저장한다.
+
 ### 컬럼 명세
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 북마크 ID | bookmark_id | INT | NOT NULL |  |
 | 사용자 PK | user_id | UUID | NOT NULL |  |
-| 장소 ID | place_id | BIGINT | NOT NULL |  |
+| 북마크 대상 식별자 | bookmark_target_id | VARCHAR(32) | NULL |  |
+| 장소 ID | place_id | BIGINT | NULL |  |
+| 외부 제공자 | provider | VARCHAR(30) | NULL |  |
+| 외부 제공자 장소 ID | provider_place_id | VARCHAR(100) | NULL |  |
+| 표시명 | name | VARCHAR(255) | NULL |  |
+| 외부 원본 카테고리 | provider_category | VARCHAR(255) | NULL |  |
+| 표시 주소 | address | VARCHAR(255) | NULL |  |
+| 표시 좌표 | point | GEOMETRY(POINT, 4326) | NULL |  |
 
 ### 비고
 
-- `UNIQUE (user_id, place_id)` 제약을 둔다.
+- `UNIQUE (user_id, bookmark_target_id)` 제약을 둔다.
+- 신규 생성 row는 `bookmark_target_id`를 항상 채운다. 다만 기존 내부 북마크 legacy row를 흡수하는 전환 구간을 고려해 현재 스키마 자체는 nullable로 둔다.
+- 내부 장소 북마크는 `place_id`를 채우고, 목록 응답 시에는 `places` canonical 데이터를 우선 사용한다. 따라서 `name`, `address`, `point` snapshot은 비워둘 수 있다.
+- 내부 매칭되지 않은 외부 북마크는 `place_id=NULL`이며 `provider`, `provider_place_id`, `name`, `provider_category`, `address`, `point` snapshot만 가진다.
+- `bookmark_target_id`는 서버가 생성하는 opaque 식별자다. 삭제 API와 중복 방지 기준으로 사용한다.
+- 외부 snapshot row는 사용자 북마크 데이터일 뿐, 전역 `places` 마스터 데이터로 승격하지 않는다.
 
 ---
 
@@ -386,7 +416,7 @@ erDiagram
 ### 비고
 
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
-- `APPROVED`, `REJECTED` 상태 변경은 후속 관리자 API에서 처리한다.
+- `APPROVED`, `REJECTED` 상태 변경은 `/admin/hazard-reports/{reportId}/approve`, `/admin/hazard-reports/{reportId}/reject`에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
 - 제보 위치의 기준 데이터는 `report_point`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
 - 사용자별 제보 목록은 최신순으로 제공한다.
@@ -470,7 +500,7 @@ erDiagram
 - `ELEVATOR`는 장소 카테고리로 사용하지 않는다. 도시철도 엘리베이터는 `subway_station_elevators`, 일반 장소의 엘리베이터 보유 여부는 `place_accessibility_features.feature_type = elevator`로 관리한다.
 - `TOILET`은 장소 카테고리로 사용하지 않는다. 장애인 이용 가능 화장실은 `place_accessibility_features.feature_type = accessibleToilet`로 관리한다.
 - `CHARGING_STATION`은 장소 카테고리로 사용하지 않는다. 전동보장구 충전소 장소는 `category=ETC`로 저장하고 반드시 `feature_type=chargingStation`, `is_available=true`를 가진다.
-- 최종 정제 산출물은 `place/erd_ready/place_merged_broad_category_final.csv` 기준 13,564개 장소이며, `TOILET`, `CHARGING_STATION`, `MOBILITY`, `FOOD`, `PUBLIC`, `MEDICAL_WELFARE` 구 카테고리는 남기지 않는다.
+- 최종 정제 산출물은 `places_erd.csv` 기준 12,309개 장소이며, `TOILET`, `CHARGING_STATION`, `MOBILITY`, `FOOD`, `PUBLIC`, `MEDICAL_WELFARE` 구 카테고리는 남기지 않는다.
 
 ---
 
@@ -503,6 +533,7 @@ erDiagram
 
 - `UNIQUE (place_id, feature_type)` 제약을 둔다.
 - `accessibleEntrance`는 주출입구 접근 가능, 무단차 진입, 경사로형 접근로를 통합한 접근성 속성이다. 기존 `ramp`, `stepFree`는 별도 featureType으로 분리하지 않는다.
+- `place_accessibility_features_erd.csv` 원천은 42,565개 feature row이며, DB 적재 시 `ramp`, `stepFree`를 `accessibleEntrance`로 통합하고 `(place_id, feature_type)` 단위로 병합한다.
 - 지도 홈 상단 빠른 필터는 장소 카테고리가 아니라 `accessibleToilet`, `elevator`, `chargingStation` 접근성 속성을 기준으로 조회한다.
 - `chargingStation`은 전동보장구 충전 가능 여부를 뜻한다. 전동보장구 충전소 원천 장소는 `places.category=ETC`와 `chargingStation=true`를 함께 가져야 한다.
 
@@ -593,7 +624,32 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 10) segment_features
+## 10) admin_areas *(관리자 운영용)*
+
+### 역할
+
+관리자 보행 네트워크 검수 화면에서 사용할 구/동 경계를 저장한다.
+
+`road_segments`에 구/동 컬럼을 중복 저장하지 않고, `admin_areas.geom`과 `road_segments.geom`의 공간 관계로 특정 구/동의 보행 네트워크를 조회한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 행정구역 ID | area_id | BIGINT | NOT NULL |  |
+| 구 | gu | VARCHAR(50) | NOT NULL |  |
+| 동 | dong | VARCHAR(50) | NOT NULL |  |
+| 행정동 경계 | geom | GEOMETRY(GEOMETRY, 4326) | NOT NULL |  |
+
+### 비고
+
+- `gu`, `dong`은 관리자 화면 selector와 검수용 공간 필터에만 사용한다.
+- 보행 네트워크 라우팅 계약은 `road_segments`의 그래프 구조와 상태값을 기준으로 유지한다.
+- `road_segments`와의 연결은 FK가 아니라 `ST_Intersects` 같은 공간 연산으로 처리한다.
+
+---
+
+## 11) segment_features
 
 ### 역할
 
@@ -618,7 +674,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 11) route_ratings
+## 12) route_ratings
 
 ### 역할
 
@@ -660,7 +716,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ---
 
-## 12) route_sessions
+## 13) route_sessions
 
 ### 역할
 
@@ -697,9 +753,10 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `route_snapshot_json`은 선택 당시 경로를 복구하기 위한 JSON이다.
 - `route_snapshot_json`에는 프론트 응답용 route payload를 그대로 복구할 수 있는 값을 저장한다.
   - route 단위: `routeId`, `transportMode`, `routeOption`, `routeOptions`, `title`, `distanceMeter`, `estimatedTimeMinute`, `transferCount`, `badges`, `geometry`
-  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `alightingStop`, `isLowFloor`, `badges`
+  - leg 단위: `sequence`, `type`, `role`, `instruction`, `distanceMeter`, `estimatedTimeMinute`, `geometry`, `routeNo`, `laneOptions`, `boardingStop`, `arrivingStop`, `isLowFloor`
   - step 단위: `sequence`, `instruction`, `distanceMeter`, `geometry`, `badges`, `alert`, `slopePercent`, `widthState`
   - alert 단위: `type`, `distanceMeter`
+- 접근성 요약은 route 단위 `badges`에 저장하고, leg 단위 상세 안내는 `guidanceEvents`를 기준으로 복구한다. `RouteLegResponse.badges`는 API 응답과 snapshot JSON에 노출하지 않는다.
 - `route_snapshot_json`에는 후속 API 복구용 backend-only metadata를 함께 저장한다.
   - 공통 transit metadata: `legSequence`, `type`, `routeNo`, `laneOptions`
   - BUS metadata: `transitRouteId`, `boardingStopId`, `exitStopId`, `odsayRouteId`, `odsayStationId`
@@ -882,7 +939,8 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 ### places - bookmarks
 
-- `places 1 : N bookmarks`
+- `places 0..1 : N bookmarks`
+- `bookmarks.place_id`는 내부 장소와 연결된 경우에만 채운다. 외부 snapshot 북마크는 `place_id=NULL`이다.
 
 ### places - place_accessibility_features
 
@@ -907,3 +965,8 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - `subway_stations 1 : N subway_station_elevators`
 - `odsay_station_id` 기준 논리 관계로 연결한다.
+
+### admin_areas - road_segments
+
+- FK 관계가 아니다.
+- 관리자 검수 화면에서 `admin_areas.geom`과 `road_segments.geom`의 공간 교차 여부로 구/동별 보행 네트워크를 조회한다.

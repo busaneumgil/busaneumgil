@@ -6,7 +6,6 @@ import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
-import com.ssafy.e102.eumgil.data.local.datasource.DebugSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource
@@ -15,12 +14,12 @@ import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
-import com.ssafy.e102.eumgil.data.mock.datasource.RouteMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.VoiceAnalyzeRemoteDataSource
@@ -156,31 +155,28 @@ object RepositoryModule {
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,
-        debugSettingsLocalDataSourceProvider: () -> DebugSettingsLocalDataSource,
     ): SettingsRepository =
         DefaultSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
-            debugSettingsLocalDataSourceProvider = debugSettingsLocalDataSourceProvider,
         )
 
-    fun provideRepositorySourcePolicy(
-        debugSettingsLocalDataSource: DebugSettingsLocalDataSource,
-    ): RepositorySourcePolicy =
-        DefaultRepositorySourcePolicy(
-            debugSettingsLocalDataSource = debugSettingsLocalDataSource,
-        )
+    fun provideRepositorySourcePolicy(): RepositorySourcePolicy = DefaultRepositorySourcePolicy()
 
     fun providePlacesRepository(
         remoteDataSource: PlacesRemoteDataSource,
         localDataSource: PlacesLocalDataSource,
         mockDataSource: PlacesMockDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): PlacesRepository =
         DefaultPlacesRepository(
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideFacilitySeedRepository(
@@ -194,11 +190,11 @@ object RepositoryModule {
 
     fun provideRouteRepository(
         localDataSource: RouteLocalDataSource,
-        mockDataSource: RouteMockDataSource,
+        remoteDataSource: RouteRemoteDataSource,
     ): RouteRepository =
         DefaultRouteRepository(
             localDataSource = localDataSource,
-            mockDataSource = mockDataSource,
+            remoteDataSource = remoteDataSource,
         )
 
     fun provideSearchRepository(

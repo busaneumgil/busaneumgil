@@ -119,8 +119,15 @@ class TutorialScreenTest {
     }
 
     @Test
-    fun `route description keeps the setting phrase on its own line`() {
-        assertEquals(true, TutorialLayoutDefaults.routeDescriptionBreaksAfterSettingComma)
+    fun `route description uses a single concise line`() {
+        val stringsFile = File("src/main/res/values/strings.xml")
+
+        assertEquals(false, TutorialLayoutDefaults.routeDescriptionBreaksAfterSettingComma)
+        assertEquals(true, TutorialLayoutDefaults.routeDescriptionUsesSingleLine)
+        assertEquals(
+            "상황에 맞는 경로를 선택해 이용하세요.",
+            stringsFile.readStringResource(name = "tutorial_route_description"),
+        )
     }
 
     @Test

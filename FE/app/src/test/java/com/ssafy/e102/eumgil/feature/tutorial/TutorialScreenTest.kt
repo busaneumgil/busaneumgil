@@ -40,10 +40,13 @@ class TutorialScreenTest {
         assertEquals(false, TutorialLayoutDefaults.usesIllustrationHalo)
         assertEquals(true, TutorialLayoutDefaults.destinationFiltersAttachToSearch)
         assertEquals(true, TutorialLayoutDefaults.destinationSearchShowsMic)
-        assertEquals(true, TutorialLayoutDefaults.destinationShowsMapPreview)
-        assertEquals(true, TutorialLayoutDefaults.destinationMapAttachesBelowFilters)
+        assertEquals(false, TutorialLayoutDefaults.destinationShowsMapPreview)
+        assertEquals(true, TutorialLayoutDefaults.destinationUsesSearchAndFilterOnly)
         assertEquals(false, TutorialLayoutDefaults.destinationFilterRowScrollable)
         assertEquals(true, TutorialLayoutDefaults.destinationFilterUsesLatestMapIcons)
+        assertEquals(true, TutorialLayoutDefaults.destinationFilterUsesOriginalMapChipShape)
+        assertEquals(true, TutorialLayoutDefaults.destinationShowsFilterResultPanel)
+        assertEquals(false, TutorialLayoutDefaults.usesGeneratedBitmapIllustration)
         assertEquals(true, TutorialLayoutDefaults.reportDescriptionMentionsRouteContribution)
     }
 
@@ -53,16 +56,26 @@ class TutorialScreenTest {
         assertEquals(22.sp, TutorialLayoutDefaults.headerDescriptionLineHeight)
         assertEquals(12.dp, TutorialLayoutDefaults.illustrationContentGap)
         assertEquals(4.dp, TutorialLayoutDefaults.headerVisualGap)
+        assertEquals(20.dp, TutorialLayoutDefaults.headerTopPadding)
+        assertEquals(12.dp, TutorialLayoutDefaults.sceneContentVerticalGap)
         assertEquals(1.dp, TutorialLayoutDefaults.previousButtonBorderWidth)
+        assertEquals(96.dp, TutorialLayoutDefaults.routeCardHeight)
+        assertEquals(148.dp, TutorialLayoutDefaults.reportTileWidth)
+        assertEquals(112.dp, TutorialLayoutDefaults.reportTileHeight)
     }
 
     @Test
-    fun `destination preview fills the first tutorial stage without dead space`() {
-        assertEquals(304.dp, TutorialLayoutDefaults.illustrationHeight)
+    fun `destination controls sit close together with equal vertical rhythm`() {
+        assertEquals(300.dp, TutorialLayoutDefaults.illustrationHeight)
         assertEquals(340.dp, TutorialLayoutDefaults.searchBarMaxWidth)
-        assertEquals(340.dp, TutorialLayoutDefaults.destinationMapMaxWidth)
-        assertEquals(166.dp, TutorialLayoutDefaults.destinationMapHeight)
-        assertEquals(10.dp, TutorialLayoutDefaults.filterChipHorizontalPadding)
+        assertEquals(12.dp, TutorialLayoutDefaults.destinationControlVerticalGap)
+        assertEquals(13.dp, TutorialLayoutDefaults.filterChipHorizontalPadding)
+        assertEquals(9.dp, TutorialLayoutDefaults.filterChipVerticalPadding)
+        assertEquals(38.dp, TutorialLayoutDefaults.filterChipMinHeight)
+        assertEquals(8.dp, TutorialLayoutDefaults.filterChipCornerRadius)
+        assertEquals(2, TutorialLayoutDefaults.filterChipRowMaxItemCount)
+        assertEquals(340.dp, TutorialLayoutDefaults.destinationResultPanelMaxWidth)
+        assertEquals(12.dp, TutorialLayoutDefaults.destinationResultPanelGap)
     }
 
     @Test

@@ -35,6 +35,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
+import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
@@ -127,8 +128,13 @@ public class TransitRefreshService {
 	}
 
 	private RouteSession getOwnedRouteSession(UUID userId, String routeId) {
-		return routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, routeId)
+		return routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			userId, routeId, RouteSessionStatus.ACTIVE)
 			.orElseGet(() -> {
+				if (routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, routeId)
+					.isPresent()) {
+					throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+				}
 				if (routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc(routeId).isPresent()) {
 					throw new RouteException(RouteErrorCode.ROUTE_ACCESS_DENIED);
 				}

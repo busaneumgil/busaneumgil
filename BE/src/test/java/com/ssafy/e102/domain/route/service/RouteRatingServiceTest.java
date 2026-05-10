@@ -28,6 +28,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteRatingRepository;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
+import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
@@ -85,6 +86,33 @@ class RouteRatingServiceTest {
 	void rateRejectsMissingRouteSession() {
 		when(routeSessionRepository.findById(SESSION_ID))
 			.thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 4)))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("ACTIVE route session은 안내 종료 전 상태이므로 rating을 차단한다")
+	void rateRejectsActiveRouteSession() {
+		RouteSession routeSession = routeSession("rt_selected_001", snapshot("rt_selected_001"),
+			RouteSessionStatus.ACTIVE);
+		when(routeSessionRepository.findById(SESSION_ID))
+			.thenReturn(Optional.of(routeSession));
+
+		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 4)))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_SESSION_NOT_COMPLETED);
+	}
+
+	@Test
+	@DisplayName("route session snapshot이 없으면 RT4043으로 평가를 차단한다")
+	void rateRejectsRouteSessionWithoutSnapshot() {
+		RouteSession routeSession = routeSession("rt_selected_001", null);
+		when(routeSessionRepository.findById(SESSION_ID))
+			.thenReturn(Optional.of(routeSession));
 
 		assertThatThrownBy(() -> service.rate(USER_ID, new RouteRatingRequest(SESSION_ID, 4)))
 			.isInstanceOf(RouteException.class)
@@ -154,6 +182,7 @@ class RouteRatingServiceTest {
 		when(routeSession.getSessionId()).thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000099"));
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot("rt_selected_001"));
 		when(routeSession.getUser()).thenReturn(user(USER_ID));
+		when(routeSession.getStatus()).thenReturn(RouteSessionStatus.COMPLETED);
 		when(routeSessionRepository.findById(SESSION_ID))
 			.thenReturn(Optional.of(routeSession));
 		when(routeRatingRepository.findByRouteSession_SessionId(routeSession.getSessionId()))
@@ -188,11 +217,16 @@ class RouteRatingServiceTest {
 	}
 
 	private RouteSession routeSession(String routeId, JsonNode snapshot) {
+		return routeSession(routeId, snapshot, RouteSessionStatus.COMPLETED);
+	}
+
+	private RouteSession routeSession(String routeId, JsonNode snapshot, RouteSessionStatus status) {
 		RouteSession routeSession = mock(RouteSession.class);
 		when(routeSession.getSessionId()).thenReturn(SESSION_ID);
 		when(routeSession.getRouteId()).thenReturn(routeId);
 		when(routeSession.getRouteSnapshotJson()).thenReturn(snapshot);
 		when(routeSession.getUser()).thenReturn(user(USER_ID));
+		when(routeSession.getStatus()).thenReturn(status);
 		return routeSession;
 	}
 }

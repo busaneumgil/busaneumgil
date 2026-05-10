@@ -44,6 +44,7 @@ import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
@@ -78,7 +79,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("선택된 BUS leg는 route session snapshot에서 복구해 refresh 대상이 된다")
 	void refreshRestoresBusLegFromRouteSessionSnapshot() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(bimsArrivalCacheService.find("507700000", "5200177000"))
 			.thenReturn(Optional.empty());
@@ -99,7 +101,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("BUS 도착정보가 Redis cache에 있으면 BIMS를 호출하지 않는다")
 	void refreshBusUsesCachedArrival() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(bimsArrivalCacheService.find("507700000", "5200177000"))
 			.thenReturn(Optional.of(new BusanBimsArrival("507700000", "5200177000", "100", 2, false)));
@@ -115,7 +118,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("BUS 정류장/노선은 확인됐지만 도착 차량이 없으면 NO_CURRENT_ARRIVAL을 반환한다")
 	void refreshBusReturnsNoCurrentArrivalWhenBimsHasNoArrival() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(bimsArrivalCacheService.find("507700000", "5200177000"))
 			.thenReturn(Optional.empty());
@@ -132,7 +136,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("BIMS timeout은 EX5040으로 전파한다")
 	void refreshBusPropagatesBimsTimeout() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(bimsArrivalCacheService.find("507700000", "5200177000"))
 			.thenReturn(Optional.empty());
@@ -149,7 +154,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("BIMS 오류는 EX5020으로 전파한다")
 	void refreshBusPropagatesBimsFailure() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(bimsArrivalCacheService.find("507700000", "5200177000"))
 			.thenReturn(Optional.empty());
@@ -165,6 +171,8 @@ class TransitRefreshServiceTest {
 	@Test
 	@DisplayName("다른 사용자의 route session이면 A4030을 반환한다")
 	void refreshRejectsRouteSessionOwnedByOtherUser() {
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "other_route", RouteSessionStatus.ACTIVE)).thenReturn(Optional.empty());
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "other_route"))
 			.thenReturn(Optional.empty());
 		when(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc("other_route"))
@@ -179,6 +187,8 @@ class TransitRefreshServiceTest {
 	@Test
 	@DisplayName("route session이 없으면 RT4043을 반환한다")
 	void refreshRejectsMissingRouteSession() {
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "missing_route", RouteSessionStatus.ACTIVE)).thenReturn(Optional.empty());
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "missing_route"))
 			.thenReturn(Optional.empty());
 		when(routeSessionRepository.findFirstByRouteIdOrderByUpdatedAtDesc("missing_route"))
@@ -191,10 +201,26 @@ class TransitRefreshServiceTest {
 	}
 
 	@Test
+	@DisplayName("COMPLETED route session에는 transit-refresh를 허용하지 않는다")
+	void refreshRejectsCompletedRouteSession() {
+		RouteSession completedSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.empty());
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+			.thenReturn(Optional.of(completedSession));
+
+		assertThatThrownBy(() -> service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2)))
+			.isInstanceOf(RouteException.class)
+			.extracting("errorCode")
+			.isEqualTo(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+	}
+
+	@Test
 	@DisplayName("없는 legSequence는 snapshot 복구 실패로 RT4043을 반환한다")
 	void refreshRejectsMissingLegSequence() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), null);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 
 		assertThatThrownBy(() -> service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(99)))
@@ -207,7 +233,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("WALK leg에 transit-refresh를 요청하면 PT4090을 반환한다")
 	void refreshRejectsWalkLeg() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.WALK), null);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 
 		assertThatThrownBy(() -> service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2)))
@@ -220,7 +247,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("BUS/SUBWAY 외 leg에 transit-refresh를 요청하면 PT4090을 반환한다")
 	void refreshRejectsNonBusOrSubwayLeg() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.PUBLIC_TRANSIT), null);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 
 		assertThatThrownBy(() -> service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2)))
@@ -234,7 +262,8 @@ class TransitRefreshServiceTest {
 	void refreshIgnoresBackendMetadataWhenRestoringRoutePayload() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS),
 			objectMapper.createObjectNode().put("mapObj", "map-object"));
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 
 		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
@@ -246,7 +275,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("BUS backend metadata를 해석할 수 없으면 ARRIVAL_UNKNOWN을 반환한다")
 	void refreshBusReturnsUnknownWhenMetadataIsMissing() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), null);
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 
 		TransitRefreshResponse response = service.refresh(USER_ID, "rt_selected_001", new TransitRefreshRequest(2));
@@ -260,7 +290,8 @@ class TransitRefreshServiceTest {
 	void refreshDoesNotMutateRouteSnapshot() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.BUS), busMetadata());
 		JsonNode before = routeSession.getRouteSnapshotJson().deepCopy();
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(bimsArrivalCacheService.find("507700000", "5200177000"))
 			.thenReturn(Optional.of(new BusanBimsArrival("507700000", "5200177000", "100", 2, false)));
@@ -274,7 +305,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("SUBWAY leg는 시간표 기반으로 다음 출발 정보를 반환한다")
 	void refreshSubwayUsesTimetable() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.SUBWAY), subwayMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(subwayTimetableRepository.findNextDepartures(
 			eq("301"),
@@ -304,7 +336,8 @@ class TransitRefreshServiceTest {
 	@DisplayName("SUBWAY 시간표가 없으면 ARRIVAL_UNKNOWN을 반환한다")
 	void refreshSubwayReturnsUnknownWhenTimetableIsMissing() {
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.SUBWAY), subwayMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(subwayTimetableRepository.findNextDepartures(
 			eq("301"),
@@ -332,7 +365,8 @@ class TransitRefreshServiceTest {
 		service = new TransitRefreshService(routeSessionRepository, objectMapper, bimsArrivalCacheService,
 			busanBimsClient, subwayTimetableRepository, immediateTransaction(), SUNDAY_NIGHT_CLOCK);
 		RouteSession routeSession = routeSession(routeSummary(TransportMode.SUBWAY), subwayMetadata());
-		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(USER_ID, "rt_selected_001"))
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(USER_ID,
+			"rt_selected_001", RouteSessionStatus.ACTIVE))
 			.thenReturn(Optional.of(routeSession));
 		when(subwayTimetableRepository.findNextDepartures(
 			eq("301"),

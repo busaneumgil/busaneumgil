@@ -99,26 +99,38 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
-    fun `facility markers render through compose projection overlay while clearing legacy label layers`() {
+    fun `facility markers render through native kakao label layers with runtime bitmap styles`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
         assertTrue(
-            "Facility markers should render through a dedicated Compose projection overlay so filtered facilities stay visible even when Kakao labels are unreliable.",
+            "Facility markers should recreate a dedicated Kakao label layer instead of projecting every facility marker through Compose.",
+            source.contains("LabelLayerOptions") &&
+                source.contains("from(KAKAO_MARKER_LAYER_ID)") &&
+                source.contains("addLabels(labelOptions)"),
+        )
+        assertTrue(
+            "Facility labels should use runtime-generated bitmap styles so vector drawables are not handed to Kakao labels directly.",
+            source.contains("KakaoFacilityMarkerStyleCache") &&
+                source.contains("LabelStyle") &&
+                source.contains(".from(bitmapFor("),
+        )
+        assertTrue(
+            "The renderer should still clear old label layers before re-adding the current facility labels.",
+            source.contains("removeAllLabelLayer()"),
+        )
+        assertFalse(
+            "Facility markers should no longer use the dedicated Compose projection overlay path.",
             source.contains("MapProjectedFacilityMarkerOverlay("),
         )
-        assertTrue(
-            "The renderer should keep a distinct projected facility marker list alongside special markers.",
+        assertFalse(
+            "Facility markers should no longer keep a projected facility overlay list in controller state.",
             source.contains("projectedFacilityMarkerOverlays"),
         )
-        assertTrue(
-            "Projected facility markers should be derived from the current visible marker state instead of relying on Kakao label insertion.",
+        assertFalse(
+            "Facility markers should no longer be derived from createKakaoFacilityMarkerOverlays.",
             source.contains("createKakaoFacilityMarkerOverlays("),
-        )
-        assertTrue(
-            "Legacy Kakao label layers should be cleared so the new projected marker path does not double-render facilities.",
-            source.contains("removeAllLabelLayer()"),
         )
     }
 }

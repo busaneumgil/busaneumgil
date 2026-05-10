@@ -198,10 +198,16 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertEquals(listOf("toilet", "elevator"), markerStates.map { it.markerId })
-        assertEquals(R.drawable.ic_place_restroom, markerStates.first().iconResId)
-        assertEquals(R.drawable.ic_lowvision_category_elevator, markerStates.last().iconResId)
+        assertEquals(FacilityCategory.TOILET, markerStates.first().category)
+        assertEquals(FacilityCategory.ELEVATOR, markerStates.last().category)
+        assertEquals(R.drawable.ic_place_restroom, markerStates.first().glyphResId)
+        assertEquals(R.drawable.ic_lowvision_category_elevator, markerStates.last().glyphResId)
         assertEquals(0L, markerStates.first().rank)
-        assertEquals(1L, markerStates.last().rank)
+        assertTrue(markerStates.last().rank > markerStates.first().rank)
+        assertEquals(28, markerStates.first().sizeDp)
+        assertEquals(34, markerStates.last().sizeDp)
+        assertFalse(markerStates.first().isSelected)
+        assertTrue(markerStates.last().isSelected)
         assertTrue(markerStates.none { it.markerId == "hidden" })
     }
 
@@ -246,15 +252,17 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertEquals(listOf("toilet"), markerStates.map { it.markerId })
-        assertEquals(R.drawable.ic_place_restroom, markerStates.last().iconResId)
+        assertEquals(R.drawable.ic_place_restroom, markerStates.last().glyphResId)
         assertEquals(0L, markerStates.last().rank)
         assertEquals("toilet", markerStates.last().clickTargetId)
+        assertEquals(0.5f, markerStates.last().anchorPointX)
+        assertEquals(0.5f, markerStates.last().anchorPointY)
     }
 
     @Test
-    fun `facility projected overlays keep visible markers and selected emphasis`() {
-        val overlays =
-            createKakaoFacilityMarkerOverlays(
+    fun `marker render state keeps native label sizing and anchor metadata for facilities`() {
+        val markerStates =
+            createKakaoMarkerRenderStates(
                 markerOverlayState =
                     MapMarkerOverlayState(
                         loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
@@ -274,82 +282,46 @@ class KakaoMapViewportBindingsTest {
                                     categoryType = MapMarkerCategoryType(category = FacilityCategory.TOILET),
                                 ),
                                 MapMarkerUiModel(
-                                    markerId = "elevator",
-                                    name = "Elevator",
+                                    markerId = "braille",
+                                    name = "Braille blocks",
                                     coordinate = MapCoordinate(latitude = 35.2, longitude = 129.09),
-                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.ELEVATOR),
+                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.BRAILLE_BLOCK),
                                 ),
                             ),
                         visibleMarkerCount = 2,
                         totalMarkerCount = 3,
                     ),
-                selectedMarkerId = "elevator",
-            ) { coordinate ->
-                KakaoMapScreenPoint(
-                    x = (coordinate.latitude * 10).toInt(),
-                    y = (coordinate.longitude * 10).toInt(),
-                )
-            }
+                selectedMarkerId = "braille",
+            )
 
-        assertEquals(listOf("toilet", "elevator"), overlays.map { it.markerId })
-        assertEquals("Accessible toilet", overlays.first().contentDescription)
-        assertEquals("elevator", overlays.last().clickTargetId)
-        assertEquals(FacilityCategory.ELEVATOR, overlays.last().categoryType.category)
-        assertEquals(28, overlays.first().sizeDp)
-        assertEquals(34, overlays.last().sizeDp)
-        assertFalse(overlays.first().isSelected)
-        assertTrue(overlays.last().isSelected)
-        assertTrue(overlays.none { it.markerId == "hidden" })
+        assertEquals(listOf("toilet", "braille"), markerStates.map { it.markerId })
+        assertEquals(28, markerStates.first().sizeDp)
+        assertEquals(34, markerStates.last().sizeDp)
+        assertEquals(0.5f, markerStates.first().anchorPointX)
+        assertEquals(0.5f, markerStates.first().anchorPointY)
+        assertEquals(0.5f, markerStates.last().anchorPointX)
+        assertEquals(0.5f, markerStates.last().anchorPointY)
+        assertFalse(markerStates.first().isSelected)
+        assertTrue(markerStates.last().isSelected)
+        assertEquals(FacilityCategory.BRAILLE_BLOCK, markerStates.last().category)
+        assertTrue(markerStates.none { it.markerId == "hidden" })
     }
 
     @Test
-    fun `marker render state maps facility categories to compact map icons`() {
-        val markerStates =
-            createKakaoMarkerRenderStates(
-                markerOverlayState =
-                    MapMarkerOverlayState(
-                        loadStatus = com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus.READY,
-                        markers =
-                            listOf(
-                                MapMarkerUiModel(
-                                    markerId = "restaurant",
-                                    name = "Restaurant",
-                                    coordinate = MapCoordinate(latitude = 35.2, longitude = 129.2),
-                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.RESTAURANT),
-                                ),
-                                MapMarkerUiModel(
-                                    markerId = "charging",
-                                    name = "Charging station",
-                                    coordinate = MapCoordinate(latitude = 35.21, longitude = 129.21),
-                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.CHARGING_STATION),
-                                ),
-                                MapMarkerUiModel(
-                                    markerId = "healthcare",
-                                    name = "Healthcare",
-                                    coordinate = MapCoordinate(latitude = 35.22, longitude = 129.22),
-                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.HEALTHCARE),
-                                ),
-                                MapMarkerUiModel(
-                                    markerId = "tourist",
-                                    name = "Tourist spot",
-                                    coordinate = MapCoordinate(latitude = 35.23, longitude = 129.23),
-                                    categoryType = MapMarkerCategoryType(category = FacilityCategory.TOURIST_SPOT),
-                                ),
-                            ),
-                        visibleMarkerCount = 4,
-                        totalMarkerCount = 4,
-                    ),
-                selectedMarkerId = null,
-            )
-
+    fun `facility glyph mapping keeps category specific icons for native bitmap labels`() {
         assertEquals(
             listOf(
                 R.drawable.ic_place_restaurant,
                 R.drawable.ic_place_charging,
-                R.drawable.ic_place_hospital,
+                R.drawable.ic_place_healthcare,
                 R.drawable.ic_nav_facility,
             ),
-            markerStates.map { it.iconResId },
+            listOf(
+                facilityMarkerGlyphResId(FacilityCategory.RESTAURANT),
+                facilityMarkerGlyphResId(FacilityCategory.CHARGING_STATION),
+                facilityMarkerGlyphResId(FacilityCategory.HEALTHCARE),
+                facilityMarkerGlyphResId(FacilityCategory.TOURIST_SPOT),
+            ),
         )
     }
 

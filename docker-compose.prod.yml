@@ -6,6 +6,7 @@ name: s14p31e102-prod
 # Expected candidates:
 # - backend (Spring Boot)
 # - ai (Python Flask intent service)
+# - admin (React/Vite static admin web)
 # - graphhopper-runtime (disabled by default until graph-cache artifact flow is ready)
 #
 # Do NOT place managed AWS resources here:
@@ -131,6 +132,25 @@ services:
       JWT_SIGNUP_TOKEN_TTL: ${JWT_SIGNUP_TOKEN_TTL:-10m}
     ports:
       - "127.0.0.1:${SERVER_PORT:-8080}:8080"
+
+  admin:
+    image: s14p31e102-prod-admin:${APP_IMAGE_TAG:-latest}
+    build:
+      context: ./ADMIN
+      args:
+        ADMIN_BACKEND_API_URL: ${VITE_BACKEND_API_URL:-https://api.busaneumgil.com}
+        ADMIN_KAKAO_JS_PUBLIC: ${VITE_ADMIN_KAKAO_JAVASCRIPT_KEY:-}
+        ADMIN_NAVER_CLIENT_PUBLIC_ID: ${VITE_ADMIN_NAVER_CLIENT_ID:-}
+        ADMIN_GOOGLE_CLIENT_PUBLIC_ID: ${VITE_ADMIN_GOOGLE_CLIENT_ID:-}
+        ADMIN_KAKAO_MAP_PUBLIC: ${VITE_KAKAO_MAP_KEY:-}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ADMIN_PORT:-3001}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
   graphhopper-prod-data:

@@ -13,6 +13,9 @@ import unittest
 ROOT_DIR = Path(__file__).resolve().parents[2]
 AI_DOCKERFILE = ROOT_DIR / "AI" / "Dockerfile"
 AI_DOCKERIGNORE = ROOT_DIR / "AI" / ".dockerignore"
+ADMIN_DOCKERFILE = ROOT_DIR / "ADMIN" / "Dockerfile"
+ADMIN_DOCKERIGNORE = ROOT_DIR / "ADMIN" / ".dockerignore"
+ADMIN_NGINX_CONF = ROOT_DIR / "ADMIN" / "nginx.conf"
 DEV_COMPOSE = ROOT_DIR / "docker-compose.dev.yml"
 PROD_COMPOSE = ROOT_DIR / "docker-compose.prod.yml"
 LOCAL_COMPOSE = ROOT_DIR / "docker-compose.local.yml"
@@ -25,7 +28,9 @@ JENKINS_README = ROOT_DIR / "INF" / "jenkins" / "README.md"
 PROD_DEPLOY = ROOT_DIR / "scripts" / "deploy" / "prod-deploy.sh"
 PROD_ROLLBACK = ROOT_DIR / "scripts" / "deploy" / "prod-rollback.sh"
 PROD_SMOKE = ROOT_DIR / "scripts" / "deploy" / "prod-smoke.sh"
+PROD_ADMIN_INGRESS = ROOT_DIR / "scripts" / "deploy" / "prod-admin-ingress.sh"
 PROD_UP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up.sh"
+PROD_UP_GRAPHHOPPER = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up-graphhopper.sh"
 PROD_GRAPHHOPPER_BOOTSTRAP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-graphhopper-bootstrap.sh"
 
 
@@ -47,6 +52,7 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("GMS_KEY", prod_content)
         self.assertIn("DEFAULT_MODEL", prod_content)
         self.assertIn("APP_ENV: prod", prod_content)
+        self.assertIn("ADMIN_BACKEND_API_URL: ${VITE_BACKEND_API_URL:-https://api.busaneumgil.com}", prod_content)
         self.assertIn("GMS_KEY", local_content)
         self.assertIn("DEFAULT_MODEL", local_content)
         self.assertIn("APP_ENV: dev", local_content)
@@ -69,6 +75,24 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn(".env", content)
         self.assertIn(".DS_Store", content)
 
+    def test_admin_dockerfile_builds_static_vite_app(self):
+        content = ADMIN_DOCKERFILE.read_text(encoding="utf-8")
+        nginx_content = ADMIN_NGINX_CONF.read_text(encoding="utf-8")
+
+        self.assertIn("npm ci", content)
+        self.assertIn("npm run build:prod", content)
+        self.assertIn("ARG ADMIN_BACKEND_API_URL=https://api.busaneumgil.com", content)
+        self.assertIn('VITE_BACKEND_API_URL="$ADMIN_BACKEND_API_URL"', content)
+        self.assertIn("COPY --from=build /app/dist /usr/share/nginx/html", content)
+        self.assertIn("try_files $uri $uri/ /index.html", nginx_content)
+
+    def test_admin_dockerignore_excludes_local_artifacts_and_env(self):
+        content = ADMIN_DOCKERIGNORE.read_text(encoding="utf-8")
+
+        self.assertIn("node_modules/", content)
+        self.assertIn("dist/", content)
+        self.assertIn(".env", content)
+
     def test_jenkinsfile_uploads_prod_env_via_temp_file_then_rename(self):
         content = JENKINSFILE.read_text(encoding="utf-8")
 
@@ -88,18 +112,21 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_prod_deploy_runs_smoke_via_bash(self):
         content = PROD_DEPLOY.read_text(encoding="utf-8")
 
-        self.assertIn("build backend ai", content)
-        self.assertIn("up -d backend ai", content)
+        self.assertIn("build backend ai admin", content)
+        self.assertIn("up -d backend ai admin", content)
         self.assertIn('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"', content)
         self.assertIn('require_env_value JWT_SECRET', content)
-        self.assertLess(content.index("build backend ai"), content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'))
-        self.assertLess(content.index("up -d backend ai"), content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'))
+        self.assertIn('require_env_value VITE_BACKEND_API_URL', content)
+        self.assertLess(content.index("build backend ai admin"), content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'))
+        self.assertLess(content.index("up -d backend ai admin"), content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'))
 
     def test_prod_rollback_runs_smoke_via_bash(self):
         content = PROD_ROLLBACK.read_text(encoding="utf-8")
 
         self.assertIn('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"', content)
         self.assertIn('require_env_value JWT_SECRET', content)
+        self.assertIn('docker image inspect "$admin_image"', content)
+        self.assertIn('SMOKE_ADMIN="$smoke_admin"', content)
         self.assertLess(
             content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'),
             content.index('cp "$DEPLOY_STATE_DIR/previous-app-image" "$DEPLOY_STATE_DIR/current-app-image"'),
@@ -117,12 +144,22 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('"success"[[:space:]]*:[[:space:]]*false', content)
         self.assertIn('"intent"[[:space:]]*:[[:space:]]*"unknown"', content)
         self.assertIn('wait_for_url "http://127.0.0.1:${SERVER_PORT}/v3/api-docs" "Backend"', content)
+        self.assertIn('SMOKE_ADMIN="${SMOKE_ADMIN:-true}"', content)
+        self.assertIn('if [ "$SMOKE_ADMIN" = "true" ]; then', content)
+        self.assertIn('http://127.0.0.1:${ADMIN_PORT}/health', content)
+        self.assertIn('http://127.0.0.1:${ADMIN_PORT}/', content)
 
     def test_prod_up_runs_prod_smoke_after_start(self):
         content = PROD_UP.read_text(encoding="utf-8")
 
-        self.assertIn('up -d backend ai', content)
+        self.assertIn('up -d backend ai admin', content)
         self.assertIn('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"', content)
+
+    def test_prod_up_graphhopper_keeps_admin_runtime(self):
+        content = PROD_UP_GRAPHHOPPER.read_text(encoding="utf-8")
+
+        self.assertIn('up -d --force-recreate backend ai admin', content)
+        self.assertIn('wait_for_admin_health "$(admin_port)"', content)
 
     def test_prod_graphhopper_bootstrap_applies_accessibility_features_before_graph_build(self):
         content = PROD_GRAPHHOPPER_BOOTSTRAP.read_text(encoding="utf-8")
@@ -142,7 +179,14 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_prod_jenkinsfile_collects_remote_logs_on_failure(self):
         content = JENKINSFILE.read_text(encoding="utf-8")
 
-        self.assertIn('docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=160 backend ai || true', content)
+        self.assertIn('docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=160 backend ai admin || true', content)
+
+    def test_prod_admin_ingress_configures_admin_domain(self):
+        content = PROD_ADMIN_INGRESS.read_text(encoding="utf-8")
+
+        self.assertIn("ADMIN_DOMAIN=\"${ADMIN_DOMAIN:-admin.busaneumgil.com}\"", content)
+        self.assertIn("ADMIN_PORT=\"${ADMIN_PORT:-3001}\"", content)
+        self.assertIn("certbot_args=(--nginx -d \"$ADMIN_DOMAIN\"", content)
 
     def test_dev_jenkinsfile_notifies_success_and_failure(self):
         content = DEV_JENKINSFILE.read_text(encoding="utf-8")

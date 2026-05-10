@@ -1,6 +1,6 @@
 # 경로 API 운영 DB Migration 체크리스트
 
-> 기준 코드: `be/feat/transit-refresh-S14P31E102-501`  
+> 기준 코드: `be/feat/transit-refresh-S14P31E102-501`
 > 적용 SQL: `scripts/db/migrations/2026-05-10_route_api_schema.sql`
 
 ## 목적

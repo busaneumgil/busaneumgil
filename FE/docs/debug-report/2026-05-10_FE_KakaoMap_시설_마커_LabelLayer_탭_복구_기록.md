@@ -1,7 +1,7 @@
 # FE KakaoMap 시설 마커 LabelLayer 탭 복구 기록
 
-> 작성일: 2026-05-10  
-> Work Lane: FE  
+> 작성일: 2026-05-10
+> Work Lane: FE
 > 목적: 시설 마커를 Kakao SDK native `LabelLayer`로 복구한 뒤 발생한 탭 불가 이슈의 원인과 해결 방법을 기록한다.
 
 ## 1. 배경

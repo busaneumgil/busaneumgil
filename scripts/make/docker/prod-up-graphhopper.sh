@@ -12,6 +12,12 @@ graphhopper_admin_port() {
   echo "${port:-8990}"
 }
 
+admin_port() {
+  local port
+  port="$(env_value ADMIN_PORT)"
+  echo "${port:-3001}"
+}
+
 graphhopper_cache_ready() {
   "${PROD_COMPOSE[@]}" --profile graphhopper-build run --rm --no-deps --build --entrypoint sh \
     graphhopper-build \
@@ -73,6 +79,33 @@ wait_for_backend_http() {
   return 1
 }
 
+wait_for_admin_health() {
+  local port="$1"
+  local url="http://127.0.0.1:$port/health"
+
+  echo "waiting for prod admin health: $url"
+  for _ in $(seq 1 60); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      echo "prod admin is healthy: $url"
+      return 0
+    fi
+
+    local admin_container
+    admin_container="$("${PROD_COMPOSE[@]}" ps -q admin 2>/dev/null || true)"
+    if [ -n "$admin_container" ] && [ "$(docker inspect -f '{{.State.Running}}' "$admin_container" 2>/dev/null || echo false)" != "true" ]; then
+      echo "prod admin container exited before healthcheck became reachable." >&2
+      "${PROD_COMPOSE[@]}" logs --tail=160 admin >&2 || true
+      return 1
+    fi
+
+    sleep 3
+  done
+
+  echo "prod admin health did not become reachable: $url" >&2
+  "${PROD_COMPOSE[@]}" logs --tail=160 admin >&2 || true
+  return 1
+}
+
 if graphhopper_cache_ready; then
   echo "prod GraphHopper graph-cache is already present."
 else
@@ -83,5 +116,6 @@ fi
 prepare_prod_runtime_env
 "${PROD_COMPOSE[@]}" --profile graphhopper up -d --build graphhopper
 wait_for_graphhopper_healthcheck "$(graphhopper_admin_port)"
-"${PROD_COMPOSE[@]}" --profile graphhopper up -d --force-recreate backend ai
+"${PROD_COMPOSE[@]}" --profile graphhopper up -d --force-recreate backend ai admin
 wait_for_backend_http
+wait_for_admin_health "$(admin_port)"

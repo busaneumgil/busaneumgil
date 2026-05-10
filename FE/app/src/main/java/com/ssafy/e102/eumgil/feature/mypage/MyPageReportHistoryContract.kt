@@ -3,6 +3,8 @@ package com.ssafy.e102.eumgil.feature.mypage
 data class MyPageReportHistoryUiState(
     val screenState: MyPageReportHistoryScreenState = MyPageReportHistoryScreenState.LOADING,
     val reports: List<MyPageReportHistoryUiModel> = emptyList(),
+    val selectedDetail: MyPageReportHistoryDetailUiModel? = null,
+    val detailLoadingHistoryId: String? = null,
     val errorMessage: String? = null,
 )
 
@@ -12,7 +14,18 @@ data class MyPageReportHistoryUiModel(
     val address: String,
     val submittedAtText: String,
     val photoUri: String?,
+    val sourceLabel: String,
     val updatedAtMillis: Long,
+)
+
+data class MyPageReportHistoryDetailUiModel(
+    val historyId: String,
+    val title: String,
+    val description: String,
+    val locationText: String,
+    val submittedAtText: String,
+    val imageCountText: String,
+    val sourceLabel: String,
 )
 
 enum class MyPageReportHistoryScreenState {

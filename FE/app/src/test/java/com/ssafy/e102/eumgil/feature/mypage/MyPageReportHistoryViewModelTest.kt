@@ -1,6 +1,9 @@
 package com.ssafy.e102.eumgil.feature.mypage
 
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryDetailData
+import com.ssafy.e102.eumgil.data.repository.ReportHistorySource
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
@@ -25,25 +28,28 @@ class MyPageReportHistoryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `outbox items are mapped in latest updated order`() =
+    fun `history items are mapped in latest updated order`() =
         runTest {
             val repository = FakeReportHistoryRepository()
             val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
 
             repository.emit(
                 listOf(
-                    reportOutbox(
-                        outboxId = "old",
+                    reportHistory(
+                        historyId = "outbox:old",
                         reportCategory = ReportType.STAIRS_STEP.apiValue,
-                        address = "부산진구 가야대로 772 앞",
+                        address = "부산진구 가야대로 772",
                         updatedAtMillis = 1_714_097_400_000L,
+                        source = ReportHistorySource.LocalOutbox,
                     ),
-                    reportOutbox(
-                        outboxId = "new",
+                    reportHistory(
+                        historyId = "server:7",
                         reportCategory = ReportType.OTHER_OBSTACLE.apiValue,
-                        address = "부산역 1번 출구 엘리베이터",
+                        address = null,
                         updatedAtMillis = 1_714_104_000_000L,
-                        photoUri = "content://reports/elevator.jpg",
+                        imageUrl = "https://example.com/reports/7.jpg",
+                        source = ReportHistorySource.Server,
+                        serverReportId = 7L,
                     ),
                 ),
             )
@@ -52,15 +58,16 @@ class MyPageReportHistoryViewModelTest {
             val uiState = viewModel.uiState.value
 
             assertEquals(MyPageReportHistoryScreenState.CONTENT, uiState.screenState)
-            assertEquals(listOf("new", "old"), uiState.reports.map { it.outboxId })
+            assertEquals(listOf("server:7", "outbox:old"), uiState.reports.map { it.outboxId })
             assertEquals("기타 장애물", uiState.reports.first().title)
-            assertEquals("부산역 1번 출구 엘리베이터", uiState.reports.first().address)
-            assertEquals("content://reports/elevator.jpg", uiState.reports.first().photoUri)
+            assertEquals("위치 35.179600, 129.075600", uiState.reports.first().address)
+            assertEquals("https://example.com/reports/7.jpg", uiState.reports.first().photoUri)
+            assertEquals("서버 이력", uiState.reports.first().sourceLabel)
             assertTrue(uiState.reports.first().submittedAtText.contains("2024.04"))
         }
 
     @Test
-    fun `empty outbox exposes empty state`() =
+    fun `empty history exposes empty state`() =
         runTest {
             val repository = FakeReportHistoryRepository()
             val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
@@ -82,6 +89,48 @@ class MyPageReportHistoryViewModelTest {
             advanceUntilIdle()
 
             assertEquals(MyPageReportHistoryScreenState.ERROR, viewModel.uiState.value.screenState)
+        }
+
+    @Test
+    fun `report click loads selected detail`() =
+        runTest {
+            val repository = FakeReportHistoryRepository()
+            val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
+            repository.emit(
+                listOf(
+                    reportHistory(
+                        historyId = "server:7",
+                        reportCategory = ReportType.SIDEWALK_MISSING.apiValue,
+                        address = null,
+                        updatedAtMillis = 1_714_104_000_000L,
+                        source = ReportHistorySource.Server,
+                        serverReportId = 7L,
+                    ),
+                ),
+            )
+            repository.details["server:7"] =
+                ReportHistoryDetailData(
+                    historyId = "server:7",
+                    reportCategory = ReportType.SIDEWALK_MISSING.apiValue,
+                    description = "보행 가능한 인도가 없습니다.",
+                    address = null,
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    imageRefs = listOf("https://example.com/reports/7-1.jpg"),
+                    source = ReportHistorySource.Server,
+                    serverReportId = 7L,
+                    createdAtMillis = 1_714_104_000_000L,
+                )
+            advanceUntilIdle()
+
+            viewModel.onAction(MyPageReportHistoryUiAction.ReportClicked("server:7"))
+            advanceUntilIdle()
+
+            val detail = viewModel.uiState.value.selectedDetail
+            assertEquals("인도 없음", detail?.title)
+            assertEquals("보행 가능한 인도가 없습니다.", detail?.description)
+            assertEquals("첨부 사진 1장", detail?.imageCountText)
+            assertEquals(null, viewModel.uiState.value.detailLoadingHistoryId)
         }
 
     @Test
@@ -113,6 +162,7 @@ class MyPageReportHistoryViewModelTest {
 
 private class FakeReportHistoryRepository : ReportRepository {
     private val reports = MutableSharedFlow<ReportHistoryEmission>()
+    val details = mutableMapOf<String, ReportHistoryDetailData>()
 
     override suspend fun getLatestDraft(): ReportDraftData? = null
 
@@ -126,6 +176,9 @@ private class FakeReportHistoryRepository : ReportRepository {
         ReportSubmitResult.Skipped
 
     override fun observeReportHistory(): Flow<List<ReportOutboxData>> =
+        MutableSharedFlow<List<ReportOutboxData>>()
+
+    override fun observeReportHistoryEntries(): Flow<List<ReportHistoryData>> =
         reports.map { emission ->
             when (emission) {
                 ReportHistoryEmission.Failure -> error("history load failed")
@@ -133,7 +186,9 @@ private class FakeReportHistoryRepository : ReportRepository {
             }
         }
 
-    suspend fun emit(items: List<ReportOutboxData>) {
+    override suspend fun getReportHistoryDetail(historyId: String): ReportHistoryDetailData? = details[historyId]
+
+    suspend fun emit(items: List<ReportHistoryData>) {
         reports.emit(ReportHistoryEmission.Items(items))
     }
 
@@ -144,29 +199,32 @@ private class FakeReportHistoryRepository : ReportRepository {
 
 private sealed interface ReportHistoryEmission {
     data class Items(
-        val items: List<ReportOutboxData>,
+        val items: List<ReportHistoryData>,
     ) : ReportHistoryEmission
 
     data object Failure : ReportHistoryEmission
 }
 
-private fun reportOutbox(
-    outboxId: String,
+private fun reportHistory(
+    historyId: String,
     reportCategory: String,
-    address: String,
+    address: String?,
     updatedAtMillis: Long,
-    photoUri: String? = null,
-): ReportOutboxData =
-    ReportOutboxData(
-        outboxId = outboxId,
+    source: ReportHistorySource,
+    serverReportId: Long? = null,
+    imageUrl: String? = null,
+): ReportHistoryData =
+    ReportHistoryData(
+        historyId = historyId,
         reportCategory = reportCategory,
-        description = "",
+        description = null,
         address = address,
         latitude = 35.1796,
         longitude = 129.0756,
-        photoUri = photoUri,
-        photoMimeType = photoUri?.let { "image/jpeg" },
-        photoSizeBytes = photoUri?.let { 1024L },
+        photoUri = null,
+        imageUrl = imageUrl,
+        source = source,
+        serverReportId = serverReportId,
         createdAtMillis = updatedAtMillis - 1_000L,
         updatedAtMillis = updatedAtMillis,
     )

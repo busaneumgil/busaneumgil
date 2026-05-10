@@ -9,6 +9,14 @@
       "multiply_by": "0.75"
     },
     {
+      "if": "avg_slope_percent >= 5.56 && avg_slope_percent < 8.33",
+      "multiply_by": "0.65"
+    },
+    {
+      "if": "avg_slope_percent >= 8.33 && avg_slope_percent < 10.0",
+      "multiply_by": "0.25"
+    },
+    {
       "if": "avg_slope_percent >= 10.0",
       "multiply_by": "0.10"
     },
@@ -19,22 +27,6 @@
     {
       "if": "stairs_state == UNKNOWN",
       "multiply_by": "0.70"
-    },
-    {
-      "if": "slope_state == MODERATE",
-      "multiply_by": "0.65"
-    },
-    {
-      "if": "slope_state == STEEP",
-      "multiply_by": "0.25"
-    },
-    {
-      "if": "slope_state == RISK",
-      "multiply_by": "0.10"
-    },
-    {
-      "if": "slope_state == UNKNOWN",
-      "multiply_by": "0.85"
     },
     {
       "if": "width_state == ADEQUATE_120",

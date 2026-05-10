@@ -17,14 +17,6 @@ public final class IeumEnum {
         UNKNOWN
     }
 
-    public enum SlopeState {
-        FLAT,
-        MODERATE,
-        STEEP,
-        RISK,
-        UNKNOWN
-    }
-
     public enum WidthState {
         ADEQUATE_150,
         ADEQUATE_120,

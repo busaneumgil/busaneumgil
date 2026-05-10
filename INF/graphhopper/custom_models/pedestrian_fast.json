@@ -17,15 +17,15 @@
       "multiply_by": "0.95"
     },
     {
-      "if": "slope_state == MODERATE",
+      "if": "avg_slope_percent >= 5.56 && avg_slope_percent < 8.33",
       "multiply_by": "0.95"
     },
     {
-      "if": "slope_state == STEEP",
+      "if": "avg_slope_percent >= 8.33 && avg_slope_percent < 12.0",
       "multiply_by": "0.85"
     },
     {
-      "if": "slope_state == RISK",
+      "if": "avg_slope_percent >= 12.0",
       "multiply_by": "0.70"
     },
     {

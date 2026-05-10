@@ -36,7 +36,6 @@ class WalkRoutePayloadServiceTest {
 			Map.of(
 				"segment_type", List.of(new GraphHopperPathDetail(0, 1, "CROSS_WALK")),
 				"signal_state", List.of(new GraphHopperPathDetail(0, 1, "YES")),
-				"slope_state", List.of(new GraphHopperPathDetail(0, 2, "MODERATE")),
 				"avg_slope_percent", List.of(new GraphHopperPathDetail(0, 2, "6.25")),
 				"width_state", List.of(new GraphHopperPathDetail(0, 2, "NARROW")),
 				"surface_state", List.of(new GraphHopperPathDetail(1, 2, "UNPAVED"))));
@@ -152,7 +151,7 @@ class WalkRoutePayloadServiceTest {
 				"stairs_state", List.of(new GraphHopperPathDetail(0, 1, "YES")),
 				"width_state", List.of(new GraphHopperPathDetail(0, 1, "NARROW")),
 				"surface_state", List.of(new GraphHopperPathDetail(0, 1, "UNPAVED")),
-				"slope_state", List.of(new GraphHopperPathDetail(0, 1, "MODERATE"))));
+				"avg_slope_percent", List.of(new GraphHopperPathDetail(0, 1, "6.25"))));
 
 		RouteSummaryResponse route = service.toRouteSummary(
 			"rs_walk_test",
@@ -228,7 +227,7 @@ class WalkRoutePayloadServiceTest {
 			List.of(
 				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
 				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000"))),
-			Map.of("slope_state", List.of(new GraphHopperPathDetail(0, 1, "FLAT"))));
+			Map.of("avg_slope_percent", List.of(new GraphHopperPathDetail(0, 1, "2.50"))));
 
 		RouteSummaryResponse route = service.toRouteSummary(
 			"rs_walk_test",
@@ -241,6 +240,27 @@ class WalkRoutePayloadServiceTest {
 	}
 
 	@Test
+	void classifiesSlopeByWalkRouteProfileThresholds() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("100.00"),
+			60_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000"))),
+			Map.of("avg_slope_percent", List.of(new GraphHopperPathDetail(0, 1, "4.00"))));
+
+		RouteSummaryResponse pedestrianRoute = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+		RouteSummaryResponse visualRoute = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.VISUAL_SAFE, path));
+
+		assertThat(pedestrianRoute.badges()).containsExactly(RouteBadge.LOW_SLOPE);
+		assertThat(visualRoute.badges()).containsExactly(RouteBadge.MIDDLE_SLOPE);
+	}
+
+	@Test
 	void includesLowAndMiddleSlopeBadgesWhenBothSlopeTypesExist() {
 		GraphHopperRoutePath path = new GraphHopperRoutePath(
 			new BigDecimal("100.00"),
@@ -249,9 +269,9 @@ class WalkRoutePayloadServiceTest {
 				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
 				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000")),
 				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0000"))),
-			Map.of("slope_state", List.of(
-				new GraphHopperPathDetail(0, 1, "MODERATE"),
-				new GraphHopperPathDetail(1, 2, "FLAT"))));
+			Map.of("avg_slope_percent", List.of(
+				new GraphHopperPathDetail(0, 1, "6.25"),
+				new GraphHopperPathDetail(1, 2, "2.50"))));
 
 		RouteSummaryResponse route = service.toRouteSummary(
 			"rs_walk_test",

@@ -60,7 +60,6 @@ required_columns = {
         "width_meter",
         "braille_block_state",
         "audio_signal_state",
-        "slope_state",
         "width_state",
         "surface_state",
         "stairs_state",
@@ -74,6 +73,14 @@ required_columns = {
         "geom",
         "state",
         "value_number",
+    ),
+    "source_features": (
+        "source_feature_id",
+        "feature_type",
+        "geom",
+        "state",
+        "value_number",
+        "source_file",
     ),
 }
 
@@ -121,6 +128,9 @@ with psycopg2.connect(
             elif "segment_features" in incompatible:
                 cursor.execute('DROP TABLE IF EXISTS "segment_features"')
                 print("Dropped empty incompatible segment_features table for snake_case JPA recreation.")
+            elif "source_features" in incompatible:
+                cursor.execute('DROP TABLE IF EXISTS "source_features"')
+                print("Dropped empty incompatible source_features table for snake_case JPA recreation.")
 PY
 }
 
@@ -168,7 +178,7 @@ url = os.environ["DB_URL"].replace("jdbc:postgresql://", "")
 host_port, db_name = url.split("/", 1)
 host, port = host_port.split(":", 1)
 
-required_tables = ("road_nodes", "road_segments", "segment_features")
+required_tables = ("road_nodes", "road_segments", "segment_features", "source_features")
 required_columns = {
     "road_nodes": ("vertex_id", "source_node_key", "point"),
     "road_segments": (
@@ -182,7 +192,6 @@ required_columns = {
         "width_meter",
         "braille_block_state",
         "audio_signal_state",
-        "slope_state",
         "width_state",
         "surface_state",
         "stairs_state",
@@ -196,6 +205,14 @@ required_columns = {
         "geom",
         "state",
         "value_number",
+    ),
+    "source_features": (
+        "source_feature_id",
+        "feature_type",
+        "geom",
+        "state",
+        "value_number",
+        "source_file",
     ),
 }
 
@@ -211,7 +228,8 @@ with psycopg2.connect(
         cursor.execute(
             "SELECT to_regclass('public.road_nodes'), "
             "to_regclass('public.road_segments'), "
-            "to_regclass('public.segment_features')"
+            "to_regclass('public.segment_features'), "
+            "to_regclass('public.source_features')"
         )
         existing = cursor.fetchone()
         missing_tables = [table for table, regclass in zip(required_tables, existing) if regclass is None]

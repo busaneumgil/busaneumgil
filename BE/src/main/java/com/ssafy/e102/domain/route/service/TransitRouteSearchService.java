@@ -40,6 +40,7 @@ import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
 import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
 import com.ssafy.e102.domain.route.type.TransportMode;
+import com.ssafy.e102.domain.route.type.WalkRouteProfile;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteClient;
@@ -490,18 +491,20 @@ public class TransitRouteSearchService {
 				List.of());
 		}
 		try {
+			WalkRouteProfile resolvedProfile = walkRouteProfileService.resolve(
+				profile.primaryUserType(),
+				profile.mobilitySubtype(),
+				RouteOption.SAFE);
 			GraphHopperRoutePath path = graphHopperRouteClient.route(new GraphHopperRouteRequest(
 				from,
 				to,
-				walkRouteProfileService.resolve(
-					profile.primaryUserType(),
-					profile.mobilitySubtype(),
-					RouteOption.SAFE)));
+				resolvedProfile));
 			return walkRoutePayloadService.toWalkLeg(
 				sequence,
 				walkRole(hasNextTransit),
 				instruction,
 				path,
+				resolvedProfile,
 				null,
 				destinationEventType(nextTransitType));
 		} catch (RouteException exception) {

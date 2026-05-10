@@ -263,14 +263,6 @@ public class TransitRouteSearchService {
 			.ifPresent(candidate -> addSelected(selectedByRoute, candidate, RouteOption.MIN_TRANSFER));
 		selectBy(candidates, this::minWalkComparator)
 			.ifPresent(candidate -> addSelected(selectedByRoute, candidate, RouteOption.MIN_WALK));
-		if (selectedByRoute.size() < 3) {
-			for (TransitRouteCandidate candidate : candidates) {
-				addSelected(selectedByRoute, candidate, RouteOption.RECOMMENDED);
-				if (selectedByRoute.size() == 3) {
-					break;
-				}
-			}
-		}
 		return selectedByRoute.values()
 			.stream()
 			.limit(3)

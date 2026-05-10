@@ -672,6 +672,44 @@ class RouteSettingViewModelTest {
             assertEquals("pt_rt_recommended_001", selectionHandoff.routeId)
             assertEquals("session-pt_rt_recommended_001", selectionHandoff.sessionId)
         }
+
+    @Test
+    fun `start action clears manual origin for the next fresh route search without changing current handoff`() =
+        runTest {
+            val manualOrigin =
+                PlaceDestination(
+                    placeId = "manual-origin",
+                    name = "Manual Origin",
+                    address = "Manual street",
+                    latitude = 35.1111,
+                    longitude = 129.1111,
+                    category = PlaceCategory.OTHER,
+                )
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedOrigin(manualOrigin)
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is RouteSettingUiEvent.StartNavigationRequested)
+            val request = (event as RouteSettingUiEvent.StartNavigationRequested).request
+            assertEquals(manualOrigin.latitude, request.origin.coordinate.latitude, 0.0)
+            assertEquals(manualOrigin.longitude, request.origin.coordinate.longitude, 0.0)
+            assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
+            assertTrue(viewModel.uiState.value.ctaAcknowledged)
+        }
 }
 
 private fun testRouteRepository(): RouteRepository {

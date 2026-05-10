@@ -378,6 +378,7 @@ class RouteSettingViewModel(
                         ctaAcknowledged = true,
                     )
                 }
+                destinationSelectionRepository.clearSelectedOriginSilently()
 
                 emitUiEvent(
                     RouteSettingUiEvent.StartNavigationRequested(

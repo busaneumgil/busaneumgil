@@ -34,6 +34,7 @@ import com.ssafy.e102.domain.bookmark.service.FavoriteRouteService;
 import com.ssafy.e102.domain.bookmark.service.PlaceBookmarkService;
 import com.ssafy.e102.domain.report.service.AdminHazardReportService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
+import com.ssafy.e102.domain.route.service.RouteRatingService;
 import com.ssafy.e102.domain.route.service.WalkRouteSearchService;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
 import com.ssafy.e102.domain.user.repository.UserRepository;
@@ -86,6 +87,9 @@ class SecurityConfigTest {
 
 	@MockitoBean
 	private WalkRouteSearchService walkRouteSearchService;
+
+	@MockitoBean
+	private RouteRatingService routeRatingService;
 
 	@Test
 	@DisplayName("소셜 로그인은 인증 없이 접근할 수 있다")
@@ -166,6 +170,23 @@ class SecurityConfigTest {
 				{
 				  "startPoint": {"lat": 35.12, "lng": 128.936},
 				  "endPoint": {"lat": 35.1315, "lng": 128.8823}
+				}
+				"""))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("경로 평가 API는 인증이 필요하다")
+	void routeRatingsRequireAuthentication() throws Exception {
+		mockMvc.perform(post("/route-ratings")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "sessionId": "00000000-0000-0000-0000-000000000099",
+				  "score": 5
 				}
 				"""))
 			.andExpect(status().isUnauthorized())

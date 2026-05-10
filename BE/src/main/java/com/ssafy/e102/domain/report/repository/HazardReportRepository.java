@@ -73,4 +73,6 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 		ReportStatus currentStatus,
 		@Param("nextStatus")
 		ReportStatus nextStatus);
+
+	void deleteAllByUser_UserId(UUID userId);
 }

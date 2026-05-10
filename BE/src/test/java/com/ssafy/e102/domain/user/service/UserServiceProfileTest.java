@@ -16,6 +16,12 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ssafy.e102.domain.auth.service.AuthSessionService;
+import com.ssafy.e102.domain.bookmark.repository.FavoriteRouteRepository;
+import com.ssafy.e102.domain.place.repository.BookmarkRepository;
+import com.ssafy.e102.domain.report.repository.HazardReportImageRepository;
+import com.ssafy.e102.domain.report.repository.HazardReportRepository;
+import com.ssafy.e102.domain.route.repository.RouteRatingRepository;
+import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.user.dto.response.UserMeResponse;
 import com.ssafy.e102.domain.user.dto.response.UserTypeResponse;
 import com.ssafy.e102.domain.user.entity.User;
@@ -34,12 +40,38 @@ class UserServiceProfileTest {
 	@Mock
 	private AuthSessionService authSessionService;
 
+	@Mock
+	private RouteRatingRepository routeRatingRepository;
+
+	@Mock
+	private RouteSessionRepository routeSessionRepository;
+
+	@Mock
+	private BookmarkRepository bookmarkRepository;
+
+	@Mock
+	private FavoriteRouteRepository favoriteRouteRepository;
+
+	@Mock
+	private HazardReportImageRepository hazardReportImageRepository;
+
+	@Mock
+	private HazardReportRepository hazardReportRepository;
+
 	private UserService userService;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		userService = new UserService(userRepository, authSessionService);
+		userService = new UserService(
+			userRepository,
+			authSessionService,
+			routeRatingRepository,
+			routeSessionRepository,
+			bookmarkRepository,
+			favoriteRouteRepository,
+			hazardReportImageRepository,
+			hazardReportRepository);
 	}
 
 	@Test

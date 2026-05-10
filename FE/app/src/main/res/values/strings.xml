@@ -636,6 +636,9 @@
     <string name="tutorial_destination_item_location_description">내 위치를 기준으로\n가까운 시설과 이동 동선을 살펴봐요.</string>
     <string name="tutorial_destination_emphasis">검색과 필터로 필요한 정보를 먼저 좁혀보세요.</string>
     <string name="tutorial_destination_search_hint">어디로 가시나요?</string>
+    <string name="tutorial_destination_result_count">2개 표시</string>
+    <string name="tutorial_destination_result_nearby">가까운 시설</string>
+    <string name="tutorial_destination_result_available">이용 가능</string>
     <string name="tutorial_filter_toilet">장애인 화장실</string>
     <string name="tutorial_filter_elevator">엘리베이터</string>
     <string name="tutorial_filter_parking">장애인 주차장</string>

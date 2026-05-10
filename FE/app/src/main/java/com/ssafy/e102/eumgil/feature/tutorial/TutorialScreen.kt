@@ -39,7 +39,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
@@ -93,7 +92,8 @@ fun TutorialScreen(
         Column(
             modifier =
                 Modifier
-                    .weight(1f),
+                    .weight(1f)
+                    .padding(top = TutorialLayoutDefaults.headerTopPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.headerVisualGap),
         ) {
@@ -268,7 +268,7 @@ private fun TutorialFlatIllustration(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
     ) {
         TutorialIllustrationScene(content = content)
         if (content.scene != TutorialIllustrationSceneType.DESTINATION_SEARCH && content.chips.isNotEmpty()) {
@@ -289,32 +289,23 @@ private fun TutorialIllustrationScene(content: TutorialVisualContent) {
 
 @Composable
 private fun TutorialDestinationSearchScene(content: TutorialVisualContent) {
-    Box(
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .height(TutorialLayoutDefaults.illustrationHeight),
-        contentAlignment = Alignment.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.destinationControlVerticalGap),
     ) {
         TutorialSearchBar(
             iconRes = content.heroIconRes,
             labelRes = content.primaryLabelRes,
             trailingIconRes = R.drawable.ic_permission_mic,
-            modifier = Modifier.align(Alignment.TopCenter),
         )
         TutorialFilterChipRow(
             chips = content.chips,
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = TutorialLayoutDefaults.destinationFilterTopPadding),
         )
-        TutorialDestinationMapPreview(
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = TutorialLayoutDefaults.destinationMapTopPadding),
-        )
+        TutorialDestinationResultPanel(content = content)
     }
 }
 
@@ -326,7 +317,7 @@ private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
                 .fillMaxWidth()
                 .height(TutorialLayoutDefaults.illustrationHeight),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
     ) {
         TutorialRouteCard(
             iconRes = content.heroIconRes,
@@ -334,7 +325,7 @@ private fun TutorialRouteComparisonScene(content: TutorialVisualContent) {
             time = stringResource(id = R.string.tutorial_route_recommended_time),
             selected = true,
         )
-        Spacer(modifier = Modifier.height(EumSpacing.small))
+        Spacer(modifier = Modifier.height(TutorialLayoutDefaults.sceneContentVerticalGap))
         TutorialRouteCard(
             iconRes = R.drawable.ic_route_time,
             labelRes = content.secondaryLabelRes,
@@ -352,13 +343,13 @@ private fun TutorialReportSubmissionScene(content: TutorialVisualContent) {
                 .fillMaxWidth()
                 .height(TutorialLayoutDefaults.illustrationHeight),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
             TutorialReportTile(iconRes = R.drawable.ic_route_tactile_blocks, labelRes = R.string.tutorial_report_chip_tactile)
             TutorialReportTile(iconRes = R.drawable.ic_report_sidewalk, labelRes = R.string.tutorial_report_chip_sidewalk)
         }
-        Spacer(modifier = Modifier.height(EumSpacing.small))
+        Spacer(modifier = Modifier.height(TutorialLayoutDefaults.sceneContentVerticalGap))
         Row(horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
             TutorialReportTile(iconRes = R.drawable.ic_status_warning, labelRes = R.string.tutorial_report_chip_damage)
             TutorialReportTile(iconRes = content.heroIconRes, labelRes = R.string.tutorial_report_action_submit, selected = true)
@@ -413,147 +404,89 @@ private fun TutorialSearchBar(
 }
 
 @Composable
-private fun TutorialDestinationMapPreview(modifier: Modifier = Modifier) {
+private fun TutorialDestinationResultPanel(content: TutorialVisualContent) {
     Surface(
         modifier =
-            modifier
+            Modifier
                 .fillMaxWidth()
-                .widthIn(max = TutorialLayoutDefaults.destinationMapMaxWidth)
-                .height(TutorialLayoutDefaults.destinationMapHeight),
-        shape = RoundedCornerShape(EumRadius.large),
+                .widthIn(max = TutorialLayoutDefaults.destinationResultPanelMaxWidth),
+        shape = RoundedCornerShape(EumRadius.small),
         color = EumWhite,
         border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
         shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(EumSpacing.small),
+        Column(
+            modifier = Modifier.padding(EumSpacing.small),
+            verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.destinationResultPanelGap),
         ) {
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapRoadWidth,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 24.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_nav_facility),
+                    contentDescription = null,
+                    modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+                    tint = EumPrimary600,
+                )
+                Text(
+                    text = stringResource(id = content.secondaryLabelRes),
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(id = R.string.tutorial_destination_result_count),
+                    color = EumPrimary600,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            TutorialDestinationResultRow(
+                iconRes = content.chips[0].iconRes,
+                labelRes = content.chips[0].labelRes,
+                statusRes = R.string.tutorial_destination_result_nearby,
             )
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapWideRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapRoadWidth,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 116.dp),
-            )
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 52.dp),
-            )
-            TutorialMapRoad(
-                width = TutorialLayoutDefaults.destinationMapRoadWidth,
-                height = TutorialLayoutDefaults.destinationMapTallRoadHeight,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 58.dp),
-            )
-            TutorialMapRoute(
-                width = 128.dp,
-                height = TutorialLayoutDefaults.destinationMapRouteWidth,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 56.dp, top = 70.dp),
-            )
-            TutorialMapRoute(
-                width = TutorialLayoutDefaults.destinationMapRouteWidth,
-                height = 52.dp,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 180.dp, top = 70.dp),
-            )
-            TutorialMapNode(
-                selected = false,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 42.dp, top = 60.dp),
-            )
-            TutorialMapNode(
-                selected = true,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 166.dp, top = 110.dp),
+            TutorialDestinationResultRow(
+                iconRes = content.chips[1].iconRes,
+                labelRes = content.chips[1].labelRes,
+                statusRes = R.string.tutorial_destination_result_available,
             )
         }
     }
 }
 
 @Composable
-private fun TutorialMapRoad(
-    width: Dp,
-    height: Dp,
-    modifier: Modifier = Modifier,
+private fun TutorialDestinationResultRow(
+    @DrawableRes iconRes: Int,
+    @StringRes labelRes: Int,
+    @StringRes statusRes: Int,
 ) {
-    Box(
-        modifier =
-            modifier
-                .width(width)
-                .height(height)
-                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                .background(TutorialLayoutDefaults.destinationMapRoadColor),
-    )
-}
-
-@Composable
-private fun TutorialMapRoute(
-    width: Dp,
-    height: Dp,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .width(width)
-                .height(height)
-                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                .background(EumPrimary600),
-    )
-}
-
-@Composable
-private fun TutorialMapNode(
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .size(
-                    if (selected) {
-                        TutorialLayoutDefaults.destinationMapSelectedNodeSize
-                    } else {
-                        TutorialLayoutDefaults.destinationMapNodeSize
-                    },
-                )
-                .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                .background(if (selected) EumPrimary600 else EumWhite),
-        contentAlignment = Alignment.Center,
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(TutorialLayoutDefaults.destinationMapNodeDotSize)
-                    .clip(RoundedCornerShape(TutorialLayoutDefaults.pillCorner))
-                    .background(if (selected) EumWhite else EumPrimary600),
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(TutorialLayoutDefaults.filterChipIconSize),
+            tint = EumPrimary600,
+        )
+        Text(
+            text = stringResource(id = labelRes),
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = stringResource(id = statusRes),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -676,17 +609,23 @@ private fun TutorialFilterChipRow(
     chips: List<TutorialFilterChip>,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Column(
         modifier =
             modifier
+                .widthIn(max = TutorialLayoutDefaults.searchBarMaxWidth)
                 .fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.destinationControlVerticalGap),
     ) {
-        chips.forEach { chip ->
-            TutorialFilterChip(
-                chip = chip,
-                modifier = Modifier.weight(1f),
-            )
+        chips.chunked(TutorialLayoutDefaults.filterChipRowMaxItemCount).forEach { rowChips ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(TutorialLayoutDefaults.filterChipGap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                rowChips.forEach { chip ->
+                    TutorialFilterChip(chip = chip)
+                }
+            }
         }
     }
 }
@@ -698,9 +637,10 @@ private fun TutorialFilterChip(
 ) {
     Surface(
         modifier = modifier.heightIn(min = TutorialLayoutDefaults.filterChipMinHeight),
-        shape = RoundedCornerShape(EumRadius.small),
-        color = EumSurfaceInfo,
-        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, EumBorderInfo),
+        shape = RoundedCornerShape(TutorialLayoutDefaults.filterChipCornerRadius),
+        color = EumWhite,
+        border = BorderStroke(TutorialLayoutDefaults.hairlineWidth, TutorialLayoutDefaults.filterChipBorderColor),
+        shadowElevation = TutorialLayoutDefaults.mockPhoneElevation,
     ) {
         Row(
             modifier =
@@ -720,7 +660,7 @@ private fun TutorialFilterChip(
             Text(
                 text = stringResource(id = chip.labelRes),
                 color = EumPrimary600,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 lineHeight = TutorialLayoutDefaults.filterChipLabelLineHeight,
@@ -836,16 +776,19 @@ internal object TutorialLayoutDefaults {
     const val reportCategoryChipCount: Int = 0
     const val showsEmphasisChip: Boolean = false
     const val usesLayeredFlatIllustration: Boolean = true
+    const val usesGeneratedBitmapIllustration: Boolean = false
     const val usesWhitePanelFrame: Boolean = false
     const val distinctIllustrationSceneCount: Int = 3
     const val usesNavigationSafeZone: Boolean = true
     const val usesIllustrationHalo: Boolean = false
     const val destinationFiltersAttachToSearch: Boolean = true
     const val destinationSearchShowsMic: Boolean = true
-    const val destinationShowsMapPreview: Boolean = true
-    const val destinationMapAttachesBelowFilters: Boolean = true
+    const val destinationShowsMapPreview: Boolean = false
+    const val destinationUsesSearchAndFilterOnly: Boolean = true
     const val destinationFilterRowScrollable: Boolean = false
     const val destinationFilterUsesLatestMapIcons: Boolean = true
+    const val destinationFilterUsesOriginalMapChipShape: Boolean = true
+    const val destinationShowsFilterResultPanel: Boolean = true
     const val routeDescriptionBreaksAfterSettingComma: Boolean = true
     const val reportDescriptionMentionsRouteContribution: Boolean = true
     const val visualPanelWeight: Float = 1f
@@ -859,6 +802,7 @@ internal object TutorialLayoutDefaults {
     val visualPanelButtonGap = 12.dp
     val visualPanelMaxWidth = 420.dp
     val visualPanelVerticalPadding = 4.dp
+    val headerTopPadding = 20.dp
 
     val headerSectionGap = 8.dp
     val headerVisualGap = 4.dp
@@ -870,47 +814,42 @@ internal object TutorialLayoutDefaults {
     val microGap = 4.dp
     val hairlineWidth = 1.dp
 
-    val illustrationHeight = 304.dp
+    val illustrationHeight = 300.dp
     val illustrationContentGap = 12.dp
+    val sceneContentVerticalGap = 12.dp
     val heroIconSize = 56.dp
     val mockPhoneElevation = 2.dp
     val searchBarMaxWidth = 340.dp
     val searchBarHeight = 58.dp
-    val destinationFilterTopPadding = 66.dp
-    val destinationMapTopPadding = 124.dp
-    val destinationMapMaxWidth = 340.dp
-    val destinationMapHeight = 166.dp
-    val destinationMapRoadWidth = 6.dp
-    val destinationMapRouteWidth = 7.dp
-    val destinationMapWideRoadWidth = 268.dp
-    val destinationMapTallRoadHeight = 140.dp
-    val destinationMapNodeSize = 18.dp
-    val destinationMapSelectedNodeSize = 22.dp
-    val destinationMapNodeDotSize = 8.dp
+    val destinationControlVerticalGap = 12.dp
+    val destinationResultPanelMaxWidth = 340.dp
+    val destinationResultPanelGap = 12.dp
     val floatingPanelHeight = 56.dp
     val floatingPanelElevation = 3.dp
     val floatingPanelIconSize = 22.dp
     val smallCardWidth = 72.dp
     val smallCardHeight = 60.dp
     val smallCardIconSize = 28.dp
-    val routeCardHeight = 78.dp
+    val routeCardHeight = 96.dp
     val routeCardBorderWidth = 2.dp
     val radioDotOuterSize = 24.dp
     val radioDotInnerSize = 12.dp
-    val reportTileWidth = 132.dp
-    val reportTileHeight = 92.dp
-    val filterChipHorizontalPadding = 10.dp
-    val filterChipVerticalPadding = 8.dp
+    val reportTileWidth = 148.dp
+    val reportTileHeight = 112.dp
+    val filterChipHorizontalPadding = 13.dp
+    val filterChipVerticalPadding = 9.dp
     val filterChipIconSize = 18.dp
-    val filterChipGap = 6.dp
-    val filterChipMinHeight = 46.dp
-    val filterChipLabelLineHeight = 14.sp
+    val filterChipGap = 8.dp
+    val filterChipMinHeight = 38.dp
+    val filterChipCornerRadius = 8.dp
+    val filterChipLabelLineHeight = 16.sp
+    val filterChipRowMaxItemCount: Int = 2
 
     val indicatorSelectedWidth = 70.dp
     val indicatorDefaultWidth = 54.dp
     val indicatorHeight = 6.dp
     val pillCorner = 99.dp
 
-    val destinationMapRoadColor = Color(0xFFE7ECF5)
+    val filterChipBorderColor = EumPrimary600.copy(alpha = 0.28f)
     val indicatorTrackColor = Color(0xFFD9DDE7)
 }

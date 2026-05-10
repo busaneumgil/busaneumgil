@@ -101,10 +101,10 @@ fun RouteSettingScreen(
                 )
         }
     val ctaSupportingText =
-        when {
-            !isWalkMode -> stringResource(id = R.string.route_setting_transit_cta_supporting)
-            uiState.cta.isEnabled -> null
-            else -> uiState.cta.supportingText
+        if (uiState.cta.isEnabled) {
+            null
+        } else {
+            uiState.cta.supportingText
         }
 
     Scaffold(
@@ -120,7 +120,7 @@ fun RouteSettingScreen(
                 buttonLabel = uiState.cta.label,
                 enabled = uiState.isStartEnabled,
                 supportingText = ctaSupportingText,
-                selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
+                selectedRoute = uiState.selectedRoute,
                 onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
             )
         },
@@ -1431,7 +1431,6 @@ private fun RouteMapStage(
     uiState: RouteSettingUiState,
     modifier: Modifier = Modifier,
 ) {
-    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
     val routeColor = optionAccentColor(selectedRoute?.routeOption ?: RouteOption.SAFE)
@@ -1461,16 +1460,6 @@ private fun RouteMapStage(
             )
 
             when {
-                !isWalkMode ->
-                    RouteMapMessageCard(
-                        title = stringResource(id = R.string.route_setting_transit_placeholder_title),
-                        description = stringResource(id = R.string.route_setting_transit_placeholder_description),
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopStart)
-                                .padding(EumSpacing.medium),
-                    )
-
                 selectedRoute == null || !previewMap.isDisplayable ->
                     RouteMapMessageCard(
                         title = routePreviewFallbackTitle(previewMap.status),
@@ -1482,7 +1471,7 @@ private fun RouteMapStage(
                     )
             }
 
-            if (isWalkMode && selectedRoute != null && previewMap.isDisplayable) {
+            if (selectedRoute != null && previewMap.isDisplayable) {
                 RouteMapStatusBadge(
                     label = selectedRoute.optionTitle,
                     supportingText = selectedRoute.summaryLabel,
@@ -1594,8 +1583,6 @@ private fun RouteSettingRouteSheet(
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
-    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape =
@@ -1616,21 +1603,17 @@ private fun RouteSettingRouteSheet(
                 ),
             verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
         ) {
-            if (isWalkMode) {
-                RouteWalkOptionSection(
-                    uiState = uiState,
-                    onOptionClick = onOptionClick,
-                    onOptionDetailClick = onOptionDetailClick,
-                )
-            } else {
-                RouteTransitOptionSection()
-            }
+            RouteOptionSection(
+                uiState = uiState,
+                onOptionClick = onOptionClick,
+                onOptionDetailClick = onOptionDetailClick,
+            )
         }
     }
 }
 
 @Composable
-private fun RouteWalkOptionSection(
+private fun RouteOptionSection(
     uiState: RouteSettingUiState,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
@@ -1671,16 +1654,6 @@ private fun RouteWalkOptionSection(
                 }
         }
     }
-}
-
-@Composable
-private fun RouteTransitOptionSection() {
-    RouteStateCard(
-        title = stringResource(id = R.string.route_setting_transit_placeholder_title),
-        description = stringResource(id = R.string.route_setting_transit_placeholder_description),
-        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f),
-        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

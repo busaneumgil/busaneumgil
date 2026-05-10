@@ -13,6 +13,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
+import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
@@ -21,7 +22,11 @@ import com.ssafy.e102.eumgil.data.mock.fixture.MockRouteFixtures
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRatingData
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
+import com.ssafy.e102.eumgil.data.repository.RouteSessionData
+import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
@@ -59,6 +64,7 @@ class RouteSettingViewModelTest {
             val uiState = viewModel.uiState.value
 
             assertFalse(uiState.isLoading)
+            assertEquals(RouteTravelMode.WALK, uiState.selectedTravelMode)
             assertEquals(RouteOption.SAFE, uiState.selectedOption)
             assertEquals("place-1", uiState.destination.placeId)
             assertEquals(PlaceCategory.RESTAURANT, uiState.destination.category)
@@ -92,11 +98,11 @@ class RouteSettingViewModelTest {
             assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
             assertEquals("안전한 길", uiState.selectedRoute?.optionTitle)
             assertEquals("Safe Route", uiState.selectedRoute?.title)
-            assertEquals(980, uiState.selectedRoute?.distanceMeters)
+            assertEquals(720, uiState.selectedRoute?.distanceMeters)
             assertEquals(16, uiState.selectedRoute?.estimatedTimeMinutes)
             assertEquals(RouteRiskLevel.LOW, uiState.selectedRoute?.riskLevel)
             assertEquals("16분", uiState.selectedRoute?.estimatedTimeLabel)
-            assertEquals("980 m", uiState.selectedRoute?.distanceLabel)
+            assertEquals("720 m", uiState.selectedRoute?.distanceLabel)
             assertEquals("위험도 낮음", uiState.selectedRoute?.riskLabel)
             assertEquals("3/3", uiState.selectedRoute?.renderableSegmentLabel)
             assertEquals(
@@ -566,15 +572,83 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `start action acknowledges pending handoff and emits navigation request`() =
+    fun `init defaults to transit when SAFE walk distance exceeds 750m`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
                     updateSelectedDestination(testDestination())
                 }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 820)
             val viewModel =
                 RouteSettingViewModel(
-                    routeRepository = testRouteRepository(),
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(RouteTravelMode.TRANSIT, uiState.selectedTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, uiState.selectedOption)
+            assertEquals(
+                listOf(RouteOption.RECOMMENDED, RouteOption.MIN_TRANSFER, RouteOption.MIN_WALK),
+                uiState.optionCards.map(RouteOptionCardUiState::routeOption),
+            )
+            assertEquals("Transit Recommended", uiState.selectedRoute?.title)
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.transitSearchCount)
+        }
+
+    @Test
+    fun `manual travel mode change loads the selected mode search surface`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            assertEquals(RouteTravelMode.WALK, viewModel.uiState.value.selectedTravelMode)
+
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val transitState = viewModel.uiState.value
+            assertEquals(RouteTravelMode.TRANSIT, transitState.selectedTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, transitState.selectedOption)
+            assertEquals(
+                listOf(RouteOption.RECOMMENDED, RouteOption.MIN_TRANSFER, RouteOption.MIN_WALK),
+                transitState.optionCards.map(RouteOptionCardUiState::routeOption),
+            )
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.transitSearchCount)
+
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.WALK))
+            advanceUntilIdle()
+
+            assertEquals(RouteTravelMode.WALK, viewModel.uiState.value.selectedTravelMode)
+            assertEquals(2, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.transitSearchCount)
+        }
+
+    @Test
+    fun `start action selects route and emits handoff payload with search and session ids`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 820)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
                     destinationSelectionRepository = destinationSelectionRepository,
                 )
 
@@ -589,21 +663,42 @@ class RouteSettingViewModelTest {
             assertEquals("길 안내를 시작하는 중입니다.", viewModel.uiState.value.cta.supportingText)
             val event = uiEvent.await()
             assertTrue(event is RouteSettingUiEvent.StartNavigationRequested)
-            assertEquals(
-                RouteOption.SAFE,
-                (event as RouteSettingUiEvent.StartNavigationRequested).request.selectedRoute.routeOption,
-            )
+            val request = (event as RouteSettingUiEvent.StartNavigationRequested).request
+            val selectionHandoff = requireNotNull(request.selectionHandoff)
+            assertEquals(RouteOption.RECOMMENDED, request.selectedRoute.routeOption)
+            assertEquals("pt_rt_recommended_001", routeRepository.lastSelectedRouteId)
+            assertEquals("transit-search-1", routeRepository.lastSelectedSearchId)
+            assertEquals("transit-search-1", selectionHandoff.searchId)
+            assertEquals("pt_rt_recommended_001", selectionHandoff.routeId)
+            assertEquals("session-pt_rt_recommended_001", selectionHandoff.sessionId)
         }
 }
 
-private fun testRouteRepository() =
-    DefaultRouteRepository(
-        localDataSource = RouteLocalDataSource(),
-        remoteDataSource =
-            testRouteRemoteDataSource { request ->
-                MockRouteFixtures.searchRoutes(request)
-            },
-    )
+private fun testRouteRepository(): RouteRepository {
+    val delegate =
+        DefaultRouteRepository(
+            localDataSource = RouteLocalDataSource(),
+            remoteDataSource =
+                testRouteRemoteDataSource { request ->
+                    MockRouteFixtures.searchRoutes(request)
+                },
+        )
+    return object : BaseTestRouteRepository() {
+        override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            delegate.getRouteSearchData(query).withSafeWalkDistance(distanceMeters = 720)
+
+        override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            buildTransitSearchData(
+                query = query,
+                searchId = "transit-search-1",
+            )
+
+        override suspend fun selectRoute(
+            routeId: String,
+            searchId: String,
+        ): RouteSessionData = RouteSessionData(sessionId = "session-$routeId")
+    }
+}
 
 private fun testRouteRemoteDataSource(
     responseProvider: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto,
@@ -637,8 +732,224 @@ private fun invalidDestination(): PlaceDestination =
         category = PlaceCategory.OTHER,
     )
 
+private abstract class BaseTestRouteRepository : RouteRepository {
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("getTransitRouteSearchData was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData =
+        error("selectRoute was not expected")
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = RouteTransitRefreshData(type = "BUS", arrivalStatus = "UNKNOWN")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ): RouteRerouteData = RouteRerouteData()
+
+    override suspend fun endRoute(routeId: String): RouteSessionData = RouteSessionData(sessionId = "session-$routeId")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = RouteRatingData(ratingId = 0L)
+}
+
+private class TransitModeRecordingRouteRepository(
+    private val walkSafeDistanceMeters: Int,
+) : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var transitSearchCount: Int = 0
+        private set
+    var lastSelectedRouteId: String? = null
+        private set
+    var lastSelectedSearchId: String? = null
+        private set
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "walk-search-$walkSearchCount",
+            safeDistanceMeters = walkSafeDistanceMeters,
+        )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        transitSearchCount += 1
+        return buildTransitSearchData(
+            query = query,
+            searchId = "transit-search-$transitSearchCount",
+        )
+    }
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData {
+        lastSelectedRouteId = routeId
+        lastSelectedSearchId = searchId
+        return RouteSessionData(sessionId = "session-$routeId")
+    }
+}
+
+private fun RouteSearchData.withSafeWalkDistance(distanceMeters: Int): RouteSearchData =
+    copy(
+        result =
+            result.copy(
+                routes =
+                    routes.map { route ->
+                        if (route.routeOption == RouteOption.SAFE) {
+                            route.copy(summary = route.summary.copy(distanceMeters = distanceMeters))
+                        } else {
+                            route
+                        }
+                    },
+            ),
+    )
+
+private fun buildWalkSearchData(
+    query: RouteSearchQuery,
+    searchId: String,
+    safeDistanceMeters: Int,
+): RouteSearchData =
+    RouteSearchData(
+        query = query,
+        result =
+            RouteSearchResult(
+                origin = query.origin,
+                destination = query.destination,
+                searchId = searchId,
+                routes =
+                    listOf(
+                        buildRouteCandidate(
+                            routeOption = RouteOption.SAFE,
+                            title = "Safe Route",
+                            routeId = "walk_rt_safe_001",
+                            transportMode = RouteTransportMode.WALK,
+                            distanceMeters = safeDistanceMeters,
+                            estimatedTimeMinutes = 16,
+                            riskLevel = RouteRiskLevel.LOW,
+                        ),
+                        buildRouteCandidate(
+                            routeOption = RouteOption.SHORTEST,
+                            title = "Shortest Route",
+                            routeId = "walk_rt_shortest_001",
+                            transportMode = RouteTransportMode.WALK,
+                            distanceMeters = 640,
+                            estimatedTimeMinutes = 14,
+                            riskLevel = RouteRiskLevel.MEDIUM,
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Walk route payload"),
+    )
+
+private fun buildTransitSearchData(
+    query: RouteSearchQuery,
+    searchId: String,
+): RouteSearchData =
+    RouteSearchData(
+        query = query,
+        result =
+            RouteSearchResult(
+                origin = query.origin,
+                destination = query.destination,
+                searchId = searchId,
+                routes =
+                    listOf(
+                        buildRouteCandidate(
+                            routeOption = RouteOption.RECOMMENDED,
+                            title = "Transit Recommended",
+                            routeId = "pt_rt_recommended_001",
+                            transportMode = RouteTransportMode.PUBLIC_TRANSIT,
+                            distanceMeters = 4200,
+                            estimatedTimeMinutes = 28,
+                            riskLevel = RouteRiskLevel.LOW,
+                        ),
+                        buildRouteCandidate(
+                            routeOption = RouteOption.MIN_TRANSFER,
+                            title = "Transit Min Transfer",
+                            routeId = "pt_rt_min_transfer_001",
+                            transportMode = RouteTransportMode.PUBLIC_TRANSIT,
+                            distanceMeters = 4380,
+                            estimatedTimeMinutes = 30,
+                            riskLevel = RouteRiskLevel.MEDIUM,
+                        ),
+                        buildRouteCandidate(
+                            routeOption = RouteOption.MIN_WALK,
+                            title = "Transit Min Walk",
+                            routeId = "pt_rt_min_walk_001",
+                            transportMode = RouteTransportMode.PUBLIC_TRANSIT,
+                            distanceMeters = 4520,
+                            estimatedTimeMinutes = 31,
+                            riskLevel = RouteRiskLevel.LOW,
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Transit route payload"),
+    )
+
+private fun buildRouteCandidate(
+    routeOption: RouteOption,
+    title: String,
+    routeId: String,
+    transportMode: RouteTransportMode,
+    distanceMeters: Int,
+    estimatedTimeMinutes: Int,
+    riskLevel: RouteRiskLevel,
+): RouteCandidate {
+    val previewPoints =
+        listOf(
+            GeoCoordinate(35.1796, 129.0756),
+            GeoCoordinate(35.1768, 129.0714),
+            GeoCoordinate(35.1734, 129.0641),
+        )
+    return RouteCandidate(
+        routeId = routeId,
+        serverRouteId = routeId,
+        transportMode = transportMode,
+        routeOption = routeOption,
+        title = title,
+        summary =
+            RouteSummary(
+                distanceMeters = distanceMeters,
+                estimatedTimeMinutes = estimatedTimeMinutes,
+                riskLevel = riskLevel,
+            ),
+        preview =
+            RoutePreviewModel(
+                polyline = RoutePolyline(points = previewPoints),
+                segmentCount = 2,
+                renderableSegmentCount = 2,
+                fallbackSegmentCount = 0,
+            ),
+        segments =
+            listOf(
+                RouteSegment(
+                    sequence = 1,
+                    polyline = RoutePolyline(points = previewPoints.take(2)),
+                    distanceMeters = distanceMeters / 2,
+                    guidanceMessage = "Start on the selected route.",
+                ),
+                RouteSegment(
+                    sequence = 2,
+                    polyline = RoutePolyline(points = previewPoints.drop(1)),
+                    distanceMeters = distanceMeters - (distanceMeters / 2),
+                    guidanceMessage = "Continue to the destination.",
+                ),
+            ),
+    )
+}
+
 private fun partialRouteRepository(): RouteRepository =
-    object : RouteRepository {
+    object : BaseTestRouteRepository() {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
             RouteSearchData(
                 query = query,
@@ -686,7 +997,7 @@ private fun partialRouteRepository(): RouteRepository =
     }
 
 private fun emptyRouteRepository(): RouteRepository =
-    object : RouteRepository {
+    object : BaseTestRouteRepository() {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
             RouteSearchData(
                 query = query,
@@ -704,13 +1015,13 @@ private fun emptyRouteRepository(): RouteRepository =
     }
 
 private fun failingRouteRepository(): RouteRepository =
-    object : RouteRepository {
+    object : BaseTestRouteRepository() {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
             error("route load failed")
     }
 
 private fun directionalRouteRepository(): RouteRepository =
-    object : RouteRepository {
+    object : BaseTestRouteRepository() {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
             RouteSearchData(
                 query = query,
@@ -784,7 +1095,7 @@ private fun directionalRouteRepository(): RouteRepository =
             )
     }
 
-private class CountingRouteRepository : RouteRepository {
+private class CountingRouteRepository : BaseTestRouteRepository() {
     var callCount: Int = 0
         private set
 
@@ -804,7 +1115,7 @@ private class CountingRouteRepository : RouteRepository {
                                 title = "Safe Route #$countLabel",
                                 summary =
                                     RouteSummary(
-                                        distanceMeters = 900 + countLabel,
+                                        distanceMeters = 700 + countLabel,
                                         estimatedTimeMinutes = 15 + countLabel,
                                         riskLevel = RouteRiskLevel.LOW,
                                     ),
@@ -835,7 +1146,7 @@ private class CountingRouteRepository : RouteRepository {
                                 title = "Shortest Route #$countLabel",
                                 summary =
                                     RouteSummary(
-                                        distanceMeters = 800 + countLabel,
+                                        distanceMeters = 620 + countLabel,
                                         estimatedTimeMinutes = 13 + countLabel,
                                         riskLevel = RouteRiskLevel.MEDIUM,
                                     ),

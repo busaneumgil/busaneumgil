@@ -868,6 +868,205 @@ class ReportViewModelTest {
             )
             assertTrue(uiState.outboxState is ReportOutboxState.Saved)
         }
+
+    @Test
+    fun `start new report after complete resets form to type selection`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.DescriptionChanged("기존 입력"))
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.screenState is ReportScreenState.Completed)
+
+            viewModel.onAction(ReportUiAction.StartNewReportClicked)
+            advanceUntilIdle()
+
+            val resetState = viewModel.uiState.value
+            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(null, resetState.reportType.value)
+            assertEquals("", resetState.description.value)
+            assertTrue(resetState.screenState is ReportScreenState.Editing)
+        }
+
+    @Test
+    fun `tab reentered after complete resets form to type selection`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.screenState is ReportScreenState.Completed)
+
+            viewModel.onAction(ReportUiAction.TabReentered)
+            advanceUntilIdle()
+
+            val resetState = viewModel.uiState.value
+            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(null, resetState.reportType.value)
+            assertTrue(resetState.screenState is ReportScreenState.Editing)
+        }
+
+    @Test
+    fun `tab reentered while editing preserves in progress form input`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
+            viewModel.onAction(ReportUiAction.DescriptionChanged("작성 중인 설명"))
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.screenState is ReportScreenState.Editing)
+
+            viewModel.onAction(ReportUiAction.TabReentered)
+            advanceUntilIdle()
+
+            val preservedState = viewModel.uiState.value
+            assertEquals(ReportType.RAMP, preservedState.reportType.value)
+            assertEquals("작성 중인 설명", preservedState.description.value)
+        }
+
+    @Test
+    fun `tab reentered with persisted draft surfaces resume affordance after re-init`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.RAMP.apiValue,
+                            description = "임시저장된 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            // 진입 직후 draft 배너 노출 조건이 충족된다.
+            assertTrue(viewModel.uiState.value.hasExistingDraft)
+            assertEquals("draft-1", viewModel.uiState.value.draftId)
+
+            // 다른 탭을 다녀온 뒤 재진입했을 때 작성 중 상태(폼은 빈 상태)는 그대로 유지된다.
+            viewModel.onAction(ReportUiAction.TabReentered)
+            advanceUntilIdle()
+
+            val preservedState = viewModel.uiState.value
+            assertEquals(ReportStep.TypeSelection, preservedState.currentStep)
+            assertTrue(preservedState.screenState is ReportScreenState.Editing)
+            assertTrue(preservedState.hasExistingDraft)
+            assertEquals("draft-1", preservedState.draftId)
+        }
+
+    @Test
+    fun `tab reentered after submit failure preserves recoverable state`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    submitResultFactory = { outboxId ->
+                        ReportSubmitResult.Failure(
+                            outboxId = outboxId,
+                            reason = ReportSubmitFailureReason.Network,
+                        )
+                    },
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.screenState is ReportScreenState.Failure)
+
+            viewModel.onAction(ReportUiAction.TabReentered)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertTrue(state.screenState is ReportScreenState.Failure)
+            assertEquals(ReportType.OTHER_OBSTACLE, state.reportType.value)
+            assertTrue(state.outboxState is ReportOutboxState.Saved)
+        }
+
+    @Test
+    fun `back to map after complete resets form and emits navigate to map event`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            uiEvent.await() // drain ShowSnackbar / NavigateToReportComplete
+            val backToMapEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.BackToMapClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportUiEvent.NavigateToMap, backToMapEvent.await())
+            val resetState = viewModel.uiState.value
+            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(null, resetState.reportType.value)
+        }
 }
 
 private class FakeReportRepository(

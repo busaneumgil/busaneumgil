@@ -52,6 +52,8 @@ interface DestinationSelectionRepository {
         destination: PlaceDestination,
     )
 
+    fun clearSelectedOriginSilently()
+
     fun clearSelectedOrigin()
 
     fun clearSelectedDestination()
@@ -106,6 +108,11 @@ class InMemoryDestinationSelectionRepository : DestinationSelectionRepository {
         mutableSelectedDestination.value = destination
         syncSelectionState()
         emitSelectionRequest(RouteSelectionRequestReason.SWAPPED)
+    }
+
+    override fun clearSelectedOriginSilently() {
+        mutableSelectedOrigin.value = null
+        syncSelectionState()
     }
 
     override fun clearSelectedOrigin() {

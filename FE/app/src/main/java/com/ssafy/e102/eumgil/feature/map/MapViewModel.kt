@@ -14,14 +14,19 @@ import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
 import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRequest
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
@@ -52,11 +57,13 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.abs
 
 class MapViewModel(
     private val locationPermissionManager: LocationPermissionManager,
     private val currentLocationManager: CurrentLocationManager,
     private val destinationSelectionRepository: DestinationSelectionRepository,
+    private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val facilitySeedRepository: FacilitySeedRepository,
     private val bookmarkRepository: BookmarkRepository,
     private val searchRepository: SearchRepository = NoOpSearchRepository,
@@ -76,6 +83,7 @@ class MapViewModel(
     private var selectedFacilityDetail: FacilityDetailSeed? = null
     private var selectedMapTapDetail: MapTappedPlaceDetail? = null
     private var selectedMapTapNameHint: String? = null
+    private var selectedDestinationPreview: DestinationPreviewRequest? = null
     private var isMapTapDetailLoading = false
     private var mapTapDetailErrorMessage: String? = null
     private var mapTapDetailRequestId: Long = 0L
@@ -103,6 +111,7 @@ class MapViewModel(
         }
         observeSelectedDestination()
         observeSelectionRequests()
+        observeDestinationPreviewRequests()
         observePermissionState()
         observeLocationUpdates()
         loadMarkerBrowseState()
@@ -341,6 +350,13 @@ class MapViewModel(
                     if (requestId != mapTapDetailRequestId) return@onSuccess
                     isMapTapDetailLoading = false
                     selectedMapTapDetail = detail
+                    selectedFacilityBookmarkState =
+                        detail?.let { mapTapDetail ->
+                            SelectedFacilityBookmarkState(
+                                facilityId = mapTapDetail.bookmarkCacheKey(),
+                                isBookmarked = mapTapDetail.isBookmarked,
+                            )
+                        } ?: SelectedFacilityBookmarkState()
                     mapTapDetailErrorMessage =
                         if (detail == null) {
                             MAP_TAP_DETAIL_EMPTY_MESSAGE
@@ -396,7 +412,20 @@ class MapViewModel(
     }
 
     private fun handleFacilitySetDestinationClicked() {
-        val destination = selectedFacilityDetail?.toPlaceDestination() ?: return
+        val preview = selectedDestinationPreview
+        if (preview != null) {
+            clearSelectedFacilitySelection()
+            renderSelectedFacilityState()
+            destinationSelectionRepository.setEditingTarget(preview.editingTarget)
+            destinationSelectionRepository.updateSelectionForEditingTarget(preview.destination)
+            emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+            return
+        }
+
+        val destination =
+            selectedMapTapDetail?.toPlaceDestinationOrNull()
+                ?: selectedFacilityDetail?.toPlaceDestination()
+                ?: return
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
         destinationSelectionRepository.updateSelectedDestination(destination)
@@ -598,6 +627,50 @@ class MapViewModel(
         }
     }
 
+    private fun observeDestinationPreviewRequests() {
+        viewModelScope.launch {
+            destinationPreviewRepository.pendingPreview.collectLatest { previewRequest ->
+                if (previewRequest == null) return@collectLatest
+
+                handleDestinationPreviewRequested(previewRequest)
+                destinationPreviewRepository.consumePreview(previewRequest.requestId)
+            }
+        }
+    }
+
+    private fun handleDestinationPreviewRequested(previewRequest: DestinationPreviewRequest) {
+        val destination = previewRequest.destination
+        val coordinate =
+            MapCoordinate(
+                latitude = destination.latitude,
+                longitude = destination.longitude,
+            )
+
+        mapTapDetailRequestId += 1L
+        mapTapDetailLookupJob?.cancel()
+        mapTapDetailLookupJob = null
+        selectedMapPinCoordinate = coordinate
+        selectedDestinationPreview = previewRequest
+        selectedMapTapDetail = previewRequest.toMapTappedPlaceDetail()
+        selectedMapTapNameHint = destination.name
+        isMapTapDetailLoading = false
+        mapTapDetailErrorMessage = null
+        selectedMarkerId = null
+        selectedFacilityDetail = null
+        selectedFacilityBookmarkState =
+            SelectedFacilityBookmarkState(
+                facilityId = selectedMapTapDetail?.bookmarkCacheKey(),
+                isBookmarked = selectedMapTapDetail?.isBookmarked ?: false,
+            )
+        isRecenterButtonActive = false
+        syncCameraToDestinationPreview(
+            coordinate = coordinate,
+            incrementRequestId = true,
+        )
+        renderSelectedFacilityState()
+        renderUiState()
+    }
+
     private fun observeLocationUpdates() {
         viewModelScope.launch {
             currentLocationManager.latestLocation.collectLatest { snapshot ->
@@ -715,8 +788,14 @@ class MapViewModel(
     ) {
         mutableUiState.update { state ->
             val currentTarget = state.cameraTarget
+            val isAlignedWithRequestedCenter = currentTarget.center.isApproximatelySameCoordinate(center)
+
+            // Ignore stale programmatic move-end callbacks that arrive after a newer camera target won.
+            if (!isUserGesture && !isAlignedWithRequestedCenter) {
+                return@update state
+            }
             val hasCameraChanged =
-                currentTarget.center != center ||
+                !isAlignedWithRequestedCenter ||
                     currentTarget.resolvedZoomLevel() != zoomLevel
 
             if (!hasCameraChanged) {
@@ -728,7 +807,7 @@ class MapViewModel(
                 state.copy(
                     cameraTarget =
                         currentTarget.copy(
-                            center = center,
+                            center = if (isAlignedWithRequestedCenter) currentTarget.center else center,
                             zoomLevel = zoomLevel,
                         ),
                     isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
@@ -792,6 +871,7 @@ class MapViewModel(
         when {
             mutableUiState.value.cameraTarget.source == MapCameraSource.CURRENT_LOCATION -> true
             selectedDestination != null -> false
+            selectedDestinationPreview != null -> false
             else -> true
         }
 
@@ -868,7 +948,53 @@ class MapViewModel(
         }
     }
 
+    private fun syncCameraToDestinationPreview(
+        coordinate: MapCoordinate,
+        incrementRequestId: Boolean,
+    ) {
+        mutableUiState.update { state ->
+            val shouldIncrement =
+                incrementRequestId ||
+                    state.cameraTarget.source != MapCameraSource.SEARCH_RESULT ||
+                    state.cameraTarget.center != coordinate
+            val nextRequestId =
+                if (shouldIncrement) {
+                    state.cameraTarget.requestId + 1L
+                } else {
+                    state.cameraTarget.requestId
+                }
+            val nextZoomLevel =
+                if (shouldIncrement) {
+                    MapCameraSource.SEARCH_RESULT.defaultZoomLevel()
+                } else {
+                    state.cameraTarget.zoomLevel
+                }
+
+            state.copy(
+                cameraTarget =
+                    MapCameraTarget(
+                        center = coordinate,
+                        source = MapCameraSource.SEARCH_RESULT,
+                        requestId = nextRequestId,
+                        zoomLevel = nextZoomLevel,
+                    ),
+            )
+        }
+    }
+
     private fun applyFallbackCameraTarget() {
+        selectedDestinationPreview?.let { preview ->
+            syncCameraToDestinationPreview(
+                coordinate =
+                    MapCoordinate(
+                        latitude = preview.destination.latitude,
+                        longitude = preview.destination.longitude,
+                    ),
+                incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.SEARCH_RESULT,
+            )
+            return
+        }
+
         selectedDestination?.let { destination ->
             syncCameraToSelectedDestination(
                 destination = destination,
@@ -984,6 +1110,7 @@ class MapViewModel(
         val hadSelection =
             selectedMarkerId != null ||
                 selectedFacilityDetail != null ||
+                selectedDestinationPreview != null ||
                 (
                     clearMapTapSelection &&
                         (
@@ -998,6 +1125,7 @@ class MapViewModel(
         selectedMarkerId = null
         selectedFacilityDetail = null
         selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
+        selectedDestinationPreview = null
         if (clearMapTapSelection) {
             clearMapTapSelectionState(clearPin = true)
         }
@@ -1013,6 +1141,7 @@ class MapViewModel(
         }
         selectedMapTapDetail = null
         selectedMapTapNameHint = null
+        selectedDestinationPreview = null
         isMapTapDetailLoading = false
         mapTapDetailErrorMessage = null
     }
@@ -1060,6 +1189,7 @@ class MapViewModel(
             detail = selectedFacilityDetail,
             mapTapDetail = selectedMapTapDetail,
             mapTapNameHint = selectedMapTapNameHint,
+            destinationPreview = selectedDestinationPreview,
             isMapTapDetailLoading = isMapTapDetailLoading,
             mapTapDetailErrorMessage = mapTapDetailErrorMessage,
             isBookmarked = selectedFacilityBookmarkState.isBookmarked,
@@ -1092,7 +1222,16 @@ class MapViewModel(
     }
 
     private fun toggleSelectedFacilityBookmark() {
-        val detail = selectedFacilityDetail ?: return
+        selectedFacilityDetail?.let { detail ->
+            toggleFacilityBookmark(detail)
+            return
+        }
+        selectedMapTapDetail?.let { detail ->
+            toggleMapTapBookmark(detail)
+        }
+    }
+
+    private fun toggleFacilityBookmark(detail: FacilityDetailSeed) {
         val currentBookmarkState = selectedFacilityBookmarkState
         if (currentBookmarkState.isUpdating) return
 
@@ -1133,6 +1272,68 @@ class MapViewModel(
             }
             .onFailure {
                 if (selectedFacilityDetail?.facilityId != detail.facilityId) return@onFailure
+                selectedFacilityBookmarkState =
+                    currentBookmarkState.copy(
+                        isUpdating = false,
+                        errorMessage = BOOKMARK_SAVE_FAILURE_MESSAGE,
+                    )
+                renderSelectedFacilityState()
+                emitUiEvent(MapUiEvent.ShowSnackbar(BOOKMARK_SAVE_FAILURE_MESSAGE))
+            }
+        }
+    }
+
+    private fun toggleMapTapBookmark(detail: MapTappedPlaceDetail) {
+        val currentBookmarkState = selectedFacilityBookmarkState
+        if (currentBookmarkState.isUpdating) return
+
+        val nextBookmarked = !currentBookmarkState.isBookmarked
+        selectedFacilityBookmarkState =
+            currentBookmarkState.copy(
+                isBookmarked = nextBookmarked,
+                isUpdating = true,
+                errorMessage = null,
+            )
+        selectedMapTapDetail = selectedMapTapDetail?.copy(isBookmarked = nextBookmarked)
+        renderSelectedFacilityState()
+
+        viewModelScope.launch {
+            runCatching {
+                if (nextBookmarked) {
+                    bookmarkRepository.saveBookmark(detail.toBookmarkData())
+                } else {
+                    bookmarkRepository.deleteBookmark(currentBookmarkState.facilityId ?: detail.bookmarkCacheKey())
+                    null
+                }
+            }.onSuccess { savedBookmark ->
+                if (selectedMapTapDetail?.matchesBookmarkTarget(detail) != true) return@onSuccess
+                val updatedDetail =
+                    if (nextBookmarked && savedBookmark != null) {
+                        selectedMapTapDetail?.withSavedBookmark(savedBookmark)
+                    } else {
+                        selectedMapTapDetail?.copy(isBookmarked = false)
+                    }
+                selectedMapTapDetail = updatedDetail
+                selectedFacilityBookmarkState =
+                    selectedFacilityBookmarkState.copy(
+                        facilityId = updatedDetail?.bookmarkCacheKey() ?: currentBookmarkState.facilityId,
+                        isBookmarked = nextBookmarked,
+                        isUpdating = false,
+                        errorMessage = null,
+                    )
+                renderSelectedFacilityState()
+                emitUiEvent(
+                    MapUiEvent.ShowSnackbar(
+                        if (nextBookmarked) {
+                            BOOKMARK_SAVE_SUCCESS_MESSAGE
+                        } else {
+                            BOOKMARK_DELETE_SUCCESS_MESSAGE
+                        },
+                    ),
+                )
+            }.onFailure {
+                if (selectedMapTapDetail?.matchesBookmarkTarget(detail) != true) return@onFailure
+                selectedMapTapDetail = selectedMapTapDetail?.copy(isBookmarked = currentBookmarkState.isBookmarked)
                 selectedFacilityBookmarkState =
                     currentBookmarkState.copy(
                         isUpdating = false,
@@ -1234,6 +1435,7 @@ class MapViewModel(
             locationPermissionManager: LocationPermissionManager,
             currentLocationManager: CurrentLocationManager,
             destinationSelectionRepository: DestinationSelectionRepository,
+            destinationPreviewRepository: DestinationPreviewRepository,
             facilitySeedRepository: FacilitySeedRepository,
             bookmarkRepository: BookmarkRepository,
             searchRepository: SearchRepository,
@@ -1247,6 +1449,7 @@ class MapViewModel(
                             locationPermissionManager = locationPermissionManager,
                             currentLocationManager = currentLocationManager,
                             destinationSelectionRepository = destinationSelectionRepository,
+                            destinationPreviewRepository = destinationPreviewRepository,
                             facilitySeedRepository = facilitySeedRepository,
                             bookmarkRepository = bookmarkRepository,
                             searchRepository = searchRepository,
@@ -1317,6 +1520,97 @@ private fun MapTapPayload.toMapPlaceDetailRequest(): MapPlaceDetailRequest =
         nameHint = nameHint,
     )
 
+private fun DestinationPreviewRequest.toMapTappedPlaceDetail(): MapTappedPlaceDetail =
+    MapTappedPlaceDetail(
+        bookmarkTargetId =
+            bookmarkTargetId
+                ?.takeIf { it.isNotBlank() }
+                ?: destination.placeId.takeIf { detailType == MapPlaceDetailType.INTERNAL_PLACE }
+                ?: "",
+        detailType = detailType,
+        placeId = destination.placeId.takeIf { detailType == MapPlaceDetailType.INTERNAL_PLACE },
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        name = destination.name,
+        category = destination.category,
+        providerCategory = null,
+        address = destination.address.orEmpty(),
+        latitude = destination.latitude,
+        longitude = destination.longitude,
+        accessibilityTags = accessibilityTagKeys,
+    )
+
+private fun MapTappedPlaceDetail.toBookmarkData(): BookmarkData {
+    val serverPlaceId = placeId?.toLongOrNull()
+    val localPlaceId =
+        serverPlaceId?.toString()
+            ?: bookmarkTargetId.takeIf { it.isNotBlank() }
+            ?: externalBookmarkFallbackKey()
+
+    return BookmarkData(
+        placeId = localPlaceId,
+        placeName = name,
+        address = address.takeIf { it.isNotBlank() },
+        latitude = latitude,
+        longitude = longitude,
+        category = category?.name,
+        bookmarkTargetId = bookmarkTargetId.takeIf { it.isNotBlank() },
+        targetType = detailType.name,
+        serverPlaceId = serverPlaceId,
+        provider =
+            provider?.takeIf { it.isNotBlank() }
+                ?: DEFAULT_EXTERNAL_BOOKMARK_PROVIDER.takeIf { detailType != MapPlaceDetailType.INTERNAL_PLACE },
+        providerPlaceId = providerPlaceId?.takeIf { it.isNotBlank() },
+        providerCategory = providerCategory?.takeIf { it.isNotBlank() },
+    )
+}
+
+private fun MapTappedPlaceDetail.withSavedBookmark(bookmark: BookmarkData): MapTappedPlaceDetail =
+    copy(
+        bookmarkTargetId = bookmark.bookmarkTargetId ?: bookmarkTargetId,
+        placeId = bookmark.serverPlaceId?.toString() ?: placeId,
+        isBookmarked = true,
+    )
+
+private fun MapTappedPlaceDetail.bookmarkCacheKey(): String =
+    placeId?.takeIf { it.isNotBlank() }
+        ?: bookmarkTargetId.takeIf { it.isNotBlank() }
+        ?: externalBookmarkFallbackKey()
+
+private fun MapTappedPlaceDetail.externalBookmarkFallbackKey(): String =
+    providerPlaceId
+        ?.takeIf { it.isNotBlank() }
+        ?.let { providerPlaceId -> "provider:${provider.orEmpty().lowercase(Locale.US)}:$providerPlaceId" }
+        ?: "map:${latitude.toLogCoordinate()},${longitude.toLogCoordinate()}"
+
+private fun MapTappedPlaceDetail.matchesBookmarkTarget(other: MapTappedPlaceDetail): Boolean =
+    (bookmarkTargetId.isNotBlank() && bookmarkTargetId == other.bookmarkTargetId) ||
+        (!placeId.isNullOrBlank() && placeId == other.placeId) ||
+        (!providerPlaceId.isNullOrBlank() && providerPlaceId == other.providerPlaceId) ||
+        externalBookmarkFallbackKey() == other.externalBookmarkFallbackKey()
+
+private fun MapTappedPlaceDetail.toPlaceDestinationOrNull(): PlaceDestination? {
+    if (!latitude.isValidLatitude() || !longitude.isValidLongitude()) return null
+
+    return PlaceDestination(
+        placeId = bookmarkCacheKey(),
+        name = name,
+        address = address.takeIf { it.isNotBlank() },
+        latitude = latitude,
+        longitude = longitude,
+        category = category,
+    )
+}
+
+private fun Double.isValidLatitude(): Boolean = isFinite() && this in -90.0..90.0
+
+private fun Double.isValidLongitude(): Boolean = isFinite() && this in -180.0..180.0
+
+private fun MapCoordinate.isApproximatelySameCoordinate(
+    other: MapCoordinate,
+    tolerance: Double = CAMERA_CALLBACK_COORDINATE_TOLERANCE,
+): Boolean = abs(latitude - other.latitude) <= tolerance && abs(longitude - other.longitude) <= tolerance
+
 private data class SelectedFacilityBookmarkState(
     val facilityId: String? = null,
     val isBookmarked: Boolean = false,
@@ -1357,3 +1651,6 @@ private fun MapShortcutFilterKey.isSelected(
     val category = toFacilityCategory(availableCategories) ?: return false
     return category in selection.selectedFacilityCategories
 }
+
+private const val CAMERA_CALLBACK_COORDINATE_TOLERANCE = 0.00001
+private const val DEFAULT_EXTERNAL_BOOKMARK_PROVIDER = "KAKAO"

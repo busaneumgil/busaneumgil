@@ -44,10 +44,14 @@ fun NavigationRoute(
     val bookmarkRepository = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
-    val viewModelFactory = remember(currentLocationManager, bookmarkRepository) {
+    val routeRepository = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.routeRepository
+    }
+    val viewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
         NavigationViewModel.provideFactory(
             currentLocationManager = currentLocationManager,
             bookmarkRepository = bookmarkRepository,
+            routeRepository = routeRepository,
         )
     }
     val viewModel =

@@ -76,7 +76,7 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
-import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayBackdrop
+import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOverlayState
 import java.util.Locale
 
@@ -86,7 +86,6 @@ fun RouteSettingScreen(
     onAction: (RouteSettingUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
     val supportingMessage =
         when (uiState.destinationHandoffState) {
             RouteDestinationHandoffState.DIRECT ->
@@ -102,10 +101,10 @@ fun RouteSettingScreen(
                 )
         }
     val ctaSupportingText =
-        when {
-            !isWalkMode -> stringResource(id = R.string.route_setting_transit_cta_supporting)
-            uiState.cta.isEnabled -> null
-            else -> uiState.cta.supportingText
+        if (uiState.cta.isEnabled) {
+            null
+        } else {
+            uiState.cta.supportingText
         }
 
     Scaffold(
@@ -121,7 +120,7 @@ fun RouteSettingScreen(
                 buttonLabel = uiState.cta.label,
                 enabled = uiState.isStartEnabled,
                 supportingText = ctaSupportingText,
-                selectedRoute = uiState.selectedRoute.takeIf { isWalkMode },
+                selectedRoute = uiState.selectedRoute,
                 onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
             )
         },
@@ -1432,7 +1431,6 @@ private fun RouteMapStage(
     uiState: RouteSettingUiState,
     modifier: Modifier = Modifier,
 ) {
-    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
     val routeColor = optionAccentColor(selectedRoute?.routeOption ?: RouteOption.SAFE)
@@ -1453,7 +1451,7 @@ private fun RouteMapStage(
             RouteMapBackdrop(
                 previewMap = previewMap,
                 routePath =
-                    if (isWalkMode && previewMap.isDisplayable) {
+                    if (previewMap.isDisplayable) {
                         previewMap.polyline
                     } else {
                         emptyList()
@@ -1462,16 +1460,6 @@ private fun RouteMapStage(
             )
 
             when {
-                !isWalkMode ->
-                    RouteMapMessageCard(
-                        title = stringResource(id = R.string.route_setting_transit_placeholder_title),
-                        description = stringResource(id = R.string.route_setting_transit_placeholder_description),
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopStart)
-                                .padding(EumSpacing.medium),
-                    )
-
                 selectedRoute == null || !previewMap.isDisplayable ->
                     RouteMapMessageCard(
                         title = routePreviewFallbackTitle(previewMap.status),
@@ -1483,7 +1471,7 @@ private fun RouteMapStage(
                     )
             }
 
-            if (isWalkMode && selectedRoute != null && previewMap.isDisplayable) {
+            if (selectedRoute != null && previewMap.isDisplayable) {
                 RouteMapStatusBadge(
                     label = selectedRoute.optionTitle,
                     supportingText = selectedRoute.summaryLabel,
@@ -1595,8 +1583,6 @@ private fun RouteSettingRouteSheet(
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
-    val isWalkMode = uiState.selectedTravelMode == RouteTravelMode.WALK
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape =
@@ -1617,21 +1603,17 @@ private fun RouteSettingRouteSheet(
                 ),
             verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
         ) {
-            if (isWalkMode) {
-                RouteWalkOptionSection(
-                    uiState = uiState,
-                    onOptionClick = onOptionClick,
-                    onOptionDetailClick = onOptionDetailClick,
-                )
-            } else {
-                RouteTransitOptionSection()
-            }
+            RouteOptionSection(
+                uiState = uiState,
+                onOptionClick = onOptionClick,
+                onOptionDetailClick = onOptionDetailClick,
+            )
         }
     }
 }
 
 @Composable
-private fun RouteWalkOptionSection(
+private fun RouteOptionSection(
     uiState: RouteSettingUiState,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
@@ -1672,16 +1654,6 @@ private fun RouteWalkOptionSection(
                 }
         }
     }
-}
-
-@Composable
-private fun RouteTransitOptionSection() {
-    RouteStateCard(
-        title = stringResource(id = R.string.route_setting_transit_placeholder_title),
-        description = stringResource(id = R.string.route_setting_transit_placeholder_description),
-        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f),
-        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -2073,7 +2045,7 @@ private fun RouteMapBackdrop(
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.route_setting_preview_title)
-    MapViewportOverlayBackdrop(
+    MapOverlayViewport(
         overlayState =
             createRoutePreviewViewportOverlayState(
                 previewMap =
@@ -2087,8 +2059,6 @@ private fun RouteMapBackdrop(
                     ),
             ),
         modifier = modifier,
-        horizontalPadding = 28.dp,
-        verticalPadding = 24.dp,
         contentDescription = mapDescription,
     )
 }
@@ -2518,7 +2488,7 @@ private data class RoutePreviewProjectionPoint(
 )
 
 private const val METERS_PER_KILOMETER = 1_000
-private const val MAX_VISIBLE_OPTION_CARD_COUNT = 2
+private const val MAX_VISIBLE_OPTION_CARD_COUNT = 3
 private const val MAX_VISIBLE_ROUTE_CHIP_COUNT = 2
 private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 1
 private const val DEFAULT_PREVIEW_CENTER_LATITUDE = 35.1796

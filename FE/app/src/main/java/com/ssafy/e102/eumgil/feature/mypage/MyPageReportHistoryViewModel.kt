@@ -3,7 +3,9 @@ package com.ssafy.e102.eumgil.feature.mypage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryDetailData
+import com.ssafy.e102.eumgil.data.repository.ReportHistorySource
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,6 +32,7 @@ class MyPageReportHistoryViewModel(
     val uiEvent: SharedFlow<MyPageReportHistoryUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var observeHistoryJob: Job? = null
+    private var loadDetailJob: Job? = null
 
     init {
         observeReportHistory()
@@ -40,7 +43,7 @@ class MyPageReportHistoryViewModel(
             MyPageReportHistoryUiAction.BackClicked ->
                 emitUiEvent(MyPageReportHistoryUiEvent.NavigateBack)
             is MyPageReportHistoryUiAction.ReportClicked ->
-                emitUiEvent(MyPageReportHistoryUiEvent.ShowSnackbar(PREPARING_MESSAGE))
+                loadReportDetail(action.outboxId)
             MyPageReportHistoryUiAction.ReportCtaClicked ->
                 emitUiEvent(MyPageReportHistoryUiEvent.NavigateToReport)
             MyPageReportHistoryUiAction.RetryClicked ->
@@ -53,26 +56,30 @@ class MyPageReportHistoryViewModel(
         mutableUiState.update { state ->
             state.copy(
                 screenState = MyPageReportHistoryScreenState.LOADING,
+                selectedDetail = null,
+                detailLoadingHistoryId = null,
                 errorMessage = null,
             )
         }
         observeHistoryJob =
             viewModelScope.launch {
-                reportRepository.observeReportHistory()
+                reportRepository.observeReportHistoryEntries()
                     .catch {
                         mutableUiState.update { state ->
                             state.copy(
                                 screenState = MyPageReportHistoryScreenState.ERROR,
                                 reports = emptyList(),
+                                selectedDetail = null,
+                                detailLoadingHistoryId = null,
                                 errorMessage = REPORT_HISTORY_LOAD_FAILURE_MESSAGE,
                             )
                         }
                     }
-                    .collectLatest { outboxItems ->
+                    .collectLatest { historyItems ->
                         val reports =
-                            outboxItems
-                                .sortedByDescending(ReportOutboxData::updatedAtMillis)
-                                .map(ReportOutboxData::toReportHistoryUiModel)
+                            historyItems
+                                .sortedByDescending(ReportHistoryData::updatedAtMillis)
+                                .map(ReportHistoryData::toReportHistoryUiModel)
                         mutableUiState.update { state ->
                             state.copy(
                                 screenState =
@@ -82,10 +89,51 @@ class MyPageReportHistoryViewModel(
                                         MyPageReportHistoryScreenState.CONTENT
                                     },
                                 reports = reports,
+                                selectedDetail =
+                                    state.selectedDetail?.takeIf { detail ->
+                                        reports.any { report -> report.outboxId == detail.historyId }
+                                    },
                                 errorMessage = null,
                             )
                         }
                     }
+            }
+    }
+
+    private fun loadReportDetail(historyId: String) {
+        loadDetailJob?.cancel()
+        mutableUiState.update { state ->
+            state.copy(
+                detailLoadingHistoryId = historyId,
+                selectedDetail = null,
+            )
+        }
+        loadDetailJob =
+            viewModelScope.launch {
+                runCatching { reportRepository.getReportHistoryDetail(historyId) }
+                    .fold(
+                        onSuccess = { detail ->
+                            if (detail == null) {
+                                mutableUiState.update { state ->
+                                    state.copy(detailLoadingHistoryId = null)
+                                }
+                                emitUiEvent(MyPageReportHistoryUiEvent.ShowSnackbar(REPORT_DETAIL_LOAD_FAILURE_MESSAGE))
+                            } else {
+                                mutableUiState.update { state ->
+                                    state.copy(
+                                        selectedDetail = detail.toReportHistoryDetailUiModel(),
+                                        detailLoadingHistoryId = null,
+                                    )
+                                }
+                            }
+                        },
+                        onFailure = {
+                            mutableUiState.update { state ->
+                                state.copy(detailLoadingHistoryId = null)
+                            }
+                            emitUiEvent(MyPageReportHistoryUiEvent.ShowSnackbar(REPORT_DETAIL_LOAD_FAILURE_MESSAGE))
+                        },
+                    )
             }
     }
 
@@ -96,8 +144,8 @@ class MyPageReportHistoryViewModel(
     }
 
     companion object {
-        const val PREPARING_MESSAGE = "준비 중입니다."
         private const val REPORT_HISTORY_LOAD_FAILURE_MESSAGE = "제보 내역을 불러오지 못했습니다."
+        private const val REPORT_DETAIL_LOAD_FAILURE_MESSAGE = "제보 상세를 불러오지 못했습니다."
 
         fun provideFactory(reportRepository: ReportRepository): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -113,26 +161,55 @@ class MyPageReportHistoryViewModel(
     }
 }
 
-private fun ReportOutboxData.toReportHistoryUiModel(): MyPageReportHistoryUiModel =
+private fun ReportHistoryData.toReportHistoryUiModel(): MyPageReportHistoryUiModel =
     MyPageReportHistoryUiModel(
-        outboxId = outboxId,
+        outboxId = historyId,
         title = reportCategory.toReportHistoryTitle(),
-        address = address?.takeIf { it.isNotBlank() } ?: "주소 정보 없음",
+        address = address?.takeIf { it.isNotBlank() } ?: toCoordinateText(),
         submittedAtText = updatedAtMillis.formatSubmittedAt(),
-        photoUri = photoUri?.takeIf { it.isNotBlank() },
+        photoUri = photoUri?.takeIf { it.isNotBlank() } ?: imageUrl?.takeIf { it.isNotBlank() },
+        sourceLabel = source.toSourceLabel(),
         updatedAtMillis = updatedAtMillis,
     )
 
+private fun ReportHistoryDetailData.toReportHistoryDetailUiModel(): MyPageReportHistoryDetailUiModel =
+    MyPageReportHistoryDetailUiModel(
+        historyId = historyId,
+        title = reportCategory.toReportHistoryTitle(),
+        description = description?.takeIf { it.isNotBlank() } ?: "상세 설명이 없습니다.",
+        locationText = address?.takeIf { it.isNotBlank() } ?: toCoordinateText(),
+        submittedAtText = createdAtMillis.formatSubmittedAt(),
+        imageCountText =
+            if (imageRefs.isEmpty()) {
+                "첨부 사진 없음"
+            } else {
+                "첨부 사진 ${imageRefs.size}장"
+            },
+        sourceLabel = source.toSourceLabel(),
+    )
+
+private fun ReportHistoryData.toCoordinateText(): String =
+    "위치 ${latitude.formatCoordinate()}, ${longitude.formatCoordinate()}"
+
+private fun ReportHistoryDetailData.toCoordinateText(): String =
+    "위치 ${latitude.formatCoordinate()}, ${longitude.formatCoordinate()}"
+
+private fun Double.formatCoordinate(): String = String.format(Locale.US, "%.6f", this)
+
+private fun ReportHistorySource.toSourceLabel(): String =
+    when (this) {
+        ReportHistorySource.Server -> "서버 이력"
+        ReportHistorySource.LocalOutbox -> "로컬 저장"
+    }
+
 private fun String.toReportHistoryTitle(): String =
     when (this) {
-        // 서버 명세 6종 (제보 API 명세 2026-04-29 기준)
         "STAIRS_STEP" -> "계단·단차 있음"
         "BRAILLE_BLOCK" -> "점자블록 문제"
         "SIDEWALK_MISSING" -> "인도 없음"
         "RAMP" -> "경사로 문제"
         "SIDEWALK_WIDTH" -> "인도폭 문제"
         "OTHER_OBSTACLE" -> "기타 장애물"
-        // legacy 값 backward compatibility (저장된 구 데이터 표시용)
         "STAIRS" -> "계단·단차 있음"
         "TACTILE_BLOCK", "GUIDANCE_BLOCK" -> "점자블록 문제"
         "SLOPE" -> "경사로 문제"

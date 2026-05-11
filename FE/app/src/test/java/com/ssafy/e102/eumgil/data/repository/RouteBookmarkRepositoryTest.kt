@@ -180,6 +180,29 @@ class RouteBookmarkRepositoryTest {
 
             assertEquals("42", saved.bookmarkId)
             assertEquals(1, fakeDataSource.createCallCount)
+            assertEquals(listOf("walk_rt_safe_001"), fakeDataSource.createdRouteIds)
+            assertEquals(listOf(testSaveRequest().startLabel), fakeDataSource.createdStartLabels)
+            assertEquals(listOf(testSaveRequest().endLabel), fakeDataSource.createdEndLabels)
+            assertEquals(1, fakeDao.routes().size)
+        }
+
+    @Test
+    fun `saveRouteBookmark skips server create when route id is missing`() =
+        runBlocking {
+            val fakeDao = FakeFavoriteRouteDao()
+            val fakeDataSource = FakeFavoriteRoutesRemoteDataSource(createdId = 42L)
+
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    favoriteRoutesRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val saved = repository.saveRouteBookmark(testSaveRequest(routeId = null))
+
+            assertTrue(saved.bookmarkId.startsWith("route-bookmark:"))
+            assertEquals(0, fakeDataSource.createCallCount)
             assertEquals(1, fakeDao.routes().size)
         }
 
@@ -306,7 +329,11 @@ class RouteBookmarkRepositoryTest {
 }
 
 private fun testSaveRequest(): RouteBookmarkSaveRequest =
+    testSaveRequest(routeId = "walk_rt_safe_001")
+
+private fun testSaveRequest(routeId: String?): RouteBookmarkSaveRequest =
     RouteBookmarkSaveRequest(
+        routeId = routeId,
         routeName = "집에서 병원",
         startLabel = "부산시민공원",
         endLabel = "부산역",
@@ -381,6 +408,9 @@ private class FakeFavoriteRoutesRemoteDataSource(
         private set
     var createCallCount: Int = 0
         private set
+    val createdRouteIds = mutableListOf<String>()
+    val createdStartLabels = mutableListOf<String>()
+    val createdEndLabels = mutableListOf<String>()
 
     override suspend fun getFavoriteRoutes(
         accessToken: String,
@@ -399,13 +429,14 @@ private class FakeFavoriteRoutesRemoteDataSource(
 
     override suspend fun createFavoriteRoute(
         accessToken: String,
+        routeId: String,
         startLabel: String,
         endLabel: String,
-        startPoint: FavoriteRoutePointDto,
-        endPoint: FavoriteRoutePointDto,
-        routeOption: String,
     ): CreateFavoriteRouteResponseDto {
         createCallCount++
+        createdRouteIds.add(routeId)
+        createdStartLabels.add(startLabel)
+        createdEndLabels.add(endLabel)
         return CreateFavoriteRouteResponseDto(favRouteId = createdId)
     }
 
@@ -414,9 +445,6 @@ private class FakeFavoriteRoutesRemoteDataSource(
         favRouteId: Long,
         startLabel: String?,
         endLabel: String?,
-        startPoint: FavoriteRoutePointDto?,
-        endPoint: FavoriteRoutePointDto?,
-        routeOption: String?,
     ) {
         // no-op for test
     }

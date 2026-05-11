@@ -10,6 +10,8 @@ import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper
+import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper.toFeatureTypeApiValueOrNull
+import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper.toServerCategoryApiValueOrNull
 import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper.toApiValue
 import org.json.JSONObject
 import java.util.Locale
@@ -139,20 +141,33 @@ open class PlacesRemoteDataSource private constructor(
             put("lat", latitude.toString())
             put("lng", longitude.toString())
             put("radius", radiusMeters.toString())
-            if (categories.isNotEmpty()) {
+            val serverCategories =
+                categories
+                    .mapNotNull { category -> category.toServerCategoryApiValueOrNull() }
+                    .distinct()
+            val categoryFeatureTypes =
+                categories
+                    .mapNotNull { category -> category.toFeatureTypeApiValueOrNull() }
+                    .distinct()
+            if (serverCategories.isNotEmpty()) {
                 put(
                     "category",
-                    categories
-                        .sortedBy { category -> category.name }
-                        .joinToString(",") { category -> category.toApiValue() },
+                    serverCategories
+                        .sorted()
+                        .joinToString(","),
                 )
             }
-            if (featureTypes.isNotEmpty()) {
+            val serverFeatureTypes =
+                (
+                    featureTypes.map { featureType -> featureType.toApiValue() } +
+                        categoryFeatureTypes
+                ).distinct()
+            if (serverFeatureTypes.isNotEmpty()) {
                 put(
                     "featureType",
-                    featureTypes
-                        .sortedBy { featureType -> featureType.name }
-                        .joinToString(",") { featureType -> featureType.toApiValue() },
+                    serverFeatureTypes
+                        .sorted()
+                        .joinToString(","),
                 )
             }
         }

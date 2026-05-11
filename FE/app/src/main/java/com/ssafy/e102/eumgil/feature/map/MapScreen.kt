@@ -405,7 +405,7 @@ private fun FacilityDetailBookmarkActionButton(
     val bookmarkButtonLabel = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
     val bookmarkStateDescription =
         when {
-            state.isBookmarkEnabled.not() -> "Bookmark is only available for internal places."
+            state.isBookmarkEnabled.not() -> "Bookmark is unavailable for this place."
 
             state.isBookmarkUpdating ->
                 stringResource(id = R.string.map_facility_detail_bookmark_state_updating)
@@ -699,11 +699,11 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 address = mapTapDetailAddressLabel(mapTapDetail),
                 guideMessage = mapTapDetailGuideMessage(mapTapDetail),
                 accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
-                isBookmarked = mapTapDetail.isBookmarked,
-                isBookmarkUpdating = false,
-                isBookmarkEnabled = false,
-                isRouteActionEnabled = false,
-                bookmarkErrorMessage = null,
+                isBookmarked = sheetState.isBookmarked,
+                isBookmarkUpdating = sheetState.isBookmarkUpdating,
+                isBookmarkEnabled = true,
+                isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
+                bookmarkErrorMessage = sheetState.bookmarkErrorMessage,
             )
 
         shouldDelayPoiSheetUntilDetail -> null
@@ -786,11 +786,11 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             address = mapTapDetailAddressLabel(mapTapDetail),
             guideMessage = mapTapDetailGuideMessage(mapTapDetail),
             accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
-            isBookmarked = mapTapDetail.isBookmarked,
-            isBookmarkUpdating = false,
-            isBookmarkEnabled = false,
-            isRouteActionEnabled = false,
-            bookmarkErrorMessage = null,
+            isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
+            isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
+            isBookmarkEnabled = true,
+            isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
+            bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     } else if (uiState.facilityDetailSheetState.isMapTapDetailLoading) {
         MapFacilityDetailSheetUiState(
@@ -854,6 +854,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
 private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     val cameraTarget = uiState.cameraTarget
     val currentLocationMarker = resolveCurrentLocationMarker(uiState.locationStatus)
+    val viewportDestination = uiState.facilityDetailSheetState.destinationPreview?.destination ?: uiState.selectedDestination
     val integrationState =
         resolveMapIntegrationState(
             hasNativeAppKey = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(),
@@ -890,7 +891,7 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
             MapCameraSource.SEARCH_RESULT ->
                 stringResource(
                     id = R.string.map_viewport_title_selected,
-                    uiState.selectedDestination?.name
+                    viewportDestination?.name
                         ?: stringResource(id = R.string.map_shell_search_hint_selected_fallback),
                 )
 
@@ -917,7 +918,7 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
                 )
 
             MapCameraSource.SEARCH_RESULT ->
-                selectedDestinationSummaryText(destination = uiState.selectedDestination)
+                selectedDestinationSummaryText(destination = viewportDestination)
 
             MapCameraSource.DEFAULT_BUSAN ->
                 stringResource(
@@ -931,13 +932,13 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
         cameraTarget = cameraTarget,
         currentLocation = currentLocationMarker,
         selectedDestinationCoordinate =
-            uiState.selectedDestination?.let { destination ->
+            viewportDestination?.let { destination ->
                 MapCoordinate(
                     latitude = destination.latitude,
                     longitude = destination.longitude,
                 )
             },
-        selectedDestinationName = uiState.selectedDestination?.name,
+        selectedDestinationName = viewportDestination?.name,
         markerOverlayState = uiState.markerOverlayState,
         overlayState =
             createMapMarkerViewportOverlayState(
@@ -1086,6 +1087,12 @@ private fun mapTapDetailAccessibilityLabels(detail: MapTappedPlaceDetail): List<
         .mapNotNull(::recentDestinationTagLabel)
         .distinct()
         .take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
+
+private fun MapTappedPlaceDetail.hasValidCoordinate(): Boolean =
+    latitude.isFinite() &&
+        longitude.isFinite() &&
+        latitude in -90.0..90.0 &&
+        longitude in -180.0..180.0
 
 @Composable
 private fun mapTapDetailTypeLabel(detailType: MapPlaceDetailType): String =
@@ -1326,21 +1333,21 @@ private fun recentDestinationTagLabels(destination: RecentDestination): List<Str
 
 private fun recentDestinationTagLabel(rawKey: String): String? =
     when (rawKey.trim().lowercase()) {
-        "accessible-toilet" -> "장애인 화장실 있음"
-        "elevator" -> "엘리베이터 있음"
+        "accessible-toilet" -> "장애인 화장실"
+        "elevator" -> "엘리베이터"
         "accessible-parking" -> "장애인 주차 가능"
         "step-free-entrance" -> "단차 없음"
-        "guidance-facility" -> "안내시설 있음"
+        "guidance-facility" -> "안내시설"
         "accessible-room" -> "객실 이용 가능"
-        "ramp" -> "경사로 있음"
+        "ramp" -> "경사로"
         "auto-door" -> "출입 가능"
         "wide-entry" -> "출입 가능"
         "wheelchair-turning-space" -> "출입 가능"
         "table-spacing" -> "출입 가능"
-        "rest-area" -> "안내시설 있음"
-        "braille-block" -> "안내시설 있음"
-        "crosswalk" -> "안내시설 있음"
-        "low-height-button" -> "안내시설 있음"
+        "rest-area" -> "안내시설"
+        "braille-block" -> "안내시설"
+        "crosswalk" -> "안내시설"
+        "low-height-button" -> "안내시설"
         else -> null
     }
 

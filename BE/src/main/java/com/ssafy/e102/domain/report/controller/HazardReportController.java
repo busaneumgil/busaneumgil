@@ -49,7 +49,7 @@ public class HazardReportController {
 		return ApiResponse.created(hazardReportService.createHazardReport(principal.userId(), request));
 	}
 
-	@Operation(summary = "내 제보 목록 조회", description = "현재 로그인한 사용자가 등록한 도로 상태 제보 목록을 최신순 cursor 기반으로 조회한다.")
+	@Operation(summary = "내 제보 목록 조회", description = "현재 로그인한 사용자가 등록한 도로 상태 제보 목록을 최신순 커서 기반으로 조회한다.")
 	@GetMapping("/me")
 	public ApiResponse<HazardReportListResponse> getMyHazardReports(
 		@AuthenticationPrincipal

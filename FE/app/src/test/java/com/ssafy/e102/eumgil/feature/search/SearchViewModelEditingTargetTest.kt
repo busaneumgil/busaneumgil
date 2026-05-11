@@ -21,7 +21,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import kotlinx.coroutines.withTimeoutOrNull
@@ -110,7 +109,7 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
-    fun `provider only search result stays blocked even when editing target is origin`() =
+    fun `provider only search result can update origin when coordinates are valid`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -139,15 +138,14 @@ class SearchViewModelEditingTargetTest {
             viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
             advanceUntilIdle()
 
-            assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
+            assertEquals("provider:kakao:987654321", destinationSelectionRepository.selectedOrigin.value?.placeId)
             assertEquals(null, destinationSelectionRepository.selectedDestination.value)
             assertEquals(
-                null,
+                SearchUiEvent.NavigateToRouteSetting,
                 withTimeoutOrNull(100) {
                     viewModel.uiEvent.first()
                 },
             )
-            assertTrue(viewModel.uiState.value.resultState is SearchResultUiState.Error)
         }
 }
 
@@ -180,7 +178,7 @@ private class EditingTargetFakeBookmarkRepository : BookmarkRepository {
 
     override suspend fun isBookmarked(placeId: String): Boolean = false
 
-    override suspend fun saveBookmark(bookmark: BookmarkData) = Unit
+    override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData = bookmark
 
     override suspend fun deleteBookmark(placeId: String) = Unit
 }

@@ -11,10 +11,11 @@ import com.ssafy.e102.global.response.ApiResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "관리자", description = "관리자 principal 및 권한 확인 API")
+@Tag(name = "관리자", description = "관리자 인증 주체 및 권한 확인 API")
 @RestController
 @RequestMapping("/admin")
 @RequiredArgsConstructor
@@ -22,10 +23,10 @@ public class AdminController {
 
 	private final AdminService adminService;
 
-	@Operation(summary = "관리자 principal 조회", description = "현재 로그인한 사용자가 ADMIN role인지 확인하고 관리자 권한 정보를 반환한다.")
+	@Operation(summary = "관리자 인증 주체 조회", description = "현재 로그인한 사용자가 관리자 권한인지 확인하고 관리자 권한 정보를 반환한다.")
 	@GetMapping("/me")
 	public ApiResponse<AdminMeResponse> getMe(
-		@AuthenticationPrincipal
+		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal) {
 		return ApiResponse.success(adminService.getMe(principal.userId()));
 	}

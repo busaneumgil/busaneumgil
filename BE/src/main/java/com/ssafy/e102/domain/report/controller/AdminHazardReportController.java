@@ -32,7 +32,7 @@ public class AdminHazardReportController {
 
 	private final AdminHazardReportService adminHazardReportService;
 
-	@Operation(summary = "관리자 제보 목록 조회", description = "관리자 페이지에서 도로 상태 제보를 최신순 cursor 기반으로 조회한다.")
+	@Operation(summary = "관리자 제보 목록 조회", description = "관리자 페이지에서 도로 상태 제보를 최신순 커서 기반으로 조회한다.")
 	@GetMapping
 	public ApiResponse<AdminHazardReportListResponse> getHazardReports(
 		@Parameter(description = "처리 상태 필터. 생략하면 전체 상태를 조회한다.") @RequestParam(required = false)
@@ -55,7 +55,7 @@ public class AdminHazardReportController {
 		return ApiResponse.success(adminHazardReportService.getHazardReportDetail(reportId));
 	}
 
-	@Operation(summary = "제보 승인", description = "PENDING 상태의 도로 상태 제보를 APPROVED로 변경한다. 이미 처리된 제보는 다시 처리할 수 없다.")
+	@Operation(summary = "제보 승인", description = "대기 상태의 도로 상태 제보를 승인 상태로 변경한다. 이미 처리된 제보는 다시 처리할 수 없다.")
 	@PatchMapping("/{reportId}/approve")
 	public ApiResponse<AdminHazardReportStatusResponse> approveHazardReport(
 		@Parameter(description = "승인할 제보 ID") @PathVariable @Positive
@@ -63,7 +63,7 @@ public class AdminHazardReportController {
 		return ApiResponse.success(adminHazardReportService.approveHazardReport(reportId));
 	}
 
-	@Operation(summary = "제보 반려", description = "PENDING 상태의 도로 상태 제보를 REJECTED로 변경한다. 현재 ERD에는 반려 사유를 저장하지 않는다.")
+	@Operation(summary = "제보 반려", description = "대기 상태의 도로 상태 제보를 반려 상태로 변경한다. 현재 ERD에는 반려 사유를 저장하지 않는다.")
 	@PatchMapping("/{reportId}/reject")
 	public ApiResponse<AdminHazardReportStatusResponse> rejectHazardReport(
 		@Parameter(description = "반려할 제보 ID") @PathVariable @Positive

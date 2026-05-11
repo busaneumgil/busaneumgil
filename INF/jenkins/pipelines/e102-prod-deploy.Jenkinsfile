@@ -135,13 +135,13 @@ pipeline {
           env.LAST_STAGE_NAME = env.STAGE_NAME
         }
         withCredentials([
+          file(credentialsId: 'e102-prod-env-file', variable: 'PROD_ENV'),
           sshUserPrivateKey(credentialsId: 'e102-s2-ssh-key', keyFileVariable: 'S2_KEY', usernameVariable: 'S2_USER')
         ]) {
           sh '''
-            test -f /var/jenkins_home/prod-secrets/.env.prod
             ssh -i "$S2_KEY" -o StrictHostKeyChecking=accept-new "$S2_USER@$S2_HOST" "mkdir -p '$REMOTE_DIR'"
             scp -i "$S2_KEY" -o StrictHostKeyChecking=accept-new e102-prod-workspace.tar.gz "$S2_USER@$S2_HOST:$REMOTE_DIR/"
-            scp -i "$S2_KEY" -o StrictHostKeyChecking=accept-new /var/jenkins_home/prod-secrets/.env.prod "$S2_USER@$S2_HOST:$REMOTE_DIR/.env.prod.upload"
+            scp -i "$S2_KEY" -o StrictHostKeyChecking=accept-new "$PROD_ENV" "$S2_USER@$S2_HOST:$REMOTE_DIR/.env.prod.upload"
             ssh -i "$S2_KEY" -o StrictHostKeyChecking=accept-new "$S2_USER@$S2_HOST" "cd '$REMOTE_DIR' && mv -f .env.prod.upload .env.prod && chmod 600 .env.prod && mkdir -p .deploy-state && find . -mindepth 1 -maxdepth 1 ! -name .deploy-state ! -name .env.prod ! -name e102-prod-workspace.tar.gz -exec rm -rf {} + && tar -xzf e102-prod-workspace.tar.gz && chmod +x scripts/deploy/*.sh"
           '''
         }

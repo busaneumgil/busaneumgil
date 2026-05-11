@@ -135,6 +135,30 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
+    fun `route overlays render through native kakao route line layer`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Route preview and navigation polylines should be rendered by Kakao's native route line layer.",
+            source.contains("syncRouteLines(") &&
+                source.contains("RouteLineOptions") &&
+                source.contains("RouteLineSegment") &&
+                source.contains("routeLineManager.addLayer("),
+        )
+        assertTrue(
+            "Route map camera should fit route geometry instead of staying on the default map center.",
+            source.contains("CameraUpdateFactory.fitMapPoints") &&
+                source.contains("createKakaoRouteCameraRenderState"),
+        )
+        assertTrue(
+            "Route origin and destination markers should stay projected over the Kakao map viewport.",
+            source.contains("overlayPoints = state?.overlayState?.points.orEmpty()"),
+        )
+    }
+
+    @Test
     fun `external kakao poi taps are forwarded as provider map tap payloads`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")

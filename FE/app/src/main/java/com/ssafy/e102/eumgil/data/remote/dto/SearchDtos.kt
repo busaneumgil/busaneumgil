@@ -2,6 +2,10 @@ package com.ssafy.e102.eumgil.data.remote.dto
 
 data class PlacesSearchDto(
     val places: List<SearchPlaceDto>,
+    val nextCursor: String?,
+    val size: Int,
+    val totalElements: Long,
+    val hasNext: Boolean,
 )
 
 data class SearchPlaceDto(

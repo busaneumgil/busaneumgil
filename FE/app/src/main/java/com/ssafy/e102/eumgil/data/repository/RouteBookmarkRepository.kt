@@ -9,7 +9,6 @@ import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.entity.FavoriteRouteEntity
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRouteListItemDto
-import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRoutePointDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -105,15 +104,14 @@ class DefaultRouteBookmarkRepository(
     private suspend fun trySaveOnServer(request: RouteBookmarkSaveRequest): Long? {
         val datasource = favoriteRoutesRemoteDataSource ?: return null
         val token = accessTokenProvider() ?: return null
+        val routeId = request.routeId?.trim()?.takeIf(String::isNotEmpty) ?: return null
 
         val response =
             datasource.createFavoriteRoute(
                 accessToken = token,
+                routeId = routeId,
                 startLabel = request.startLabel,
                 endLabel = request.endLabel,
-                startPoint = FavoriteRoutePointDto(lat = request.startPoint.latitude, lng = request.startPoint.longitude),
-                endPoint = FavoriteRoutePointDto(lat = request.endPoint.latitude, lng = request.endPoint.longitude),
-                routeOption = request.routeOption.name,
             )
         return response.favRouteId
     }
@@ -222,7 +220,11 @@ private fun RouteBookmark.routeSignature(): String =
     "${startPoint.latitude},${startPoint.longitude}|${endPoint.latitude},${endPoint.longitude}|${routeOption.name}"
 
 private fun RouteBookmarkSaveRequest.bookmarkId(): String =
-    "route-bookmark:${startPoint.latitude},${startPoint.longitude}|${endPoint.latitude},${endPoint.longitude}|${routeOption.name}"
+    routeId
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?.let { "route-bookmark:$it" }
+        ?: "route-bookmark:${startPoint.latitude},${startPoint.longitude}|${endPoint.latitude},${endPoint.longitude}|${routeOption.name}"
 
 private fun RouteBookmarkSaveRequest.fallbackBookmarkId(): String = bookmarkId()
 

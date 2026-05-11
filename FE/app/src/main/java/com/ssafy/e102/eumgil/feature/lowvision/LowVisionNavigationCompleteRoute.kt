@@ -31,10 +31,11 @@ fun LowVisionNavigationCompleteRoute(
         }
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
-        remember(appContainer.currentLocationManager, appContainer.bookmarkRepository) {
+        remember(appContainer.currentLocationManager, appContainer.bookmarkRepository, appContainer.routeRepository) {
             NavigationViewModel.provideFactory(
                 currentLocationManager = appContainer.currentLocationManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
+                routeRepository = appContainer.routeRepository,
             )
         }
     val viewModel =

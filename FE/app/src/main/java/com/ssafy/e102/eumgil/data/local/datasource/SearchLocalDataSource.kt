@@ -1,16 +1,30 @@
 package com.ssafy.e102.eumgil.data.local.datasource
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONObject
 
-class SearchLocalDataSource {
+class SearchLocalDataSource(
+    private val dataStore: DataStore<Preferences>? = null,
+) {
     private val cachedResultsByQuery = ConcurrentHashMap<String, List<SearchResult>>()
     private val recentSearchesByKeyword = LinkedHashMap<String, RecentSearch>()
     private val recentDestinationsByKey = LinkedHashMap<String, RecentDestination>()
+    private val recentSearchesMutex = Mutex()
+    private val recentDestinationsMutex = Mutex()
 
     suspend fun getCachedResults(query: SearchQuery): List<SearchResult> =
         cachedResultsByQuery[query.normalizedKey()].orEmpty()
@@ -23,27 +37,30 @@ class SearchLocalDataSource {
     }
 
     suspend fun getRecentSearches(): List<RecentSearch> =
-        synchronized(recentSearchesByKeyword) {
-            recentSearchesByKeyword.values.sortedByDescending(RecentSearch::searchedAtMillis)
+        recentSearchesMutex.withLock {
+            loadRecentSearches().values.sortedByDescending(RecentSearch::searchedAtMillis)
         }
 
     suspend fun saveRecentSearch(keyword: String) {
         val normalizedKeyword = keyword.normalizedKeyword()
         if (normalizedKeyword.isEmpty()) return
 
-        synchronized(recentSearchesByKeyword) {
-            recentSearchesByKeyword.remove(normalizedKeyword)
-            recentSearchesByKeyword[normalizedKeyword] = RecentSearch(keyword = keyword.trim())
+        recentSearchesMutex.withLock {
+            val recentSearches = loadRecentSearches()
+            recentSearches.remove(normalizedKeyword)
+            recentSearches[normalizedKeyword] = RecentSearch(keyword = keyword.trim())
 
-            while (recentSearchesByKeyword.size > MAX_RECENT_SEARCHES) {
+            while (recentSearches.size > MAX_RECENT_SEARCHES) {
                 val oldestKey =
-                    recentSearchesByKeyword
+                    recentSearches
                         .entries
                         .minByOrNull { entry -> entry.value.searchedAtMillis }
                         ?.key
                         ?: break
-                recentSearchesByKeyword.remove(oldestKey)
+                recentSearches.remove(oldestKey)
             }
+
+            persistRecentSearches(recentSearches)
         }
     }
 
@@ -51,46 +68,212 @@ class SearchLocalDataSource {
         val normalizedKeyword = keyword.normalizedKeyword()
         if (normalizedKeyword.isEmpty()) return
 
-        synchronized(recentSearchesByKeyword) {
-            recentSearchesByKeyword.remove(normalizedKeyword)
+        recentSearchesMutex.withLock {
+            val recentSearches = loadRecentSearches()
+            recentSearches.remove(normalizedKeyword)
+            persistRecentSearches(recentSearches)
         }
     }
 
     suspend fun clearRecentSearches() {
-        synchronized(recentSearchesByKeyword) {
-            recentSearchesByKeyword.clear()
+        recentSearchesMutex.withLock {
+            val recentSearches = loadRecentSearches()
+            recentSearches.clear()
+            persistRecentSearches(recentSearches)
         }
     }
 
     suspend fun getRecentDestinations(): List<RecentDestination> =
-        synchronized(recentDestinationsByKey) {
-            recentDestinationsByKey.values.sortedByDescending(RecentDestination::searchedAtMillis)
+        recentDestinationsMutex.withLock {
+            loadRecentDestinations().values.sortedByDescending(RecentDestination::searchedAtMillis)
         }
 
     suspend fun saveRecentDestination(destination: RecentDestination) {
-        val normalizedKey = destination.normalizedKey()
+        val sanitizedDestination = destination.sanitized()
+        val normalizedKey = sanitizedDestination.normalizedKey()
         if (normalizedKey.isEmpty()) return
 
-        synchronized(recentDestinationsByKey) {
-            recentDestinationsByKey.remove(normalizedKey)
-            recentDestinationsByKey[normalizedKey] =
-                destination.copy(
-                    name = destination.name.trim(),
-                    address = destination.address?.trim()?.takeIf(String::isNotEmpty),
-                    accessibilityTagKeys = destination.accessibilityTagKeys.filter(String::isNotBlank).distinct(),
-                )
+        recentDestinationsMutex.withLock {
+            val recentDestinations = loadRecentDestinations()
+            recentDestinations.remove(normalizedKey)
+            recentDestinations[normalizedKey] = sanitizedDestination
 
-            while (recentDestinationsByKey.size > MAX_RECENT_DESTINATIONS) {
+            while (recentDestinations.size > MAX_RECENT_DESTINATIONS) {
                 val oldestKey =
-                    recentDestinationsByKey
+                    recentDestinations
                         .entries
                         .minByOrNull { entry -> entry.value.searchedAtMillis }
                         ?.key
                         ?: break
-                recentDestinationsByKey.remove(oldestKey)
+                recentDestinations.remove(oldestKey)
+            }
+
+            persistRecentDestinations(recentDestinations)
+        }
+    }
+
+    private suspend fun loadRecentSearches(): LinkedHashMap<String, RecentSearch> =
+        if (dataStore == null) {
+            recentSearchesByKeyword
+        } else {
+            decodeRecentSearches(
+                encoded = dataStore.data.first()[SearchPreferenceKeys.RECENT_SEARCHES].orEmpty(),
+            )
+        }
+
+    private suspend fun loadRecentDestinations(): LinkedHashMap<String, RecentDestination> =
+        if (dataStore == null) {
+            recentDestinationsByKey
+        } else {
+            decodeRecentDestinations(
+                encoded = dataStore.data.first()[SearchPreferenceKeys.RECENT_DESTINATIONS].orEmpty(),
+            )
+        }
+
+    private suspend fun persistRecentSearches(recentSearches: LinkedHashMap<String, RecentSearch>) {
+        if (dataStore == null) return
+
+        dataStore.edit { preferences ->
+            if (recentSearches.isEmpty()) {
+                preferences.remove(SearchPreferenceKeys.RECENT_SEARCHES)
+            } else {
+                preferences[SearchPreferenceKeys.RECENT_SEARCHES] = encodeRecentSearches(recentSearches.values)
             }
         }
     }
+
+    private suspend fun persistRecentDestinations(recentDestinations: LinkedHashMap<String, RecentDestination>) {
+        if (dataStore == null) return
+
+        dataStore.edit { preferences ->
+            if (recentDestinations.isEmpty()) {
+                preferences.remove(SearchPreferenceKeys.RECENT_DESTINATIONS)
+            } else {
+                preferences[SearchPreferenceKeys.RECENT_DESTINATIONS] =
+                    encodeRecentDestinations(recentDestinations.values)
+            }
+        }
+    }
+
+    private fun decodeRecentSearches(encoded: String): LinkedHashMap<String, RecentSearch> =
+        runCatching {
+            val recentSearches = LinkedHashMap<String, RecentSearch>()
+            val jsonArray = JSONArray(encoded)
+            for (index in 0 until jsonArray.length()) {
+                val jsonObject = jsonArray.optJSONObject(index) ?: continue
+                val keyword = jsonObject.optString(JsonFields.KEYWORD, "").trim()
+                if (keyword.isEmpty()) continue
+
+                val recentSearch =
+                    RecentSearch(
+                        keyword = keyword,
+                        searchedAtMillis =
+                            jsonObject.optLong(
+                                JsonFields.SEARCHED_AT_MILLIS,
+                                System.currentTimeMillis(),
+                            ),
+                    )
+                recentSearches.remove(keyword.normalizedKeyword())
+                recentSearches[keyword.normalizedKeyword()] = recentSearch
+            }
+            recentSearches
+        }.getOrDefault(LinkedHashMap())
+
+    private fun decodeRecentDestinations(encoded: String): LinkedHashMap<String, RecentDestination> =
+        runCatching {
+            val recentDestinations = LinkedHashMap<String, RecentDestination>()
+            val jsonArray = JSONArray(encoded)
+            for (index in 0 until jsonArray.length()) {
+                val jsonObject = jsonArray.optJSONObject(index) ?: continue
+                val name = jsonObject.optString(JsonFields.NAME, "").trim()
+                val latitude = jsonObject.optDouble(JsonFields.LATITUDE, Double.NaN)
+                val longitude = jsonObject.optDouble(JsonFields.LONGITUDE, Double.NaN)
+                if (name.isEmpty() || !latitude.isFinite() || !longitude.isFinite()) continue
+
+                val recentDestination =
+                    RecentDestination(
+                        placeId = jsonObject.optString(JsonFields.PLACE_ID, "").trim(),
+                        name = name,
+                        address =
+                            jsonObject
+                                .optString(JsonFields.ADDRESS, "")
+                                .trim()
+                                .takeIf(String::isNotEmpty),
+                        latitude = latitude,
+                        longitude = longitude,
+                        category =
+                            jsonObject
+                                .optString(JsonFields.CATEGORY, "")
+                                .takeIf(String::isNotBlank)
+                                ?.let(::decodePlaceCategory),
+                        accessibilityTagKeys =
+                            jsonObject
+                                .optJSONArray(JsonFields.ACCESSIBILITY_TAG_KEYS)
+                                ?.toStringList()
+                                .orEmpty(),
+                        searchedAtMillis =
+                            jsonObject.optLong(
+                                JsonFields.SEARCHED_AT_MILLIS,
+                                System.currentTimeMillis(),
+                            ),
+                    ).sanitized()
+                val normalizedKey = recentDestination.normalizedKey()
+                if (normalizedKey.isEmpty()) continue
+
+                recentDestinations.remove(normalizedKey)
+                recentDestinations[normalizedKey] = recentDestination
+            }
+            recentDestinations
+        }.getOrDefault(LinkedHashMap())
+
+    private fun encodeRecentSearches(recentSearches: Collection<RecentSearch>): String =
+        JSONArray().apply {
+            recentSearches
+                .sortedByDescending(RecentSearch::searchedAtMillis)
+                .forEach { recentSearch ->
+                    put(
+                        JSONObject().apply {
+                            put(JsonFields.KEYWORD, recentSearch.keyword)
+                            put(JsonFields.SEARCHED_AT_MILLIS, recentSearch.searchedAtMillis)
+                        },
+                    )
+                }
+        }.toString()
+
+    private fun encodeRecentDestinations(recentDestinations: Collection<RecentDestination>): String =
+        JSONArray().apply {
+            recentDestinations
+                .sortedByDescending(RecentDestination::searchedAtMillis)
+                .forEach { recentDestination ->
+                    put(
+                        JSONObject().apply {
+                            put(JsonFields.PLACE_ID, recentDestination.placeId)
+                            put(JsonFields.NAME, recentDestination.name)
+                            put(JsonFields.ADDRESS, recentDestination.address)
+                            put(JsonFields.LATITUDE, recentDestination.latitude)
+                            put(JsonFields.LONGITUDE, recentDestination.longitude)
+                            put(JsonFields.CATEGORY, recentDestination.category?.name)
+                            put(JsonFields.SEARCHED_AT_MILLIS, recentDestination.searchedAtMillis)
+                            put(
+                                JsonFields.ACCESSIBILITY_TAG_KEYS,
+                                JSONArray().apply {
+                                    recentDestination.accessibilityTagKeys.forEach(::put)
+                                },
+                            )
+                        },
+                    )
+                }
+        }.toString()
+
+    private fun JSONArray.toStringList(): List<String> =
+        buildList {
+            for (index in 0 until length()) {
+                optString(index, "").trim().takeIf(String::isNotEmpty)?.let(::add)
+            }
+        }.distinct()
+
+    private fun decodePlaceCategory(raw: String): PlaceCategory? =
+        runCatching { PlaceCategory.valueOf(raw) }.getOrNull()
 
     private fun SearchQuery.normalizedKey(): String =
         buildList {
@@ -114,8 +297,33 @@ class SearchLocalDataSource {
             ).joinToString(separator = "|").lowercase()
         }
 
+    private fun RecentDestination.sanitized(): RecentDestination =
+        copy(
+            placeId = placeId.trim(),
+            name = name.trim(),
+            address = address?.trim()?.takeIf(String::isNotEmpty),
+            accessibilityTagKeys = accessibilityTagKeys.map(String::trim).filter(String::isNotEmpty).distinct(),
+        )
+
+    private object JsonFields {
+        const val PLACE_ID: String = "placeId"
+        const val NAME: String = "name"
+        const val ADDRESS: String = "address"
+        const val LATITUDE: String = "latitude"
+        const val LONGITUDE: String = "longitude"
+        const val CATEGORY: String = "category"
+        const val ACCESSIBILITY_TAG_KEYS: String = "accessibilityTagKeys"
+        const val SEARCHED_AT_MILLIS: String = "searchedAtMillis"
+        const val KEYWORD: String = "keyword"
+    }
+
     companion object {
         private const val MAX_RECENT_SEARCHES: Int = 10
         private const val MAX_RECENT_DESTINATIONS: Int = 10
     }
+}
+
+private object SearchPreferenceKeys {
+    val RECENT_SEARCHES = stringPreferencesKey("search_recent_searches")
+    val RECENT_DESTINATIONS = stringPreferencesKey("search_recent_destinations")
 }

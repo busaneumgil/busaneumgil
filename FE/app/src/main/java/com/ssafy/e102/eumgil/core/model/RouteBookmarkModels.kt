@@ -17,6 +17,7 @@ data class RouteBookmark(
 )
 
 data class RouteBookmarkDraft(
+    val routeId: String? = null,
     val startLabel: String,
     val endLabel: String,
     val startPoint: GeoCoordinate,
@@ -30,6 +31,7 @@ data class RouteBookmarkDraft(
 
     fun toSaveRequest(routeName: String = defaultRouteName): RouteBookmarkSaveRequest =
         RouteBookmarkSaveRequest(
+            routeId = routeId?.trim()?.takeIf(String::isNotEmpty),
             routeName = routeName.trim().ifBlank { defaultRouteName },
             startLabel = startLabel.orDefaultStartLabel(),
             endLabel = endLabel.orDefaultEndLabel(),
@@ -42,6 +44,7 @@ data class RouteBookmarkDraft(
 }
 
 data class RouteBookmarkSaveRequest(
+    val routeId: String? = null,
     val routeName: String,
     val startLabel: String,
     val endLabel: String,

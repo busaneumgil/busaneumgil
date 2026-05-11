@@ -33,7 +33,9 @@ fun ArrivalRoute(
         remember(appContainer, navigationViewModel) {
             ArrivalViewModel.provideFactory(
                 routeBookmarkRepository = appContainer.routeBookmarkRepository,
+                routeRepository = appContainer.routeRepository,
                 currentRouteBookmarkDraft = navigationViewModel.currentRouteBookmarkDraft(),
+                currentRatingSessionId = navigationViewModel.currentRatingSessionId(),
             )
         }
     val viewModel: ArrivalViewModel = viewModel(factory = viewModelFactory)
@@ -74,6 +76,7 @@ private fun rememberNavigationGuidanceViewModel(): NavigationViewModel {
             NavigationViewModel.provideFactory(
                 currentLocationManager = appContainer.currentLocationManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
+                routeRepository = appContainer.routeRepository,
             )
         }
 

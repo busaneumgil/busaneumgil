@@ -33,11 +33,12 @@ import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
-import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
+import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.GoogleSocialAccessTokenProvider
@@ -49,8 +50,8 @@ import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
-import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 import com.ssafy.e102.eumgil.di.RepositoryModule
 
@@ -73,6 +74,12 @@ class AppContainer(
         )
     }
 
+    private val searchDataStore by lazy(LazyThreadSafetyMode.NONE) {
+        PreferenceDataStoreFactory.create(
+            produceFile = { appContext.preferencesDataStoreFile("search_local") },
+        )
+    }
+
     private val authSessionLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
         AuthSessionLocalDataSource(
             dataStore = authSessionDataStore,
@@ -83,7 +90,9 @@ class AppContainer(
     private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesLocalDataSource() }
     private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
-    private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { SearchLocalDataSource() }
+    private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        SearchLocalDataSource(dataStore = searchDataStore)
+    }
 
     private val httpJsonClient by lazy(LazyThreadSafetyMode.NONE) {
         HttpJsonClient(baseUrl = AppEnvironment.baseUrl)
@@ -144,6 +153,10 @@ class AppContainer(
 
     val destinationSelectionRepository: DestinationSelectionRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideDestinationSelectionRepository()
+    }
+
+    val destinationPreviewRepository: DestinationPreviewRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideDestinationPreviewRepository()
     }
 
     val authSessionRepository: AuthSessionRepository by lazy(LazyThreadSafetyMode.NONE) {

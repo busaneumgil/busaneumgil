@@ -102,12 +102,13 @@ pipeline {
         script {
           env.LAST_STAGE_NAME = env.STAGE_NAME
         }
-        sh '''
-          test -f /opt/e102-server/.env.dev
-          cp /opt/e102-server/.env.dev .env.dev
-          cp /opt/e102-server/docker-compose.s1.override.yml docker-compose.s1.override.yml
-          chmod 600 .env.dev
-        '''
+        withCredentials([file(credentialsId: 'e102-dev-env-file', variable: 'E102_DEV_ENV')]) {
+          sh '''
+            cp "$E102_DEV_ENV" .env.dev
+            cp /opt/e102-server/docker-compose.s1.override.yml docker-compose.s1.override.yml
+            chmod 600 .env.dev
+          '''
+        }
       }
     }
 

@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
 import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRequest
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
@@ -31,6 +32,7 @@ data class MapFacilityDetailSheetState(
     val detail: FacilityDetailSeed? = null,
     val mapTapDetail: MapTappedPlaceDetail? = null,
     val mapTapNameHint: String? = null,
+    val destinationPreview: DestinationPreviewRequest? = null,
     val isMapTapDetailLoading: Boolean = false,
     val mapTapDetailErrorMessage: String? = null,
     val isBookmarked: Boolean = false,
@@ -38,7 +40,12 @@ data class MapFacilityDetailSheetState(
     val bookmarkErrorMessage: String? = null,
 ) {
     val isVisible: Boolean
-        get() = detail != null || mapTapDetail != null || isMapTapDetailLoading || mapTapDetailErrorMessage != null
+        get() =
+            detail != null ||
+                mapTapDetail != null ||
+                destinationPreview != null ||
+                isMapTapDetailLoading ||
+                mapTapDetailErrorMessage != null
 }
 
 data class MapTapPayload(

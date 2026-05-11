@@ -11,7 +11,6 @@ import org.locationtech.jts.geom.LineString;
 
 import com.ssafy.e102.domain.route.type.AccessibilityState;
 import com.ssafy.e102.domain.route.type.SegmentType;
-import com.ssafy.e102.domain.route.type.SlopeState;
 import com.ssafy.e102.domain.route.type.SurfaceState;
 import com.ssafy.e102.domain.route.type.WidthState;
 
@@ -36,7 +35,6 @@ class RoadSegmentTest {
 		assertThat(roadSegment.getWalkAccess()).isEqualTo(AccessibilityState.UNKNOWN);
 		assertThat(roadSegment.getBrailleBlockState()).isEqualTo(AccessibilityState.UNKNOWN);
 		assertThat(roadSegment.getAudioSignalState()).isEqualTo(AccessibilityState.UNKNOWN);
-		assertThat(roadSegment.getSlopeState()).isEqualTo(SlopeState.UNKNOWN);
 		assertThat(roadSegment.getWidthState()).isEqualTo(WidthState.UNKNOWN);
 		assertThat(roadSegment.getSurfaceState()).isEqualTo(SurfaceState.UNKNOWN);
 		assertThat(roadSegment.getStairsState()).isEqualTo(AccessibilityState.UNKNOWN);

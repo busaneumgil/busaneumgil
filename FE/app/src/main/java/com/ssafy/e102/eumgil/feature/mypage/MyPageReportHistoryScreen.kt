@@ -136,6 +136,22 @@ fun MyPageReportHistoryScreen(
                         }
                     }
 
+                    uiState.detailLoadingHistoryId?.let {
+                        item {
+                            ReportHistoryStateCard(
+                                title = "제보 상세를 불러오는 중입니다",
+                                description = "선택한 제보의 서버 상세 정보를 확인하고 있어요.",
+                                isLoading = true,
+                            )
+                        }
+                    }
+
+                    uiState.selectedDetail?.let { detail ->
+                        item(key = "detail-${detail.historyId}") {
+                            ReportHistoryDetailCard(detail = detail)
+                        }
+                    }
+
                     items(
                         items = uiState.reports,
                         key = { report -> report.outboxId },
@@ -225,8 +241,55 @@ private fun ReportHistoryCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Text(
+                    text = report.sourceLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             ReportHistoryThumbnail(hasPhoto = report.photoUri != null)
+        }
+    }
+}
+
+@Composable
+private fun ReportHistoryDetailCard(detail: MyPageReportHistoryDetailUiModel) {
+    val spec = reportHistoryLayoutSpec()
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(spec.cardCornerRadiusDp.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+        shadowElevation = spec.cardShadowElevationDp.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            Text(
+                text = detail.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = detail.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = detail.locationText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "${detail.submittedAtText} · ${detail.imageCountText} · ${detail.sourceLabel}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

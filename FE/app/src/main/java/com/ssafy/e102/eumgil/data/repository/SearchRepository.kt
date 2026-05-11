@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
@@ -18,6 +19,9 @@ import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
 interface SearchRepository {
     suspend fun search(query: SearchQuery): List<SearchResult>
+
+    suspend fun searchPage(query: SearchQuery): SearchPage =
+        SearchPage(results = search(query))
 
     suspend fun analyzeVoiceSearch(
         text: String,
@@ -65,7 +69,9 @@ class DefaultSearchRepository(
             null
         }
 
-    override suspend fun search(query: SearchQuery): List<SearchResult> {
+    override suspend fun search(query: SearchQuery): List<SearchResult> = searchPage(query).results
+
+    override suspend fun searchPage(query: SearchQuery): SearchPage {
         val readPlan = sourcePolicy.readPlan(RepositoryDomain.SEARCH)
         val lastSource = readPlan.sources.last()
         var remoteFailure: Throwable? = null
@@ -73,11 +79,11 @@ class DefaultSearchRepository(
         for (source in readPlan.sources) {
             when (source) {
                 RepositorySource.REMOTE -> {
-                    val remoteResult = runCatching { runAuthenticatedRemoteRequest { remoteDataSource.search(query) } }
+                    val remoteResult = runCatching { runAuthenticatedRemoteRequest { remoteDataSource.searchPage(query) } }
                     if (remoteResult.isSuccess) {
-                        val searchResults = remoteResult.getOrDefault(emptyList())
-                        localDataSource.updateCachedResults(query = query, results = searchResults)
-                        return searchResults
+                        val searchPage = remoteResult.getOrDefault(SearchPage(results = emptyList()))
+                        localDataSource.updateCachedResults(query = query, results = searchPage.results)
+                        return searchPage
                     }
                     remoteFailure = remoteResult.exceptionOrNull()
                 }
@@ -85,14 +91,14 @@ class DefaultSearchRepository(
                 RepositorySource.LOCAL -> {
                     val cachedResults = localDataSource.getCachedResults(query)
                     if (cachedResults.isNotEmpty()) {
-                        return cachedResults
+                        return SearchPage(results = cachedResults)
                     }
                     if (source == lastSource && remoteFailure == null) {
-                        return cachedResults
+                        return SearchPage(results = cachedResults)
                     }
                 }
 
-                RepositorySource.MOCK -> return mockDataSource.search(query)
+                RepositorySource.MOCK -> return SearchPage(results = mockDataSource.search(query))
             }
         }
 

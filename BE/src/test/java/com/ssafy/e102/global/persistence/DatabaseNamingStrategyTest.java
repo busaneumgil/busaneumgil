@@ -33,6 +33,7 @@ import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RouteRating;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
+import com.ssafy.e102.domain.route.entity.SourceFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
 import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
@@ -61,6 +62,7 @@ class DatabaseNamingStrategyTest {
 		RoadSegment.class,
 		AdminArea.class,
 		SegmentFeature.class,
+		SourceFeature.class,
 		RouteRating.class,
 		RouteSession.class,
 		SubwayStation.class,
@@ -193,7 +195,6 @@ class DatabaseNamingStrategyTest {
 			.isEqualTo("braille_block_state");
 		assertThat(physicalColumnName(RoadSegment.class, "audioSignalState"))
 			.isEqualTo("audio_signal_state");
-		assertThat(physicalColumnName(RoadSegment.class, "slopeState")).isEqualTo("slope_state");
 		assertThat(physicalColumnName(RoadSegment.class, "widthState")).isEqualTo("width_state");
 		assertThat(physicalColumnName(RoadSegment.class, "surfaceState")).isEqualTo("surface_state");
 		assertThat(physicalColumnName(RoadSegment.class, "stairsState")).isEqualTo("stairs_state");
@@ -211,6 +212,13 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(SegmentFeature.class, "geom")).isEqualTo("geom");
 		assertThat(physicalColumnName(SegmentFeature.class, "state")).isEqualTo("state");
 		assertThat(physicalColumnName(SegmentFeature.class, "valueNumber")).isEqualTo("value_number");
+
+		assertThat(physicalColumnName(SourceFeature.class, "sourceFeatureId")).isEqualTo("source_feature_id");
+		assertThat(physicalColumnName(SourceFeature.class, "featureType")).isEqualTo("feature_type");
+		assertThat(physicalColumnName(SourceFeature.class, "geom")).isEqualTo("geom");
+		assertThat(physicalColumnName(SourceFeature.class, "state")).isEqualTo("state");
+		assertThat(physicalColumnName(SourceFeature.class, "valueNumber")).isEqualTo("value_number");
+		assertThat(physicalColumnName(SourceFeature.class, "sourceFile")).isEqualTo("source_file");
 	}
 
 	@Test
@@ -294,6 +302,7 @@ class DatabaseNamingStrategyTest {
 			RoadSegment.class,
 			AdminArea.class,
 			SegmentFeature.class,
+			SourceFeature.class,
 			RouteRating.class,
 			RouteSession.class,
 			SubwayStation.class,

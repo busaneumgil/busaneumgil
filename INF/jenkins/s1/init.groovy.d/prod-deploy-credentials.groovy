@@ -61,9 +61,7 @@ def upsertSshKeyCredential = { String id, String description, String username, S
     println("[e102] upserted SSH key credential ${id}")
 }
 
-removeIfExists('e102-dev-env-file')
-removeIfExists('e102-prod-env-file')
-println('[e102] removed deprecated env-file credentials when present')
+println('[e102] env file credentials are managed in Jenkins Credentials and are not synced from host files')
 
 upsertStringCredential(
     'e102-s2-host',

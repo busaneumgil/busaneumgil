@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,11 +49,7 @@ fun NavigationSegmentRail(
 ) {
     val railColor = MaterialTheme.colorScheme.surface
     val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
-    val firstSegmentIndex = uiState.railItems.firstOrNull()?.index
-    val lastSegmentIndex = uiState.railItems.lastOrNull()?.index
-    val canReturnToActiveSegment =
-        uiState.railItems.isNotEmpty() &&
-            (uiState.isInspectingSegments || uiState.focusedSegmentIndex != uiState.activeSegmentIndex)
+    val railSlots = createNavigationSegmentRailSlots(uiState)
 
     Box(
         modifier =
@@ -75,14 +70,14 @@ fun NavigationSegmentRail(
                     NavigationSegmentRailWaypoint(
                         label = stringResource(id = R.string.navigation_rail_origin_label),
                         iconRes = R.drawable.ic_navigation_rail_origin_pin,
+                        segmentItem = railSlots.originItem,
                         dividerColor = dividerColor,
-                        enabled = firstSegmentIndex != null,
                         onClick = {
-                            firstSegmentIndex?.let(onSegmentTapped)
+                            railSlots.originItem?.index?.let(onSegmentTapped)
                         },
                     )
                 }
-                items(items = uiState.railItems, key = { item -> item.index }) { item ->
+                items(items = railSlots.intermediateItems, key = { item -> item.index }) { item ->
                     NavigationSegmentRailItem(
                         item = item,
                         dividerColor = dividerColor,
@@ -93,16 +88,16 @@ fun NavigationSegmentRail(
                     NavigationSegmentRailWaypoint(
                         label = stringResource(id = R.string.navigation_rail_destination_label),
                         iconRes = R.drawable.ic_navigation_rail_destination_pin,
+                        segmentItem = railSlots.destinationItem,
                         dividerColor = dividerColor,
-                        enabled = lastSegmentIndex != null,
                         onClick = {
-                            lastSegmentIndex?.let(onSegmentTapped)
+                            railSlots.destinationItem?.index?.let(onSegmentTapped)
                         },
                     )
                 }
                 items(items = listOf("navigation-rail-return"), key = { it }) {
                     NavigationSegmentRailReturnAction(
-                        enabled = canReturnToActiveSegment,
+                        enabled = railSlots.canReturnToActiveSegment,
                         dividerColor = dividerColor,
                         onClick = onReturnToActiveSegmentClick,
                     )
@@ -130,10 +125,18 @@ fun NavigationSegmentRail(
 private fun NavigationSegmentRailWaypoint(
     label: String,
     iconRes: Int,
+    segmentItem: NavigationSegmentRailItemUiState?,
     dividerColor: Color,
-    enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val enabled = segmentItem != null
+    val tone = segmentItem?.let { item -> navigationSegmentRailTone(item) } ?: navigationDisabledRailTone()
+    val isSelected = segmentItem?.isSelected == true
+    val contentLabel =
+        segmentItem?.let { item ->
+            "$label ${item.guidanceAction.label} ${item.distanceLabel}"
+        } ?: label
+
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -142,8 +145,11 @@ private fun NavigationSegmentRailWaypoint(
                 Modifier
                     .fillMaxWidth()
                     .height(64.dp)
+                    .background(tone.containerColor)
                     .semantics {
-                        contentDescription = label
+                        contentDescription = contentLabel
+                        selected = isSelected
+                        stateDescription = segmentItem?.stateLabel ?: label
                         if (!enabled) {
                             disabled()
                         }
@@ -155,6 +161,16 @@ private fun NavigationSegmentRailWaypoint(
                     ),
             contentAlignment = Alignment.Center,
         ) {
+            if (tone.indicatorColor != Color.Transparent) {
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .width(2.dp)
+                            .background(tone.indicatorColor),
+                )
+            }
             Image(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
@@ -162,7 +178,7 @@ private fun NavigationSegmentRailWaypoint(
                     Modifier
                         .width(42.dp)
                         .height(50.dp)
-                        .alpha(if (enabled) 1f else 0.38f),
+                        .alpha(tone.iconAlpha),
             )
         }
         HorizontalDivider(color = dividerColor)
@@ -176,14 +192,7 @@ private fun NavigationSegmentRailItem(
     onClick: () -> Unit,
 ) {
     val tone = navigationSegmentRailTone(item)
-    val isSelected = item.isFocused || item.isActive
-    val stateLabel =
-        when {
-            item.isFocused -> "Selected segment"
-            item.isActive -> "Current segment"
-            item.isCompleted -> "Completed segment"
-            else -> "Guidance segment"
-        }
+    val isSelected = item.isSelected
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -197,7 +206,7 @@ private fun NavigationSegmentRailItem(
                     .semantics {
                         contentDescription = "${item.guidanceAction.label} ${item.distanceLabel}"
                         selected = isSelected
-                        stateDescription = stateLabel
+                        stateDescription = item.stateLabel
                     }
                     .clickable(role = Role.Button, onClick = onClick),
             contentAlignment = Alignment.Center,
@@ -340,6 +349,32 @@ private data class NavigationSegmentRailTone(
     val iconAlpha: Float,
 )
 
+internal data class NavigationSegmentRailSlots(
+    val originItem: NavigationSegmentRailItemUiState? = null,
+    val intermediateItems: List<NavigationSegmentRailItemUiState> = emptyList(),
+    val destinationItem: NavigationSegmentRailItemUiState? = null,
+    val canReturnToActiveSegment: Boolean = false,
+)
+
+internal fun createNavigationSegmentRailSlots(uiState: NavigationSegmentSyncUiState): NavigationSegmentRailSlots {
+    val railItems = uiState.railItems
+    val canReturnToActiveSegment =
+        railItems.isNotEmpty() &&
+            (uiState.isInspectingSegments || uiState.focusedSegmentIndex != uiState.activeSegmentIndex)
+
+    return NavigationSegmentRailSlots(
+        originItem = railItems.firstOrNull(),
+        intermediateItems =
+            if (railItems.size <= 2) {
+                emptyList()
+            } else {
+                railItems.subList(1, railItems.lastIndex)
+            },
+        destinationItem = railItems.lastOrNull(),
+        canReturnToActiveSegment = canReturnToActiveSegment,
+    )
+}
+
 @Composable
 private fun navigationSegmentRailTone(item: NavigationSegmentRailItemUiState): NavigationSegmentRailTone =
     when {
@@ -375,3 +410,23 @@ private fun navigationSegmentRailTone(item: NavigationSegmentRailItemUiState): N
                 iconAlpha = 0.72f,
             )
     }
+
+private fun navigationDisabledRailTone(): NavigationSegmentRailTone =
+    NavigationSegmentRailTone(
+        containerColor = Color.Transparent,
+        indicatorColor = Color.Transparent,
+        iconTint = Color.Unspecified,
+        iconAlpha = 0.38f,
+    )
+
+private val NavigationSegmentRailItemUiState.isSelected: Boolean
+    get() = isFocused || isActive
+
+private val NavigationSegmentRailItemUiState.stateLabel: String
+    get() =
+        when {
+            isFocused -> "Selected segment"
+            isActive -> "Current segment"
+            isCompleted -> "Completed segment"
+            else -> "Guidance segment"
+        }

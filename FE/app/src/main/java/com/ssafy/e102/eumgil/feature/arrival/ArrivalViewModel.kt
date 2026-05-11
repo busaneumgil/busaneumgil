@@ -4,9 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RouteSearchData
+import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +23,9 @@ import kotlinx.coroutines.launch
 
 class ArrivalViewModel(
     private val routeBookmarkRepository: RouteBookmarkRepository,
-    private val currentRouteBookmarkDraft: RouteBookmarkDraft?,
+    private val routeRepository: RouteRepository = NoOpArrivalRouteRepository,
+    private val currentRouteBookmarkDraft: RouteBookmarkDraft? = null,
+    private val currentRatingSessionId: String? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ArrivalUiState())
     val uiState: StateFlow<ArrivalUiState> = mutableUiState.asStateFlow()
@@ -30,6 +36,7 @@ class ArrivalViewModel(
     init {
         mutableUiState.update { state ->
             state.copy(
+                hasRatingSession = !currentRatingSessionId.isNullOrBlank(),
                 routeSaveDraft = currentRouteBookmarkDraft?.toUiState(),
                 routeNameInput = currentRouteBookmarkDraft?.defaultRouteName.orEmpty(),
                 isRouteSaveUpdating = currentRouteBookmarkDraft != null,
@@ -47,14 +54,7 @@ class ArrivalViewModel(
             is ArrivalUiAction.RouteNameChanged -> updateRouteName(action.value)
             ArrivalUiAction.ConfirmRouteSaveClicked -> saveRouteBookmark()
             ArrivalUiAction.RouteSaveDialogDismissed -> dismissRouteSaveDialog()
-            ArrivalUiAction.SubmitEvaluationClicked ->
-                mutableUiState.update { state ->
-                    if (!state.isEvaluationSubmitEnabled) {
-                        state
-                    } else {
-                        state.copy(isEvaluationSheetVisible = false)
-                    }
-                }
+            ArrivalUiAction.SubmitEvaluationClicked -> submitEvaluation()
             ArrivalUiAction.EvaluationSheetDismissed ->
                 mutableUiState.update { state ->
                     state.copy(isEvaluationSheetVisible = false)
@@ -153,6 +153,47 @@ class ArrivalViewModel(
         }
     }
 
+    private fun submitEvaluation() {
+        val sessionId = currentRatingSessionId?.takeIf(String::isNotBlank) ?: return
+        val selectedRating = uiState.value.selectedRating
+        if (!uiState.value.isEvaluationSubmitEnabled) return
+
+        mutableUiState.update { state ->
+            state.copy(isEvaluationSubmitting = true)
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                routeRepository.rateRoute(
+                    sessionId = sessionId,
+                    score = selectedRating,
+                )
+            }.onSuccess {
+                mutableUiState.update { state ->
+                    state.copy(
+                        isEvaluationSubmitting = false,
+                        isEvaluationSheetVisible = false,
+                    )
+                }
+                emitUiEvent(
+                    ArrivalUiEvent.ShowSnackbar(
+                        messageResId = R.string.arrival_rating_success_message,
+                    ),
+                )
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                mutableUiState.update { state ->
+                    state.copy(isEvaluationSubmitting = false)
+                }
+                emitUiEvent(
+                    ArrivalUiEvent.ShowSnackbar(
+                        messageResId = R.string.arrival_rating_failure_message,
+                    ),
+                )
+            }
+        }
+    }
+
     private fun emitUiEvent(event: ArrivalUiEvent) {
         viewModelScope.launch {
             mutableUiEvent.emit(event)
@@ -172,14 +213,18 @@ class ArrivalViewModel(
     companion object {
         fun provideFactory(
             routeBookmarkRepository: RouteBookmarkRepository,
+            routeRepository: RouteRepository,
             currentRouteBookmarkDraft: RouteBookmarkDraft?,
+            currentRatingSessionId: String?,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
                     ArrivalViewModel(
                         routeBookmarkRepository = routeBookmarkRepository,
+                        routeRepository = routeRepository,
                         currentRouteBookmarkDraft = currentRouteBookmarkDraft,
+                        currentRatingSessionId = currentRatingSessionId,
                     ) as T
             }
     }
@@ -199,7 +244,7 @@ private fun RouteBookmarkDraft.toUiState(): ArrivalRouteSaveDraftUiState =
     ArrivalRouteSaveDraftUiState(
         defaultRouteName = defaultRouteName,
         startLabel = startLabel.ifBlank { "출발지" },
-        endLabel = endLabel.ifBlank { "도착지" },
+        endLabel = endLabel.ifBlank { "목적지" },
         routeOptionLabel =
             when (routeOption) {
                 RouteOption.SAFE -> "안전한 길"
@@ -211,3 +256,34 @@ private fun RouteBookmarkDraft.toUiState(): ArrivalRouteSaveDraftUiState =
         distanceMeters = distanceMeters,
         durationMinutes = durationMinutes,
     )
+
+private object NoOpArrivalRouteRepository : RouteRepository {
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("ArrivalViewModel does not load route search data.")
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("ArrivalViewModel does not load transit search data.")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ) = error("ArrivalViewModel does not select routes.")
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ) = error("ArrivalViewModel does not refresh transit.")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ) = error("ArrivalViewModel does not reroute.")
+
+    override suspend fun endRoute(routeId: String) =
+        error("ArrivalViewModel does not end routes.")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ) = error("ArrivalViewModel requires a RouteRepository for rating.")
+}

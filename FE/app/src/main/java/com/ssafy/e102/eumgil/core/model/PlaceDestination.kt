@@ -21,7 +21,7 @@ fun SearchResult.toPlaceDestination(): PlaceDestination =
     )
 
 fun SearchResult.toPlaceDestinationOrNull(): PlaceDestination? =
-    if (isVerifiedPlace && hasValidCoordinate(latitude = latitude, longitude = longitude)) {
+    if (hasValidCoordinate(latitude = latitude, longitude = longitude)) {
         toPlaceDestination()
     } else {
         null

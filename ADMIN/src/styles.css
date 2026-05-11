@@ -914,6 +914,43 @@ select {
   color: var(--color-gray-900);
 }
 
+.admin-form-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.admin-form-grid label,
+.feature-toggle-list label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-form-grid input,
+.admin-form-grid select {
+  width: 100%;
+}
+
+.feature-toggle-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.feature-toggle-list label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--color-white);
+  color: var(--color-gray-800);
+}
+
 .primary {
   width: 100%;
   margin-top: 8px;

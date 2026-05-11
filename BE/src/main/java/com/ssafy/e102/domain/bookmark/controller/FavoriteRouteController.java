@@ -43,7 +43,7 @@ public class FavoriteRouteController {
 
 	private final FavoriteRouteService favoriteRouteService;
 
-	@Operation(summary = "경로 북마크 목록 조회", description = "현재 로그인한 사용자의 경로 북마크를 최신순 cursor 기반으로 조회한다.")
+	@Operation(summary = "경로 북마크 목록 조회", description = "현재 로그인한 사용자의 경로 북마크를 최신순 커서 기반으로 조회한다.")
 	@GetMapping
 	public ApiResponse<FavoriteRouteListResponse> getFavoriteRoutes(
 		@AuthenticationPrincipal

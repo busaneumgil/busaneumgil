@@ -22,6 +22,11 @@ class AdminServiceTest {
 
 		assertThat(response.userId()).isEqualTo(userId);
 		assertThat(response.role()).isEqualTo("ADMIN");
-		assertThat(response.permissions()).containsExactly("HAZARD_REPORT_READ", "HAZARD_REPORT_REVIEW");
+		assertThat(response.permissions()).containsExactly(
+			"ADMIN_MAP_READ",
+			"ADMIN_PLACE_READ",
+			"ADMIN_PLACE_WRITE",
+			"HAZARD_REPORT_READ",
+			"HAZARD_REPORT_REVIEW");
 	}
 }

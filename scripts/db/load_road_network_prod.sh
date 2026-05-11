@@ -312,7 +312,6 @@ def load_csv() -> None:
                   width_meter numeric(6, 2),
                   braille_block_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
                   audio_signal_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
-                  slope_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
                   width_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
                   surface_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
                   stairs_state varchar(30) NOT NULL DEFAULT 'UNKNOWN',
@@ -415,7 +414,6 @@ def load_csv() -> None:
                   width_meter,
                   braille_block_state,
                   audio_signal_state,
-                  slope_state,
                   width_state,
                   surface_state,
                   stairs_state,
@@ -433,7 +431,6 @@ def load_csv() -> None:
                   NULLIF(width_meter, '')::numeric(6, 2),
                   braille_block_state,
                   audio_signal_state,
-                  slope_state,
                   width_state,
                   surface_state,
                   stairs_state,
@@ -445,6 +442,27 @@ def load_csv() -> None:
                   END
                 FROM staging_road_segments
                 """
+            )
+            cursor.execute("CREATE SEQUENCE IF NOT EXISTS road_nodes_vertex_id_seq")
+            cursor.execute(
+                "SELECT setval('road_nodes_vertex_id_seq', COALESCE((SELECT MAX(vertex_id) FROM road_nodes), 0) + 1, false)"
+            )
+            cursor.execute(
+                "ALTER TABLE road_nodes ALTER COLUMN vertex_id SET DEFAULT nextval('road_nodes_vertex_id_seq')"
+            )
+            cursor.execute("CREATE SEQUENCE IF NOT EXISTS road_segments_edge_id_seq")
+            cursor.execute(
+                "SELECT setval('road_segments_edge_id_seq', COALESCE((SELECT MAX(edge_id) FROM road_segments), 0) + 1, false)"
+            )
+            cursor.execute(
+                "ALTER TABLE road_segments ALTER COLUMN edge_id SET DEFAULT nextval('road_segments_edge_id_seq')"
+            )
+            cursor.execute("CREATE SEQUENCE IF NOT EXISTS segment_features_feature_id_seq")
+            cursor.execute(
+                "SELECT setval('segment_features_feature_id_seq', COALESCE((SELECT MAX(feature_id) FROM segment_features), 0) + 1, false)"
+            )
+            cursor.execute(
+                "ALTER TABLE segment_features ALTER COLUMN feature_id SET DEFAULT nextval('segment_features_feature_id_seq')"
             )
             cursor.execute(
                 """

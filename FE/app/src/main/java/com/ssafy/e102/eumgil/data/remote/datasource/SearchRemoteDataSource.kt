@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.data.remote.datasource
 
 import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
@@ -36,6 +37,10 @@ open class SearchRemoteDataSource internal constructor(
     )
 
     open suspend fun search(query: SearchQuery): List<SearchResult> {
+        return searchPage(query).results
+    }
+
+    open suspend fun searchPage(query: SearchQuery): SearchPage {
         val response =
             getRequestExecutor(
                 "/places/search",
@@ -44,7 +49,7 @@ open class SearchRemoteDataSource internal constructor(
             )
         val responseJson = response.body.toJsonObjectOrNull()
         val searchDto = response.requirePlacesSearchDto(responseJson)
-        return SearchDtoMapper.toSearchResults(searchDto)
+        return SearchDtoMapper.toSearchPage(searchDto)
     }
 
     open suspend fun analyzeVoiceSearch(

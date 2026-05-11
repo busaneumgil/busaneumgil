@@ -1,10 +1,16 @@
 import type {
   AreaOption,
+  AdminPlaceDetailResponse,
+  AdminPlaceUpdateRequest,
   AdminHazardReportDetail,
   AdminHazardReportListResponse,
   AdminHazardReportStatusResponse,
   AdminMeResponse,
   FacilityPayload,
+  ManualEditDocument,
+  PlaceAccessibilityFeature,
+  RoadNetworkEditApplyResponse,
+  RoadNetworkEditJobResponse,
   HazardReportStatus,
   SegmentPayload,
 } from "../types";
@@ -111,15 +117,88 @@ export async function fetchAdminRoadNetworkPayload({
   return requestAdminJson<SegmentPayload>(`/admin/road-network/segments?${params.toString()}`, accessToken);
 }
 
+export async function applyAdminRoadNetworkEdits(
+  document: ManualEditDocument,
+  accessToken: string,
+): Promise<RoadNetworkEditApplyResponse> {
+  return requestAdminJson<RoadNetworkEditApplyResponse>("/admin/road-network/edits/apply", accessToken, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ edits: document.edits }),
+  });
+}
+
+export async function createAdminRoadNetworkEditJob(
+  document: ManualEditDocument,
+  accessToken: string,
+): Promise<RoadNetworkEditJobResponse> {
+  return requestAdminJson<RoadNetworkEditJobResponse>("/admin/road-network/edits/jobs", accessToken, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ edits: document.edits }),
+  });
+}
+
+export async function fetchAdminRoadNetworkEditJob(
+  jobId: number,
+  accessToken: string,
+): Promise<RoadNetworkEditJobResponse> {
+  return requestAdminJson<RoadNetworkEditJobResponse>(`/admin/road-network/edits/jobs/${jobId}`, accessToken);
+}
+
 export async function fetchAdminFacilityPayload({
+  gu,
+  dong,
   accessToken,
   limit = 20000,
 }: {
+  gu?: string;
+  dong?: string;
   accessToken: string;
   limit?: number;
 }): Promise<FacilityPayload> {
   const params = new URLSearchParams({ limit: String(limit) });
+  if (gu && dong) {
+    params.set("gu", gu);
+    params.set("dong", dong);
+  }
   return requestAdminJson<FacilityPayload>(`/admin/places/facilities?${params.toString()}`, accessToken);
+}
+
+export async function fetchAdminPlaceDetail(placeId: number, accessToken: string): Promise<AdminPlaceDetailResponse> {
+  return requestAdminJson<AdminPlaceDetailResponse>(`/admin/places/${placeId}`, accessToken);
+}
+
+export async function updateAdminPlace(
+  placeId: number,
+  request: AdminPlaceUpdateRequest,
+  accessToken: string,
+): Promise<AdminPlaceDetailResponse> {
+  return requestAdminJson<AdminPlaceDetailResponse>(`/admin/places/${placeId}`, accessToken, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+}
+
+export async function updateAdminPlaceAccessibilityFeatures(
+  placeId: number,
+  features: PlaceAccessibilityFeature[],
+  accessToken: string,
+): Promise<AdminPlaceDetailResponse> {
+  return requestAdminJson<AdminPlaceDetailResponse>(`/admin/places/${placeId}/accessibility-features`, accessToken, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ features }),
+  });
 }
 
 export async function fetchAdminHazardReports({

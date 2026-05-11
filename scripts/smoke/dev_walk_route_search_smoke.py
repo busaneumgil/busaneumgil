@@ -193,8 +193,8 @@ def validate_response(body: dict[str, Any]) -> None:
         missing = required_route_fields - set(route)
         if missing:
             raise SystemExit(f"route fields missing: {missing}")
-        if not route["legs"] or not route["legs"][0].get("steps"):
-            raise SystemExit(f"walk leg steps missing: {route.get('routeId')}")
+        if not route["legs"] or not route["legs"][0].get("guidanceEvents"):
+            raise SystemExit(f"walk leg guidanceEvents missing: {route.get('routeId')}")
 
 
 def main() -> None:
@@ -213,7 +213,7 @@ def main() -> None:
         "searchId": body["data"]["searchId"],
         "routeCount": len(body["data"]["routes"]),
         "routeOptions": [route["routeOption"] for route in body["data"]["routes"]],
-        "stepCounts": [len(route["legs"][0]["steps"]) for route in body["data"]["routes"]],
+        "guidanceEventCounts": [len(route["legs"][0]["guidanceEvents"]) for route in body["data"]["routes"]],
     }
     print(json.dumps(body if args.json else summary, ensure_ascii=False, indent=2))
 

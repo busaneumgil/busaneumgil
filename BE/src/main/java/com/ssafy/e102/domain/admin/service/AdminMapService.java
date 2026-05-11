@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
@@ -28,15 +31,22 @@ import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminGeoJsonFeatureCollectionResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminGeoJsonFeatureResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminLineStringGeometryResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPointGeometryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkSummaryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.place.entity.Place;
+import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
+import com.ssafy.e102.domain.place.exception.PlaceErrorCode;
+import com.ssafy.e102.domain.place.exception.PlaceException;
+import com.ssafy.e102.domain.place.repository.PlaceAccessibilityFeatureRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
+import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.global.geo.GeoPointConverter;
 
 @Service
 @Transactional(readOnly = true)
@@ -48,14 +58,20 @@ public class AdminMapService {
 	private final AdminAreaRepository adminAreaRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final PlaceRepository placeRepository;
+	private final PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
+	private final GeoPointConverter geoPointConverter;
 
 	public AdminMapService(
 		AdminAreaRepository adminAreaRepository,
 		RoadSegmentRepository roadSegmentRepository,
-		PlaceRepository placeRepository) {
+		PlaceRepository placeRepository,
+		PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository,
+		GeoPointConverter geoPointConverter) {
 		this.adminAreaRepository = adminAreaRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.placeRepository = placeRepository;
+		this.placeAccessibilityFeatureRepository = placeAccessibilityFeatureRepository;
+		this.geoPointConverter = geoPointConverter;
 	}
 
 	public AdminAreaListResponse getAreas() {
@@ -109,8 +125,13 @@ public class AdminMapService {
 			AdminGeoJsonFeatureCollectionResponse.of(features));
 	}
 
-	public AdminFacilityPayloadResponse getFacilities(int limit) {
-		List<Place> places = placeRepository.findAll(PageRequest.of(0, limit, PLACE_SORT)).getContent();
+	public AdminFacilityPayloadResponse getFacilities(String gu, String dong, int limit) {
+		List<Place> places;
+		if (hasArea(gu, dong)) {
+			places = placeRepository.findAllIntersectingArea(gu, dong, limit);
+		} else {
+			places = placeRepository.findAll(PageRequest.of(0, limit, PLACE_SORT)).getContent();
+		}
 		List<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminFacilityPropertiesResponse>> features = places
 			.stream()
 			.map(this::toFacilityFeature)
@@ -137,8 +158,82 @@ public class AdminMapService {
 			AdminGeoJsonFeatureCollectionResponse.of(features));
 	}
 
+	public AdminPlaceDetailResponse getPlace(Long placeId) {
+		Place place = getPlaceWithAccessibilityFeatures(placeId);
+		return AdminPlaceDetailResponse.of(place, geoPointConverter);
+	}
+
+	@Transactional
+	public AdminPlaceDetailResponse updatePlace(Long placeId, AdminPlaceUpdateRequest request) {
+		Place place = getPlaceWithAccessibilityFeatures(placeId);
+		validateProviderPlaceIdOwner(placeId, normalizeNullableText(request.providerPlaceId()));
+		place.updateBasicInfo(
+			request.name(),
+			request.category(),
+			request.address(),
+			request.point() == null ? null : geoPointConverter.toPoint(request.point()),
+			request.providerPlaceId());
+		return AdminPlaceDetailResponse.of(place, geoPointConverter);
+	}
+
+	@Transactional
+	public AdminPlaceDetailResponse updatePlaceAccessibilityFeatures(
+		Long placeId,
+		AdminPlaceAccessibilityFeaturesUpdateRequest request) {
+		Place place = requirePlace(placeId);
+		validateUniqueFeatureTypes(request.features());
+		placeAccessibilityFeatureRepository.deleteAllByPlace_PlaceId(placeId);
+		List<PlaceAccessibilityFeature> savedFeatures = placeAccessibilityFeatureRepository.saveAll(
+			request.features()
+				.stream()
+				.map(feature -> PlaceAccessibilityFeature.create(
+					place,
+					feature.featureType(),
+					feature.isAvailable()))
+				.toList());
+		return AdminPlaceDetailResponse.of(place, savedFeatures, geoPointConverter);
+	}
+
 	private boolean hasArea(String gu, String dong) {
 		return gu != null && !gu.isBlank() && dong != null && !dong.isBlank();
+	}
+
+	private Place requirePlace(Long placeId) {
+		return placeRepository.findById(placeId)
+			.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_NOT_FOUND));
+	}
+
+	private Place getPlaceWithAccessibilityFeatures(Long placeId) {
+		return placeRepository.findWithAccessibilityFeaturesByPlaceId(placeId)
+			.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_NOT_FOUND));
+	}
+
+	private void validateProviderPlaceIdOwner(Long placeId, String providerPlaceId) {
+		if (providerPlaceId == null) {
+			return;
+		}
+		placeRepository.findByProviderPlaceId(providerPlaceId)
+			.filter(place -> !place.getPlaceId().equals(placeId))
+			.ifPresent(ignored -> {
+				throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "이미 다른 장소에 연결된 providerPlaceId입니다.");
+			});
+	}
+
+	private void validateUniqueFeatureTypes(
+		List<AdminPlaceAccessibilityFeaturesUpdateRequest.Feature> features) {
+		Set<AccessibilityFeatureType> featureTypes = EnumSet.noneOf(AccessibilityFeatureType.class);
+		for (AdminPlaceAccessibilityFeaturesUpdateRequest.Feature feature : features) {
+			if (!featureTypes.add(feature.featureType())) {
+				throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "접근성 속성 유형은 중복될 수 없습니다.");
+			}
+		}
+	}
+
+	private String normalizeNullableText(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		return value.trim();
 	}
 
 	private String toSyntheticDong(String dong) {
@@ -161,7 +256,6 @@ public class AdminMapService {
 				roadSegment.getWalkAccess(),
 				roadSegment.getBrailleBlockState(),
 				roadSegment.getAudioSignalState(),
-				roadSegment.getSlopeState(),
 				roadSegment.getWidthState(),
 				roadSegment.getSurfaceState(),
 				roadSegment.getStairsState(),

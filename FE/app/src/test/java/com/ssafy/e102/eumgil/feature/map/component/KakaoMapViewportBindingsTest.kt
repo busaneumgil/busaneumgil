@@ -230,6 +230,128 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `projected marker render state adds route origin and destination overlay points`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "origin",
+                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                            kind = MapViewportPointKind.ORIGIN,
+                        ),
+                        MapViewportPointOverlay(
+                            overlayId = "destination",
+                            coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            kind = MapViewportPointKind.DESTINATION,
+                        ),
+                    ),
+            )
+
+        assertEquals(listOf("overlay-origin", "overlay-destination"), markerStates.map { it.markerId })
+        assertEquals(
+            listOf(KakaoProjectedMarkerKind.ROUTE_ORIGIN, KakaoProjectedMarkerKind.ROUTE_DESTINATION),
+            markerStates.map { it.kind },
+        )
+        assertEquals(R.drawable.ic_navigation_rail_origin_pin, markerStates.first().iconResId)
+        assertEquals(R.drawable.ic_navigation_rail_destination_pin, markerStates.last().iconResId)
+    }
+
+    @Test
+    fun `projected marker render state adds segment junction overlay points as centered dots`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "junction-1",
+                            coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                        ),
+                    ),
+            )
+
+        assertEquals(listOf("overlay-junction-1"), markerStates.map { it.markerId })
+        assertEquals(KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION, markerStates.first().kind)
+        assertEquals(0, markerStates.first().iconResId)
+        assertEquals(16, markerStates.first().sizeDp)
+        assertEquals(0.5f, markerStates.first().anchorPointX)
+        assertEquals(0.5f, markerStates.first().anchorPointY)
+    }
+
+    @Test
+    fun `route line render state keeps route polyline style for kakao route line layer`() {
+        val routeLineStates =
+            createKakaoRouteLineRenderStates(
+                listOf(
+                    MapViewportPolylineOverlay(
+                        overlayId = "route-preview",
+                        points =
+                            listOf(
+                                MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            ),
+                        style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                        tone = MapViewportOverlayTone.PRIMARY,
+                    ),
+                ),
+            )
+
+        assertEquals(listOf("route-preview"), routeLineStates.map { it.routeLineId })
+        assertEquals(2, routeLineStates.first().points.size)
+        assertEquals(5f, routeLineStates.first().lineWidth, 0f)
+        assertEquals(6.5f, routeLineStates.first().strokeWidth, 0f)
+        assertEquals(0xFF2A7BFF.toInt(), routeLineStates.first().lineColor)
+        assertEquals(0xFF0F4FC6.toInt(), routeLineStates.first().strokeColor)
+    }
+
+    @Test
+    fun `route camera render state fits only projection-included route geometry`() {
+        val cameraState =
+            createKakaoRouteCameraRenderState(
+                MapViewportOverlayState(
+                    points =
+                        listOf(
+                            MapViewportPointOverlay(
+                                overlayId = "origin",
+                                coordinate = MapCoordinate(latitude = 35.0, longitude = 129.0),
+                                kind = MapViewportPointKind.ORIGIN,
+                                includeInProjection = false,
+                            ),
+                        ),
+                    polylines =
+                        listOf(
+                            MapViewportPolylineOverlay(
+                                overlayId = "route",
+                                points =
+                                    listOf(
+                                        MapCoordinate(latitude = 35.1, longitude = 129.1),
+                                        MapCoordinate(latitude = 35.2, longitude = 129.2),
+                                    ),
+                                style = MapViewportPolylineStyle.ROUTE_BASELINE,
+                                tone = MapViewportOverlayTone.PRIMARY,
+                            ),
+                        ),
+                ),
+            )
+
+        requireNotNull(cameraState)
+        assertEquals(
+            listOf(
+                MapCoordinate(latitude = 35.1, longitude = 129.1),
+                MapCoordinate(latitude = 35.2, longitude = 129.2),
+            ),
+            cameraState.points,
+        )
+    }
+
+    @Test
     fun `marker render state keeps only kakao facility markers`() {
         val markerStates =
             createKakaoMarkerRenderStates(

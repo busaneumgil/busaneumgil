@@ -3,30 +3,36 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
-import com.ssafy.e102.eumgil.core.model.RouteDefaults
 import com.ssafy.e102.eumgil.core.model.RouteOption
-import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
-import com.ssafy.e102.eumgil.core.model.RouteSearchSourceType
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
+import com.ssafy.e102.eumgil.core.model.RouteSearchSourceType
 import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
-import com.ssafy.e102.eumgil.data.mock.fixture.MockRouteFixtures
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
-import com.ssafy.e102.eumgil.data.route.RouteAlertDto
 import com.ssafy.e102.eumgil.data.route.RouteDto
+import com.ssafy.e102.eumgil.data.route.RouteGuidanceEventDto
 import com.ssafy.e102.eumgil.data.route.RouteLegDto
+import com.ssafy.e102.eumgil.data.route.RoutePointDto
+import com.ssafy.e102.eumgil.data.route.RouteRatingRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteRatingResponseDto
+import com.ssafy.e102.eumgil.data.route.RouteRerouteRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteRerouteResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
-import com.ssafy.e102.eumgil.data.route.RouteStepDto
+import com.ssafy.e102.eumgil.data.route.RouteSelectRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSessionResponseDto
+import com.ssafy.e102.eumgil.data.route.RouteTransitArrivalDto
+import com.ssafy.e102.eumgil.data.route.RouteTransitLaneOptionDto
+import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitStopDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -34,185 +40,170 @@ import org.junit.Test
 
 class RouteRepositoryTest {
     @Test
-    fun `getRouteSearchData returns server backed SAFE and SHORTEST routes and caches the result`() =
+    fun `getRouteSearchData returns cached walk search data after first remote load`() =
         runBlocking {
             val localDataSource = RouteLocalDataSource()
-            var remoteCallCount = 0
+            var walkCallCount = 0
             val repository =
                 DefaultRouteRepository(
                     localDataSource = localDataSource,
                     remoteDataSource =
-                        remoteDataSource { request ->
-                            remoteCallCount += 1
-                            MockRouteFixtures.searchRoutes(request)
-                        },
+                        remoteDataSource(
+                            searchWalkResponse = {
+                                walkCallCount += 1
+                                walkSearchResponse()
+                            },
+                        ),
                 )
-            val query = testRouteQuery()
+            val query = routeQuery(requestedOptions = listOf(RouteOption.SAFE))
 
-            val searchData = repository.getRouteSearchData(query)
-            val cachedSearchData = localDataSource.getCachedSearchData(query)
-            val cachedRead = repository.getRouteSearchData(query)
+            val first = repository.getRouteSearchData(query)
+            val second = repository.getRouteSearchData(query)
 
-            assertEquals(RouteSearchSourceType.SERVER_API, searchData.source.type)
-            assertEquals("실시간 경로", searchData.source.label)
-            assertFalse(searchData.source.isFromCache)
-            assertEquals("rs_walk_busan_demo", searchData.result.searchId)
-            assertEquals(listOf(RouteOption.SAFE, RouteOption.SHORTEST), searchData.result.availableOptions)
-            assertEquals(
-                listOf("walk_rt_safe_demo", "walk_rt_shortest_demo"),
-                searchData.routes.map { route -> route.routeId },
-            )
-            assertTrue(searchData.routes.all { route -> route.transportMode == RouteTransportMode.WALK })
-            assertTrue(searchData.routes.all { route -> route.legs.isNotEmpty() })
-            assertTrue(searchData.routes.all { route -> route.previewPolyline.isRenderable })
-            assertTrue(searchData.routes.all { route -> route.preview.segmentCount > 0 })
-            assertEquals(searchData, cachedSearchData)
-            assertTrue(searchData.primaryRoute?.hasRenderablePreview == true)
-            assertTrue(cachedRead.source.isFromCache)
-            assertEquals(searchData.result, cachedRead.result)
-            assertEquals(1, remoteCallCount)
+            assertEquals(1, walkCallCount)
+            assertEquals(RouteSearchSourceType.SERVER_API, first.source.type)
+            assertTrue(!first.source.isFromCache)
+            assertTrue(second.source.isFromCache)
+            assertEquals("rs_walk_server_001", first.result.searchId)
+            assertEquals(first.result, second.result)
+            assertEquals("walk_rt_safe_001", first.routes.single().routeId)
+            assertEquals(RouteTransportMode.WALK, first.routes.single().transportMode)
+            assertEquals(first, localDataSource.getCachedSearchData(query))
         }
 
     @Test
-    fun `searchRoutes normalizes invalid dto values while keeping valid route preview points`() =
+    fun `getTransitRouteSearchData uses transit surface and caches transit result`() =
+        runBlocking {
+            val localDataSource = RouteLocalDataSource()
+            var walkCallCount = 0
+            var transitCallCount = 0
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource(
+                            searchWalkResponse = {
+                                walkCallCount += 1
+                                walkSearchResponse()
+                            },
+                            searchTransitResponse = {
+                                transitCallCount += 1
+                                transitSearchResponse()
+                            },
+                        ),
+                )
+            val query = routeQuery(requestedOptions = listOf(RouteOption.RECOMMENDED, RouteOption.MIN_WALK))
+
+            val first = repository.getTransitRouteSearchData(query)
+            val second = repository.getTransitRouteSearchData(query)
+
+            assertEquals(0, walkCallCount)
+            assertEquals(1, transitCallCount)
+            assertEquals("rs_transit_server_001", first.result.searchId)
+            assertEquals(RouteTransportMode.PUBLIC_TRANSIT, first.routes.single().transportMode)
+            assertEquals(RouteOption.RECOMMENDED, first.routes.single().routeOption)
+            assertEquals("Stop B", first.routes.single().legs[1].alightingStop?.name)
+            assertTrue(second.source.isFromCache)
+            assertEquals(first.result, second.result)
+            assertEquals(first, localDataSource.getCachedSearchData(query))
+        }
+
+    @Test
+    fun `route action methods map remote responses into repository data`() =
         runBlocking {
             val repository =
                 DefaultRouteRepository(
                     localDataSource = RouteLocalDataSource(),
                     remoteDataSource =
-                        remoteDataSource {
-                            RouteSearchResponseDto(
-                                searchId = "rs_transit_invalid_server_payload",
-                                routes =
-                                    listOf(
+                        remoteDataSource(
+                            selectResponse = { routeId, request ->
+                                assertEquals("route-1", routeId)
+                                assertEquals("search-1", request.searchId)
+                                RouteSessionResponseDto(sessionId = "session-select-1")
+                            },
+                            refreshResponse = { routeId, request ->
+                                assertEquals("route-1", routeId)
+                                assertEquals(2, request.legSequence)
+                                RouteTransitRefreshResponseDto(
+                                    type = "BUS",
+                                    arrivalStatus = "ARRIVING_SOON",
+                                    transits =
+                                        listOf(
+                                            RouteTransitArrivalDto(
+                                                routeNo = "100",
+                                                remainingMinute = 2,
+                                                isLowFloor = true,
+                                            ),
+                                        ),
+                                )
+                            },
+                            rerouteResponse = { request ->
+                                assertEquals("route-1", request.routeId)
+                                assertEquals(35.1797, request.currentPoint.lat, 0.0)
+                                RouteRerouteResponseDto(
+                                    route =
                                         RouteDto(
-                                            routeId = "pt_rt_invalid_server_payload",
-                                            transportMode = "PUBLIC_TRANSIT",
-                                            routeOption = "RECOMMENDED",
-                                            title = " ",
-                                            distanceMeter = -1.0,
-                                            estimatedTimeMinute = null,
-                                            transferCount = 1,
-                                            badges = listOf("UNPAVED"),
+                                            routeId = "walk_rt_reroute_1",
+                                            transportMode = "WALK",
+                                            routeOption = "SAFE",
+                                            title = "Rerouted Walk",
+                                            distanceMeter = 180.0,
+                                            estimatedTimeMinute = 3,
+                                            geometry =
+                                                "LINESTRING(129.075600 35.179600, 129.076000 35.180100)",
                                             legs =
                                                 listOf(
                                                     RouteLegDto(
                                                         sequence = 1,
                                                         type = "WALK",
-                                                        role = "WALK_TO_TRANSIT",
-                                                        instruction = " ",
-                                                        distanceMeter = -10.0,
-                                                        geometry = "POINT(129.0756 35.1796)",
-                                                        steps =
-                                                            listOf(
-                                                                RouteStepDto(
-                                                                    sequence = -1,
-                                                                    instruction = " ",
-                                                                    distanceMeter = -10.0,
-                                                                    geometry = "POINT(129.0756 35.1796)",
-                                                                    alerts =
-                                                                        listOf(
-                                                                            RouteAlertDto(
-                                                                                type = "CURB",
-                                                                                distanceMeter = 10.0,
-                                                                            ),
-                                                                        ),
-                                                                ),
-                                                            ),
-                                                    ),
-                                                    RouteLegDto(
-                                                        sequence = 2,
-                                                        type = "BUS",
-                                                        role = "TRANSIT",
-                                                        instruction = "Take bus 100",
-                                                        estimatedTimeMinute = 7,
-                                                        routeNo = "100",
-                                                        boardingStop =
-                                                            RouteTransitStopDto(
-                                                                name = "Stop A",
-                                                                lat = 35.1796,
-                                                                lng = 129.0756,
-                                                            ),
-                                                        alightingStop =
-                                                            RouteTransitStopDto(
-                                                                name = "Stop B",
-                                                                lat = 35.1800,
-                                                                lng = 129.0761,
-                                                            ),
+                                                        role = "WALK_ONLY",
+                                                        instruction = "Continue straight",
+                                                        distanceMeter = 180.0,
+                                                        estimatedTimeMinute = 3,
+                                                        geometry =
+                                                            "LINESTRING(129.075600 35.179600, 129.076000 35.180100)",
                                                     ),
                                                 ),
                                         ),
-                                    ),
-                            )
-                        },
+                                )
+                            },
+                            endResponse = { routeId ->
+                                assertEquals("route-1", routeId)
+                                RouteSessionResponseDto(sessionId = "session-end-1")
+                            },
+                            ratingResponse = { request ->
+                                assertEquals("session-end-1", request.sessionId)
+                                assertEquals(5, request.score)
+                                RouteRatingResponseDto(ratingId = 77L)
+                            },
+                        ),
                 )
-            val query = testRouteQuery(requestedOptions = listOf(RouteOption.SAFE))
 
-            val result = repository.searchRoutes(query)
-            val route = result.routes.single()
-            val firstSegment = route.segments.first()
-            val secondSegment = route.segments.last()
+            val selected = repository.selectRoute(routeId = "route-1", searchId = "search-1")
+            val refreshed = repository.refreshTransit(routeId = "route-1", legSequence = 2)
+            val rerouted =
+                repository.reroute(
+                    routeId = "route-1",
+                    currentPoint = GeoCoordinate(latitude = 35.1797, longitude = 129.0757),
+                )
+            val ended = repository.endRoute(routeId = "route-1")
+            val rated = repository.rateRoute(sessionId = ended.sessionId, score = 5)
 
-            assertEquals("rs_transit_invalid_server_payload", result.searchId)
-            assertEquals("pt_rt_invalid_server_payload", route.routeId)
-            assertEquals(RouteTransportMode.PUBLIC_TRANSIT, route.transportMode)
-            assertEquals(RouteOption.RECOMMENDED, route.routeOption)
-            assertEquals("Recommended Route", route.title)
-            assertEquals(0, route.summary.distanceMeters)
-            assertEquals(0, route.summary.estimatedTimeMinutes)
-            assertEquals(RouteRiskLevel.HIGH, route.summary.riskLevel)
-            assertEquals(1, firstSegment.sequence)
-            assertEquals(0, firstSegment.distanceMeters)
-            assertEquals(RouteDefaults.DEFAULT_GUIDANCE_MESSAGE, firstSegment.guidanceMessage)
-            assertTrue(firstSegment.polyline.points.isEmpty())
-            assertEquals("Take bus 100", secondSegment.guidanceMessage)
-            assertEquals(2, route.preview.segmentCount)
-            assertEquals(0, route.preview.renderableSegmentCount)
-            assertEquals(1, route.preview.fallbackSegmentCount)
-            assertFalse(route.previewPolyline.isRenderable)
-            assertTrue(route.hasFallbackSegments)
-            assertEquals(route, result.findRoute(RouteOption.RECOMMENDED))
-            assertEquals("100", route.legs.last().routeNo)
-            assertNotNull(route.legs.last().boardingStop)
-            assertNotNull(route.legs.last().alightingStop)
+            assertEquals("session-select-1", selected.sessionId)
+            assertEquals("BUS", refreshed.type)
+            assertEquals("ARRIVING_SOON", refreshed.arrivalStatus)
+            assertEquals("100", refreshed.transits.single().routeNo)
+            assertEquals(2, refreshed.transits.single().remainingMinute)
+            assertNotNull(rerouted.route)
+            assertEquals("walk_rt_reroute_1", rerouted.route?.routeId)
+            assertEquals(RouteOption.SAFE, rerouted.route?.routeOption)
+            assertEquals("session-end-1", ended.sessionId)
+            assertEquals(77L, rated.ratingId)
         }
 
     @Test
-    fun `getRouteSearchData propagates remote failure without mock fallback or cache write`() =
+    fun `selectRoute retries with refreshed auth session when remote responds unauthorized`() =
         runBlocking {
-            val localDataSource = RouteLocalDataSource()
-            val repository =
-                DefaultRouteRepository(
-                    localDataSource = localDataSource,
-                    remoteDataSource =
-                        remoteDataSource {
-                            throw RouteApiException(
-                                httpStatusCode = 404,
-                                status = "RT4040",
-                                message = "탐색 가능한 경로가 없습니다.",
-                            )
-                        },
-                )
-            val query = testRouteQuery()
-
-            var failure: Throwable? = null
-            try {
-                repository.getRouteSearchData(query)
-            } catch (throwable: Throwable) {
-                failure = throwable
-            }
-
-            val error = failure as? RouteApiException
-            assertNotNull(error)
-            assertEquals(404, error?.httpStatusCode)
-            assertEquals("RT4040", error?.status)
-            assertEquals("탐색 가능한 경로가 없습니다.", error?.message)
-            assertNull(localDataSource.getCachedSearchData(query))
-        }
-    @Test
-    fun `getRouteSearchData retries with refreshed auth session when remote responds unauthorized`() =
-        runBlocking {
-            val localDataSource = RouteLocalDataSource()
             val authSessionRepository =
                 TestAuthSessionRepository(
                     initialState =
@@ -224,29 +215,25 @@ class RouteRepositoryTest {
             var requestCount = 0
             val repository =
                 DefaultRouteRepository(
-                    localDataSource = localDataSource,
+                    localDataSource = RouteLocalDataSource(),
                     remoteDataSource =
-                        remoteDataSource { request ->
-                            requestCount += 1
-                            when (requestCount) {
-                                1 ->
-                                    throw RouteApiException(
-                                        httpStatusCode = 401,
-                                        status = "AUTH_401",
-                                        message = "인증이 필요합니다.",
-                                    )
+                        remoteDataSource(
+                            selectResponse = { _, _ ->
+                                requestCount += 1
+                                when (requestCount) {
+                                    1 ->
+                                        throw RouteApiException(
+                                            httpStatusCode = 401,
+                                            status = "AUTH_401",
+                                            message = "Authentication required.",
+                                        )
 
-                                2 -> {
-                                    assertEquals(
-                                        "refreshed-access-token",
-                                        authSessionRepository.getAuthGateState().authSession?.accessToken,
-                                    )
-                                    MockRouteFixtures.searchRoutes(request)
+                                    2 -> RouteSessionResponseDto(sessionId = "session-select-1")
+
+                                    else -> error("Unexpected select retry count: $requestCount")
                                 }
-
-                                else -> error("Unexpected route retry count: $requestCount")
-                            }
-                        },
+                            },
+                        ),
                     authSessionRepository = authSessionRepository,
                     authRemoteDataSource =
                         object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
@@ -259,23 +246,24 @@ class RouteRepositoryTest {
                             }
                         },
                 )
-            val query = testRouteQuery()
 
-            val searchData = repository.getRouteSearchData(query)
+            val result = repository.selectRoute(routeId = "route-1", searchId = "search-1")
 
-            assertEquals("rs_walk_busan_demo", searchData.result.searchId)
+            assertEquals("session-select-1", result.sessionId)
             assertEquals(2, requestCount)
+            assertEquals(
+                "refreshed-access-token",
+                authSessionRepository.getAuthGateState().authSession?.accessToken,
+            )
             assertEquals(
                 "refreshed-refresh-token",
                 authSessionRepository.getAuthGateState().authSession?.refreshToken,
             )
-            assertEquals(searchData, localDataSource.getCachedSearchData(query))
         }
 
     @Test
-    fun `getRouteSearchData clears auth session and propagates auth failure when token refresh fails`() =
+    fun `selectRoute clears auth session and surfaces repository auth error when refresh fails`() =
         runBlocking {
-            val localDataSource = RouteLocalDataSource()
             val authSessionRepository =
                 TestAuthSessionRepository(
                     initialState =
@@ -286,15 +274,17 @@ class RouteRepositoryTest {
                 )
             val repository =
                 DefaultRouteRepository(
-                    localDataSource = localDataSource,
+                    localDataSource = RouteLocalDataSource(),
                     remoteDataSource =
-                        remoteDataSource {
-                            throw RouteApiException(
-                                httpStatusCode = 403,
-                                status = "AUTH_403",
-                                message = "인증이 필요합니다.",
-                            )
-                        },
+                        remoteDataSource(
+                            selectResponse = { _, _ ->
+                                throw RouteApiException(
+                                    httpStatusCode = 403,
+                                    status = "AUTH_403",
+                                    message = "Authentication required.",
+                                )
+                            },
+                        ),
                     authSessionRepository = authSessionRepository,
                     authRemoteDataSource =
                         object : AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")) {
@@ -303,44 +293,186 @@ class RouteRepositoryTest {
                             }
                         },
                 )
-            val query = testRouteQuery()
 
-            val failure = runCatching { repository.getRouteSearchData(query) }.exceptionOrNull() as? RouteApiException
+            val failure =
+                runCatching {
+                    repository.selectRoute(routeId = "route-1", searchId = "search-1")
+                }.exceptionOrNull() as? RouteApiException
 
             requireNotNull(failure)
             assertEquals(401, failure.httpStatusCode)
             assertEquals("ROUTE_AUTHENTICATION_FAILED", failure.status)
-            assertEquals("인증이 필요합니다.", failure.message)
             assertNull(authSessionRepository.getAuthGateState().authSession)
-            assertNull(localDataSource.getCachedSearchData(query))
         }
 }
 
 private fun remoteDataSource(
-    responseProvider: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto,
+    searchWalkResponse: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto = {
+        error("searchWalkRoutes was not expected")
+    },
+    searchTransitResponse: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto = {
+        error("searchTransitRoutes was not expected")
+    },
+    selectResponse: suspend (String, RouteSelectRequestDto) -> RouteSessionResponseDto = { _, _ ->
+        error("selectRoute was not expected")
+    },
+    refreshResponse: suspend (String, RouteTransitRefreshRequestDto) -> RouteTransitRefreshResponseDto = { _, _ ->
+        error("refreshTransit was not expected")
+    },
+    rerouteResponse: suspend (RouteRerouteRequestDto) -> RouteRerouteResponseDto = {
+        error("reroute was not expected")
+    },
+    endResponse: suspend (String) -> RouteSessionResponseDto = {
+        error("endRoute was not expected")
+    },
+    ratingResponse: suspend (RouteRatingRequestDto) -> RouteRatingResponseDto = {
+        error("rateRoute was not expected")
+    },
 ): RouteRemoteDataSource =
     object : RouteRemoteDataSource(
         postRequestExecutor = { _, _, _ ->
-            error("repository tests override searchWalkRoutes directly")
+            error("repository tests override route remote methods directly")
         },
     ) {
         override suspend fun searchWalkRoutes(request: RouteSearchRequestDto): RouteSearchResponseDto =
-            responseProvider(request)
+            searchWalkResponse(request)
+
+        override suspend fun searchTransitRoutes(request: RouteSearchRequestDto): RouteSearchResponseDto =
+            searchTransitResponse(request)
+
+        override suspend fun selectRoute(
+            routeId: String,
+            request: RouteSelectRequestDto,
+        ): RouteSessionResponseDto = selectResponse(routeId, request)
+
+        override suspend fun refreshTransit(
+            routeId: String,
+            request: RouteTransitRefreshRequestDto,
+        ): RouteTransitRefreshResponseDto = refreshResponse(routeId, request)
+
+        override suspend fun reroute(request: RouteRerouteRequestDto): RouteRerouteResponseDto =
+            rerouteResponse(request)
+
+        override suspend fun endRoute(routeId: String): RouteSessionResponseDto = endResponse(routeId)
+
+        override suspend fun rateRoute(request: RouteRatingRequestDto): RouteRatingResponseDto =
+            ratingResponse(request)
     }
 
-private fun testRouteQuery(
-    requestedOptions: List<RouteOption> = RouteOption.defaultSearchOptions,
-): RouteSearchQuery =
+private fun routeQuery(requestedOptions: List<RouteOption>): RouteSearchQuery =
     RouteSearchQuery(
         origin =
             RouteWaypoint(
-                name = "Busan City Hall",
+                name = "Origin",
                 coordinate = GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
             ),
         destination =
             RouteWaypoint(
-                name = "Busan Station",
+                name = "Destination",
                 coordinate = GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
             ),
         requestedOptions = requestedOptions,
+    )
+
+private fun walkSearchResponse(): RouteSearchResponseDto =
+    RouteSearchResponseDto(
+        searchId = "rs_walk_server_001",
+        routes =
+            listOf(
+                RouteDto(
+                    routeId = "walk_rt_safe_001",
+                    transportMode = "WALK",
+                    routeOption = "SAFE",
+                    routeOptions = listOf("SAFE"),
+                    title = "Accessible Walk",
+                    distanceMeter = 120.0,
+                    estimatedTimeMinute = 2,
+                    geometry = "LINESTRING(129.075600 35.179600, 129.076800 35.180600)",
+                    legs =
+                        listOf(
+                            RouteLegDto(
+                                sequence = 1,
+                                type = "WALK",
+                                role = "WALK_ONLY",
+                                instruction = "Walk to destination",
+                                distanceMeter = 120.0,
+                                estimatedTimeMinute = 2,
+                                geometry = "LINESTRING(129.075600 35.179600, 129.076800 35.180600)",
+                            ),
+                        ),
+                ),
+            ),
+    )
+
+private fun transitSearchResponse(): RouteSearchResponseDto =
+    RouteSearchResponseDto(
+        searchId = "rs_transit_server_001",
+        routes =
+            listOf(
+                RouteDto(
+                    routeId = "pt_rt_001",
+                    transportMode = "PUBLIC_TRANSIT",
+                    routeOptions = listOf("RECOMMENDED", "MIN_WALK"),
+                    title = "Transit Route",
+                    distanceMeter = 4200.0,
+                    estimatedTimeMinute = 28,
+                    transferCount = 1,
+                    badges = listOf("ELEVATOR"),
+                    legs =
+                        listOf(
+                            RouteLegDto(
+                                sequence = 1,
+                                type = "WALK",
+                                role = "WALK_TO_TRANSIT",
+                                instruction = "Walk to Stop A",
+                                distanceMeter = 180.0,
+                                estimatedTimeMinute = 3,
+                                geometry =
+                                    "LINESTRING(129.075600 35.179600, 129.076000 35.179900)",
+                                guidanceEvents =
+                                    listOf(
+                                        RouteGuidanceEventDto(
+                                            sequence = 1,
+                                            type = "TURN_RIGHT",
+                                            distanceFromLegStartMeter = 40.0,
+                                            durationFromLegStartSecond = 40,
+                                            distanceFromRouteStartMeter = 40.0,
+                                            durationFromRouteStartSecond = 40,
+                                            geometry = "POINT(129.076000 35.179900)",
+                                        ),
+                                    ),
+                            ),
+                            RouteLegDto(
+                                sequence = 2,
+                                type = "BUS",
+                                role = "TRANSIT",
+                                instruction = "Take bus 100",
+                                estimatedTimeMinute = 11,
+                                routeNo = "100",
+                                laneOptions =
+                                    listOf(
+                                        RouteTransitLaneOptionDto(
+                                            routeNo = "100",
+                                            remainingMinute = 3,
+                                            durationSecond = 660,
+                                            estimatedTimeMinute = 11,
+                                            isLowFloor = true,
+                                        ),
+                                    ),
+                                boardingStop =
+                                    RouteTransitStopDto(
+                                        name = "Stop A",
+                                        lat = 35.1799,
+                                        lng = 129.0760,
+                                    ),
+                                arrivingStop =
+                                    RouteTransitStopDto(
+                                        name = "Stop B",
+                                        lat = 35.1650,
+                                        lng = 129.0600,
+                                    ),
+                            ),
+                        ),
+                ),
+            ),
     )

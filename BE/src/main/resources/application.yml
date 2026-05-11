@@ -14,7 +14,7 @@ server:
 
 springdoc:
   swagger-ui:
-    doc-expansion: none
+    urls-primary-name: 인증
 
 social:
   provider:

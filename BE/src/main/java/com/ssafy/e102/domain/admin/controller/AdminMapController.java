@@ -34,7 +34,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "관리자 지도", description = "관리자 보행 네트워크 및 편의시설 DB 조회 API")
+@Tag(name = "관리자 지도", description = "관리자 보행 네트워크 및 편의시설 조회 API")
 @Validated
 @RestController
 @RequestMapping("/admin")
@@ -45,13 +45,13 @@ public class AdminMapController {
 	private final AdminRoadNetworkEditService adminRoadNetworkEditService;
 	private final AdminRoadNetworkEditJobService adminRoadNetworkEditJobService;
 
-	@Operation(summary = "관리자 검수 구/동 목록 조회", description = "DB에 적재된 admin_areas의 gu/dong 목록을 조회한다.")
+	@Operation(summary = "관리자 검수 구/동 목록 조회", description = "데이터베이스에 적재된 관리자 검수 구/동 목록을 조회한다.")
 	@GetMapping("/areas")
 	public ApiResponse<AdminAreaListResponse> getAreas() {
 		return ApiResponse.success(adminMapService.getAreas());
 	}
 
-	@Operation(summary = "관리자 보행 네트워크 조회", description = "행정동 경계와 교차하는 road_segments를 GeoJSON 형태로 조회한다.")
+	@Operation(summary = "관리자 보행 네트워크 조회", description = "행정동 경계와 교차하는 보행 네트워크 구간을 지도 표시용 형식으로 조회한다.")
 	@GetMapping("/road-network/segments")
 	public ApiResponse<AdminRoadNetworkResponse> getRoadNetwork(
 		@Parameter(description = "구") @RequestParam(required = false)
@@ -63,7 +63,7 @@ public class AdminMapController {
 		return ApiResponse.success(adminMapService.getRoadNetwork(gu, dong, limit));
 	}
 
-	@Operation(summary = "관리자 보행 네트워크 편집 반영", description = "관리자 페이지의 add/delete draft를 DB road_nodes, road_segments, segment_features에 반영한다.")
+	@Operation(summary = "관리자 보행 네트워크 편집 반영", description = "관리자 페이지의 추가/삭제 편집안을 보행 네트워크 테이블에 반영한다.")
 	@PostMapping("/road-network/edits/apply")
 	public ApiResponse<AdminRoadNetworkEditApplyResponse> applyRoadNetworkEdits(
 		@RequestBody @Valid
@@ -71,7 +71,7 @@ public class AdminMapController {
 		return ApiResponse.success(adminRoadNetworkEditService.apply(request));
 	}
 
-	@Operation(summary = "관리자 보행 네트워크 편집 반영 작업 생성", description = "대량 add/delete draft를 비동기 작업으로 등록하고 jobId를 반환한다.")
+	@Operation(summary = "관리자 보행 네트워크 편집 반영 작업 생성", description = "대량 추가/삭제 편집안을 비동기 작업으로 등록하고 작업 ID를 반환한다.")
 	@PostMapping("/road-network/edits/jobs")
 	public ApiResponse<AdminRoadNetworkEditJobResponse> createRoadNetworkEditJob(
 		@RequestBody @Valid
@@ -87,7 +87,7 @@ public class AdminMapController {
 		return ApiResponse.success(adminRoadNetworkEditJobService.findById(jobId));
 	}
 
-	@Operation(summary = "관리자 편의시설 조회", description = "DB에 적재된 places를 GeoJSON 형태로 조회한다.")
+	@Operation(summary = "관리자 편의시설 조회", description = "데이터베이스에 적재된 장소를 지도 표시용 형식으로 조회한다.")
 	@GetMapping("/places/facilities")
 	public ApiResponse<AdminFacilityPayloadResponse> getFacilities(
 		@Parameter(description = "구") @RequestParam(required = false)
@@ -107,7 +107,7 @@ public class AdminMapController {
 		return ApiResponse.success(adminMapService.getPlace(placeId));
 	}
 
-	@Operation(summary = "관리자 장소 기본 정보 수정", description = "관리자 페이지에서 장소명, 카테고리, 주소, 좌표, providerPlaceId를 수정한다. null 필드는 기존 값을 유지한다.")
+	@Operation(summary = "관리자 장소 기본 정보 수정", description = "관리자 페이지에서 장소명, 카테고리, 주소, 좌표, 외부 제공자 장소 ID를 수정한다. 값이 비어 있는 필드는 기존 값을 유지한다.")
 	@PatchMapping("/places/{placeId}")
 	public ApiResponse<AdminPlaceDetailResponse> updatePlace(
 		@Parameter(description = "수정할 장소 ID") @PathVariable @Positive

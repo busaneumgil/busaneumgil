@@ -33,7 +33,7 @@ public class PlaceController {
 
 	private final PlaceService placeService;
 
-	@Operation(summary = "텍스트 장소 검색", description = "키워드를 기준으로 카카오 Local API 장소 검색 결과를 반환하고, 내부 장소와 매칭되면 접근성 정보를 함께 제공한다.")
+	@Operation(summary = "텍스트 장소 검색", description = "키워드를 기준으로 카카오 장소 검색 결과를 반환하고, 내부 장소와 매칭되면 접근성 정보를 함께 제공한다.")
 	@GetMapping("/search")
 	public ApiResponse<PlaceSearchResponse> searchPlaces(
 		@Parameter(description = "검색어") @RequestParam(required = false)
@@ -42,16 +42,16 @@ public class PlaceController {
 		String lat,
 		@Parameter(description = "검색 중심 경도") @RequestParam(required = false)
 		String lng,
-		@Parameter(description = "검색 반경 meter") @RequestParam(required = false)
+		@Parameter(description = "검색 반경. 단위는 미터입니다.") @RequestParam(required = false)
 		String radius,
-		@Parameter(description = "다음 검색 결과 조회를 위한 cursor") @RequestParam(required = false)
+		@Parameter(description = "다음 검색 결과 조회를 위한 커서") @RequestParam(required = false)
 		String cursor,
 		@Parameter(description = "조회 개수") @RequestParam(required = false)
 		String size) {
 		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, cursor, size));
 	}
 
-	@Operation(summary = "좌표 주소 변환", description = "위도와 경도를 기준으로 카카오 Local API 주소 변환 결과를 반환한다.")
+	@Operation(summary = "좌표 주소 변환", description = "위도와 경도를 기준으로 카카오 주소 변환 결과를 반환한다.")
 	@GetMapping("/reverse-geocode")
 	public ApiResponse<PlaceReverseGeocodeResponse> reverseGeocode(
 		@Parameter(description = "변환할 위도") @RequestParam(required = false)
@@ -61,7 +61,7 @@ public class PlaceController {
 		return ApiResponse.success(placeService.reverseGeocode(lat, lng));
 	}
 
-	@Operation(summary = "장소 목록 조회", description = "현재 위치, 카테고리, 접근성 feature 조건으로 내부 장소 목록을 조회하고 로그인 사용자 기준 북마크 여부를 함께 반환한다.")
+	@Operation(summary = "장소 목록 조회", description = "현재 위치, 카테고리, 접근성 기능 조건으로 내부 장소 목록을 조회하고 로그인 사용자 기준 북마크 여부를 함께 반환한다.")
 	@GetMapping
 	public ApiResponse<PlaceListResponse> getPlaces(
 		@AuthenticationPrincipal
@@ -70,16 +70,16 @@ public class PlaceController {
 		String lat,
 		@Parameter(description = "조회 중심 경도") @RequestParam(required = false)
 		String lng,
-		@Parameter(description = "조회 반경 meter") @RequestParam(required = false)
+		@Parameter(description = "조회 반경. 단위는 미터입니다.") @RequestParam(required = false)
 		String radius,
 		@Parameter(description = "장소 카테고리 필터") @RequestParam(required = false)
 		String category,
-		@Parameter(description = "접근성 feature 유형 필터") @RequestParam(required = false)
+		@Parameter(description = "접근성 기능 유형 필터") @RequestParam(required = false)
 		String featureType) {
 		return ApiResponse.success(placeService.getPlaces(principal.userId(), lat, lng, radius, category, featureType));
 	}
 
-	@Operation(summary = "장소 상세 조회", description = "내부 장소 ID 기준으로 장소 상세 정보, 접근성 feature, 로그인 사용자 기준 북마크 여부를 조회한다.")
+	@Operation(summary = "장소 상세 조회", description = "내부 장소 ID 기준으로 장소 상세 정보, 접근성 기능, 로그인 사용자 기준 북마크 여부를 조회한다.")
 	@GetMapping("/{placeId}")
 	public ApiResponse<PlaceDetailResponse> getPlace(
 		@AuthenticationPrincipal

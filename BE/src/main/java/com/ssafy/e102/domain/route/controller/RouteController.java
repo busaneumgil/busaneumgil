@@ -33,10 +33,10 @@ import lombok.RequiredArgsConstructor;
 /**
  * 경로 API의 `/routes/**` 진입점이다.
  *
- * <p>Controller는 인증 principal과 API 요청 DTO만 받고, 사용자 profile 조회, 좌표 검증,
+ * <p>Controller는 인증 주체와 API 요청 DTO만 받고, 사용자 profile 조회, 좌표 검증,
  * GraphHopper 후보 조회, 응답 조립은 {@link WalkRouteSearchService}로 넘긴다.
  */
-@Tag(name = "경로", description = "경로 검색 API")
+@Tag(name = "길안내", description = "경로 검색, 선택, 안내 종료, 재탐색, 대중교통 도착정보 갱신 API")
 @RestController
 @RequestMapping("/routes")
 @RequiredArgsConstructor
@@ -59,29 +59,32 @@ public class RouteController {
 		return ApiResponse.success(walkRouteSearchService.search(principal.userId(), request));
 	}
 
+	@Operation(summary = "대중교통 경로 검색", description = "출발지와 도착지 좌표를 기준으로 대중교통 경로 후보를 검색합니다.")
 	@PostMapping("/search/transit")
 	public ApiResponse<WalkRouteSearchResponse> searchTransitRoutes(
-		@AuthenticationPrincipal
+		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,
 		@Valid @RequestBody
 		WalkRouteSearchRequest request) {
 		return ApiResponse.success(transitRouteSearchService.search(principal.userId(), request));
 	}
 
+	@Operation(summary = "경로 재탐색", description = "현재 위치와 선택된 경로 세션을 기준으로 경로 이탈 여부를 판단하고 필요한 경우 새 경로를 반환합니다.")
 	@PostMapping("/reroute")
 	public ApiResponse<RerouteResponse> reroute(
-		@AuthenticationPrincipal
+		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,
 		@Valid @RequestBody
 		RerouteRequest request) {
 		return ApiResponse.success(rerouteService.reroute(principal.userId(), request));
 	}
 
+	@Operation(summary = "경로 선택", description = "검색 결과 중 사용자가 선택한 경로를 안내 세션으로 저장합니다.")
 	@PostMapping("/{routeId}/select")
 	public ApiResponse<RouteSessionResponse> selectRoute(
-		@AuthenticationPrincipal
+		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,
-		@PathVariable
+		@Parameter(description = "선택할 경로 ID") @PathVariable
 		String routeId,
 		@Valid @RequestBody
 		SelectRouteRequest request) {
@@ -91,11 +94,12 @@ public class RouteController {
 			"경로가 선택되었습니다.");
 	}
 
+	@Operation(summary = "안내 종료", description = "진행 중인 경로 안내 세션을 종료 처리합니다.")
 	@PostMapping("/{routeId}/end")
 	public ApiResponse<RouteSessionResponse> endRoute(
-		@AuthenticationPrincipal
+		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,
-		@PathVariable
+		@Parameter(description = "종료할 경로 ID") @PathVariable
 		String routeId) {
 		return new ApiResponse<>(
 			"S2000",
@@ -103,11 +107,12 @@ public class RouteController {
 			"안내가 종료되었습니다.");
 	}
 
+	@Operation(summary = "대중교통 도착정보 갱신", description = "선택된 경로의 대중교통 구간에 대해 최신 도착정보를 조회합니다.")
 	@PostMapping("/{routeId}/transit-refresh")
 	public ApiResponse<TransitRefreshResponse> refreshTransit(
-		@AuthenticationPrincipal
+		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,
-		@PathVariable
+		@Parameter(description = "도착정보를 갱신할 경로 ID") @PathVariable
 		String routeId,
 		@Valid @RequestBody
 		TransitRefreshRequest request) {

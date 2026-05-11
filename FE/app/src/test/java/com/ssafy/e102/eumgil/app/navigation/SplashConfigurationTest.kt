@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.app.navigation
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
@@ -52,7 +53,12 @@ class SplashConfigurationTest {
     @Test
     fun `main activity starts with splash theme`() {
         val manifest = parseXml(File("src/main/AndroidManifest.xml"))
-        val application = manifest.documentElement
+        val application =
+            manifest
+                .getElementsByTagName("application")
+                .asSequence()
+                .mapNotNull { node -> node as? Element }
+                .single()
         val activity =
             manifest
                 .getElementsByTagName("activity")
@@ -91,7 +97,7 @@ class SplashConfigurationTest {
     fun `main activity installs platform splash screen before content`() {
         val mainActivity = File("src/main/java/com/ssafy/e102/eumgil/app/MainActivity.kt").readText()
         val installCallIndex = mainActivity.indexOf("installSplashScreen()")
-        val setContentIndex = mainActivity.indexOf("setContent")
+        val setContentIndex = mainActivity.indexOf("setContent {")
 
         assertTrue("MainActivity must call installSplashScreen().", installCallIndex >= 0)
         assertTrue(
@@ -133,8 +139,8 @@ class SplashConfigurationTest {
         val settingsRepository = File("src/main/java/com/ssafy/e102/eumgil/data/repository/SettingsRepository.kt").readText()
 
         assertTrue(
-            "AppContainer should lazily initialize debug settings to avoid opening Room before the first frame.",
-            appContainer.contains("private val debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE)"),
+            "AppContainer should lazily initialize init settings to avoid opening startup storage before the first frame.",
+            appContainer.contains("private val initSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE)"),
         )
         assertTrue(
             "Bookmark repository should stay lazy until the feature is opened.",
@@ -145,10 +151,18 @@ class SplashConfigurationTest {
             appContainer.contains("val reportRepository: ReportRepository by lazy(LazyThreadSafetyMode.NONE)"),
         )
         assertTrue(
-            "Settings repository should defer debug datasource access until runtime debug settings are requested.",
-            settingsRepository.contains(
-                "debugSettingsLocalDataSource by lazy(LazyThreadSafetyMode.NONE,",
-            ),
+            "Settings repository should receive init settings datasource without opening Room-backed repositories.",
+            settingsRepository.contains("private val initSettingsLocalDataSource: InitSettingsLocalDataSource"),
+        )
+    }
+
+    @Test
+    fun `app container does not seed bookmark mocks in real data flows`() {
+        val appContainer = File("src/main/java/com/ssafy/e102/eumgil/app/AppContainer.kt").readText()
+
+        assertFalse(
+            "Bookmark screens should load server or local cache data, not debug fixture bookmarks.",
+            appContainer.contains("MockBookmarkFixtures.defaultBookmarks"),
         )
     }
 

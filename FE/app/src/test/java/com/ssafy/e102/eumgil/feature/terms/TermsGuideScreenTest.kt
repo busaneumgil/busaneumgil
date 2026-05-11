@@ -78,4 +78,14 @@ class TermsGuideScreenTest {
             source.contains("detectTapGestures"),
         )
     }
+
+    @Test
+    fun `terms guide screen applies system safe zones`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/terms/TermsGuideScreen.kt")
+                .readText()
+
+        assertTrue(source.contains(".statusBarsPadding()"))
+        assertTrue(source.contains(".navigationBarsPadding()"))
+    }
 }

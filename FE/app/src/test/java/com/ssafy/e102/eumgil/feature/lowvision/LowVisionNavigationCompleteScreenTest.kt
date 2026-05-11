@@ -2,7 +2,9 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LowVisionNavigationCompleteScreenTest {
@@ -21,5 +23,28 @@ class LowVisionNavigationCompleteScreenTest {
         assertEquals(28.dp, LowVisionNavigationCompleteLayoutDefaults.cardGap)
         assertEquals(26.dp, LowVisionNavigationCompleteLayoutDefaults.cardCornerRadius)
         assertEquals(64.sp, LowVisionNavigationCompleteLayoutDefaults.titleFontSize)
+    }
+
+    @Test
+    fun `navigation complete screen applies system safe zones`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionNavigationCompleteScreen.kt")
+                .readText()
+
+        assertTrue(source.contains(".statusBarsPadding()"))
+        assertTrue(source.contains(".navigationBarsPadding()"))
+    }
+
+    @Test
+    fun `navigation complete save uses low vision bookmark route without re-ending navigation`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionNavigationCompleteRoute.kt")
+                .readText()
+
+        assertTrue(source.contains("bookmarkRepository.saveBookmark"))
+        assertTrue(source.contains("onNavigateToBookmark()"))
+        assertTrue(source.contains("destination.toLowVisionBookmarkData()"))
+        assertTrue(!source.contains("SaveBookmarkClicked"))
+        assertTrue(!source.contains("NavigationViewModel"))
     }
 }

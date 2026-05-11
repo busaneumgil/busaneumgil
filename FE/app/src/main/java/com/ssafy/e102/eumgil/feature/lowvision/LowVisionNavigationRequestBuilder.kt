@@ -12,6 +12,7 @@ import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationSelectionHandoff
+import kotlinx.coroutines.CancellationException
 
 internal data class LowVisionNavigationPlan(
     val searchData: RouteSearchData,
@@ -68,26 +69,33 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
 internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
     destinationSelectionRepository: DestinationSelectionRepository,
 ): RouteNavigationRequest? {
-    val plan = buildLowVisionNavigationPlan(destinationSelectionRepository) ?: return null
-    val searchId = plan.searchData.searchId?.takeIf(String::isNotBlank) ?: return null
-    val routeId = plan.selectedRoute.serverRouteId?.takeIf(String::isNotBlank) ?: return null
-    val sessionData =
-        selectRoute(
-            routeId = routeId,
-            searchId = searchId,
-        )
-    return RouteNavigationRequest(
-        origin = plan.searchData.result.origin,
-        destination = plan.searchData.result.destination,
-        selectedRoute = plan.selectedRoute,
-        source = plan.searchData.source,
-        selectionHandoff =
-            RouteNavigationSelectionHandoff(
-                searchId = searchId,
+    return try {
+        val plan = buildLowVisionNavigationPlan(destinationSelectionRepository) ?: return null
+        val searchId = plan.searchData.searchId?.takeIf(String::isNotBlank) ?: return null
+        val routeId = plan.selectedRoute.serverRouteId?.takeIf(String::isNotBlank) ?: return null
+        val sessionData =
+            selectRoute(
                 routeId = routeId,
-                sessionId = sessionData.sessionId,
-            ),
-    )
+                searchId = searchId,
+            )
+        RouteNavigationRequest(
+            origin = plan.searchData.result.origin,
+            destination = plan.searchData.result.destination,
+            selectedRoute = plan.selectedRoute,
+            source = plan.searchData.source,
+            selectionHandoff =
+                RouteNavigationSelectionHandoff(
+                    searchId = searchId,
+                    routeId = routeId,
+                    sessionId = sessionData.sessionId,
+                    initialRemainingDistanceMeters = sessionData.remainingDistanceMeters,
+                    initialRemainingDurationSeconds = sessionData.remainingDurationSeconds,
+                ),
+        )
+    } catch (throwable: Throwable) {
+        if (throwable is CancellationException) throw throwable
+        null
+    }
 }
 
 private fun PlaceDestination?.toLowVisionRouteWaypoint(): RouteWaypoint =

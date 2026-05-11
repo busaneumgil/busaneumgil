@@ -78,6 +78,29 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `selection handoff remaining metrics seed initial navigation summary`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    selectionHandoff =
+                        RouteNavigationSelectionHandoff(
+                            searchId = "search-1",
+                            routeId = "walk-route-1",
+                            sessionId = "session-1",
+                            initialRemainingDistanceMeters = 720,
+                            initialRemainingDurationSeconds = 540,
+                        ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("720m", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("9분", viewModel.uiState.value.remainingEtaLabel)
+        }
+
+    @Test
     fun `walk to transit leg triggers transit refresh near boarding stop`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -118,10 +141,9 @@ class NavigationViewModelTest {
 
             assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
             assertTrue(viewModel.uiState.value.mapOverlay.focusedSegmentPolyline.isEmpty())
-            assertEquals(
-                GeoCoordinate(latitude = 35.1800, longitude = 129.0720),
-                viewModel.uiState.value.mapOverlay.focusCoordinate,
-            )
+            val focusCoordinate = requireNotNull(viewModel.uiState.value.mapOverlay.focusCoordinate)
+            assertEquals(35.1800, focusCoordinate.latitude, 0.0001)
+            assertEquals(129.0720, focusCoordinate.longitude, 0.0001)
         }
 
     @Test

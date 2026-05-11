@@ -393,6 +393,8 @@ class RouteSettingViewModel(
                                         searchId = searchId,
                                         routeId = routeId,
                                         sessionId = sessionData.sessionId,
+                                        initialRemainingDistanceMeters = sessionData.remainingDistanceMeters,
+                                        initialRemainingDurationSeconds = sessionData.remainingDurationSeconds,
                                     ),
                             ),
                     ),

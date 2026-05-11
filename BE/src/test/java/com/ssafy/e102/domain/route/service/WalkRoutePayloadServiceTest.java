@@ -220,7 +220,7 @@ class WalkRoutePayloadServiceTest {
 	}
 
 	@Test
-	void mapsLowSlopeToGuidanceEvent() {
+	void summarizesStartingLowSlopeOnlyAsRouteBadge() {
 		GraphHopperRoutePath path = new GraphHopperRoutePath(
 			new BigDecimal("100.00"),
 			60_000,
@@ -234,9 +234,62 @@ class WalkRoutePayloadServiceTest {
 			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
 
 		assertThat(route.badges()).containsExactly(RouteBadge.LOW_SLOPE);
+		assertThat(route.legs().get(0).guidanceEvents()).isEmpty();
+	}
+
+	@Test
+	void deduplicatesContinuousAccessibilityStateEvents() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("500.00"),
+			300_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0030"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0040"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0050"), new BigDecimal("35.0000"))),
+			Map.of("avg_slope_percent", List.of(
+				new GraphHopperPathDetail(0, 1, "2.50"),
+				new GraphHopperPathDetail(1, 2, "2.60"),
+				new GraphHopperPathDetail(2, 3, "6.25"),
+				new GraphHopperPathDetail(3, 4, "6.30"),
+				new GraphHopperPathDetail(4, 5, "2.50"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.badges()).containsExactly(RouteBadge.MIDDLE_SLOPE, RouteBadge.LOW_SLOPE);
 		assertThat(route.legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
-			.containsExactly(RouteGuidanceEventType.LOW_SLOPE);
+			.containsExactly(RouteGuidanceEventType.MIDDLE_SLOPE, RouteGuidanceEventType.LOW_SLOPE);
+		assertThat(route.legs().get(0).guidanceEvents().get(0).distanceFromLegStartMeter())
+			.isGreaterThan(BigDecimal.ZERO);
+		assertThat(route.legs().get(0).guidanceEvents().get(1).distanceFromLegStartMeter())
+			.isGreaterThan(route.legs().get(0).guidanceEvents().get(0).distanceFromLegStartMeter());
+	}
+
+	@Test
+	void keepsTurnEventSeparateFromContinuousAccessibilityStateDedupe() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("200.00"),
+			120_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("0.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("1.0"))),
+			Map.of("width_state", List.of(
+				new GraphHopperPathDetail(0, 1, "NARROW"),
+				new GraphHopperPathDetail(1, 2, "NARROW"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.legs().get(0).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(RouteGuidanceEventType.NARROW_SIDEWALK, RouteGuidanceEventType.TURN_LEFT);
 	}
 
 	@Test

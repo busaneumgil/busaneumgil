@@ -20,7 +20,6 @@ import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
-import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
@@ -224,12 +223,6 @@ class AppContainer(
             accessTokenProvider = {
                 authSessionRepository.getAuthGateState().authSession?.accessToken
             },
-            initialBookmarks =
-                if (AppEnvironment.isDebugBuild) {
-                    MockBookmarkFixtures.defaultBookmarks
-                } else {
-                    emptyList()
-                },
         )
     }
 

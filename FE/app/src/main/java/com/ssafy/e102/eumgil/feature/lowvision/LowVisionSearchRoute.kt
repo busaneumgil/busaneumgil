@@ -34,8 +34,12 @@ fun LowVisionSearchRoute(
             (context.applicationContext as BusanEumgilApp).appContainer
         }
     val lowVisionSearchRepository =
-        remember(appContainer.searchRepository) {
-            LowVisionSearchRepository(delegate = appContainer.searchRepository)
+        remember(appContainer.searchRepository, appContainer.placesRepository, appContainer.currentLocationManager) {
+            LowVisionSearchRepository(
+                delegate = appContainer.searchRepository,
+                placesRepository = appContainer.placesRepository,
+                currentLocationProvider = { appContainer.currentLocationManager.latestLocation.value },
+            )
         }
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
@@ -54,6 +58,10 @@ fun LowVisionSearchRoute(
             ViewModelProvider(owner, viewModelFactory).get(LOW_VISION_SEARCH_VIEW_MODEL_KEY, SearchViewModel::class.java)
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(appContainer.currentLocationManager) {
+        appContainer.currentLocationManager.refreshLatestLocation()
+    }
 
     LaunchedEffect(viewModel, initialQuery) {
         viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = RouteEditingTarget.DESTINATION))

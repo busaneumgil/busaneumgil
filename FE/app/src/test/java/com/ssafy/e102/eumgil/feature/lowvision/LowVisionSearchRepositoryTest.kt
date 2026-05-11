@@ -41,10 +41,7 @@ class LowVisionSearchRepositoryTest {
 
             assertEquals(listOf("delegate-place"), results.map(SearchResult::placeId))
             assertTrue(delegate.searchRequests.isEmpty())
-            val request = delegate.searchPageRequests.single()
-            assertEquals("Braille", request.keyword)
-            assertEquals(35.1796, request.latitude ?: 0.0, 0.0)
-            assertEquals(129.0756, request.longitude ?: 0.0, 0.0)
+            assertEquals(listOf(SearchQuery(keyword = "Braille")), delegate.searchPageRequests)
         }
 
     @Test
@@ -72,11 +69,7 @@ class LowVisionSearchRepositoryTest {
             val page = repository.searchPage(query)
 
             assertEquals(expectedPage, page)
-            val request = delegate.searchPageRequests.single()
-            assertEquals(query.keyword, request.keyword)
-            assertEquals(query.cursor, request.cursor)
-            assertEquals(35.1796, request.latitude ?: 0.0, 0.0)
-            assertEquals(129.0756, request.longitude ?: 0.0, 0.0)
+            assertEquals(listOf(query), delegate.searchPageRequests)
         }
 
     @Test
@@ -122,79 +115,6 @@ class LowVisionSearchRepositoryTest {
 
             val query = placesRepository.queries.single()
             assertEquals(setOf(PlaceCategory.FOOD_CAFE, PlaceCategory.RESTAURANT), query.categories)
-            assertEquals(35.1796, query.latitude ?: 0.0, 0.0)
-            assertEquals(129.0756, query.longitude ?: 0.0, 0.0)
-        }
-
-    @Test
-    fun `category result uses default Busan anchor when current location is outside route service area`() =
-        runBlocking {
-            val delegate = RecordingSearchRepository()
-            val placesRepository = RecordingPlacesRepository(places = emptyList())
-            val repository =
-                LowVisionSearchRepository(
-                    delegate = delegate,
-                    placesRepository = placesRepository,
-                    currentLocationProvider = {
-                        LocationSnapshot(
-                            latitude = 37.5665,
-                            longitude = 126.9780,
-                            accuracyMeters = 10f,
-                            recordedAtEpochMillis = System.currentTimeMillis(),
-                        )
-                    },
-                )
-
-            repository.searchPage(SearchQuery(keyword = "\uC74C\uC2DD\uC810"))
-
-            val query = placesRepository.queries.single()
-            assertEquals(35.1796, query.latitude ?: 0.0, 0.0)
-            assertEquals(129.0756, query.longitude ?: 0.0, 0.0)
-        }
-
-    @Test
-    fun `live low vision search uses Busan anchor and removes results outside route service area`() =
-        runBlocking {
-            val delegate =
-                RecordingSearchRepository(
-                    searchPage =
-                        SearchPage(
-                            results =
-                                listOf(
-                                    SearchResult(
-                                        placeId = "busan-place",
-                                        title = "Busan Place",
-                                        subtitle = "Busan",
-                                        latitude = 35.1796,
-                                        longitude = 129.0756,
-                                    ),
-                                    SearchResult(
-                                        placeId = "seoul-place",
-                                        title = "Seoul Place",
-                                        subtitle = "Seoul",
-                                        latitude = 37.5665,
-                                        longitude = 126.9780,
-                                    ),
-                                ),
-                        ),
-                )
-            val repository =
-                LowVisionSearchRepository(
-                    delegate = delegate,
-                    currentLocationProvider = {
-                        LocationSnapshot(
-                            latitude = 37.5665,
-                            longitude = 126.9780,
-                            accuracyMeters = 10f,
-                            recordedAtEpochMillis = System.currentTimeMillis(),
-                        )
-                    },
-                )
-
-            val page = repository.searchPage(SearchQuery(keyword = "museum"))
-
-            assertEquals(listOf("busan-place"), page.results.map(SearchResult::placeId))
-            val query = delegate.searchPageRequests.single()
             assertEquals(35.1796, query.latitude ?: 0.0, 0.0)
             assertEquals(129.0756, query.longitude ?: 0.0, 0.0)
         }

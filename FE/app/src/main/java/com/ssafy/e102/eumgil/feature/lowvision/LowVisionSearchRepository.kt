@@ -25,7 +25,7 @@ internal class LowVisionSearchRepository(
     override suspend fun searchPage(query: SearchQuery): SearchPage {
         val categories = query.normalizedKeyword.toLowVisionCategoryFilters()
         if (categories != null && query.cursor.isNullOrBlank() && placesRepository != null) {
-            val anchor = currentLocationProvider().toLowVisionSearchAnchor()
+            val anchor = currentLocationProvider().toCategorySearchAnchor()
             val places =
                 placesRepository.getPlaces(
                     PlaceQuery(
@@ -35,15 +35,10 @@ internal class LowVisionSearchRepository(
                     ),
                 )
 
-            return SearchPage(results = places.map(PlaceSummary::toSearchResult).filter(SearchResult::isInLowVisionRouteServiceArea))
+            return SearchPage(results = places.map(PlaceSummary::toSearchResult))
         }
 
-        val page = delegate.searchPage(query.withLowVisionSearchAnchor())
-        val routableResults = page.results.filter(SearchResult::isInLowVisionRouteServiceArea)
-        return page.copy(
-            results = routableResults,
-            size = routableResults.size,
-        )
+        return delegate.searchPage(query)
     }
 
     override suspend fun analyzeVoiceSearch(
@@ -62,19 +57,6 @@ internal class LowVisionSearchRepository(
     override suspend fun saveRecentDestination(destination: RecentDestination) {
         delegate.saveRecentDestination(destination)
     }
-
-    private fun SearchQuery.withLowVisionSearchAnchor(): SearchQuery {
-        val currentAnchor = currentLocationProvider().toLowVisionSearchAnchor()
-        val hasRoutableAnchor =
-            latitude != null &&
-                longitude != null &&
-                isInLowVisionRouteServiceArea(latitude = latitude, longitude = longitude)
-        return if (hasRoutableAnchor) {
-            this
-        } else {
-            copy(latitude = currentAnchor.latitude, longitude = currentAnchor.longitude)
-        }
-    }
 }
 
 private data class CategorySearchAnchor(
@@ -82,22 +64,12 @@ private data class CategorySearchAnchor(
     val longitude: Double,
 )
 
-private fun LocationSnapshot?.toLowVisionSearchAnchor(): CategorySearchAnchor =
-    if (this != null && isFreshCurrentLocation() && isInLowVisionRouteServiceArea(latitude = latitude, longitude = longitude)) {
+private fun LocationSnapshot?.toCategorySearchAnchor(): CategorySearchAnchor =
+    if (this != null && isFreshCurrentLocation()) {
         CategorySearchAnchor(latitude = latitude, longitude = longitude)
     } else {
         DEFAULT_CATEGORY_SEARCH_ANCHOR
     }
-
-private fun SearchResult.isInLowVisionRouteServiceArea(): Boolean =
-    isInLowVisionRouteServiceArea(latitude = latitude, longitude = longitude)
-
-private fun isInLowVisionRouteServiceArea(
-    latitude: Double,
-    longitude: Double,
-): Boolean =
-    latitude in BUSAN_MIN_LATITUDE..BUSAN_MAX_LATITUDE &&
-        longitude in BUSAN_MIN_LONGITUDE..BUSAN_MAX_LONGITUDE
 
 private fun String.toLowVisionCategoryFilters(): Set<PlaceCategory>? =
     when (trim()) {
@@ -123,7 +95,3 @@ private fun PlaceSummary.toSearchResult(): SearchResult =
     )
 
 private val DEFAULT_CATEGORY_SEARCH_ANCHOR = CategorySearchAnchor(latitude = 35.1796, longitude = 129.0756)
-private const val BUSAN_MIN_LATITUDE = 34.85
-private const val BUSAN_MAX_LATITUDE = 35.45
-private const val BUSAN_MIN_LONGITUDE = 128.70
-private const val BUSAN_MAX_LONGITUDE = 129.40

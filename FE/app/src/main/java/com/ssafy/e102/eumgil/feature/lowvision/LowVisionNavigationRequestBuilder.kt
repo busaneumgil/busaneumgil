@@ -22,6 +22,13 @@ import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationSelectionHandoff
 import kotlinx.coroutines.CancellationException
+import kotlin.math.atan2
+import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 internal data class LowVisionNavigationPlan(
     val searchData: RouteSearchData,
@@ -48,10 +55,11 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
         }
     val resolvedOrigin = walkSearchData.query.origin
     val selectedWalkRoute =
-        walkSearchData.findRoute(RouteOption.SAFE)
+        (walkSearchData.findRoute(RouteOption.SAFE)
             ?: walkSearchData.primaryRoute
             ?: walkSearchData.routes.firstOrNull()
-            ?: return fallbackLowVisionNavigationPlan(query = walkSearchData.query)
+            ?: return fallbackLowVisionNavigationPlan(query = walkSearchData.query))
+            .withLowVisionNavigationDefaults(query = walkSearchData.query)
     if (selectedWalkRoute.summary.distanceMeters <= LOW_VISION_TRANSIT_THRESHOLD_METERS) {
         return LowVisionNavigationPlan(
             searchData = walkSearchData,
@@ -76,13 +84,14 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
             )
         }
     val selectedTransitRoute =
-        transitSearchData.findRoute(RouteOption.RECOMMENDED)
+        (transitSearchData.findRoute(RouteOption.RECOMMENDED)
             ?: transitSearchData.primaryRoute
             ?: transitSearchData.routes.firstOrNull()
             ?: return LowVisionNavigationPlan(
                 searchData = walkSearchData,
                 selectedRoute = selectedWalkRoute,
-            )
+            ))
+            .withLowVisionNavigationDefaults(query = transitSearchData.query)
 
     return LowVisionNavigationPlan(
         searchData = transitSearchData,
@@ -183,6 +192,141 @@ private fun fallbackLowVisionNavigationPlan(query: RouteSearchQuery): LowVisionN
             ),
         selectedRoute = fallbackRoute,
     )
+}
+
+private fun RouteCandidate.withLowVisionNavigationDefaults(query: RouteSearchQuery): RouteCandidate {
+    val resolvedPolyline = lowVisionRoutePolyline(query)
+    val resolvedDistanceMeters = lowVisionDistanceMeters(resolvedPolyline)
+    val resolvedDurationSeconds = lowVisionDurationSeconds(resolvedDistanceMeters)
+    val resolvedEstimatedMinutes =
+        summary.estimatedTimeMinutes
+            .takeIf { estimatedMinutes -> estimatedMinutes > 0 }
+            ?: ceil(resolvedDurationSeconds / SECONDS_PER_MINUTE.toDouble()).toInt().coerceAtLeast(1)
+    val resolvedSegments =
+        segments
+            .takeIf(List<RouteSegment>::isNotEmpty)
+            ?: resolvedPolyline.toLowVisionRouteSegments(
+                totalDistanceMeters = resolvedDistanceMeters,
+            )
+    val renderableSegmentCount = resolvedSegments.count(RouteSegment::hasRenderablePolyline)
+
+    return copy(
+        summary =
+            summary.copy(
+                distanceMeters = resolvedDistanceMeters,
+                estimatedTimeMinutes = resolvedEstimatedMinutes,
+                durationSeconds = resolvedDurationSeconds,
+            ),
+        geometry = resolvedPolyline,
+        preview =
+            preview.copy(
+                polyline = resolvedPolyline,
+                segmentCount = resolvedSegments.size,
+                renderableSegmentCount = renderableSegmentCount,
+                fallbackSegmentCount = (resolvedSegments.size - renderableSegmentCount).coerceAtLeast(0),
+            ),
+        segments = resolvedSegments,
+    )
+}
+
+private fun RouteCandidate.lowVisionRoutePolyline(query: RouteSearchQuery): RoutePolyline =
+    when {
+        preview.polyline.isRenderable -> preview.polyline
+        geometry.isRenderable -> geometry
+        segments.any(RouteSegment::hasRenderablePolyline) -> segments.toLowVisionRoutePolyline()
+        legs.any { leg -> leg.polyline.isRenderable } ->
+            RoutePolyline(points = legs.flatMapPolylinePoints { leg -> leg.polyline.points })
+        else -> RoutePolyline(points = query.origin.coordinate.toFallbackPath(query.destination.coordinate))
+    }
+
+private fun RouteCandidate.lowVisionDistanceMeters(polyline: RoutePolyline): Int =
+    summary.distanceMeters
+        .takeIf { distanceMeters -> distanceMeters > 0 }
+        ?: segments.sumOf(RouteSegment::distanceMeters).takeIf { distanceMeters -> distanceMeters > 0 }
+        ?: legs
+            .sumOf { leg ->
+                leg.distanceMeters ?: leg.steps.sumOf { step -> step.distanceMeters }
+            }.takeIf { distanceMeters -> distanceMeters > 0 }
+        ?: polyline.points.totalLowVisionPolylineDistanceMeters().roundToInt().takeIf { distanceMeters -> distanceMeters > 0 }
+        ?: LOW_VISION_FALLBACK_DISTANCE_METERS
+
+private fun RouteCandidate.lowVisionDurationSeconds(distanceMeters: Int): Int =
+    summary.durationSeconds
+        ?.takeIf { durationSeconds -> durationSeconds > 0 }
+        ?: legs.sumOf { leg -> leg.durationSeconds ?: 0 }.takeIf { durationSeconds -> durationSeconds > 0 }
+        ?: summary.estimatedTimeMinutes
+            .takeIf { estimatedMinutes -> estimatedMinutes > 0 }
+            ?.times(SECONDS_PER_MINUTE)
+        ?: ceil(distanceMeters / LOW_VISION_WALKING_SPEED_METERS_PER_SECOND).toInt().coerceAtLeast(SECONDS_PER_MINUTE)
+
+private fun RoutePolyline.toLowVisionRouteSegments(totalDistanceMeters: Int): List<RouteSegment> {
+    val path = points.takeIf { routePoints -> routePoints.size >= 2 } ?: return emptyList()
+    val segmentDistances =
+        path.zipWithNext().map { (start, end) ->
+            haversineLowVisionDistanceMeters(start, end)
+        }
+    val measuredDistance = segmentDistances.sum().takeIf { distance -> distance > 0.0 }
+    val fallbackDistance = (totalDistanceMeters / segmentDistances.size).coerceAtLeast(1)
+
+    return path.zipWithNext().mapIndexed { index, (start, end) ->
+        val proportionalDistance =
+            measuredDistance
+                ?.let { totalMeasuredDistance ->
+                    (totalDistanceMeters * (segmentDistances[index] / totalMeasuredDistance)).roundToInt()
+                }
+                ?.coerceAtLeast(1)
+                ?: fallbackDistance
+        fallbackSegment(
+            sequence = index + 1,
+            points = listOf(start, end),
+            distanceMeters = proportionalDistance,
+            guidanceMessage =
+                when (index) {
+                    0 -> "Continue straight from the start."
+                    path.lastIndex - 1 -> "Continue toward the destination."
+                    else -> "Continue on the suggested route."
+                },
+        )
+    }
+}
+
+private fun List<RouteSegment>.toLowVisionRoutePolyline(): RoutePolyline =
+    RoutePolyline(points = flatMapPolylinePoints { segment -> segment.polyline.points })
+
+private fun <T> List<T>.flatMapPolylinePoints(pointsOf: (T) -> List<GeoCoordinate>): List<GeoCoordinate> =
+    buildList {
+        this@flatMapPolylinePoints.forEach { item ->
+            val points = pointsOf(item)
+            if (points.isEmpty()) return@forEach
+            if (isEmpty()) {
+                addAll(points)
+            } else if (last() == points.first()) {
+                addAll(points.drop(1))
+            } else {
+                addAll(points)
+            }
+        }
+    }
+
+private fun List<GeoCoordinate>.totalLowVisionPolylineDistanceMeters(): Double =
+    if (size < 2) {
+        0.0
+    } else {
+        zipWithNext().sumOf { (start, end) -> haversineLowVisionDistanceMeters(start, end) }
+    }
+
+private fun haversineLowVisionDistanceMeters(
+    start: GeoCoordinate,
+    end: GeoCoordinate,
+): Double {
+    val dLat = Math.toRadians(end.latitude - start.latitude)
+    val dLon = Math.toRadians(end.longitude - start.longitude)
+    val sinHalfLat = sin(dLat / 2)
+    val sinHalfLon = sin(dLon / 2)
+    val h =
+        sinHalfLat.pow(2) +
+            cos(Math.toRadians(start.latitude)) * cos(Math.toRadians(end.latitude)) * sinHalfLon.pow(2)
+    return 2 * LOW_VISION_EARTH_RADIUS_METERS * atan2(sqrt(h), sqrt(1 - h))
 }
 
 private fun RouteSearchQuery.toLowVisionFallbackRoute(): RouteCandidate {
@@ -298,6 +442,8 @@ private const val LOW_VISION_TRANSIT_THRESHOLD_METERS = 750
 private const val LOW_VISION_FALLBACK_DISTANCE_METERS = 600
 private const val LOW_VISION_FALLBACK_DURATION_SECONDS = 600
 private const val LOW_VISION_FALLBACK_SEGMENT_COUNT = 3
+private const val LOW_VISION_WALKING_SPEED_METERS_PER_SECOND = 1.0
+private const val LOW_VISION_EARTH_RADIUS_METERS = 6_371_000.0
 private const val LOW_VISION_FALLBACK_ROUTE_ID = "low-vision-fallback-route"
 private const val LOW_VISION_FALLBACK_ROUTE_TITLE = "Low vision route"
 private const val LOW_VISION_FALLBACK_SOURCE_LABEL = "Low vision fallback route"

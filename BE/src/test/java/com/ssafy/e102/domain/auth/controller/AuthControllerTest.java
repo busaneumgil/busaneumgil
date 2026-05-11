@@ -4,9 +4,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,12 +23,14 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.ssafy.e102.domain.auth.cookie.RefreshTokenCookieManager;
 import com.ssafy.e102.domain.auth.dto.response.SignupResponse;
 import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
+import com.ssafy.e102.global.security.jwt.JwtProperties;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 class AuthControllerTest {
@@ -39,7 +43,18 @@ class AuthControllerTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService))
+		RefreshTokenCookieManager refreshTokenCookieManager = new RefreshTokenCookieManager(
+			new JwtProperties(
+				"bG9jYWwtand0LXNlY3JldC1mb3ItZTEwMi0zMmJ5dGVzISE=",
+				"e102-test",
+				Duration.ofMinutes(15),
+				Duration.ofDays(14),
+				Duration.ofMinutes(10)),
+			"refreshToken",
+			"/auth",
+			"Lax",
+			false);
+		mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService, refreshTokenCookieManager))
 			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
 			.build();
 	}
@@ -67,7 +82,9 @@ class AuthControllerTest {
 			.andExpect(jsonPath("$.data.refreshToken").value("refresh-token"))
 			.andExpect(jsonPath("$.data.userId").value(userId.toString()))
 			.andExpect(jsonPath("$.data.selectedPrimaryUserType").value("MOBILITY_IMPAIRED"))
-			.andExpect(jsonPath("$.data.selectedMobilitySubtype").value("MANUAL_WHEELCHAIR"));
+			.andExpect(jsonPath("$.data.selectedMobilitySubtype").value("MANUAL_WHEELCHAIR"))
+			.andExpect(
+				header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=refresh-token")));
 	}
 
 	@Test
@@ -92,7 +109,9 @@ class AuthControllerTest {
 			.andExpect(jsonPath("$.data.refreshToken").value("refresh-token"))
 			.andExpect(jsonPath("$.data.userId").value(userId.toString()))
 			.andExpect(jsonPath("$.data.selectedPrimaryUserType").value("LOW_VISION"))
-			.andExpect(jsonPath("$.data.selectedMobilitySubtype").doesNotExist());
+			.andExpect(jsonPath("$.data.selectedMobilitySubtype").doesNotExist())
+			.andExpect(
+				header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=refresh-token")));
 	}
 
 	@Test
@@ -106,7 +125,22 @@ class AuthControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
-			.andExpect(jsonPath("$.data.refreshToken").value("new-refresh-token"));
+			.andExpect(jsonPath("$.data.refreshToken").value("new-refresh-token"))
+			.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=new-refresh-token")));
+	}
+
+	@Test
+	@DisplayName("토큰 재발급 요청은 쿠키의 refresh token도 사용할 수 있다")
+	void reissueWithCookie() throws Exception {
+		when(authService.reissue(any())).thenReturn(new TokenResponse("new-access-token", "new-refresh-token"));
+
+		mockMvc.perform(post("/auth/reissue")
+			.cookie(new jakarta.servlet.http.Cookie("refreshToken", "cookie-refresh-token")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
+			.andExpect(jsonPath("$.data.refreshToken").value("new-refresh-token"))
+			.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=new-refresh-token")));
 	}
 
 	@Test
@@ -122,7 +156,8 @@ class AuthControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data").doesNotExist())
-			.andExpect(jsonPath("$.message").value("로그아웃되었습니다."));
+			.andExpect(jsonPath("$.message").value("로그아웃되었습니다."))
+			.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("Max-Age=0")));
 
 		verify(authService).logout(userId, "access-token");
 		SecurityContextHolder.clearContext();

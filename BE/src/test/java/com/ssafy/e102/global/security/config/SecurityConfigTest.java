@@ -259,7 +259,8 @@ class SecurityConfigTest {
 			.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
 			.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization"))
 			.andExpect(status().isOk())
-			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3001"));
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3001"))
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
 	}
 
 	@Test

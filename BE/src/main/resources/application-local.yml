@@ -31,6 +31,9 @@ logging:
 auth:
   test:
     enabled: ${AUTH_TEST_ENABLED:true}
+  refresh-cookie:
+    secure: ${AUTH_REFRESH_COOKIE_SECURE:false}
+    same-site: ${AUTH_REFRESH_COOKIE_SAME_SITE:Lax}
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3001}

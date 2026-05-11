@@ -17,4 +17,4 @@ WORKDIR /app/llm_test/server
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "gunicorn --bind ${AI_HOST}:${AI_PORT} app:app"]
+CMD ["sh", "-c", "gunicorn --bind ${AI_HOST}:${AI_PORT} --error-logfile - --capture-output app:app"]

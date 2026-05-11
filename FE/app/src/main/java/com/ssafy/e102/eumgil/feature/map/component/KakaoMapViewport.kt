@@ -82,6 +82,7 @@ internal fun KakaoMapViewport(
     val lifecycleOwner = LocalLifecycleOwner.current
     var reloadGeneration by remember { mutableIntStateOf(0) }
     var isRendererRestarting by remember { mutableStateOf(false) }
+    var attemptedAutomaticRecoveryCount by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reloadGeneration, isRendererRestarting) {
         if (!isRendererRestarting) return@LaunchedEffect
@@ -102,6 +103,23 @@ internal fun KakaoMapViewport(
     key(reloadGeneration) {
         val controller = remember(reloadGeneration) { KakaoMapViewportController() }
         val rendererFailure = controller.rendererFailure
+
+        LaunchedEffect(controller, rendererFailure, attemptedAutomaticRecoveryCount) {
+            val failure = rendererFailure ?: return@LaunchedEffect
+            if (
+                !shouldAutoRestartKakaoRenderer(
+                    failure = failure,
+                    attemptedAutomaticRecoveryCount = attemptedAutomaticRecoveryCount,
+                )
+            ) {
+                return@LaunchedEffect
+            }
+
+            controller.finish()
+            attemptedAutomaticRecoveryCount += 1
+            isRendererRestarting = true
+            reloadGeneration += 1
+        }
 
         LaunchedEffect(controller, controller.rendererStatus) {
             if (controller.rendererStatus != KakaoRendererStatus.Initializing) return@LaunchedEffect
@@ -188,6 +206,7 @@ internal fun KakaoMapViewport(
                         if (isRendererError) {
                             {
                                 controller.finish()
+                                attemptedAutomaticRecoveryCount = 0
                                 isRendererRestarting = true
                                 reloadGeneration += 1
                             }

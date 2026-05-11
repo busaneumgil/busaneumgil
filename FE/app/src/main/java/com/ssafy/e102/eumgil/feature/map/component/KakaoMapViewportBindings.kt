@@ -199,6 +199,16 @@ internal fun resolveKakaoRendererFailureAfterUnexpectedDestroy(
     existingFailure: KakaoRendererFailure?,
 ): KakaoRendererFailure = existingFailure ?: createKakaoRendererDestroyedFailure()
 
+internal fun shouldAutoRestartKakaoRenderer(
+    failure: KakaoRendererFailure,
+    attemptedAutomaticRecoveryCount: Int,
+): Boolean =
+    attemptedAutomaticRecoveryCount < 1 &&
+        (
+            failure.reasonLabel == KAKAO_RENDERER_TIMEOUT_REASON_LABEL ||
+                failure.reasonLabel == KAKAO_RENDERER_DESTROYED_REASON_LABEL
+        )
+
 internal fun createKakaoRendererDestroyedFailure(): KakaoRendererFailure =
     KakaoRendererFailure(
         reasonLabel = KAKAO_RENDERER_DESTROYED_REASON_LABEL,

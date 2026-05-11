@@ -5,6 +5,8 @@ import java.util.List;
 
 import org.locationtech.jts.geom.Point;
 
+import com.ssafy.e102.domain.place.exception.PlaceErrorCode;
+import com.ssafy.e102.domain.place.exception.PlaceException;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.global.entity.BaseEntity;
 
@@ -54,4 +56,49 @@ public class Place extends BaseEntity {
 
 	@OneToMany(mappedBy = "place", fetch = FetchType.LAZY)
 	private List<PlaceAccessibilityFeature> accessibilityFeatures = new ArrayList<>();
+
+	public void updateBasicInfo(
+		String name,
+		PlaceCategory category,
+		String address,
+		Point point,
+		String providerPlaceId) {
+		this.name = normalizeName(valueOrDefault(name, this.name));
+		this.category = valueOrDefault(category, this.category);
+		this.address = normalizeNullableText(valueOrDefault(address, this.address));
+		this.point = requirePoint(valueOrDefault(point, this.point));
+		this.providerPlaceId = normalizeNullableText(valueOrDefault(providerPlaceId, this.providerPlaceId));
+	}
+
+	private static String normalizeName(String name) {
+		if (name == null || name.isBlank()) {
+			throw invalidRequest("장소명은 필수입니다.");
+		}
+		return name.trim();
+	}
+
+	private static String normalizeNullableText(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		return value.trim();
+	}
+
+	private static Point requirePoint(Point point) {
+		if (point == null) {
+			throw invalidRequest("장소 좌표는 필수입니다.");
+		}
+		return point;
+	}
+
+	private static <T> T valueOrDefault(T value, T defaultValue) {
+		if (value == null) {
+			return defaultValue;
+		}
+		return value;
+	}
+
+	private static PlaceException invalidRequest(String message) {
+		return new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, message);
+	}
 }

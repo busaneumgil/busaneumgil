@@ -22,6 +22,29 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 	@EntityGraph(attributePaths = "accessibilityFeatures")
 	List<Place> findAllByPlaceIdIn(Collection<Long> placeIds);
 
+	Optional<Place> findByProviderPlaceId(String providerPlaceId);
+
+	@Query(value = """
+		select distinct p.*
+		from places p
+		join admin_areas aa
+			on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 500)::geometry)
+		where aa.gu = :gu
+			and (
+				aa.dong = :dong
+				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+			)
+		order by p.place_id asc
+		limit :limit
+		""", nativeQuery = true)
+	List<Place> findAllIntersectingArea(
+		@Param("gu")
+		String gu,
+		@Param("dong")
+		String dong,
+		@Param("limit")
+		int limit);
+
 	@Query(value = """
 		select p.place_id
 		from places p

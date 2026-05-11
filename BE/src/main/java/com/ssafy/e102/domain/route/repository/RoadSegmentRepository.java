@@ -14,7 +14,7 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 		select distinct rs.*
 		from road_segments rs
 		join admin_areas aa
-			on ST_Intersects(rs.geom, ST_Envelope(ST_Buffer(aa.geom::geography, 500)::geometry))
+			on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 500)::geometry)
 		where aa.gu = :gu
 			and (
 				aa.dong = :dong
@@ -35,7 +35,7 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 		select count(distinct rs.edge_id)
 		from road_segments rs
 		join admin_areas aa
-			on ST_Intersects(rs.geom, ST_Envelope(ST_Buffer(aa.geom::geography, 500)::geometry))
+			on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 500)::geometry)
 		where aa.gu = :gu
 			and (
 				aa.dong = :dong

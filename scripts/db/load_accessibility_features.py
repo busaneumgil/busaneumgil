@@ -743,6 +743,10 @@ def ensure_schema(cursor) -> None:
           ON segment_features(edge_id);
         CREATE INDEX IF NOT EXISTS segment_features_geom_gix
           ON segment_features USING GIST ("geom");
+
+        CREATE SEQUENCE IF NOT EXISTS segment_features_feature_id_seq;
+        ALTER TABLE segment_features
+          ALTER COLUMN feature_id SET DEFAULT nextval('segment_features_feature_id_seq');
         """
     )
 
@@ -1183,6 +1187,12 @@ def insert_and_update(cursor, dry_run: bool) -> tuple[int, int]:
           END
         FROM accessibility_edge_updates u
         WHERE s.edge_id = u.edge_id;
+
+        SELECT setval(
+          'segment_features_feature_id_seq',
+          COALESCE((SELECT MAX(feature_id) FROM segment_features), 0) + 1,
+          false
+        );
         """
     )
     return insert_count, update_candidate_count

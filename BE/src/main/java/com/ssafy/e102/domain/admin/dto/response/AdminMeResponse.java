@@ -11,7 +11,7 @@ public record AdminMeResponse(
 	UUID userId,
 	@Schema(description = "관리자 권한명", example = "ADMIN")
 	String role,
-	@Schema(description = "관리자 permission 목록", example = "[\"HAZARD_REPORT_READ\", \"HAZARD_REPORT_REVIEW\"]")
+	@Schema(description = "관리자 permission 목록", example = "[\"ADMIN_MAP_READ\", \"ADMIN_PLACE_READ\", \"ADMIN_PLACE_WRITE\", \"HAZARD_REPORT_READ\", \"HAZARD_REPORT_REVIEW\"]")
 	List<String> permissions) {
 
 	public static AdminMeResponse of(UUID userId, List<String> permissions) {

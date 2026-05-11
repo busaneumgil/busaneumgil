@@ -35,6 +35,7 @@
 - 현재 회원 탈퇴 구현은 사용자 row를 물리 삭제한다. FK 제약을 피하기 위해 사용자 종속 데이터는 명시 삭제 순서로 먼저 정리한다.
 - 모든 물리 DB 컬럼 네이밍은 `snake_case`를 사용한다. Java 엔티티 필드와 API 응답 필드는 `camelCase`를 유지한다.
 - 숫자 ID를 참조하는 외래키 컬럼은 자동 증가 컬럼이 아니므로 `SERIAL/BIGSERIAL`이 아니라 `INT/BIGINT`로 표기한다.
+- `road_nodes.vertex_id`, `road_segments.edge_id`, `segment_features.feature_id`는 기존 CSV 적재 시 명시 ID를 유지하되, 관리자 페이지에서 신규 row를 추가할 때는 DB sequence default로 다음 ID를 발급한다.
 - PK는 테이블별 데이터 증가량 기준으로 구분한다. 대량 적재 또는 로그성 테이블은 `BIGINT`, 일반 관리성 테이블은 `INT`를 우선 검토한다.
 - 사용자 식별자인 `users.user_id`는 Java/API에서 `userId`로 노출하고 JWT subject에도 동일한 UUID를 사용한다.
 - 소셜 OAuth 인증은 서비스 회원가입과 분리한다. `users` row는 필수 약관 동의와 온보딩 선택값이 모두 확정된 뒤 생성하므로, 가입 완료 사용자만 저장한다.
@@ -560,7 +561,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 정점 ID | vertex_id | BIGINT | NOT NULL |  |
+| 정점 ID | vertex_id | BIGINT | NOT NULL | `nextval('road_nodes_vertex_id_seq')` |
 | 소스 노드 키 | source_node_key | VARCHAR(100) | NOT NULL |  |
 | 노드 좌표 | point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 
@@ -575,6 +576,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
   - 예시: `"129.083214:35.179032"`
 - OSM 전용 `osm_node_id`는 이 버전에서 제거됐다. `vertex_id`가 유일한 PK이며 `source_node_key`가 natural key 역할을 한다.
 - `road_segments`의 시작/종료점으로 사용된 anchor node만 저장한다.
+- 관리자 페이지에서 새 segment를 추가할 때 1.5m 이내 기존 node가 있으면 해당 node를 재사용하고, 없으면 `road_nodes_vertex_id_seq`로 신규 node를 생성한다.
 
 ---
 
@@ -590,7 +592,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| 간선 ID | edge_id | BIGINT | NOT NULL |  |
+| 간선 ID | edge_id | BIGINT | NOT NULL | `nextval('road_segments_edge_id_seq')` |
 | 시작 노드 ID | from_node_id | BIGINT | NOT NULL |  |
 | 종료 노드 ID | to_node_id | BIGINT | NOT NULL |  |
 | 선형 좌표 | geom | GEOMETRY(LINESTRING, 4326) | NOT NULL |  |
@@ -616,6 +618,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 ### 비고
 
 - `edge_id`가 downstream(CSV ETL, GraphHopper)에서 사용하는 유일한 surrogate key다.
+- 관리자 페이지에서 새 segment를 추가할 때 `road_segments_edge_id_seq`로 신규 `edge_id`를 발급한다. CSV 적재 스크립트는 명시 ID를 그대로 넣고 적재 후 sequence를 현재 최대 ID 다음으로 보정한다.
 - `walk_access` 기본값은 SHP 소스에서 보행 전용 의미를 확정할 수 없으므로 `UNKNOWN`으로 시작한다. `NO`는 모든 프로필에서 통행 차단, `UNKNOWN`은 차단하지 않고 penalty로 처리한다.
 - `avg_slope_percent`, `width_meter`는 CSV ETL(`slope_analysis_staging.csv`) 보강값으로 채워진다.
 - 경사 난이도는 단일 파생 상태 컬럼으로 저장하지 않는다. `avg_slope_percent` 원천 수치를 기준으로 GraphHopper profile 또는 backend 정책에서 사용자 유형별 threshold를 적용한다.
@@ -718,7 +721,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
-| feature 식별자 | feature_id | BIGINT | NOT NULL |  |
+| feature 식별자 | feature_id | BIGINT | NOT NULL | `nextval('segment_features_feature_id_seq')` |
 | 소속 edge | edge_id | BIGINT | NOT NULL |  |
 | feature 종류 | feature_type | VARCHAR(50) | NOT NULL |  |
 | 표시 위치/구간 | geom | GEOMETRY(GEOMETRY, 4326) | NOT NULL |  |
@@ -729,6 +732,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 - `geom`은 feature 성격에 따라 `POINT`, `LINESTRING` 등으로 저장할 수 있도록 범용 geometry 타입을 사용한다.
 - `feature_type` 후보값: `CROSSWALK`, `AUDIO_SIGNAL`, `BRAILLE_BLOCK`, `STAIRS`.
 - 경사, 폭, 노면, 도보 가능 여부, 신호기 같은 원천/집계 feature는 `source_features`와 `road_segments`에서 관리한다.
+- 관리자 페이지에서 새 segment를 추가하면 `source_features`와 공간 매칭한 위치성 feature만 `segment_features_feature_id_seq`로 생성한다.
 
 ---
 

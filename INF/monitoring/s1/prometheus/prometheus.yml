@@ -14,3 +14,20 @@ scrape_configs:
   - job_name: cadvisor
     static_configs:
       - targets: ["cadvisor:8080"]
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          environment: dev
+          runtime_stack: s1-dev
+          service: redis
+
+  - job_name: s1-dev-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:18080"]
+        labels:
+          environment: dev
+          runtime_stack: s1-dev
+          service: backend

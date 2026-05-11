@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RoutePolyline
+import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteSearchData
@@ -149,6 +151,33 @@ class LowVisionNavigationRouteTest {
 
             assertEquals("fresh-route", request?.selectedRoute?.serverRouteId)
             assertNull(request?.selectionHandoff)
+        }
+
+    @Test
+    fun `low vision navigation repairs incomplete route metrics and steps`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "real-place-id",
+                    name = "Real Place",
+                    address = "Busan",
+                    latitude = 35.2,
+                    longitude = 129.2,
+                ),
+            )
+            val routeRepository = IncompleteFreshRouteRepository()
+
+            val request = routeRepository.buildLowVisionNavigationRequest(destinationSelectionRepository)
+
+            assertEquals("incomplete-route", request?.selectedRoute?.serverRouteId)
+            assertTrue(request?.selectedRoute?.summary?.distanceMeters ?: 0 > 0)
+            assertTrue(request?.selectedRoute?.summary?.estimatedTimeMinutes ?: 0 > 0)
+            assertTrue(request?.selectedRoute?.summary?.durationSeconds ?: 0 > 0)
+            assertTrue(request?.selectedRoute?.segments?.isNotEmpty() == true)
+            assertTrue(request?.selectedRoute?.previewPolyline?.isRenderable == true)
+            assertTrue(request?.selectionHandoff?.initialRemainingDistanceMeters ?: 0 > 0)
+            assertTrue(request?.selectionHandoff?.initialRemainingDurationSeconds ?: 0 > 0)
         }
 
     @Test
@@ -465,6 +494,82 @@ private class MissingSearchIdRouteRepository : RouteRepository {
     ): RouteRatingData = throw IllegalStateException("rating failed")
 }
 
+private class IncompleteFreshRouteRepository : RouteRepository {
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("cached route search should not be used for low vision navigation start")
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        val polyline =
+            RoutePolyline(
+                points =
+                    listOf(
+                        query.origin.coordinate,
+                        query.origin.coordinate.interpolateTo(query.destination.coordinate, fraction = 0.5),
+                        query.destination.coordinate,
+                    ),
+            )
+        return RouteSearchData(
+            query = query,
+            result =
+                RouteSearchResult(
+                    origin = query.origin,
+                    destination = query.destination,
+                    searchId = "incomplete-search",
+                    routes =
+                        listOf(
+                            RouteCandidate(
+                                routeId = "incomplete-route",
+                                serverRouteId = "incomplete-route",
+                                routeOption = RouteOption.SAFE,
+                                title = "Incomplete route",
+                                summary =
+                                    RouteSummary(
+                                        distanceMeters = 0,
+                                        estimatedTimeMinutes = 0,
+                                        riskLevel = RouteRiskLevel.LOW,
+                                        durationSeconds = 0,
+                                    ),
+                                geometry = polyline,
+                                preview = RoutePreviewModel(polyline = polyline),
+                                segments = emptyList(),
+                            ),
+                        ),
+                ),
+            source = RouteSearchSource.serverApi(),
+        )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("transit route search was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData {
+        assertEquals("incomplete-route", routeId)
+        assertEquals("incomplete-search", searchId)
+        return RouteSessionData(sessionId = "session-incomplete")
+    }
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = throw IllegalStateException("refresh failed")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    ): RouteRerouteData = throw IllegalStateException("reroute failed")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData =
+        throw IllegalStateException("end route failed")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = throw IllegalStateException("rating failed")
+}
+
 private class TransitFailureFallbackRouteRepository : RouteRepository {
     var freshTransitSearchCalled: Boolean = false
 
@@ -643,6 +748,15 @@ private class CancellationRouteRepository : RouteRepository {
         score: Int,
     ): RouteRatingData = throw IllegalStateException("rating failed")
 }
+
+private fun com.ssafy.e102.eumgil.core.model.GeoCoordinate.interpolateTo(
+    destination: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    fraction: Double,
+): com.ssafy.e102.eumgil.core.model.GeoCoordinate =
+    com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+        latitude = latitude + (destination.latitude - latitude) * fraction,
+        longitude = longitude + (destination.longitude - longitude) * fraction,
+    )
 
 private fun lowVisionRouteSearchData(
     query: RouteSearchQuery,

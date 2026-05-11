@@ -149,6 +149,49 @@ class MapViewModel(
         currentLocationManager.stopLocationUpdates()
     }
 
+    fun onHomeReentered() {
+        isRecenterButtonActive = false
+        locationPermissionManager.refreshPermissionState()
+        latestPermissionState = locationPermissionManager.permissionState.value
+        if (latestPermissionState is LocationPermissionState.Granted) {
+            currentLocationManager.startLocationUpdates()
+            currentLocationManager.refreshLatestLocation()
+        }
+        latestLocation = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
+
+        val hadFacilitySelection = clearSelectedFacilitySelection()
+        val hadSelectedDestination = selectedDestination != null
+        selectedDestination = null
+        mutableUiState.update { state ->
+            state.copy(
+                selectedDestination = null,
+            )
+        }
+        if (hadSelectedDestination) {
+            destinationSelectionRepository.clearSelectedDestination()
+        }
+        if (hadFacilitySelection) {
+            renderSelectedFacilityState()
+        }
+
+        val currentLocation = latestLocation
+        if (currentLocation != null && latestPermissionState is LocationPermissionState.Granted) {
+            stopLocationLookup()
+            syncCameraToCurrentLocation(
+                snapshot = currentLocation,
+                incrementRequestId = true,
+            )
+        } else {
+            if (latestPermissionState is LocationPermissionState.Granted) {
+                startLocationLookup(forceRestart = true)
+            } else {
+                stopLocationLookup()
+            }
+            applyFallbackCameraTarget()
+        }
+        renderUiState()
+    }
+
     fun onAction(action: MapUiAction) {
         when (action) {
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
@@ -348,17 +391,18 @@ class MapViewModel(
                     placesRepository.getMapTappedPlaceDetail(payload.toMapPlaceDetailRequest())
                 }.onSuccess { detail ->
                     if (requestId != mapTapDetailRequestId) return@onSuccess
+                    val normalizedDetail = detail?.withFallbackCoordinate(coordinate)
                     isMapTapDetailLoading = false
-                    selectedMapTapDetail = detail
+                    selectedMapTapDetail = normalizedDetail
                     selectedFacilityBookmarkState =
-                        detail?.let { mapTapDetail ->
+                        normalizedDetail?.let { mapTapDetail ->
                             SelectedFacilityBookmarkState(
                                 facilityId = mapTapDetail.bookmarkCacheKey(),
                                 isBookmarked = mapTapDetail.isBookmarked,
                             )
                         } ?: SelectedFacilityBookmarkState()
                     mapTapDetailErrorMessage =
-                        if (detail == null) {
+                        if (normalizedDetail == null) {
                             MAP_TAP_DETAIL_EMPTY_MESSAGE
                         } else {
                             null
@@ -1012,8 +1056,18 @@ class MapViewModel(
             return
         }
 
+        if (shouldKeepCurrentLocationCameraWhileLocationRefreshes()) {
+            return
+        }
+
         applyDefaultCameraTarget()
     }
+
+    private fun shouldKeepCurrentLocationCameraWhileLocationRefreshes(): Boolean =
+        isRouteStarted &&
+            latestPermissionState is LocationPermissionState.Granted &&
+            latestLocation == null &&
+            mutableUiState.value.cameraTarget.source == MapCameraSource.CURRENT_LOCATION
 
     private fun applyDefaultCameraTarget() {
         mutableUiState.update { state ->
@@ -1588,6 +1642,18 @@ private fun MapTappedPlaceDetail.matchesBookmarkTarget(other: MapTappedPlaceDeta
         (!placeId.isNullOrBlank() && placeId == other.placeId) ||
         (!providerPlaceId.isNullOrBlank() && providerPlaceId == other.providerPlaceId) ||
         externalBookmarkFallbackKey() == other.externalBookmarkFallbackKey()
+
+private fun MapTappedPlaceDetail.withFallbackCoordinate(
+    fallbackCoordinate: MapCoordinate,
+): MapTappedPlaceDetail =
+    if (latitude.isValidLatitude() && longitude.isValidLongitude()) {
+        this
+    } else {
+        copy(
+            latitude = fallbackCoordinate.latitude,
+            longitude = fallbackCoordinate.longitude,
+        )
+    }
 
 private fun MapTappedPlaceDetail.toPlaceDestinationOrNull(): PlaceDestination? {
     if (!latitude.isValidLatitude() || !longitude.isValidLongitude()) return null

@@ -10,6 +10,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -26,6 +27,8 @@ fun MapRoute(
     onNavigateToMyPage: () -> Unit,
     onNavigateToRouteSetting: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    shouldResetForHomeEntry: Boolean = false,
+    onHomeReentryResetConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -55,6 +58,14 @@ fun MapRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val consumeHomeReentryReset by rememberUpdatedState(onHomeReentryResetConsumed)
+
+    LaunchedEffect(viewModel, shouldResetForHomeEntry) {
+        if (!shouldResetForHomeEntry) return@LaunchedEffect
+
+        viewModel.onHomeReentered()
+        consumeHomeReentryReset()
+    }
 
     DisposableEffect(lifecycleOwner, viewModel) {
         val lifecycle = lifecycleOwner.lifecycle

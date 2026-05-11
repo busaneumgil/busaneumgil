@@ -67,6 +67,14 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `low vision navigation complete done moves to low vision home`() {
+        assertEquals(
+            LowVisionRoute.Home.route,
+            resolveLowVisionNavigationCompleteDoneRoute(),
+        )
+    }
+
+    @Test
     fun `navigation bookmark save returns to low vision bookmark for low vision user`() {
         assertEquals(
             LowVisionRoute.Bookmark.route,

@@ -23,7 +23,7 @@ class LowVisionNavigationScreenTest {
     @Test
     fun `navigation screen exposes current location and exit action cards`() {
         assertEquals(
-            listOf("\uD604\uC7AC \uC704\uCE58", "\uC548\uB0B4 \uC885\uB8CC"),
+            listOf("\uD604\uC7AC \uC704\uCE58", "\uC548\uB0B4 \uC644\uB8CC"),
             lowVisionNavigationActionCards().map(LowVisionNavigationActionCard::label),
         )
     }

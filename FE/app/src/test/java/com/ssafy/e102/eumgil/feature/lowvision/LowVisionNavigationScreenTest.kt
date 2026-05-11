@@ -60,8 +60,30 @@ class LowVisionNavigationScreenTest {
     }
 
     @Test
-    fun `navigation current location card uses the gps coordinate display`() {
-        val display = lowVisionCurrentLocationDisplay(latitude = 35.179612, longitude = 129.075634)
+    fun `navigation current location card prefers resolved address over gps coordinates`() {
+        val display =
+            lowVisionCurrentLocationDisplay(
+                latitude = 35.179612,
+                longitude = 129.075634,
+                address = "\uBD80\uC0B0\uAD11\uC5ED\uC2DC \uBD80\uC0B0\uC9C4\uAD6C \uC911\uC559\uB300\uB85C 100",
+            )
+
+        assertEquals("\uD604\uC7AC \uC704\uCE58", display.title)
+        assertEquals("", display.supportingText)
+        assertEquals(
+            "\uD604\uC7AC \uC704\uCE58 \uBD80\uC0B0\uAD11\uC5ED\uC2DC \uBD80\uC0B0\uC9C4\uAD6C \uC911\uC559\uB300\uB85C 100",
+            display.talkBackText,
+        )
+    }
+
+    @Test
+    fun `navigation current location card falls back to gps coordinates when address is blank`() {
+        val display =
+            lowVisionCurrentLocationDisplay(
+                latitude = 35.179612,
+                longitude = 129.075634,
+                address = " ",
+            )
 
         assertEquals("\uD604\uC7AC \uC704\uCE58", display.title)
         assertEquals("", display.supportingText)

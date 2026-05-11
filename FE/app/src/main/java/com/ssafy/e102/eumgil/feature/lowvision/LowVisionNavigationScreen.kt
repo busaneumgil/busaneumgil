@@ -185,6 +185,7 @@ fun LowVisionNavigationScreen(
     modifier: Modifier = Modifier,
     onTabSelected: (LowVisionBottomTab) -> Unit = {},
     loadErrorMessage: String? = null,
+    currentLocationAddress: String? = null,
 ) {
     Column(
         modifier =
@@ -223,7 +224,11 @@ fun LowVisionNavigationScreen(
 
                 LowVisionCurrentLocationCard(
                     card = lowVisionNavigationActionCards().first(),
-                    display = lowVisionCurrentLocationDisplay(uiState.mapOverlay.currentLocation?.coordinate),
+                    display =
+                        lowVisionCurrentLocationDisplay(
+                            coordinate = uiState.mapOverlay.currentLocation?.coordinate,
+                            address = currentLocationAddress,
+                        ),
                     modifier =
                         Modifier
                             .fillMaxWidth()

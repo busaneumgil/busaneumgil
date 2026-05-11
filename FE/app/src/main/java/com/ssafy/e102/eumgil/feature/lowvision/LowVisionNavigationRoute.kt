@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiEvent
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel
 import kotlinx.coroutines.flow.collect
@@ -47,6 +48,13 @@ fun LowVisionNavigationRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var loadErrorMessage by remember { mutableStateOf<String?>(null) }
+    val currentLocationAddressResolver =
+        remember(appContext) { AndroidCurrentLocationAddressResolver(context = appContext) }
+    val currentLocationAddress =
+        rememberLowVisionCurrentLocationAddress(
+            coordinate = uiState.mapOverlay.currentLocation?.coordinate,
+            addressResolver = currentLocationAddressResolver,
+        )
 
     LaunchedEffect(appContainer.destinationSelectionRepository.selectedDestination.value) {
         loadErrorMessage = null
@@ -77,6 +85,7 @@ fun LowVisionNavigationRoute(
             onTabSelected = onTabSelected,
             modifier = modifier,
             loadErrorMessage = loadErrorMessage,
+            currentLocationAddress = currentLocationAddress,
         )
     }
 }

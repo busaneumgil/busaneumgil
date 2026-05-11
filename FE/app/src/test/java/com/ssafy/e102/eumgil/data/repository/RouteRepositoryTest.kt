@@ -72,6 +72,37 @@ class RouteRepositoryTest {
         }
 
     @Test
+    fun `getFreshRouteSearchData bypasses cached walk search ids before select`() =
+        runBlocking {
+            val localDataSource = RouteLocalDataSource()
+            var walkCallCount = 0
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource(
+                            searchWalkResponse = {
+                                walkCallCount += 1
+                                walkSearchResponse(
+                                    searchId = "rs_walk_server_$walkCallCount",
+                                    routeId = "walk_rt_safe_$walkCallCount",
+                                )
+                            },
+                        ),
+                )
+            val query = routeQuery(requestedOptions = listOf(RouteOption.SAFE))
+
+            val cached = repository.getRouteSearchData(query)
+            val fresh = repository.getFreshRouteSearchData(query)
+
+            assertEquals(2, walkCallCount)
+            assertEquals("rs_walk_server_1", cached.result.searchId)
+            assertEquals("rs_walk_server_2", fresh.result.searchId)
+            assertEquals("walk_rt_safe_2", fresh.routes.single().routeId)
+            assertEquals(fresh, localDataSource.getCachedSearchData(query))
+        }
+
+    @Test
     fun `getTransitRouteSearchData uses transit surface and caches transit result`() =
         runBlocking {
             val localDataSource = RouteLocalDataSource()
@@ -380,13 +411,16 @@ private fun routeQuery(requestedOptions: List<RouteOption>): RouteSearchQuery =
         requestedOptions = requestedOptions,
     )
 
-private fun walkSearchResponse(): RouteSearchResponseDto =
+private fun walkSearchResponse(
+    searchId: String = "rs_walk_server_001",
+    routeId: String = "walk_rt_safe_001",
+): RouteSearchResponseDto =
     RouteSearchResponseDto(
-        searchId = "rs_walk_server_001",
+        searchId = searchId,
         routes =
             listOf(
                 RouteDto(
-                    routeId = "walk_rt_safe_001",
+                    routeId = routeId,
                     transportMode = "WALK",
                     routeOption = "SAFE",
                     routeOptions = listOf("SAFE"),

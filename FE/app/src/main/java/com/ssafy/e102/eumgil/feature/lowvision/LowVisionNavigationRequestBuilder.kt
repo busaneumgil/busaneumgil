@@ -24,7 +24,7 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
 ): LowVisionNavigationPlan? {
     val destination = destinationSelectionRepository.selectedDestination.value.toLowVisionRouteWaypoint()
     val walkSearchData =
-        getRouteSearchData(
+        getFreshRouteSearchData(
             RouteSearchQuery(
                 origin = LOW_VISION_DEFAULT_ORIGIN,
                 destination = destination,
@@ -44,7 +44,7 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
     }
 
     val transitSearchData =
-        getTransitRouteSearchData(
+        getFreshTransitRouteSearchData(
             RouteSearchQuery(
                 origin = LOW_VISION_DEFAULT_ORIGIN,
                 destination = destination,

@@ -33,9 +33,14 @@ interface RouteRepository {
     // Primary read-model entry point for 199 route setting and 200/201/202 handoff consumers.
     suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData
 
+    suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData = getRouteSearchData(query)
+
     suspend fun searchRoutes(query: RouteSearchQuery): RouteSearchResult = getRouteSearchData(query).result
 
     suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData
+
+    suspend fun getFreshTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        getTransitRouteSearchData(query)
 
     suspend fun searchTransitRoutes(query: RouteSearchQuery): RouteSearchResult = getTransitRouteSearchData(query).result
 
@@ -80,12 +85,22 @@ class DefaultRouteRepository(
         }
 
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
-        getSearchData(query) { request ->
+        getSearchData(query = query, useCache = true) { request ->
+            remoteDataSource.searchWalkRoutes(request)
+        }
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        getSearchData(query = query, useCache = false) { request ->
             remoteDataSource.searchWalkRoutes(request)
         }
 
     override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
-        getSearchData(query) { request ->
+        getSearchData(query = query, useCache = true) { request ->
+            remoteDataSource.searchTransitRoutes(request)
+        }
+
+    override suspend fun getFreshTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        getSearchData(query = query, useCache = false) { request ->
             remoteDataSource.searchTransitRoutes(request)
         }
 
@@ -144,10 +159,13 @@ class DefaultRouteRepository(
 
     private suspend fun getSearchData(
         query: RouteSearchQuery,
+        useCache: Boolean,
         remoteSearch: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto,
     ): RouteSearchData {
-        localDataSource.getCachedSearchData(query)?.let { cachedSearchData ->
-            return cachedSearchData.copy(source = cachedSearchData.source.asCached())
+        if (useCache) {
+            localDataSource.getCachedSearchData(query)?.let { cachedSearchData ->
+                return cachedSearchData.copy(source = cachedSearchData.source.asCached())
+            }
         }
 
         val response = runAuthenticatedRemoteRequest { remoteSearch(query.toRequestDto()) }

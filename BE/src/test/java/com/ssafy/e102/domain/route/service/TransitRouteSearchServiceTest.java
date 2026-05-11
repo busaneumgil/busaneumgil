@@ -501,6 +501,25 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
+	@DisplayName("같은 BIMS 도착정보 key는 검색 요청 안에서 한 번만 조회한다")
+	void deduplicatesBimsArrivalRequestsWithinSearch() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(twoSameBusPath("map-duplicate-bims"))));
+		when(odsayClient.loadLane(any()))
+			.thenReturn(List.of(
+				new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.061 35.161, 129.066 35.166)"),
+				new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		service.search(UUID.randomUUID(), request());
+
+		verify(busanBimsClient, times(1)).findArrival("BS1", "BL1", "100");
+		assertThat(bimsTaskExecutor.executionCount()).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("shortlist 이후 BIMS 저상버스 결과를 RECOMMENDED 우선순위에 적용한다")
 	void appliesLowFloorPriorityAfterBimsEnrichment() {
 		when(odsayClient.searchPubTransPath(START, END))
@@ -639,6 +658,23 @@ class TransitRouteSearchServiceTest {
 				busLeg("100"),
 				walkLeg(),
 				busLeg("200"),
+				walkLeg()),
+			Map.of());
+	}
+
+	private OdsayTransitPath twoSameBusPath(String mapObj) {
+		return new OdsayTransitPath(
+			BigDecimal.valueOf(5000),
+			35,
+			900,
+			2,
+			0,
+			mapObj,
+			List.of(
+				walkLeg(),
+				busLeg("100"),
+				walkLeg(),
+				busLeg("100"),
 				walkLeg()),
 			Map.of());
 	}

@@ -51,5 +51,5 @@ busan:
   bims:
     base-url: ${BUSAN_BIMS_API_BASE_URL:https://apis.data.go.kr/6260000/BusanBIMS}
     service-key: ${BUSAN_BIMS_SERVICE_KEY_DECODING:}
-    connect-timeout: ${BUSAN_BIMS_CONNECT_TIMEOUT:5s}
-    read-timeout: ${BUSAN_BIMS_READ_TIMEOUT:5s}
+    connect-timeout: ${BUSAN_BIMS_CONNECT_TIMEOUT:1s}
+    read-timeout: ${BUSAN_BIMS_READ_TIMEOUT:2s}

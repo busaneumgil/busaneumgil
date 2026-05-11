@@ -2,6 +2,7 @@ package com.ssafy.e102.domain.route.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -16,6 +17,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,6 +84,7 @@ public class TransitRouteSearchService {
 	private static final int ACCESSIBLE_BUS_BOARDING_PREP_SECOND = 3 * 60;
 	private static final int OPTION_PRESELECT_LIMIT = 3;
 	private static final int BIMS_SHORTLIST_LIMIT = 5;
+	private static final Duration BIMS_ENRICHMENT_TIMEOUT = Duration.ofSeconds(2);
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
 		RouteBadge.STAIR,
@@ -378,16 +382,12 @@ public class TransitRouteSearchService {
 	private List<TransitRouteCandidate> enrichBimsCandidates(
 		List<TransitRouteBaseCandidate> baseCandidates,
 		WalkRouteUserProfile profile) {
-		List<TransitRouteCandidateFuture> futures = baseCandidates.stream()
-			.map(baseCandidate -> new TransitRouteCandidateFuture(
-				baseCandidate,
-				CompletableFuture.supplyAsync(() -> enrichBims(baseCandidate, profile), bimsTaskExecutor)))
-			.toList();
+		Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> arrivalFutures = bimsArrivalFutures(baseCandidates);
 		List<TransitRouteCandidate> candidates = new ArrayList<>();
 		RouteException firstBimsFailure = null;
-		for (TransitRouteCandidateFuture future : futures) {
+		for (TransitRouteBaseCandidate baseCandidate : baseCandidates) {
 			try {
-				candidates.add(future.future().join());
+				candidates.add(enrichBims(baseCandidate, profile, arrivalFutures));
 			} catch (CompletionException exception) {
 				RouteException routeException = routeException(exception);
 				if (routeException == null) {
@@ -404,9 +404,9 @@ public class TransitRouteSearchService {
 					"transit candidate skipped provider={} operation={} routeIndex={} legIndex={} mapObj={} status={} message={}",
 					"bims",
 					"enrichment",
-					future.baseCandidate().routeIndex(),
+					baseCandidate.routeIndex(),
 					"-",
-					future.baseCandidate().path().mapObj(),
+					baseCandidate.path().mapObj(),
 					routeException.getErrorCode().getStatus(),
 					routeException.getMessage(),
 					routeException);
@@ -418,10 +418,39 @@ public class TransitRouteSearchService {
 		return candidates;
 	}
 
+	private Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> bimsArrivalFutures(
+		List<TransitRouteBaseCandidate> baseCandidates) {
+		Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> arrivalFutures = new LinkedHashMap<>();
+		for (TransitRouteBaseCandidate baseCandidate : baseCandidates) {
+			for (OdsayTransitLeg leg : baseCandidate.path().legs()) {
+				if (leg.type() != TransportMode.BUS) {
+					continue;
+				}
+				for (OdsayTransitLane lane : leg.lanes()) {
+					BimsArrivalKey key = BimsArrivalKey.of(boardingStopId(leg), lane.busLocalBlId(), lane.busNo());
+					if (key.hasStopId()) {
+						arrivalFutures.computeIfAbsent(key, this::bimsArrivalFuture);
+					}
+				}
+			}
+		}
+		log.info("transit bims dedupe uniqueArrivalRequestCount={}", arrivalFutures.size());
+		return Map.copyOf(arrivalFutures);
+	}
+
+	private CompletableFuture<BusanBimsArrival> bimsArrivalFuture(BimsArrivalKey key) {
+		return CompletableFuture
+			.supplyAsync(() -> busanBimsClient.findArrival(key.stopId(), key.lineId(), key.routeNo()), bimsTaskExecutor)
+			.orTimeout(BIMS_ENRICHMENT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+	}
+
 	private RouteException routeException(CompletionException exception) {
 		Throwable cause = exception.getCause();
 		if (cause instanceof RouteException routeException) {
 			return routeException;
+		}
+		if (cause instanceof TimeoutException) {
+			return new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT);
 		}
 		return null;
 	}
@@ -569,13 +598,17 @@ public class TransitRouteSearchService {
 				|| profile.mobilitySubtype() == MobilitySubtype.MANUAL_WHEELCHAIR);
 	}
 
-	private TransitRouteCandidate enrichBims(TransitRouteBaseCandidate baseCandidate, WalkRouteUserProfile profile) {
+	private TransitRouteCandidate enrichBims(
+		TransitRouteBaseCandidate baseCandidate,
+		WalkRouteUserProfile profile,
+		Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> arrivalFutures) {
 		TransitRouteCandidate candidate = baseCandidate.candidate();
 		RouteSummaryResponse route = candidate.route();
 		List<RouteLegResponse> enrichedLegs = enrichBimsLegs(
 			route.legs(),
 			baseCandidate.path().legs(),
-			baseCandidate.routeIndex());
+			baseCandidate.routeIndex(),
+			arrivalFutures);
 		RouteSummaryResponse enrichedRoute = new RouteSummaryResponse(
 			route.routeId(),
 			route.transportMode(),
@@ -599,7 +632,8 @@ public class TransitRouteSearchService {
 	private List<RouteLegResponse> enrichBimsLegs(
 		List<RouteLegResponse> legs,
 		List<OdsayTransitLeg> odsayLegs,
-		int routeIndex) {
+		int routeIndex,
+		Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> arrivalFutures) {
 		List<RouteLegResponse> enrichedLegs = new ArrayList<>();
 		for (RouteLegResponse leg : legs) {
 			if (leg.type() != TransportMode.BUS) {
@@ -616,13 +650,22 @@ public class TransitRouteSearchService {
 				enrichedLegs.add(leg);
 				continue;
 			}
-			enrichedLegs.add(enrichBimsLeg(leg, odsayLeg, routeIndex));
+			enrichedLegs.add(enrichBimsLeg(leg, odsayLeg, routeIndex, arrivalFutures));
 		}
 		return List.copyOf(enrichedLegs);
 	}
 
-	private RouteLegResponse enrichBimsLeg(RouteLegResponse leg, OdsayTransitLeg odsayLeg, int routeIndex) {
-		List<TransitLaneOptionResponse> laneOptions = laneOptions(routeIndex, leg.sequence(), odsayLeg, true);
+	private RouteLegResponse enrichBimsLeg(
+		RouteLegResponse leg,
+		OdsayTransitLeg odsayLeg,
+		int routeIndex,
+		Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> arrivalFutures) {
+		List<TransitLaneOptionResponse> laneOptions = laneOptions(
+			routeIndex,
+			leg.sequence(),
+			odsayLeg,
+			true,
+			arrivalFutures);
 		String routeNo = routeNo(odsayLeg, laneOptions);
 		return new RouteLegResponse(
 			leg.sequence(),
@@ -648,9 +691,25 @@ public class TransitRouteSearchService {
 		TransitRouteCandidate candidate) {
 	}
 
-	private record TransitRouteCandidateFuture(
-		TransitRouteBaseCandidate baseCandidate,
-		CompletableFuture<TransitRouteCandidate> future) {
+	private record BimsArrivalKey(
+		String stopId,
+		String lineId,
+		String routeNo) {
+
+		private static BimsArrivalKey of(String stopId, String lineId, String routeNo) {
+			return new BimsArrivalKey(blankToNull(stopId), blankToNull(lineId), blankToNull(routeNo));
+		}
+
+		private boolean hasStopId() {
+			return stopId != null;
+		}
+
+		private static String blankToNull(String value) {
+			if (value == null || value.isBlank()) {
+				return null;
+			}
+			return value.trim();
+		}
 	}
 
 	private record SelectedTransitRoute(
@@ -1038,6 +1097,15 @@ public class TransitRouteSearchService {
 		int legIndex,
 		OdsayTransitLeg odsayLeg,
 		boolean enrichBims) {
+		return laneOptions(routeIndex, legIndex, odsayLeg, enrichBims, Map.of());
+	}
+
+	private List<TransitLaneOptionResponse> laneOptions(
+		int routeIndex,
+		int legIndex,
+		OdsayTransitLeg odsayLeg,
+		boolean enrichBims,
+		Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> arrivalFutures) {
 		if (odsayLeg.type() != TransportMode.BUS) {
 			return List.of();
 		}
@@ -1055,7 +1123,7 @@ public class TransitRouteSearchService {
 		}
 		return odsayLeg.lanes()
 			.stream()
-			.map(lane -> laneOption(routeIndex, legIndex, odsayLeg, lane, durationSecond))
+			.map(lane -> laneOption(routeIndex, legIndex, odsayLeg, lane, durationSecond, arrivalFutures))
 			.sorted((left, right) -> Boolean.compare(
 				Boolean.TRUE.equals(right.isLowFloor()),
 				Boolean.TRUE.equals(left.isLowFloor())))
@@ -1067,10 +1135,15 @@ public class TransitRouteSearchService {
 		int legIndex,
 		OdsayTransitLeg odsayLeg,
 		OdsayTransitLane lane,
-		int durationSecond) {
+		int durationSecond,
+		Map<BimsArrivalKey, CompletableFuture<BusanBimsArrival>> arrivalFutures) {
 		String stopId = boardingStopId(odsayLeg);
+		BimsArrivalKey key = BimsArrivalKey.of(stopId, lane.busLocalBlId(), lane.busNo());
 		try {
-			BusanBimsArrival arrival = busanBimsClient.findArrival(stopId, lane.busLocalBlId(), lane.busNo());
+			BusanBimsArrival arrival = arrivalFutures
+				.getOrDefault(key, CompletableFuture.completedFuture(
+					new BusanBimsArrival(stopId, lane.busLocalBlId(), lane.busNo(), null, null)))
+				.join();
 			return new TransitLaneOptionResponse(
 				lane.busNo(),
 				arrival.remainingMinute(),

@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
@@ -16,6 +17,8 @@ public record GraphHopperPathResponse(
 	BigDecimal distance,
 	long time,
 	GraphHopperPointsResponse points,
+	@JsonProperty("snapped_waypoints")
+	GraphHopperPointsResponse snappedWaypoints,
 	Map<String, List<List<JsonNode>>> details) {
 
 	List<GraphHopperCoordinate> coordinates() {
@@ -24,6 +27,16 @@ public record GraphHopperPathResponse(
 		}
 		// GraphHopper 좌표 배열은 [lng, lat] 순서라 내부 좌표 record로 명시적으로 옮긴다.
 		return points.coordinates()
+			.stream()
+			.map(GraphHopperCoordinate::from)
+			.toList();
+	}
+
+	List<GraphHopperCoordinate> snappedCoordinates() {
+		if (snappedWaypoints == null || snappedWaypoints.coordinates() == null) {
+			return List.of();
+		}
+		return snappedWaypoints.coordinates()
 			.stream()
 			.map(GraphHopperCoordinate::from)
 			.toList();

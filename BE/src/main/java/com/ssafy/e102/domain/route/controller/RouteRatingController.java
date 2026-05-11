@@ -28,7 +28,7 @@ public class RouteRatingController {
 
 	private final RouteRatingService routeRatingService;
 
-	@Operation(summary = "경로 평가 등록", description = "사용자가 완료한 경로 안내 세션에 대해 만족도 평가를 등록합니다.")
+	@Operation(summary = "경로 평가 등록", description = "종료된 안내 세션에 대해 사용자가 남긴 별점을 저장하거나 갱신합니다.")
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<RouteRatingResponse> rateRoute(

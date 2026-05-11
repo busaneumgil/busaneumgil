@@ -69,8 +69,7 @@ public class GlobalExceptionHandler {
 			request.getMethod(),
 			request.getRequestURI(),
 			exception.getMessage(),
-			exception
-		);
+			exception);
 
 		return ResponseEntity
 			.status(CommonErrorCode.INTERNAL_ERROR.getHttpStatus())

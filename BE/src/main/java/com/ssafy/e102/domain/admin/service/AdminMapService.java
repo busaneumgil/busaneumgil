@@ -125,8 +125,13 @@ public class AdminMapService {
 			AdminGeoJsonFeatureCollectionResponse.of(features));
 	}
 
-	public AdminFacilityPayloadResponse getFacilities(int limit) {
-		List<Place> places = placeRepository.findAll(PageRequest.of(0, limit, PLACE_SORT)).getContent();
+	public AdminFacilityPayloadResponse getFacilities(String gu, String dong, int limit) {
+		List<Place> places;
+		if (hasArea(gu, dong)) {
+			places = placeRepository.findAllIntersectingArea(gu, dong, limit);
+		} else {
+			places = placeRepository.findAll(PageRequest.of(0, limit, PLACE_SORT)).getContent();
+		}
 		List<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminFacilityPropertiesResponse>> features = places
 			.stream()
 			.map(this::toFacilityFeature)

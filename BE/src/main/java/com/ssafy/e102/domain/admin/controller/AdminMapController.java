@@ -90,9 +90,13 @@ public class AdminMapController {
 	@Operation(summary = "관리자 편의시설 조회", description = "DB에 적재된 places를 GeoJSON 형태로 조회한다.")
 	@GetMapping("/places/facilities")
 	public ApiResponse<AdminFacilityPayloadResponse> getFacilities(
+		@Parameter(description = "구") @RequestParam(required = false)
+		String gu,
+		@Parameter(description = "동") @RequestParam(required = false)
+		String dong,
 		@Parameter(description = "조회 개수. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "20000") @Min(1) @Max(20000)
 		int limit) {
-		return ApiResponse.success(adminMapService.getFacilities(limit));
+		return ApiResponse.success(adminMapService.getFacilities(gu, dong, limit));
 	}
 
 	@Operation(summary = "관리자 장소 상세 조회", description = "관리자 페이지에서 장소 기본 정보와 접근성 속성 목록을 조회한다.")

@@ -114,12 +114,24 @@ class AdminMapServiceTest {
 		PageRequest pageRequest = PageRequest.of(0, 10, PLACE_SORT);
 		when(placeRepository.findAll(pageRequest)).thenReturn(new PageImpl<>(List.of(place), pageRequest, 1));
 
-		AdminFacilityPayloadResponse response = adminMapService.getFacilities(10);
+		AdminFacilityPayloadResponse response = adminMapService.getFacilities(null, null, 10);
 
 		assertThat(response.summary().facilityCount()).isEqualTo(1);
 		assertThat(response.facilities().features()).hasSize(1);
 		assertThat(response.facilities().features().get(0).properties().category())
 			.isEqualTo(PlaceCategory.PUBLIC_OFFICE);
+	}
+
+	@Test
+	@DisplayName("관리자 편의시설은 구/동이 있으면 행정동 주변 places를 조회한다")
+	void getFacilitiesByArea() throws Exception {
+		Place place = place();
+		when(placeRepository.findAllIntersectingArea("강서구", "명지동", 10)).thenReturn(List.of(place));
+
+		AdminFacilityPayloadResponse response = adminMapService.getFacilities("강서구", "명지동", 10);
+
+		assertThat(response.summary().facilityCount()).isEqualTo(1);
+		assertThat(response.facilities().features()).hasSize(1);
 	}
 
 	@Test

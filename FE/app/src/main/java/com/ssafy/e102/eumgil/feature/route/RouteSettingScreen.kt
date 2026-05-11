@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -38,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -67,6 +69,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
@@ -135,6 +138,7 @@ fun RouteSettingScreen(
         ) {
             RouteWaypointCard(
                 origin = uiState.origin,
+                originStatus = uiState.originStatus,
                 destination = uiState.destination,
                 supportingMessage = supportingMessage,
                 onOriginClick = {
@@ -244,6 +248,15 @@ fun RouteDetailScreen(
                     )
 
                 else -> {
+                    uiState.loadNoticeMessage?.takeIf(String::isNotBlank)?.let { message ->
+                        RouteStateCard(
+                            title = stringResource(id = R.string.route_setting_fallback_notice_title),
+                            description = message,
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.28f),
+                            borderColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f),
+                        )
+                    }
+                    RouteDebugStateCard(debugMessage = uiState.loadDebugMessage)
                     RouteDetailSummaryCard(selectedRoute = selectedRoute)
                     RouteDetailStepsSection(
                         origin = uiState.origin,
@@ -1007,6 +1020,7 @@ internal fun routeSettingLayoutPolicy(): RouteSettingLayoutPolicy =
 @Composable
 private fun RouteWaypointCard(
     origin: RouteLocationUiState,
+    originStatus: RouteOriginStatusUiState?,
     destination: RouteLocationUiState,
     supportingMessage: String?,
     onOriginClick: () -> Unit,
@@ -1073,6 +1087,7 @@ private fun RouteWaypointCard(
                         RouteWaypointRow(
                             label = originLabel,
                             name = origin.name,
+                            status = originStatus,
                             supportingText = origin.supportingText,
                             markerColor = RouteWaypointOriginColor,
                             labelWidth = labelColumnWidth,
@@ -1090,6 +1105,7 @@ private fun RouteWaypointCard(
                         RouteWaypointRow(
                             label = destinationLabel,
                             name = destination.name,
+                            status = null,
                             supportingText = destination.supportingText,
                             markerColor = RouteWaypointDestinationColor,
                             labelWidth = labelColumnWidth,
@@ -1182,16 +1198,24 @@ private fun RouteWaypointPinMarker(
 private fun RouteWaypointRow(
     label: String,
     name: String,
+    status: RouteOriginStatusUiState?,
     supportingText: String?,
     markerColor: Color,
     labelWidth: Dp,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button, onClick = onClick)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
                 .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(RouteWaypointSupportingGap),
     ) {
@@ -1229,18 +1253,58 @@ private fun RouteWaypointRow(
                 horizontalArrangement = Arrangement.spacedBy(RouteWaypointTextGap),
             ) {
                 Spacer(modifier = Modifier.width(labelWidth))
-                Text(
-                    text = value,
+                Column(
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RouteWaypointSupportingTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                    verticalArrangement = Arrangement.spacedBy(RouteWaypointSupportingGap),
+                ) {
+                    status?.let { uiState ->
+                        RouteOriginStatusText(uiState = uiState)
+                    }
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RouteWaypointSupportingTextColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        if (status != null && supportingText.isNullOrBlank() && shouldShowStandaloneOriginStatus(status = status, name = name)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(RouteWaypointTextGap),
+            ) {
+                Spacer(modifier = Modifier.width(labelWidth))
+                RouteOriginStatusText(uiState = status)
             }
         }
     }
 }
+
+@Composable
+private fun RouteOriginStatusText(
+    uiState: RouteOriginStatusUiState,
+) {
+    val contentColor =
+        when (uiState.tone) {
+            RouteOriginStatusTone.INFO -> MaterialTheme.colorScheme.primary
+            RouteOriginStatusTone.WARNING -> MaterialTheme.colorScheme.tertiary
+            RouteOriginStatusTone.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+    Text(
+        text = uiState.label,
+        style = MaterialTheme.typography.labelSmall,
+        color = contentColor,
+        fontWeight = FontWeight.Medium,
+    )
+}
+
+private fun shouldShowStandaloneOriginStatus(
+    status: RouteOriginStatusUiState,
+    name: String,
+): Boolean = !name.contains(status.label)
 
 @Composable
 private fun RouteWaypointSwapButton(
@@ -1621,6 +1685,17 @@ private fun RouteOptionSection(
     Column(
         verticalArrangement = Arrangement.spacedBy(RouteOptionCardGap),
     ) {
+        if (!uiState.isLoading && uiState.loadErrorMessage == null) {
+            uiState.loadNoticeMessage?.takeIf(String::isNotBlank)?.let { message ->
+                RouteStateCard(
+                    title = stringResource(id = R.string.route_setting_fallback_notice_title),
+                    description = message,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.32f),
+                    borderColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.24f),
+                )
+            }
+        }
+        RouteDebugStateCard(debugMessage = uiState.loadDebugMessage)
         when {
             uiState.isLoading ->
                 RouteStateCard(
@@ -1803,11 +1878,18 @@ private fun RouteOptionDetailArrowButton(
     accentColor: Color,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Box(
         modifier =
             Modifier
                 .size(RouteOptionDetailButtonTouchTargetSize)
-                .clickable(role = Role.Button, onClick = onClick)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
                 .semantics {
                     contentDescription = a11yLabel
                 },
@@ -2205,6 +2287,19 @@ private fun RouteStateCard(
             }
         }
     }
+}
+
+@Composable
+private fun RouteDebugStateCard(debugMessage: String?) {
+    if (!AppEnvironment.isDebugBuild || debugMessage.isNullOrBlank()) {
+        return
+    }
+    RouteStateCard(
+        title = "Route debug info",
+        description = debugMessage,
+        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.18f),
+        borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+    )
 }
 
 @Composable

@@ -15,6 +15,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
 
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
+    val rendererSessionKey: Long = 0L,
     val selectedDestination: PlaceDestination? = null,
     val selectedMarkerId: String? = null,
     val selectedMapPinCoordinate: MapCoordinate? = null,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -273,18 +275,32 @@ private fun MyPageMenuRow(
     @DrawableRes iconRes: Int,
     onClick: (MyPageMenuItem) -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     val title = stringResource(id = titleRes)
+    val suppressRipple = shouldSuppressMyPageMenuRipple(menuItem)
+    val clickableModifier =
+        if (suppressRipple) {
+            Modifier.clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = title,
+                onClick = { onClick(menuItem) },
+            )
+        } else {
+            Modifier.clickable(
+                role = Role.Button,
+                onClickLabel = title,
+                onClick = { onClick(menuItem) },
+            )
+        }
 
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
-                .clickable(
-                    role = Role.Button,
-                    onClickLabel = title,
-                    onClick = { onClick(menuItem) },
-                ),
+                .then(clickableModifier),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
@@ -320,6 +336,9 @@ private fun MyPageMenuRow(
         }
     }
 }
+
+internal fun shouldSuppressMyPageMenuRipple(menuItem: MyPageMenuItem): Boolean =
+    menuItem == MyPageMenuItem.REPORT_HISTORY || menuItem == MyPageMenuItem.APP_HELP
 
 private val MyPageUserMode.labelRes: Int
     get() =

@@ -285,4 +285,36 @@ class RouteSettingLayoutPolicyTest {
             stepsSection.contains("HorizontalDivider("),
         )
     }
+
+    @Test
+    fun `route setting suppresses ripple only on taps that open other route screens`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val waypointSection =
+            source
+                .substringAfter("private fun RouteWaypointRow(")
+                .substringBefore("@Composable\nprivate fun RouteOriginStatusText")
+        val detailArrowSection =
+            source
+                .substringAfter("private fun RouteOptionDetailArrowButton(")
+                .substringBefore("/*")
+
+        assertTrue(
+            "Waypoint rows should suppress ripple because they open the search screen for origin/destination editing.",
+            waypointSection.contains("indication = null"),
+        )
+        assertTrue(
+            "Waypoint rows should keep a dedicated interaction source when ripple is suppressed.",
+            waypointSection.contains("MutableInteractionSource()"),
+        )
+        assertTrue(
+            "Route option detail arrows should suppress ripple because they open the route detail screen.",
+            detailArrowSection.contains("indication = null"),
+        )
+        assertTrue(
+            "Route option detail arrows should keep a dedicated interaction source when ripple is suppressed.",
+            detailArrowSection.contains("MutableInteractionSource()"),
+        )
+    }
 }

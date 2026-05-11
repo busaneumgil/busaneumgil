@@ -109,7 +109,7 @@ class AuthenticatedRequestRunnerTest {
         }
 
     @Test
-    fun `authentication failure without refresh token clears session and returns auth failure`() =
+    fun `unauthorized failure without refresh token clears session and returns auth failure`() =
         runTest {
             val authSessionRepository =
                 RecordingRunnerAuthSessionRepository(
@@ -127,12 +127,48 @@ class AuthenticatedRequestRunnerTest {
 
             val result =
                 runner.run(
-                    execute = { throw RunnerTestApiException(httpStatusCode = 403) },
+                    execute = { throw RunnerTestApiException(httpStatusCode = 401) },
                     isAuthenticationFailure = Throwable::isRunnerAuthenticationFailure,
                 )
 
             assertEquals(1, authSessionRepository.clearAuthSessionCallCount)
             assertSame(AuthenticatedRequestResult.AuthenticationFailed, result)
+        }
+
+    @Test
+    fun `forbidden failure is rethrown without reissue or session clear`() =
+        runTest {
+            val authSessionRepository =
+                RecordingRunnerAuthSessionRepository(
+                    authGateState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "access-token",
+                                    refreshToken = "refresh-token",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val authRemoteDataSource = FakeRunnerAuthRemoteDataSource()
+            val runner =
+                AuthenticatedRequestRunner(
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = authRemoteDataSource,
+                )
+
+            val failure =
+                runCatching {
+                    runner.run(
+                        execute = { throw RunnerTestApiException(httpStatusCode = 403) },
+                        isAuthenticationFailure = Throwable::isRunnerAuthenticationFailure,
+                    )
+                }.exceptionOrNull() as? RunnerTestApiException
+
+            requireNotNull(failure)
+            assertEquals(403, failure.httpStatusCode)
+            assertEquals(0, authRemoteDataSource.reissueCallCount)
+            assertEquals(0, authSessionRepository.clearAuthSessionCallCount)
         }
 
     @Test
@@ -270,4 +306,4 @@ private class RunnerTestApiException(
 ) : RuntimeException("HTTP $httpStatusCode")
 
 private fun Throwable.isRunnerAuthenticationFailure(): Boolean =
-    this is RunnerTestApiException && httpStatusCode in setOf(401, 403)
+    this is RunnerTestApiException && httpStatusCode == 401

@@ -31,6 +31,22 @@ class SearchViewModelEditingTargetTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun `editing target configuration updates ui state`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.EditingTargetConfigured(RouteEditingTarget.ORIGIN))
+
+            assertEquals(RouteEditingTarget.ORIGIN, viewModel.uiState.value.editingTarget)
+        }
+
+    @Test
     fun `search submit keeps destination editing target in results navigation`() =
         runTest {
             val viewModel =

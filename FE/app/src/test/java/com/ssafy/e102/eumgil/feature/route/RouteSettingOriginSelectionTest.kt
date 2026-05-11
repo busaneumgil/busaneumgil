@@ -24,11 +24,14 @@ import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 
@@ -36,6 +39,59 @@ import org.junit.Test
 class RouteSettingOriginSelectionTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    @Test
+    fun `route setting starts and stops active location updates while screen is visible`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = RecordingRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = locationManager,
+                )
+
+            advanceUntilIdle()
+            viewModel.startLocationUpdates()
+            viewModel.stopLocationUpdates()
+
+            assertEquals(1, locationManager.refreshCallCount)
+            assertEquals(1, locationManager.startCallCount)
+            assertEquals(1, locationManager.stopCallCount)
+        }
+
+    @Test
+    fun `missing gps location shows direct selection guidance instead of demo origin copy`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = RecordingRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = locationManager,
+                )
+
+            advanceUntilIdle()
+            viewModel.startLocationUpdates()
+            advanceUntilIdle()
+
+            assertEquals("현재 위치", viewModel.uiState.value.origin.name)
+            assertEquals(
+                "현재 위치를 가져오지 못했어요. 출발지를 직접 선택해 주세요.",
+                viewModel.uiState.value.origin.supportingText,
+            )
+            assertEquals(RouteOriginState.CURRENT_LOCATION_UNAVAILABLE, viewModel.uiState.value.originState)
+            assertEquals("위치 확인 필요", viewModel.uiState.value.originStatus?.label)
+            assertNull(viewModel.uiState.value.origin.metadataLabel)
+        }
 
     @Test
     fun `gps location initializes origin when no manual origin exists`() =
@@ -60,6 +116,10 @@ class RouteSettingOriginSelectionTest {
             advanceUntilIdle()
             val originCoordinate = requireNotNull(viewModel.uiState.value.origin.coordinate)
 
+            assertEquals("현재 위치", viewModel.uiState.value.origin.name)
+            assertNull(viewModel.uiState.value.origin.supportingText)
+            assertEquals(RouteOriginState.CURRENT_LOCATION_RESOLVED, viewModel.uiState.value.originState)
+            assertEquals("현재 위치", viewModel.uiState.value.originStatus?.label)
             assertEquals(currentLocation.latitude, originCoordinate.latitude, 0.0)
             assertEquals(currentLocation.longitude, originCoordinate.longitude, 0.0)
             assertEquals(currentLocation.latitude, routeRepository.queries.single().origin.coordinate.latitude, 0.0)
@@ -104,6 +164,42 @@ class RouteSettingOriginSelectionTest {
             assertEquals("origin-1", viewModel.uiState.value.origin.placeId)
             assertEquals(testOrigin().latitude, routeRepository.queries.last().origin.coordinate.latitude, 0.0)
             assertEquals(testOrigin().longitude, routeRepository.queries.last().origin.coordinate.longitude, 0.0)
+        }
+
+    @Test
+    fun `small gps jitter does not trigger a redundant route reload`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = RecordingRouteRepository()
+            val locationManager =
+                FakeCurrentLocationManager(
+                    initialLocation =
+                        testLocationSnapshot(
+                            latitude = 35.1701,
+                            longitude = 129.0712,
+                        ),
+                )
+            RouteSettingViewModel(
+                routeRepository = routeRepository,
+                destinationSelectionRepository = destinationSelectionRepository,
+                currentLocationManager = locationManager,
+            )
+
+            advanceUntilIdle()
+            locationManager.updateLocation(
+                testLocationSnapshot(
+                    latitude = 35.17014,
+                    longitude = 129.07124,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, routeRepository.callCount)
+            assertEquals(35.1701, routeRepository.queries.single().origin.coordinate.latitude, 0.0)
+            assertEquals(129.0712, routeRepository.queries.single().origin.coordinate.longitude, 0.0)
         }
 
     @Test
@@ -176,6 +272,47 @@ class RouteSettingOriginSelectionTest {
             assertEquals(testOrigin().latitude, routeRepository.queries.last().destination.coordinate.latitude, 0.0)
             assertEquals(testOrigin().longitude, routeRepository.queries.last().destination.coordinate.longitude, 0.0)
         }
+
+    @Test
+    fun `selection and location changes while loading collapse into one follow-up search`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = SlowRecordingRouteRepository()
+            val locationManager =
+                FakeCurrentLocationManager(
+                    initialLocation =
+                        testLocationSnapshot(
+                            latitude = 35.1701,
+                            longitude = 129.0712,
+                        ),
+                )
+            RouteSettingViewModel(
+                routeRepository = routeRepository,
+                destinationSelectionRepository = destinationSelectionRepository,
+                currentLocationManager = locationManager,
+            )
+
+            runCurrent()
+            assertEquals(1, routeRepository.callCount)
+
+            destinationSelectionRepository.updateSelectedDestination(testUpdatedDestination())
+            locationManager.updateLocation(
+                testLocationSnapshot(
+                    latitude = 35.1716,
+                    longitude = 129.0728,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(2, routeRepository.callCount)
+            assertEquals(testUpdatedDestination().latitude, routeRepository.queries.last().destination.coordinate.latitude, 0.0)
+            assertEquals(testUpdatedDestination().longitude, routeRepository.queries.last().destination.coordinate.longitude, 0.0)
+            assertEquals(35.1716, routeRepository.queries.last().origin.coordinate.latitude, 0.0)
+            assertEquals(129.0728, routeRepository.queries.last().origin.coordinate.longitude, 0.0)
+        }
 }
 
 private fun testOrigin(): PlaceDestination =
@@ -223,21 +360,33 @@ private class FakeCurrentLocationManager(
     initialLocation: LocationSnapshot? = null,
 ) : CurrentLocationManager {
     private val mutableLatestLocation = MutableStateFlow(initialLocation)
+    var refreshCallCount: Int = 0
+        private set
+    var startCallCount: Int = 0
+        private set
+    var stopCallCount: Int = 0
+        private set
 
     override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
 
-    override fun refreshLatestLocation() = Unit
+    override fun refreshLatestLocation() {
+        refreshCallCount += 1
+    }
 
-    override fun startLocationUpdates() = Unit
+    override fun startLocationUpdates() {
+        startCallCount += 1
+    }
 
-    override fun stopLocationUpdates() = Unit
+    override fun stopLocationUpdates() {
+        stopCallCount += 1
+    }
 
     fun updateLocation(snapshot: LocationSnapshot?) {
         mutableLatestLocation.value = snapshot
     }
 }
 
-private class RecordingRouteRepository : RouteRepository {
+private open class RecordingRouteRepository : RouteRepository {
     val queries = mutableListOf<RouteSearchQuery>()
     val callCount: Int
         get() = queries.size
@@ -291,6 +440,44 @@ private class RecordingRouteRepository : RouteRepository {
                     label = "Recording route payload",
                 ),
         )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("getTransitRouteSearchData was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData =
+        error("selectRoute was not expected")
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = RouteTransitRefreshData(type = "BUS", arrivalStatus = "UNKNOWN")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ): RouteRerouteData = RouteRerouteData()
+
+    override suspend fun endRoute(routeId: String): RouteSessionData = RouteSessionData(sessionId = "session-$routeId")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = RouteRatingData(ratingId = 0L)
+}
+
+private class SlowRecordingRouteRepository : RouteRepository {
+    val queries = mutableListOf<RouteSearchQuery>()
+    val callCount: Int
+        get() = queries.size
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        queries += query
+        delay(1_000)
+        return RecordingRouteRepository().getRouteSearchData(query)
     }
 
     override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =

@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -56,6 +57,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
 internal data class MapViewportUiState(
     val integrationState: MapIntegrationState,
     val cameraTarget: MapCameraTarget,
+    val rendererSessionKey: Long = 0L,
     val currentLocation: MapCoordinate?,
     val selectedDestinationCoordinate: MapCoordinate? = null,
     val selectedDestinationName: String? = null,
@@ -121,14 +123,16 @@ internal fun MapViewport(
         }
 
         is MapIntegrationState.Bound -> {
-            MapContainer(
-                integrationState = integrationState,
-                state = state,
-                onMarkerClick = onMarkerClick,
-                onCameraMoveEnd = onCameraMoveEnd,
-                onMapClick = onMapClick,
-                modifier = modifier,
-            )
+            key(state.rendererSessionKey) {
+                MapContainer(
+                    integrationState = integrationState,
+                    state = state,
+                    onMarkerClick = onMarkerClick,
+                    onCameraMoveEnd = onCameraMoveEnd,
+                    onMapClick = onMapClick,
+                    modifier = modifier,
+                )
+            }
         }
     }
 }

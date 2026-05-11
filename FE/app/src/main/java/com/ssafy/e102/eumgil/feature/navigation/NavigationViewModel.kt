@@ -1091,7 +1091,9 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
             when (mapFocusMode) {
                 NavigationMapFocusMode.ACTIVE -> currentLocationCoordinate
                 NavigationMapFocusMode.FOCUSED ->
-                    selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex) ?: currentLocationCoordinate
+                    selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
+                        ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
+                        ?: currentLocationCoordinate
             },
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,
@@ -1148,6 +1150,17 @@ private fun RouteWaypoint.toNavigationMapPointUiState(fallbackLabel: String): Na
         label = name.orEmpty().ifBlank { fallbackLabel },
         coordinate = coordinate,
     )
+
+private fun RouteCandidate.resolveSegmentStartCoordinate(segmentIndex: Int): GeoCoordinate? {
+    val segment = segments.getOrNull(segmentIndex) ?: return null
+
+    segment.polyline.points.firstOrNull()?.let { return it }
+    val sourceLeg =
+        segment.sourceLegSequence?.let { sourceLegSequence ->
+            legs.firstOrNull { leg -> leg.sequence == sourceLegSequence }
+        }
+    return sourceLeg?.polyline?.points?.firstOrNull()
+}
 
 private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): GeoCoordinate? {
     val segment = segments.getOrNull(segmentIndex) ?: return null

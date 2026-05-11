@@ -106,6 +106,43 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `segment tap focuses map on the tapped segment start coordinate`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertEquals(
+                WALK_MID_POINT,
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+        }
+
+    @Test
+    fun `segment tap falls back to source leg start coordinate when the segment polyline is missing`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testLegPolylineFallbackNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 0))
+            advanceUntilIdle()
+
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertTrue(viewModel.uiState.value.mapOverlay.focusedSegmentPolyline.isEmpty())
+            assertEquals(
+                LEG_FALLBACK_START_POINT,
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+        }
+
+    @Test
     fun `segment tap resolves focused map coordinate even when the segment polyline is missing`() =
         runTest {
             val viewModel = createViewModel()
@@ -555,10 +592,107 @@ private fun testSparseSegmentNavigationRequest(): RouteNavigationRequest =
             ),
     )
 
+private fun testLegPolylineFallbackNavigationRequest(): RouteNavigationRequest =
+    RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = "Origin",
+                coordinate = GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
+            ),
+        destination =
+            RouteWaypoint(
+                name = "Destination",
+                coordinate = GeoCoordinate(latitude = 35.1810, longitude = 129.0780),
+            ),
+        selectedRoute =
+            RouteCandidate(
+                serverRouteId = "leg-fallback-route-1",
+                routeOption = RouteOption.RECOMMENDED,
+                title = "Leg Fallback Route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 800,
+                        estimatedTimeMinutes = 12,
+                        riskLevel = RouteRiskLevel.LOW,
+                        durationSeconds = 720,
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
+                                        LEG_FALLBACK_START_POINT,
+                                        GeoCoordinate(latitude = 35.1810, longitude = 129.0780),
+                                    ),
+                            ),
+                        segmentCount = 2,
+                        renderableSegmentCount = 1,
+                    ),
+                legs =
+                    listOf(
+                        RouteLeg(
+                            sequence = 1,
+                            role = RouteLegRole.WALK_TO_TRANSIT,
+                            distanceMeters = 400,
+                            durationSeconds = 300,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            LEG_FALLBACK_START_POINT,
+                                            GeoCoordinate(latitude = 35.1806, longitude = 129.0735),
+                                        ),
+                                ),
+                        ),
+                        RouteLeg(
+                            sequence = 2,
+                            role = RouteLegRole.TRANSIT,
+                            type = RouteLegType.BUS,
+                            distanceMeters = 400,
+                            durationSeconds = 420,
+                        ),
+                    ),
+                segments =
+                    listOf(
+                        RouteSegment(
+                            sequence = 1,
+                            polyline = RoutePolyline(),
+                            distanceMeters = 400,
+                            guidanceMessage = "Walk to transit",
+                            sourceLegSequence = 1,
+                        ),
+                        RouteSegment(
+                            sequence = 2,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.1806, longitude = 129.0735),
+                                            GeoCoordinate(latitude = 35.1810, longitude = 129.0780),
+                                        ),
+                                ),
+                            distanceMeters = 400,
+                            guidanceMessage = "Ride transit",
+                            sourceLegSequence = 2,
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Leg fallback navigation test route"),
+        selectionHandoff =
+            RouteNavigationSelectionHandoff(
+                searchId = "search-4",
+                routeId = "leg-fallback-route-1",
+                sessionId = "session-4",
+            ),
+    )
+
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1815, longitude = 129.0756)
+private val LEG_FALLBACK_START_POINT = GeoCoordinate(latitude = 35.1802, longitude = 129.0718)
 
 private val TRANSIT_START_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0600)
 private val TRANSIT_BOARDING_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0625)

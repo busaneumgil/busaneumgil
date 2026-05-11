@@ -157,7 +157,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding limits focused projection to focused segment and focus coordinate`() {
+    fun `navigation binding keeps focused polyline visible but limits projection to the focus halo`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -209,7 +209,7 @@ class MapViewportOverlayBindingsTest {
         )
         assertFalse(overlayState.polylines.first().includeInProjection)
         assertFalse(overlayState.polylines[1].includeInProjection)
-        assertTrue(overlayState.polylines[2].includeInProjection)
+        assertFalse(overlayState.polylines[2].includeInProjection)
         assertEquals(
             listOf(
                 MapViewportPointKind.CURRENT_LOCATION,
@@ -223,6 +223,12 @@ class MapViewportOverlayBindingsTest {
         assertFalse(overlayState.points[1].includeInProjection)
         assertFalse(overlayState.points[2].includeInProjection)
         assertTrue(overlayState.points[3].includeInProjection)
+        assertEquals(
+            listOf(MapViewportPointKind.FOCUS_HALO),
+            overlayState.points
+                .filter { point -> point.includeInProjection }
+                .map { point -> point.kind },
+        )
     }
 
     @Test
@@ -288,7 +294,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding adds segment markers for every renderable segment without affecting projection`() {
+    fun `navigation binding adds segment start markers except the first segment and skips non renderable ones`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -317,6 +323,7 @@ class MapViewportOverlayBindingsTest {
                                     distanceMeters = 320,
                                     riskLevel = RouteRiskLevel.MEDIUM,
                                     guidanceMessage = "Second",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
                                 ),
                                 NavigationMapSegmentUiState(
                                     sequence = 3,
@@ -328,20 +335,35 @@ class MapViewportOverlayBindingsTest {
                                     distanceMeters = 400,
                                     riskLevel = RouteRiskLevel.LOW,
                                     guidanceMessage = "Third",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 4,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.190, longitude = 129.080),
+                                        ),
+                                    distanceMeters = 40,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Ignored",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
                                 ),
                             ),
                     ),
             )
 
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
-        assertEquals(3, junctionPoints.size)
+        assertEquals(2, junctionPoints.size)
         assertEquals(
             listOf(
-                MapCoordinate(latitude = 35.1725, longitude = 129.054),
-                MapCoordinate(latitude = 35.178, longitude = 129.063),
-                MapCoordinate(latitude = 35.1855, longitude = 129.074),
+                MapCoordinate(latitude = 35.175, longitude = 129.058),
+                MapCoordinate(latitude = 35.181, longitude = 129.068),
             ),
             junctionPoints.map { it.coordinate },
+        )
+        assertEquals(
+            listOf(MapViewportOverlayTone.PRIMARY, MapViewportOverlayTone.TERTIARY),
+            junctionPoints.map { it.tone },
         )
         assertTrue(junctionPoints.none { it.includeInProjection })
     }

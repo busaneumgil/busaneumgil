@@ -6,6 +6,8 @@ data class ArrivalUiState(
     val isEvaluationSheetVisible: Boolean = true,
     val selectedRating: Int = 0,
     val selectedRatingLabel: ArrivalEvaluationLabel = ArrivalEvaluationLabel.Idle,
+    val hasRatingSession: Boolean = false,
+    val isEvaluationSubmitting: Boolean = false,
     val routeSaveDraft: ArrivalRouteSaveDraftUiState? = null,
     val routeNameInput: String = "",
     val isRouteSaveSelected: Boolean = false,
@@ -13,7 +15,7 @@ data class ArrivalUiState(
     val isRouteSaveDialogVisible: Boolean = false,
 ) {
     val isEvaluationSubmitEnabled: Boolean
-        get() = selectedRating > 0
+        get() = hasRatingSession && selectedRating > 0 && !isEvaluationSubmitting
 
     val hasRouteSaveTarget: Boolean
         get() = routeSaveDraft != null

@@ -133,6 +133,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     }
                 }
             },
+            onNavigateToMapPreview = {
+                val didReturnToMap = navController.popBackStack(
+                    route = TopLevelRoute.Map.route,
+                    inclusive = false,
+                )
+                if (!didReturnToMap) {
+                    navController.navigateToTopLevel(TopLevelDestination.Map)
+                }
+            },
             onNavigateToRouteBriefing = {
                 navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
@@ -186,6 +195,15 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
+                }
+            },
+            onNavigateToMapPreview = {
+                val didReturnToMap = navController.popBackStack(
+                    route = TopLevelRoute.Map.route,
+                    inclusive = false,
+                )
+                if (!didReturnToMap) {
+                    navController.navigateToTopLevel(TopLevelDestination.Map)
                 }
             },
             onNavigateToRouteBriefing = {
@@ -529,10 +547,14 @@ private fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {
     val bookmarkRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
-    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository) {
+    val routeRepository = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.routeRepository
+    }
+    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
         NavigationGuidanceViewModel.provideFactory(
             currentLocationManager = currentLocationManager,
             bookmarkRepository = bookmarkRepository,
+            routeRepository = routeRepository,
         )
     }
 

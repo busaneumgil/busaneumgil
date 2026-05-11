@@ -102,6 +102,49 @@ class PlacesRemoteDataSourceTest {
         }
 
     @Test
+    fun `getPlaces keeps ui-only filters out of category query and maps them to featureType`() =
+        runBlocking {
+            var capturedQueryParams: Map<String, String> = emptyMap()
+            val dataSource =
+                PlacesRemoteDataSource(
+                    requestExecutor = { _, queryParams, _ ->
+                        capturedQueryParams = queryParams
+                        HttpJsonResponse(
+                            statusCode = 200,
+                            body =
+                                """
+                                {
+                                  "status": "S2000",
+                                  "data": {
+                                    "places": []
+                                  },
+                                  "message": "ok"
+                                }
+                                """.trimIndent(),
+                        )
+                    },
+                )
+
+            dataSource.getPlaces(
+                PlaceQuery(
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    categories =
+                        setOf(
+                            PlaceCategory.TOILET,
+                            PlaceCategory.ELEVATOR,
+                            PlaceCategory.CHARGING_STATION,
+                            PlaceCategory.BRAILLE_BLOCK,
+                            PlaceCategory.FOOD_CAFE,
+                        ),
+                ),
+            )
+
+            assertEquals("FOOD_CAFE", capturedQueryParams["category"])
+            assertEquals("accessibleToilet,chargingStation,elevator", capturedQueryParams["featureType"])
+        }
+
+    @Test
     fun `getPlaceDetail maps detail response and sends expected auth header`() =
         runBlocking {
             var capturedPath: String? = null

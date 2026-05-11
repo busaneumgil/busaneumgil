@@ -40,6 +40,7 @@ fun MapRoute(
                 locationPermissionManager = appContainer.locationPermissionManager,
                 currentLocationManager = appContainer.currentLocationManager,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 facilitySeedRepository = appContainer.facilitySeedRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 searchRepository = appContainer.searchRepository,

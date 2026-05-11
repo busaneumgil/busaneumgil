@@ -82,6 +82,10 @@ sealed interface SearchUiAction {
         val result: SearchResult,
     ) : SearchUiAction
 
+    data class SearchResultPreviewClicked(
+        val result: SearchResult,
+    ) : SearchUiAction
+
     data class SearchResultBriefingClicked(
         val result: SearchResult,
     ) : SearchUiAction
@@ -93,6 +97,8 @@ sealed interface SearchUiAction {
     data class LowVisionBookmarkSaveClicked(
         val result: SearchResult,
     ) : SearchUiAction
+
+    data object LoadNextPageClicked : SearchUiAction
 }
 
 sealed interface SearchUiEvent {
@@ -110,6 +116,8 @@ sealed interface SearchUiEvent {
     data object StopVoiceCapture : SearchUiEvent
 
     data object NavigateToRouteSetting : SearchUiEvent
+
+    data object NavigateToMapPreview : SearchUiEvent
 
     data object NavigateToRouteBriefing : SearchUiEvent
 
@@ -132,6 +140,9 @@ sealed interface SearchResultUiState {
     data class Success(
         val query: String,
         val results: List<SearchResult>,
+        val nextCursor: String? = null,
+        val hasNext: Boolean = false,
+        val isLoadingNextPage: Boolean = false,
     ) : SearchResultUiState
 
     data class Empty(

@@ -17,6 +17,9 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmark WHERE placeId = :placeId LIMIT 1")
     suspend fun getBookmark(placeId: String): BookmarkEntity?
 
+    @Query("SELECT * FROM bookmark WHERE bookmarkTargetId = :bookmarkTargetId LIMIT 1")
+    suspend fun getBookmarkByTargetId(bookmarkTargetId: String): BookmarkEntity?
+
     @Query("SELECT COUNT(*) FROM bookmark")
     suspend fun getBookmarkCount(): Int
 
@@ -28,6 +31,9 @@ interface BookmarkDao {
 
     @Query("DELETE FROM bookmark WHERE placeId = :placeId")
     suspend fun deleteBookmark(placeId: String)
+
+    @Query("DELETE FROM bookmark WHERE bookmarkTargetId = :bookmarkTargetId")
+    suspend fun deleteBookmarkByTargetId(bookmarkTargetId: String)
 
     @Query("DELETE FROM bookmark")
     suspend fun clearBookmarks()

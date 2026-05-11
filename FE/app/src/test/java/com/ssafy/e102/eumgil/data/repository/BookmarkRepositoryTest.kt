@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.BookmarkListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.BookmarkPageDto
 import com.ssafy.e102.eumgil.data.remote.dto.BookmarkPointDto
+import com.ssafy.e102.eumgil.data.remote.dto.CreateBookmarkRequestDto
 import com.ssafy.e102.eumgil.data.remote.dto.CreateBookmarkResponseDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,21 +49,23 @@ class BookmarkRepositoryTest {
         }
 
     @Test
-    fun `observeBookmarks fetches from server and replaces cache when token is provided`() =
+    fun `observeBookmarks fetches cursor page from server and preserves target metadata`() =
         runBlocking {
             val serverItem =
                 BookmarkListItemDto(
                     bookmarkId = 1L,
+                    bookmarkTargetId = "tgt_0123456789abcdef",
+                    targetType = "INTERNAL_PLACE",
                     placeId = 42L,
                     provider = "KAKAO",
                     providerPlaceId = "external-42",
-                    name = "부산시민공원",
+                    name = "Busan Citizens Park",
                     category = "TOURIST_SPOT",
-                    address = "부산광역시 부산진구 시민공원로 73",
+                    providerCategory = null,
+                    address = "73 Citizen Park-ro, Busan",
                     point = BookmarkPointDto(lat = 35.1686, lng = 129.0576),
                 )
-            val cachedBookmark = testBookmarkEntity(placeId = "stale-cache")
-            val fakeDao = FakeBookmarkDao(bookmarks = listOf(cachedBookmark))
+            val fakeDao = FakeBookmarkDao(bookmarks = listOf(testBookmarkEntity(placeId = "stale-cache")))
             val fakeDataSource = FakeBookmarksRemoteDataSource(serverContent = listOf(serverItem))
 
             val repository =
@@ -76,7 +79,12 @@ class BookmarkRepositoryTest {
 
             assertEquals(1, bookmarks.size)
             assertEquals("42", bookmarks[0].placeId)
-            assertEquals("부산시민공원", bookmarks[0].placeName)
+            assertEquals("tgt_0123456789abcdef", bookmarks[0].bookmarkTargetId)
+            assertEquals("INTERNAL_PLACE", bookmarks[0].targetType)
+            assertEquals(42L, bookmarks[0].serverPlaceId)
+            assertEquals("Busan Citizens Park", bookmarks[0].placeName)
+            assertEquals(null, fakeDataSource.lastCursor)
+            assertEquals(50, fakeDataSource.lastSize)
         }
 
     @Test
@@ -119,11 +127,10 @@ class BookmarkRepositoryTest {
         }
 
     @Test
-    fun `saveBookmark posts to server and updates cache when token and numeric placeId provided`() =
+    fun `saveBookmark posts internal place id and caches server target`() =
         runBlocking {
             val fakeDao = FakeBookmarkDao()
             val fakeDataSource = FakeBookmarksRemoteDataSource()
-
             val repository =
                 DefaultBookmarkRepository(
                     bookmarkDao = fakeDao,
@@ -131,19 +138,23 @@ class BookmarkRepositoryTest {
                     accessTokenProvider = { "test-token" },
                 )
 
-            repository.saveBookmark(
-                BookmarkData(
-                    placeId = "42",
-                    placeName = "부산시민공원",
-                    address = null,
-                    latitude = 35.1686,
-                    longitude = 129.0576,
-                    category = "TOURIST_SPOT",
-                ),
-            )
+            val savedBookmark =
+                repository.saveBookmark(
+                    BookmarkData(
+                        placeId = "42",
+                        placeName = "Busan Citizens Park",
+                        address = null,
+                        latitude = 35.1686,
+                        longitude = 129.0576,
+                        category = "TOURIST_SPOT",
+                    ),
+                )
 
-            assertEquals(listOf(42L), fakeDataSource.createdPlaceIds)
-            assertEquals(1, fakeDao.getBookmarkCount())
+            assertEquals(listOf(42L), fakeDataSource.createdRequests.map { it.placeId })
+            assertEquals("42", savedBookmark.placeId)
+            assertEquals("tgt_0123456789abcdef", savedBookmark.bookmarkTargetId)
+            assertEquals("INTERNAL_PLACE", savedBookmark.targetType)
+            assertEquals("tgt_0123456789abcdef", fakeDao.getBookmark("42")?.bookmarkTargetId)
         }
 
     @Test
@@ -151,7 +162,6 @@ class BookmarkRepositoryTest {
         runBlocking {
             val fakeDao = FakeBookmarkDao()
             val fakeDataSource = FakeBookmarksRemoteDataSource()
-
             val repository =
                 DefaultBookmarkRepository(
                     bookmarkDao = fakeDao,
@@ -162,7 +172,7 @@ class BookmarkRepositoryTest {
             repository.saveBookmark(
                 BookmarkData(
                     placeId = "non-numeric-uuid",
-                    placeName = "부산시민공원",
+                    placeName = "Busan Citizens Park",
                     address = null,
                     latitude = 35.1686,
                     longitude = 129.0576,
@@ -171,7 +181,56 @@ class BookmarkRepositoryTest {
                 ),
             )
 
-            assertEquals(listOf(99L), fakeDataSource.createdPlaceIds)
+            assertEquals(listOf(99L), fakeDataSource.createdRequests.map { it.placeId })
+        }
+
+    @Test
+    fun `saveBookmark posts external snapshot and caches returned bookmark target id`() =
+        runBlocking {
+            val fakeDao = FakeBookmarkDao()
+            val fakeDataSource =
+                FakeBookmarksRemoteDataSource(
+                    createResponse =
+                        CreateBookmarkResponseDto(
+                            bookmarkId = 7L,
+                            bookmarkTargetId = "tgt_fedcba9876543210",
+                            targetType = "EXTERNAL_POI",
+                            placeId = null,
+                        ),
+                )
+            val repository =
+                DefaultBookmarkRepository(
+                    bookmarkDao = fakeDao,
+                    bookmarksRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val savedBookmark =
+                repository.saveBookmark(
+                    BookmarkData(
+                        placeId = "provider:kakao:poi-123",
+                        placeName = "External Cafe",
+                        address = "Busan external address",
+                        latitude = 35.1686,
+                        longitude = 129.0576,
+                        category = null,
+                        targetType = "EXTERNAL_POI",
+                        provider = "KAKAO",
+                        providerPlaceId = "poi-123",
+                        providerCategory = "Cafe",
+                    ),
+                )
+
+            val request = fakeDataSource.createdRequests.single()
+            assertEquals(null, request.placeId)
+            assertEquals("KAKAO", request.provider)
+            assertEquals("poi-123", request.providerPlaceId)
+            assertEquals("External Cafe", request.name)
+            assertEquals("Cafe", request.providerCategory)
+            assertEquals("provider:kakao:poi-123", savedBookmark.placeId)
+            assertEquals("tgt_fedcba9876543210", savedBookmark.bookmarkTargetId)
+            assertEquals("EXTERNAL_POI", savedBookmark.targetType)
+            assertEquals("tgt_fedcba9876543210", fakeDao.getBookmark("provider:kakao:poi-123")?.bookmarkTargetId)
         }
 
     @Test
@@ -179,7 +238,6 @@ class BookmarkRepositoryTest {
         runBlocking {
             val fakeDao = FakeBookmarkDao()
             val fakeDataSource = FakeBookmarksRemoteDataSource()
-
             val repository =
                 DefaultBookmarkRepository(
                     bookmarkDao = fakeDao,
@@ -190,7 +248,7 @@ class BookmarkRepositoryTest {
             repository.saveBookmark(
                 BookmarkData(
                     placeId = "42",
-                    placeName = "부산시민공원",
+                    placeName = "Busan Citizens Park",
                     address = null,
                     latitude = 35.1686,
                     longitude = 129.0576,
@@ -198,16 +256,15 @@ class BookmarkRepositoryTest {
                 ),
             )
 
-            assertTrue(fakeDataSource.createdPlaceIds.isEmpty())
+            assertTrue(fakeDataSource.createdRequests.isEmpty())
             assertEquals(1, fakeDao.getBookmarkCount())
         }
 
     @Test
-    fun `saveBookmark only caches locally when placeId is non-numeric and serverPlaceId is null`() =
+    fun `saveBookmark only caches locally when request cannot be represented`() =
         runBlocking {
             val fakeDao = FakeBookmarkDao()
             val fakeDataSource = FakeBookmarksRemoteDataSource()
-
             val repository =
                 DefaultBookmarkRepository(
                     bookmarkDao = fakeDao,
@@ -218,7 +275,7 @@ class BookmarkRepositoryTest {
             repository.saveBookmark(
                 BookmarkData(
                     placeId = "kakao-only-id",
-                    placeName = "외부 장소",
+                    placeName = "External place without provider",
                     address = null,
                     latitude = 0.0,
                     longitude = 0.0,
@@ -226,17 +283,36 @@ class BookmarkRepositoryTest {
                 ),
             )
 
-            assertTrue(fakeDataSource.createdPlaceIds.isEmpty())
+            assertTrue(fakeDataSource.createdRequests.isEmpty())
             assertEquals(1, fakeDao.getBookmarkCount())
         }
 
     @Test
-    fun `deleteBookmark calls server and removes cache when placeId is numeric`() =
+    fun `deleteBookmark calls target endpoint before place compatibility endpoint`() =
+        runBlocking {
+            val cachedBookmark = testBookmarkEntity(placeId = "42", bookmarkTargetId = "tgt_0123456789abcdef")
+            val fakeDao = FakeBookmarkDao(bookmarks = listOf(cachedBookmark))
+            val fakeDataSource = FakeBookmarksRemoteDataSource()
+            val repository =
+                DefaultBookmarkRepository(
+                    bookmarkDao = fakeDao,
+                    bookmarksRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            repository.deleteBookmark("42")
+
+            assertEquals(listOf("tgt_0123456789abcdef"), fakeDataSource.deletedTargetIds)
+            assertTrue(fakeDataSource.deletedPlaceIds.isEmpty())
+            assertEquals(0, fakeDao.getBookmarkCount())
+        }
+
+    @Test
+    fun `deleteBookmark falls back to place endpoint when target id is missing`() =
         runBlocking {
             val cachedBookmark = testBookmarkEntity(placeId = "42")
             val fakeDao = FakeBookmarkDao(bookmarks = listOf(cachedBookmark))
             val fakeDataSource = FakeBookmarksRemoteDataSource()
-
             val repository =
                 DefaultBookmarkRepository(
                     bookmarkDao = fakeDao,
@@ -251,12 +327,11 @@ class BookmarkRepositoryTest {
         }
 
     @Test
-    fun `deleteBookmark removes cache even when server call fails`() =
+    fun `deleteBookmark keeps cache and throws when server call fails`() =
         runBlocking {
-            val cachedBookmark = testBookmarkEntity(placeId = "42")
+            val cachedBookmark = testBookmarkEntity(placeId = "42", bookmarkTargetId = "tgt_0123456789abcdef")
             val fakeDao = FakeBookmarkDao(bookmarks = listOf(cachedBookmark))
             val fakeDataSource = FakeBookmarksRemoteDataSource(throwOnDelete = true)
-
             val repository =
                 DefaultBookmarkRepository(
                     bookmarkDao = fakeDao,
@@ -264,9 +339,10 @@ class BookmarkRepositoryTest {
                     accessTokenProvider = { "test-token" },
                 )
 
-            repository.deleteBookmark("42")
+            val result = runCatching { repository.deleteBookmark("42") }
 
-            assertEquals(0, fakeDao.getBookmarkCount())
+            assertTrue(result.isFailure)
+            assertEquals(1, fakeDao.getBookmarkCount())
         }
 }
 
@@ -283,6 +359,9 @@ private class FakeBookmarkDao(
     override suspend fun getBookmark(placeId: String): BookmarkEntity? =
         mutableBookmarks.value.firstOrNull { bookmark -> bookmark.placeId == placeId }
 
+    override suspend fun getBookmarkByTargetId(bookmarkTargetId: String): BookmarkEntity? =
+        mutableBookmarks.value.firstOrNull { bookmark -> bookmark.bookmarkTargetId == bookmarkTargetId }
+
     override suspend fun getBookmarkCount(): Int = mutableBookmarks.value.size
 
     override suspend fun upsertBookmark(bookmark: BookmarkEntity) {
@@ -297,6 +376,11 @@ private class FakeBookmarkDao(
         mutableBookmarks.value = mutableBookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
     }
 
+    override suspend fun deleteBookmarkByTargetId(bookmarkTargetId: String) {
+        mutableBookmarks.value =
+            mutableBookmarks.value.filterNot { bookmark -> bookmark.bookmarkTargetId == bookmarkTargetId }
+    }
+
     override suspend fun clearBookmarks() {
         mutableBookmarks.value = emptyList()
     }
@@ -304,37 +388,57 @@ private class FakeBookmarkDao(
 
 private class FakeBookmarksRemoteDataSource(
     private val serverContent: List<BookmarkListItemDto> = emptyList(),
+    private val createResponse: CreateBookmarkResponseDto? = null,
     private val throwOnGet: Boolean = false,
     private val throwOnDelete: Boolean = false,
 ) : BookmarksRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "http://test.invalid")) {
-    val createdPlaceIds = mutableListOf<Long>()
+    val createdRequests = mutableListOf<CreateBookmarkRequestDto>()
     val deletedPlaceIds = mutableListOf<Long>()
+    val deletedTargetIds = mutableListOf<String>()
     var getBookmarksCallCount: Int = 0
+        private set
+    var lastCursor: Long? = null
+        private set
+    var lastSize: Int? = null
         private set
 
     override suspend fun getBookmarks(
         accessToken: String,
-        page: Int?,
+        cursor: Long?,
         size: Int?,
     ): BookmarkPageDto {
         getBookmarksCallCount++
+        lastCursor = cursor
+        lastSize = size
         if (throwOnGet) throw RuntimeException("server get failure")
         return BookmarkPageDto(
             content = serverContent,
-            page = page ?: 0,
             size = size ?: serverContent.size,
-            totalElements = serverContent.size.toLong(),
-            totalPages = 1,
+            nextCursor = null,
             hasNext = false,
         )
     }
 
     override suspend fun createBookmark(
         accessToken: String,
-        placeId: Long,
+        request: CreateBookmarkRequestDto,
     ): CreateBookmarkResponseDto {
-        createdPlaceIds.add(placeId)
-        return CreateBookmarkResponseDto(bookmarkId = 1L, placeId = placeId)
+        createdRequests.add(request)
+        return createResponse
+            ?: CreateBookmarkResponseDto(
+                bookmarkId = 1L,
+                bookmarkTargetId = "tgt_0123456789abcdef",
+                targetType = if (request.placeId != null) "INTERNAL_PLACE" else "EXTERNAL_POI",
+                placeId = request.placeId,
+            )
+    }
+
+    override suspend fun deleteBookmarkByTargetId(
+        accessToken: String,
+        bookmarkTargetId: String,
+    ) {
+        if (throwOnDelete) throw RuntimeException("server delete failure")
+        deletedTargetIds.add(bookmarkTargetId)
     }
 
     override suspend fun deleteBookmark(
@@ -349,11 +453,18 @@ private class FakeBookmarksRemoteDataSource(
 private fun List<BookmarkEntity>.upsert(bookmark: BookmarkEntity): List<BookmarkEntity> =
     filterNot { existing -> existing.placeId == bookmark.placeId } + bookmark
 
-private fun testBookmarkEntity(placeId: String): BookmarkEntity =
+private fun testBookmarkEntity(
+    placeId: String,
+    bookmarkTargetId: String? = null,
+): BookmarkEntity =
     BookmarkEntity(
         placeId = placeId,
-        placeName = "기존 북마크",
-        address = "부산광역시 동구 중앙대로 206",
+        serverBookmarkId = 1L,
+        bookmarkTargetId = bookmarkTargetId,
+        targetType = "INTERNAL_PLACE",
+        serverPlaceId = placeId.toLongOrNull(),
+        placeName = "Cached Bookmark",
+        address = "206 Jungang-daero, Busan",
         latitude = 35.1151,
         longitude = 129.0415,
         category = "ELEVATOR",
@@ -367,4 +478,11 @@ private fun BookmarkEntity.toBookmarkData(): BookmarkData =
         latitude = latitude,
         longitude = longitude,
         category = category,
+        bookmarkId = serverBookmarkId,
+        bookmarkTargetId = bookmarkTargetId,
+        targetType = targetType,
+        serverPlaceId = serverPlaceId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
     )

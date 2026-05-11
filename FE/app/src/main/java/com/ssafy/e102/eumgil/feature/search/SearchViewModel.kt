@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
@@ -10,7 +11,9 @@ import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import kotlinx.coroutines.CancellationException
@@ -31,6 +34,7 @@ class SearchViewModel(
     private val searchRepository: SearchRepository,
     private val bookmarkRepository: BookmarkRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
+    private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SearchUiState())
@@ -69,9 +73,11 @@ class SearchViewModel(
             is SearchUiAction.RecentSearchDeleteClicked -> deleteRecentSearch(action.keyword)
             SearchUiAction.RecentSearchClearAllClicked -> clearRecentSearches()
             is SearchUiAction.SearchResultClicked -> selectSearchResult(action.result)
+            is SearchUiAction.SearchResultPreviewClicked -> previewSearchResult(action.result)
             is SearchUiAction.SearchResultBriefingClicked -> briefSearchResult(action.result)
             is SearchUiAction.BookmarkToggleClicked -> toggleBookmark(action.result)
             is SearchUiAction.LowVisionBookmarkSaveClicked -> saveLowVisionBookmark(action.result)
+            SearchUiAction.LoadNextPageClicked -> loadNextSearchPage()
         }
     }
 
@@ -79,6 +85,31 @@ class SearchViewModel(
         if (!handoffSearchResult(result)) return
 
         emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun previewSearchResult(result: SearchResult) {
+        val destination = result.toPlaceDestinationOrNull()
+        if (destination == null) {
+            showResultActionError(message = blockedResultMessage(result))
+            return
+        }
+
+        destinationPreviewRepository.requestPreview(
+            destination = destination,
+            editingTarget = destinationSelectionRepository.editingTarget.value,
+            accessibilityTagKeys = result.accessibilityTagKeys,
+            detailType =
+                if (result.isVerifiedPlace) {
+                    MapPlaceDetailType.INTERNAL_PLACE
+                } else {
+                    MapPlaceDetailType.EXTERNAL_POI
+                },
+            bookmarkTargetId = result.serverPlaceId,
+            provider = result.bookmarkProvider(),
+            providerPlaceId = result.providerPlaceId,
+        )
+        persistRecentDestination(result = result, destination = destination)
+        emitUiEvent(SearchUiEvent.NavigateToMapPreview)
     }
 
     private fun briefSearchResult(result: SearchResult) {
@@ -152,6 +183,10 @@ class SearchViewModel(
                             latitude = destination.latitude,
                             longitude = destination.longitude,
                             category = destination.category?.name,
+                            serverPlaceId = result.serverPlaceId?.toLongOrNull(),
+                            provider = result.bookmarkProvider(),
+                            providerPlaceId = result.providerPlaceId,
+                            providerCategory = destination.category?.name,
                         ),
                     )
                 }
@@ -187,6 +222,10 @@ class SearchViewModel(
                         latitude = destination.latitude,
                         longitude = destination.longitude,
                         category = destination.category?.name,
+                        serverPlaceId = result.serverPlaceId?.toLongOrNull(),
+                        provider = result.bookmarkProvider(),
+                        providerPlaceId = result.providerPlaceId,
+                        providerCategory = destination.category?.name,
                     ),
                 )
             }.onSuccess {
@@ -410,9 +449,9 @@ class SearchViewModel(
         }
         searchJob =
             viewModelScope.launch {
-                val results =
+                val searchPage =
                     try {
-                        searchRepository.search(SearchQuery(keyword = normalizedQuery))
+                        searchRepository.searchPage(SearchQuery(keyword = normalizedQuery))
                     } catch (throwable: Throwable) {
                         if (throwable is CancellationException) throw throwable
 
@@ -427,6 +466,7 @@ class SearchViewModel(
                         }
                         return@launch
                     }
+                val results = searchPage.results
 
                 val recentSearches =
                     try {
@@ -447,9 +487,65 @@ class SearchViewModel(
                                 SearchResultUiState.Success(
                                     query = normalizedQuery,
                                     results = results,
+                                    nextCursor = searchPage.nextCursor,
+                                    hasNext = searchPage.hasNext,
                                 )
                             },
                     )
+                }
+            }
+    }
+
+    private fun loadNextSearchPage() {
+        val currentResultState = mutableUiState.value.resultState as? SearchResultUiState.Success ?: return
+        val nextCursor = currentResultState.nextCursor?.trim()?.takeIf(String::isNotEmpty) ?: return
+        if (!currentResultState.hasNext || currentResultState.isLoadingNextPage) return
+
+        mutableUiState.update { state ->
+            state.copy(resultState = currentResultState.copy(isLoadingNextPage = true))
+        }
+
+        searchJob =
+            viewModelScope.launch {
+                val nextPage =
+                    try {
+                        searchRepository.searchPage(
+                            SearchQuery(
+                                keyword = currentResultState.query,
+                                cursor = nextCursor,
+                            ),
+                        )
+                    } catch (throwable: Throwable) {
+                        if (throwable is CancellationException) throw throwable
+
+                        mutableUiState.update { state ->
+                            val latestSuccess = state.resultState as? SearchResultUiState.Success
+                            if (latestSuccess == null || latestSuccess.query != currentResultState.query) {
+                                state
+                            } else {
+                                state.copy(
+                                    resultState = latestSuccess.copy(isLoadingNextPage = false),
+                                )
+                            }
+                        }
+                        return@launch
+                    }
+
+                mutableUiState.update { state ->
+                    val latestSuccess = state.resultState as? SearchResultUiState.Success
+                    if (latestSuccess == null || latestSuccess.query != currentResultState.query) {
+                        state
+                    } else {
+                        state.copy(
+                            resultState =
+                                latestSuccess.copy(
+                                    results = latestSuccess.results + nextPage.results,
+                                    nextCursor = nextPage.nextCursor,
+                                    hasNext = nextPage.hasNext,
+                                    isLoadingNextPage = false,
+                                ),
+                        )
+                    }
                 }
             }
     }
@@ -526,10 +622,10 @@ class SearchViewModel(
     }
 
     private fun blockedResultMessage(result: SearchResult): String =
-        if (!result.isVerifiedPlace) {
-            UNVERIFIED_PLACE_HANDOFF_MESSAGE
-        } else {
+        if (result.toPlaceDestinationOrNull() == null) {
             INVALID_DESTINATION_HANDOFF_MESSAGE
+        } else {
+            BOOKMARK_TOGGLE_FAILURE_MESSAGE
         }
 
     override fun onCleared() {
@@ -547,6 +643,7 @@ class SearchViewModel(
             searchRepository: SearchRepository,
             bookmarkRepository: BookmarkRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
+            destinationPreviewRepository: DestinationPreviewRepository,
             placesRepository: PlacesRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -557,6 +654,7 @@ class SearchViewModel(
                             searchRepository = searchRepository,
                             bookmarkRepository = bookmarkRepository,
                             destinationSelectionRepository = destinationSelectionRepository,
+                            destinationPreviewRepository = destinationPreviewRepository,
                             placesRepository = placesRepository,
                         ) as T
                     }
@@ -575,3 +673,7 @@ private fun SearchResultUiState.hasResultQuery(query: String): Boolean =
         is SearchResultUiState.Error -> this.query == query
         else -> false
     }
+
+private fun SearchResult.bookmarkProvider(): String? =
+    provider?.takeIf { it.isNotBlank() }
+        ?: "KAKAO".takeIf { !providerPlaceId.isNullOrBlank() }

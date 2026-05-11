@@ -185,7 +185,7 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `provider only search result exposes limited state description`() {
+    fun `provider only search result with valid coordinates exposes selectable state description`() {
         val result =
             SearchResult(
                 placeId = "provider:kakao:987654321",
@@ -198,7 +198,7 @@ class SearchScreenTest {
                 matched = false,
             )
 
-        assertEquals(R.string.search_screen_result_action_limited, resolveSearchResultStateDescriptionRes(result))
+        assertEquals(R.string.search_screen_result_selectable, resolveSearchResultStateDescriptionRes(result))
     }
 
     @Test

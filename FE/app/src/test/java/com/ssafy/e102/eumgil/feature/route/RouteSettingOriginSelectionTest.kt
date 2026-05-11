@@ -17,7 +17,11 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRatingData
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
+import com.ssafy.e102.eumgil.data.repository.RouteSessionData
+import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -253,7 +257,7 @@ private class RecordingRouteRepository : RouteRepository {
                                 title = "Safe Route",
                                 summary =
                                     RouteSummary(
-                                        distanceMeters = 900,
+                                        distanceMeters = 700,
                                         estimatedTimeMinutes = 15,
                                         riskLevel = RouteRiskLevel.LOW,
                                     ),
@@ -288,4 +292,30 @@ private class RecordingRouteRepository : RouteRepository {
                 ),
         )
     }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("getTransitRouteSearchData was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData =
+        error("selectRoute was not expected")
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = RouteTransitRefreshData(type = "BUS", arrivalStatus = "UNKNOWN")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ): RouteRerouteData = RouteRerouteData()
+
+    override suspend fun endRoute(routeId: String): RouteSessionData = RouteSessionData(sessionId = "session-$routeId")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = RouteRatingData(ratingId = 0L)
 }

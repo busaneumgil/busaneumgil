@@ -27,7 +27,7 @@ data class RouteSettingUiState(
     val ctaAcknowledged: Boolean = false,
 ) {
     val isStartEnabled: Boolean
-        get() = cta.isEnabled && selectedTravelMode == RouteTravelMode.WALK
+        get() = cta.isEnabled
 }
 
 data class RouteLocationUiState(
@@ -247,4 +247,11 @@ data class RouteNavigationRequest(
     val destination: RouteWaypoint,
     val selectedRoute: RouteCandidate,
     val source: RouteSearchSource,
+    val selectionHandoff: RouteNavigationSelectionHandoff? = null,
+)
+
+data class RouteNavigationSelectionHandoff(
+    val searchId: String,
+    val routeId: String,
+    val sessionId: String,
 )

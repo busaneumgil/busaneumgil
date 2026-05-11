@@ -84,7 +84,7 @@ public class TransitRouteSearchService {
 	private static final int ACCESSIBLE_BUS_BOARDING_PREP_SECOND = 3 * 60;
 	private static final int OPTION_PRESELECT_LIMIT = 3;
 	private static final int BIMS_SHORTLIST_LIMIT = 5;
-	private static final Duration BIMS_ENRICHMENT_TIMEOUT = Duration.ofSeconds(2);
+	private static final Duration BIMS_ENRICHMENT_TIMEOUT = Duration.ofSeconds(6);
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
 		RouteBadge.STAIR,

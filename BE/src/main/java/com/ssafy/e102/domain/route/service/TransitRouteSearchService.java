@@ -13,9 +13,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +50,7 @@ import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.global.external.bims.BusanBimsArrival;
 import com.ssafy.e102.global.external.bims.BusanBimsClient;
+import com.ssafy.e102.global.external.bims.BusanBimsClientConfig;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRoutePath;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperRouteRequest;
@@ -74,6 +79,8 @@ public class TransitRouteSearchService {
 	private static final int WHEELCHAIR_SUBWAY_TRANSFER_BUFFER_SECOND = 8 * 60;
 	private static final int DEFAULT_BUS_BOARDING_PREP_SECOND = 2 * 60;
 	private static final int ACCESSIBLE_BUS_BOARDING_PREP_SECOND = 3 * 60;
+	private static final int OPTION_PRESELECT_LIMIT = 3;
+	private static final int BIMS_SHORTLIST_LIMIT = 5;
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
 		RouteBadge.STAIR,
@@ -92,6 +99,7 @@ public class TransitRouteSearchService {
 	private final WalkRoutePayloadService walkRoutePayloadService;
 	private final GraphHopperRouteClient graphHopperRouteClient;
 	private final BusanBimsClient busanBimsClient;
+	private final Executor bimsTaskExecutor;
 	private final OdsayClient odsayClient;
 	private final RouteSearchCacheService routeSearchCacheService;
 
@@ -104,6 +112,8 @@ public class TransitRouteSearchService {
 		WalkRoutePayloadService walkRoutePayloadService,
 		GraphHopperRouteClient graphHopperRouteClient,
 		BusanBimsClient busanBimsClient,
+		@Qualifier(BusanBimsClientConfig.BIMS_TASK_EXECUTOR)
+		Executor bimsTaskExecutor,
 		OdsayClient odsayClient,
 		RouteSearchCacheService routeSearchCacheService) {
 		this.userProfileQueryService = userProfileQueryService;
@@ -114,6 +124,7 @@ public class TransitRouteSearchService {
 		this.walkRoutePayloadService = walkRoutePayloadService;
 		this.graphHopperRouteClient = graphHopperRouteClient;
 		this.busanBimsClient = busanBimsClient;
+		this.bimsTaskExecutor = bimsTaskExecutor;
 		this.odsayClient = odsayClient;
 		this.routeSearchCacheService = routeSearchCacheService;
 	}
@@ -127,15 +138,16 @@ public class TransitRouteSearchService {
 
 		OdsayTransitSearchResult searchResult = odsayClient.searchPubTransPath(startPoint, endPoint);
 		String searchId = "rs_transit_" + UUID.randomUUID();
-		List<TransitRouteCandidate> candidates = new ArrayList<>();
+		List<TransitRouteBaseCandidate> baseCandidates = new ArrayList<>();
 		RouteException firstExternalFailure = null;
 		for (int index = 0; index < searchResult.paths().size(); index++) {
 			OdsayTransitPath path = searchResult.paths().get(index);
 			int routeIndex = index + 1;
 			try {
 				List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(path.mapObj());
-				toCandidate(searchId, routeIndex, startPoint, endPoint, path, laneGeometries, profile)
-					.ifPresent(candidates::add);
+				toCandidate(searchId, routeIndex, startPoint, endPoint, path, laneGeometries, profile, false)
+					.map(candidate -> new TransitRouteBaseCandidate(routeIndex, path, candidate))
+					.ifPresent(baseCandidates::add);
 			} catch (RouteException exception) {
 				if (exception.getErrorCode() == RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT) {
 					throw exception;
@@ -156,10 +168,14 @@ public class TransitRouteSearchService {
 					exception);
 			}
 		}
-		if (candidates.isEmpty()) {
+		if (baseCandidates.isEmpty()) {
 			if (firstExternalFailure != null) {
 				throw firstExternalFailure;
 			}
+			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
+		}
+		List<TransitRouteCandidate> candidates = enrichBimsCandidates(selectBimsShortlist(baseCandidates), profile);
+		if (candidates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		List<TransitRouteCandidate> selectedCandidates = selectCandidates(candidates);
@@ -178,9 +194,17 @@ public class TransitRouteSearchService {
 		GeoPointRequest endPoint,
 		OdsayTransitPath path,
 		List<OdsayLaneGeometry> laneGeometries,
-		WalkRouteUserProfile profile) {
+		WalkRouteUserProfile profile,
+		boolean enrichBims) {
 		String routeId = "%s_%03d".formatted(searchId, routeIndex);
-		List<RouteLegResponse> legs = toLegs(routeIndex, startPoint, endPoint, path.legs(), laneGeometries, profile);
+		List<RouteLegResponse> legs = toLegs(
+			routeIndex,
+			startPoint,
+			endPoint,
+			path.legs(),
+			laneGeometries,
+			profile,
+			enrichBims);
 		if (legs.isEmpty()) {
 			return java.util.Optional.empty();
 		}
@@ -331,6 +355,106 @@ public class TransitRouteSearchService {
 			.toList();
 	}
 
+	private List<TransitRouteBaseCandidate> selectBimsShortlist(List<TransitRouteBaseCandidate> candidates) {
+		Map<String, TransitRouteBaseCandidate> selectedByRoute = new LinkedHashMap<>();
+		addShortlistCandidates(selectedByRoute, candidates, this::baseRecommendedComparator);
+		addShortlistCandidates(selectedByRoute, candidates, this::minTransferComparator);
+		addShortlistCandidates(selectedByRoute, candidates, this::minWalkComparator);
+		Comparator<TransitRouteCandidate> baseRecommendedComparator = baseRecommendedComparator();
+		List<TransitRouteBaseCandidate> shortlist = selectedByRoute.values()
+			.stream()
+			.sorted((left, right) -> baseRecommendedComparator.compare(left.candidate(), right.candidate()))
+			.limit(BIMS_SHORTLIST_LIMIT)
+			.toList();
+		log.info(
+			"transit bims shortlist odsayCandidateCount={} shortlistCount={} busLegCount={} busLaneOptionCount={}",
+			candidates.size(),
+			shortlist.size(),
+			busLegCount(shortlist),
+			busLaneOptionCount(shortlist));
+		return shortlist;
+	}
+
+	private List<TransitRouteCandidate> enrichBimsCandidates(
+		List<TransitRouteBaseCandidate> baseCandidates,
+		WalkRouteUserProfile profile) {
+		List<TransitRouteCandidateFuture> futures = baseCandidates.stream()
+			.map(baseCandidate -> new TransitRouteCandidateFuture(
+				baseCandidate,
+				CompletableFuture.supplyAsync(() -> enrichBims(baseCandidate, profile), bimsTaskExecutor)))
+			.toList();
+		List<TransitRouteCandidate> candidates = new ArrayList<>();
+		RouteException firstBimsFailure = null;
+		for (TransitRouteCandidateFuture future : futures) {
+			try {
+				candidates.add(future.future().join());
+			} catch (CompletionException exception) {
+				RouteException routeException = routeException(exception);
+				if (routeException == null) {
+					throw exception;
+				}
+				if (routeException.getErrorCode() == RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT) {
+					throw routeException;
+				}
+				if (routeException.getErrorCode() == RouteErrorCode.EXTERNAL_ROUTE_API_FAILED
+					&& firstBimsFailure == null) {
+					firstBimsFailure = routeException;
+				}
+				log.warn(
+					"transit candidate skipped provider={} operation={} routeIndex={} legIndex={} mapObj={} status={} message={}",
+					"bims",
+					"enrichment",
+					future.baseCandidate().routeIndex(),
+					"-",
+					future.baseCandidate().path().mapObj(),
+					routeException.getErrorCode().getStatus(),
+					routeException.getMessage(),
+					routeException);
+			}
+		}
+		if (candidates.isEmpty() && firstBimsFailure != null) {
+			throw firstBimsFailure;
+		}
+		return candidates;
+	}
+
+	private RouteException routeException(CompletionException exception) {
+		Throwable cause = exception.getCause();
+		if (cause instanceof RouteException routeException) {
+			return routeException;
+		}
+		return null;
+	}
+
+	private void addShortlistCandidates(
+		Map<String, TransitRouteBaseCandidate> selectedByRoute,
+		List<TransitRouteBaseCandidate> candidates,
+		java.util.function.Supplier<Comparator<TransitRouteCandidate>> comparatorSupplier) {
+		Comparator<TransitRouteCandidate> comparator = comparatorSupplier.get();
+		candidates.stream()
+			.sorted((left, right) -> comparator.compare(left.candidate(), right.candidate()))
+			.limit(OPTION_PRESELECT_LIMIT)
+			.forEach(candidate -> selectedByRoute.putIfAbsent(routeKey(candidate.candidate().route()), candidate));
+	}
+
+	private int busLegCount(List<TransitRouteBaseCandidate> candidates) {
+		return candidates.stream()
+			.map(TransitRouteBaseCandidate::candidate)
+			.flatMap(candidate -> candidate.route().legs().stream())
+			.filter(leg -> leg.type() == TransportMode.BUS)
+			.mapToInt(leg -> 1)
+			.sum();
+	}
+
+	private int busLaneOptionCount(List<TransitRouteBaseCandidate> candidates) {
+		return candidates.stream()
+			.map(TransitRouteBaseCandidate::candidate)
+			.flatMap(candidate -> candidate.route().legs().stream())
+			.filter(leg -> leg.type() == TransportMode.BUS)
+			.mapToInt(leg -> leg.laneOptions().size())
+			.sum();
+	}
+
 	private java.util.Optional<TransitRouteCandidate> selectBy(
 		List<TransitRouteCandidate> candidates,
 		java.util.function.Supplier<Comparator<TransitRouteCandidate>> comparatorSupplier) {
@@ -340,6 +464,12 @@ public class TransitRouteSearchService {
 	private Comparator<TransitRouteCandidate> recommendedComparator() {
 		return Comparator.comparing(this::hasLowFloorBusForEveryBusLeg).reversed()
 			.thenComparing(candidate -> candidate.route().durationSecond())
+			.thenComparing(TransitRouteCandidate::transferCount)
+			.thenComparing(TransitRouteCandidate::totalWalkMeter);
+	}
+
+	private Comparator<TransitRouteCandidate> baseRecommendedComparator() {
+		return Comparator.comparing((TransitRouteCandidate candidate) -> candidate.route().durationSecond())
 			.thenComparing(TransitRouteCandidate::transferCount)
 			.thenComparing(TransitRouteCandidate::totalWalkMeter);
 	}
@@ -439,6 +569,90 @@ public class TransitRouteSearchService {
 				|| profile.mobilitySubtype() == MobilitySubtype.MANUAL_WHEELCHAIR);
 	}
 
+	private TransitRouteCandidate enrichBims(TransitRouteBaseCandidate baseCandidate, WalkRouteUserProfile profile) {
+		TransitRouteCandidate candidate = baseCandidate.candidate();
+		RouteSummaryResponse route = candidate.route();
+		List<RouteLegResponse> enrichedLegs = enrichBimsLegs(
+			route.legs(),
+			baseCandidate.path().legs(),
+			baseCandidate.routeIndex());
+		RouteSummaryResponse enrichedRoute = new RouteSummaryResponse(
+			route.routeId(),
+			route.transportMode(),
+			route.routeOption(),
+			route.routeOptions(),
+			route.title(),
+			route.distanceMeter(),
+			route.durationSecond(),
+			route.estimatedTimeMinute(),
+			route.badges(),
+			routeWarnings(enrichedLegs, profile),
+			route.geometry(),
+			enrichedLegs);
+		return new TransitRouteCandidate(
+			enrichedRoute,
+			candidate.snapshot(),
+			candidate.totalWalkMeter(),
+			candidate.transferCount());
+	}
+
+	private List<RouteLegResponse> enrichBimsLegs(
+		List<RouteLegResponse> legs,
+		List<OdsayTransitLeg> odsayLegs,
+		int routeIndex) {
+		List<RouteLegResponse> enrichedLegs = new ArrayList<>();
+		for (RouteLegResponse leg : legs) {
+			if (leg.type() != TransportMode.BUS) {
+				enrichedLegs.add(leg);
+				continue;
+			}
+			int odsayIndex = leg.sequence() - 1;
+			if (odsayIndex < 0 || odsayIndex >= odsayLegs.size()) {
+				enrichedLegs.add(leg);
+				continue;
+			}
+			OdsayTransitLeg odsayLeg = odsayLegs.get(odsayIndex);
+			if (odsayLeg.type() != TransportMode.BUS) {
+				enrichedLegs.add(leg);
+				continue;
+			}
+			enrichedLegs.add(enrichBimsLeg(leg, odsayLeg, routeIndex));
+		}
+		return List.copyOf(enrichedLegs);
+	}
+
+	private RouteLegResponse enrichBimsLeg(RouteLegResponse leg, OdsayTransitLeg odsayLeg, int routeIndex) {
+		List<TransitLaneOptionResponse> laneOptions = laneOptions(routeIndex, leg.sequence(), odsayLeg, true);
+		String routeNo = routeNo(odsayLeg, laneOptions);
+		return new RouteLegResponse(
+			leg.sequence(),
+			leg.type(),
+			leg.role(),
+			instruction(odsayLeg, routeNo),
+			leg.distanceMeter(),
+			leg.durationSecond(),
+			leg.estimatedTimeMinute(),
+			leg.geometry(),
+			leg.guidanceEvents(),
+			routeNo,
+			laneOptions,
+			leg.boardingStop(),
+			leg.arrivingStop(),
+			leg.isLowFloor(),
+			leg.badges());
+	}
+
+	private record TransitRouteBaseCandidate(
+		int routeIndex,
+		OdsayTransitPath path,
+		TransitRouteCandidate candidate) {
+	}
+
+	private record TransitRouteCandidateFuture(
+		TransitRouteBaseCandidate baseCandidate,
+		CompletableFuture<TransitRouteCandidate> future) {
+	}
+
 	private record SelectedTransitRoute(
 		TransitRouteCandidate candidate,
 		Set<RouteOption> routeOptions) {
@@ -481,7 +695,8 @@ public class TransitRouteSearchService {
 		GeoPointRequest endPoint,
 		List<OdsayTransitLeg> odsayLegs,
 		List<OdsayLaneGeometry> laneGeometries,
-		WalkRouteUserProfile profile) {
+		WalkRouteUserProfile profile,
+		boolean enrichBims) {
 		List<RouteLegResponse> legs = new ArrayList<>();
 		GeoPointRequest cursor = startPoint;
 		int[] geometryIndex = {0};
@@ -516,7 +731,8 @@ public class TransitRouteSearchService {
 					routeIndex,
 					odsayLeg,
 					cursor,
-					nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex));
+					nextGeometry(odsayLeg.type(), laneGeometries, geometryIndex),
+					enrichBims);
 				legs.add(transitLeg);
 				if (transitLeg.arrivingStop() != null) {
 					cursor = new GeoPointRequest(
@@ -654,9 +870,10 @@ public class TransitRouteSearchService {
 		int routeIndex,
 		OdsayTransitLeg odsayLeg,
 		GeoPointRequest referencePoint,
-		String geometry) {
+		String geometry,
+		boolean enrichBims) {
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
-		List<TransitLaneOptionResponse> laneOptions = laneOptions(routeIndex, sequence, odsayLeg);
+		List<TransitLaneOptionResponse> laneOptions = laneOptions(routeIndex, sequence, odsayLeg, enrichBims);
 		String routeNo = routeNo(odsayLeg, laneOptions);
 		RouteStopResponse boardingStop = boardingStop(odsayLeg, referencePoint);
 		RouteStopResponse arrivingStop = arrivingStop(odsayLeg);
@@ -816,11 +1033,26 @@ public class TransitRouteSearchService {
 			.toList();
 	}
 
-	private List<TransitLaneOptionResponse> laneOptions(int routeIndex, int legIndex, OdsayTransitLeg odsayLeg) {
+	private List<TransitLaneOptionResponse> laneOptions(
+		int routeIndex,
+		int legIndex,
+		OdsayTransitLeg odsayLeg,
+		boolean enrichBims) {
 		if (odsayLeg.type() != TransportMode.BUS) {
 			return List.of();
 		}
 		int durationSecond = Math.max(0, odsayLeg.sectionTimeMinute() * 60);
+		if (!enrichBims) {
+			return odsayLeg.lanes()
+				.stream()
+				.map(lane -> new TransitLaneOptionResponse(
+					lane.busNo(),
+					null,
+					durationSecond,
+					estimatedMinute(durationSecond),
+					null))
+				.toList();
+		}
 		return odsayLeg.lanes()
 			.stream()
 			.map(lane -> laneOption(routeIndex, legIndex, odsayLeg, lane, durationSecond))

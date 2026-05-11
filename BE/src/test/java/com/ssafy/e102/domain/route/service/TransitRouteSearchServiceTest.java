@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,11 +92,13 @@ class TransitRouteSearchServiceTest {
 	@Mock
 	private RouteSearchCacheService routeSearchCacheService;
 
+	private CountingExecutor bimsTaskExecutor;
 	private TransitRouteSearchService service;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
+		bimsTaskExecutor = new CountingExecutor();
 		service = new TransitRouteSearchService(
 			userProfileQueryService,
 			subwayStationElevatorRepository,
@@ -103,6 +108,7 @@ class TransitRouteSearchServiceTest {
 			new WalkRoutePayloadService(new RouteTurnInstructionService()),
 			graphHopperRouteClient,
 			busanBimsClient,
+			bimsTaskExecutor,
 			odsayClient,
 			routeSearchCacheService);
 		when(userProfileQueryService.getProfile(any()))
@@ -469,8 +475,77 @@ class TransitRouteSearchServiceTest {
 			.containsExactly(RouteOption.RECOMMENDED, RouteOption.MIN_TRANSFER, RouteOption.MIN_WALK);
 	}
 
+	@Test
+	@DisplayName("BIMS enrichment 대상은 shortlist 최대 5개로 제한한다")
+	void limitsBimsEnrichmentToFiveShortlistedCandidates() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(
+				busPathWithBusDuration("map-fast-1", "100", 5, 900, 1),
+				busPathWithBusDuration("map-fast-2", "101", 6, 800, 1),
+				busPathWithBusDuration("map-fast-3", "102", 7, 700, 1),
+				busPathWithBusDuration("map-walk-1", "103", 20, 100, 1),
+				busPathWithBusDuration("map-walk-2", "104", 21, 200, 1),
+				busPathWithBusDuration("map-walk-3", "105", 22, 300, 1))));
+		when(odsayClient.loadLane(any()))
+			.thenReturn(List.of(new OdsayLaneGeometry(
+				TransportMode.BUS,
+				"LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival(any(), any(), any()))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		service.search(UUID.randomUUID(), request());
+
+		verify(busanBimsClient, times(5)).findArrival(any(), any(), any());
+		assertThat(bimsTaskExecutor.executionCount()).isEqualTo(5);
+	}
+
+	@Test
+	@DisplayName("shortlist 이후 BIMS 저상버스 결과를 RECOMMENDED 우선순위에 적용한다")
+	void appliesLowFloorPriorityAfterBimsEnrichment() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(
+				busPathWithBusDuration("map-fast-normal", "100", 5, 100, 1),
+				busPathWithBusDuration("map-slower-low-floor", "200", 6, 100, 1))));
+		when(odsayClient.loadLane(any()))
+			.thenReturn(List.of(new OdsayLaneGeometry(
+				TransportMode.BUS,
+				"LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, false));
+		when(busanBimsClient.findArrival("BS1", "BL1", "200"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "200", 5, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes().get(0).routeOption()).isEqualTo(RouteOption.RECOMMENDED);
+		assertThat(response.routes().get(0).legs())
+			.filteredOn(leg -> leg.type() == TransportMode.BUS)
+			.first()
+			.satisfies(leg -> {
+				assertThat(leg.routeNo()).isEqualTo("200");
+				assertThat(leg.laneOptions().get(0).isLowFloor()).isTrue();
+			});
+	}
+
 	private WalkRouteSearchRequest request() {
 		return new WalkRouteSearchRequest(START, END);
+	}
+
+	private static final class CountingExecutor implements Executor {
+
+		private final AtomicInteger executionCount = new AtomicInteger();
+
+		@Override
+		public void execute(Runnable command) {
+			executionCount.incrementAndGet();
+			command.run();
+		}
+
+		private int executionCount() {
+			return executionCount.get();
+		}
 	}
 
 	private OdsayTransitPath busPath(String mapObj, String busNo, int totalTimeMinute, int totalWalkMeter) {

@@ -22,7 +22,7 @@ import com.ssafy.e102.global.exception.CommonErrorCode;
 @Service
 public class AdminRoadNetworkEditService {
 
-	private static final double SNAP_DISTANCE_METER = 1.5;
+	private static final double SNAP_DISTANCE_METER = 1.0;
 	private static final int SRID = 4326;
 
 	private final JdbcTemplate jdbcTemplate;
@@ -241,8 +241,15 @@ public class AdminRoadNetworkEditService {
 		counters.snappedNodes += snappedNodeIds.size();
 		insertBulkRoadSegments();
 		addedEdgeIds.addAll(queryLongs("select edge_id from admin_edit_new_segments order by edge_id"));
+		validateAddedSegments(inputs, addedEdgeIds);
 		counters.createdSegmentFeatures += insertSegmentFeaturesForNewSegments();
 		counters.updatedSegmentAttributes += updateSegmentAttributesForNewSegments();
+	}
+
+	private void validateAddedSegments(List<AddSegmentInput> inputs, List<Long> addedEdgeIds) {
+		if (inputs.size() != addedEdgeIds.size()) {
+			throw invalidRequest("추가할 segment의 양 끝점이 같은 node로 연결되어 추가할 수 없습니다.");
+		}
 	}
 
 	private void createAddSegmentTempTables() {

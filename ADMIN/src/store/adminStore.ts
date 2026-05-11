@@ -83,7 +83,7 @@ interface AdminState {
   undoDraftEdit: () => void;
   clearDraft: () => void;
   requestReview: () => void;
-  markApplied: () => void;
+  markApplied: (assignmentId?: string) => void;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -143,8 +143,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       ),
     }));
   },
-  markApplied: () => {
-    const selectedAssignmentId = get().selectedAssignmentId;
+  markApplied: (assignmentId) => {
+    const selectedAssignmentId = assignmentId ?? get().selectedAssignmentId;
     set((state) => ({
       assignments: state.assignments.map((assignment) =>
         assignment.assignmentId === selectedAssignmentId

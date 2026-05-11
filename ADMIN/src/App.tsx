@@ -58,8 +58,10 @@ function AdminApp() {
   const [activeRoadEditJobId, setActiveRoadEditJobId] = useState<number | null>(null);
   const [lastRoadEditJob, setLastRoadEditJob] = useState<RoadNetworkEditJobResponse | null>(null);
   const completedRoadEditJobIdRef = useRef<number | null>(null);
+  const submittedRoadEditAssignmentIdRef = useRef<string | null>(null);
   const {
     page,
+    selectedAssignmentId,
     selectedGu,
     selectedDong,
     draftEdits,
@@ -108,15 +110,18 @@ function AdminApp() {
   });
 
   const applyRoadNetworkMutation = useMutation({
-    mutationFn: () => createAdminRoadNetworkEditJob({
-      version: "ADMIN-draft-v1",
-      assignmentId: `${selectedGu}:${selectedDong}`,
-      gu: selectedGu,
-      dong: selectedDong,
-      role: currentAdmin?.role ?? "ADMIN",
-      createdAt: new Date().toISOString(),
-      edits: draftEdits,
-    }, accessToken),
+    mutationFn: () => {
+      submittedRoadEditAssignmentIdRef.current = selectedAssignmentId;
+      return createAdminRoadNetworkEditJob({
+        version: "ADMIN-draft-v1",
+        assignmentId: `${selectedGu}:${selectedDong}`,
+        gu: selectedGu,
+        dong: selectedDong,
+        role: currentAdmin?.role ?? "ADMIN",
+        createdAt: new Date().toISOString(),
+        edits: draftEdits,
+      }, accessToken);
+    },
     onSuccess: (job) => {
       completedRoadEditJobIdRef.current = null;
       setLastRoadEditJob(job);
@@ -149,7 +154,8 @@ function AdminApp() {
       return;
     }
     completedRoadEditJobIdRef.current = activeRoadEditJob.jobId;
-    markApplied();
+    markApplied(submittedRoadEditAssignmentIdRef.current ?? undefined);
+    submittedRoadEditAssignmentIdRef.current = null;
     setSelectedSegment(null);
     setActiveRoadEditJobId(null);
     queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
@@ -231,6 +237,7 @@ function AdminApp() {
               구
               <select
                 value={selectedGu}
+                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                 onChange={(event) => {
                   const nextGu = event.target.value;
                   const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
@@ -253,6 +260,7 @@ function AdminApp() {
               동
               <select
                 value={selectedDong}
+                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                 onChange={(event) => {
                   setSelectedArea(selectedGu, event.target.value);
                   setSelectedFacility(null);

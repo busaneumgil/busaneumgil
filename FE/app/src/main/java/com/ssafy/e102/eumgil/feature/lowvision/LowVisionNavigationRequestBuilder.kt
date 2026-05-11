@@ -44,13 +44,20 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
     }
 
     val transitSearchData =
-        getFreshTransitRouteSearchData(
-            RouteSearchQuery(
-                origin = LOW_VISION_DEFAULT_ORIGIN,
-                destination = destination,
-                requestedOptions = LOW_VISION_TRANSIT_OPTIONS,
-            ),
-        )
+        runCatching {
+            getFreshTransitRouteSearchData(
+                RouteSearchQuery(
+                    origin = LOW_VISION_DEFAULT_ORIGIN,
+                    destination = destination,
+                    requestedOptions = LOW_VISION_TRANSIT_OPTIONS,
+                ),
+            )
+        }.getOrElse {
+            return LowVisionNavigationPlan(
+                searchData = walkSearchData,
+                selectedRoute = selectedWalkRoute,
+            )
+        }
     val selectedTransitRoute =
         transitSearchData.findRoute(RouteOption.RECOMMENDED)
             ?: transitSearchData.primaryRoute

@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
 @Composable
@@ -106,6 +107,7 @@ fun SearchVoiceInputRoute(
         if (lastCompletedCount.intValue >= 0 &&
             ttsState.completedUtteranceCount > lastCompletedCount.intValue
         ) {
+            delay(300) // TTS 잔향 + AEC 안정화 대기
             sttViewModel.beginRecording()
         }
         lastCompletedCount.intValue = ttsState.completedUtteranceCount

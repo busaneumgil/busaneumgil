@@ -36,6 +36,7 @@ public class AdminRoadNetworkEditService {
 	@Transactional
 	public AdminRoadNetworkEditApplyResponse apply(AdminRoadNetworkEditApplyRequest request) {
 		List<AdminRoadNetworkEditApplyRequest.Edit> edits = request.edits();
+		validateActions(edits);
 		Set<Long> deleteEdgeIds = new LinkedHashSet<>();
 		Set<Long> deleteNodeIds = new LinkedHashSet<>();
 
@@ -48,6 +49,8 @@ public class AdminRoadNetworkEditService {
 				deleteNodeIds.add(requirePositiveId(edit.vertexId(), "삭제할 node ID는 필수입니다."));
 			}
 		}
+		validateExistingEdgeIds(deleteEdgeIds);
+		validateExistingNodeIds(deleteNodeIds);
 
 		if (!deleteNodeIds.isEmpty()) {
 			deleteEdgeIds.addAll(findIncidentEdgeIds(deleteNodeIds));
@@ -56,6 +59,7 @@ public class AdminRoadNetworkEditService {
 		Set<Long> orphanCleanupCandidateNodeIds = new LinkedHashSet<>(deleteNodeIds);
 		orphanCleanupCandidateNodeIds.addAll(findEndpointNodeIds(deleteEdgeIds));
 		List<Long> deletedEdgeIds = deleteSegments(deleteEdgeIds);
+		validateDeletedSegments(deleteEdgeIds, deletedEdgeIds);
 		ApplyCounters counters = new ApplyCounters();
 		List<Long> addedEdgeIds = new ArrayList<>();
 		List<Long> createdNodeIds = new ArrayList<>();
@@ -88,6 +92,49 @@ public class AdminRoadNetworkEditService {
 			deletedEdgeIds,
 			createdNodeIds,
 			snappedNodeIds);
+	}
+
+	private void validateActions(List<AdminRoadNetworkEditApplyRequest.Edit> edits) {
+		for (AdminRoadNetworkEditApplyRequest.Edit edit : edits) {
+			String action = edit.action();
+			if (!"add_segment".equals(action) && !"delete_segment".equals(action) && !"delete_node".equals(action)) {
+				throw invalidRequest("지원하지 않는 편집 action입니다.");
+			}
+		}
+	}
+
+	private void validateExistingEdgeIds(Set<Long> edgeIds) {
+		if (edgeIds.isEmpty()) {
+			return;
+		}
+		Long existingCount = namedParameterJdbcTemplate.queryForObject(
+			"""
+				select count(*)
+				from road_segments
+				where edge_id in (:edgeIds)
+				""",
+			Map.of("edgeIds", edgeIds),
+			Long.class);
+		if (existingCount == null || existingCount != edgeIds.size()) {
+			throw invalidRequest("삭제할 segment를 찾을 수 없습니다.");
+		}
+	}
+
+	private void validateExistingNodeIds(Set<Long> nodeIds) {
+		if (nodeIds.isEmpty()) {
+			return;
+		}
+		Long existingCount = namedParameterJdbcTemplate.queryForObject(
+			"""
+				select count(*)
+				from road_nodes
+				where vertex_id in (:nodeIds)
+				""",
+			Map.of("nodeIds", nodeIds),
+			Long.class);
+		if (existingCount == null || existingCount != nodeIds.size()) {
+			throw invalidRequest("삭제할 node를 찾을 수 없습니다.");
+		}
 	}
 
 	private List<Long> findIncidentEdgeIds(Set<Long> deleteNodeIds) {
@@ -141,6 +188,12 @@ public class AdminRoadNetworkEditService {
 				""",
 			parameters,
 			Long.class);
+	}
+
+	private void validateDeletedSegments(Set<Long> requestedEdgeIds, List<Long> deletedEdgeIds) {
+		if (requestedEdgeIds.size() != deletedEdgeIds.size()) {
+			throw invalidRequest("삭제할 segment를 찾을 수 없습니다.");
+		}
 	}
 
 	private void addSegments(

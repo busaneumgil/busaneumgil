@@ -5,6 +5,8 @@ services:
     image: grafana/promtail:3.2.1
     container_name: e102-prod-promtail
     restart: unless-stopped
+    env_file:
+      - ./.env
     command:
       - -config.expand-env=true
       - -config.file=/etc/promtail/config.yml
@@ -12,4 +14,3 @@ services:
       - ./promtail/config.yml:/etc/promtail/config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-

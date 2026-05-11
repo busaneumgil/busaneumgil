@@ -18,6 +18,7 @@
   - `prod backend`도 동일한 actuator endpoint를 내부 관리 포트 `18080`에서 운영 관측용으로 노출한다.
   - `prod metric`은 현재 `CloudWatch`를 1차 운영 알람 기준으로 두고, `S1`의 PLG stack에서는 2차 조회 관점으로만 다룬다.
   - `prod log`는 `INF/monitoring/s2` 템플릿을 사용해 `S2 promtail -> S1 Loki` 경로로 수집한다.
+  - 현재 운영 반영 기준으로는 `https://plg.busaneumgil.com/loki/api/v1/push` 경로를 사용하며, 이 ingress는 `S2` IP만 허용한다.
   - `S2 prod` metric을 `S1`에서 직접 보려면 별도 private scrape 경로 또는 agent 기반 forwarding 설계가 필요하다.
 
 ## 인증 기준
@@ -104,8 +105,11 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
 ## S2 prod 로그 수집 기준
 
 - `INF/monitoring/s2/docker-compose.yml`을 S2 `/home/ubuntu/e102/monitoring` 기준으로 배치한다.
-- `LOKI_PUSH_URL`은 S1 Loki가 닿는 비공개 주소를 사용한다.
+- `LOKI_PUSH_URL`은 우선 `S1 private IP` 또는 내부 전용 주소를 사용한다.
   - 예시: `http://<s1-private-ip>:3100/loki/api/v1/push`
+- private 경로를 바로 열 수 없는 경우 현재 운영 반영 기준으로는 아래 ingress를 사용한다.
+  - `https://plg.busaneumgil.com/loki/api/v1/push`
+  - 이 경로는 `S2` IP만 허용한다.
 - promtail은 Docker stdout/stderr를 읽어 `environment=prod`, `runtime_stack=s2-prod` 라벨로 보낸다.
 - 이 경로는 `로그 2차 조회` 목적이며, 1차 장애 알람은 계속 CloudWatch/SNS가 책임진다.
 

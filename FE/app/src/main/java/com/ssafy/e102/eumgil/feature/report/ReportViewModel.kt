@@ -59,8 +59,28 @@ class ReportViewModel(
                 }
                 emitUiEvent(ReportUiEvent.NavigateToReportHistory)
             }
+            ReportUiAction.StartNewReportClicked -> {
+                if (mutableUiState.value.screenState is ReportScreenState.Completed) {
+                    resetForm()
+                }
+            }
+            ReportUiAction.BackToMapClicked -> {
+                if (mutableUiState.value.screenState is ReportScreenState.Completed) {
+                    resetForm()
+                }
+                emitUiEvent(ReportUiEvent.NavigateToMap)
+            }
+            ReportUiAction.TabReentered -> handleTabReentered()
             ReportUiAction.SubmitClicked,
             ReportUiAction.RetrySubmitClicked -> submitReport()
+        }
+    }
+
+    private fun handleTabReentered() {
+        // 완료 화면에서 머무르지 않고 다른 탭으로 떠난 뒤 다시 진입한 경우에만 새 제보로 초기화.
+        // Editing/Submitting/Failure 상태는 사용자가 작성·재시도 중이므로 보존한다.
+        if (mutableUiState.value.screenState is ReportScreenState.Completed) {
+            resetForm()
         }
     }
 

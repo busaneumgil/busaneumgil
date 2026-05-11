@@ -260,6 +260,10 @@
     <string name="report_submit_failure_local_save">제보 저장에 실패했습니다. 다시 시도해 주세요.</string>
     <string name="report_submit_failure_server">제보 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.</string>
     <string name="report_submit_failure_unknown">제보 등록에 실패했습니다. 다시 시도해 주세요.</string>
+    <string name="report_complete_cta_history">제보 내역 확인하기</string>
+    <string name="report_complete_cta_new_report">다른 제보하기</string>
+    <string name="report_complete_cta_back_to_map">지도로 돌아가기</string>
+    <string name="report_complete_photo_attached">%1$d장 첨부됨</string>
     <string name="saved_route_address_empty">주소 정보 없음</string>
     <string name="saved_route_edit">편집</string>
     <string name="saved_route_edit_mode_active_a11y">편집 모드입니다. 완료하려면 두 번 탭하세요.</string>

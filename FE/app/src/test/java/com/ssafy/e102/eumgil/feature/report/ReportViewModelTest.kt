@@ -956,6 +956,45 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `tab reentered with persisted draft surfaces resume affordance after re-init`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.RAMP.apiValue,
+                            description = "임시저장된 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            // 진입 직후 draft 배너 노출 조건이 충족된다.
+            assertTrue(viewModel.uiState.value.hasExistingDraft)
+            assertEquals("draft-1", viewModel.uiState.value.draftId)
+
+            // 다른 탭을 다녀온 뒤 재진입했을 때 작성 중 상태(폼은 빈 상태)는 그대로 유지된다.
+            viewModel.onAction(ReportUiAction.TabReentered)
+            advanceUntilIdle()
+
+            val preservedState = viewModel.uiState.value
+            assertEquals(ReportStep.TypeSelection, preservedState.currentStep)
+            assertTrue(preservedState.screenState is ReportScreenState.Editing)
+            assertTrue(preservedState.hasExistingDraft)
+            assertEquals("draft-1", preservedState.draftId)
+        }
+
+    @Test
     fun `tab reentered after submit failure preserves recoverable state`() =
         runTest {
             val repository =

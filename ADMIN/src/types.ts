@@ -18,6 +18,11 @@ export interface SocialLoginResponse {
   selectedMobilitySubtype: string | null;
 }
 
+export interface TokenResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
 export type WorkStatus = "TODO" | "DRAFT" | "REVIEW" | "APPLIED" | "REOPENED";
 
 export type AdminPage = "network" | "facilities" | "hazards";

@@ -14,6 +14,9 @@ import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
+import com.ssafy.e102.eumgil.data.route.DefaultRouteGeometryParser
+import com.ssafy.e102.eumgil.data.route.RouteGeometryParseResult
+import com.ssafy.e102.eumgil.data.route.RouteGeometryParser
 import com.ssafy.e102.eumgil.data.route.RouteDto
 import com.ssafy.e102.eumgil.data.route.RouteGuidanceEventDto
 import com.ssafy.e102.eumgil.data.route.RouteLegDto
@@ -31,14 +34,71 @@ import com.ssafy.e102.eumgil.data.route.RouteTransitLaneOptionDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitStopDto
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RouteRepositoryTest {
+    @Test
+    fun `getRouteSearchData defers route mapping to background dispatcher and skips cache update when cancelled early`() =
+        runTest {
+            val localDataSource = RouteLocalDataSource()
+            val query = routeQuery(requestedOptions = listOf(RouteOption.SAFE))
+            val mappingDispatcher = StandardTestDispatcher(testScheduler)
+            var walkCallCount = 0
+            var parseCallCount = 0
+            val countingParser =
+                object : RouteGeometryParser {
+                    private val delegate = DefaultRouteGeometryParser()
+
+                    override fun parse(geometry: String?): RouteGeometryParseResult {
+                        parseCallCount += 1
+                        return delegate.parse(geometry)
+                    }
+                }
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource(
+                            searchWalkResponse = {
+                                walkCallCount += 1
+                                walkSearchResponse()
+                            },
+                        ),
+                    geometryParser = countingParser,
+                    routeMappingDispatcher = mappingDispatcher,
+                )
+
+            val deferred =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    repository.getRouteSearchData(query)
+                }
+
+            assertEquals(1, walkCallCount)
+            assertEquals(0, parseCallCount)
+            assertFalse(deferred.isCompleted)
+            assertNull(localDataSource.getCachedSearchData(query))
+
+            deferred.cancel()
+            advanceUntilIdle()
+
+            assertTrue(deferred.isCancelled)
+            assertEquals(0, parseCallCount)
+            assertNull(localDataSource.getCachedSearchData(query))
+        }
+
     @Test
     fun `getRouteSearchData returns cached walk search data after first remote load`() =
         runBlocking {
@@ -279,8 +339,8 @@ class RouteRepositoryTest {
                         remoteDataSource(
                             selectResponse = { _, _ ->
                                 throw RouteApiException(
-                                    httpStatusCode = 403,
-                                    status = "AUTH_403",
+                                    httpStatusCode = 401,
+                                    status = "AUTH_401",
                                     message = "Authentication required.",
                                 )
                             },
@@ -303,6 +363,47 @@ class RouteRepositoryTest {
             assertEquals(401, failure.httpStatusCode)
             assertEquals("ROUTE_AUTHENTICATION_FAILED", failure.status)
             assertNull(authSessionRepository.getAuthGateState().authSession)
+        }
+
+    @Test
+    fun `selectRoute surfaces forbidden response without clearing auth session`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "access-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = RouteLocalDataSource(),
+                    remoteDataSource =
+                        remoteDataSource(
+                            selectResponse = { _, _ ->
+                                throw RouteApiException(
+                                    httpStatusCode = 403,
+                                    status = "FR4030",
+                                    message = "Forbidden.",
+                                )
+                            },
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")),
+                )
+
+            val failure =
+                runCatching {
+                    repository.selectRoute(routeId = "route-1", searchId = "search-1")
+                }.exceptionOrNull() as? RouteApiException
+
+            requireNotNull(failure)
+            assertEquals(403, failure.httpStatusCode)
+            assertEquals("FR4030", failure.status)
+            assertEquals("Forbidden.", failure.message)
+            assertEquals("access-token", authSessionRepository.getAuthGateState().authSession?.accessToken)
+            assertEquals("refresh-token", authSessionRepository.getAuthGateState().authSession?.refreshToken)
         }
 }
 

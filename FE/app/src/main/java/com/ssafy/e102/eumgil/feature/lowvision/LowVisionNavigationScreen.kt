@@ -90,7 +90,7 @@ internal fun lowVisionNavigationActionCards(): List<LowVisionNavigationActionCar
             iconRes = R.drawable.ic_voice_location_pin,
         ),
         LowVisionNavigationActionCard(
-            label = "\uC548\uB0B4 \uC885\uB8CC",
+            label = "\uC548\uB0B4 \uC644\uB8CC",
             iconRes = R.drawable.ic_action_close,
         ),
     )
@@ -465,7 +465,7 @@ private fun LowVisionExitNavigationCard(
                 .clip(RoundedCornerShape(18.dp))
                 .lowVisionButtonSemantics(
                     label = card.label,
-                    actionHint = "\uB450 \uBC88 \uD0ED\uD558\uBA74 \uAE38 \uC548\uB0B4\uB97C \uC885\uB8CC\uD569\uB2C8\uB2E4.",
+                    actionHint = "\uB450 \uBC88 \uD0ED\uD558\uBA74 \uAE38 \uC548\uB0B4\uB97C \uC644\uB8CC\uD569\uB2C8\uB2E4.",
                 )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(18.dp),

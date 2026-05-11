@@ -243,7 +243,14 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                         }
                     }
                 },
-                onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+                onCompleteClick = {
+                    navController.navigate(resolveLowVisionNavigationCompleteDoneRoute()) {
+                        launchSingleTop = true
+                        popUpTo(LowVisionRoute.NavigationComplete.route) {
+                            inclusive = true
+                        }
+                    }
+                },
             )
         }
 
@@ -402,6 +409,8 @@ internal fun resolveNavigationCompletionRoute(selectedPrimaryUserType: String? =
     }
 
 internal fun resolveLowVisionNavigationExitRoute(): String = LowVisionRoute.NavigationComplete.route
+
+internal fun resolveLowVisionNavigationCompleteDoneRoute(): String = LowVisionRoute.Home.route
 
 internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 

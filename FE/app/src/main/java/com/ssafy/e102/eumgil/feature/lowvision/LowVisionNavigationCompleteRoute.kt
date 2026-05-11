@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LowVisionNavigationCompleteRoute(
     onNavigateToBookmark: () -> Unit,
-    onTabSelected: (LowVisionBottomTab) -> Unit,
+    onCompleteClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -38,7 +38,7 @@ fun LowVisionNavigationCompleteRoute(
                     onNavigateToBookmark()
                 }
             },
-            onCompleteClick = { onTabSelected(LowVisionBottomTab.HOME) },
+            onCompleteClick = onCompleteClick,
             modifier = modifier,
         )
     }

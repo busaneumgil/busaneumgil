@@ -9,10 +9,8 @@ data class ArrivalUiState(
     val hasRatingSession: Boolean = false,
     val isEvaluationSubmitting: Boolean = false,
     val routeSaveDraft: ArrivalRouteSaveDraftUiState? = null,
-    val routeNameInput: String = "",
     val isRouteSaveSelected: Boolean = false,
     val isRouteSaveUpdating: Boolean = false,
-    val isRouteSaveDialogVisible: Boolean = false,
 ) {
     val isEvaluationSubmitEnabled: Boolean
         get() = hasRatingSession && selectedRating > 0 && !isEvaluationSubmitting
@@ -22,9 +20,6 @@ data class ArrivalUiState(
 
     val isRouteSaveEnabled: Boolean
         get() = hasRouteSaveTarget && !isRouteSaveUpdating && !isRouteSaveSelected
-
-    val isRouteSaveConfirmEnabled: Boolean
-        get() = hasRouteSaveTarget && !isRouteSaveUpdating && routeNameInput.trim().isNotEmpty()
 }
 
 data class ArrivalRouteSaveDraftUiState(
@@ -53,12 +48,6 @@ sealed interface ArrivalUiAction {
     data class RatingSelected(val rating: Int) : ArrivalUiAction
 
     data object SaveRouteClicked : ArrivalUiAction
-
-    data class RouteNameChanged(val value: String) : ArrivalUiAction
-
-    data object ConfirmRouteSaveClicked : ArrivalUiAction
-
-    data object RouteSaveDialogDismissed : ArrivalUiAction
 
     data object SubmitEvaluationClicked : ArrivalUiAction
 

@@ -93,7 +93,7 @@ class ArrivalViewModelTest {
         }
 
     @Test
-    fun `confirm route save still stores route bookmark`() =
+    fun `save route click stores route bookmark immediately without dialog confirmation`() =
         runTest {
             val routeBookmarkRepository = FakeRouteBookmarkRepository()
             val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
@@ -101,11 +101,11 @@ class ArrivalViewModelTest {
             val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
 
             viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
-            viewModel.onAction(ArrivalUiAction.RouteNameChanged("출근 경로"))
-            viewModel.onAction(ArrivalUiAction.ConfirmRouteSaveClicked)
             advanceUntilIdle()
 
-            assertEquals("출근 경로", routeBookmarkRepository.savedBookmarks.value.single().routeName)
+            assertEquals(testRouteBookmarkDraft().defaultRouteName, routeBookmarkRepository.savedBookmarks.value.single().routeName)
+            assertTrue(viewModel.uiState.value.isRouteSaveSelected)
+            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
             assertEquals(
                 ArrivalUiEvent.ShowSnackbar(R.string.arrival_route_save_success_message),
                 eventDeferred.await(),
@@ -194,8 +194,8 @@ private class FakeArrivalRouteRepository(
 private fun testRouteBookmarkDraft(): RouteBookmarkDraft =
     RouteBookmarkDraft(
         routeId = "walk_rt_safe_001",
-        startLabel = "부산시청",
-        endLabel = "해운대수변공원",
+        startLabel = "Busan City Hall",
+        endLabel = "Haeundae Park",
         startPoint = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
         endPoint = GeoCoordinate(latitude = 35.1587, longitude = 129.1604),
         routeOption = RouteOption.SAFE,

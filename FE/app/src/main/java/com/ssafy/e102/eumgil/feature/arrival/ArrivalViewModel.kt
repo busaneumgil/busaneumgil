@@ -38,7 +38,6 @@ class ArrivalViewModel(
             state.copy(
                 hasRatingSession = !currentRatingSessionId.isNullOrBlank(),
                 routeSaveDraft = currentRouteBookmarkDraft?.toUiState(),
-                routeNameInput = currentRouteBookmarkDraft?.defaultRouteName.orEmpty(),
                 isRouteSaveUpdating = currentRouteBookmarkDraft != null,
             )
         }
@@ -50,10 +49,7 @@ class ArrivalViewModel(
             ArrivalUiAction.HomeClicked -> emitUiEvent(ArrivalUiEvent.NavigateToMap)
             ArrivalUiAction.ExploreNewRouteClicked -> emitUiEvent(ArrivalUiEvent.NavigateToSearch)
             is ArrivalUiAction.RatingSelected -> updateSelectedRating(action.rating)
-            ArrivalUiAction.SaveRouteClicked -> openRouteSaveDialog()
-            is ArrivalUiAction.RouteNameChanged -> updateRouteName(action.value)
-            ArrivalUiAction.ConfirmRouteSaveClicked -> saveRouteBookmark()
-            ArrivalUiAction.RouteSaveDialogDismissed -> dismissRouteSaveDialog()
+            ArrivalUiAction.SaveRouteClicked -> saveRouteBookmark()
             ArrivalUiAction.SubmitEvaluationClicked -> submitEvaluation()
             ArrivalUiAction.EvaluationSheetDismissed ->
                 mutableUiState.update { state ->
@@ -82,39 +78,9 @@ class ArrivalViewModel(
         }
     }
 
-    private fun openRouteSaveDialog() {
-        mutableUiState.update { state ->
-            val draft = state.routeSaveDraft
-            if (!state.isRouteSaveEnabled || draft == null) {
-                state
-            } else {
-                state.copy(
-                    isRouteSaveDialogVisible = true,
-                    routeNameInput =
-                        state.routeNameInput.ifBlank {
-                            draft.defaultRouteName
-                        },
-                )
-            }
-        }
-    }
-
-    private fun updateRouteName(value: String) {
-        mutableUiState.update { state ->
-            state.copy(routeNameInput = value)
-        }
-    }
-
-    private fun dismissRouteSaveDialog() {
-        mutableUiState.update { state ->
-            state.copy(isRouteSaveDialogVisible = false)
-        }
-    }
-
     private fun saveRouteBookmark() {
         val draft = currentRouteBookmarkDraft ?: return
-        val currentState = uiState.value
-        if (!currentState.isRouteSaveConfirmEnabled) return
+        if (!uiState.value.isRouteSaveEnabled) return
 
         mutableUiState.update { state ->
             state.copy(isRouteSaveUpdating = true)
@@ -123,15 +89,13 @@ class ArrivalViewModel(
         viewModelScope.launch {
             runCatching {
                 routeBookmarkRepository.saveRouteBookmark(
-                    draft.toSaveRequest(routeName = currentState.routeNameInput),
+                    draft.toSaveRequest(),
                 )
             }.onSuccess { savedBookmark ->
                 mutableUiState.update { state ->
                     state.copy(
-                        routeNameInput = savedBookmark.routeName,
                         isRouteSaveSelected = true,
                         isRouteSaveUpdating = false,
-                        isRouteSaveDialogVisible = false,
                     )
                 }
                 emitUiEvent(

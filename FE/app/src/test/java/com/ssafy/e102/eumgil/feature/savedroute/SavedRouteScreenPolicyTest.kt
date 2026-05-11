@@ -22,4 +22,56 @@ class SavedRouteScreenPolicyTest {
         )
         assertTrue("Saved route navigate button PNG icon should exist in drawable.", asset.exists())
     }
+
+    @Test
+    fun `saved place rows suppress ripple when tapping through to the map screen`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val savedPlaceSection =
+            source
+                .substringAfter("private fun SavedPlaceListItem(")
+                .substringBefore("@Composable\nprivate fun SavedRouteBookmarkListItem")
+
+        assertTrue(
+            "Saved place rows should suppress ripple because the content tap navigates back to the map.",
+            savedPlaceSection.contains("indication = null"),
+        )
+        assertTrue(
+            "Saved place rows should keep a dedicated interaction source when ripple is suppressed.",
+            savedPlaceSection.contains("MutableInteractionSource()"),
+        )
+    }
+
+    @Test
+    fun `saved route navigation ctas suppress ripple when leaving the bookmark screen`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val stateActionsSection =
+            source
+                .substringAfter("private fun SavedBookmarkStateActions(")
+                .substringBefore("@Composable\nprivate fun SavedRouteInlineMessage")
+        val primaryActionSection =
+            source
+                .substringAfter("private fun SavedBookmarkPrimaryActionButton(")
+                .substringBefore("@Composable\nprivate fun SavedRoutePathDecoration")
+
+        assertTrue(
+            "Saved-route empty and error CTAs should use a no-ripple navigation button because they jump back to the map screen.",
+            stateActionsSection.contains("NoRippleSavedRouteNavigationButton("),
+        )
+        assertTrue(
+            "Saved-route primary CTA should use the no-ripple navigation button when it opens route guidance.",
+            primaryActionSection.contains("NoRippleSavedRouteNavigationButton("),
+        )
+        assertTrue(
+            "Saved-route no-ripple CTA helper should disable ripple indication explicitly.",
+            source.contains("indication = null"),
+        )
+        assertTrue(
+            "Saved-route no-ripple CTA helper should keep a dedicated interaction source.",
+            source.contains("MutableInteractionSource()"),
+        )
+    }
 }

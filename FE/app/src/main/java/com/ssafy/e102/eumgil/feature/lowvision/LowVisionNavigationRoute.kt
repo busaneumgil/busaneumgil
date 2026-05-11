@@ -6,7 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
@@ -44,11 +46,18 @@ fun LowVisionNavigationRoute(
             ViewModelProvider(owner, viewModelFactory)[NavigationViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var loadErrorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(appContainer.destinationSelectionRepository.selectedDestination.value) {
-        appContainer.routeRepository
-            .buildLowVisionNavigationRequest(appContainer.destinationSelectionRepository)
-            ?.let(viewModel::bindNavigationRequest)
+        loadErrorMessage = null
+        val request =
+            appContainer.routeRepository
+                .buildLowVisionNavigationRequest(appContainer.destinationSelectionRepository)
+        if (request == null) {
+            loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE
+        } else {
+            viewModel.bindNavigationRequest(request)
+        }
     }
 
     LaunchedEffect(viewModel, onNavigateToComplete, onNavigateToBookmark) {
@@ -67,6 +76,7 @@ fun LowVisionNavigationRoute(
             onAction = viewModel::onAction,
             onTabSelected = onTabSelected,
             modifier = modifier,
+            loadErrorMessage = loadErrorMessage,
         )
     }
 }

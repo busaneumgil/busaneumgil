@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
+import com.ssafy.e102.eumgil.feature.navigation.NavigationScreenState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiState
 
@@ -101,6 +102,13 @@ internal fun lowVisionNavigationBottomTabs(): List<LowVisionBottomTab> =
         LowVisionBottomTab.CATEGORY,
         LowVisionBottomTab.MY_PAGE,
     )
+
+internal const val LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE: String = "길 안내를 불러오지 못했습니다."
+
+internal fun shouldShowLowVisionNavigationLoadError(
+    uiState: NavigationUiState,
+    loadErrorMessage: String?,
+): Boolean = uiState.screenState == NavigationScreenState.Loading && !loadErrorMessage.isNullOrBlank()
 
 internal fun lowVisionNavigationDisplayMetric(
     section: LowVisionNavigationMetricSection,
@@ -176,6 +184,7 @@ fun LowVisionNavigationScreen(
     onAction: (NavigationUiAction) -> Unit,
     modifier: Modifier = Modifier,
     onTabSelected: (LowVisionBottomTab) -> Unit = {},
+    loadErrorMessage: String? = null,
 ) {
     Column(
         modifier =
@@ -195,38 +204,82 @@ fun LowVisionNavigationScreen(
                     ),
             verticalArrangement = Arrangement.spacedBy(LowVisionNavigationLayoutDefaults.contentGap),
         ) {
-            LowVisionNavigationMetricHeader(
-                uiState = uiState,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(LowVisionNavigationLayoutDefaults.metricHeaderHeight),
-            )
+            if (shouldShowLowVisionNavigationLoadError(uiState, loadErrorMessage)) {
+                LowVisionNavigationLoadError(
+                    message = loadErrorMessage.orEmpty(),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                )
+            } else {
+                LowVisionNavigationMetricHeader(
+                    uiState = uiState,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(LowVisionNavigationLayoutDefaults.metricHeaderHeight),
+                )
 
-            LowVisionCurrentLocationCard(
-                card = lowVisionNavigationActionCards().first(),
-                display = lowVisionCurrentLocationDisplay(uiState.mapOverlay.currentLocation?.coordinate),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-            )
+                LowVisionCurrentLocationCard(
+                    card = lowVisionNavigationActionCards().first(),
+                    display = lowVisionCurrentLocationDisplay(uiState.mapOverlay.currentLocation?.coordinate),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                )
 
-            LowVisionExitNavigationCard(
-                card = lowVisionNavigationActionCards()[1],
-                enabled = uiState.isExitEnabled,
-                onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1.55f),
-            )
+                LowVisionExitNavigationCard(
+                    card = lowVisionNavigationActionCards()[1],
+                    enabled = uiState.isExitEnabled,
+                    onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1.55f),
+                )
+            }
         }
 
         LowVisionBottomNav(
             selectedTab = LowVisionBottomTab.HOME,
             onTabSelected = onTabSelected,
         )
+    }
+}
+
+@Composable
+private fun LowVisionNavigationLoadError(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .clearAndSetSemantics {
+                    contentDescription = message
+                },
+        shape = RoundedCornerShape(18.dp),
+        color = LowVisionNavigationPanel,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = message,
+                color = LowVisionNavigationYellow,
+                fontSize = 56.sp,
+                lineHeight = 64.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

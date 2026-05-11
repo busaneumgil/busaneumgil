@@ -2,7 +2,11 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ssafy.e102.eumgil.feature.navigation.NavigationScreenState
+import com.ssafy.e102.eumgil.feature.navigation.NavigationUiState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LowVisionNavigationScreenTest {
@@ -86,6 +90,28 @@ class LowVisionNavigationScreenTest {
                 LowVisionBottomTab.MY_PAGE,
             ),
             lowVisionNavigationBottomTabs(),
+        )
+    }
+
+    @Test
+    fun `navigation screen shows load error only while route guidance is still loading`() {
+        assertTrue(
+            shouldShowLowVisionNavigationLoadError(
+                uiState = NavigationUiState(screenState = NavigationScreenState.Loading),
+                loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE,
+            ),
+        )
+        assertFalse(
+            shouldShowLowVisionNavigationLoadError(
+                uiState = NavigationUiState(screenState = NavigationScreenState.Ready),
+                loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE,
+            ),
+        )
+        assertFalse(
+            shouldShowLowVisionNavigationLoadError(
+                uiState = NavigationUiState(screenState = NavigationScreenState.Loading),
+                loadErrorMessage = null,
+            ),
         )
     }
 }

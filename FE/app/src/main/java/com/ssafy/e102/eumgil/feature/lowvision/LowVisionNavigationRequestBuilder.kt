@@ -94,34 +94,51 @@ internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
             plan.selectedRoute.serverRouteId?.takeIf(String::isNotBlank)
                 ?: plan.selectedRoute.routeId.takeIf(String::isNotBlank)
                 ?: return null
-        val sessionData =
-            selectRoute(
+        val selectionHandoff =
+            selectLowVisionRouteOrNull(
                 routeId = routeId,
                 searchId = searchId,
+                selectedRoute = plan.selectedRoute,
             )
         RouteNavigationRequest(
             origin = plan.searchData.result.origin,
             destination = plan.searchData.result.destination,
             selectedRoute = plan.selectedRoute,
             source = plan.searchData.source,
-            selectionHandoff =
-                RouteNavigationSelectionHandoff(
-                    searchId = searchId,
-                    routeId = routeId,
-                    sessionId = sessionData.sessionId,
-                    initialRemainingDistanceMeters =
-                        sessionData.totalDistanceMeters ?: plan.selectedRoute.summary.distanceMeters,
-                    initialRemainingDurationSeconds =
-                        sessionData.totalDurationSeconds
-                            ?: plan.selectedRoute.summary.durationSeconds
-                            ?: plan.selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
-                ),
+            selectionHandoff = selectionHandoff,
         )
     } catch (throwable: Throwable) {
         if (throwable is CancellationException) throw throwable
         null
     }
 }
+
+private suspend fun RouteRepository.selectLowVisionRouteOrNull(
+    routeId: String,
+    searchId: String,
+    selectedRoute: RouteCandidate,
+): RouteNavigationSelectionHandoff? =
+    try {
+        val sessionData =
+            selectRoute(
+                routeId = routeId,
+                searchId = searchId,
+            )
+        RouteNavigationSelectionHandoff(
+            searchId = searchId,
+            routeId = routeId,
+            sessionId = sessionData.sessionId,
+            initialRemainingDistanceMeters =
+                sessionData.totalDistanceMeters ?: selectedRoute.summary.distanceMeters,
+            initialRemainingDurationSeconds =
+                sessionData.totalDurationSeconds
+                    ?: selectedRoute.summary.durationSeconds
+                    ?: selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
+        )
+    } catch (throwable: Throwable) {
+        if (throwable is CancellationException) throw throwable
+        null
+    }
 
 private suspend fun RouteRepository.getFreshLowVisionWalkRouteSearchData(query: RouteSearchQuery): RouteSearchData =
     try {

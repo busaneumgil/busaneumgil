@@ -2,7 +2,6 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +14,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +77,12 @@ fun LowVisionRouteBriefingScreen(
                 lineHeight = 64.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
+                modifier =
+                    if (isPlaying) {
+                        Modifier.clearAndSetSemantics {}
+                    } else {
+                        Modifier
+                    },
             )
             Box(
                 modifier =
@@ -96,7 +103,7 @@ fun LowVisionRouteBriefingScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 visibleSteps.forEach { step ->
-                    BriefingStepRow(step = step)
+                    BriefingStepRow(step = step, suppressTalkBack = isPlaying)
                 }
             }
 
@@ -111,23 +118,41 @@ fun LowVisionRouteBriefingScreen(
             )
         }
 
-        LowVisionBottomNav(
-            selectedTab = LowVisionBottomTab.HOME,
-            onTabSelected = onTabSelected,
-        )
+        Box(
+            modifier =
+                if (isPlaying) {
+                    Modifier.clearAndSetSemantics {}
+                } else {
+                    Modifier
+                },
+        ) {
+            LowVisionBottomNav(
+                selectedTab = LowVisionBottomTab.HOME,
+                onTabSelected = onTabSelected,
+            )
+        }
     }
 }
 
 @Composable
-private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
+private fun BriefingStepRow(
+    step: LowVisionRouteBriefingStepUiState,
+    suppressTalkBack: Boolean,
+) {
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = LowVisionRouteBriefingLayoutDefaults.stepRowMinHeight)
-                .semantics {
-                    contentDescription = "${step.sequence}번. ${step.instruction}"
-                },
+                .then(
+                    if (suppressTalkBack) {
+                        Modifier.clearAndSetSemantics {}
+                    } else {
+                        Modifier.semantics {
+                            contentDescription = "${step.sequence}단계 ${step.instruction}"
+                        }
+                    },
+                ),
         shape = RoundedCornerShape(8.dp),
         color = BriefingYellow,
     ) {
@@ -160,9 +185,9 @@ private fun BriefingStepRow(step: LowVisionRouteBriefingStepUiState) {
                 text =
                     when (step.icon) {
                         LowVisionRouteBriefingStepIcon.STRAIGHT -> "↑"
-                        LowVisionRouteBriefingStepIcon.TRANSIT -> "▣"
+                        LowVisionRouteBriefingStepIcon.TRANSIT -> "□"
                         LowVisionRouteBriefingStepIcon.TURN -> "↱"
-                },
+                    },
                 color = BriefingBlack,
                 fontSize = 56.sp,
                 fontWeight = FontWeight.Black,
@@ -180,7 +205,7 @@ private fun BriefingPlaybackButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val label = if (isPlaying) "중지" else "시작"
+    val label = routeBriefingPlaybackButtonLabel(isPlaying)
     val icon = if (isPlaying) "■" else "▶"
     val alpha = if (enabled) 1f else 0.45f
 
@@ -190,12 +215,7 @@ private fun BriefingPlaybackButton(
                 .clip(RoundedCornerShape(20.dp))
                 .lowVisionButtonSemantics(
                     label = label,
-                    actionHint =
-                        if (isPlaying) {
-                            "두 번 탭하면 브리핑을 중지합니다."
-                        } else {
-                            "두 번 탭하면 브리핑을 시작합니다."
-                        },
+                    actionHint = routeBriefingPlaybackButtonActionHint(isPlaying),
                 )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(20.dp),
@@ -225,3 +245,17 @@ private fun BriefingPlaybackButton(
         }
     }
 }
+
+internal fun routeBriefingPlaybackButtonLabel(isPlaying: Boolean): String =
+    if (isPlaying) {
+        "경로 안내 중지"
+    } else {
+        "경로 안내 시작"
+    }
+
+internal fun routeBriefingPlaybackButtonActionHint(isPlaying: Boolean): String =
+    if (isPlaying) {
+        "두 번 탭하면 경로 안내 음성을 중지합니다."
+    } else {
+        "두 번 탭하면 경로 안내를 시작합니다. 안내 중에는 화면 항목 안내를 줄입니다. 다시 누르면 중지합니다."
+    }

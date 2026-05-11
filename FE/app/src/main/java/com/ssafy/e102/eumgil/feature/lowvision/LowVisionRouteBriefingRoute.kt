@@ -18,6 +18,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
+import com.ssafy.e102.eumgil.core.tts.ROUTE_BRIEFING_TTS_SPEECH_RATE
 
 @Composable
 fun LowVisionRouteBriefingRoute(
@@ -46,7 +47,10 @@ fun LowVisionRouteBriefingRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val ttsController =
         remember(appContext) {
-            AndroidTextToSpeechController(context = appContext)
+            AndroidTextToSpeechController(
+                context = appContext,
+                speechRate = ROUTE_BRIEFING_TTS_SPEECH_RATE,
+            )
         }
     val ttsState by ttsController.state.collectAsStateWithLifecycle()
     var playbackActive by rememberSaveable { mutableStateOf(false) }

@@ -31,7 +31,7 @@
       },
       "id": 1,
       "options": {
-        "content": "### prod 대시보드 읽는 순서\n1. **CloudWatch 인프라 패널**에서 EC2/RDS/ElastiCache/ALB 이상 징후를 먼저 확인합니다.\n2. 바로 아래 **prod 경고/오류 로그**에서 앱 레벨 증거를 찾습니다.\n3. 상세 흐름이 더 필요하면 **prod 서비스 전체 로그**로 내려가 확인합니다.\n\n- `prod infra metric`은 CloudWatch가 1차 기준입니다.\n- `prod app log`는 `S2 promtail -> S1 Loki` 경로를 기본으로 사용합니다.\n- CloudWatch 갱신 주기를 고려해 이 대시보드는 `1분` refresh를 기본으로 둡니다.",
+        "content": "### prod 대시보드 읽는 순서\n1. **CloudWatch 인프라 패널**에서 EC2/RDS/ElastiCache/ALB 이상 징후를 먼저 확인합니다.\n2. 바로 아래 **prod 경고/오류 로그**에서 앱 레벨 증거를 찾습니다.\n3. 상세 흐름이 더 필요하면 Explore에서 prod 전체 로그를 확인합니다.\n\n- `prod infra metric`은 CloudWatch가 1차 기준입니다.\n- `prod app log`는 `S2 promtail -> S1 Loki` 경로를 기본으로 사용합니다.\n- 대시보드 로그는 기본적으로 `warning 이상`과 `exception/timeout/failed` 같은 장애 단서를 우선 보여줍니다.\n- CloudWatch 갱신 주기를 고려해 이 대시보드는 `1분` refresh를 기본으로 둡니다.",
         "mode": "markdown"
       },
       "pluginVersion": "11.3.1",
@@ -653,7 +653,7 @@
         "uid": "loki"
       },
       "gridPos": {
-        "h": 10,
+        "h": 12,
         "w": 24,
         "x": 0,
         "y": 23
@@ -671,44 +671,12 @@
       },
       "targets": [
         {
-          "expr": "{environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?i)(error|warn|warning|exception|timeout|failed|traceback)\"",
+          "expr": "{environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\"",
           "queryType": "range",
           "refId": "A"
         }
       ],
       "title": "prod 경고/오류 로그",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 33
-      },
-      "id": 12,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": true,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "expr": "{environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "prod 서비스 전체 로그",
       "type": "logs"
     }
   ],
@@ -795,6 +763,6 @@
   "timezone": "browser",
   "title": "E102 운영 관측 개요 - Prod",
   "uid": "e102-prod-observability",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

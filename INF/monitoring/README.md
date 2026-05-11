@@ -89,7 +89,6 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
   - `컨테이너 CPU / 메모리 / 재시작`
   - `호스트 디스크 / 네트워크`
   - `경고/오류 로그`
-  - `서비스 전체 로그`
 - `dev` 대시보드 변수:
   - `메트릭 서비스`: `backend`, `ai`, `graphhopper`, `postgres`, `redis`, `minio`, `admin`
   - `로그 서비스`: `backend`, `ai`, `graphhopper`, `admin`
@@ -98,6 +97,7 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
   - `AWS 리전`: 현재 `ap-northeast-2`
 - 현재 제약:
   - `dev` overview는 `dev` 전용으로 고정하고, `prod`는 별도 dashboard로 분리한다.
+  - 대시보드 로그 패널은 기본적으로 `warning 이상`과 `exception/timeout/failed` 같은 장애 단서를 우선 보여준다.
   - `prod log`는 S2 promtail 배치 후 같은 Grafana에서 즉시 조회 가능하다.
   - `prod infra metric`은 CloudWatch datasource가 살아 있어야 보인다.
 

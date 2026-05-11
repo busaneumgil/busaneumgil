@@ -103,7 +103,7 @@ fun ReportScreen(
                         onAction = onAction,
                     )
                 ReportStep.Complete ->
-                    ReportCompleteStep(uiState = uiState)
+                    ReportCompleteStep(uiState = uiState, onAction = onAction)
             }
         }
     }
@@ -155,12 +155,7 @@ private fun ReportBottomBar(
                 onClick = { onAction(ReportUiAction.SubmitClicked) },
             )
         }
-        ReportStep.Complete ->
-            ReportPrimaryActionBar(
-                label = "제보 내역 확인하기",
-                enabled = true,
-                onClick = { onAction(ReportUiAction.ReportHistoryClicked) },
-            )
+        ReportStep.Complete -> Unit
     }
 }
 
@@ -604,7 +599,10 @@ private fun ReportFailureReason?.toBannerDescriptionRes(): Int =
     }
 
 @Composable
-private fun ReportCompleteStep(uiState: ReportUiState) {
+private fun ReportCompleteStep(
+    uiState: ReportUiState,
+    onAction: (ReportUiAction) -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
@@ -612,6 +610,36 @@ private fun ReportCompleteStep(uiState: ReportUiState) {
     ) {
         ReportCompleteHero()
         ReportCompleteSummaryCard(uiState = uiState)
+        ReportCompleteCtaSection(onAction = onAction)
+    }
+}
+
+@Composable
+private fun ReportCompleteCtaSection(
+    onAction: (ReportUiAction) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Button(
+            onClick = { onAction(ReportUiAction.ReportHistoryClicked) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = stringResource(id = R.string.report_complete_cta_history))
+        }
+        OutlinedButton(
+            onClick = { onAction(ReportUiAction.StartNewReportClicked) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = stringResource(id = R.string.report_complete_cta_new_report))
+        }
+        OutlinedButton(
+            onClick = { onAction(ReportUiAction.BackToMapClicked) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = stringResource(id = R.string.report_complete_cta_back_to_map))
+        }
     }
 }
 
@@ -657,6 +685,8 @@ private fun ReportCompleteHero() {
 
 @Composable
 private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
+    val photoCount = uiState.photo.count
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -685,6 +715,12 @@ private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
                 label = "설명",
                 value = uiState.description.value.trim().ifBlank { "설명 없음" },
             )
+            if (photoCount > 0) {
+                ReportCompleteSummaryRow(
+                    label = "사진",
+                    value = stringResource(id = R.string.report_complete_photo_attached, photoCount),
+                )
+            }
         }
     }
 }

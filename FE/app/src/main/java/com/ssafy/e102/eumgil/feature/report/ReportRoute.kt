@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.collect
 fun ReportRoute(
     onNavigateBack: () -> Unit,
     onNavigateToReportHistory: () -> Unit,
+    onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -39,12 +40,19 @@ fun ReportRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, onNavigateBack) {
+    LaunchedEffect(viewModel) {
+        // 탭 재진입 시 완료 화면이면 자동으로 새 제보 시작 상태로 초기화 (T10).
+        // 작성 중·실패 상태는 보존되어야 하므로 ViewModel에서 분기 처리한다.
+        viewModel.onAction(ReportUiAction.TabReentered)
+    }
+
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToReportHistory, onNavigateToMap) {
         viewModel.uiEvent.collect { event ->
             handleReportUiEvent(
                 event = event,
                 onNavigateBack = onNavigateBack,
                 onNavigateToReportHistory = onNavigateToReportHistory,
+                onNavigateToMap = onNavigateToMap,
             )
         }
     }
@@ -60,10 +68,12 @@ private fun handleReportUiEvent(
     event: ReportUiEvent,
     onNavigateBack: () -> Unit,
     onNavigateToReportHistory: () -> Unit,
+    onNavigateToMap: () -> Unit,
 ) {
     when (event) {
         ReportUiEvent.NavigateBack -> onNavigateBack()
         ReportUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
+        ReportUiEvent.NavigateToMap -> onNavigateToMap()
         ReportUiEvent.OpenLocationPicker,
         ReportUiEvent.OpenPhotoPicker,
         ReportUiEvent.RequestLocationPermission,

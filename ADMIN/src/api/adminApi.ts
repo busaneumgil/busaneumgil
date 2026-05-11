@@ -13,6 +13,7 @@ import type {
   RoadNetworkEditJobResponse,
   HazardReportStatus,
   SegmentPayload,
+  TokenResponse,
 } from "../types";
 
 const configuredBackendApiUrl = import.meta.env.VITE_BACKEND_API_URL as string | undefined;
@@ -30,11 +31,21 @@ function defaultBackendApiUrl() {
 export const backendApiUrl = (configuredBackendApiUrl || defaultBackendApiUrl()).replace(/\/$/, "");
 
 export const adminAccessTokenStorageKey = "busan-eumgil-ADMIN:access-token";
+export const adminAccessTokenRefreshedEvent = "busan-eumgil-ADMIN:access-token-refreshed";
 
 interface ApiResponse<T> {
   status: string;
   data: T;
   message: string;
+}
+
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
 }
 
 interface FetchAdminHazardReportsParams {
@@ -45,10 +56,13 @@ interface FetchAdminHazardReportsParams {
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${backendApiUrl}${path}`, init);
+  const response = await fetch(`${backendApiUrl}${path}`, {
+    credentials: "include",
+    ...init,
+  });
   const body = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) {
-    throw new Error(body?.message || `${response.status} ${response.statusText}`);
+    throw new ApiRequestError(body?.message || `${response.status} ${response.statusText}`, response.status);
   }
   if (!body) {
     throw new Error("응답을 읽을 수 없습니다.");
@@ -61,11 +75,23 @@ async function requestAdminJson<T>(path: string, accessToken: string, init?: Req
   if (!normalizedToken) {
     throw new Error("Access Token을 입력하세요.");
   }
+  try {
+    return await requestAdminJsonWithToken<T>(path, normalizedToken, init);
+  } catch (error) {
+    if (!(error instanceof ApiRequestError) || error.status !== 401) {
+      throw error;
+    }
+    const refreshedToken = await reissueAdminAccessToken();
+    return requestAdminJsonWithToken<T>(path, refreshedToken, init);
+  }
+}
+
+async function requestAdminJsonWithToken<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
   return requestJson<T>(path, {
     ...init,
     headers: {
       ...init?.headers,
-      Authorization: `Bearer ${normalizedToken}`,
+      Authorization: `Bearer ${accessToken}`,
     },
   });
 }
@@ -87,6 +113,40 @@ export function storeAdminAccessToken(accessToken: string) {
     return;
   }
   window.localStorage.setItem(adminAccessTokenStorageKey, normalizedToken);
+}
+
+export async function reissueAdminAccessToken() {
+  const response = await requestJson<TokenResponse>("/auth/reissue", {
+    method: "POST",
+  });
+  const normalizedToken = normalizeAdminAccessToken(response.accessToken);
+  storeAdminAccessToken(normalizedToken);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(adminAccessTokenRefreshedEvent, { detail: normalizedToken }));
+  }
+  return normalizedToken;
+}
+
+export async function logoutAdminSession(accessToken: string) {
+  const normalizedToken = normalizeAdminAccessToken(accessToken);
+  if (!normalizedToken) return;
+  try {
+    await logoutAdminSessionWithToken(normalizedToken);
+  } catch (error) {
+    if (!(error instanceof ApiRequestError) || error.status !== 401) {
+      throw error;
+    }
+    await logoutAdminSessionWithToken(await reissueAdminAccessToken());
+  }
+}
+
+async function logoutAdminSessionWithToken(accessToken: string) {
+  await requestJson<void>("/auth/logout", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
 }
 
 export async function fetchAdminMe(accessToken: string): Promise<AdminMeResponse> {

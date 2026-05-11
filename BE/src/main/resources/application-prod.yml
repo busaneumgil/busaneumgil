@@ -25,6 +25,9 @@ spring:
 auth:
   test:
     enabled: ${AUTH_TEST_ENABLED:false}
+  refresh-cookie:
+    secure: ${AUTH_REFRESH_COOKIE_SECURE:true}
+    same-site: ${AUTH_REFRESH_COOKIE_SAME_SITE:Lax}
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:https://admin.busaneumgil.com}

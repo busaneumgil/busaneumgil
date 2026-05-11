@@ -68,6 +68,9 @@ export function AdminAuthPanel({
         setMessage(`관리자 확인 완료: ${data.role}`);
       })
       .catch((error) => {
+        storeAdminAccessToken("");
+        onAccessTokenChange("");
+        onTokenInputChange("");
         setPrincipal(null);
         onAdminVerified?.(null);
         setMessage(error instanceof Error ? error.message : "관리자 권한 확인에 실패했습니다.");

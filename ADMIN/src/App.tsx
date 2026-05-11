@@ -7,7 +7,9 @@ import {
   fetchAdminPlaceDetail,
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
+  adminAccessTokenRefreshedEvent,
   getStoredAdminAccessToken,
+  logoutAdminSession,
   storeAdminAccessToken,
   updateAdminPlace,
   updateAdminPlaceAccessibilityFeatures,
@@ -111,6 +113,18 @@ function AdminApp() {
   const hasToken = Boolean(accessToken);
   const isAdminAuthenticated = hasToken && adminPrincipal?.role === "ADMIN";
   const currentAdmin = adminPrincipal;
+
+  useEffect(() => {
+    function handleAccessTokenRefreshed(event: Event) {
+      const nextToken = (event as CustomEvent<string>).detail;
+      if (!nextToken) return;
+      setAccessToken(nextToken);
+      setTokenInput(nextToken);
+    }
+
+    window.addEventListener(adminAccessTokenRefreshedEvent, handleAccessTokenRefreshed);
+    return () => window.removeEventListener(adminAccessTokenRefreshedEvent, handleAccessTokenRefreshed);
+  }, []);
 
   useEffect(() => {
     setRoadviewDock({
@@ -229,6 +243,7 @@ function AdminApp() {
   }, [areasQuery.data, selectedGu]);
 
   function logoutAdmin() {
+    void logoutAdminSession(accessToken).catch(() => undefined);
     storeAdminAccessToken("");
     setAccessToken("");
     setTokenInput("");

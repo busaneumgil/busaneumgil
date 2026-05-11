@@ -4,10 +4,13 @@ import {
   createAdminRoadNetworkEditJob,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
+  fetchAdminPlaceDetail,
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
   getStoredAdminAccessToken,
   storeAdminAccessToken,
+  updateAdminPlace,
+  updateAdminPlaceAccessibilityFeatures,
 } from "./api/adminApi";
 import { AdminAuthPanel } from "./auth/AdminAuthPanel";
 import { adminShellClassName } from "./layout/adminLayout";
@@ -16,7 +19,38 @@ import { facilityCategoryLabel } from "./map/facilityStyle";
 import { SegmentMap, type RoadviewDockState } from "./map/SegmentMap";
 import { HazardReportsPage } from "./report/HazardReportsPage";
 import { useAdminStore } from "./store/adminStore";
-import type { AdminMeResponse, AdminPage, FacilityFeature, RoadNetworkEditJobResponse, SegmentFeature } from "./types";
+import type {
+  AccessibilityFeatureType,
+  AdminMeResponse,
+  AdminPage,
+  AdminPlaceDetailResponse,
+  AdminPlaceUpdateRequest,
+  FacilityFeature,
+  PlaceAccessibilityFeature,
+  PlaceCategory,
+  RoadNetworkEditJobResponse,
+  SegmentFeature,
+} from "./types";
+
+const placeCategories: PlaceCategory[] = [
+  "FOOD_CAFE",
+  "TOURIST_SPOT",
+  "ACCOMMODATION",
+  "HEALTHCARE",
+  "WELFARE",
+  "PUBLIC_OFFICE",
+  "ETC",
+];
+
+const accessibilityFeatureTypes: AccessibilityFeatureType[] = [
+  "accessibleEntrance",
+  "elevator",
+  "accessibleToilet",
+  "accessibleParking",
+  "chargingStation",
+  "accessibleRoom",
+  "guidanceFacility",
+];
 
 const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
@@ -103,9 +137,18 @@ function AdminApp() {
   });
 
   const facilityQuery = useQuery({
-    queryKey: ["admin-facilities", accessToken],
-    queryFn: () => fetchAdminFacilityPayload({ accessToken }),
+    queryKey: ["admin-facilities", selectedGu, selectedDong, accessToken],
+    queryFn: () => fetchAdminFacilityPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
     enabled: page === "facilities" && isAdminAuthenticated,
+    retry: false,
+  });
+
+  const selectedFacilityPlaceId = selectedFacility ? Number(selectedFacility.properties.placeId) : null;
+
+  const placeDetailQuery = useQuery({
+    queryKey: ["admin-place", selectedFacilityPlaceId, accessToken],
+    queryFn: () => fetchAdminPlaceDetail(selectedFacilityPlaceId!, accessToken),
+    enabled: page === "facilities" && isAdminAuthenticated && Number.isFinite(selectedFacilityPlaceId),
     retry: false,
   });
 
@@ -126,6 +169,24 @@ function AdminApp() {
       completedRoadEditJobIdRef.current = null;
       setLastRoadEditJob(job);
       setActiveRoadEditJobId(job.jobId);
+    },
+  });
+
+  const updatePlaceMutation = useMutation({
+    mutationFn: ({ placeId, request }: { placeId: number; request: AdminPlaceUpdateRequest }) =>
+      updateAdminPlace(placeId, request, accessToken),
+    onSuccess: (place) => {
+      queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
+      queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
+    },
+  });
+
+  const updatePlaceFeaturesMutation = useMutation({
+    mutationFn: ({ placeId, features }: { placeId: number; features: PlaceAccessibilityFeature[] }) =>
+      updateAdminPlaceAccessibilityFeatures(placeId, features, accessToken),
+    onSuccess: (place) => {
+      queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
+      queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
     },
   });
 
@@ -417,7 +478,17 @@ function AdminApp() {
                   <Metric label="provider" value={facilityQuery.data?.summary?.providerPlaceIdCount ?? "-"} />
                 </div>
                 {selectedFacility ? (
-                  <FacilityDetails feature={selectedFacility} />
+                  <FacilityDetails
+                    feature={selectedFacility}
+                    detail={placeDetailQuery.data}
+                    loading={placeDetailQuery.isLoading}
+                    error={placeDetailQuery.error}
+                    savingBasic={updatePlaceMutation.isPending}
+                    savingFeatures={updatePlaceFeaturesMutation.isPending}
+                    saveError={updatePlaceMutation.error || updatePlaceFeaturesMutation.error}
+                    onSaveBasic={(placeId, request) => updatePlaceMutation.mutate({ placeId, request })}
+                    onSaveFeatures={(placeId, features) => updatePlaceFeaturesMutation.mutate({ placeId, features })}
+                  />
                 ) : (
                   <p className="muted">지도에서 편의시설 점을 hover하면 요약을 보고, 클릭하면 상세와 Roadview를 고정합니다.</p>
                 )}
@@ -472,16 +543,157 @@ function SegmentReferenceDetails({ segment }: { segment: SegmentFeature }) {
   );
 }
 
-function FacilityDetails({ feature }: { feature: FacilityFeature }) {
+function FacilityDetails({
+  feature,
+  detail,
+  loading,
+  error,
+  savingBasic,
+  savingFeatures,
+  saveError,
+  onSaveBasic,
+  onSaveFeatures,
+}: {
+  feature: FacilityFeature;
+  detail?: AdminPlaceDetailResponse;
+  loading: boolean;
+  error?: Error | null;
+  savingBasic: boolean;
+  savingFeatures: boolean;
+  saveError?: Error | null;
+  onSaveBasic: (placeId: number, request: AdminPlaceUpdateRequest) => void;
+  onSaveFeatures: (placeId: number, features: PlaceAccessibilityFeature[]) => void;
+}) {
   const properties = feature.properties;
+  const [name, setName] = useState(properties.name || "");
+  const [category, setCategory] = useState<PlaceCategory>(properties.category);
+  const [address, setAddress] = useState(properties.address || "");
+  const [providerPlaceId, setProviderPlaceId] = useState(properties.providerPlaceId || "");
+  const [lat, setLat] = useState(String(feature.geometry.coordinates[1] ?? ""));
+  const [lng, setLng] = useState(String(feature.geometry.coordinates[0] ?? ""));
+  const [features, setFeatures] = useState<Record<AccessibilityFeatureType, boolean>>(() =>
+    Object.fromEntries(accessibilityFeatureTypes.map((featureType) => [featureType, false])) as Record<AccessibilityFeatureType, boolean>,
+  );
+
+  useEffect(() => {
+    if (!detail) return;
+    setName(detail.name);
+    setCategory(detail.category);
+    setAddress(detail.address ?? "");
+    setProviderPlaceId(detail.providerPlaceId ?? "");
+    setLat(String(detail.point.lat));
+    setLng(String(detail.point.lng));
+    setFeatures(
+      Object.fromEntries(
+        accessibilityFeatureTypes.map((featureType) => [
+          featureType,
+          detail.accessibilityFeatures.some((item) => item.featureType === featureType && item.isAvailable),
+        ]),
+      ) as Record<AccessibilityFeatureType, boolean>,
+    );
+  }, [detail]);
+
+  const placeId = Number(properties.placeId);
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+  const canSave = Number.isFinite(placeId) && Boolean(detail) && Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
+
+  function saveBasic() {
+    if (!canSave) return;
+    onSaveBasic(placeId, {
+      name,
+      category,
+      address,
+      providerPlaceId,
+      point: {
+        lat: parsedLat,
+        lng: parsedLng,
+      },
+    });
+  }
+
+  function saveFeatures() {
+    if (!canSave) return;
+    onSaveFeatures(
+      placeId,
+      accessibilityFeatureTypes.map((featureType) => ({
+        featureType,
+        isAvailable: features[featureType],
+      })),
+    );
+  }
+
   return (
-    <dl className="attribute-detail-list">
-      <AttributeRow label="place" value={properties.placeId} />
-      <AttributeRow label="provider" value={properties.providerPlaceId || "-"} />
-      <AttributeRow label="이름" value={properties.name || "-"} />
-      <AttributeRow label="분류" value={facilityCategoryLabel(properties.category)} />
-      <AttributeRow label="주소" value={properties.address || "-"} />
-    </dl>
+    <>
+      <dl className="attribute-detail-list">
+        <AttributeRow label="place" value={properties.placeId} />
+        <AttributeRow label="provider" value={properties.providerPlaceId || "-"} />
+        <AttributeRow label="이름" value={properties.name || "-"} />
+        <AttributeRow label="분류" value={facilityCategoryLabel(properties.category)} />
+        <AttributeRow label="주소" value={properties.address || "-"} />
+      </dl>
+      {loading && <p className="muted">상세 정보를 불러오는 중입니다.</p>}
+      {error && <p className="error-box">{error.message}</p>}
+      {saveError && <p className="error-box">{saveError.message}</p>}
+      {detail && (
+        <>
+          <div className="admin-form-grid">
+            <label>
+              이름
+              <input value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+            <label>
+              카테고리
+              <select value={category} onChange={(event) => setCategory(event.target.value as PlaceCategory)}>
+                {placeCategories.map((item) => (
+                  <option key={item} value={item}>
+                    {facilityCategoryLabel(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              주소
+              <input value={address} onChange={(event) => setAddress(event.target.value)} />
+            </label>
+            <label>
+              providerPlaceId
+              <input value={providerPlaceId} onChange={(event) => setProviderPlaceId(event.target.value)} />
+            </label>
+            <label>
+              lat
+              <input value={lat} onChange={(event) => setLat(event.target.value)} />
+            </label>
+            <label>
+              lng
+              <input value={lng} onChange={(event) => setLng(event.target.value)} />
+            </label>
+          </div>
+          <div className="button-row">
+            <button className="primary" type="button" onClick={saveBasic} disabled={savingBasic || !canSave}>
+              {savingBasic ? "저장 중" : "기본 정보 저장"}
+            </button>
+          </div>
+          <div className="feature-toggle-list">
+            {accessibilityFeatureTypes.map((featureType) => (
+              <label key={featureType}>
+                <input
+                  type="checkbox"
+                  checked={features[featureType]}
+                  onChange={(event) => setFeatures((value) => ({ ...value, [featureType]: event.target.checked }))}
+                />
+                {accessibilityFeatureLabel(featureType)}
+              </label>
+            ))}
+          </div>
+          <div className="button-row">
+            <button className="primary" type="button" onClick={saveFeatures} disabled={savingFeatures || !canSave}>
+              {savingFeatures ? "저장 중" : "접근성 저장"}
+            </button>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -492,6 +704,25 @@ function AttributeRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function accessibilityFeatureLabel(featureType: AccessibilityFeatureType) {
+  switch (featureType) {
+    case "accessibleEntrance":
+      return "단차 없는 출입";
+    case "elevator":
+      return "엘리베이터";
+    case "accessibleToilet":
+      return "장애인 화장실";
+    case "accessibleParking":
+      return "장애인 주차";
+    case "chargingStation":
+      return "전동보장구 충전";
+    case "accessibleRoom":
+      return "객실 이용";
+    case "guidanceFacility":
+      return "안내시설";
+  }
 }
 
 function formatNumber(value?: number | null) {

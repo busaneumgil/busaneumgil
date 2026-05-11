@@ -24,6 +24,24 @@ export type AdminPage = "network" | "facilities" | "hazards";
 
 export type EditableSegmentType = "SIDE_LINE" | "CROSS_WALK";
 
+export type PlaceCategory =
+  | "FOOD_CAFE"
+  | "TOURIST_SPOT"
+  | "ACCOMMODATION"
+  | "HEALTHCARE"
+  | "WELFARE"
+  | "PUBLIC_OFFICE"
+  | "ETC";
+
+export type AccessibilityFeatureType =
+  | "accessibleEntrance"
+  | "elevator"
+  | "accessibleToilet"
+  | "accessibleParking"
+  | "chargingStation"
+  | "accessibleRoom"
+  | "guidanceFacility";
+
 export interface Assignment {
   assignmentId: string;
   gu: string;
@@ -177,7 +195,7 @@ export interface FacilityFeature {
   properties: {
     placeId: string;
     name: string;
-    category: string;
+    category: PlaceCategory;
     address: string;
     providerPlaceId?: string;
   };
@@ -276,6 +294,29 @@ export interface RoadNetworkEditJobResponse {
   processedEdits: number;
   message: string;
   result?: RoadNetworkEditApplyResponse | null;
+}
+
+export interface PlaceAccessibilityFeature {
+  featureType: AccessibilityFeatureType;
+  isAvailable: boolean;
+}
+
+export interface AdminPlaceDetailResponse {
+  placeId: number;
+  name: string;
+  category: PlaceCategory;
+  address: string | null;
+  point: GeoPoint;
+  providerPlaceId: string | null;
+  accessibilityFeatures: PlaceAccessibilityFeature[];
+}
+
+export interface AdminPlaceUpdateRequest {
+  name?: string | null;
+  category?: PlaceCategory | null;
+  address?: string | null;
+  point?: GeoPoint | null;
+  providerPlaceId?: string | null;
 }
 
 export type HazardReportStatus = "PENDING" | "APPROVED" | "REJECTED";

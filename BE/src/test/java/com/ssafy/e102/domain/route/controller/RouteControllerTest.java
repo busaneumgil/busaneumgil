@@ -215,7 +215,7 @@ class RouteControllerTest {
 		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		when(routeSelectService.select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class)))
-			.thenReturn(new RouteSessionResponse(sessionId));
+			.thenReturn(new RouteSessionResponse(sessionId, BigDecimal.valueOf(950), 960));
 
 		mockMvc.perform(post("/routes/rt_selected_001/select")
 			.principal(authentication)
@@ -228,6 +228,8 @@ class RouteControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.sessionId").value(sessionId.toString()))
+			.andExpect(jsonPath("$.data.remainingDistanceMeter").value(950))
+			.andExpect(jsonPath("$.data.remainingDurationSecond").value(960))
 			.andExpect(jsonPath("$.message").value("경로가 선택되었습니다."));
 
 		verify(routeSelectService).select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class));

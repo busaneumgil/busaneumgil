@@ -41,7 +41,7 @@ class LowVisionNavigationRouteTest {
     }
 
     @Test
-    fun `low vision navigation request returns null instead of crashing when route api fails`() =
+    fun `low vision navigation request falls back to local route when route api fails`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             destinationSelectionRepository.updateSelectedDestination(
@@ -58,7 +58,9 @@ class LowVisionNavigationRouteTest {
                 ThrowingRouteRepository()
                     .buildLowVisionNavigationRequest(destinationSelectionRepository)
 
-            assertNull(request)
+            assertEquals("low-vision-fallback-route", request?.selectedRoute?.routeId)
+            assertEquals(null, request?.selectionHandoff)
+            assertTrue(request?.selectedRoute?.segments?.isNotEmpty() == true)
         }
 
     @Test
@@ -125,6 +127,27 @@ class LowVisionNavigationRouteTest {
 
             assertEquals("fresh-route", request?.selectedRoute?.serverRouteId)
             assertEquals("fresh-search", routeRepository.lastSearchId)
+            assertNull(request?.selectionHandoff)
+        }
+
+    @Test
+    fun `low vision navigation still returns route request when search id is missing`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "real-place-id",
+                    name = "Real Place",
+                    address = "Busan",
+                    latitude = 35.2,
+                    longitude = 129.2,
+                ),
+            )
+            val routeRepository = MissingSearchIdRouteRepository()
+
+            val request = routeRepository.buildLowVisionNavigationRequest(destinationSelectionRepository)
+
+            assertEquals("fresh-route", request?.selectedRoute?.serverRouteId)
             assertNull(request?.selectionHandoff)
         }
 
@@ -383,6 +406,45 @@ private class SelectFailureFallbackRouteRepository : RouteRepository {
         lastSearchId = searchId
         throw IllegalStateException("select route failed")
     }
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = throw IllegalStateException("refresh failed")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    ): RouteRerouteData = throw IllegalStateException("reroute failed")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData =
+        throw IllegalStateException("end route failed")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = throw IllegalStateException("rating failed")
+}
+
+private class MissingSearchIdRouteRepository : RouteRepository {
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("cached route search should not be used for low vision navigation start")
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        lowVisionRouteSearchData(
+            query = query,
+            searchId = "",
+            routeId = "fresh-route",
+            distanceMeters = 120.0,
+        )
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("transit route search was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData = throw IllegalStateException("select route should not be called")
 
     override suspend fun refreshTransit(
         routeId: String,

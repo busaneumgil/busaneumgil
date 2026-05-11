@@ -524,8 +524,15 @@ private fun ReportDetailDraftActions(
     if (!canSaveDraft && !isSubmitRecoverable) return
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
+        if (isSubmitRecoverable) {
+            ReportSubmitFailureBanner(
+                reason = (uiState.submitState as? ReportSubmitState.Failed)?.reason
+                    ?: (uiState.screenState as? ReportScreenState.Failure)?.reason,
+                onRetryClick = { onAction(ReportUiAction.RetrySubmitClicked) },
+            )
+        }
         if (canSaveDraft) {
             OutlinedButton(
                 onClick = { onAction(ReportUiAction.SaveDraftClicked) },
@@ -535,16 +542,61 @@ private fun ReportDetailDraftActions(
                 Text(text = if (isDraftSaving) "임시저장 중" else "임시저장")
             }
         }
-        if (isSubmitRecoverable) {
+    }
+}
+
+@Composable
+private fun ReportSubmitFailureBanner(
+    reason: ReportFailureReason?,
+    onRetryClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(EumRadius.large),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.36f)),
+        shadowElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_status_warning),
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                text = stringResource(id = R.string.report_submit_failure_banner_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(id = reason.toBannerDescriptionRes()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
             Button(
-                onClick = { onAction(ReportUiAction.RetrySubmitClicked) },
+                onClick = onRetryClick,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = "다시 제출")
+                Text(text = stringResource(id = R.string.report_submit_failure_retry))
             }
         }
     }
 }
+
+private fun ReportFailureReason?.toBannerDescriptionRes(): Int =
+    when (this) {
+        ReportFailureReason.Unauthorized -> R.string.report_submit_failure_unauthorized
+        ReportFailureReason.InvalidInput -> R.string.report_submit_failure_invalid_input
+        ReportFailureReason.NetworkUnavailable -> R.string.report_submit_failure_network
+        ReportFailureReason.LocalSaveFailed -> R.string.report_submit_failure_local_save
+        ReportFailureReason.ServerSubmitFailed -> R.string.report_submit_failure_server
+        else -> R.string.report_submit_failure_unknown
+    }
 
 @Composable
 private fun ReportCompleteStep(uiState: ReportUiState) {

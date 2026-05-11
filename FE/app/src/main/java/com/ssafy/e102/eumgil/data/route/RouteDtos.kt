@@ -123,8 +123,6 @@ data class RouteSelectRequestDto(
 
 data class RouteSessionResponseDto(
     val sessionId: String,
-    val remainingDistanceMeter: Double? = null,
-    val remainingDurationSecond: Int? = null,
 )
 
 data class RouteTransitRefreshRequestDto(

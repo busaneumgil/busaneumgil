@@ -27,7 +27,6 @@ import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshResponseDto
 import com.ssafy.e102.eumgil.data.route.toDomain
 import com.ssafy.e102.eumgil.data.route.toRequestDto
 import com.ssafy.e102.eumgil.data.route.toRouteCandidate
-import kotlin.math.roundToInt
 
 interface RouteRepository {
     // Primary read-model entry point for 199 route setting and 200/201/202 handoff consumers.
@@ -223,8 +222,6 @@ class DefaultRouteRepository(
 
 data class RouteSessionData(
     val sessionId: String,
-    val remainingDistanceMeters: Int? = null,
-    val remainingDurationSeconds: Int? = null,
 )
 
 data class RouteTransitArrivalData(
@@ -250,8 +247,6 @@ data class RouteRatingData(
 private fun RouteSessionResponseDto.toRepositoryData(): RouteSessionData =
     RouteSessionData(
         sessionId = sessionId,
-        remainingDistanceMeters = remainingDistanceMeter?.takeIf { value -> value >= 0.0 }?.roundToInt(),
-        remainingDurationSeconds = remainingDurationSecond?.takeIf { value -> value >= 0 },
     )
 
 private fun RouteTransitRefreshResponseDto.toRepositoryData(): RouteTransitRefreshData =

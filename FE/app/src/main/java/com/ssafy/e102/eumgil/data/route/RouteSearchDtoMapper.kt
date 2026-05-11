@@ -51,8 +51,6 @@ fun parseRouteSessionResponseDto(body: String): RouteSessionResponseDto {
     val dataJson = body.requireRouteDataJson("route session response missing data object")
     return RouteSessionResponseDto(
         sessionId = dataJson.requireNonBlankString("sessionId"),
-        remainingDistanceMeter = dataJson.optNullableDouble("remainingDistanceMeter"),
-        remainingDurationSecond = dataJson.optNullableInt("remainingDurationSecond"),
     )
 }
 

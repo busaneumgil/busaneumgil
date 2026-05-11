@@ -76,6 +76,8 @@ class LowVisionNavigationRouteTest {
 
             assertEquals("fresh-search", request?.selectionHandoff?.searchId)
             assertEquals("fresh-route", request?.selectionHandoff?.routeId)
+            assertEquals(120, request?.selectionHandoff?.initialRemainingDistanceMeters)
+            assertEquals(120, request?.selectionHandoff?.initialRemainingDurationSeconds)
             assertTrue(routeRepository.freshWalkSearchCalled)
         }
 }

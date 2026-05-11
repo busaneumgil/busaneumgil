@@ -88,8 +88,8 @@ internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
                     searchId = searchId,
                     routeId = routeId,
                     sessionId = sessionData.sessionId,
-                    initialRemainingDistanceMeters = sessionData.remainingDistanceMeters,
-                    initialRemainingDurationSeconds = sessionData.remainingDurationSeconds,
+                    initialRemainingDistanceMeters = plan.selectedRoute.summary.distanceMeters,
+                    initialRemainingDurationSeconds = plan.selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
                 ),
         )
     } catch (throwable: Throwable) {
@@ -116,6 +116,7 @@ private val LOW_VISION_DEFAULT_DESTINATION =
     )
 
 private const val LOW_VISION_TRANSIT_THRESHOLD_METERS = 750
+private const val SECONDS_PER_MINUTE = 60
 private val LOW_VISION_WALK_OPTIONS = listOf(RouteOption.SAFE, RouteOption.SHORTEST)
 private val LOW_VISION_TRANSIT_OPTIONS =
     listOf(

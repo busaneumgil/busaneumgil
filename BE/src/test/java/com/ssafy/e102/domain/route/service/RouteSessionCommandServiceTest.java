@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -264,8 +265,17 @@ class RouteSessionCommandServiceTest {
 	}
 
 	@Test
-	@DisplayName("route session response includes initial remaining distance and duration from snapshot")
-	void saveActiveSessionResponseIncludesInitialRemainingMetrics() {
+	@DisplayName("route session response exposes only session id")
+	void routeSessionResponseExposesOnlySessionId() {
+		assertThat(Arrays.stream(RouteSessionResponse.class.getRecordComponents())
+			.map(component -> component.getName())
+			.toList())
+			.containsExactly("sessionId");
+	}
+
+	@Test
+	@DisplayName("route session response does not expose snapshot distance and duration as remaining metrics")
+	void saveActiveSessionResponseDoesNotExposeSnapshotMetrics() {
 		User user = user(USER_ID);
 		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
@@ -288,8 +298,6 @@ class RouteSessionCommandServiceTest {
 				.put("durationSecond", 960));
 
 		assertThat(response.sessionId()).isEqualTo(sessionId);
-		assertThat(response.remainingDistanceMeter()).isEqualByComparingTo("950");
-		assertThat(response.remainingDurationSecond()).isEqualTo(960);
 	}
 
 	private Point point(double lng, double lat) {

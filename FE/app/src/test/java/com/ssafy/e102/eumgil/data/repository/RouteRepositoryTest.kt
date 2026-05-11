@@ -152,8 +152,6 @@ class RouteRepositoryTest {
                                 assertEquals("search-1", request.searchId)
                                 RouteSessionResponseDto(
                                     sessionId = "session-select-1",
-                                    remainingDistanceMeter = 950.0,
-                                    remainingDurationSecond = 960,
                                 )
                             },
                             refreshResponse = { routeId, request ->
@@ -225,8 +223,6 @@ class RouteRepositoryTest {
             val rated = repository.rateRoute(sessionId = ended.sessionId, score = 5)
 
             assertEquals("session-select-1", selected.sessionId)
-            assertEquals(950, selected.remainingDistanceMeters)
-            assertEquals(960, selected.remainingDurationSeconds)
             assertEquals("BUS", refreshed.type)
             assertEquals("ARRIVING_SOON", refreshed.arrivalStatus)
             assertEquals("100", refreshed.transits.single().routeNo)

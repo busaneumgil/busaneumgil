@@ -35,6 +35,13 @@ services:
       GF_AUTH_GITLAB_ALLOWED_GROUPS: ${GITLAB_ALLOWED_GROUPS}
       GF_AUTH_GITLAB_USE_PKCE: "true"
       GF_AUTH_GITLAB_USE_REFRESH_TOKEN: "true"
+      GRAFANA_CLOUDWATCH_AUTH_TYPE: ${GRAFANA_CLOUDWATCH_AUTH_TYPE:-keys}
+      GRAFANA_CLOUDWATCH_DEFAULT_REGION: ${GRAFANA_CLOUDWATCH_DEFAULT_REGION:-ap-northeast-2}
+      GRAFANA_CLOUDWATCH_CUSTOM_NAMESPACES: ${GRAFANA_CLOUDWATCH_CUSTOM_NAMESPACES:-}
+      GRAFANA_CLOUDWATCH_ASSUME_ROLE_ARN: ${GRAFANA_CLOUDWATCH_ASSUME_ROLE_ARN:-}
+      GRAFANA_CLOUDWATCH_EXTERNAL_ID: ${GRAFANA_CLOUDWATCH_EXTERNAL_ID:-}
+      GRAFANA_CLOUDWATCH_ACCESS_KEY_ID: ${GRAFANA_CLOUDWATCH_ACCESS_KEY_ID:-}
+      GRAFANA_CLOUDWATCH_SECRET_ACCESS_KEY: ${GRAFANA_CLOUDWATCH_SECRET_ACCESS_KEY:-}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -45,6 +52,8 @@ services:
     image: prom/prometheus:v2.55.1
     container_name: e102-prometheus
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -104,6 +113,17 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
       - /dev/disk:/dev/disk:ro
+    networks:
+      - ops
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: e102-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: ${DEV_REDIS_EXPORTER_ADDR:-redis://host.docker.internal:6379}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - ops
 

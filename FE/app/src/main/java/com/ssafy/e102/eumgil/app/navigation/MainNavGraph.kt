@@ -365,6 +365,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToReportHistory = {
                 navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
+            onNavigateToMap = {
+                navController.navigateToTopLevel(TopLevelDestination.Map)
+            },
         )
     }
 

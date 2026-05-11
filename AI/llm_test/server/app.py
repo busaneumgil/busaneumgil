@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 import os
 import time
+import uuid
 from dataclasses import asdict
 
 from env_loader import load_runtime_env
@@ -39,6 +40,59 @@ PROVIDERS = {
 logger.info("Providers ready: " + ", ".join(PROVIDERS.keys()))
 
 
+def get_request_id() -> str:
+    return getattr(g, "request_id", "-")
+
+
+def format_remote_addr() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+    return forwarded_for or request.remote_addr or "-"
+
+
+@app.before_request
+def mark_request_start() -> None:
+    g.request_started_at = time.perf_counter()
+    g.request_id = request.headers.get("X-Request-Id") or uuid.uuid4().hex[:12]
+
+
+@app.after_request
+def log_request_completion(response):
+    if request.path == "/health":
+        return response
+
+    started_at = getattr(g, "request_started_at", None)
+    latency_ms = 0
+    if started_at is not None:
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+
+    logger.info(
+        "event=request_completed request_id=%s method=%s path=%s status=%s latency_ms=%s remote_addr=%s content_length=%s",
+        get_request_id(),
+        request.method,
+        request.path,
+        response.status_code,
+        latency_ms,
+        format_remote_addr(),
+        response.calculate_content_length() or 0,
+    )
+    response.headers["X-Request-Id"] = get_request_id()
+    return response
+
+
+@app.teardown_request
+def log_unhandled_exception(exception) -> None:
+    if exception is None:
+        return
+
+    logger.exception(
+        "event=request_unhandled_exception request_id=%s method=%s path=%s remote_addr=%s",
+        get_request_id(),
+        request.method,
+        request.path,
+        format_remote_addr(),
+    )
+
+
 @app.route('/api/chat/llm', methods=['POST'])
 def chat_llm():
     """단일 모델 호출 (PoC용)"""
@@ -49,11 +103,23 @@ def chat_llm():
 
     provider = PROVIDERS.get(model_key)
     if not provider:
+        logger.warning(
+            "event=chat_llm_invalid_model request_id=%s model=%s",
+            get_request_id(),
+            model_key,
+        )
         return jsonify({"error": f"Unknown model: {model_key}"}), 400
 
     result = provider.call(text)
     result.total_latency_ms = int(time.time() * 1000) - stt_start_ms
     save_result(text, stt_start_ms, [result])
+    logger.info(
+        "event=chat_llm_completed request_id=%s model=%s latency_ms=%s success=%s",
+        get_request_id(),
+        model_key,
+        result.total_latency_ms,
+        result.success,
+    )
 
     return jsonify(asdict(result))
 
@@ -65,6 +131,11 @@ def voice_analyze():
 
     text = body.get("text", "").strip()
     if not text:
+        logger.warning(
+            "event=voice_analyze_invalid_input request_id=%s reason=empty_text model=%s",
+            get_request_id(),
+            body.get("model", Config.DEFAULT_MODEL),
+        )
         return jsonify({
             "success": False,
             "intent": "unknown",
@@ -77,6 +148,11 @@ def voice_analyze():
     model_key = body.get("model", Config.DEFAULT_MODEL)
     provider = PROVIDERS.get(model_key)
     if not provider:
+        logger.warning(
+            "event=voice_analyze_invalid_model request_id=%s model=%s",
+            get_request_id(),
+            model_key,
+        )
         return jsonify({
             "success": False,
             "intent": "unknown",
@@ -88,6 +164,12 @@ def voice_analyze():
 
     mode = body.get("mode", "MOBILITY_IMPAIRED")
     if mode not in ("MOBILITY_IMPAIRED", "LOW_VISION"):
+        logger.warning(
+            "event=voice_analyze_invalid_mode request_id=%s mode=%s model=%s",
+            get_request_id(),
+            mode,
+            model_key,
+        )
         return jsonify({
             "success": False,
             "error": "mode는 'MOBILITY_IMPAIRED' 또는 'LOW_VISION'만 허용됩니다.",
@@ -111,6 +193,16 @@ def voice_analyze():
         data = asdict(result)
         intent_raw = data.get("intent") or "unknown"
         intent_upper = intent_raw.upper()
+        logger.info(
+            "event=voice_analyze_completed request_id=%s model=%s mode=%s intent=%s confirmed=%s latency_ms=%s success=%s",
+            get_request_id(),
+            model_key,
+            mode,
+            intent_upper,
+            data.get("confirmed"),
+            latency_ms,
+            result.success,
+        )
         return jsonify({
             "success": result.success,
             "intent": intent_upper,
@@ -123,7 +215,13 @@ def voice_analyze():
         })
     except Exception as e:
         latency_ms = int(time.time() * 1000) - start_ms
-        logger.error(f"voice_analyze 오류: {e}")
+        logger.exception(
+            "event=voice_analyze_failed request_id=%s model=%s mode=%s latency_ms=%s",
+            get_request_id(),
+            model_key,
+            mode,
+            latency_ms,
+        )
         return jsonify({
             "success": False,
             "intent": "UNKNOWN",

@@ -1,8 +1,8 @@
 package com.ssafy.e102.domain.route.service;
 
-import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
@@ -123,6 +123,7 @@ public class RerouteService {
 			route.durationSecond(),
 			route.estimatedTimeMinute(),
 			route.badges(),
+			route.warnings(),
 			route.geometry(),
 			route.legs());
 	}
@@ -169,6 +170,7 @@ public class RerouteService {
 			durationSecond,
 			estimatedMinute(durationSecond),
 			mergeBadges(repairRoute.badges(), previousRoute.badges(), offsetLegs),
+			previousRoute.warnings(),
 			mergeGeometry(offsetLegs),
 			offsetLegs);
 	}
@@ -606,7 +608,7 @@ public class RerouteService {
 		if (durationSecond <= 0) {
 			return 0;
 		}
-		return Math.max(1, (int)Math.ceil(durationSecond / 60.0));
+		return Math.max(1, durationSecond / 60);
 	}
 
 	private double toProjectedX(double lng, double referenceLat) {

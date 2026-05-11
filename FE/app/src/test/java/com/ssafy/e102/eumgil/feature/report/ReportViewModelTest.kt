@@ -868,6 +868,74 @@ class ReportViewModelTest {
             )
             assertTrue(uiState.outboxState is ReportOutboxState.Saved)
         }
+
+    @Test
+    fun `start new report after complete resets form to type selection`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.DescriptionChanged("기존 입력"))
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.screenState is ReportScreenState.Completed)
+
+            viewModel.onAction(ReportUiAction.StartNewReportClicked)
+            advanceUntilIdle()
+
+            val resetState = viewModel.uiState.value
+            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(null, resetState.reportType.value)
+            assertEquals("", resetState.description.value)
+            assertTrue(resetState.screenState is ReportScreenState.Editing)
+        }
+
+    @Test
+    fun `back to map after complete resets form and emits navigate to map event`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            uiEvent.await() // drain ShowSnackbar / NavigateToReportComplete
+            val backToMapEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.BackToMapClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportUiEvent.NavigateToMap, backToMapEvent.await())
+            val resetState = viewModel.uiState.value
+            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(null, resetState.reportType.value)
+        }
 }
 
 private class FakeReportRepository(

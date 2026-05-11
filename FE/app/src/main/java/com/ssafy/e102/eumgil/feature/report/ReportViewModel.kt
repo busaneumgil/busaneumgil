@@ -59,6 +59,17 @@ class ReportViewModel(
                 }
                 emitUiEvent(ReportUiEvent.NavigateToReportHistory)
             }
+            ReportUiAction.StartNewReportClicked -> {
+                if (mutableUiState.value.screenState is ReportScreenState.Completed) {
+                    resetForm()
+                }
+            }
+            ReportUiAction.BackToMapClicked -> {
+                if (mutableUiState.value.screenState is ReportScreenState.Completed) {
+                    resetForm()
+                }
+                emitUiEvent(ReportUiEvent.NavigateToMap)
+            }
             ReportUiAction.SubmitClicked,
             ReportUiAction.RetrySubmitClicked -> submitReport()
         }

@@ -235,9 +235,9 @@ class TransitRouteSearchServiceTest {
 			.containsExactly(RouteGuidanceEventType.ARRIVING_POINT);
 		RouteGuidanceEventResponse arrivingPoint = response.routes().get(0).legs().get(1).guidanceEvents().get(0);
 		assertThat(arrivingPoint.distanceFromLegStartMeter()).isEqualByComparingTo("1500.00");
-		assertThat(arrivingPoint.durationFromLegStartSecond()).isEqualTo(600);
+		assertThat(arrivingPoint.durationFromLegStartSecond()).isEqualTo(780);
 		assertThat(arrivingPoint.distanceFromRouteStartMeter()).isEqualByComparingTo("1800.00");
-		assertThat(arrivingPoint.durationFromRouteStartSecond()).isEqualTo(900);
+		assertThat(arrivingPoint.durationFromRouteStartSecond()).isEqualTo(1080);
 		assertThat(arrivingPoint.geometry()).isEqualTo("POINT(129.066 35.166)");
 		assertThat(response.routes().get(0).legs().get(2).role()).isEqualTo(RouteLegRole.TRANSIT_TO_WALK);
 		assertThat(response.routes().get(0).legs().get(2).badges())
@@ -291,6 +291,10 @@ class TransitRouteSearchServiceTest {
 
 		assertThat(response.routes()).hasSize(1);
 		assertThat(response.routes().get(0).durationSecond()).isEqualTo(1380);
+		assertThat(response.routes().get(0).durationSecond()).isEqualTo(response.routes().get(0).legs()
+			.stream()
+			.mapToInt(leg -> leg.durationSecond())
+			.sum());
 		assertThat(response.routes().get(0).estimatedTimeMinute()).isEqualTo(23);
 		assertThat(response.routes().get(0).warnings())
 			.containsExactly(RouteWarningCode.LOW_FLOOR_BUS_UNAVAILABLE);
@@ -315,6 +319,42 @@ class TransitRouteSearchServiceTest {
 		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
 
 		assertThat(response.routes().get(0).warnings()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("대중교통 버퍼는 leg duration에 포함하고 하나의 BUS leg라도 저상버스 후보가 없으면 warning을 유지한다")
+	void includesTransitBuffersInLegDurationsAndWarnsWhenAnyBusLegHasNoLowFloorOption() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(twoBusPath("map-multi"))));
+		when(odsayClient.loadLane("map-multi"))
+			.thenReturn(List.of(
+				new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.061 35.161, 129.066 35.166)"),
+				new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.066 35.166, 129.069 35.169)")));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(busanBimsClient.findArrival("BS1", "BL1", "200"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "200", null, null));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		assertThat(response.routes().get(0).durationSecond()).isEqualTo(2640);
+		assertThat(response.routes().get(0).durationSecond()).isEqualTo(response.routes().get(0).legs()
+			.stream()
+			.mapToInt(leg -> leg.durationSecond())
+			.sum());
+		assertThat(response.routes().get(0).legs())
+			.filteredOn(leg -> leg.type() == TransportMode.BUS)
+			.extracting(leg -> leg.durationSecond())
+			.containsExactly(780, 960);
+		RouteGuidanceEventResponse secondBusArrival = response.routes().get(0).legs().get(3).guidanceEvents().get(0);
+		assertThat(secondBusArrival.durationFromLegStartSecond()).isEqualTo(960);
+		assertThat(secondBusArrival.durationFromRouteStartSecond()).isEqualTo(2340);
+		assertThat(response.routes().get(0).legs().get(4).guidanceEvents().get(0).durationFromRouteStartSecond())
+			.isEqualTo(2640);
+		assertThat(response.routes().get(0).warnings())
+			.containsExactly(RouteWarningCode.LOW_FLOOR_BUS_UNAVAILABLE);
 	}
 
 	@Test
@@ -413,9 +453,9 @@ class TransitRouteSearchServiceTest {
 	void keepsRepresentativeRouteOptionsUnique() {
 		when(odsayClient.searchPubTransPath(START, END))
 			.thenReturn(new OdsayTransitSearchResult(List.of(
-				busPath("map-recommended", "100", 20, 500, 2),
-				busPath("map-min-transfer", "101", 30, 700, 1),
-				busPath("map-min-walk", "102", 35, 100, 2))));
+				busPathWithBusDuration("map-recommended", "100", 5, 500, 2),
+				busPathWithBusDuration("map-min-transfer", "101", 10, 700, 1),
+				busPathWithBusDuration("map-min-walk", "102", 15, 100, 2))));
 		when(odsayClient.loadLane(any()))
 			.thenReturn(List.of(new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.061 35.161, 129.066 35.166)")));
 		when(busanBimsClient.findArrival(any(), any(), any()))
@@ -476,6 +516,26 @@ class TransitRouteSearchServiceTest {
 			Map.of());
 	}
 
+	private OdsayTransitPath busPathWithBusDuration(
+		String mapObj,
+		String busNo,
+		int busDurationMinute,
+		int totalWalkMeter,
+		int busTransitCount) {
+		return new OdsayTransitPath(
+			BigDecimal.valueOf(3000),
+			busDurationMinute + 10,
+			totalWalkMeter,
+			busTransitCount,
+			0,
+			mapObj,
+			List.of(
+				walkLeg(),
+				busLeg(busNo, busDurationMinute),
+				walkLeg()),
+			Map.of());
+	}
+
 	private OdsayTransitPath subwayPath(String mapObj) {
 		return new OdsayTransitPath(
 			BigDecimal.valueOf(3500),
@@ -487,6 +547,23 @@ class TransitRouteSearchServiceTest {
 			List.of(
 				walkLeg(),
 				subwayLeg(),
+				walkLeg()),
+			Map.of());
+	}
+
+	private OdsayTransitPath twoBusPath(String mapObj) {
+		return new OdsayTransitPath(
+			BigDecimal.valueOf(5000),
+			35,
+			900,
+			2,
+			0,
+			mapObj,
+			List.of(
+				walkLeg(),
+				busLeg("100"),
+				walkLeg(),
+				busLeg("200"),
 				walkLeg()),
 			Map.of());
 	}
@@ -548,10 +625,14 @@ class TransitRouteSearchServiceTest {
 	}
 
 	private OdsayTransitLeg busLeg(String busNo) {
+		return busLeg(busNo, 10);
+	}
+
+	private OdsayTransitLeg busLeg(String busNo, int sectionTimeMinute) {
 		return new OdsayTransitLeg(
 			TransportMode.BUS,
 			BigDecimal.valueOf(1500),
-			10,
+			sectionTimeMinute,
 			"승차정류장",
 			BigDecimal.valueOf(35.1610),
 			BigDecimal.valueOf(129.0610),

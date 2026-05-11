@@ -184,7 +184,8 @@ public class TransitRouteSearchService {
 		if (legs.isEmpty()) {
 			return java.util.Optional.empty();
 		}
-		List<RouteLegResponse> offsetLegs = withRouteGuidanceOffsets(legs);
+		List<RouteLegResponse> bufferedLegs = withTransitTimeBuffers(legs, profile);
+		List<RouteLegResponse> offsetLegs = withRouteGuidanceOffsets(bufferedLegs);
 		if (hasMissingGeometry(offsetLegs)) {
 			return java.util.Optional.empty();
 		}
@@ -193,7 +194,7 @@ public class TransitRouteSearchService {
 			return java.util.Optional.empty();
 		}
 		int transferCount = transferCount(path);
-		int durationSecond = totalDurationSecond(path.totalTimeMinute(), offsetLegs, profile);
+		int durationSecond = totalDurationSecond(offsetLegs);
 		RouteSummaryResponse route = new RouteSummaryResponse(
 			routeId,
 			TransportMode.PUBLIC_TRANSIT,
@@ -216,6 +217,56 @@ public class TransitRouteSearchService {
 
 	private boolean hasMissingGeometry(List<RouteLegResponse> legs) {
 		return legs.stream().anyMatch(leg -> leg.geometry() == null || leg.geometry().isBlank());
+	}
+
+	private List<RouteLegResponse> withTransitTimeBuffers(List<RouteLegResponse> legs, WalkRouteUserProfile profile) {
+		List<RouteLegResponse> bufferedLegs = new ArrayList<>();
+		boolean hasPreviousTransit = false;
+		for (RouteLegResponse leg : legs) {
+			int bufferSecond = 0;
+			if (leg.type() == TransportMode.BUS || leg.type() == TransportMode.SUBWAY) {
+				if (hasPreviousTransit) {
+					bufferSecond += transitTransferBufferSecond(leg.type(), profile);
+				}
+				if (leg.type() == TransportMode.BUS) {
+					bufferSecond += busBoardingPrepSecond(profile);
+				}
+				hasPreviousTransit = true;
+			}
+			bufferedLegs.add(bufferSecond == 0 ? leg : withAdditionalDuration(leg, bufferSecond));
+		}
+		return List.copyOf(bufferedLegs);
+	}
+
+	private RouteLegResponse withAdditionalDuration(RouteLegResponse leg, int additionalDurationSecond) {
+		int durationSecond = leg.durationSecond() + additionalDurationSecond;
+		List<RouteGuidanceEventResponse> guidanceEvents = leg.guidanceEvents() == null
+			? List.of()
+			: leg.guidanceEvents()
+				.stream()
+				.map(event -> new RouteGuidanceEventResponse(
+					event.sequence(),
+					event.type(),
+					event.distanceFromLegStartMeter(),
+					event.durationFromLegStartSecond() + additionalDurationSecond,
+					event.geometry()))
+				.toList();
+		return new RouteLegResponse(
+			leg.sequence(),
+			leg.type(),
+			leg.role(),
+			leg.instruction(),
+			leg.distanceMeter(),
+			durationSecond,
+			estimatedMinute(durationSecond),
+			leg.geometry(),
+			guidanceEvents,
+			leg.routeNo(),
+			leg.laneOptions(),
+			leg.boardingStop(),
+			leg.arrivingStop(),
+			leg.isLowFloor(),
+			leg.badges());
 	}
 
 	private List<RouteLegResponse> withRouteGuidanceOffsets(List<RouteLegResponse> legs) {
@@ -287,7 +338,7 @@ public class TransitRouteSearchService {
 	}
 
 	private Comparator<TransitRouteCandidate> recommendedComparator() {
-		return Comparator.comparing(this::hasLowFloorBus).reversed()
+		return Comparator.comparing(this::hasLowFloorBusForEveryBusLeg).reversed()
 			.thenComparing(candidate -> candidate.route().durationSecond())
 			.thenComparing(TransitRouteCandidate::transferCount)
 			.thenComparing(TransitRouteCandidate::totalWalkMeter);
@@ -336,11 +387,18 @@ public class TransitRouteSearchService {
 		return "%s:%s:%s".formatted(stop.name(), stop.lat(), stop.lng());
 	}
 
-	private boolean hasLowFloorBus(TransitRouteCandidate candidate) {
-		return candidate.route()
+	private boolean hasLowFloorBusForEveryBusLeg(TransitRouteCandidate candidate) {
+		List<RouteLegResponse> busLegs = candidate.route()
 			.legs()
 			.stream()
-			.flatMap(leg -> leg.laneOptions().stream())
+			.filter(leg -> leg.type() == TransportMode.BUS)
+			.toList();
+		return !busLegs.isEmpty() && busLegs.stream().allMatch(this::hasLowFloorBus);
+	}
+
+	private boolean hasLowFloorBus(RouteLegResponse leg) {
+		return leg.laneOptions()
+			.stream()
 			.anyMatch(option -> Boolean.TRUE.equals(option.isLowFloor()));
 	}
 
@@ -348,36 +406,17 @@ public class TransitRouteSearchService {
 		if (!isWheelchairUser(profile) || legs.stream().noneMatch(leg -> leg.type() == TransportMode.BUS)) {
 			return List.of();
 		}
-		boolean hasLowFloorBus = legs.stream()
+		boolean hasLowFloorBusForEveryBusLeg = legs.stream()
 			.filter(leg -> leg.type() == TransportMode.BUS)
-			.flatMap(leg -> leg.laneOptions().stream())
-			.anyMatch(option -> Boolean.TRUE.equals(option.isLowFloor()));
-		if (hasLowFloorBus) {
+			.allMatch(this::hasLowFloorBus);
+		if (hasLowFloorBusForEveryBusLeg) {
 			return List.of();
 		}
 		return List.of(RouteWarningCode.LOW_FLOOR_BUS_UNAVAILABLE);
 	}
 
-	private int totalDurationSecond(int odsayTotalTimeMinute, List<RouteLegResponse> legs,
-		WalkRouteUserProfile profile) {
-		return Math.max(0, odsayTotalTimeMinute) * 60
-			+ transferBufferSecond(legs, profile)
-			+ busBoardingPrepSecond(legs, profile);
-	}
-
-	private int transferBufferSecond(List<RouteLegResponse> legs, WalkRouteUserProfile profile) {
-		int bufferSecond = 0;
-		boolean hasPreviousTransit = false;
-		for (RouteLegResponse leg : legs) {
-			if (leg.type() != TransportMode.BUS && leg.type() != TransportMode.SUBWAY) {
-				continue;
-			}
-			if (hasPreviousTransit) {
-				bufferSecond += transitTransferBufferSecond(leg.type(), profile);
-			}
-			hasPreviousTransit = true;
-		}
-		return bufferSecond;
+	private int totalDurationSecond(List<RouteLegResponse> legs) {
+		return legs.stream().mapToInt(RouteLegResponse::durationSecond).sum();
 	}
 
 	private int transitTransferBufferSecond(TransportMode nextTransitType, WalkRouteUserProfile profile) {
@@ -385,11 +424,6 @@ public class TransitRouteSearchService {
 			return isWheelchairUser(profile) ? WHEELCHAIR_SUBWAY_TRANSFER_BUFFER_SECOND : SUBWAY_TRANSFER_BUFFER_SECOND;
 		}
 		return BUS_TRANSFER_BUFFER_SECOND;
-	}
-
-	private int busBoardingPrepSecond(List<RouteLegResponse> legs, WalkRouteUserProfile profile) {
-		long busLegCount = legs.stream().filter(leg -> leg.type() == TransportMode.BUS).count();
-		return Math.toIntExact(busLegCount * (long)busBoardingPrepSecond(profile));
 	}
 
 	private int busBoardingPrepSecond(WalkRouteUserProfile profile) {

@@ -2,13 +2,13 @@ package com.ssafy.e102.global.external.graphhopper;
 
 import java.net.URI;
 import java.net.SocketTimeoutException;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -22,6 +22,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
+import com.ssafy.e102.global.geo.GeoDistanceCalculator;
+import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 /**
  * Backend route service에서 GraphHopper runtime의 `/route` API로 나가는 단일 통로다.
@@ -33,9 +35,11 @@ import com.ssafy.e102.domain.route.exception.RouteException;
 public class GraphHopperRouteClient {
 
 	private static final Logger log = LoggerFactory.getLogger(GraphHopperRouteClient.class);
+	private static final double MAX_SNAP_DISTANCE_METER = 10.0;
 
 	private static final List<String> WALK_PATH_DETAILS = List.of(
 		"edge_id",
+		"walk_access",
 		"segment_type",
 		"signal_state",
 		"audio_signal_state",
@@ -70,7 +74,7 @@ public class GraphHopperRouteClient {
 					.build(),
 				GraphHopperRouteResponse.class)
 				.getBody();
-			return extractFirstPath(response);
+			return extractFirstPath(request, response);
 		} catch (HttpStatusCodeException exception) {
 			RouteErrorCode errorCode = graphHopperHttpErrorCode(exception);
 			log.warn(
@@ -141,21 +145,50 @@ public class GraphHopperRouteClient {
 			.toUri();
 	}
 
-	private String point(com.ssafy.e102.global.geo.dto.GeoPointRequest point) {
+	private String point(GeoPointRequest point) {
 		return point.lat() + "," + point.lng();
 	}
 
-	private GraphHopperRoutePath extractFirstPath(GraphHopperRouteResponse response) {
+	private GraphHopperRoutePath extractFirstPath(GraphHopperRouteRequest request, GraphHopperRouteResponse response) {
 		if (response == null || response.paths() == null || response.paths().isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		GraphHopperPathResponse path = response.paths().get(0);
+		validateSnapDistance(request, path);
+		validateWalkAccess(path);
 		List<GraphHopperCoordinate> coordinates = path.coordinates();
 		if (coordinates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		// 이후 step/payload service는 GraphHopper 원본 JSON이 아니라 이 정제된 path만 사용한다.
 		return new GraphHopperRoutePath(path.distance(), path.time(), coordinates, path.pathDetails());
+	}
+
+	private void validateSnapDistance(GraphHopperRouteRequest request, GraphHopperPathResponse path) {
+		List<GraphHopperCoordinate> snappedCoordinates = path.snappedCoordinates();
+		if (snappedCoordinates.size() < 2) {
+			return;
+		}
+		if (snapDistanceMeter(request.startPoint(), snappedCoordinates.get(0)) > MAX_SNAP_DISTANCE_METER
+			|| snapDistanceMeter(request.endPoint(),
+				snappedCoordinates.get(snappedCoordinates.size() - 1)) > MAX_SNAP_DISTANCE_METER) {
+			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
+		}
+	}
+
+	private double snapDistanceMeter(GeoPointRequest requestedPoint, GraphHopperCoordinate snappedCoordinate) {
+		return GeoDistanceCalculator.distanceMeter(
+			requestedPoint,
+			new GeoPointRequest(snappedCoordinate.lat().doubleValue(), snappedCoordinate.lng().doubleValue()));
+	}
+
+	private void validateWalkAccess(GraphHopperPathResponse path) {
+		if (path.pathDetails()
+			.getOrDefault("walk_access", List.of())
+			.stream()
+			.anyMatch(detail -> "NO".equalsIgnoreCase(detail.value()))) {
+			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
+		}
 	}
 
 	private boolean hasTimeoutCause(Throwable throwable) {

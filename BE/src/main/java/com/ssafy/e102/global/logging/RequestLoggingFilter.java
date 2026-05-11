@@ -33,8 +33,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 	protected void doFilterInternal(
 		HttpServletRequest request,
 		HttpServletResponse response,
-		FilterChain filterChain
-	) throws ServletException, IOException {
+		FilterChain filterChain) throws ServletException, IOException {
 		String requestId = request.getHeader(REQUEST_ID_HEADER);
 		if (requestId == null || requestId.isBlank()) {
 			requestId = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -57,8 +56,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 				request.getRequestURI(),
 				response.getStatus(),
 				latencyMs,
-				remoteAddr
-			);
+				remoteAddr);
 			MDC.remove(REQUEST_ID_KEY);
 		}
 	}

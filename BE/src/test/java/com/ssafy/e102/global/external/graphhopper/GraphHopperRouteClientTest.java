@@ -46,7 +46,7 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper route API를 profile과 좌표 query로 호출하고 첫 path를 반환한다")
 	void routeCallsGraphHopperAndParsesFirstPath() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=visual_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andExpect(method(HttpMethod.GET))
 			.andExpect(queryParam("profile", "visual_safe"))
@@ -88,9 +88,76 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper 응답에 path가 없으면 RT4040으로 매핑한다")
 	void routeMapsEmptyPathsToRouteNotFound() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withSuccess("{\"paths\":[]}", MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
+			new GeoPointRequest(35.12, 128.936),
+			new GeoPointRequest(35.1315, 128.8823),
+			WalkRouteProfile.PEDESTRIAN_SAFE)))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("GraphHopper snap 지점이 요청 좌표에서 10m를 초과하면 RT4040으로 매핑한다")
+	void routeMapsFarSnappedWaypointToRouteNotFound() {
+		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			.andRespond(withSuccess("""
+				{
+				  "paths": [
+				    {
+				      "distance": 950.5,
+				      "time": 960000,
+				      "points": {
+				        "type": "LineString",
+				        "coordinates": [[128.936,35.12],[128.8823,35.1315]]
+				      },
+				      "snapped_waypoints": {
+				        "type": "LineString",
+				        "coordinates": [[128.9365,35.1205],[128.8823,35.1315]]
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
+			new GeoPointRequest(35.12, 128.936),
+			new GeoPointRequest(35.1315, 128.8823),
+			WalkRouteProfile.PEDESTRIAN_SAFE)))
+			.isInstanceOf(RouteException.class)
+			.extracting(exception -> ((RouteException)exception).getErrorCode())
+			.isEqualTo(RouteErrorCode.ROUTE_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("GraphHopper path detail에 walk_access=NO가 포함되면 RT4040으로 매핑한다")
+	void routeMapsWalkAccessNoToRouteNotFound() {
+		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
+			.andRespond(withSuccess("""
+				{
+				  "paths": [
+				    {
+				      "distance": 950.5,
+				      "time": 960000,
+				      "points": {
+				        "type": "LineString",
+				        "coordinates": [[128.936,35.12],[128.8823,35.1315]]
+				      },
+				      "details": {
+				        "walk_access": [[0,1,"NO"]]
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
 
 		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
 			new GeoPointRequest(35.12, 128.936),
@@ -105,7 +172,7 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper HTTP 실패는 EX5020으로 매핑한다")
 	void routeMapsHttpFailureToExternalRouteApiFailed() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withServerError());
 
@@ -122,7 +189,7 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper ConnectionNotFoundException은 RT4040으로 매핑한다")
 	void routeMapsConnectionNotFoundToRouteNotFound() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -151,7 +218,7 @@ class GraphHopperRouteClientTest {
 	@DisplayName("GraphHopper profile/parameter 오류는 EX5020으로 유지한다")
 	void routeKeepsBadRequestWithoutNoRouteHintAsExternalRouteApiFailed() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
-			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
 			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
 				.contentType(MediaType.APPLICATION_JSON)

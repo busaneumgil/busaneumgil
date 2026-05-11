@@ -18,6 +18,7 @@ import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
 import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.type.RouteWarningCode;
 import com.ssafy.e102.domain.route.type.TransportMode;
 
 class RouteDtoJsonTest {
@@ -65,6 +66,7 @@ class RouteDtoJsonTest {
 		assertThat(route.get("routeOptions").get(0).asText()).isEqualTo("SAFE");
 		assertThat(route.has("transferCount")).isFalse();
 		assertThat(route.get("badges").get(0).asText()).isEqualTo("LOW_SLOPE");
+		assertThat(route.has("warnings")).isFalse();
 		JsonNode leg = route.get("legs").get(0);
 		assertThat(leg.get("type").asText()).isEqualTo("WALK");
 		assertThat(leg.get("role").asText()).isEqualTo("WALK_ONLY");
@@ -84,6 +86,31 @@ class RouteDtoJsonTest {
 		assertThat(guidanceEvent.get("distanceFromRouteStartMeter").decimalValue()).isEqualByComparingTo("12");
 		assertThat(guidanceEvent.get("durationFromRouteStartSecond").asInt()).isEqualTo(35);
 		assertThat(guidanceEvent.get("geometry").asText()).isEqualTo("POINT(128.9360 35.1200)");
+	}
+
+	@Test
+	@DisplayName("transit route warning code는 문자열 배열로 직렬화한다")
+	void transitRouteWarningsSerializeAsCodeArray() throws Exception {
+		WalkRouteSearchResponse response = new WalkRouteSearchResponse(
+			"rs_transit_20260506_abc123",
+			List.of(new RouteSummaryResponse(
+				"pt_rt_001",
+				TransportMode.PUBLIC_TRANSIT,
+				RouteOption.RECOMMENDED,
+				List.of(RouteOption.RECOMMENDED),
+				"transit route",
+				BigDecimal.valueOf(1200),
+				601,
+				10,
+				List.of(),
+				List.of(RouteWarningCode.LOW_FLOOR_BUS_UNAVAILABLE),
+				"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
+				List.of())));
+
+		JsonNode route = objectMapper.readTree(objectMapper.writeValueAsString(response)).get("routes").get(0);
+
+		assertThat(route.get("warnings")).hasSize(1);
+		assertThat(route.get("warnings").get(0).asText()).isEqualTo("LOW_FLOOR_BUS_UNAVAILABLE");
 	}
 
 	@Test

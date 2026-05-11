@@ -43,6 +43,10 @@ class MapFloatingControlsConfigurationTest {
             sharedSource.contains("RoundedCornerShape(EumRadius.scaleS)"),
         )
         assertTrue(
+            "Shared map floating controls should give the current-location action the same corner radius as the zoom stack.",
+            sharedSource.split("RoundedCornerShape(EumRadius.scaleS)").size - 1 >= 2,
+        )
+        assertTrue(
             "Shared map floating controls should preserve the floating overlay elevation.",
             sharedSource.contains("shadowElevation = 6.dp"),
         )

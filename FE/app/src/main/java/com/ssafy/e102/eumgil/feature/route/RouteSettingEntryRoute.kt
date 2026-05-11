@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -44,9 +45,16 @@ fun RouteSettingEntryRoute(
         }
     }
 
-    LaunchedEffect(viewModel, autoStartNavigation, uiState.isStartEnabled, uiState.ctaAcknowledged) {
-        if (autoStartNavigation && uiState.isStartEnabled && !uiState.ctaAcknowledged) {
+    LaunchedEffect(viewModel, autoStartNavigation, uiState.isStartEnabled, uiState.ctaAcknowledged, uiState.pendingTravelMode) {
+        if (autoStartNavigation && uiState.isStartEnabled && !uiState.ctaAcknowledged && uiState.pendingTravelMode == null) {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+        }
+    }
+
+    DisposableEffect(viewModel) {
+        viewModel.startLocationUpdates()
+        onDispose {
+            viewModel.stopLocationUpdates()
         }
     }
 
@@ -55,7 +63,7 @@ fun RouteSettingEntryRoute(
             !initialRouteOptionApplied &&
             initialRouteOption != null &&
             !uiState.isLoading &&
-            uiState.optionCards.isNotEmpty()
+            uiState.optionCards.any { optionCard -> optionCard.routeOption == initialRouteOption }
         ) {
             if (uiState.selectedOption != initialRouteOption) {
                 viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(initialRouteOption))

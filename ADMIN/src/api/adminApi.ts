@@ -82,8 +82,16 @@ async function requestAdminJson<T>(path: string, accessToken: string, init?: Req
       throw error;
     }
     const refreshedToken = await reissueAdminAccessToken();
-    return requestAdminJsonWithToken<T>(path, refreshedToken, init);
+    if (isRetryableAdminRequest(init)) {
+      return requestAdminJsonWithToken<T>(path, refreshedToken, init);
+    }
+    throw new ApiRequestError("인증이 갱신되었습니다. 다시 시도해주세요.", 401);
   }
+}
+
+function isRetryableAdminRequest(init?: RequestInit) {
+  const method = (init?.method || "GET").toUpperCase();
+  return method === "GET" || method === "HEAD";
 }
 
 async function requestAdminJsonWithToken<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {

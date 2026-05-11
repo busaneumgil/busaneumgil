@@ -16,6 +16,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -157,6 +158,42 @@ class LowVisionNavigationRouteTest {
             )
 
             assertEquals(currentOrigin.coordinate, routeRepository.lastWalkQuery?.origin?.coordinate)
+        }
+
+    @Test
+    fun `low vision navigation falls back to default origin when current origin route search fails`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "near-place-id",
+                    name = "Near Place",
+                    address = "Busan",
+                    latitude = 35.164,
+                    longitude = 129.164,
+                ),
+            )
+            val currentOrigin =
+                RouteWaypoint(
+                    name = "Current location",
+                    address = "Current address",
+                    coordinate = com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+                        latitude = 37.5665,
+                        longitude = 126.9780,
+                    ),
+                )
+            val routeRepository = FallbackOriginRouteRepository(currentOrigin = currentOrigin)
+
+            val request =
+                routeRepository.buildLowVisionNavigationRequest(
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    origin = currentOrigin,
+                )
+
+            assertEquals(2, routeRepository.walkQueries.size)
+            assertEquals(currentOrigin.coordinate, routeRepository.walkQueries.first().origin.coordinate)
+            assertTrue(routeRepository.walkQueries.last().origin.coordinate != currentOrigin.coordinate)
+            assertEquals("fallback-search", request?.selectionHandoff?.searchId)
         }
 
     @Test
@@ -369,6 +406,58 @@ private class OriginTrackingRouteRepository : RouteRepository {
         routeId: String,
         searchId: String,
     ): RouteSessionData = RouteSessionData(sessionId = "session-origin")
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = throw IllegalStateException("refresh failed")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    ): RouteRerouteData = throw IllegalStateException("reroute failed")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData =
+        throw IllegalStateException("end route failed")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = throw IllegalStateException("rating failed")
+}
+
+private class FallbackOriginRouteRepository(
+    private val currentOrigin: RouteWaypoint,
+) : RouteRepository {
+    val walkQueries = mutableListOf<RouteSearchQuery>()
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("cached route search should not be used for low vision navigation start")
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkQueries += query
+        if (query.origin.coordinate == currentOrigin.coordinate) {
+            throw RouteApiException(
+                httpStatusCode = 400,
+                status = "OUT_OF_SERVICE_AREA",
+                message = "out of service area",
+            )
+        }
+        return lowVisionRouteSearchData(
+            query = query,
+            searchId = "fallback-search",
+            routeId = "fallback-route",
+            distanceMeters = 120.0,
+        )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("transit route search was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData = RouteSessionData(sessionId = "session-fallback")
 
     override suspend fun refreshTransit(
         routeId: String,

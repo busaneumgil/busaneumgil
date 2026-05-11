@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.toRouteWaypointOrNull
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationSelectionHandoff
 import kotlinx.coroutines.CancellationException
@@ -26,13 +27,15 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
 ): LowVisionNavigationPlan? {
     val destination = destinationSelectionRepository.selectedDestination.value.toLowVisionRouteWaypoint()
     val walkSearchData =
-        getFreshRouteSearchData(
-            RouteSearchQuery(
-                origin = origin,
-                destination = destination,
-                requestedOptions = LOW_VISION_WALK_OPTIONS,
-            ),
+        getFreshLowVisionWalkRouteSearchData(
+            query =
+                RouteSearchQuery(
+                    origin = origin,
+                    destination = destination,
+                    requestedOptions = LOW_VISION_WALK_OPTIONS,
+                ),
         )
+    val resolvedOrigin = walkSearchData.query.origin
     val selectedWalkRoute =
         walkSearchData.findRoute(RouteOption.SAFE)
             ?: walkSearchData.primaryRoute
@@ -49,7 +52,7 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
         runCatching {
             getFreshTransitRouteSearchData(
                 RouteSearchQuery(
-                    origin = origin,
+                    origin = resolvedOrigin,
                     destination = destination,
                     requestedOptions = LOW_VISION_TRANSIT_OPTIONS,
                 ),
@@ -115,6 +118,22 @@ internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
         null
     }
 }
+
+private suspend fun RouteRepository.getFreshLowVisionWalkRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+    try {
+        getFreshRouteSearchData(query)
+    } catch (throwable: Throwable) {
+        if (throwable is CancellationException ||
+            throwable !is RouteApiException ||
+            query.origin.isLowVisionDefaultOrigin()
+        ) {
+            throw throwable
+        }
+        getFreshRouteSearchData(query.copy(origin = LOW_VISION_DEFAULT_ORIGIN))
+    }
+
+private fun RouteWaypoint.isLowVisionDefaultOrigin(): Boolean =
+    coordinate == LOW_VISION_DEFAULT_ORIGIN.coordinate
 
 private fun PlaceDestination?.toLowVisionRouteWaypoint(): RouteWaypoint =
     this?.toRouteWaypointOrNull() ?: LOW_VISION_DEFAULT_DESTINATION

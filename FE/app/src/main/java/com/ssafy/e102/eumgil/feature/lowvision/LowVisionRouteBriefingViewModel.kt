@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.feature.navigation.NavigationBriefingItem
@@ -87,11 +88,7 @@ class LowVisionRouteBriefingViewModel(
     private val mutableUiState = MutableStateFlow(LowVisionRouteBriefingUiState())
     val uiState = mutableUiState.asStateFlow()
 
-    init {
-        loadBriefing()
-    }
-
-    private fun loadBriefing() {
+    fun loadBriefing(origin: RouteWaypoint) {
         mutableUiState.update { state ->
             state.copy(
                 isLoading = true,
@@ -101,7 +98,10 @@ class LowVisionRouteBriefingViewModel(
 
         viewModelScope.launch {
             runCatching {
-                routeRepository.buildLowVisionNavigationPlan(destinationSelectionRepository)
+                routeRepository.buildLowVisionNavigationPlan(
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    origin = origin,
+                )
             }.onSuccess { plan ->
                 mutableUiState.update { state ->
                     state.copy(

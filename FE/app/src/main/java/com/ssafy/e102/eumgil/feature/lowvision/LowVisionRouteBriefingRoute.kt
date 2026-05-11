@@ -45,6 +45,9 @@ fun LowVisionRouteBriefingRoute(
             ViewModelProvider(owner, viewModelFactory)[LowVisionRouteBriefingViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedDestination by
+        appContainer.destinationSelectionRepository.selectedDestination.collectAsStateWithLifecycle()
+    val latestLocation by appContainer.currentLocationManager.latestLocation.collectAsStateWithLifecycle()
     val ttsController =
         remember(appContext) {
             AndroidTextToSpeechController(
@@ -56,6 +59,14 @@ fun LowVisionRouteBriefingRoute(
     var playbackActive by rememberSaveable { mutableStateOf(false) }
     var playbackToken by rememberSaveable { mutableIntStateOf(ttsState.completedUtteranceCount) }
     var visibleStepStartIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(appContainer.currentLocationManager) {
+        appContainer.currentLocationManager.refreshLatestLocation()
+    }
+
+    LaunchedEffect(viewModel, selectedDestination, latestLocation) {
+        viewModel.loadBriefing(origin = latestLocation.toLowVisionRouteOriginWaypoint())
+    }
 
     LaunchedEffect(uiState.steps) {
         visibleStepStartIndex = 0

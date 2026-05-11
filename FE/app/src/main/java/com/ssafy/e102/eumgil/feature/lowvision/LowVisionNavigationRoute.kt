@@ -47,6 +47,9 @@ fun LowVisionNavigationRoute(
             ViewModelProvider(owner, viewModelFactory)[NavigationViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedDestination by
+        appContainer.destinationSelectionRepository.selectedDestination.collectAsStateWithLifecycle()
+    val latestLocation by appContainer.currentLocationManager.latestLocation.collectAsStateWithLifecycle()
     var loadErrorMessage by remember { mutableStateOf<String?>(null) }
     val currentLocationAddressResolver =
         remember(appContext) { AndroidCurrentLocationAddressResolver(context = appContext) }
@@ -56,11 +59,18 @@ fun LowVisionNavigationRoute(
             addressResolver = currentLocationAddressResolver,
         )
 
-    LaunchedEffect(appContainer.destinationSelectionRepository.selectedDestination.value) {
+    LaunchedEffect(appContainer.currentLocationManager) {
+        appContainer.currentLocationManager.refreshLatestLocation()
+    }
+
+    LaunchedEffect(selectedDestination, latestLocation) {
         loadErrorMessage = null
         val request =
             appContainer.routeRepository
-                .buildLowVisionNavigationRequest(appContainer.destinationSelectionRepository)
+                .buildLowVisionNavigationRequest(
+                    destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                    origin = latestLocation.toLowVisionRouteOriginWaypoint(),
+                )
         if (request == null) {
             loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE
         } else {

@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
@@ -19,7 +20,9 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationUiEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 
 class LowVisionNavigationRouteTest {
@@ -122,6 +125,52 @@ class LowVisionNavigationRouteTest {
             assertEquals("walk-route", request?.selectionHandoff?.routeId)
             assertEquals("fresh-walk-search", request?.selectionHandoff?.searchId)
             assertTrue(routeRepository.freshTransitSearchCalled)
+        }
+
+    @Test
+    fun `low vision navigation request uses current location origin when provided`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "near-place-id",
+                    name = "Near Place",
+                    address = "Busan",
+                    latitude = 35.164,
+                    longitude = 129.164,
+                ),
+            )
+            val currentOrigin =
+                RouteWaypoint(
+                    name = "Current location",
+                    address = "Current address",
+                    coordinate = com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+                        latitude = 35.163,
+                        longitude = 129.163,
+                    ),
+                )
+            val routeRepository = OriginTrackingRouteRepository()
+
+            routeRepository.buildLowVisionNavigationRequest(
+                destinationSelectionRepository = destinationSelectionRepository,
+                origin = currentOrigin,
+            )
+
+            assertEquals(currentOrigin.coordinate, routeRepository.lastWalkQuery?.origin?.coordinate)
+        }
+
+    @Test
+    fun `low vision navigation request preserves coroutine cancellation`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+
+            try {
+                CancellationRouteRepository()
+                    .buildLowVisionNavigationRequest(destinationSelectionRepository)
+                fail("CancellationException should be rethrown")
+            } catch (_: CancellationException) {
+                // Expected cancellation should not be converted into a route load failure.
+            }
         }
 }
 
@@ -277,6 +326,83 @@ private class TransitFailureFallbackRouteRepository : RouteRepository {
         assertEquals("fresh-walk-search", searchId)
         return RouteSessionData(sessionId = "session-walk")
     }
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = throw IllegalStateException("refresh failed")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    ): RouteRerouteData = throw IllegalStateException("reroute failed")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData =
+        throw IllegalStateException("end route failed")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = throw IllegalStateException("rating failed")
+}
+
+private class OriginTrackingRouteRepository : RouteRepository {
+    var lastWalkQuery: RouteSearchQuery? = null
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("cached route search should not be used for low vision navigation start")
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        lastWalkQuery = query
+        return lowVisionRouteSearchData(
+            query = query,
+            searchId = "origin-search",
+            routeId = "origin-route",
+            distanceMeters = 120.0,
+        )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("transit route search was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData = RouteSessionData(sessionId = "session-origin")
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = throw IllegalStateException("refresh failed")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    ): RouteRerouteData = throw IllegalStateException("reroute failed")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData =
+        throw IllegalStateException("end route failed")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = throw IllegalStateException("rating failed")
+}
+
+private class CancellationRouteRepository : RouteRepository {
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("cached route search should not be used for low vision navigation start")
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        throw CancellationException("origin changed")
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("transit route search was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData = throw IllegalStateException("select route failed")
 
     override suspend fun refreshTransit(
         routeId: String,

@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
@@ -21,12 +22,13 @@ internal data class LowVisionNavigationPlan(
 
 internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
     destinationSelectionRepository: DestinationSelectionRepository,
+    origin: RouteWaypoint = LOW_VISION_DEFAULT_ORIGIN,
 ): LowVisionNavigationPlan? {
     val destination = destinationSelectionRepository.selectedDestination.value.toLowVisionRouteWaypoint()
     val walkSearchData =
         getFreshRouteSearchData(
             RouteSearchQuery(
-                origin = LOW_VISION_DEFAULT_ORIGIN,
+                origin = origin,
                 destination = destination,
                 requestedOptions = LOW_VISION_WALK_OPTIONS,
             ),
@@ -47,12 +49,13 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
         runCatching {
             getFreshTransitRouteSearchData(
                 RouteSearchQuery(
-                    origin = LOW_VISION_DEFAULT_ORIGIN,
+                    origin = origin,
                     destination = destination,
                     requestedOptions = LOW_VISION_TRANSIT_OPTIONS,
                 ),
             )
-        }.getOrElse {
+        }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
             return LowVisionNavigationPlan(
                 searchData = walkSearchData,
                 selectedRoute = selectedWalkRoute,
@@ -75,9 +78,14 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
 
 internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
     destinationSelectionRepository: DestinationSelectionRepository,
+    origin: RouteWaypoint = LOW_VISION_DEFAULT_ORIGIN,
 ): RouteNavigationRequest? {
     return try {
-        val plan = buildLowVisionNavigationPlan(destinationSelectionRepository) ?: return null
+        val plan =
+            buildLowVisionNavigationPlan(
+                destinationSelectionRepository = destinationSelectionRepository,
+                origin = origin,
+            ) ?: return null
         val searchId = plan.searchData.searchId?.takeIf(String::isNotBlank) ?: return null
         val routeId =
             plan.selectedRoute.serverRouteId?.takeIf(String::isNotBlank)
@@ -110,6 +118,15 @@ internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
 
 private fun PlaceDestination?.toLowVisionRouteWaypoint(): RouteWaypoint =
     this?.toRouteWaypointOrNull() ?: LOW_VISION_DEFAULT_DESTINATION
+
+internal fun LocationSnapshot?.toLowVisionRouteOriginWaypoint(): RouteWaypoint =
+    this?.let { snapshot ->
+        RouteWaypoint(
+            name = "\uD604\uC7AC \uC704\uCE58",
+            address = "\uD604\uC7AC \uC704\uCE58",
+            coordinate = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude),
+        )
+    } ?: LOW_VISION_DEFAULT_ORIGIN
 
 private val LOW_VISION_DEFAULT_ORIGIN =
     RouteWaypoint(

@@ -123,11 +123,14 @@ export function storeAdminAccessToken(accessToken: string) {
   window.localStorage.setItem(adminAccessTokenStorageKey, normalizedToken);
 }
 
-export async function reissueAdminAccessToken() {
+export async function reissueAdminAccessToken({ persist = true }: { persist?: boolean } = {}) {
   const response = await requestJson<TokenResponse>("/auth/reissue", {
     method: "POST",
   });
   const normalizedToken = normalizeAdminAccessToken(response.accessToken);
+  if (!persist) {
+    return normalizedToken;
+  }
   storeAdminAccessToken(normalizedToken);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(adminAccessTokenRefreshedEvent, { detail: normalizedToken }));
@@ -144,7 +147,7 @@ export async function logoutAdminSession(accessToken: string) {
     if (!(error instanceof ApiRequestError) || error.status !== 401) {
       throw error;
     }
-    await logoutAdminSessionWithToken(await reissueAdminAccessToken());
+    await logoutAdminSessionWithToken(await reissueAdminAccessToken({ persist: false }));
   }
 }
 

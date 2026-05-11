@@ -32,6 +32,7 @@ PROD_ADMIN_INGRESS = ROOT_DIR / "scripts" / "deploy" / "prod-admin-ingress.sh"
 PROD_UP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up.sh"
 PROD_UP_GRAPHHOPPER = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up-graphhopper.sh"
 PROD_GRAPHHOPPER_BOOTSTRAP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-graphhopper-bootstrap.sh"
+JENKINS_COMPOSE = ROOT_DIR / "INF" / "jenkins" / "s1" / "docker-compose.yml"
 
 
 class ProdDeployScriptsTest(unittest.TestCase):
@@ -96,11 +97,12 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_jenkinsfile_uploads_prod_env_via_temp_file_then_rename(self):
         content = JENKINSFILE.read_text(encoding="utf-8")
 
-        self.assertIn('/var/jenkins_home/prod-secrets/.env.prod', content)
+        self.assertIn("file(credentialsId: 'e102-prod-env-file'", content)
+        self.assertIn('"$PROD_ENV"', content)
         self.assertIn('.env.prod.upload', content)
         self.assertIn('mv -f .env.prod.upload .env.prod', content)
         self.assertIn("chmod +x scripts/deploy/*.sh", content)
-        self.assertNotIn("file(credentialsId: 'e102-prod-env-file'", content)
+        self.assertNotIn('/var/jenkins_home/prod-secrets/.env.prod', content)
 
     def test_jenkinsfile_uses_pipeline_params_for_remote_flags(self):
         content = JENKINSFILE.read_text(encoding="utf-8")
@@ -198,8 +200,9 @@ class ProdDeployScriptsTest(unittest.TestCase):
         content = DEV_JENKINSFILE.read_text(encoding="utf-8")
 
         self.assertIn("up -d --build", content)
-        self.assertIn("cp /opt/e102-server/.env.dev .env.dev", content)
-        self.assertNotIn("file(credentialsId: 'e102-dev-env-file'", content)
+        self.assertIn("file(credentialsId: 'e102-dev-env-file'", content)
+        self.assertIn('cp "$E102_DEV_ENV" .env.dev', content)
+        self.assertNotIn("/opt/e102-server/.env.dev", content)
         self.assertNotIn("-o /tmp/e102-ai-health.json", content)
         self.assertNotIn("-o /tmp/e102-ai-voice-analyze.json", content)
         self.assertIn("AI_HEALTH_BODY=", content)
@@ -235,19 +238,41 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_prod_credential_bootstrap_keeps_only_non_env_credentials(self):
         content = PROD_CREDENTIAL_BOOTSTRAP.read_text(encoding="utf-8")
 
-        self.assertIn("removeIfExists('e102-dev-env-file')", content)
-        self.assertIn("removeIfExists('e102-prod-env-file')", content)
+        self.assertNotIn("e102-dev-env-file", content)
+        self.assertNotIn("e102-prod-env-file", content)
         self.assertNotIn("upsertFileCredential", content)
+        self.assertNotIn("FileCredentialsImpl", content)
         self.assertIn("e102-s2-host", content)
         self.assertIn("e102-s2-ssh-key", content)
         self.assertIn("e102-mattermost-webhook-url", content)
 
-    def test_jenkins_readme_documents_host_env_files_as_source_of_truth(self):
+    def test_jenkins_readme_documents_env_credentials_as_source_of_truth(self):
         content = JENKINS_README.read_text(encoding="utf-8")
 
-        self.assertIn("/opt/e102-server/.env.dev", content)
-        self.assertIn("/var/jenkins_home/prod-secrets/.env.prod", content)
+        self.assertIn("e102-dev-env-file", content)
+        self.assertIn("e102-prod-env-file", content)
+        self.assertIn("source of truth", content)
+        self.assertNotIn("host mounted env file", content)
         self.assertNotIn("02-e102-env-credentials.groovy", content)
+
+    def test_jenkins_container_does_not_mount_deploy_env_files(self):
+        content = JENKINS_COMPOSE.read_text(encoding="utf-8")
+
+        self.assertNotIn('/home/ubuntu/e102/.env.dev:/opt/e102-server/.env.dev', content)
+        self.assertNotIn('/home/ubuntu/e102/prod-secrets/.env.prod:/opt/e102-server/.env.prod', content)
+
+    def test_init_groovy_does_not_overwrite_env_file_credentials(self):
+        content = PROD_CREDENTIAL_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertNotIn('e102-dev-env-file', content)
+        self.assertNotIn('e102-prod-env-file', content)
+        self.assertNotIn('FileCredentialsImpl', content)
+
+    def test_compose_passes_cors_allowed_origins_to_backend(self):
+        for compose_file in (DEV_COMPOSE, LOCAL_COMPOSE, PROD_COMPOSE):
+            with self.subTest(compose_file=compose_file.name):
+                content = compose_file.read_text(encoding="utf-8")
+                self.assertIn('CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-', content)
 
 
 if __name__ == "__main__":

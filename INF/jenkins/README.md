@@ -35,7 +35,7 @@ Mattermost 배포 알림 webhook도 같은 흐름으로 관리한다.
 MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
 ```
 
-Jenkins container는 `.env.jenkins` 값을 환경변수로 읽고, init groovy가 `e102-mattermost-webhook-url` credential도 함께 동기화한다. Jenkinsfile은 현재 기준으로 환경변수를 직접 읽으며, webhook URL이 없으면 알림만 건너뛰고 배포 자체는 계속 진행한다.
+Jenkins container는 `.env.jenkins` 값을 환경변수로 읽고, init groovy가 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url` 같은 운영 보조 credential을 동기화한다. 배포용 `.env.dev`와 `.env.prod`는 Jenkins Secret file credential이 원본이며, host 파일 mount로 동기화하지 않는다.
 
 ## 2026-04-29 반영 상태
 
@@ -73,7 +73,7 @@ PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는�
 처리 순서:
 
 1. GitLab `develop` checkout
-2. S1에 mount된 `/opt/e102-server/.env.dev`, override compose 복사
+2. Jenkins `e102-dev-env-file` credential을 `.env.dev`로 복사하고 S1 override compose 복사
 3. `docker compose config --quiet`
 4. `PostGIS`, `Redis`, `MinIO`, `AI` 기동
 5. GraphHopper graph-cache volume 확인
@@ -93,25 +93,23 @@ Mattermost 알림:
 
 ## Secrets
 
-Jenkins job에서 사용하는 secret은 두 경로로 나뉜다.
+Jenkins job에서 사용하는 secret은 Jenkins Credentials를 source of truth로 둔다.
 
-- 배포용 env 파일의 원본은 S1 host mounted secret file이다.
-- Jenkins Credentials는 GitLab checkout, S2 SSH, Mattermost webhook처럼 Jenkins가 직접 참조해야 하는 값만 관리한다.
+- 배포용 `.env.dev`, `.env.prod`는 Jenkins Secret file credential이다.
+- S2 SSH key, Mattermost webhook처럼 Jenkins가 직접 참조해야 하는 값도 Jenkins Credentials로 관리한다.
 
 | Credential ID | 종류 | 용도 | 상태 |
 |---|---|---|---|
 | `gitlab-pat` | Username/Password 또는 Secret text | GitLab repository checkout | 적용 완료 |
+| `e102-dev-env-file` | Secret file | S1 dev 배포 env 파일 | 적용 완료 |
+| `e102-prod-env-file` | Secret file | S2 prod 배포 env 파일 | 적용 완료 |
 | `e102-s2-host` | Secret text | S2 SSH host 또는 IP | 적용 완료 |
 | `e102-s2-ssh-key` | SSH Username with private key | S2 배포 SSH 접속 | 적용 완료 |
 | `e102-mattermost-webhook-url` | Secret text | Jenkins/MM 배포 알림 webhook | 적용 예정 |
 
-dev 배포용 env 원본은 S1 host의 `/home/ubuntu/e102/.env.dev`이고, Jenkins 컨테이너에서는 `/opt/e102-server/.env.dev`로 read-only mount해 직접 사용한다.
+`e102-dev-env-file`과 `e102-prod-env-file`은 Jenkins UI/API에서 Secret file credential로 직접 교체한다. 이 두 credential이 배포 env의 source of truth다. 값을 바꿀 때는 서버에 SSH로 접속해 host `.env` 파일을 수정하지 말고, Jenkins credential 파일을 새 버전으로 교체한 뒤 해당 배포 job을 실행한다.
 
-prod 배포용 env 원본은 S1 host의 `/home/ubuntu/e102/prod-secrets/.env.prod`이고, Jenkins 컨테이너에서는 `/var/jenkins_home/prod-secrets/.env.prod`로 read-only mount해 직접 사용한다.
-
-이 구조로 바꾼 이유는 env file을 Jenkins credential로 한 번 더 복제하면 host file, Jenkins credential, workspace temp file이 서로 drift할 수 있기 때문이다. 현재 기준의 source of truth는 host mounted env file이고, Jenkins는 그 파일을 직접 읽는 consumer다.
-
-Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`는 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url`만 동기화한다.
+S1 `/home/ubuntu/e102/prod-secrets` 하위는 S2 SSH key 같은 Jenkins bootstrap 보조 파일만 보관한다. Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`는 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url`만 동기화하고, `e102-dev-env-file`/`e102-prod-env-file`은 덮어쓰지 않는다.
 
 현재 prod는 초기 환경 bootstrap 단계이므로 `.env.prod`의 `JPA_DDL_AUTO`를 `update`로 두고 테이블/컬럼을 먼저 생성한다. 운영 모드로 전환하기 전에는 반드시 `.env.prod` 값을 `validate`로 되돌리고 한 번 더 배포해 schema drift를 차단한다.
 

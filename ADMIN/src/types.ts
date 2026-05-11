@@ -267,6 +267,17 @@ export interface RoadNetworkEditApplyResponse {
   snappedNodeIds: number[];
 }
 
+export type RoadNetworkEditJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+
+export interface RoadNetworkEditJobResponse {
+  jobId: number;
+  status: RoadNetworkEditJobStatus;
+  totalEdits: number;
+  processedEdits: number;
+  message: string;
+  result?: RoadNetworkEditApplyResponse | null;
+}
+
 export type HazardReportStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type HazardReportType =

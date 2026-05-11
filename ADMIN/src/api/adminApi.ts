@@ -7,6 +7,7 @@ import type {
   FacilityPayload,
   ManualEditDocument,
   RoadNetworkEditApplyResponse,
+  RoadNetworkEditJobResponse,
   HazardReportStatus,
   SegmentPayload,
 } from "../types";
@@ -124,6 +125,26 @@ export async function applyAdminRoadNetworkEdits(
     },
     body: JSON.stringify({ edits: document.edits }),
   });
+}
+
+export async function createAdminRoadNetworkEditJob(
+  document: ManualEditDocument,
+  accessToken: string,
+): Promise<RoadNetworkEditJobResponse> {
+  return requestAdminJson<RoadNetworkEditJobResponse>("/admin/road-network/edits/jobs", accessToken, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ edits: document.edits }),
+  });
+}
+
+export async function fetchAdminRoadNetworkEditJob(
+  jobId: number,
+  accessToken: string,
+): Promise<RoadNetworkEditJobResponse> {
+  return requestAdminJson<RoadNetworkEditJobResponse>(`/admin/road-network/edits/jobs/${jobId}`, accessToken);
 }
 
 export async function fetchAdminFacilityPayload({

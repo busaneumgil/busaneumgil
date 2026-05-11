@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import {
-  applyAdminRoadNetworkEdits,
+  createAdminRoadNetworkEditJob,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
   fetchAdminRoadNetworkPayload,
+  fetchAdminRoadNetworkEditJob,
   getStoredAdminAccessToken,
   storeAdminAccessToken,
 } from "./api/adminApi";
@@ -15,7 +16,7 @@ import { facilityCategoryLabel } from "./map/facilityStyle";
 import { SegmentMap, type RoadviewDockState } from "./map/SegmentMap";
 import { HazardReportsPage } from "./report/HazardReportsPage";
 import { useAdminStore } from "./store/adminStore";
-import type { AdminMeResponse, AdminPage, FacilityFeature, SegmentFeature } from "./types";
+import type { AdminMeResponse, AdminPage, FacilityFeature, RoadNetworkEditJobResponse, SegmentFeature } from "./types";
 
 const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
@@ -54,6 +55,9 @@ function AdminApp() {
   const [accessToken, setAccessToken] = useState(getStoredAdminAccessToken);
   const [tokenInput, setTokenInput] = useState(accessToken);
   const [adminPrincipal, setAdminPrincipal] = useState<AdminMeResponse | null>(null);
+  const [activeRoadEditJobId, setActiveRoadEditJobId] = useState<number | null>(null);
+  const [lastRoadEditJob, setLastRoadEditJob] = useState<RoadNetworkEditJobResponse | null>(null);
+  const completedRoadEditJobIdRef = useRef<number | null>(null);
   const {
     page,
     selectedGu,
@@ -104,7 +108,7 @@ function AdminApp() {
   });
 
   const applyRoadNetworkMutation = useMutation({
-    mutationFn: () => applyAdminRoadNetworkEdits({
+    mutationFn: () => createAdminRoadNetworkEditJob({
       version: "ADMIN-draft-v1",
       assignmentId: `${selectedGu}:${selectedDong}`,
       gu: selectedGu,
@@ -113,13 +117,44 @@ function AdminApp() {
       createdAt: new Date().toISOString(),
       edits: draftEdits,
     }, accessToken),
-    onSuccess: () => {
-      markApplied();
-      setSelectedSegment(null);
-      queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
+    onSuccess: (job) => {
+      completedRoadEditJobIdRef.current = null;
+      setLastRoadEditJob(job);
+      setActiveRoadEditJobId(job.jobId);
     },
   });
+
+  const roadEditJobQuery = useQuery({
+    queryKey: ["admin-road-network-edit-job", activeRoadEditJobId, accessToken],
+    queryFn: () => fetchAdminRoadNetworkEditJob(activeRoadEditJobId!, accessToken),
+    enabled: activeRoadEditJobId !== null && isAdminAuthenticated,
+    refetchInterval: activeRoadEditJobId === null ? false : 2000,
+    retry: false,
+  });
+
+  const activeRoadEditJob = roadEditJobQuery.data ?? lastRoadEditJob;
+  const isRoadEditJobRunning = activeRoadEditJob?.status === "PENDING" || activeRoadEditJob?.status === "RUNNING";
+  const roadEditResult = activeRoadEditJob?.result ?? null;
+
+  useEffect(() => {
+    if (!activeRoadEditJob || activeRoadEditJob.status === "PENDING" || activeRoadEditJob.status === "RUNNING") {
+      return;
+    }
+    setLastRoadEditJob(activeRoadEditJob);
+    if (activeRoadEditJob.status === "FAILED") {
+      setActiveRoadEditJobId(null);
+      return;
+    }
+    if (completedRoadEditJobIdRef.current === activeRoadEditJob.jobId) {
+      return;
+    }
+    completedRoadEditJobIdRef.current = activeRoadEditJob.jobId;
+    markApplied();
+    setSelectedSegment(null);
+    setActiveRoadEditJobId(null);
+    queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
+  }, [activeRoadEditJob, markApplied]);
 
   const filteredDongs = useMemo(() => {
     const areas = areasQuery.data ?? [];
@@ -303,23 +338,32 @@ function AdminApp() {
                 <button
                   className="primary"
                   onClick={() => applyRoadNetworkMutation.mutate()}
-                  disabled={!draftEdits.length || applyRoadNetworkMutation.isPending}
+                  disabled={!draftEdits.length || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                 >
-                  {applyRoadNetworkMutation.isPending ? "DB 반영 중" : "DB 반영"}
+                  {applyRoadNetworkMutation.isPending || isRoadEditJobRunning ? "DB 반영 중" : "DB 반영"}
                 </button>
-                <button onClick={requestReview} disabled={!draftEdits.length || applyRoadNetworkMutation.isPending}>
+                <button onClick={requestReview} disabled={!draftEdits.length || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}>
                   Request Review
                 </button>
-                {applyRoadNetworkMutation.data && (
+                {activeRoadEditJob && (
                   <p className="muted">
-                    반영 완료: 추가 {applyRoadNetworkMutation.data.addedSegments}, 삭제 {applyRoadNetworkMutation.data.deletedSegments},
-                    생성 node {applyRoadNetworkMutation.data.createdNodes}, snap {applyRoadNetworkMutation.data.snappedNodes}
+                    작업 #{activeRoadEditJob.jobId} {activeRoadEditJob.message}
+                    {roadEditResult && (
+                      <>
+                        {" "}추가 {roadEditResult.addedSegments}, 삭제 {roadEditResult.deletedSegments},
+                        생성 node {roadEditResult.createdNodes}, snap {roadEditResult.snappedNodes}
+                      </>
+                    )}
                   </p>
                 )}
-                {applyRoadNetworkMutation.error && (
-                  <p className="error-box">{applyRoadNetworkMutation.error.message}</p>
+                {(applyRoadNetworkMutation.error || roadEditJobQuery.error || activeRoadEditJob?.status === "FAILED") && (
+                  <p className="error-box">
+                    {applyRoadNetworkMutation.error?.message
+                      || roadEditJobQuery.error?.message
+                      || activeRoadEditJob?.message}
+                  </p>
                 )}
-                <p className="muted">로컬 draft를 DB road_nodes, road_segments, segment_features에 트랜잭션으로 반영합니다.</p>
+                <p className="muted">로컬 draft를 비동기 작업으로 등록한 뒤 DB road_nodes, road_segments, segment_features에 반영합니다.</p>
               </section>
             </aside>
           </div>

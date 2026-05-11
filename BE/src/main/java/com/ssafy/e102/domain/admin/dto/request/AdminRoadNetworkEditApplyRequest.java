@@ -6,9 +6,10 @@ import com.ssafy.e102.domain.route.type.SegmentType;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 
 public record AdminRoadNetworkEditApplyRequest(
-	@NotEmpty
+	@NotEmpty @Size(max = 1000)
 	List<@Valid Edit> edits) {
 
 	public record Edit(

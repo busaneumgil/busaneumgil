@@ -18,8 +18,10 @@ import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
+import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditJobService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditService;
 import com.ssafy.e102.global.response.ApiResponse;
 
@@ -41,6 +43,7 @@ public class AdminMapController {
 
 	private final AdminMapService adminMapService;
 	private final AdminRoadNetworkEditService adminRoadNetworkEditService;
+	private final AdminRoadNetworkEditJobService adminRoadNetworkEditJobService;
 
 	@Operation(summary = "관리자 검수 구/동 목록 조회", description = "DB에 적재된 admin_areas의 gu/dong 목록을 조회한다.")
 	@GetMapping("/areas")
@@ -66,6 +69,22 @@ public class AdminMapController {
 		@RequestBody @Valid
 		AdminRoadNetworkEditApplyRequest request) {
 		return ApiResponse.success(adminRoadNetworkEditService.apply(request));
+	}
+
+	@Operation(summary = "관리자 보행 네트워크 편집 반영 작업 생성", description = "대량 add/delete draft를 비동기 작업으로 등록하고 jobId를 반환한다.")
+	@PostMapping("/road-network/edits/jobs")
+	public ApiResponse<AdminRoadNetworkEditJobResponse> createRoadNetworkEditJob(
+		@RequestBody @Valid
+		AdminRoadNetworkEditApplyRequest request) {
+		return ApiResponse.success(adminRoadNetworkEditJobService.create(request));
+	}
+
+	@Operation(summary = "관리자 보행 네트워크 편집 반영 작업 조회", description = "비동기 편집 반영 작업의 처리 상태와 결과를 조회한다.")
+	@GetMapping("/road-network/edits/jobs/{jobId}")
+	public ApiResponse<AdminRoadNetworkEditJobResponse> getRoadNetworkEditJob(
+		@Parameter(description = "조회할 편집 반영 작업 ID") @PathVariable @Positive
+		Long jobId) {
+		return ApiResponse.success(adminRoadNetworkEditJobService.findById(jobId));
 	}
 
 	@Operation(summary = "관리자 편의시설 조회", description = "DB에 적재된 places를 GeoJSON 형태로 조회한다.")

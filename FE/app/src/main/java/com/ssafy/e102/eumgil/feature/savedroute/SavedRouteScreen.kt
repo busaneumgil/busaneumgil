@@ -38,9 +38,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
@@ -141,10 +146,22 @@ private fun SavedRouteTopBar(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            val editModeDescription =
+                stringResource(
+                    id =
+                        if (isEditMode) {
+                            R.string.saved_route_edit_mode_active_a11y
+                        } else {
+                            R.string.saved_route_edit_mode_inactive_a11y
+                        },
+                )
             TextButton(
                 onClick = onActionClick,
                 enabled = isActionEnabled,
-                modifier = Modifier.align(Alignment.CenterEnd),
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .semantics { contentDescription = editModeDescription },
                 contentPadding = PaddingValues(horizontal = EumSpacing.small, vertical = 6.dp),
             ) {
                 Text(
@@ -211,10 +228,23 @@ private fun SavedBookmarkTabButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val tabSelectedStateDescription = stringResource(id = R.string.a11y_tab_selected)
+    val tabUnselectedStateDescription = stringResource(id = R.string.a11y_tab_unselected)
+
     Surface(
         modifier =
             modifier
                 .clip(RoundedCornerShape(EumRadius.full))
+                .semantics {
+                    role = Role.Tab
+                    this.selected = selected
+                    stateDescription =
+                        if (selected) {
+                            tabSelectedStateDescription
+                        } else {
+                            tabUnselectedStateDescription
+                        }
+                }
                 .clickable(
                     role = Role.Tab,
                     onClick = onClick,
@@ -427,7 +457,15 @@ private fun SavedBookmarkStateCard(
         }
 
     Surface(
-        modifier = modifier,
+        modifier =
+            modifier.semantics {
+                liveRegion =
+                    when {
+                        isError -> LiveRegionMode.Assertive
+                        isLoading -> LiveRegionMode.Polite
+                        else -> LiveRegionMode.Polite
+                    }
+            },
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, borderColor),
@@ -601,6 +639,7 @@ private fun SavedPlaceListItem(
                 isEditMode = isEditMode,
                 enabled = isActionEnabled,
                 onClick = onPrimaryActionClick,
+                accessibilityContext = place.name,
             )
         }
     }
@@ -698,6 +737,7 @@ private fun SavedRouteBookmarkListItem(
                 isEditMode = isEditMode,
                 enabled = isActionEnabled,
                 onClick = onPrimaryActionClick,
+                accessibilityContext = routeBookmark.routeName,
             )
         }
     }
@@ -709,13 +749,28 @@ private fun SavedBookmarkPrimaryActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    accessibilityContext: String? = null,
 ) {
     val shape = RoundedCornerShape(EumRadius.full)
+    val accessibilityLabel =
+        accessibilityContext?.let { context ->
+            if (isEditMode) {
+                stringResource(id = R.string.saved_route_action_remove_a11y, context)
+            } else {
+                stringResource(id = R.string.saved_route_action_start_a11y, context)
+            }
+        }
+    val sharedModifier =
+        if (accessibilityLabel != null) {
+            modifier.semantics { contentDescription = accessibilityLabel }
+        } else {
+            modifier
+        }
     if (isEditMode) {
         Button(
             onClick = onClick,
             modifier =
-                modifier.heightIn(min = 42.dp),
+                sharedModifier.heightIn(min = 42.dp),
             enabled = enabled,
             shape = shape,
             colors =
@@ -736,7 +791,7 @@ private fun SavedBookmarkPrimaryActionButton(
         OutlinedButton(
             onClick = onClick,
             modifier =
-                modifier.heightIn(min = 42.dp),
+                sharedModifier.heightIn(min = 42.dp),
             enabled = enabled,
             shape = shape,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.36f)),

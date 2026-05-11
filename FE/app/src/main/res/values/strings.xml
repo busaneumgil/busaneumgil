@@ -262,6 +262,10 @@
     <string name="report_submit_failure_unknown">제보 등록에 실패했습니다. 다시 시도해 주세요.</string>
     <string name="saved_route_address_empty">주소 정보 없음</string>
     <string name="saved_route_edit">편집</string>
+    <string name="saved_route_edit_mode_active_a11y">편집 모드입니다. 완료하려면 두 번 탭하세요.</string>
+    <string name="saved_route_edit_mode_inactive_a11y">편집 모드 시작하려면 두 번 탭하세요.</string>
+    <string name="saved_route_action_start_a11y">%1$s 길안내 시작</string>
+    <string name="saved_route_action_remove_a11y">%1$s 북마크 삭제</string>
     <string name="saved_route_done">완료</string>
     <string name="saved_route_start_route">길찾기</string>
     <string name="saved_route_remove_bookmark">삭제</string>

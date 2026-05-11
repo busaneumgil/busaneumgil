@@ -25,6 +25,7 @@ import com.ssafy.e102.eumgil.data.route.RouteRerouteResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSelectRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSelectResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSessionResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitArrivalDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitLaneOptionDto
@@ -150,8 +151,10 @@ class RouteRepositoryTest {
                             selectResponse = { routeId, request ->
                                 assertEquals("route-1", routeId)
                                 assertEquals("search-1", request.searchId)
-                                RouteSessionResponseDto(
+                                RouteSelectResponseDto(
                                     sessionId = "session-select-1",
+                                    totalDistanceMeter = 950.0,
+                                    totalDurationSecond = 960,
                                 )
                             },
                             refreshResponse = { routeId, request ->
@@ -223,6 +226,8 @@ class RouteRepositoryTest {
             val rated = repository.rateRoute(sessionId = ended.sessionId, score = 5)
 
             assertEquals("session-select-1", selected.sessionId)
+            assertEquals(950, selected.totalDistanceMeters)
+            assertEquals(960, selected.totalDurationSeconds)
             assertEquals("BUS", refreshed.type)
             assertEquals("ARRIVING_SOON", refreshed.arrivalStatus)
             assertEquals("100", refreshed.transits.single().routeNo)
@@ -261,7 +266,7 @@ class RouteRepositoryTest {
                                             message = "Authentication required.",
                                         )
 
-                                    2 -> RouteSessionResponseDto(sessionId = "session-select-1")
+                                    2 -> RouteSelectResponseDto(sessionId = "session-select-1")
 
                                     else -> error("Unexpected select retry count: $requestCount")
                                 }
@@ -346,7 +351,7 @@ private fun remoteDataSource(
     searchTransitResponse: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto = {
         error("searchTransitRoutes was not expected")
     },
-    selectResponse: suspend (String, RouteSelectRequestDto) -> RouteSessionResponseDto = { _, _ ->
+    selectResponse: suspend (String, RouteSelectRequestDto) -> RouteSelectResponseDto = { _, _ ->
         error("selectRoute was not expected")
     },
     refreshResponse: suspend (String, RouteTransitRefreshRequestDto) -> RouteTransitRefreshResponseDto = { _, _ ->
@@ -376,7 +381,7 @@ private fun remoteDataSource(
         override suspend fun selectRoute(
             routeId: String,
             request: RouteSelectRequestDto,
-        ): RouteSessionResponseDto = selectResponse(routeId, request)
+        ): RouteSelectResponseDto = selectResponse(routeId, request)
 
         override suspend fun refreshTransit(
             routeId: String,

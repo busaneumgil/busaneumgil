@@ -80,8 +80,8 @@ class LowVisionNavigationRouteTest {
 
             assertEquals("fresh-search", request?.selectionHandoff?.searchId)
             assertEquals("fresh-route", request?.selectionHandoff?.routeId)
-            assertEquals(120, request?.selectionHandoff?.initialRemainingDistanceMeters)
-            assertEquals(120, request?.selectionHandoff?.initialRemainingDurationSeconds)
+            assertEquals(950, request?.selectionHandoff?.initialRemainingDistanceMeters)
+            assertEquals(960, request?.selectionHandoff?.initialRemainingDurationSeconds)
             assertTrue(routeRepository.freshWalkSearchCalled)
         }
 
@@ -267,7 +267,11 @@ private class FreshRouteSearchTrackingRepository : RouteRepository {
     ): RouteSessionData {
         assertEquals("fresh-route", routeId)
         assertEquals("fresh-search", searchId)
-        return RouteSessionData(sessionId = "session-1")
+        return RouteSessionData(
+            sessionId = "session-1",
+            totalDistanceMeters = 950,
+            totalDurationSeconds = 960,
+        )
     }
 
     override suspend fun refreshTransit(

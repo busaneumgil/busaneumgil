@@ -109,8 +109,12 @@ internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
                     searchId = searchId,
                     routeId = routeId,
                     sessionId = sessionData.sessionId,
-                    initialRemainingDistanceMeters = plan.selectedRoute.summary.distanceMeters,
-                    initialRemainingDurationSeconds = plan.selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
+                    initialRemainingDistanceMeters =
+                        sessionData.totalDistanceMeters ?: plan.selectedRoute.summary.distanceMeters,
+                    initialRemainingDurationSeconds =
+                        sessionData.totalDurationSeconds
+                            ?: plan.selectedRoute.summary.durationSeconds
+                            ?: plan.selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
                 ),
         )
     } catch (throwable: Throwable) {

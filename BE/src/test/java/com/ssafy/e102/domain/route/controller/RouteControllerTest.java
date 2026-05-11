@@ -36,6 +36,7 @@ import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSelectResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitArrivalStatus;
@@ -215,7 +216,7 @@ class RouteControllerTest {
 		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		when(routeSelectService.select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class)))
-			.thenReturn(new RouteSessionResponse(sessionId));
+			.thenReturn(new RouteSelectResponse(sessionId, BigDecimal.valueOf(950), 960));
 
 		mockMvc.perform(post("/routes/rt_selected_001/select")
 			.principal(authentication)
@@ -228,6 +229,8 @@ class RouteControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.sessionId").value(sessionId.toString()))
+			.andExpect(jsonPath("$.data.totalDistanceMeter").value(950))
+			.andExpect(jsonPath("$.data.totalDurationSecond").value(960))
 			.andExpect(jsonPath("$.data.remainingDistanceMeter").doesNotExist())
 			.andExpect(jsonPath("$.data.remainingDurationSecond").doesNotExist())
 			.andExpect(jsonPath("$.message").value("경로가 선택되었습니다."));

@@ -228,7 +228,9 @@ class RouteRemoteDataSourceTest {
                                         {
                                           "status": "S2000",
                                           "data": {
-                                            "sessionId": "session-select-1"
+                                            "sessionId": "session-select-1",
+                                            "totalDistanceMeter": 950.0,
+                                            "totalDurationSecond": 960
                                           }
                                         }
                                         """.trimIndent()
@@ -339,6 +341,8 @@ class RouteRemoteDataSourceTest {
             assertTrue(calls[4].body.contains("\"score\":5"))
 
             assertEquals("session-select-1", selectResponse.sessionId)
+            assertEquals(950.0, selectResponse.totalDistanceMeter ?: -1.0, 0.0)
+            assertEquals(960, selectResponse.totalDurationSecond)
             assertEquals("BUS", refreshResponse.type)
             assertEquals("ARRIVING_SOON", refreshResponse.arrivalStatus)
             assertEquals("100", refreshResponse.transits.single().routeNo)

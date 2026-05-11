@@ -20,6 +20,7 @@ import com.ssafy.e102.eumgil.data.route.RouteRerouteResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSelectRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSelectResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSessionResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitArrivalDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshRequestDto
@@ -27,6 +28,7 @@ import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshResponseDto
 import com.ssafy.e102.eumgil.data.route.toDomain
 import com.ssafy.e102.eumgil.data.route.toRequestDto
 import com.ssafy.e102.eumgil.data.route.toRouteCandidate
+import kotlin.math.roundToInt
 
 interface RouteRepository {
     // Primary read-model entry point for 199 route setting and 200/201/202 handoff consumers.
@@ -222,6 +224,8 @@ class DefaultRouteRepository(
 
 data class RouteSessionData(
     val sessionId: String,
+    val totalDistanceMeters: Int? = null,
+    val totalDurationSeconds: Int? = null,
 )
 
 data class RouteTransitArrivalData(
@@ -243,6 +247,13 @@ data class RouteRerouteData(
 data class RouteRatingData(
     val ratingId: Long,
 )
+
+private fun RouteSelectResponseDto.toRepositoryData(): RouteSessionData =
+    RouteSessionData(
+        sessionId = sessionId,
+        totalDistanceMeters = totalDistanceMeter.toRoundedMeters(),
+        totalDurationSeconds = totalDurationSecond?.takeIf { durationSeconds -> durationSeconds >= 0 },
+    )
 
 private fun RouteSessionResponseDto.toRepositoryData(): RouteSessionData =
     RouteSessionData(
@@ -270,6 +281,11 @@ private fun RouteRerouteResponseDto.toRepositoryData(geometryParser: RouteGeomet
 
 private fun RouteRatingResponseDto.toRepositoryData(): RouteRatingData =
     RouteRatingData(ratingId = ratingId)
+
+private fun Double?.toRoundedMeters(): Int? =
+    this
+        ?.takeIf { value -> value >= 0.0 }
+        ?.roundToInt()
 
 private fun GeoCoordinate.toPointDto(): RoutePointDto =
     RoutePointDto(

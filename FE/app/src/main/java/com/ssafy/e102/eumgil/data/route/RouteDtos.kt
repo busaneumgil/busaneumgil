@@ -121,6 +121,12 @@ data class RouteSelectRequestDto(
     val searchId: String,
 )
 
+data class RouteSelectResponseDto(
+    val sessionId: String,
+    val totalDistanceMeter: Double? = null,
+    val totalDurationSecond: Int? = null,
+)
+
 data class RouteSessionResponseDto(
     val sessionId: String,
 )

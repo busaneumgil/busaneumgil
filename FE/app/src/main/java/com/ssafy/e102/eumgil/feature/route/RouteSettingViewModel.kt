@@ -393,9 +393,12 @@ class RouteSettingViewModel(
                                         searchId = searchId,
                                         routeId = routeId,
                                         sessionId = sessionData.sessionId,
-                                        initialRemainingDistanceMeters = selectedRoute.summary.distanceMeters,
+                                        initialRemainingDistanceMeters =
+                                            sessionData.totalDistanceMeters ?: selectedRoute.summary.distanceMeters,
                                         initialRemainingDurationSeconds =
-                                            selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
+                                            sessionData.totalDurationSeconds
+                                                ?: selectedRoute.summary.durationSeconds
+                                                ?: selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
                                     ),
                             ),
                     ),

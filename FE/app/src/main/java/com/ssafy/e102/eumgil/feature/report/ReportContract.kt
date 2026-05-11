@@ -237,6 +237,8 @@ sealed interface ReportUiAction {
     data object StartNewReportClicked : ReportUiAction
 
     data object BackToMapClicked : ReportUiAction
+
+    data object TabReentered : ReportUiAction
 }
 
 sealed interface ReportUiEvent {

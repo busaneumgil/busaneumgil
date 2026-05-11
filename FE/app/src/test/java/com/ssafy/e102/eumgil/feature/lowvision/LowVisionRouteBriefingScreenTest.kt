@@ -19,12 +19,12 @@ class LowVisionRouteBriefingScreenTest {
 
     @Test
     fun `playback button explains start and stop behavior before route briefing starts`() {
-        assertEquals("경로 안내 시작", routeBriefingPlaybackButtonLabel(isPlaying = false))
+        assertEquals("\uC2DC\uC791", routeBriefingPlaybackButtonLabel(isPlaying = false))
         assertEquals(
             "두 번 탭하면 경로 안내를 시작합니다. 안내 중에는 화면 항목 안내를 줄입니다. 다시 누르면 중지합니다.",
             routeBriefingPlaybackButtonActionHint(isPlaying = false),
         )
-        assertEquals("경로 안내 중지", routeBriefingPlaybackButtonLabel(isPlaying = true))
+        assertEquals("\uC911\uC9C0", routeBriefingPlaybackButtonLabel(isPlaying = true))
         assertEquals(
             "두 번 탭하면 경로 안내 음성을 중지합니다.",
             routeBriefingPlaybackButtonActionHint(isPlaying = true),

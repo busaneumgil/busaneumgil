@@ -72,7 +72,10 @@ internal suspend fun RouteRepository.buildLowVisionNavigationRequest(
     return try {
         val plan = buildLowVisionNavigationPlan(destinationSelectionRepository) ?: return null
         val searchId = plan.searchData.searchId?.takeIf(String::isNotBlank) ?: return null
-        val routeId = plan.selectedRoute.serverRouteId?.takeIf(String::isNotBlank) ?: return null
+        val routeId =
+            plan.selectedRoute.serverRouteId?.takeIf(String::isNotBlank)
+                ?: plan.selectedRoute.routeId.takeIf(String::isNotBlank)
+                ?: return null
         val sessionData =
             selectRoute(
                 routeId = routeId,

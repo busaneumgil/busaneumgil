@@ -80,6 +80,27 @@ class LowVisionNavigationRouteTest {
             assertEquals(120, request?.selectionHandoff?.initialRemainingDurationSeconds)
             assertTrue(routeRepository.freshWalkSearchCalled)
         }
+
+    @Test
+    fun `low vision navigation request can select route id when server route id is missing`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "real-place-id",
+                    name = "Real Place",
+                    address = "Busan",
+                    latitude = 35.2,
+                    longitude = 129.2,
+                ),
+            )
+            val routeRepository = RouteIdOnlyRouteSearchRepository()
+
+            val request = routeRepository.buildLowVisionNavigationRequest(destinationSelectionRepository)
+
+            assertEquals("fresh-route", request?.selectionHandoff?.routeId)
+            assertEquals("session-1", request?.selectionHandoff?.sessionId)
+        }
 }
 
 private class ThrowingRouteRepository : RouteRepository {
@@ -160,10 +181,55 @@ private class FreshRouteSearchTrackingRepository : RouteRepository {
     ): RouteRatingData = throw IllegalStateException("rating failed")
 }
 
+private class RouteIdOnlyRouteSearchRepository : RouteRepository {
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("cached route search should not be used for low vision navigation start")
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        lowVisionRouteSearchData(
+            query = query,
+            searchId = "fresh-search",
+            routeId = "fresh-route",
+            serverRouteId = null,
+            distanceMeters = 120.0,
+        )
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("transit route search was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData {
+        assertEquals("fresh-route", routeId)
+        assertEquals("fresh-search", searchId)
+        return RouteSessionData(sessionId = "session-1")
+    }
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = throw IllegalStateException("refresh failed")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    ): RouteRerouteData = throw IllegalStateException("reroute failed")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData =
+        throw IllegalStateException("end route failed")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = throw IllegalStateException("rating failed")
+}
+
 private fun lowVisionRouteSearchData(
     query: RouteSearchQuery,
     searchId: String,
     routeId: String,
+    serverRouteId: String? = routeId,
     distanceMeters: Double,
 ): RouteSearchData =
     RouteSearchData(
@@ -177,7 +243,7 @@ private fun lowVisionRouteSearchData(
                     listOf(
                         RouteCandidate(
                             routeId = routeId,
-                            serverRouteId = routeId,
+                            serverRouteId = serverRouteId,
                             routeOption = RouteOption.SAFE,
                             title = "Fresh route",
                             summary =

@@ -67,13 +67,18 @@ internal fun List<LowVisionRouteBriefingStepUiState>.briefingSpeechTextFrom(
 ): String =
     visibleBriefingSteps(startIndex).toBriefingSpeechText()
 
-internal fun List<LowVisionRouteBriefingStepUiState>.toBriefingSpeechText(): String =
-    buildString {
-        append("경로 브리핑 ")
+internal fun List<LowVisionRouteBriefingStepUiState>.toBriefingSpeechText(): String {
+    val title = "\uACBD\uB85C \uBE0C\uB9AC\uD551"
+    if (isEmpty()) return title
+
+    return buildList {
+        add(title)
         this@toBriefingSpeechText.forEach { step ->
-            append("${step.sequence}번 ${step.instruction}. ")
+            add("${step.sequence}\uBC88")
+            add(step.instruction.trim().trimEnd('.'))
         }
-    }.trim()
+    }.joinToString(separator = ". ", postfix = ".")
+}
 
 class LowVisionRouteBriefingViewModel(
     private val routeRepository: RouteRepository,

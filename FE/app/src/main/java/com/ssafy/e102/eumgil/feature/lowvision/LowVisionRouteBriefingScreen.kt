@@ -248,9 +248,9 @@ private fun BriefingPlaybackButton(
 
 internal fun routeBriefingPlaybackButtonLabel(isPlaying: Boolean): String =
     if (isPlaying) {
-        "경로 안내 중지"
+        "\uC911\uC9C0"
     } else {
-        "경로 안내 시작"
+        "\uC2DC\uC791"
     }
 
 internal fun routeBriefingPlaybackButtonActionHint(isPlaying: Boolean): String =

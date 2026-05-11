@@ -747,21 +747,6 @@ def ensure_schema(cursor) -> None:
         CREATE SEQUENCE IF NOT EXISTS segment_features_feature_id_seq;
         ALTER TABLE segment_features
           ALTER COLUMN feature_id SET DEFAULT nextval('segment_features_feature_id_seq');
-
-        CREATE OR REPLACE FUNCTION source_match_threshold_meter(source_file text)
-        RETURNS double precision
-        LANGUAGE sql
-        IMMUTABLE
-        AS $$
-            SELECT CASE
-                WHEN source_file = '점자블록.csv' THEN 0.0
-                WHEN source_file = '계단.csv' THEN 2.0
-                WHEN source_file = '횡단보도_음향신호기.csv' THEN 30.0
-                WHEN source_file = '횡단보도_신호등.csv' THEN 20.0
-                WHEN source_file = '경사도&표면타입.csv' THEN 20.0
-                ELSE 10.0
-            END
-        $$;
         """
     )
 

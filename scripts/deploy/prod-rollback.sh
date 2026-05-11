@@ -28,12 +28,21 @@ if [ ! -f "$DEPLOY_STATE_DIR/previous-app-image" ]; then
 fi
 
 export APP_IMAGE_TAG="$(cat "$DEPLOY_STATE_DIR/previous-app-image")"
+admin_image="s14p31e102-prod-admin:${APP_IMAGE_TAG}"
+smoke_admin="true"
 
 if [ -f "$DEPLOY_STATE_DIR/previous-graphhopper-image" ]; then
   export GRAPHHOPPER_IMAGE_TAG="$(cat "$DEPLOY_STATE_DIR/previous-graphhopper-image")"
 fi
 
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d backend ai
+if docker image inspect "$admin_image" >/dev/null 2>&1; then
+  docker compose --env-file .env.prod -f docker-compose.prod.yml up -d admin
+else
+  echo "No previous admin image found for ${APP_IMAGE_TAG}. Stopping admin during rollback."
+  docker compose --env-file .env.prod -f docker-compose.prod.yml stop admin >/dev/null 2>&1 || true
+  smoke_admin="false"
+fi
 
 if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
   docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper run --rm --entrypoint sh graphhopper -c '
@@ -47,7 +56,7 @@ if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
   docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d graphhopper
 fi
 
-bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"
+SMOKE_ADMIN="$smoke_admin" bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"
 
 cp "$DEPLOY_STATE_DIR/previous-app-image" "$DEPLOY_STATE_DIR/current-app-image"
 if [ -f "$DEPLOY_STATE_DIR/previous-graphhopper-image" ]; then

@@ -3,12 +3,15 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.data.local.datasource.SearchLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.SearchApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.policy.RepositoryDomain
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySource
@@ -16,6 +19,9 @@ import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
 
 interface SearchRepository {
     suspend fun search(query: SearchQuery): List<SearchResult>
+
+    suspend fun searchPage(query: SearchQuery): SearchPage =
+        SearchPage(results = search(query))
 
     suspend fun analyzeVoiceSearch(
         text: String,
@@ -50,8 +56,22 @@ class DefaultSearchRepository(
     private val localDataSource: SearchLocalDataSource,
     private val mockDataSource: SearchMockDataSource,
     private val sourcePolicy: RepositorySourcePolicy,
+    authSessionRepository: AuthSessionRepository? = null,
+    authRemoteDataSource: AuthRemoteDataSource? = null,
 ) : SearchRepository {
-    override suspend fun search(query: SearchQuery): List<SearchResult> {
+    private val authenticatedRequestRunner =
+        if (authSessionRepository != null && authRemoteDataSource != null) {
+            AuthenticatedRequestRunner(
+                authSessionRepository = authSessionRepository,
+                authRemoteDataSource = authRemoteDataSource,
+            )
+        } else {
+            null
+        }
+
+    override suspend fun search(query: SearchQuery): List<SearchResult> = searchPage(query).results
+
+    override suspend fun searchPage(query: SearchQuery): SearchPage {
         val readPlan = sourcePolicy.readPlan(RepositoryDomain.SEARCH)
         val lastSource = readPlan.sources.last()
         var remoteFailure: Throwable? = null
@@ -59,11 +79,11 @@ class DefaultSearchRepository(
         for (source in readPlan.sources) {
             when (source) {
                 RepositorySource.REMOTE -> {
-                    val remoteResult = runCatching { remoteDataSource.search(query) }
+                    val remoteResult = runCatching { runAuthenticatedRemoteRequest { remoteDataSource.searchPage(query) } }
                     if (remoteResult.isSuccess) {
-                        val searchResults = remoteResult.getOrDefault(emptyList())
-                        localDataSource.updateCachedResults(query = query, results = searchResults)
-                        return searchResults
+                        val searchPage = remoteResult.getOrDefault(SearchPage(results = emptyList()))
+                        localDataSource.updateCachedResults(query = query, results = searchPage.results)
+                        return searchPage
                     }
                     remoteFailure = remoteResult.exceptionOrNull()
                 }
@@ -71,14 +91,14 @@ class DefaultSearchRepository(
                 RepositorySource.LOCAL -> {
                     val cachedResults = localDataSource.getCachedResults(query)
                     if (cachedResults.isNotEmpty()) {
-                        return cachedResults
+                        return SearchPage(results = cachedResults)
                     }
                     if (source == lastSource && remoteFailure == null) {
-                        return cachedResults
+                        return SearchPage(results = cachedResults)
                     }
                 }
 
-                RepositorySource.MOCK -> return mockDataSource.search(query)
+                RepositorySource.MOCK -> return SearchPage(results = mockDataSource.search(query))
             }
         }
 
@@ -96,10 +116,12 @@ class DefaultSearchRepository(
 
         val readPlan = sourcePolicy.readPlan(RepositoryDomain.SEARCH)
         return if (RepositorySource.REMOTE in readPlan.sources) {
-            remoteDataSource.analyzeVoiceSearch(
-                text = normalizedText,
-                mode = mode,
-            )
+            runAuthenticatedRemoteRequest {
+                remoteDataSource.analyzeVoiceSearch(
+                    text = normalizedText,
+                    mode = mode,
+                )
+            }
         } else {
             super<SearchRepository>.analyzeVoiceSearch(text = normalizedText, mode = mode)
         }
@@ -123,5 +145,45 @@ class DefaultSearchRepository(
 
     override suspend fun saveRecentDestination(destination: RecentDestination) {
         localDataSource.saveRecentDestination(destination)
+    }
+
+    private suspend fun <T> runAuthenticatedRemoteRequest(execute: suspend () -> T): T {
+        val runner = authenticatedRequestRunner ?: return execute()
+
+        return when (
+            val result =
+                runner.run(
+                    execute = { execute() },
+                    isAuthenticationFailure = ::isAuthenticationFailure,
+                )
+        ) {
+            AuthenticatedRequestResult.MissingSession ->
+                throw SearchApiException(
+                    httpStatusCode = HTTP_UNAUTHORIZED,
+                    status = SEARCH_STATUS_MISSING_SESSION,
+                    message = AUTH_REQUIRED_MESSAGE,
+                )
+
+            AuthenticatedRequestResult.AuthenticationFailed ->
+                throw SearchApiException(
+                    httpStatusCode = HTTP_UNAUTHORIZED,
+                    status = SEARCH_STATUS_AUTHENTICATION_FAILED,
+                    message = AUTH_REQUIRED_MESSAGE,
+                )
+
+            is AuthenticatedRequestResult.Success -> result.value
+        }
+    }
+
+    private fun isAuthenticationFailure(throwable: Throwable): Boolean =
+        throwable is SearchApiException &&
+            (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)
+
+    private companion object {
+        private const val HTTP_UNAUTHORIZED = 401
+        private const val HTTP_FORBIDDEN = 403
+        private const val SEARCH_STATUS_MISSING_SESSION = "SEARCH_AUTH_MISSING_SESSION"
+        private const val SEARCH_STATUS_AUTHENTICATION_FAILED = "SEARCH_AUTHENTICATION_FAILED"
+        private const val AUTH_REQUIRED_MESSAGE = "인증이 필요합니다."
     }
 }

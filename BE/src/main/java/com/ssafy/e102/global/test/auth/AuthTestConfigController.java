@@ -22,7 +22,7 @@ public class AuthTestConfigController {
 		this.properties = properties;
 	}
 
-	@Operation(summary = "소셜 로그인 테스트 설정 조회", description = "로컬/테스트 환경에서 소셜 로그인 테스트에 필요한 Kakao, Naver, Google 클라이언트 설정을 조회한다.")
+	@Operation(summary = "소셜 로그인 테스트 설정 조회", description = "로컬/테스트 환경에서 소셜 로그인 테스트에 필요한 카카오, 네이버, 구글 클라이언트 설정을 조회한다.")
 	@GetMapping
 	public AuthTestConfigResponse getConfig() {
 		return new AuthTestConfigResponse(

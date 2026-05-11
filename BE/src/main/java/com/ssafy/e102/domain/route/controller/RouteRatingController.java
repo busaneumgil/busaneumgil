@@ -20,7 +20,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "경로 평가", description = "안내 종료 후 경로 평가 API")
+@Tag(name = "경로 평가", description = "경로 안내 결과 평가 API")
 @RestController
 @RequestMapping("/route-ratings")
 @RequiredArgsConstructor
@@ -28,9 +28,9 @@ public class RouteRatingController {
 
 	private final RouteRatingService routeRatingService;
 
+	@Operation(summary = "경로 평가 등록", description = "종료된 안내 세션에 대해 사용자가 남긴 별점을 저장하거나 갱신합니다.")
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@Operation(summary = "경로 평가 등록", description = "종료된 안내 세션에 대해 사용자가 남긴 별점을 저장하거나 갱신합니다.")
 	public ApiResponse<RouteRatingResponse> rateRoute(
 		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,

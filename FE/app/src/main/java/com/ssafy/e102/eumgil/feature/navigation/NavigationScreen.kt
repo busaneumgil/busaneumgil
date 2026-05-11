@@ -60,7 +60,7 @@ import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredT
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
-import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayBackdrop
+import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
 
@@ -397,11 +397,9 @@ private fun NavigationMapBackdrop(
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.navigation_map_section_title)
-    MapViewportOverlayBackdrop(
+    MapOverlayViewport(
         overlayState = createNavigationViewportOverlayState(mapOverlay),
         modifier = modifier,
-        horizontalPadding = 28.dp,
-        verticalPadding = 24.dp,
         contentDescription = mapDescription,
     )
 }

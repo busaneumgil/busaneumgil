@@ -68,6 +68,9 @@ export function AdminAuthPanel({
         setMessage(`관리자 확인 완료: ${data.role}`);
       })
       .catch((error) => {
+        storeAdminAccessToken("");
+        onAccessTokenChange("");
+        onTokenInputChange("");
         setPrincipal(null);
         onAdminVerified?.(null);
         setMessage(error instanceof Error ? error.message : "관리자 권한 확인에 실패했습니다.");
@@ -79,6 +82,7 @@ export function AdminAuthPanel({
     storeAdminAccessToken(normalizedToken);
     onAccessTokenChange(normalizedToken);
     onTokenInputChange(normalizedToken);
+    return normalizedToken;
   }
 
   function clearToken() {
@@ -95,9 +99,14 @@ export function AdminAuthPanel({
     setMessage(`${provider} 로그인 확인 중`);
     try {
       const serviceToken = await requestServiceToken(provider, providerAccessToken);
-      saveToken(serviceToken);
-      setMessage(`${provider} 로그인 완료`);
+      const normalizedToken = saveToken(serviceToken);
+      const admin = await fetchAdminMe(normalizedToken);
+      setPrincipal(admin);
+      onAdminVerified?.(admin);
+      setMessage(`${provider} 로그인 완료: ${admin.role}`);
     } catch (error) {
+      setPrincipal(null);
+      onAdminVerified?.(null);
       setMessage(error instanceof Error ? error.message : `${provider} 로그인에 실패했습니다.`);
     } finally {
       setPendingProvider(null);
@@ -147,28 +156,13 @@ export function AdminAuthPanel({
           구글 로그인
         </button>
       </div>
-      <details className="admin-token-fallback" open={!accessToken && Boolean(storedToken)}>
-        <summary>로컬 테스트용 accessToken 입력</summary>
-        <div>
-          <label>
-            Access Token
-            <input
-              type="password"
-              value={tokenInput}
-              placeholder="ADMIN accessToken"
-              onChange={(event) => onTokenInputChange(event.target.value)}
-            />
-          </label>
-          <div className="button-row compact">
-            <button className="primary" type="button" onClick={() => saveToken()}>
-              적용
-            </button>
-            <button type="button" onClick={clearToken}>
-              제거
-            </button>
-          </div>
+      {storedToken && (
+        <div className="button-row compact">
+          <button type="button" onClick={clearToken}>
+            저장된 토큰 제거
+          </button>
         </div>
-      </details>
+      )}
       <div className="admin-auth-status">
         {principal ? <span>{principal.userId} · {principal.role}</span> : <span>{message}</span>}
         {!config && <small>AUTH_TEST_* 설정 또는 /auth/test-config 응답을 확인하세요.</small>}

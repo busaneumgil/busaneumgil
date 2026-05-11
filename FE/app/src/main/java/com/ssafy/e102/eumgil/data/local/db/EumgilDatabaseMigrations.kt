@@ -40,5 +40,29 @@ object EumgilDatabaseMigrations {
             }
         }
 
-    val all: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    val MIGRATION_3_4: Migration =
+        object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN serverReportId INTEGER")
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN lastFailureReason TEXT")
+            }
+        }
+
+    val MIGRATION_4_5: Migration =
+        object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE bookmark ADD COLUMN serverBookmarkId INTEGER")
+                database.execSQL("ALTER TABLE bookmark ADD COLUMN bookmarkTargetId TEXT")
+                database.execSQL("ALTER TABLE bookmark ADD COLUMN targetType TEXT")
+                database.execSQL("ALTER TABLE bookmark ADD COLUMN serverPlaceId INTEGER")
+                database.execSQL("ALTER TABLE bookmark ADD COLUMN provider TEXT")
+                database.execSQL("ALTER TABLE bookmark ADD COLUMN providerPlaceId TEXT")
+                database.execSQL("ALTER TABLE bookmark ADD COLUMN providerCategory TEXT")
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_bookmark_bookmarkTargetId ON bookmark(bookmarkTargetId)",
+                )
+            }
+        }
+
+    val all: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }

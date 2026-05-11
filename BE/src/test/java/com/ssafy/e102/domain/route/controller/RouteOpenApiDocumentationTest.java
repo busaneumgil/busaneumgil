@@ -14,7 +14,7 @@ class RouteOpenApiDocumentationTest {
 
 	@Test
 	void routeApisExposeKoreanSwaggerSummaries() {
-		assertTag(RouteController.class, "경로");
+		assertTag(RouteController.class, "길안내");
 		assertOperation(RouteController.class, "searchWalkRoutes", "도보 경로 검색");
 		assertOperation(RouteController.class, "searchTransitRoutes", "대중교통 경로 검색");
 		assertOperation(RouteController.class, "reroute", "경로 재탐색");

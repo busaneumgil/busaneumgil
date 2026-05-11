@@ -1,18 +1,24 @@
 package com.ssafy.e102.eumgil.data.remote.datasource
 
 import android.util.Log
+import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceQuery
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper
+import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper.toFeatureTypeApiValueOrNull
+import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper.toServerCategoryApiValueOrNull
 import com.ssafy.e102.eumgil.data.remote.mapper.PlaceDtoMapper.toApiValue
 import org.json.JSONObject
 import java.util.Locale
 
 open class PlacesRemoteDataSource private constructor(
-    private val requestExecutor: suspend (String, Map<String, String>, Map<String, String>) -> HttpJsonResponse,
+    private val getRequestExecutor: suspend (String, Map<String, String>, Map<String, String>) -> HttpJsonResponse,
+    private val postRequestExecutor: suspend (String, String, Map<String, String>) -> HttpJsonResponse,
     private val accessTokenProvider: suspend () -> String?,
     private val baseUrlLabel: String,
 ) {
@@ -20,10 +26,17 @@ open class PlacesRemoteDataSource private constructor(
         baseUrl: String,
         accessTokenProvider: suspend () -> String? = { null },
     ) : this(
-        requestExecutor = { path, queryParams, headers ->
+        getRequestExecutor = { path, queryParams, headers ->
             HttpJsonClient(baseUrl = baseUrl).getJson(
                 path = path,
                 queryParams = queryParams,
+                headers = headers,
+            )
+        },
+        postRequestExecutor = { path, body, headers ->
+            HttpJsonClient(baseUrl = baseUrl).postJson(
+                path = path,
+                body = body,
                 headers = headers,
             )
         },
@@ -34,8 +47,12 @@ open class PlacesRemoteDataSource private constructor(
     internal constructor(
         requestExecutor: suspend (String, Map<String, String>, Map<String, String>) -> HttpJsonResponse,
         accessTokenProvider: suspend () -> String? = { null },
+        postRequestExecutor: suspend (String, String, Map<String, String>) -> HttpJsonResponse = { _, _, _ ->
+            error("POST request executor is not configured.")
+        },
     ) : this(
-        requestExecutor = requestExecutor,
+        getRequestExecutor = requestExecutor,
+        postRequestExecutor = postRequestExecutor,
         accessTokenProvider = accessTokenProvider,
         baseUrlLabel = "<test>",
     )
@@ -53,7 +70,7 @@ open class PlacesRemoteDataSource private constructor(
             "GET /places baseUrl=$baseUrlLabel lat=${latitude.toLogCoordinate()} lng=${longitude.toLogCoordinate()} radius=${query.radiusMeters} categories=${query.categories.toLogList()} featureTypes=${query.featureTypes.toLogList()}",
         )
         val response =
-            requestExecutor(
+            getRequestExecutor(
                 "/places",
                 queryParams,
                 bearerHeader(),
@@ -76,7 +93,7 @@ open class PlacesRemoteDataSource private constructor(
 
     open suspend fun getPlaceDetail(placeId: String): PlaceDetail? {
         val response =
-            requestExecutor(
+            getRequestExecutor(
                 "/places/$placeId",
                 emptyMap(),
                 bearerHeader(),
@@ -88,6 +105,26 @@ open class PlacesRemoteDataSource private constructor(
         val responseJson = response.body.toJsonObjectOrNull()
         val placeDetailDto = response.requirePlaceDetailDto(responseJson)
         return PlaceDtoMapper.toPlaceDetail(placeDetailDto)
+    }
+
+    open suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? {
+        safeLogInfo(
+            PLACES_REMOTE_LOG_TAG,
+            "POST /places/detail baseUrl=$baseUrlLabel lat=${request.latitude.toLogCoordinate()} lng=${request.longitude.toLogCoordinate()} clickType=${request.clickType.name} provider=${request.provider.orEmpty()} providerPlaceId=${request.providerPlaceId.orEmpty()}",
+        )
+        val response =
+            postRequestExecutor(
+                "/places/detail",
+                request.toRequestBody(),
+                bearerHeader(),
+            )
+        if (response.statusCode == 404) {
+            return null
+        }
+
+        val responseJson = response.body.toJsonObjectOrNull()
+        val detailDto = response.requireMapPlaceDetailDto(responseJson)
+        return PlaceDtoMapper.toMapTappedPlaceDetail(detailDto)
     }
 
     private suspend fun bearerHeader(): Map<String, String> =
@@ -104,23 +141,48 @@ open class PlacesRemoteDataSource private constructor(
             put("lat", latitude.toString())
             put("lng", longitude.toString())
             put("radius", radiusMeters.toString())
-            if (categories.isNotEmpty()) {
+            val serverCategories =
+                categories
+                    .mapNotNull { category -> category.toServerCategoryApiValueOrNull() }
+                    .distinct()
+            val categoryFeatureTypes =
+                categories
+                    .mapNotNull { category -> category.toFeatureTypeApiValueOrNull() }
+                    .distinct()
+            if (serverCategories.isNotEmpty()) {
                 put(
                     "category",
-                    categories
-                        .sortedBy { category -> category.name }
-                        .joinToString(",") { category -> category.toApiValue() },
+                    serverCategories
+                        .sorted()
+                        .joinToString(","),
                 )
             }
-            if (featureTypes.isNotEmpty()) {
+            val serverFeatureTypes =
+                (
+                    featureTypes.map { featureType -> featureType.toApiValue() } +
+                        categoryFeatureTypes
+                ).distinct()
+            if (serverFeatureTypes.isNotEmpty()) {
                 put(
                     "featureType",
-                    featureTypes
-                        .sortedBy { featureType -> featureType.name }
-                        .joinToString(",") { featureType -> featureType.toApiValue() },
+                    serverFeatureTypes
+                        .sorted()
+                        .joinToString(","),
                 )
             }
         }
+
+    private fun MapPlaceDetailRequest.toRequestBody(): String =
+        JSONObject()
+            .put("lat", latitude)
+            .put("lng", longitude)
+            .put("clickType", clickType.toApiValue())
+            .putOptional("provider", provider)
+            .putOptional("providerPlaceId", providerPlaceId)
+            .putOptional("nameHint", nameHint)
+            .toString()
+
+    private fun MapPlaceClickType.toApiValue(): String = name
 
     private fun HttpJsonResponse.requirePlacesBrowseDto(responseJson: JSONObject?) =
         if (statusCode in 200..299) {
@@ -144,6 +206,17 @@ open class PlacesRemoteDataSource private constructor(
             throw placesApiException(response = this, responseJson = responseJson)
         }
 
+    private fun HttpJsonResponse.requireMapPlaceDetailDto(responseJson: JSONObject?) =
+        if (statusCode in 200..299) {
+            runCatching {
+                PlaceDtoMapper.parseMapPlaceDetailDto(body)
+            }.getOrElse { error ->
+                throw placesApiException(response = this, responseJson = responseJson, fallback = error.message)
+            }
+        } else {
+            throw placesApiException(response = this, responseJson = responseJson)
+        }
+
     private fun placesApiException(
         response: HttpJsonResponse,
         responseJson: JSONObject?,
@@ -160,6 +233,16 @@ open class PlacesRemoteDataSource private constructor(
         )
 
     private fun String.toJsonObjectOrNull(): JSONObject? = runCatching { JSONObject(this) }.getOrNull()
+
+    private fun JSONObject.putOptional(
+        name: String,
+        value: String?,
+    ): JSONObject =
+        apply {
+            value
+                ?.takeIf { it.isNotBlank() }
+                ?.let { put(name, it) }
+        }
 
     private companion object {
         private const val PLACES_REMOTE_LOG_TAG = "PlacesRemoteDataSource"

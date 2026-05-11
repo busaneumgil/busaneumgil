@@ -13,6 +13,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ssafy.e102.global.response.ErrorResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
@@ -62,8 +63,13 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler(Exception.class)
-	public ResponseEntity<ErrorResponse> handleException(Exception exception) {
-		log.error("Unhandled exception occurred", exception);
+	public ResponseEntity<ErrorResponse> handleException(HttpServletRequest request, Exception exception) {
+		log.error(
+			"event=unhandled_exception method={} path={} message={}",
+			request.getMethod(),
+			request.getRequestURI(),
+			exception.getMessage(),
+			exception);
 
 		return ResponseEntity
 			.status(CommonErrorCode.INTERNAL_ERROR.getHttpStatus())

@@ -396,6 +396,18 @@ SELECT
   END
 FROM staging_road_segments;
 
+CREATE SEQUENCE IF NOT EXISTS road_nodes_vertex_id_seq;
+SELECT setval('road_nodes_vertex_id_seq', COALESCE((SELECT MAX(vertex_id) FROM road_nodes), 0) + 1, false);
+ALTER TABLE road_nodes ALTER COLUMN vertex_id SET DEFAULT nextval('road_nodes_vertex_id_seq');
+
+CREATE SEQUENCE IF NOT EXISTS road_segments_edge_id_seq;
+SELECT setval('road_segments_edge_id_seq', COALESCE((SELECT MAX(edge_id) FROM road_segments), 0) + 1, false);
+ALTER TABLE road_segments ALTER COLUMN edge_id SET DEFAULT nextval('road_segments_edge_id_seq');
+
+CREATE SEQUENCE IF NOT EXISTS segment_features_feature_id_seq;
+SELECT setval('segment_features_feature_id_seq', COALESCE((SELECT MAX(feature_id) FROM segment_features), 0) + 1, false);
+ALTER TABLE segment_features ALTER COLUMN feature_id SET DEFAULT nextval('segment_features_feature_id_seq');
+
 DO \$validate_loaded\$
 DECLARE
   staging_node_count bigint;

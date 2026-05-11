@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
@@ -12,6 +13,7 @@ import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
@@ -76,6 +78,60 @@ class SearchViewModelTest {
             assertTrue(resultState is SearchResultUiState.Success)
             assertEquals("Busan City Hall", (resultState as SearchResultUiState.Success).query)
             assertEquals(listOf(result), resultState.results)
+        }
+
+    @Test
+    fun `load next page appends cursor search results`() =
+        runTest {
+            val firstResult =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                )
+            val secondResult =
+                SearchResult(
+                    placeId = "provider:kakao:987654321",
+                    serverPlaceId = null,
+                    providerPlaceId = "987654321",
+                    title = "Provider Only Cafe",
+                    subtitle = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    matched = false,
+                )
+            val searchRepository =
+                FakeSearchRepository(
+                    searchPagesByCursor =
+                        mapOf(
+                            null to SearchPage(results = listOf(firstResult), nextCursor = "cursor-2", hasNext = true),
+                            "cursor-2" to SearchPage(results = listOf(secondResult), nextCursor = null, hasNext = false),
+                        ),
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "Busan"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.LoadNextPageClicked)
+            advanceUntilIdle()
+
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Success)
+            val successState = resultState as SearchResultUiState.Success
+            assertEquals(listOf(firstResult, secondResult), successState.results)
+            assertEquals(false, successState.hasNext)
+            assertEquals(listOf(null, "cursor-2"), searchRepository.searchPageCursors)
         }
 
     @Test
@@ -486,14 +542,16 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `search result click stores selected destination and emits route setting navigation`() =
+    fun `search result preview click requests map preview without mutating selected destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val viewModel =
                 SearchViewModel(
                     searchRepository = FakeSearchRepository(),
                     bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                 )
             val result =
                 SearchResult(
@@ -508,11 +566,14 @@ class SearchViewModelTest {
             advanceUntilIdle()
             val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
-            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
             advanceUntilIdle()
 
-            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
-            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            val preview = destinationPreviewRepository.pendingPreview.value
+            assertEquals(result.toPlaceDestination(), preview?.destination)
+            assertEquals(listOf<String>(), preview?.accessibilityTagKeys)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }
 
     @Test
@@ -618,7 +679,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only search result click blocks handoff and does not store recent destination`() =
+    fun `provider only search result click stores destination but does not enrich recent destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val searchRepository = FakeSearchRepository()
@@ -649,11 +710,10 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
             advanceUntilIdle()
 
-            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals("provider:kakao:987654321", destinationSelectionRepository.selectedDestination.value?.placeId)
+            assertEquals("Provider Only Cafe", destinationSelectionRepository.selectedDestination.value?.name)
             assertTrue(placesRepository.detailRequests.isEmpty())
             assertTrue(searchRepository.savedRecentDestinations.isEmpty())
-            val resultState = viewModel.uiState.value.resultState
-            assertTrue(resultState is SearchResultUiState.Error)
         }
 
     @Test
@@ -711,7 +771,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only search result bookmark toggle is blocked`() =
+    fun `provider only search result bookmark toggle saves external snapshot`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository()
             val viewModel =
@@ -739,9 +799,20 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.BookmarkToggleClicked(result = result))
             advanceUntilIdle()
 
-            assertTrue(bookmarkRepository.bookmarks.value.isEmpty())
-            val resultState = viewModel.uiState.value.resultState
-            assertTrue(resultState is SearchResultUiState.Error)
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:kakao:987654321",
+                    placeName = "Provider Only Cafe",
+                    address = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = "987654321",
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
         }
 
     @Test
@@ -783,7 +854,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only low vision bookmark save is blocked`() =
+    fun `provider only low vision bookmark save stores external snapshot`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository()
             val viewModel =
@@ -807,13 +878,26 @@ class SearchViewModelTest {
                 )
 
             advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
             advanceUntilIdle()
 
-            assertTrue(bookmarkRepository.bookmarks.value.isEmpty())
-            val resultState = viewModel.uiState.value.resultState
-            assertTrue(resultState is SearchResultUiState.Error)
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:kakao:987654321",
+                    placeName = "Provider Only Cafe",
+                    address = "2 Gwangbok-ro, Busan",
+                    latitude = 35.1010,
+                    longitude = 129.0330,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = "987654321",
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+            assertEquals(SearchUiEvent.NavigateToLowVisionBookmark, uiEvent.await())
         }
 
     @Test
@@ -900,16 +984,23 @@ class SearchViewModelTest {
 
 private class FakeSearchRepository(
     private val searchResults: List<SearchResult> = emptyList(),
+    private val searchPagesByCursor: Map<String?, SearchPage> = emptyMap(),
     private val voiceAnalysis: SearchVoiceAnalysis? = null,
     recentSearches: List<RecentSearch> = emptyList(),
 ) : SearchRepository {
     val savedRecentDestinations = mutableListOf<RecentDestination>()
     val voiceAnalysisRequests = mutableListOf<Pair<String, SearchVoiceMode>>()
     val deletedRecentSearchKeywords = mutableListOf<String>()
+    val searchPageCursors = mutableListOf<String?>()
     var clearRecentSearchesCallCount = 0
     private val recentSearches = MutableStateFlow(recentSearches)
 
     override suspend fun search(query: SearchQuery): List<SearchResult> = searchResults
+
+    override suspend fun searchPage(query: SearchQuery): SearchPage {
+        searchPageCursors += query.cursor
+        return searchPagesByCursor[query.cursor] ?: SearchPage(results = searchResults)
+    }
 
     override suspend fun analyzeVoiceSearch(
         text: String,
@@ -971,8 +1062,9 @@ private class FakeBookmarkRepository(
     override suspend fun isBookmarked(placeId: String): Boolean =
         bookmarks.value.any { bookmark -> bookmark.placeId == placeId }
 
-    override suspend fun saveBookmark(bookmark: BookmarkData) {
+    override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData {
         bookmarks.value = bookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
+        return bookmark
     }
 
     override suspend fun deleteBookmark(placeId: String) {

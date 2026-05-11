@@ -12,6 +12,10 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+springdoc:
+  swagger-ui:
+    urls-primary-name: 인증
+
 social:
   provider:
     kakao:
@@ -40,6 +44,23 @@ graphhopper:
   base-url: ${GRAPHHOPPER_BASE_URL:http://localhost:8989}
   connect-timeout: ${GRAPHHOPPER_CONNECT_TIMEOUT:5s}
   read-timeout: ${GRAPHHOPPER_READ_TIMEOUT:5s}
+
+management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:${SERVER_PORT:8080}}
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,prometheus}
+  endpoint:
+    health:
+      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:never}
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 odsay:
   base-url: ${ODSAY_API_BASE_URL:https://api.odsay.com/v1/api}

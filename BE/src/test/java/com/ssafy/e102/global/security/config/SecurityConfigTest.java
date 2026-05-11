@@ -142,6 +142,23 @@ class SecurityConfigTest {
 	}
 
 	@Test
+	@DisplayName("actuator health endpoint는 인증 없이 접근할 수 있다")
+	void actuatorHealthIsPublic() throws Exception {
+		mockMvc.perform(get("/actuator/health"))
+			.andExpect(status().isOk())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").exists());
+	}
+
+	@Test
+	@DisplayName("actuator prometheus endpoint는 인증 없이 접근할 수 있다")
+	void actuatorPrometheusIsPublic() throws Exception {
+		mockMvc.perform(get("/actuator/prometheus"))
+			.andExpect(status().isOk())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN));
+	}
+
+	@Test
 	@DisplayName("내 정보 조회는 인증이 필요하다")
 	void usersMeRequiresAuthentication() throws Exception {
 		mockMvc.perform(get("/users/me"))
@@ -259,7 +276,8 @@ class SecurityConfigTest {
 			.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
 			.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization"))
 			.andExpect(status().isOk())
-			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3001"));
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3001"))
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
 	}
 
 	@Test

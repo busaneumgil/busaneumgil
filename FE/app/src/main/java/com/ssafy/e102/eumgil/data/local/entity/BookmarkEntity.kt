@@ -6,12 +6,23 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "bookmark",
-    indices = [Index(value = ["placeId"], unique = true), Index(value = ["updatedAt"])],
+    indices = [
+        Index(value = ["placeId"], unique = true),
+        Index(value = ["bookmarkTargetId"], unique = true),
+        Index(value = ["updatedAt"]),
+    ],
 )
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true)
     val bookmarkId: Long = 0L,
     val placeId: String,
+    val serverBookmarkId: Long? = null,
+    val bookmarkTargetId: String? = null,
+    val targetType: String? = null,
+    val serverPlaceId: Long? = null,
+    val provider: String? = null,
+    val providerPlaceId: String? = null,
+    val providerCategory: String? = null,
     val placeName: String,
     val address: String? = null,
     val latitude: Double,

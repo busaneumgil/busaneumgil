@@ -4,8 +4,8 @@ from functools import wraps
 
 # 로거 설정
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    format='time=%(asctime)s level=%(levelname)s logger=%(name)s message="%(message)s"',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 

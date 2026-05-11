@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
 @Composable
@@ -27,6 +28,7 @@ fun SearchEntryRoute(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     preserveEntryStateOnReentry: Boolean = false,
@@ -41,6 +43,7 @@ fun SearchEntryRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToMapPreview = onNavigateToMapPreview,
         onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
@@ -53,6 +56,7 @@ fun SearchResultsRoute(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     modifier: Modifier = Modifier,
@@ -65,6 +69,7 @@ fun SearchResultsRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
+        onNavigateToMapPreview = onNavigateToMapPreview,
         onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
@@ -102,6 +107,7 @@ fun SearchVoiceInputRoute(
         if (lastCompletedCount.intValue >= 0 &&
             ttsState.completedUtteranceCount > lastCompletedCount.intValue
         ) {
+            delay(300) // TTS 잔향 + AEC 안정화 대기
             sttViewModel.beginRecording()
         }
         lastCompletedCount.intValue = ttsState.completedUtteranceCount
@@ -146,6 +152,7 @@ fun SearchVoiceInputRoute(
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = {},
         onNavigateToRouteSetting = {},
+        onNavigateToMapPreview = {},
         onNavigateToRouteBriefing = {},
         onStartVoiceCapture = { sttViewModel.startListening() },
         onStopVoiceCapture = { sttViewModel.stopListening() },
@@ -163,6 +170,7 @@ private fun SearchRouteContent(
     onNavigateToResults: (String, RouteEditingTarget) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
+    onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit = {},
     onStartVoiceCapture: () -> Unit = {},
     onStopVoiceCapture: () -> Unit = {},
@@ -197,6 +205,7 @@ private fun SearchRouteContent(
         onNavigateToResults,
         onNavigateToVoiceInput,
         onNavigateToRouteSetting,
+        onNavigateToMapPreview,
         onNavigateToRouteBriefing,
         onStartVoiceCapture,
         onStopVoiceCapture,
@@ -209,6 +218,7 @@ private fun SearchRouteContent(
                 SearchUiEvent.StartVoiceCapture -> onStartVoiceCapture()
                 SearchUiEvent.StopVoiceCapture -> onStopVoiceCapture()
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                SearchUiEvent.NavigateToMapPreview -> onNavigateToMapPreview()
                 SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
             }
@@ -237,6 +247,7 @@ private fun rememberSearchViewModel(): SearchViewModel {
                 searchRepository = appContainer.searchRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 placesRepository = appContainer.placesRepository,
             )
         }

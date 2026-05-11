@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import {
+  createAdminRoadNetworkEditJob,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
+  fetchAdminPlaceDetail,
   fetchAdminRoadNetworkPayload,
+  fetchAdminRoadNetworkEditJob,
+  adminAccessTokenRefreshedEvent,
   getStoredAdminAccessToken,
+  logoutAdminSession,
   storeAdminAccessToken,
+  updateAdminPlace,
+  updateAdminPlaceAccessibilityFeatures,
 } from "./api/adminApi";
 import { AdminAuthPanel } from "./auth/AdminAuthPanel";
 import { adminShellClassName } from "./layout/adminLayout";
@@ -14,12 +21,43 @@ import { facilityCategoryLabel } from "./map/facilityStyle";
 import { SegmentMap, type RoadviewDockState } from "./map/SegmentMap";
 import { HazardReportsPage } from "./report/HazardReportsPage";
 import { useAdminStore } from "./store/adminStore";
-import type { AdminMeResponse, AdminPage, FacilityFeature, SegmentFeature } from "./types";
+import type {
+  AccessibilityFeatureType,
+  AdminMeResponse,
+  AdminPage,
+  AdminPlaceDetailResponse,
+  AdminPlaceUpdateRequest,
+  FacilityFeature,
+  PlaceAccessibilityFeature,
+  PlaceCategory,
+  RoadNetworkEditJobResponse,
+  SegmentFeature,
+} from "./types";
+
+const placeCategories: PlaceCategory[] = [
+  "FOOD_CAFE",
+  "TOURIST_SPOT",
+  "ACCOMMODATION",
+  "HEALTHCARE",
+  "WELFARE",
+  "PUBLIC_OFFICE",
+  "ETC",
+];
+
+const accessibilityFeatureTypes: AccessibilityFeatureType[] = [
+  "accessibleEntrance",
+  "elevator",
+  "accessibleToilet",
+  "accessibleParking",
+  "chargingStation",
+  "accessibleRoom",
+  "guidanceFacility",
+];
 
 const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
     label: "보행 네트워크",
-    description: "SIDE_LINE/CROSS_WALK를 구·동 단위로 편집하고 CSV 반영 전 draft를 검수합니다.",
+    description: "SIDE_LINE/CROSS_WALK를 구·동 단위로 편집하고 DB 반영 전 draft를 검수합니다.",
   },
   facilities: {
     label: "편의시설",
@@ -53,8 +91,13 @@ function AdminApp() {
   const [accessToken, setAccessToken] = useState(getStoredAdminAccessToken);
   const [tokenInput, setTokenInput] = useState(accessToken);
   const [adminPrincipal, setAdminPrincipal] = useState<AdminMeResponse | null>(null);
+  const [activeRoadEditJobId, setActiveRoadEditJobId] = useState<number | null>(null);
+  const [lastRoadEditJob, setLastRoadEditJob] = useState<RoadNetworkEditJobResponse | null>(null);
+  const completedRoadEditJobIdRef = useRef<number | null>(null);
+  const submittedRoadEditAssignmentIdRef = useRef<string | null>(null);
   const {
     page,
+    selectedAssignmentId,
     selectedGu,
     selectedDong,
     draftEdits,
@@ -64,10 +107,24 @@ function AdminApp() {
     clearDraft,
     requestReview,
     addDraftEdit,
+    markApplied,
   } = useAdminStore();
 
   const hasToken = Boolean(accessToken);
   const isAdminAuthenticated = hasToken && adminPrincipal?.role === "ADMIN";
+  const currentAdmin = adminPrincipal;
+
+  useEffect(() => {
+    function handleAccessTokenRefreshed(event: Event) {
+      const nextToken = (event as CustomEvent<string>).detail;
+      if (!nextToken) return;
+      setAccessToken(nextToken);
+      setTokenInput(nextToken);
+    }
+
+    window.addEventListener(adminAccessTokenRefreshedEvent, handleAccessTokenRefreshed);
+    return () => window.removeEventListener(adminAccessTokenRefreshedEvent, handleAccessTokenRefreshed);
+  }, []);
 
   useEffect(() => {
     setRoadviewDock({
@@ -94,11 +151,91 @@ function AdminApp() {
   });
 
   const facilityQuery = useQuery({
-    queryKey: ["admin-facilities", accessToken],
-    queryFn: () => fetchAdminFacilityPayload({ accessToken }),
+    queryKey: ["admin-facilities", selectedGu, selectedDong, accessToken],
+    queryFn: () => fetchAdminFacilityPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
     enabled: page === "facilities" && isAdminAuthenticated,
     retry: false,
   });
+
+  const selectedFacilityPlaceId = selectedFacility ? Number(selectedFacility.properties.placeId) : null;
+
+  const placeDetailQuery = useQuery({
+    queryKey: ["admin-place", selectedFacilityPlaceId, accessToken],
+    queryFn: () => fetchAdminPlaceDetail(selectedFacilityPlaceId!, accessToken),
+    enabled: page === "facilities" && isAdminAuthenticated && Number.isFinite(selectedFacilityPlaceId),
+    retry: false,
+  });
+
+  const applyRoadNetworkMutation = useMutation({
+    mutationFn: () => {
+      submittedRoadEditAssignmentIdRef.current = selectedAssignmentId;
+      return createAdminRoadNetworkEditJob({
+        version: "ADMIN-draft-v1",
+        assignmentId: `${selectedGu}:${selectedDong}`,
+        gu: selectedGu,
+        dong: selectedDong,
+        role: currentAdmin?.role ?? "ADMIN",
+        createdAt: new Date().toISOString(),
+        edits: draftEdits,
+      }, accessToken);
+    },
+    onSuccess: (job) => {
+      completedRoadEditJobIdRef.current = null;
+      setLastRoadEditJob(job);
+      setActiveRoadEditJobId(job.jobId);
+    },
+  });
+
+  const updatePlaceMutation = useMutation({
+    mutationFn: ({ placeId, request }: { placeId: number; request: AdminPlaceUpdateRequest }) =>
+      updateAdminPlace(placeId, request, accessToken),
+    onSuccess: (place) => {
+      queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
+      queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
+    },
+  });
+
+  const updatePlaceFeaturesMutation = useMutation({
+    mutationFn: ({ placeId, features }: { placeId: number; features: PlaceAccessibilityFeature[] }) =>
+      updateAdminPlaceAccessibilityFeatures(placeId, features, accessToken),
+    onSuccess: (place) => {
+      queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
+      queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
+    },
+  });
+
+  const roadEditJobQuery = useQuery({
+    queryKey: ["admin-road-network-edit-job", activeRoadEditJobId, accessToken],
+    queryFn: () => fetchAdminRoadNetworkEditJob(activeRoadEditJobId!, accessToken),
+    enabled: activeRoadEditJobId !== null && isAdminAuthenticated,
+    refetchInterval: activeRoadEditJobId === null ? false : 2000,
+    retry: false,
+  });
+
+  const activeRoadEditJob = roadEditJobQuery.data ?? lastRoadEditJob;
+  const isRoadEditJobRunning = activeRoadEditJob?.status === "PENDING" || activeRoadEditJob?.status === "RUNNING";
+  const roadEditResult = activeRoadEditJob?.result ?? null;
+
+  useEffect(() => {
+    if (!activeRoadEditJob || activeRoadEditJob.status === "PENDING" || activeRoadEditJob.status === "RUNNING") {
+      return;
+    }
+    setLastRoadEditJob(activeRoadEditJob);
+    if (activeRoadEditJob.status === "FAILED") {
+      setActiveRoadEditJobId(null);
+      return;
+    }
+    if (completedRoadEditJobIdRef.current === activeRoadEditJob.jobId) {
+      return;
+    }
+    completedRoadEditJobIdRef.current = activeRoadEditJob.jobId;
+    markApplied(submittedRoadEditAssignmentIdRef.current ?? undefined);
+    submittedRoadEditAssignmentIdRef.current = null;
+    setSelectedSegment(null);
+    setActiveRoadEditJobId(null);
+    queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
+  }, [activeRoadEditJob, markApplied]);
 
   const filteredDongs = useMemo(() => {
     const areas = areasQuery.data ?? [];
@@ -106,13 +243,12 @@ function AdminApp() {
   }, [areasQuery.data, selectedGu]);
 
   function logoutAdmin() {
+    void logoutAdminSession(accessToken).catch(() => undefined);
     storeAdminAccessToken("");
     setAccessToken("");
     setTokenInput("");
     setAdminPrincipal(null);
   }
-
-  const currentAdmin = adminPrincipal;
 
   if (!isAdminAuthenticated || !currentAdmin) {
     return (
@@ -177,6 +313,7 @@ function AdminApp() {
               구
               <select
                 value={selectedGu}
+                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                 onChange={(event) => {
                   const nextGu = event.target.value;
                   const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
@@ -199,6 +336,7 @@ function AdminApp() {
               동
               <select
                 value={selectedDong}
+                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                 onChange={(event) => {
                   setSelectedArea(selectedGu, event.target.value);
                   setSelectedFacility(null);
@@ -281,10 +419,35 @@ function AdminApp() {
               </section>
               <section className="panel-section">
                 <h3>검수 흐름</h3>
-                <button className="primary" onClick={requestReview}>
+                <button
+                  className="primary"
+                  onClick={() => applyRoadNetworkMutation.mutate()}
+                  disabled={!draftEdits.length || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
+                >
+                  {applyRoadNetworkMutation.isPending || isRoadEditJobRunning ? "DB 반영 중" : "DB 반영"}
+                </button>
+                <button onClick={requestReview} disabled={!draftEdits.length || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}>
                   Request Review
                 </button>
-                <p className="muted">DB 수정 반영은 후속 API에서 처리합니다. 현재 화면은 DB 조회와 로컬 draft 확인만 지원합니다.</p>
+                {activeRoadEditJob && (
+                  <p className="muted">
+                    작업 #{activeRoadEditJob.jobId} {activeRoadEditJob.message}
+                    {roadEditResult && (
+                      <>
+                        {" "}추가 {roadEditResult.addedSegments}, 삭제 {roadEditResult.deletedSegments},
+                        생성 node {roadEditResult.createdNodes}, snap {roadEditResult.snappedNodes}
+                      </>
+                    )}
+                  </p>
+                )}
+                {(applyRoadNetworkMutation.error || roadEditJobQuery.error || activeRoadEditJob?.status === "FAILED") && (
+                  <p className="error-box">
+                    {applyRoadNetworkMutation.error?.message
+                      || roadEditJobQuery.error?.message
+                      || activeRoadEditJob?.message}
+                  </p>
+                )}
+                <p className="muted">로컬 draft를 비동기 작업으로 등록한 뒤 DB road_nodes, road_segments, segment_features에 반영합니다.</p>
               </section>
             </aside>
           </div>
@@ -330,7 +493,17 @@ function AdminApp() {
                   <Metric label="provider" value={facilityQuery.data?.summary?.providerPlaceIdCount ?? "-"} />
                 </div>
                 {selectedFacility ? (
-                  <FacilityDetails feature={selectedFacility} />
+                  <FacilityDetails
+                    feature={selectedFacility}
+                    detail={placeDetailQuery.data}
+                    loading={placeDetailQuery.isLoading}
+                    error={placeDetailQuery.error}
+                    savingBasic={updatePlaceMutation.isPending}
+                    savingFeatures={updatePlaceFeaturesMutation.isPending}
+                    saveError={updatePlaceMutation.error || updatePlaceFeaturesMutation.error}
+                    onSaveBasic={(placeId, request) => updatePlaceMutation.mutate({ placeId, request })}
+                    onSaveFeatures={(placeId, features) => updatePlaceFeaturesMutation.mutate({ placeId, features })}
+                  />
                 ) : (
                   <p className="muted">지도에서 편의시설 점을 hover하면 요약을 보고, 클릭하면 상세와 Roadview를 고정합니다.</p>
                 )}
@@ -385,16 +558,157 @@ function SegmentReferenceDetails({ segment }: { segment: SegmentFeature }) {
   );
 }
 
-function FacilityDetails({ feature }: { feature: FacilityFeature }) {
+function FacilityDetails({
+  feature,
+  detail,
+  loading,
+  error,
+  savingBasic,
+  savingFeatures,
+  saveError,
+  onSaveBasic,
+  onSaveFeatures,
+}: {
+  feature: FacilityFeature;
+  detail?: AdminPlaceDetailResponse;
+  loading: boolean;
+  error?: Error | null;
+  savingBasic: boolean;
+  savingFeatures: boolean;
+  saveError?: Error | null;
+  onSaveBasic: (placeId: number, request: AdminPlaceUpdateRequest) => void;
+  onSaveFeatures: (placeId: number, features: PlaceAccessibilityFeature[]) => void;
+}) {
   const properties = feature.properties;
+  const [name, setName] = useState(properties.name || "");
+  const [category, setCategory] = useState<PlaceCategory>(properties.category);
+  const [address, setAddress] = useState(properties.address || "");
+  const [providerPlaceId, setProviderPlaceId] = useState(properties.providerPlaceId || "");
+  const [lat, setLat] = useState(String(feature.geometry.coordinates[1] ?? ""));
+  const [lng, setLng] = useState(String(feature.geometry.coordinates[0] ?? ""));
+  const [features, setFeatures] = useState<Record<AccessibilityFeatureType, boolean>>(() =>
+    Object.fromEntries(accessibilityFeatureTypes.map((featureType) => [featureType, false])) as Record<AccessibilityFeatureType, boolean>,
+  );
+
+  useEffect(() => {
+    if (!detail) return;
+    setName(detail.name);
+    setCategory(detail.category);
+    setAddress(detail.address ?? "");
+    setProviderPlaceId(detail.providerPlaceId ?? "");
+    setLat(String(detail.point.lat));
+    setLng(String(detail.point.lng));
+    setFeatures(
+      Object.fromEntries(
+        accessibilityFeatureTypes.map((featureType) => [
+          featureType,
+          detail.accessibilityFeatures.some((item) => item.featureType === featureType && item.isAvailable),
+        ]),
+      ) as Record<AccessibilityFeatureType, boolean>,
+    );
+  }, [detail]);
+
+  const placeId = Number(properties.placeId);
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+  const canSave = Number.isFinite(placeId) && Boolean(detail) && Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
+
+  function saveBasic() {
+    if (!canSave) return;
+    onSaveBasic(placeId, {
+      name,
+      category,
+      address,
+      providerPlaceId,
+      point: {
+        lat: parsedLat,
+        lng: parsedLng,
+      },
+    });
+  }
+
+  function saveFeatures() {
+    if (!canSave) return;
+    onSaveFeatures(
+      placeId,
+      accessibilityFeatureTypes.map((featureType) => ({
+        featureType,
+        isAvailable: features[featureType],
+      })),
+    );
+  }
+
   return (
-    <dl className="attribute-detail-list">
-      <AttributeRow label="place" value={properties.placeId} />
-      <AttributeRow label="provider" value={properties.providerPlaceId || "-"} />
-      <AttributeRow label="이름" value={properties.name || "-"} />
-      <AttributeRow label="분류" value={facilityCategoryLabel(properties.category)} />
-      <AttributeRow label="주소" value={properties.address || "-"} />
-    </dl>
+    <>
+      <dl className="attribute-detail-list">
+        <AttributeRow label="place" value={properties.placeId} />
+        <AttributeRow label="provider" value={properties.providerPlaceId || "-"} />
+        <AttributeRow label="이름" value={properties.name || "-"} />
+        <AttributeRow label="분류" value={facilityCategoryLabel(properties.category)} />
+        <AttributeRow label="주소" value={properties.address || "-"} />
+      </dl>
+      {loading && <p className="muted">상세 정보를 불러오는 중입니다.</p>}
+      {error && <p className="error-box">{error.message}</p>}
+      {saveError && <p className="error-box">{saveError.message}</p>}
+      {detail && (
+        <>
+          <div className="admin-form-grid">
+            <label>
+              이름
+              <input value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+            <label>
+              카테고리
+              <select value={category} onChange={(event) => setCategory(event.target.value as PlaceCategory)}>
+                {placeCategories.map((item) => (
+                  <option key={item} value={item}>
+                    {facilityCategoryLabel(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              주소
+              <input value={address} onChange={(event) => setAddress(event.target.value)} />
+            </label>
+            <label>
+              providerPlaceId
+              <input value={providerPlaceId} onChange={(event) => setProviderPlaceId(event.target.value)} />
+            </label>
+            <label>
+              lat
+              <input value={lat} onChange={(event) => setLat(event.target.value)} />
+            </label>
+            <label>
+              lng
+              <input value={lng} onChange={(event) => setLng(event.target.value)} />
+            </label>
+          </div>
+          <div className="button-row">
+            <button className="primary" type="button" onClick={saveBasic} disabled={savingBasic || !canSave}>
+              {savingBasic ? "저장 중" : "기본 정보 저장"}
+            </button>
+          </div>
+          <div className="feature-toggle-list">
+            {accessibilityFeatureTypes.map((featureType) => (
+              <label key={featureType}>
+                <input
+                  type="checkbox"
+                  checked={features[featureType]}
+                  onChange={(event) => setFeatures((value) => ({ ...value, [featureType]: event.target.checked }))}
+                />
+                {accessibilityFeatureLabel(featureType)}
+              </label>
+            ))}
+          </div>
+          <div className="button-row">
+            <button className="primary" type="button" onClick={saveFeatures} disabled={savingFeatures || !canSave}>
+              {savingFeatures ? "저장 중" : "접근성 저장"}
+            </button>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -405,6 +719,25 @@ function AttributeRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function accessibilityFeatureLabel(featureType: AccessibilityFeatureType) {
+  switch (featureType) {
+    case "accessibleEntrance":
+      return "단차 없는 출입";
+    case "elevator":
+      return "엘리베이터";
+    case "accessibleToilet":
+      return "장애인 화장실";
+    case "accessibleParking":
+      return "장애인 주차";
+    case "chargingStation":
+      return "전동보장구 충전";
+    case "accessibleRoom":
+      return "객실 이용";
+    case "guidanceFacility":
+      return "안내시설";
+  }
 }
 
 function formatNumber(value?: number | null) {

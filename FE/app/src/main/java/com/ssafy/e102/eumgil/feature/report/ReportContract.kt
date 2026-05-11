@@ -233,6 +233,12 @@ sealed interface ReportUiAction {
     data object NextStepClicked : ReportUiAction
 
     data object ReportHistoryClicked : ReportUiAction
+
+    data object StartNewReportClicked : ReportUiAction
+
+    data object BackToMapClicked : ReportUiAction
+
+    data object TabReentered : ReportUiAction
 }
 
 sealed interface ReportUiEvent {
@@ -262,6 +268,8 @@ sealed interface ReportUiEvent {
     ) : ReportUiEvent
 
     data object NavigateToReportHistory : ReportUiEvent
+
+    data object NavigateToMap : ReportUiEvent
 }
 
 sealed interface ReportFailureReason {
@@ -274,6 +282,10 @@ sealed interface ReportFailureReason {
     data object NetworkUnavailable : ReportFailureReason
 
     data object LocalSaveFailed : ReportFailureReason
+
+    data object ServerSubmitFailed : ReportFailureReason
+
+    data object Unauthorized : ReportFailureReason
 
     data object Unknown : ReportFailureReason
 }

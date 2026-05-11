@@ -98,6 +98,25 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `map viewport state uses destination preview metadata before route destination`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Map viewport state should derive display metadata from the active destination preview before falling back to the persisted route destination.",
+            source.contains("val viewportDestination = uiState.facilityDetailSheetState.destinationPreview?.destination ?: uiState.selectedDestination"),
+        )
+        assertTrue(
+            "Selected destination summary should use the effective viewport destination so preview screens announce the searched place name.",
+            source.contains("selectedDestinationSummaryText(destination = viewportDestination)"),
+        )
+        assertTrue(
+            "Projected destination metadata should use the effective viewport destination so preview pins reuse the searched place name.",
+            source.contains("selectedDestinationName = viewportDestination?.name"),
+        )
+    }
+
+    @Test
     fun `facility detail and recent destinations use dedicated public office icon asset`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
@@ -224,6 +243,47 @@ class MapFacilityDetailSheetConfigurationTest {
         assertTrue(
             "Dedicated food cafe place drawable should exist for detail and recent destination surfaces.",
             File("src/main/res/drawable/ic_place_food_cafe.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail route entry button reuses the active current location icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Facility detail route entry CTA should reuse the active current-location button icon asset so it renders as a filled white icon on the primary CTA.",
+            source.contains("iconRes = R.drawable.ic_route_start_navigation_button"),
+        )
+        assertTrue(
+            "The active current-location button asset should exist before the facility detail CTA reuses it.",
+            File("src/main/res/drawable/ic_route_start_navigation_button.png").exists(),
+        )
+    }
+
+    @Test
+    fun `recent destination route button reuses the shared route entry icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/RecentDestinationBottomSheetShell.kt").readText()
+
+        assertTrue(
+            "Recent destination CTA should reuse the shared route-entry icon so the map home sheet matches the facility detail action.",
+            source.contains("R.drawable.ic_route_start_navigation_button"),
+        )
+    }
+
+    @Test
+    fun `recent destination accessibility chips use compact labels`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Recent destination accessible toilet chip should use the compact noun label without the trailing status suffix.",
+            source.contains("\"accessible-toilet\" -> \"장애인 화장실\""),
+        )
+        assertTrue(
+            "Recent destination elevator chip should use the compact noun label without the trailing status suffix.",
+            source.contains("\"elevator\" -> \"엘리베이터\""),
         )
     }
 }

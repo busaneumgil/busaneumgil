@@ -15,7 +15,7 @@ class RouteSettingLayoutPolicyTest {
         assertFalse(policy.allowsDefaultVerticalScroll)
         assertEquals(RouteSettingCtaPlacement.BottomBar, policy.ctaPlacement)
         assertEquals(RouteSettingMapHeightPolicy.FillRemainingCenterSpace, policy.mapHeightPolicy)
-        assertEquals(2, policy.maxVisibleOptionCards)
+        assertEquals(3, policy.maxVisibleOptionCards)
         assertFalse(policy.showsOptionSectionSupportingText)
         assertEquals("출발", policy.originLabel)
         assertEquals("도착", policy.destinationLabel)

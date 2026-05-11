@@ -6,8 +6,10 @@ cd "$ROOT_DIR"
 
 SERVER_PORT="${SERVER_PORT:-8080}"
 AI_PORT="${AI_PORT:-5000}"
+ADMIN_PORT="${ADMIN_PORT:-3001}"
 GRAPHHOPPER_ADMIN_PORT="${GRAPHHOPPER_ADMIN_PORT:-8990}"
 DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-false}"
+SMOKE_ADMIN="${SMOKE_ADMIN:-true}"
 SMOKE_RETRIES="${SMOKE_RETRIES:-24}"
 SMOKE_DELAY_SECONDS="${SMOKE_DELAY_SECONDS:-5}"
 
@@ -89,6 +91,12 @@ wait_for_status_with_body "POST" "http://127.0.0.1:${AI_PORT}/voice/analyze" "AI
   '"intent"[[:space:]]*:[[:space:]]*"unknown"' \
   '"error"[[:space:]]*:'
 wait_for_url "http://127.0.0.1:${SERVER_PORT}/v3/api-docs" "Backend"
+if [ "$SMOKE_ADMIN" = "true" ]; then
+  wait_for_status_with_body "GET" "http://127.0.0.1:${ADMIN_PORT}/health" "ADMIN health" "200" "" \
+    'ok'
+  wait_for_status_with_body "GET" "http://127.0.0.1:${ADMIN_PORT}/" "ADMIN web" "200" "" \
+    '<div id="root"></div>'
+fi
 
 if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
   wait_for_url "http://127.0.0.1:${GRAPHHOPPER_ADMIN_PORT}/healthcheck" "GraphHopper"

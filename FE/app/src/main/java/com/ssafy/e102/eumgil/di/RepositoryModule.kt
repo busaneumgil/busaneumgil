@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.SearchRemoteDataSource
@@ -40,7 +41,9 @@ import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyUserProfileRepository
@@ -64,6 +67,9 @@ import com.ssafy.e102.eumgil.data.repository.provideAuthLogoutRepository as prov
 object RepositoryModule {
     fun provideDestinationSelectionRepository(): DestinationSelectionRepository =
         InMemoryDestinationSelectionRepository()
+
+    fun provideDestinationPreviewRepository(): DestinationPreviewRepository =
+        InMemoryDestinationPreviewRepository()
 
     fun provideAuthSessionRepository(
         authSessionLocalDataSource: AuthSessionLocalDataSource,
@@ -191,10 +197,14 @@ object RepositoryModule {
     fun provideRouteRepository(
         localDataSource: RouteLocalDataSource,
         remoteDataSource: RouteRemoteDataSource,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): RouteRepository =
         DefaultRouteRepository(
             localDataSource = localDataSource,
             remoteDataSource = remoteDataSource,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideSearchRepository(
@@ -202,21 +212,29 @@ object RepositoryModule {
         localDataSource: SearchLocalDataSource,
         mockDataSource: SearchMockDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): SearchRepository =
         DefaultSearchRepository(
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideReportRepository(
         reportDraftDao: ReportDraftDao,
         reportOutboxDao: ReportOutboxDao,
+        hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
+        accessTokenProvider: suspend () -> String? = { null },
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
+            hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
+            accessTokenProvider = accessTokenProvider,
         )
 
     fun provideVoiceAnalyzeRepository(

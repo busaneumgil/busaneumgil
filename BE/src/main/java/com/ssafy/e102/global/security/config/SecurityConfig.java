@@ -58,6 +58,10 @@ public class SecurityConfig {
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.POST, "/auth/social-login", "/auth/signup", "/auth/reissue")
 				.permitAll()
+				.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus")
+				.permitAll()
+				.requestMatchers("/actuator/**")
+				.denyAll()
 				.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 				.permitAll()
 				.requestMatchers(HttpMethod.POST, "/auth/logout")
@@ -86,8 +90,9 @@ public class SecurityConfig {
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
 		configuration.setAllowedOrigins(corsProperties.allowedOrigins());
-		configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+		configuration.setAllowCredentials(true);
 		configuration.setMaxAge(3600L);
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -66,7 +66,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
     private val _uiEvent = Channel<LowVisionVoiceInputEvent>(Channel.BUFFERED)
     val uiEvent: Flow<LowVisionVoiceInputEvent> = _uiEvent.receiveAsFlow()
 
-    private val audioRecorder = AudioRecorder()
+    private val audioRecorder = AudioRecorder(getApplication())
     private var vadManager: VadManager? = null
     private var sttManager: SttManager? = null
     private var recordingJob: Job? = null

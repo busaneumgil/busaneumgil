@@ -1,14 +1,24 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.SystemClock
+import android.util.DisplayMetrics
 import android.util.Log
 import android.view.View
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -18,7 +28,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -27,8 +39,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.appcompat.content.res.AppCompatResources
 import com.ssafy.e102.eumgil.R
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
@@ -42,18 +56,27 @@ import com.kakao.vectormap.label.CompetitionType
 import com.kakao.vectormap.label.LabelLayerOptions
 import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
+import com.kakao.vectormap.label.LabelStyles
+import com.kakao.vectormap.label.LabelManager
 import com.kakao.vectormap.label.OrderingType
+import com.kakao.vectormap.route.RouteLineOptions
+import com.kakao.vectormap.route.RouteLineSegment
+import com.kakao.vectormap.route.RouteLineStyle
+import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.feature.map.MapTapClickType
+import com.ssafy.e102.eumgil.feature.map.MapTapPayload
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 internal fun KakaoMapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
     onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
-    onMapClick: (MapCoordinate) -> Unit,
+    onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -136,7 +159,6 @@ internal fun KakaoMapViewport(
                             overlay.resolveContentDescription(
                                 selectedDestinationName = state.selectedDestinationName,
                             ),
-                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -193,12 +215,19 @@ private class KakaoMapViewportController {
     private var latestState: MapViewportUiState? = null
     private var markerClickHandler: ((String) -> Unit)? = null
     private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean) -> Unit)? = null
-    private var mapClickHandler: ((MapCoordinate) -> Unit)? = null
+    private var mapClickHandler: ((MapTapPayload) -> Unit)? = null
+    private var facilityMarkerStyleCache: KakaoFacilityMarkerStyleCache? = null
     private var lastRenderedCameraRequestId: Long? = null
     private var lastRenderedCameraTarget: com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget? = null
+    private var lastRenderedRouteCameraSignature: Int? = null
     private var lastRenderedMarkers: List<KakaoMarkerRenderState> = emptyList()
+    private var lastRenderedRouteLines: List<KakaoRouteLineRenderState> = emptyList()
     private var lastDispatchedMapTapCoordinate: MapCoordinate? = null
     private var lastDispatchedMapTapUptimeMillis: Long = 0L
+    private var lastDispatchedMarkerTapId: String? = null
+    private var lastDispatchedMarkerTapUptimeMillis: Long = 0L
+    private var lastSuppressedTerrainTapCoordinate: MapCoordinate? = null
+    private var lastSuppressedTerrainTapUptimeMillis: Long = 0L
     private var isCameraMoveInProgress = false
     private var projectedMarkerTrackingRunnable: Runnable? = null
     private var isStarted = false
@@ -221,7 +250,7 @@ private class KakaoMapViewportController {
         initialState: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
-        onMapClick: (MapCoordinate) -> Unit,
+        onMapClick: (MapTapPayload) -> Unit,
     ): MapView {
         latestState = initialState
         markerClickHandler = onMarkerClick
@@ -232,6 +261,7 @@ private class KakaoMapViewportController {
             Log.i(KAKAO_MAP_LOG_TAG, "Creating Kakao MapView instance")
             createdMapView.addOnAttachStateChangeListener(attachStateListener)
             mapView = createdMapView
+            facilityMarkerStyleCache = KakaoFacilityMarkerStyleCache(context = context)
             if (createdMapView.isAttachedToWindow) {
                 startMap(createdMapView)
             }
@@ -243,7 +273,7 @@ private class KakaoMapViewportController {
         state: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
-        onMapClick: (MapCoordinate) -> Unit,
+        onMapClick: (MapTapPayload) -> Unit,
     ) {
         latestState = state
         markerClickHandler = onMarkerClick
@@ -279,9 +309,13 @@ private class KakaoMapViewportController {
         rendererStatus = KakaoRendererStatus.Initializing
         rendererFailure = null
         projectedMarkerOverlays = emptyList()
+        facilityMarkerStyleCache?.clear()
+        facilityMarkerStyleCache = null
         lastRenderedCameraRequestId = null
         lastRenderedCameraTarget = null
+        lastRenderedRouteCameraSignature = null
         lastRenderedMarkers = emptyList()
+        lastRenderedRouteLines = emptyList()
     }
 
     fun markRendererTimedOut() {
@@ -366,25 +400,50 @@ private class KakaoMapViewportController {
                         KAKAO_MAP_LOG_TAG,
                         "Kakao map ready ${createKakaoCameraDebugSummary(cameraTarget)}",
                     )
-                    readyMap.setPoiClickable(false)
+                    readyMap.setPoiClickable(true)
                     readyMap.setOnLabelClickListener { _, _, label ->
-                        (label.getTag() as? String)?.let { markerId ->
-                            Log.i(KAKAO_MAP_LOG_TAG, "Label tapped markerId=$markerId")
-                            markerClickHandler?.invoke(markerId)
+                        ((label.getTag() as? String) ?: label.labelId)?.let { markerId ->
+                            dispatchMarkerTap(
+                                markerId = markerId,
+                                position = label.position,
+                            )
                             true
                         } ?: false
                     }
-                    readyMap.setOnTerrainClickListener { _, position, _ ->
-                        dispatchMapTap(source = "terrain", position = position, hasPoi = false)
-                    }
-                    readyMap.setOnMapClickListener { _, position, _, poi ->
-                        if (poi == null) {
-                            dispatchMapTap(source = "map", position = position, hasPoi = false)
-                        } else {
+                    readyMap.setOnPoiClickListener { _, position, layerId, poiId ->
+                        if (layerId == KAKAO_MARKER_LAYER_ID && poiId.isNotBlank()) {
+                            dispatchMarkerTap(
+                                markerId = poiId,
+                                position = position,
+                            )
+                        } else if (poiId.isNotBlank()) {
                             Log.d(
                                 KAKAO_MAP_LOG_TAG,
-                                "Ignoring map click with poi lat=${position.latitude.toLogCoordinate()} lng=${position.longitude.toLogCoordinate()}",
+                                "Skipping external POI tap without nameHint providerPlaceId=$poiId",
                             )
+                        }
+                    }
+                    readyMap.setOnTerrainClickListener { _, position, _ ->
+                        dispatchMapTap(
+                            source = "terrain",
+                            position = position,
+                            clickType = MapTapClickType.ADDRESS,
+                        )
+                    }
+                    readyMap.setOnMapClickListener { _, position, _, poi ->
+                        if (poi?.isPoi == true && poi.layerId == KAKAO_MARKER_LAYER_ID && poi.poiId.isNotBlank()) {
+                            dispatchMarkerTap(
+                                markerId = poi.poiId,
+                                position = position,
+                            )
+                        } else if (poi?.isPoi == true && poi.poiId.isNotBlank()) {
+                            dispatchExternalPoiTap(
+                                position = position,
+                                providerPlaceId = poi.poiId,
+                                nameHint = poi.name,
+                            )
+                        } else if (poi == null) {
+                            dispatchMapTap(source = "map", position = position, clickType = MapTapClickType.ADDRESS)
                         }
                     }
                     readyMap.setOnCameraMoveStartListener { _, _ ->
@@ -440,6 +499,7 @@ private class KakaoMapViewportController {
         val state = latestState ?: return
 
         syncCamera(readyMap = readyMap, state = state)
+        syncRouteLines(readyMap = readyMap, state = state)
         syncMarkers(readyMap = readyMap, state = state)
         updateProjectedMarkerOverlays(readyMap = readyMap, state = state)
     }
@@ -551,6 +611,31 @@ private class KakaoMapViewportController {
     ) {
         val currentTarget = state.cameraTarget
         val cameraState = createKakaoCameraRenderState(currentTarget)
+        val routeCameraState = createKakaoRouteCameraRenderState(state.overlayState)
+        if (routeCameraState != null) {
+            if (
+                lastRenderedCameraRequestId == cameraState.requestId &&
+                lastRenderedRouteCameraSignature == routeCameraState.signature
+            ) {
+                return
+            }
+            val routePoints =
+                routeCameraState.points
+                    .map { point -> LatLng.from(point.latitude, point.longitude) }
+                    .toTypedArray()
+            readyMap.moveCamera(
+                CameraUpdateFactory.fitMapPoints(routePoints, KAKAO_ROUTE_CAMERA_PADDING),
+            )
+            lastRenderedCameraRequestId = cameraState.requestId
+            lastRenderedCameraTarget = currentTarget
+            lastRenderedRouteCameraSignature = routeCameraState.signature
+            Log.d(
+                KAKAO_MAP_LOG_TAG,
+                "Route camera fitted points=${routePoints.size} requestId=${cameraState.requestId}",
+            )
+            return
+        }
+        lastRenderedRouteCameraSignature = null
         if (lastRenderedCameraRequestId == cameraState.requestId) return
         val cameraUpdate =
             CameraUpdateFactory.newCenterPosition(
@@ -573,6 +658,48 @@ private class KakaoMapViewportController {
         )
     }
 
+    private fun syncRouteLines(
+        readyMap: KakaoMap,
+        state: MapViewportUiState,
+    ) {
+        val routeLineStates = createKakaoRouteLineRenderStates(state.overlayState.polylines)
+        if (lastRenderedRouteLines == routeLineStates) return
+
+        val routeLineManager = readyMap.routeLineManager ?: return
+        routeLineManager.clearAll()
+        if (routeLineStates.isNotEmpty()) {
+            val routeLineLayer =
+                routeLineManager.addLayer(
+                    KAKAO_ROUTE_LINE_LAYER_ID,
+                    KAKAO_ROUTE_LINE_LAYER_Z_ORDER,
+                ) ?: return
+            routeLineStates.forEach { routeLine ->
+                val points =
+                    routeLine.points.map { point ->
+                        LatLng.from(point.latitude, point.longitude)
+                    }
+                val style =
+                    RouteLineStyle.from(
+                        routeLine.lineWidth,
+                        routeLine.lineColor,
+                        routeLine.strokeWidth,
+                        routeLine.strokeColor,
+                    )
+                val segment = RouteLineSegment.from(points, style)
+                routeLineLayer.addRouteLine(
+                    RouteLineOptions
+                        .from(routeLine.routeLineId, segment)
+                        .setZOrder(routeLine.zOrder),
+                )
+            }
+        }
+        lastRenderedRouteLines = routeLineStates
+        Log.d(
+            KAKAO_MAP_LOG_TAG,
+            "Route lines synced count=${routeLineStates.size}",
+        )
+    }
+
     private fun syncMarkers(
         readyMap: KakaoMap,
         state: MapViewportUiState,
@@ -585,43 +712,37 @@ private class KakaoMapViewportController {
         if (lastRenderedMarkers == markerRenderStates) return
 
         val labelManager = readyMap.labelManager ?: return
+        val markerStyleCache = facilityMarkerStyleCache ?: return
         labelManager.removeAllLabelLayer()
-        val mapContext = mapView?.context
-        val layer =
-            labelManager.addLayer(
-                LabelLayerOptions
-                    .from(KAKAO_MARKER_LAYER_ID)
-                    .setCompetitionType(CompetitionType.None)
-                    .setOrderingType(OrderingType.Rank)
-                    .setZOrder(KAKAO_MARKER_LAYER_Z_ORDER)
-                    .setVisible(true)
-                    .setClickable(true),
-            ) ?: return
-
-        markerRenderStates.forEach { marker ->
-            layer.addLabel(
-                LabelOptions
-                    .from(
-                        marker.markerId,
-                        LatLng.from(marker.latitude, marker.longitude),
-                    )
-                    .setStyles(
-                        (mapContext?.let { context ->
-                            LabelStyle.from(context, marker.iconResId)
-                        } ?: LabelStyle.from(marker.iconResId))
-                            .setApplyDpScale(true)
-                            .apply {
-                                if (marker.anchorPointX != null && marker.anchorPointY != null) {
-                                    setAnchorPoint(marker.anchorPointX, marker.anchorPointY)
-                                }
-                            },
-                    )
-                    .setClickable(true)
-                    .setRank(marker.rank)
-                    .apply {
-                        marker.clickTargetId?.let(::setTag)
-                    },
-            )
+        if (markerRenderStates.isNotEmpty()) {
+            val markerLayer =
+                labelManager.addLayer(
+                    LabelLayerOptions
+                        .from(KAKAO_MARKER_LAYER_ID)
+                        .setCompetitionType(CompetitionType.None)
+                        .setOrderingType(OrderingType.Rank)
+                        .setClickable(true)
+                        .setZOrder(KAKAO_MARKER_LAYER_Z_ORDER),
+                ) ?: return
+            markerLayer.setClickable(true)
+            markerRenderStates
+                .sortedWith(compareByDescending<KakaoMarkerRenderState> { it.rank }.thenBy { it.markerId })
+                    .forEach { marker ->
+                        val labelStyles = markerStyleCache.stylesFor(labelManager, marker)
+                        val label =
+                            markerLayer.addLabel(
+                                LabelOptions
+                                    .from(
+                                        marker.markerId,
+                                        LatLng.from(marker.latitude, marker.longitude),
+                                    ).setStyles(labelStyles)
+                                    .setRank(marker.rank)
+                                    .setClickable(marker.clickTargetId != null)
+                                    .setTag(marker.clickTargetId ?: marker.markerId),
+                            ) ?: return@forEach
+                        marker.clickTargetId?.let(label::setTag)
+                        label.setClickable(marker.clickTargetId != null)
+                    }
         }
         lastRenderedMarkers = markerRenderStates
         Log.d(
@@ -648,28 +769,83 @@ private class KakaoMapViewportController {
     private fun dispatchMapTap(
         source: String,
         position: LatLng,
-        hasPoi: Boolean,
+        clickType: MapTapClickType,
+        providerPlaceId: String? = null,
+        nameHint: String? = null,
     ) {
         val coordinate =
             MapCoordinate(
                 latitude = position.latitude,
                 longitude = position.longitude,
             )
-        val previousCoordinate = lastDispatchedMapTapCoordinate
         val now = SystemClock.elapsedRealtime()
+        val suppressedByMarkerTap =
+            source == "terrain" &&
+                isSuppressedByRecentMarkerTap(coordinate = coordinate, now = now)
+        val previousCoordinate = lastDispatchedMapTapCoordinate
         val isDuplicate =
             previousCoordinate != null &&
                 now - lastDispatchedMapTapUptimeMillis <= KAKAO_MAP_TAP_DEDUP_WINDOW_MILLIS &&
                 abs(previousCoordinate.latitude - coordinate.latitude) <= KAKAO_MAP_TAP_DEDUP_COORDINATE_EPSILON &&
                 abs(previousCoordinate.longitude - coordinate.longitude) <= KAKAO_MAP_TAP_DEDUP_COORDINATE_EPSILON
-        Log.i(
-            KAKAO_MAP_LOG_TAG,
-            "Map tap source=$source lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()} poi=$hasPoi duplicate=$isDuplicate",
-        )
+        if (suppressedByMarkerTap) return
         if (isDuplicate) return
         lastDispatchedMapTapCoordinate = coordinate
         lastDispatchedMapTapUptimeMillis = now
-        mapClickHandler?.invoke(coordinate)
+        mapClickHandler?.invoke(
+            MapTapPayload(
+                coordinate = coordinate,
+                clickType = clickType,
+                provider = if (clickType == MapTapClickType.POI) KAKAO_PROVIDER_NAME else null,
+                providerPlaceId = providerPlaceId,
+                nameHint = nameHint?.takeIf { it.isNotBlank() },
+            ),
+        )
+    }
+
+    private fun dispatchExternalPoiTap(
+        position: LatLng,
+        providerPlaceId: String,
+        nameHint: String?,
+    ) {
+        dispatchMapTap(
+            source = "poi",
+            position = position,
+            clickType = MapTapClickType.POI,
+            providerPlaceId = providerPlaceId,
+            nameHint = nameHint,
+        )
+    }
+
+    private fun dispatchMarkerTap(
+        markerId: String,
+        position: LatLng,
+    ) {
+        val now = SystemClock.elapsedRealtime()
+        val isDuplicate =
+            lastDispatchedMarkerTapId == markerId &&
+                now - lastDispatchedMarkerTapUptimeMillis <= KAKAO_MARKER_TAP_DEDUP_WINDOW_MILLIS
+        if (isDuplicate) return
+
+        lastDispatchedMarkerTapId = markerId
+        lastDispatchedMarkerTapUptimeMillis = now
+        lastSuppressedTerrainTapCoordinate =
+            MapCoordinate(
+                latitude = position.latitude,
+                longitude = position.longitude,
+            )
+        lastSuppressedTerrainTapUptimeMillis = now
+        markerClickHandler?.invoke(markerId)
+    }
+
+    private fun isSuppressedByRecentMarkerTap(
+        coordinate: MapCoordinate,
+        now: Long,
+    ): Boolean {
+        val previousCoordinate = lastSuppressedTerrainTapCoordinate ?: return false
+        return now - lastSuppressedTerrainTapUptimeMillis <= KAKAO_MARKER_TAP_DEDUP_WINDOW_MILLIS &&
+            abs(previousCoordinate.latitude - coordinate.latitude) <= KAKAO_MAP_TAP_DEDUP_COORDINATE_EPSILON &&
+            abs(previousCoordinate.longitude - coordinate.longitude) <= KAKAO_MAP_TAP_DEDUP_COORDINATE_EPSILON
     }
 
     private fun updateProjectedMarkerOverlays(
@@ -681,6 +857,7 @@ private class KakaoMapViewportController {
                 currentLocation = state?.currentLocation,
                 selectedDestinationCoordinate = state?.selectedDestinationCoordinate,
                 selectedMapPinCoordinate = state?.selectedMapPinCoordinate,
+                overlayPoints = state?.overlayState?.points.orEmpty(),
             )
         projectedMarkerOverlays =
             createKakaoProjectedMarkerOverlays(projectedMarkers) { coordinate ->
@@ -735,14 +912,19 @@ private enum class KakaoRendererStatus {
 }
 
 private const val KAKAO_MARKER_LAYER_ID = "eumgil-map-markers"
+private const val KAKAO_ROUTE_LINE_LAYER_ID = "eumgil-route-lines"
+private const val KAKAO_PROVIDER_NAME = "KAKAO"
 private const val KAKAO_MAP_LOG_TAG = "KakaoMapViewport"
 private const val MAX_LIFECYCLE_DISPATCH_RETRIES = 30
 private const val LIFECYCLE_DISPATCH_RETRY_DELAY_MILLIS = 50L
 private const val KAKAO_RENDERER_RESTART_DELAY_MILLIS = 220L
 private const val KAKAO_RENDERER_READY_TIMEOUT_MILLIS = 4_000L
 private const val KAKAO_MAP_TAP_DEDUP_WINDOW_MILLIS = 250L
+private const val KAKAO_MARKER_TAP_DEDUP_WINDOW_MILLIS = 250L
 private const val KAKAO_MAP_TAP_DEDUP_COORDINATE_EPSILON = 0.000001
-private const val KAKAO_MARKER_LAYER_Z_ORDER = 100
+private const val KAKAO_MARKER_LAYER_Z_ORDER = 1000
+private const val KAKAO_ROUTE_LINE_LAYER_Z_ORDER = 900
+private const val KAKAO_ROUTE_CAMERA_PADDING = 84
 
 private fun GestureType.isUserDrivenCameraMove(): Boolean = this != GestureType.Unknown
 
@@ -751,34 +933,55 @@ private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", 
 @Composable
 private fun MapProjectedMarkerOverlay(
     overlay: KakaoProjectedMarkerOverlay,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
+    contentDescription: String?,
 ) {
     val density = LocalDensity.current
     val markerSize = overlay.sizeDp.dp
     val markerWidthPx = with(density) { markerSize.roundToPx() }
     val markerHeightPx = markerWidthPx
-    Box(modifier = modifier.zIndex(overlay.zIndex)) {
-        Image(
-            painter = painterResource(id = overlay.iconResId),
-            contentDescription = contentDescription,
-            modifier =
-                Modifier
-                    .offset {
-                        IntOffset(
-                            x = overlay.screenPoint.x - (markerWidthPx * overlay.anchorPointX).toInt(),
-                            y = overlay.screenPoint.y - (markerHeightPx * overlay.anchorPointY).toInt(),
-                        )
-                    }
-                    .size(markerSize),
-        )
+    val markerModifier =
+        Modifier
+            .zIndex(overlay.zIndex)
+            .offset {
+                IntOffset(
+                    x = overlay.screenPoint.x - (markerWidthPx * overlay.anchorPointX).toInt(),
+                    y = overlay.screenPoint.y - (markerHeightPx * overlay.anchorPointY).toInt(),
+                )
+            }
+            .size(markerSize)
+
+    if (overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION) {
+        Box(
+            modifier = markerModifier,
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 4.dp,
+            ) {}
+            Surface(
+                modifier = Modifier.size((overlay.sizeDp * 0.58f).dp),
+                shape = CircleShape,
+                color = Color(0xFF2A7BFF),
+                border = BorderStroke(1.dp, Color(0xFF0F4FC6)),
+            ) {}
+        }
+        return
     }
+
+    Image(
+        painter = painterResource(id = overlay.iconResId),
+        contentDescription = contentDescription,
+        modifier = markerModifier,
+    )
 }
 
 @Composable
 private fun KakaoProjectedMarkerOverlay.resolveContentDescription(
     selectedDestinationName: String?,
-): String =
+): String? =
     when (kind) {
         KakaoProjectedMarkerKind.CURRENT_LOCATION ->
             stringResource(id = R.string.navigation_map_marker_current)
@@ -789,4 +992,240 @@ private fun KakaoProjectedMarkerOverlay.resolveContentDescription(
 
         KakaoProjectedMarkerKind.SELECTED_MAP_PIN ->
             stringResource(id = R.string.map_viewport_description_selected)
+
+        KakaoProjectedMarkerKind.ROUTE_ORIGIN ->
+            stringResource(id = R.string.navigation_map_marker_origin)
+
+        KakaoProjectedMarkerKind.ROUTE_DESTINATION ->
+            stringResource(id = R.string.navigation_map_marker_destination)
+
+        KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION -> null
     }
+
+private class KakaoFacilityMarkerStyleCache(
+    private val context: Context,
+) {
+    private val densityBucket = resolveDensityBucket(context.resources.displayMetrics.densityDpi)
+    private val bitmapCache = mutableMapOf<KakaoFacilityMarkerBitmapCacheKey, Bitmap>()
+    private val stylesCache = mutableMapOf<KakaoFacilityMarkerBitmapCacheKey, LabelStyles>()
+
+    fun stylesFor(
+        labelManager: LabelManager,
+        marker: KakaoMarkerRenderState,
+    ): LabelStyles {
+        val key =
+            KakaoFacilityMarkerBitmapCacheKey(
+                category = marker.category,
+                isSelected = marker.isSelected,
+                densityBucket = densityBucket,
+            )
+        return stylesCache.getOrPut(key) {
+            val styles =
+                LabelStyles.from(
+                    key.styleId,
+                    LabelStyle
+                        .from(bitmapFor(marker, key))
+                        .setApplyDpScale(false)
+                        .setAnchorPoint(marker.anchorPointX, marker.anchorPointY),
+                )
+            labelManager.addLabelStyles(styles) ?: styles
+        }
+    }
+
+    fun clear() {
+        stylesCache.clear()
+        bitmapCache.clear()
+    }
+
+    private fun bitmapFor(
+        marker: KakaoMarkerRenderState,
+        key: KakaoFacilityMarkerBitmapCacheKey,
+    ): Bitmap =
+        bitmapCache.getOrPut(key) {
+            createFacilityMarkerBitmap(
+                category = marker.category,
+                glyphResId = marker.glyphResId,
+                isSelected = marker.isSelected,
+                sizeDp = marker.sizeDp,
+            )
+        }
+
+    private fun createFacilityMarkerBitmap(
+        category: FacilityCategory,
+        glyphResId: Int,
+        isSelected: Boolean,
+        sizeDp: Int,
+    ): Bitmap {
+        val sizePx = dpToPx(sizeDp.toFloat())
+        val borderWidthPx = dpToPx(if (isSelected) 2f else 1f).coerceAtLeast(1f)
+        val glyphSizePx = dpToPx(resolveFacilityMarkerGlyphSizeDp(category).toFloat())
+        val bitmapSizePx = sizePx.roundToInt()
+        val glyphSizeIntPx = glyphSizePx.roundToInt()
+        val outerRect = RectF(0f, 0f, sizePx, sizePx)
+        val innerRect = RectF(borderWidthPx, borderWidthPx, sizePx - borderWidthPx, sizePx - borderWidthPx)
+        val palette = facilityMarkerPalette(category)
+        val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val outerPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = if (isSelected) FACILITY_MARKER_SELECTED_RING_COLOR else palette.borderColor
+            }
+        val innerPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = palette.containerColor
+            }
+
+        if (category == FacilityCategory.BRAILLE_BLOCK) {
+            val radiusPx = dpToPx(FACILITY_MARKER_BRAILLE_CORNER_RADIUS_DP)
+            canvas.save()
+            canvas.rotate(45f, sizePx / 2f, sizePx / 2f)
+            canvas.drawRoundRect(outerRect, radiusPx, radiusPx, outerPaint)
+            canvas.drawRoundRect(innerRect, radiusPx, radiusPx, innerPaint)
+            canvas.restore()
+        } else {
+            val outerRadius = sizePx / 2f
+            canvas.drawCircle(outerRadius, outerRadius, outerRadius, outerPaint)
+            canvas.drawCircle(outerRadius, outerRadius, outerRadius - borderWidthPx, innerPaint)
+        }
+
+        val glyphDrawable =
+            AppCompatResources
+                .getDrawable(context, glyphResId)
+                ?.mutate()
+                ?: return bitmap
+        DrawableCompat.setTint(glyphDrawable, palette.contentColor)
+        val glyphLeft = ((sizePx - glyphSizePx) / 2f).toInt()
+        val glyphTop = ((sizePx - glyphSizePx) / 2f).toInt()
+        glyphDrawable.bounds =
+            Rect(
+                glyphLeft,
+                glyphTop,
+                glyphLeft + glyphSizeIntPx,
+                glyphTop + glyphSizeIntPx,
+            )
+        glyphDrawable.draw(canvas)
+        return bitmap
+    }
+
+    private fun dpToPx(dp: Float): Float = dp * context.resources.displayMetrics.density
+}
+
+private fun facilityMarkerPalette(category: FacilityCategory): KakaoFacilityMarkerPalette =
+    when (category) {
+        FacilityCategory.TOILET ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF00897B.toInt(),
+                borderColor = 0xFFBFEDE7.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.ELEVATOR ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF5E7A2F.toInt(),
+                borderColor = 0xFFDDE8C8.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.CHARGING_STATION ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF9C5F00.toInt(),
+                borderColor = 0xFFF1D6AA.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.FOOD_CAFE,
+        FacilityCategory.RESTAURANT,
+        ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFFD96A39.toInt(),
+                borderColor = 0xFFF7D3C3.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.TOURIST_SPOT,
+        FacilityCategory.TOURIST_ATTRACTION,
+        ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF1976D2.toInt(),
+                borderColor = 0xFFC7E0FF.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.ACCOMMODATION ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF8D6E63.toInt(),
+                borderColor = 0xFFE5D4CD.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.HEALTHCARE ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFFC62828.toInt(),
+                borderColor = 0xFFF5C4C4.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.WELFARE ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF2E7D6B.toInt(),
+                borderColor = 0xFFC7E7DE.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.PUBLIC_OFFICE ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF546E7A.toInt(),
+                borderColor = 0xFFD1DADF.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.BRAILLE_BLOCK ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF7A5A1D.toInt(),
+                borderColor = 0xFFF0DEB7.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+
+        FacilityCategory.OTHER ->
+            KakaoFacilityMarkerPalette(
+                containerColor = 0xFF2563EB.toInt(),
+                borderColor = 0xFFDBEAFE.toInt(),
+                contentColor = 0xFFFFFFFF.toInt(),
+            )
+    }
+
+private fun resolveFacilityMarkerGlyphSizeDp(category: FacilityCategory): Int =
+    when (category) {
+        FacilityCategory.ELEVATOR -> 16
+        FacilityCategory.BRAILLE_BLOCK -> 15
+        else -> 14
+    }
+
+private fun resolveDensityBucket(densityDpi: Int): Int =
+    when {
+        densityDpi >= DisplayMetrics.DENSITY_XXXHIGH -> DisplayMetrics.DENSITY_XXXHIGH
+        densityDpi >= DisplayMetrics.DENSITY_XXHIGH -> DisplayMetrics.DENSITY_XXHIGH
+        densityDpi >= DisplayMetrics.DENSITY_XHIGH -> DisplayMetrics.DENSITY_XHIGH
+        densityDpi >= DisplayMetrics.DENSITY_HIGH -> DisplayMetrics.DENSITY_HIGH
+        else -> DisplayMetrics.DENSITY_MEDIUM
+    }
+
+private data class KakaoFacilityMarkerBitmapCacheKey(
+    val category: FacilityCategory,
+    val isSelected: Boolean,
+    val densityBucket: Int,
+) {
+    val styleId: String
+        get() = "facility-${category.name.lowercase(Locale.US)}-${if (isSelected) "selected" else "normal"}-$densityBucket"
+}
+
+private data class KakaoFacilityMarkerPalette(
+    val containerColor: Int,
+    val borderColor: Int,
+    val contentColor: Int,
+)
+
+private const val FACILITY_MARKER_SELECTED_RING_COLOR = -0x1
+private const val FACILITY_MARKER_BRAILLE_CORNER_RADIUS_DP = 10f

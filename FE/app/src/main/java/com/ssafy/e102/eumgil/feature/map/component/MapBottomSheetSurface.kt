@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -25,8 +26,17 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun MapBottomSheetSurface(
     modifier: Modifier = Modifier,
     showHandle: Boolean = true,
+    handleModifier: Modifier = Modifier,
+    containerColor: Color = Color.Unspecified,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val resolvedContainerColor =
+        if (containerColor == Color.Unspecified) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.995f)
+        } else {
+            containerColor
+        }
+
     Surface(
         modifier = modifier,
         shape =
@@ -34,7 +44,7 @@ fun MapBottomSheetSurface(
                 topStart = EumRadius.large,
                 topEnd = EumRadius.large,
             ),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.995f),
+        color = resolvedContainerColor,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)),
         shadowElevation = 12.dp,
     ) {
@@ -44,7 +54,7 @@ fun MapBottomSheetSurface(
         ) {
             if (showHandle) {
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().then(handleModifier),
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(

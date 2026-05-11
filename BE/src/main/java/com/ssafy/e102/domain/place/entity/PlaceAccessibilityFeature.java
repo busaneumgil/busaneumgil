@@ -1,5 +1,7 @@
 package com.ssafy.e102.domain.place.entity;
 
+import com.ssafy.e102.domain.place.exception.PlaceErrorCode;
+import com.ssafy.e102.domain.place.exception.PlaceException;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 
 import jakarta.persistence.Column;
@@ -41,4 +43,33 @@ public class PlaceAccessibilityFeature {
 
 	@Column(nullable = false)
 	private boolean isAvailable;
+
+	public static PlaceAccessibilityFeature create(
+		Place place,
+		AccessibilityFeatureType featureType,
+		boolean isAvailable) {
+		PlaceAccessibilityFeature feature = new PlaceAccessibilityFeature();
+		feature.place = requirePlace(place);
+		feature.featureType = requireFeatureType(featureType);
+		feature.isAvailable = isAvailable;
+		return feature;
+	}
+
+	private static Place requirePlace(Place place) {
+		if (place == null) {
+			throw invalidRequest("장소는 필수입니다.");
+		}
+		return place;
+	}
+
+	private static AccessibilityFeatureType requireFeatureType(AccessibilityFeatureType featureType) {
+		if (featureType == null) {
+			throw invalidRequest("접근성 속성 유형은 필수입니다.");
+		}
+		return featureType;
+	}
+
+	private static PlaceException invalidRequest(String message) {
+		return new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, message);
+	}
 }

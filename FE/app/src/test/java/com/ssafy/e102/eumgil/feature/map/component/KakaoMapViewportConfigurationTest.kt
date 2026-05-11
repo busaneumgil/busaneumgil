@@ -99,22 +99,85 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
-    fun `kakao marker styles apply dp scale for visible map pin rendering`() {
+    fun `facility markers render through native kakao label layers with runtime bitmap styles`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
         assertTrue(
-            "Kakao marker styles should opt into dp scaling so vector pin assets render at an intended on-screen size.",
-            source.contains("setApplyDpScale(true)"),
+            "Facility markers should recreate a dedicated Kakao label layer instead of projecting every facility marker through Compose.",
+            source.contains("LabelLayerOptions") &&
+                source.contains("from(KAKAO_MARKER_LAYER_ID)") &&
+                source.contains("markerLayer.addLabel("),
         )
         assertTrue(
-            "Custom map markers should not compete with base map labels, otherwise the dropped pin can be hidden even after it is rendered.",
-            source.contains("setCompetitionType(CompetitionType.None)"),
+            "Facility labels should use runtime-generated bitmap styles so vector drawables are not handed to Kakao labels directly.",
+            source.contains("KakaoFacilityMarkerStyleCache") &&
+                source.contains("LabelStyle") &&
+                source.contains(".from(bitmapFor("),
         )
         assertTrue(
-            "Marker ordering should follow rank so the dropped pin can stay above lower-priority markers in the same layer.",
-            source.contains("setOrderingType(OrderingType.Rank)"),
+            "The renderer should still clear old label layers before re-adding the current facility labels.",
+            source.contains("removeAllLabelLayer()"),
+        )
+        assertFalse(
+            "Facility markers should no longer use the dedicated Compose projection overlay path.",
+            source.contains("MapProjectedFacilityMarkerOverlay("),
+        )
+        assertFalse(
+            "Facility markers should no longer keep a projected facility overlay list in controller state.",
+            source.contains("projectedFacilityMarkerOverlays"),
+        )
+        assertFalse(
+            "Facility markers should no longer be derived from createKakaoFacilityMarkerOverlays.",
+            source.contains("createKakaoFacilityMarkerOverlays("),
+        )
+    }
+
+    @Test
+    fun `route overlays render through native kakao route line layer`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Route preview and navigation polylines should be rendered by Kakao's native route line layer.",
+            source.contains("syncRouteLines(") &&
+                source.contains("RouteLineOptions") &&
+                source.contains("RouteLineSegment") &&
+                source.contains("routeLineManager.addLayer("),
+        )
+        assertTrue(
+            "Route map camera should fit route geometry instead of staying on the default map center.",
+            source.contains("CameraUpdateFactory.fitMapPoints") &&
+                source.contains("createKakaoRouteCameraRenderState"),
+        )
+        assertTrue(
+            "Route origin and destination markers should stay projected over the Kakao map viewport.",
+            source.contains("overlayPoints = state?.overlayState?.points.orEmpty()"),
+        )
+    }
+
+    @Test
+    fun `external kakao poi taps are forwarded as provider map tap payloads`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Kakao POI taps should be converted into POI map tap payloads instead of being treated as blank terrain taps.",
+            source.contains("dispatchExternalPoiTap(") &&
+                source.contains("MapTapClickType.POI") &&
+                source.contains("KAKAO_PROVIDER_NAME"),
+        )
+        assertTrue(
+            "The generic map click callback should pass Kakao's POI name when the SDK exposes it.",
+            source.contains("nameHint = poi.name"),
+        )
+        assertTrue(
+            "The POI callback should still fall back to providerPlaceId when Kakao does not expose a name in that callback.",
+            source.contains("providerPlaceId = poiId") &&
+                source.contains("nameHint = null"),
         )
     }
 }

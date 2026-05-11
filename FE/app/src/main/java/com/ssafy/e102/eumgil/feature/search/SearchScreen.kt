@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -564,9 +565,26 @@ private fun SearchResultSection(
                     SearchResultItem(
                         result = result,
                         onClick = {
-                            onAction(SearchUiAction.SearchResultBriefingClicked(result = result))
+                            onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
                         },
                     )
+                }
+                if (resultState.hasNext) {
+                    OutlinedButton(
+                        onClick = { onAction(SearchUiAction.LoadNextPageClicked) },
+                        enabled = resultState.isLoadingNextPage.not(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(EumRadius.small),
+                    ) {
+                        Text(
+                            text =
+                                if (resultState.isLoadingNextPage) {
+                                    "Loading more results"
+                                } else {
+                                    "More results"
+                                },
+                        )
+                    }
                 }
             }
 

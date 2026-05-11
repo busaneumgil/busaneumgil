@@ -82,7 +82,6 @@ fun RouteDetailEntryRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel, routeOption) {
-        viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.WALK))
         viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
     }
 

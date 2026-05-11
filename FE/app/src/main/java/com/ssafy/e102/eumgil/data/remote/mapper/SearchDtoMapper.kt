@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.data.remote.mapper
 
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
@@ -23,41 +24,53 @@ internal object SearchDtoMapper {
                 List(placesJson.length()) { index ->
                     placesJson.getJSONObject(index).toSearchPlaceDto()
                 },
+            nextCursor = dataJson.optNullableString("nextCursor"),
+            size = dataJson.optInt("size", placesJson.length()),
+            totalElements = dataJson.optLong("totalElements", placesJson.length().toLong()),
+            hasNext = dataJson.optBoolean("hasNext"),
         )
     }
 
     fun toSearchResults(dto: PlacesSearchDto): List<SearchResult> =
-        dto.places.map { placeDto ->
-            val serverPlaceId = placeDto.placeId?.toString()
-            val providerPlaceId = placeDto.providerPlaceId?.takeIf { providerPlaceId -> providerPlaceId.isNotBlank() }
-            val isVerifiedPlace = placeDto.matched && !serverPlaceId.isNullOrBlank()
-            SearchResult(
-                placeId =
-                    serverPlaceId
-                        ?: synthesizeExternalPlaceId(
-                            provider = placeDto.provider,
-                            providerPlaceId = providerPlaceId,
-                            name = placeDto.name,
-                            point = placeDto.point,
-                        ),
-                title = placeDto.name,
-                subtitle = placeDto.address.orEmpty(),
-                latitude = placeDto.point.lat,
-                longitude = placeDto.point.lng,
-                category = PlaceApiFieldMapper.toPlaceCategoryOrNull(placeDto.category).takeIf { isVerifiedPlace },
-                serverPlaceId = serverPlaceId,
-                providerPlaceId = providerPlaceId,
-                accessibilityTagKeys =
-                    if (isVerifiedPlace) {
+        toSearchPage(dto).results
+
+    fun toSearchPage(dto: PlacesSearchDto): SearchPage =
+        SearchPage(
+            results =
+                dto.places.map { placeDto ->
+                    val serverPlaceId = placeDto.placeId?.toString()
+                    val providerPlaceId = placeDto.providerPlaceId?.takeIf { providerPlaceId -> providerPlaceId.isNotBlank() }
+                    val isVerifiedPlace = placeDto.matched && !serverPlaceId.isNullOrBlank()
+                    val accessibilityTagKeys =
                         PlaceApiFieldMapper.toAccessibilityTagKeys(
                             PlaceApiFieldMapper.toPlaceFeatureAvailabilities(placeDto.accessibilityFeatures),
                         )
-                    } else {
-                        emptyList()
-                    },
-                matched = isVerifiedPlace,
-            )
-        }
+                    SearchResult(
+                        placeId =
+                            serverPlaceId
+                                ?: synthesizeExternalPlaceId(
+                                    provider = placeDto.provider,
+                                    providerPlaceId = providerPlaceId,
+                                    name = placeDto.name,
+                                    point = placeDto.point,
+                                ),
+                        title = placeDto.name,
+                        subtitle = placeDto.address.orEmpty(),
+                        latitude = placeDto.point.lat,
+                        longitude = placeDto.point.lng,
+                        category = PlaceApiFieldMapper.toPlaceCategoryOrNull(placeDto.category).takeIf { isVerifiedPlace },
+                        serverPlaceId = serverPlaceId,
+                        provider = placeDto.provider.takeIf { provider -> provider.isNotBlank() },
+                        providerPlaceId = providerPlaceId,
+                        accessibilityTagKeys = accessibilityTagKeys.takeIf { isVerifiedPlace }.orEmpty(),
+                        matched = isVerifiedPlace,
+                    )
+                },
+            nextCursor = dto.nextCursor,
+            hasNext = dto.hasNext,
+            size = dto.size,
+            totalElements = dto.totalElements,
+        )
 
     fun parseVoiceSearchAnalysisDto(body: String): VoiceSearchAnalysisDto {
         val responseJson = JSONObject(body)

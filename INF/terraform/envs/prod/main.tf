@@ -12,6 +12,7 @@ locals {
   redis_authed    = var.redis_auth_token != ""
   api_domain      = local.create_dns ? "api.${var.root_domain}" : "_"
   ai_domain       = local.create_dns ? "ai.${var.root_domain}" : "_"
+  admin_domain    = local.create_dns ? "admin.${var.root_domain}" : "_"
 
   common_tags = {
     Project     = var.project_name
@@ -408,7 +409,7 @@ resource "aws_route53_record" "api_s2" {
   count = local.create_dns ? 1 : 0
 
   zone_id = var.route53_zone_id
-  name    = "api.${var.root_domain}"
+  name    = local.api_domain
   type    = "A"
   ttl     = 60
   records = [aws_eip.s2.public_ip]
@@ -418,10 +419,22 @@ resource "aws_route53_record" "ai_s2" {
   count = local.create_dns ? 1 : 0
 
   zone_id = var.route53_zone_id
-  name    = "ai.${var.root_domain}"
+  name    = local.ai_domain
   type    = "A"
   ttl     = 60
   records = [aws_eip.s2.public_ip]
+}
+
+resource "aws_route53_record" "admin_s2" {
+  count = local.create_dns ? 1 : 0
+
+  zone_id = var.route53_zone_id
+  name    = local.admin_domain
+  type    = "A"
+  ttl     = 60
+  records = [aws_eip.s2.public_ip]
+  # Allows Terraform to adopt a manually pre-created admin A record during rollout.
+  allow_overwrite = true
 }
 
 resource "aws_route53_record" "jenkins_s1" {

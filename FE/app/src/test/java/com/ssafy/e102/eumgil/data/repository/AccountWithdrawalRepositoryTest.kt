@@ -306,6 +306,8 @@ private class RecordingBookmarkDao : BookmarkDao {
 
     override suspend fun getBookmark(placeId: String): BookmarkEntity? = null
 
+    override suspend fun getBookmarkByTargetId(bookmarkTargetId: String): BookmarkEntity? = null
+
     override suspend fun getBookmarkCount(): Int = 0
 
     override suspend fun upsertBookmark(bookmark: BookmarkEntity) = Unit
@@ -313,6 +315,8 @@ private class RecordingBookmarkDao : BookmarkDao {
     override suspend fun upsertBookmarks(bookmarks: List<BookmarkEntity>) = Unit
 
     override suspend fun deleteBookmark(placeId: String) = Unit
+
+    override suspend fun deleteBookmarkByTargetId(bookmarkTargetId: String) = Unit
 
     override suspend fun clearBookmarks() {
         clearBookmarksCalled = true

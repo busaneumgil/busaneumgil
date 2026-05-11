@@ -78,6 +78,7 @@ data class NavigationMapPointUiState(
 data class NavigationMapSegmentUiState(
     val sequence: Int,
     val polyline: List<GeoCoordinate>,
+    val segmentStartCoordinate: GeoCoordinate? = null,
     val distanceMeters: Int,
     val riskLevel: RouteRiskLevel,
     val guidanceMessage: String,

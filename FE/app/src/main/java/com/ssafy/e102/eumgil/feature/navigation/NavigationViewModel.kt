@@ -70,6 +70,7 @@ class NavigationViewModel(
     private var latestRemainingDistanceMeters: Int? = null
     private var latestEstimatedMinutes: Int? = null
     private var latestTransitPresentation: NavigationTransitPresentation? = null
+    private var lastSegmentMarkerDebugSummary: String? = null
 
     init {
         collectLocationUpdates()
@@ -278,6 +279,14 @@ class NavigationViewModel(
                 activeSegmentIndex = activeSegmentIndex,
                 fallback = stepCard.toNavigationBriefingText(),
             )
+        val mapOverlay =
+            runtimeRequest.toMapOverlayUiState(
+                currentLocationCoordinate = latestLocationCoordinate ?: runtimeRequest.origin.coordinate,
+                activeSegmentIndex = activeSegmentIndex,
+                focusedSegmentIndex = focusedSegmentIndex,
+                mapFocusMode = mapFocusMode,
+            )
+        logSegmentMarkerDebugSummary(mapOverlay)
 
         mutableUiState.update { state ->
             state.copy(
@@ -288,13 +297,7 @@ class NavigationViewModel(
                         runtimeRequest.selectedRoute.routeOption,
                     ),
                 mapPlaceholderDescription = runtimeRequest.toMapPlaceholderDescription(screenState),
-                mapOverlay =
-                    runtimeRequest.toMapOverlayUiState(
-                        currentLocationCoordinate = latestLocationCoordinate ?: runtimeRequest.origin.coordinate,
-                        activeSegmentIndex = activeSegmentIndex,
-                        focusedSegmentIndex = focusedSegmentIndex,
-                        mapFocusMode = mapFocusMode,
-                    ),
+                mapOverlay = mapOverlay,
                 segmentSync =
                     runtimeRequest.toSegmentSyncUiState(
                         activeSegmentIndex = activeSegmentIndex,
@@ -320,6 +323,13 @@ class NavigationViewModel(
                     ),
             )
         }
+    }
+
+    private fun logSegmentMarkerDebugSummary(mapOverlay: NavigationMapOverlayUiState) {
+        val summary = createNavigationSegmentMarkerDebugSummary(mapOverlay)
+        if (summary == lastSegmentMarkerDebugSummary) return
+        lastSegmentMarkerDebugSummary = summary
+        println("SegmentMarkerTrace[NavigationViewModel] $summary")
     }
 
     private fun syncActiveSegment(nextActiveSegmentIndex: Int) {
@@ -1060,6 +1070,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
             NavigationMapSegmentUiState(
                 sequence = segment.sequence,
                 polyline = segment.polyline.points,
+                segmentStartCoordinate = selectedRoute.resolveSegmentStartCoordinate(index),
                 distanceMeters = segment.distanceMeters,
                 riskLevel = segment.riskLevel,
                 guidanceMessage = segment.guidanceMessage,
@@ -1098,6 +1109,53 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,
     )
+}
+
+internal fun createNavigationSegmentMarkerDebugSummary(
+    mapOverlay: NavigationMapOverlayUiState,
+): String {
+    val activeIndex = mapOverlay.routeSegments.indexOfFirst(NavigationMapSegmentUiState::isActive)
+    val focusedIndex = mapOverlay.routeSegments.indexOfFirst(NavigationMapSegmentUiState::isFocused)
+    return buildString {
+        append("focusMode=")
+        append(mapOverlay.mapFocusMode.name)
+        append(" count=")
+        append(mapOverlay.routeSegments.size)
+        append(" active=")
+        append(activeIndex)
+        append(" focused=")
+        append(focusedIndex)
+        append(" routePolyline=")
+        append(mapOverlay.selectedRoutePolyline.size)
+        append(" activePolyline=")
+        append(mapOverlay.activeSegmentPolyline.size)
+        append(" focusedPolyline=")
+        append(mapOverlay.focusedSegmentPolyline.size)
+        append(" details=[")
+        append(
+            mapOverlay.routeSegments.mapIndexed { index, segment ->
+                buildString {
+                    append("idx=")
+                    append(index)
+                    append(" seq=")
+                    append(segment.sequence)
+                    append(" kind=")
+                    append(segment.travelKind.name)
+                    append(" polyline=")
+                    append(segment.polyline.size)
+                    append(" first=")
+                    append(segment.polyline.firstOrNull().toDebugCoordinate())
+                    append(" start=")
+                    append(segment.segmentStartCoordinate.toDebugCoordinate())
+                    append(" active=")
+                    append(segment.isActive)
+                    append(" focused=")
+                    append(segment.isFocused)
+                }
+            }.joinToString(separator = "; "),
+        )
+        append("]")
+    }
 }
 
 private fun RouteNavigationRequest.toSegmentSyncUiState(
@@ -1155,10 +1213,17 @@ private fun RouteCandidate.resolveSegmentStartCoordinate(segmentIndex: Int): Geo
     val segment = segments.getOrNull(segmentIndex) ?: return null
 
     segment.polyline.points.firstOrNull()?.let { return it }
-    val sourceLeg =
-        segment.sourceLegSequence?.let { sourceLegSequence ->
-            legs.firstOrNull { leg -> leg.sequence == sourceLegSequence }
-        }
+    val sourceLeg = segment.resolveSourceLeg(legs = legs)
+    if (segment.isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)) {
+        sourceLeg?.polyline?.points?.firstOrNull()?.let { return it }
+    }
+
+    val fallbackPolyline = navigationPolylinePoints()
+    if (fallbackPolyline.isNotEmpty()) {
+        val progressRatio = resolveSegmentStartProgressRatio(segmentIndex = segmentIndex, weights = segmentWeights())
+        fallbackPolyline.coordinateAtProgressRatio(progressRatio)?.let { return it }
+    }
+
     return sourceLeg?.polyline?.points?.firstOrNull()
 }
 
@@ -1166,23 +1231,34 @@ private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): Geo
     val segment = segments.getOrNull(segmentIndex) ?: return null
 
     segment.polyline.points.toNavigationFocusCoordinate()?.let { return it }
-    val sourceLeg =
-        segment.sourceLegSequence?.let { sourceLegSequence ->
-            legs.firstOrNull { leg -> leg.sequence == sourceLegSequence }
-        }
+    val sourceLeg = segment.resolveSourceLeg(legs = legs)
     sourceLeg?.toNavigationFocusCoordinate()?.let { return it }
 
     val fallbackPolyline = navigationPolylinePoints()
     if (fallbackPolyline.isEmpty()) return null
 
-    val segmentWeights =
-        segments.map { candidateSegment ->
-            candidateSegment.polyline.totalDistanceWeight()
-                ?: candidateSegment.distanceMeters.toDouble().takeIf { distanceMeters -> distanceMeters > 0 }
-                ?: 1.0
-        }
-    val progressRatio = resolveSegmentMidProgressRatio(segmentIndex = segmentIndex, weights = segmentWeights)
+    val progressRatio = resolveSegmentMidProgressRatio(segmentIndex = segmentIndex, weights = segmentWeights())
     return fallbackPolyline.coordinateAtProgressRatio(progressRatio)
+}
+
+private fun RouteCandidate.segmentWeights(): List<Double> =
+    segments.map { candidateSegment ->
+        candidateSegment.polyline.totalDistanceWeight()
+            ?: candidateSegment.distanceMeters.toDouble().takeIf { distanceMeters -> distanceMeters > 0 }
+            ?: 1.0
+    }
+
+private fun RouteSegment.resolveSourceLeg(legs: List<RouteLeg>): RouteLeg? =
+    sourceLegSequence?.let { sourceLegSequence ->
+        legs.firstOrNull { leg -> leg.sequence == sourceLegSequence }
+    }
+
+private fun RouteSegment.isFirstSegmentOfSourceLeg(
+    segmentIndex: Int,
+    segments: List<RouteSegment>,
+): Boolean {
+    val sourceLegSequence = sourceLegSequence ?: return false
+    return segments.indexOfFirst { candidateSegment -> candidateSegment.sourceLegSequence == sourceLegSequence } == segmentIndex
 }
 
 private fun RouteLeg.toNavigationFocusCoordinate(): GeoCoordinate? =
@@ -1214,6 +1290,26 @@ private fun resolveSegmentMidProgressRatio(
     val accumulatedWeightBefore = sanitizedWeights.take(safeSegmentIndex).sum()
     val targetWeight = sanitizedWeights[safeSegmentIndex]
     return ((accumulatedWeightBefore + (targetWeight / 2.0)) / totalWeight).coerceIn(0.0, 1.0)
+}
+
+private fun resolveSegmentStartProgressRatio(
+    segmentIndex: Int,
+    weights: List<Double>,
+): Double {
+    if (weights.isEmpty()) return 0.0
+
+    val sanitizedWeights =
+        weights.map { weight ->
+            if (weight > 0.0) {
+                weight
+            } else {
+                1.0
+            }
+        }
+    val safeSegmentIndex = segmentIndex.coerceIn(0, sanitizedWeights.lastIndex)
+    val totalWeight = sanitizedWeights.sum().takeIf { total -> total > 0.0 } ?: sanitizedWeights.size.toDouble()
+    val accumulatedWeightBefore = sanitizedWeights.take(safeSegmentIndex).sum()
+    return (accumulatedWeightBefore / totalWeight).coerceIn(0.0, 1.0)
 }
 
 private fun List<GeoCoordinate>.coordinateAtProgressRatio(progressRatio: Double): GeoCoordinate? {
@@ -1463,3 +1559,8 @@ private object NoOpRouteRepository : RouteRepository {
         score: Int,
     ) = error("NavigationViewModel does not submit ratings.")
 }
+
+private fun GeoCoordinate?.toDebugCoordinate(): String =
+    this?.let { coordinate ->
+        String.format(Locale.US, "%.6f,%.6f", coordinate.latitude, coordinate.longitude)
+    } ?: "null"

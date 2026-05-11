@@ -27,6 +27,9 @@ import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitArrivalData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointKind
+import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
+import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationSelectionHandoff
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
@@ -143,7 +146,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `segment tap resolves focused map coordinate even when the segment polyline is missing`() =
+    fun `segment tap resolves the missing segment focus to its route start coordinate`() =
         runTest {
             val viewModel = createViewModel()
 
@@ -156,8 +159,80 @@ class NavigationViewModelTest {
             assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
             assertTrue(viewModel.uiState.value.mapOverlay.focusedSegmentPolyline.isEmpty())
             assertEquals(
-                GeoCoordinate(latitude = 35.1800, longitude = 129.0720),
+                SPARSE_ROUTE_START_POINT,
                 viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+        }
+
+    @Test
+    fun `segment tap resolves later sparse segments to each branch start coordinate`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testMultiSparseSegmentNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertTrue(viewModel.uiState.value.mapOverlay.focusedSegmentPolyline.isEmpty())
+            assertEquals(
+                SPARSE_ROUTE_BRANCH_POINT_1,
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 2))
+            advanceUntilIdle()
+
+            assertEquals(
+                SPARSE_ROUTE_BRANCH_POINT_2,
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+        }
+
+    @Test
+    fun `navigation segment marker debug summary reports segment sequence kind and first coordinate`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testLegPolylineFallbackNavigationRequest())
+            advanceUntilIdle()
+
+            val summary = createNavigationSegmentMarkerDebugSummary(viewModel.uiState.value.mapOverlay)
+
+            assertTrue(summary.contains("focusMode=ACTIVE"))
+            assertTrue(summary.contains("count=2"))
+            assertTrue(summary.contains("idx=0 seq=1 kind=WALK polyline=0 first=null"))
+            assertTrue(summary.contains("idx=1 seq=2 kind=TRANSIT polyline=2 first=35.180600,129.073500"))
+        }
+
+    @Test
+    fun `navigation overlay creates fallback junction markers for sparse later segments`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testMultiSparseSegmentNavigationRequest())
+            advanceUntilIdle()
+
+            val overlayState = createNavigationViewportOverlayState(viewModel.uiState.value.mapOverlay)
+            val junctionCoordinates =
+                overlayState.points
+                    .filter { point -> point.kind == MapViewportPointKind.SEGMENT_JUNCTION }
+                    .map { it.coordinate }
+
+            assertEquals(
+                listOf(
+                    MapCoordinate(
+                        latitude = SPARSE_ROUTE_BRANCH_POINT_1.latitude,
+                        longitude = SPARSE_ROUTE_BRANCH_POINT_1.longitude,
+                    ),
+                    MapCoordinate(
+                        latitude = SPARSE_ROUTE_BRANCH_POINT_2.latitude,
+                        longitude = SPARSE_ROUTE_BRANCH_POINT_2.longitude,
+                    ),
+                ),
+                junctionCoordinates,
             )
         }
 
@@ -509,12 +584,12 @@ private fun testSparseSegmentNavigationRequest(): RouteNavigationRequest =
         origin =
             RouteWaypoint(
                 name = "Origin",
-                coordinate = GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
+                coordinate = SPARSE_ROUTE_START_POINT,
             ),
         destination =
             RouteWaypoint(
                 name = "Destination",
-                coordinate = GeoCoordinate(latitude = 35.1800, longitude = 129.0780),
+                coordinate = SPARSE_ROUTE_END_POINT,
             ),
         selectedRoute =
             RouteCandidate(
@@ -534,9 +609,9 @@ private fun testSparseSegmentNavigationRequest(): RouteNavigationRequest =
                             RoutePolyline(
                                 points =
                                     listOf(
-                                        GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
-                                        GeoCoordinate(latitude = 35.1800, longitude = 129.0740),
-                                        GeoCoordinate(latitude = 35.1800, longitude = 129.0780),
+                                        SPARSE_ROUTE_START_POINT,
+                                        SPARSE_ROUTE_BRANCH_POINT_1,
+                                        SPARSE_ROUTE_END_POINT,
                                     ),
                             ),
                         segmentCount = 2,
@@ -573,8 +648,8 @@ private fun testSparseSegmentNavigationRequest(): RouteNavigationRequest =
                                 RoutePolyline(
                                     points =
                                         listOf(
-                                            GeoCoordinate(latitude = 35.1800, longitude = 129.0740),
-                                            GeoCoordinate(latitude = 35.1800, longitude = 129.0780),
+                                            SPARSE_ROUTE_BRANCH_POINT_1,
+                                            SPARSE_ROUTE_END_POINT,
                                         ),
                                 ),
                             distanceMeters = 400,
@@ -589,6 +664,96 @@ private fun testSparseSegmentNavigationRequest(): RouteNavigationRequest =
                 searchId = "search-3",
                 routeId = "sparse-route-1",
                 sessionId = "session-3",
+            ),
+    )
+
+private fun testMultiSparseSegmentNavigationRequest(): RouteNavigationRequest =
+    RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = "Origin",
+                coordinate = SPARSE_ROUTE_START_POINT,
+            ),
+        destination =
+            RouteWaypoint(
+                name = "Destination",
+                coordinate = SPARSE_ROUTE_END_POINT,
+            ),
+        selectedRoute =
+            RouteCandidate(
+                serverRouteId = "multi-sparse-route-1",
+                routeOption = RouteOption.RECOMMENDED,
+                title = "Multi Sparse Route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 900,
+                        estimatedTimeMinutes = 14,
+                        riskLevel = RouteRiskLevel.LOW,
+                        durationSeconds = 840,
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        SPARSE_ROUTE_START_POINT,
+                                        SPARSE_ROUTE_BRANCH_POINT_1,
+                                        SPARSE_ROUTE_BRANCH_POINT_2,
+                                        SPARSE_ROUTE_END_POINT,
+                                    ),
+                            ),
+                        segmentCount = 3,
+                        renderableSegmentCount = 0,
+                    ),
+                legs =
+                    listOf(
+                        RouteLeg(
+                            sequence = 1,
+                            role = RouteLegRole.WALK_ONLY,
+                            distanceMeters = 900,
+                            durationSeconds = 840,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            SPARSE_ROUTE_START_POINT,
+                                            SPARSE_ROUTE_BRANCH_POINT_1,
+                                        ),
+                                ),
+                        ),
+                    ),
+                segments =
+                    listOf(
+                        RouteSegment(
+                            sequence = 1,
+                            polyline = RoutePolyline(),
+                            distanceMeters = 300,
+                            guidanceMessage = "Start walking",
+                            sourceLegSequence = 1,
+                        ),
+                        RouteSegment(
+                            sequence = 2,
+                            polyline = RoutePolyline(),
+                            distanceMeters = 300,
+                            guidanceMessage = "Turn at the first branch",
+                            sourceLegSequence = 1,
+                        ),
+                        RouteSegment(
+                            sequence = 3,
+                            polyline = RoutePolyline(),
+                            distanceMeters = 300,
+                            guidanceMessage = "Turn at the second branch",
+                            sourceLegSequence = 1,
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Multi sparse navigation test route"),
+        selectionHandoff =
+            RouteNavigationSelectionHandoff(
+                searchId = "search-3b",
+                routeId = "multi-sparse-route-1",
+                sessionId = "session-3b",
             ),
     )
 
@@ -693,6 +858,10 @@ private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1815, longitude = 129.0756)
 private val LEG_FALLBACK_START_POINT = GeoCoordinate(latitude = 35.1802, longitude = 129.0718)
+private val SPARSE_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1800, longitude = 129.0700)
+private val SPARSE_ROUTE_BRANCH_POINT_1 = GeoCoordinate(latitude = 35.1800, longitude = 129.0740)
+private val SPARSE_ROUTE_BRANCH_POINT_2 = GeoCoordinate(latitude = 35.1800, longitude = 129.0760)
+private val SPARSE_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1800, longitude = 129.0780)
 
 private val TRANSIT_START_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0600)
 private val TRANSIT_BOARDING_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0625)

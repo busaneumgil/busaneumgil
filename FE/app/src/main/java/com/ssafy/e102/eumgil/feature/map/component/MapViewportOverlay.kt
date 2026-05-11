@@ -164,7 +164,8 @@ internal fun createNavigationViewportOverlayState(
 ): MapViewportOverlayState {
     val useFocusedProjection = mapOverlay.mapFocusMode == NavigationMapFocusMode.FOCUSED
 
-    return MapViewportOverlayState(
+    val overlayState =
+        MapViewportOverlayState(
         points =
             buildList {
                 mapOverlay.currentLocation?.let { point ->
@@ -197,7 +198,11 @@ internal fun createNavigationViewportOverlayState(
                         ),
                     )
                 }
-                addAll(mapOverlay.routeSegments.toSegmentMarkerOverlays())
+                addAll(
+                    mapOverlay.routeSegments.toSegmentMarkerOverlays(
+                        mapFocusMode = mapOverlay.mapFocusMode,
+                    ),
+                )
                 if (useFocusedProjection) {
                     mapOverlay.focusCoordinate?.let { coordinate ->
                         add(
@@ -250,6 +255,8 @@ internal fun createNavigationViewportOverlayState(
                 )
             }.filter(MapViewportPolylineOverlay::isRenderable),
     )
+    logSegmentJunctionOverlayDebugSummary(mapOverlay, overlayState)
+    return overlayState
 }
 
 private fun defaultMapViewportFallbackCamera(): MapViewportFallbackCamera =
@@ -297,18 +304,77 @@ private fun GeoCoordinate.toMapCoordinate(): MapCoordinate =
         longitude = longitude,
     )
 
-private fun List<NavigationMapSegmentUiState>.toSegmentMarkerOverlays(): List<MapViewportPointOverlay> =
+private fun List<NavigationMapSegmentUiState>.toSegmentMarkerOverlays(
+    mapFocusMode: NavigationMapFocusMode,
+): List<MapViewportPointOverlay> =
     mapIndexedNotNull { index, segment ->
-        if (index == 0 || !segment.isRenderable) return@mapIndexedNotNull null
-        val coordinate = segment.polyline.firstOrNull() ?: return@mapIndexedNotNull null
+        if (index == 0) return@mapIndexedNotNull null
+        val coordinate = segment.segmentStartCoordinate ?: segment.polyline.firstOrNull() ?: return@mapIndexedNotNull null
         MapViewportPointOverlay(
             overlayId = "navigation-junction-$index",
             coordinate = coordinate.toMapCoordinate(),
             kind = MapViewportPointKind.SEGMENT_JUNCTION,
             tone = segment.travelKind.toSegmentMarkerTone(),
-            includeInProjection = false,
+            includeInProjection =
+                when {
+                    mapFocusMode == NavigationMapFocusMode.FOCUSED -> segment.isFocused
+                    segment.polyline.size < 2 -> true
+                    else -> false
+                },
         )
     }
+
+internal fun createSegmentJunctionOverlayDebugSummary(
+    mapOverlay: NavigationMapOverlayUiState,
+    overlayState: MapViewportOverlayState,
+): String {
+    val junctionPoints =
+        overlayState.points.filter { point ->
+            point.kind == MapViewportPointKind.SEGMENT_JUNCTION
+        }
+    val projectionPoints =
+        overlayState.points
+            .filter(MapViewportPointOverlay::includeInProjection)
+            .joinToString(separator = ", ") { point ->
+                "${point.overlayId}:${point.kind.name}"
+            }
+    val projectionPolylines =
+        overlayState.polylines
+            .filter(MapViewportPolylineOverlay::includeInProjection)
+            .joinToString(separator = ", ") { polyline ->
+                "${polyline.overlayId}:${polyline.style.name}"
+            }
+    return buildString {
+        append("focusMode=")
+        append(mapOverlay.mapFocusMode.name)
+        append(" points=")
+        append(overlayState.points.size)
+        append(" polylines=")
+        append(overlayState.polylines.size)
+        append(" junctions=")
+        append(junctionPoints.size)
+        append(" details=[")
+        append(
+            junctionPoints.joinToString(separator = "; ") { point ->
+                buildString {
+                    append("id=")
+                    append(point.overlayId)
+                    append(" coord=")
+                    append(point.coordinate.toDebugCoordinate())
+                    append(" tone=")
+                    append(point.tone?.name ?: "null")
+                    append(" includeInProjection=")
+                    append(point.includeInProjection)
+                }
+            },
+        )
+        append("] projectionPoints=[")
+        append(projectionPoints)
+        append("] projectionPolylines=[")
+        append(projectionPolylines)
+        append("]")
+    }
+}
 
 private fun List<NavigationMapSegmentUiState>.toBaselinePolylineOverlays(
     includeInProjection: Boolean,
@@ -391,3 +457,18 @@ internal const val DEFAULT_VIEWPORT_CENTER_LATITUDE = 35.1796
 internal const val DEFAULT_VIEWPORT_CENTER_LONGITUDE = 129.0756
 internal const val MIN_VIEWPORT_LATITUDE_SPAN = 0.0035
 internal const val MIN_VIEWPORT_LONGITUDE_SPAN = 0.0045
+
+private var lastSegmentJunctionOverlayDebugSummary: String? = null
+
+private fun logSegmentJunctionOverlayDebugSummary(
+    mapOverlay: NavigationMapOverlayUiState,
+    overlayState: MapViewportOverlayState,
+) {
+    val summary = createSegmentJunctionOverlayDebugSummary(mapOverlay, overlayState)
+    if (summary == lastSegmentJunctionOverlayDebugSummary) return
+    lastSegmentJunctionOverlayDebugSummary = summary
+    println("SegmentMarkerTrace[MapViewportOverlay] $summary")
+}
+
+private fun MapCoordinate.toDebugCoordinate(): String =
+    String.format(java.util.Locale.US, "%.6f,%.6f", latitude, longitude)

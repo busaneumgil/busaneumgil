@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -83,6 +84,7 @@ internal fun KakaoMapViewport(
     var reloadGeneration by remember { mutableIntStateOf(0) }
     var isRendererRestarting by remember { mutableStateOf(false) }
     var attemptedAutomaticRecoveryCount by remember { mutableIntStateOf(0) }
+    val loadingPhase = resolveKakaoRendererLoadingPhase(attemptedAutomaticRecoveryCount)
 
     LaunchedEffect(reloadGeneration, isRendererRestarting) {
         if (!isRendererRestarting) return@LaunchedEffect
@@ -92,8 +94,8 @@ internal fun KakaoMapViewport(
 
     if (isRendererRestarting) {
         MapRendererFallbackOverlay(
-            title = stringResource(id = R.string.map_viewport_title_renderer_loading),
-            description = stringResource(id = R.string.map_viewport_description_renderer_loading),
+            title = stringResource(id = R.string.map_viewport_title_renderer_retrying),
+            description = stringResource(id = R.string.map_viewport_description_renderer_retrying),
             isLoading = true,
             modifier = modifier,
         )
@@ -103,6 +105,12 @@ internal fun KakaoMapViewport(
     key(reloadGeneration) {
         val controller = remember(reloadGeneration) { KakaoMapViewportController() }
         val rendererFailure = controller.rendererFailure
+        var lastProjectedRenderPathDebugSummary by remember(reloadGeneration) { mutableStateOf<String?>(null) }
+        var hasLoadingGracePeriodElapsed by remember(reloadGeneration) { mutableStateOf(false) }
+        val isRendererReady = controller.rendererStatus == KakaoRendererStatus.Ready
+        val isRendererError = rendererFailure != null
+        val isAutomaticRetryLoading =
+            !isRendererError && loadingPhase == KakaoRendererLoadingPhase.AUTOMATIC_RETRY
 
         LaunchedEffect(controller, rendererFailure, attemptedAutomaticRecoveryCount) {
             val failure = rendererFailure ?: return@LaunchedEffect
@@ -127,6 +135,17 @@ internal fun KakaoMapViewport(
             controller.markRendererTimedOut()
         }
 
+        LaunchedEffect(reloadGeneration, controller.rendererStatus, rendererFailure, loadingPhase) {
+            if (isRendererReady || isRendererError || isAutomaticRetryLoading) {
+                hasLoadingGracePeriodElapsed = false
+                return@LaunchedEffect
+            }
+
+            hasLoadingGracePeriodElapsed = false
+            delay(KAKAO_RENDERER_LOADING_OVERLAY_DELAY_MILLIS)
+            hasLoadingGracePeriodElapsed = true
+        }
+
         DisposableEffect(lifecycleOwner, controller) {
             val observer =
                 LifecycleEventObserver { _, event ->
@@ -146,6 +165,14 @@ internal fun KakaoMapViewport(
                 controller.finish()
             }
         }
+
+        val shouldShowRendererFallbackOverlay =
+            shouldShowKakaoRendererFallbackOverlay(
+                isRendererReady = isRendererReady,
+                isRendererError = isRendererError,
+                isAutomaticRetryLoading = isAutomaticRetryLoading,
+                hasLoadingGracePeriodElapsed = hasLoadingGracePeriodElapsed,
+            )
 
         Box(modifier = modifier) {
             AndroidView(
@@ -169,7 +196,15 @@ internal fun KakaoMapViewport(
                 },
             )
 
-            if (controller.rendererStatus == KakaoRendererStatus.Ready) {
+            if (isRendererReady) {
+                SideEffect {
+                    val composeSummary =
+                        createProjectedSegmentRenderPathDebugSummary(controller.projectedMarkerOverlays)
+                    if (composeSummary != lastProjectedRenderPathDebugSummary) {
+                        lastProjectedRenderPathDebugSummary = composeSummary
+                        Log.d(KAKAO_MAP_LOG_TAG, "SegmentMarkerTrace[RenderPath] $composeSummary")
+                    }
+                }
                 controller.projectedMarkerOverlays.forEach { overlay ->
                     MapProjectedMarkerOverlay(
                         overlay = overlay,
@@ -181,18 +216,21 @@ internal fun KakaoMapViewport(
                 }
             }
 
-            if (controller.rendererStatus != KakaoRendererStatus.Ready) {
-                val isRendererError = rendererFailure != null
+            if (shouldShowRendererFallbackOverlay) {
                 MapRendererFallbackOverlay(
                     title =
                         if (isRendererError) {
                             stringResource(id = R.string.map_viewport_title_renderer_error)
+                        } else if (isAutomaticRetryLoading) {
+                            stringResource(id = R.string.map_viewport_title_renderer_retrying)
                         } else {
                             stringResource(id = R.string.map_viewport_title_renderer_loading)
                         },
                     description =
                         if (isRendererError) {
                             stringResource(id = R.string.map_viewport_description_renderer_error)
+                        } else if (isAutomaticRetryLoading) {
+                            stringResource(id = R.string.map_viewport_description_renderer_retrying)
                         } else {
                             stringResource(id = R.string.map_viewport_description_renderer_loading)
                         },
@@ -236,10 +274,12 @@ private class KakaoMapViewportController {
     private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean) -> Unit)? = null
     private var mapClickHandler: ((MapTapPayload) -> Unit)? = null
     private var facilityMarkerStyleCache: KakaoFacilityMarkerStyleCache? = null
+    private var overlayMarkerStyleCache: KakaoOverlayMarkerStyleCache? = null
     private var lastRenderedCameraRequestId: Long? = null
     private var lastRenderedCameraTarget: com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget? = null
     private var lastRenderedRouteCameraSignature: Int? = null
     private var lastRenderedMarkers: List<KakaoMarkerRenderState> = emptyList()
+    private var lastRenderedOverlayMarkers: List<KakaoOverlayMarkerRenderState> = emptyList()
     private var lastRenderedRouteLines: List<KakaoRouteLineRenderState> = emptyList()
     private var lastDispatchedMapTapCoordinate: MapCoordinate? = null
     private var lastDispatchedMapTapUptimeMillis: Long = 0L
@@ -249,6 +289,10 @@ private class KakaoMapViewportController {
     private var lastSuppressedTerrainTapUptimeMillis: Long = 0L
     private var isCameraMoveInProgress = false
     private var projectedMarkerTrackingRunnable: Runnable? = null
+    private var projectedMarkerRetryRunnable: Runnable? = null
+    private var projectedMarkerRetryCount: Int = 0
+    private var lastProjectedMarkerPipelineDebugSummary: String? = null
+    private var lastNativeSegmentRenderPathDebugSummary: String? = null
     private var isStarted = false
     private var isFinished = false
     private var isLifecycleResumed = false
@@ -281,6 +325,7 @@ private class KakaoMapViewportController {
             createdMapView.addOnAttachStateChangeListener(attachStateListener)
             mapView = createdMapView
             facilityMarkerStyleCache = KakaoFacilityMarkerStyleCache(context = context)
+            overlayMarkerStyleCache = KakaoOverlayMarkerStyleCache(context = context)
             if (createdMapView.isAttachedToWindow) {
                 startMap(createdMapView)
             }
@@ -323,6 +368,7 @@ private class KakaoMapViewportController {
         lifecycleDispatchRetryCount = 0
         mapView?.removeOnAttachStateChangeListener(attachStateListener)
         stopProjectedMarkerTracking()
+        cancelProjectedMarkerRetry(resetCount = true)
         mapView?.finish()
         mapView = null
         rendererStatus = KakaoRendererStatus.Initializing
@@ -330,11 +376,15 @@ private class KakaoMapViewportController {
         projectedMarkerOverlays = emptyList()
         facilityMarkerStyleCache?.clear()
         facilityMarkerStyleCache = null
+        overlayMarkerStyleCache?.clear()
+        overlayMarkerStyleCache = null
         lastRenderedCameraRequestId = null
         lastRenderedCameraTarget = null
         lastRenderedRouteCameraSignature = null
         lastRenderedMarkers = emptyList()
+        lastRenderedOverlayMarkers = emptyList()
         lastRenderedRouteLines = emptyList()
+        lastNativeSegmentRenderPathDebugSummary = null
     }
 
     fun markRendererTimedOut() {
@@ -371,12 +421,15 @@ private class KakaoMapViewportController {
                     rendererStatus = KakaoRendererStatus.Error
                     kakaoMap = null
                     stopProjectedMarkerTracking()
+                    cancelProjectedMarkerRetry(resetCount = true)
                     projectedMarkerOverlays = emptyList()
                     hasMapLifecycleResumed = false
                     lifecycleDispatchRetryCount = 0
                     lastRenderedCameraRequestId = null
                     lastRenderedCameraTarget = null
                     lastRenderedMarkers = emptyList()
+                    lastRenderedOverlayMarkers = emptyList()
+                    lastNativeSegmentRenderPathDebugSummary = null
                     Log.w(
                         KAKAO_MAP_LOG_TAG,
                         "Kakao map renderer destroyed before interactive recovery: ${destroyFailure.debugSummary}",
@@ -728,10 +781,17 @@ private class KakaoMapViewportController {
                 markerOverlayState = state.markerOverlayState,
                 selectedMarkerId = state.selectedMarkerId,
             )
-        if (lastRenderedMarkers == markerRenderStates) return
+        val overlayMarkerRenderStates = createKakaoOverlayMarkerRenderStates(state.overlayState.points)
+        if (
+            lastRenderedMarkers == markerRenderStates &&
+            lastRenderedOverlayMarkers == overlayMarkerRenderStates
+        ) {
+            return
+        }
 
         val labelManager = readyMap.labelManager ?: return
         val markerStyleCache = facilityMarkerStyleCache ?: return
+        val overlayStyleCache = overlayMarkerStyleCache ?: return
         labelManager.removeAllLabelLayer()
         if (markerRenderStates.isNotEmpty()) {
             val markerLayer =
@@ -763,7 +823,49 @@ private class KakaoMapViewportController {
                         label.setClickable(marker.clickTargetId != null)
                     }
         }
+        if (overlayMarkerRenderStates.isNotEmpty()) {
+            val overlayMarkerLayer =
+                labelManager.addLayer(
+                    LabelLayerOptions
+                        .from(KAKAO_OVERLAY_MARKER_LAYER_ID)
+                        .setCompetitionType(CompetitionType.None)
+                        .setOrderingType(OrderingType.Rank)
+                        .setClickable(false)
+                        .setZOrder(KAKAO_OVERLAY_MARKER_LAYER_Z_ORDER),
+                ) ?: return
+            overlayMarkerLayer.setClickable(false)
+            overlayMarkerRenderStates
+                .sortedBy(KakaoOverlayMarkerRenderState::markerId)
+                .forEach { marker ->
+                    val labelStyles = overlayStyleCache.stylesFor(labelManager, marker)
+                    val label =
+                        overlayMarkerLayer.addLabel(
+                            LabelOptions
+                                .from(
+                                    marker.markerId,
+                                    LatLng.from(
+                                        marker.coordinate.latitude,
+                                        marker.coordinate.longitude,
+                                    ),
+                                ).setStyles(labelStyles)
+                                .setRank(KAKAO_OVERLAY_MARKER_RANK)
+                                .setClickable(false)
+                                .setTag(marker.markerId),
+                        ) ?: return@forEach
+                    label.setClickable(false)
+                }
+        }
         lastRenderedMarkers = markerRenderStates
+        lastRenderedOverlayMarkers = overlayMarkerRenderStates
+        val nativeRenderPathSummary =
+            createNativeSegmentRenderPathDebugSummary(
+                layerId = KAKAO_OVERLAY_MARKER_LAYER_ID,
+                markers = overlayMarkerRenderStates,
+            )
+        if (nativeRenderPathSummary != lastNativeSegmentRenderPathDebugSummary) {
+            lastNativeSegmentRenderPathDebugSummary = nativeRenderPathSummary
+            Log.d(KAKAO_MAP_LOG_TAG, "SegmentMarkerTrace[RenderPath] $nativeRenderPathSummary")
+        }
         Log.d(
             KAKAO_MAP_LOG_TAG,
             buildString {
@@ -781,6 +883,8 @@ private class KakaoMapViewportController {
                     append(",")
                     append(coordinate.longitude.toLogCoordinate())
                 }
+                append(" overlay=")
+                append(overlayMarkerRenderStates.size)
             },
         )
     }
@@ -878,8 +982,8 @@ private class KakaoMapViewportController {
                 selectedMapPinCoordinate = state?.selectedMapPinCoordinate,
                 overlayPoints = state?.overlayState?.points.orEmpty(),
             )
-        projectedMarkerOverlays =
-            createKakaoProjectedMarkerOverlays(projectedMarkers) { coordinate ->
+        val projectionResult =
+            createKakaoProjectedMarkerProjectionResult(projectedMarkers) { coordinate ->
                 readyMap
                     .toScreenPoint(
                         LatLng.from(
@@ -890,6 +994,24 @@ private class KakaoMapViewportController {
                         KakaoMapScreenPoint(x = point.x, y = point.y)
                     }
             }
+        projectedMarkerOverlays = projectionResult.overlays
+        val retryScheduled =
+            projectionResult.shouldRetry &&
+                !isCameraMoveInProgress &&
+                projectedMarkerTrackingRunnable == null &&
+                projectedMarkerRetryRunnable == null &&
+                projectedMarkerRetryCount < KAKAO_PROJECTED_MARKER_MAX_RETRY_FRAMES
+        logProjectedMarkerPipelineDebugSummary(
+            projectedMarkers = projectedMarkers,
+            projectionResult = projectionResult,
+            retryScheduled = retryScheduled,
+        )
+
+        if (projectionResult.shouldRetry && !isCameraMoveInProgress) {
+            scheduleProjectedMarkerRetry(readyMap)
+        } else if (!projectionResult.shouldRetry) {
+            cancelProjectedMarkerRetry(resetCount = true)
+        }
     }
 
     private fun startProjectedMarkerTracking() {
@@ -922,6 +1044,54 @@ private class KakaoMapViewportController {
         projectedMarkerTrackingRunnable?.let(boundMapView::removeCallbacks)
         projectedMarkerTrackingRunnable = null
     }
+
+    private fun scheduleProjectedMarkerRetry(readyMap: KakaoMap) {
+        val boundMapView = mapView ?: return
+        if (projectedMarkerTrackingRunnable != null || projectedMarkerRetryRunnable != null) return
+        if (projectedMarkerRetryCount >= KAKAO_PROJECTED_MARKER_MAX_RETRY_FRAMES) return
+
+        projectedMarkerRetryCount += 1
+        val retryRunnable =
+            Runnable {
+                if (mapView !== boundMapView || kakaoMap !== readyMap || isFinished) {
+                    projectedMarkerRetryRunnable = null
+                    return@Runnable
+                }
+                projectedMarkerRetryRunnable = null
+                updateProjectedMarkerOverlays(readyMap = readyMap, state = latestState)
+            }
+        projectedMarkerRetryRunnable = retryRunnable
+        boundMapView.postOnAnimation(retryRunnable)
+    }
+
+    private fun cancelProjectedMarkerRetry(resetCount: Boolean) {
+        val boundMapView = mapView
+        projectedMarkerRetryRunnable?.let { retryRunnable ->
+            boundMapView?.removeCallbacks(retryRunnable)
+        }
+        projectedMarkerRetryRunnable = null
+        if (resetCount) {
+            projectedMarkerRetryCount = 0
+        }
+    }
+
+    private fun logProjectedMarkerPipelineDebugSummary(
+        projectedMarkers: List<KakaoProjectedMarkerRenderState>,
+        projectionResult: KakaoProjectedMarkerProjectionResult,
+        retryScheduled: Boolean,
+    ) {
+        val summary =
+            createProjectedSegmentMarkerPipelineDebugSummary(
+                projectedMarkers = projectedMarkers,
+                projectionResult = projectionResult,
+                isCameraMoveInProgress = isCameraMoveInProgress,
+                retryScheduled = retryScheduled,
+                retryCount = projectedMarkerRetryCount,
+            )
+        if (summary == lastProjectedMarkerPipelineDebugSummary) return
+        lastProjectedMarkerPipelineDebugSummary = summary
+        Log.d(KAKAO_MAP_LOG_TAG, "SegmentMarkerTrace[Projection] $summary")
+    }
 }
 
 private enum class KakaoRendererStatus {
@@ -930,20 +1100,35 @@ private enum class KakaoRendererStatus {
     Error,
 }
 
+internal fun shouldShowKakaoRendererFallbackOverlay(
+    isRendererReady: Boolean,
+    isRendererError: Boolean,
+    isAutomaticRetryLoading: Boolean,
+    hasLoadingGracePeriodElapsed: Boolean,
+): Boolean {
+    if (isRendererReady) return false
+    return isRendererError || isAutomaticRetryLoading || hasLoadingGracePeriodElapsed
+}
+
 private const val KAKAO_MARKER_LAYER_ID = "eumgil-map-markers"
+private const val KAKAO_OVERLAY_MARKER_LAYER_ID = "eumgil-overlay-markers"
 private const val KAKAO_ROUTE_LINE_LAYER_ID = "eumgil-route-lines"
 private const val KAKAO_PROVIDER_NAME = "KAKAO"
 private const val KAKAO_MAP_LOG_TAG = "KakaoMapViewport"
 private const val MAX_LIFECYCLE_DISPATCH_RETRIES = 30
 private const val LIFECYCLE_DISPATCH_RETRY_DELAY_MILLIS = 50L
 private const val KAKAO_RENDERER_RESTART_DELAY_MILLIS = 220L
+private const val KAKAO_RENDERER_LOADING_OVERLAY_DELAY_MILLIS = 300L
 private const val KAKAO_RENDERER_READY_TIMEOUT_MILLIS = 4_000L
 private const val KAKAO_MAP_TAP_DEDUP_WINDOW_MILLIS = 250L
 private const val KAKAO_MARKER_TAP_DEDUP_WINDOW_MILLIS = 250L
 private const val KAKAO_MAP_TAP_DEDUP_COORDINATE_EPSILON = 0.000001
 private const val KAKAO_MARKER_LAYER_Z_ORDER = 1000
+private const val KAKAO_OVERLAY_MARKER_LAYER_Z_ORDER = 950
 private const val KAKAO_ROUTE_LINE_LAYER_Z_ORDER = 900
+private const val KAKAO_OVERLAY_MARKER_RANK = 0L
 private const val KAKAO_ROUTE_CAMERA_PADDING = 84
+private const val KAKAO_PROJECTED_MARKER_MAX_RETRY_FRAMES = 6
 
 private fun GestureType.isUserDrivenCameraMove(): Boolean = this != GestureType.Unknown
 
@@ -970,6 +1155,8 @@ private fun MapProjectedMarkerOverlay(
             .size(markerSize)
 
     if (overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION) {
+        val fillColor = Color(overlay.fillColorArgb ?: 0xFF2A7BFF.toInt())
+        val strokeColor = Color(overlay.strokeColorArgb ?: 0xFF0F4FC6.toInt())
         Box(
             modifier = markerModifier,
             contentAlignment = Alignment.Center,
@@ -983,8 +1170,8 @@ private fun MapProjectedMarkerOverlay(
             Surface(
                 modifier = Modifier.size((overlay.sizeDp * 0.58f).dp),
                 shape = CircleShape,
-                color = Color(0xFF2A7BFF),
-                border = BorderStroke(1.dp, Color(0xFF0F4FC6)),
+                color = fillColor,
+                border = BorderStroke(1.dp, strokeColor),
             ) {}
         }
         return
@@ -1020,6 +1207,107 @@ private fun KakaoProjectedMarkerOverlay.resolveContentDescription(
 
         KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION -> null
     }
+
+private class KakaoOverlayMarkerStyleCache(
+    private val context: Context,
+) {
+    private val densityBucket = resolveDensityBucket(context.resources.displayMetrics.densityDpi)
+    private val bitmapCache = mutableMapOf<KakaoOverlayMarkerBitmapCacheKey, Bitmap>()
+    private val stylesCache = mutableMapOf<KakaoOverlayMarkerBitmapCacheKey, LabelStyles>()
+
+    fun stylesFor(
+        labelManager: LabelManager,
+        marker: KakaoOverlayMarkerRenderState,
+    ): LabelStyles {
+        val key =
+            KakaoOverlayMarkerBitmapCacheKey(
+                kind = marker.kind,
+                fillColorArgb = marker.fillColorArgb,
+                strokeColorArgb = marker.strokeColorArgb,
+                densityBucket = densityBucket,
+            )
+        return stylesCache.getOrPut(key) {
+            val styles =
+                LabelStyles.from(
+                    key.styleId,
+                    LabelStyle
+                        .from(bitmapFor(marker, key))
+                        .setApplyDpScale(false)
+                        .setAnchorPoint(marker.anchorPointX, marker.anchorPointY),
+                )
+            labelManager.addLabelStyles(styles) ?: styles
+        }
+    }
+
+    fun clear() {
+        stylesCache.clear()
+        bitmapCache.clear()
+    }
+
+    private fun bitmapFor(
+        marker: KakaoOverlayMarkerRenderState,
+        key: KakaoOverlayMarkerBitmapCacheKey,
+    ): Bitmap =
+        bitmapCache.getOrPut(key) {
+            when (marker.kind) {
+                KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION -> createSegmentJunctionBitmap(marker)
+            }
+        }
+
+    private fun createSegmentJunctionBitmap(
+        marker: KakaoOverlayMarkerRenderState,
+    ): Bitmap {
+        val sizePx = dpToPx(marker.sizeDp.toFloat())
+        val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
+        val outerRadius = sizePx / 2f
+        val center = outerRadius
+        val innerRadius = sizePx * 0.29f
+        val outerStrokeWidth = dpToPx(0.75f).coerceAtLeast(1f)
+        val innerStrokeWidth = dpToPx(1f).coerceAtLeast(1f)
+        val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val outerPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = 0xFFFFFFFF.toInt()
+            }
+        val outerStrokePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = outerStrokeWidth
+                color = 0x26000000
+            }
+        val innerPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = marker.fillColorArgb
+            }
+        val innerStrokePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = innerStrokeWidth
+                color = marker.strokeColorArgb
+            }
+
+        canvas.drawCircle(center, center, outerRadius, outerPaint)
+        canvas.drawCircle(
+            center,
+            center,
+            outerRadius - outerStrokeWidth / 2f,
+            outerStrokePaint,
+        )
+        canvas.drawCircle(center, center, innerRadius, innerPaint)
+        canvas.drawCircle(
+            center,
+            center,
+            innerRadius - innerStrokeWidth / 2f,
+            innerStrokePaint,
+        )
+        return bitmap
+    }
+
+    private fun dpToPx(dp: Float): Float = dp * context.resources.displayMetrics.density
+}
 
 private class KakaoFacilityMarkerStyleCache(
     private val context: Context,
@@ -1238,6 +1526,17 @@ private data class KakaoFacilityMarkerBitmapCacheKey(
 ) {
     val styleId: String
         get() = "facility-${category.name.lowercase(Locale.US)}-${if (isSelected) "selected" else "normal"}-$densityBucket"
+}
+
+private data class KakaoOverlayMarkerBitmapCacheKey(
+    val kind: KakaoOverlayMarkerKind,
+    val fillColorArgb: Int,
+    val strokeColorArgb: Int,
+    val densityBucket: Int,
+) {
+    val styleId: String
+        get() =
+            "overlay-${kind.name.lowercase(Locale.US)}-$fillColorArgb-$strokeColorArgb-$densityBucket"
 }
 
 private data class KakaoFacilityMarkerPalette(

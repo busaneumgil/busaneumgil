@@ -12,6 +12,10 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+springdoc:
+  swagger-ui:
+    urls-primary-name: 인증
+
 social:
   provider:
     kakao:

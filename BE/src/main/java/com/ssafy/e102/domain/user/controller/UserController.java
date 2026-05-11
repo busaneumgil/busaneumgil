@@ -50,7 +50,7 @@ public class UserController {
 			request.selectedMobilitySubtype()));
 	}
 
-	@Operation(summary = "회원 탈퇴", description = "현재 로그인한 사용자를 탈퇴 처리하고 access token과 refresh token을 더 이상 사용할 수 없게 한다.")
+	@Operation(summary = "회원 탈퇴", description = "현재 로그인한 사용자를 탈퇴 처리하고 접근 토큰과 재발급 토큰을 더 이상 사용할 수 없게 한다.")
 	@DeleteMapping("/me")
 	public ApiResponse<Void> withdraw(
 		@Parameter(hidden = true) @AuthenticationPrincipal

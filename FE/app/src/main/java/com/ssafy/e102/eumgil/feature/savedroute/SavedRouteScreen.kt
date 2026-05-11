@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -268,6 +269,7 @@ private fun SavedPlaceContent(
             SavedBookmarkStateCard(
                 title = stringResource(id = R.string.saved_route_place_empty_title),
                 description = stringResource(id = R.string.saved_route_place_empty_description),
+                iconRes = R.drawable.ic_status_help_circle,
                 primaryActionLabel = stringResource(id = R.string.saved_route_explore_map),
                 onPrimaryActionClick = { onAction(SavedRouteUiAction.ExploreMapClicked) },
                 modifier = modifier.fillMaxWidth(),
@@ -276,6 +278,7 @@ private fun SavedPlaceContent(
             SavedBookmarkStateCard(
                 title = stringResource(id = R.string.saved_route_place_error_title),
                 description = content.errorMessage ?: stringResource(id = R.string.saved_route_error_description),
+                iconRes = R.drawable.ic_status_warning,
                 primaryActionLabel = stringResource(id = R.string.saved_route_retry),
                 onPrimaryActionClick = { onAction(SavedRouteUiAction.RetryClicked) },
                 secondaryActionLabel = stringResource(id = R.string.saved_route_explore_map),
@@ -346,6 +349,7 @@ private fun SavedRouteBookmarkContent(
             SavedBookmarkStateCard(
                 title = stringResource(id = R.string.saved_route_route_empty_title),
                 description = stringResource(id = R.string.saved_route_route_empty_description),
+                iconRes = R.drawable.ic_status_help_circle,
                 primaryActionLabel = stringResource(id = R.string.saved_route_explore_map),
                 onPrimaryActionClick = { onAction(SavedRouteUiAction.ExploreMapClicked) },
                 modifier = modifier.fillMaxWidth(),
@@ -354,6 +358,7 @@ private fun SavedRouteBookmarkContent(
             SavedBookmarkStateCard(
                 title = stringResource(id = R.string.saved_route_route_error_title),
                 description = content.errorMessage ?: stringResource(id = R.string.saved_route_route_error_description),
+                iconRes = R.drawable.ic_status_warning,
                 primaryActionLabel = stringResource(id = R.string.saved_route_retry),
                 onPrimaryActionClick = { onAction(SavedRouteUiAction.RetryClicked) },
                 secondaryActionLabel = stringResource(id = R.string.saved_route_explore_map),
@@ -400,6 +405,7 @@ private fun SavedBookmarkStateCard(
     title: String,
     description: String,
     modifier: Modifier = Modifier,
+    @DrawableRes iconRes: Int? = null,
     primaryActionLabel: String? = null,
     onPrimaryActionClick: (() -> Unit)? = null,
     secondaryActionLabel: String? = null,
@@ -413,6 +419,12 @@ private fun SavedBookmarkStateCard(
         } else {
             MaterialTheme.colorScheme.outlineVariant
         }
+    val iconTint =
+        if (isError) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
 
     Surface(
         modifier = modifier,
@@ -424,9 +436,17 @@ private fun SavedBookmarkStateCard(
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (isLoading) {
-                CircularProgressIndicator()
+            when {
+                isLoading -> CircularProgressIndicator()
+                iconRes != null ->
+                    Icon(
+                        painter = painterResource(id = iconRes),
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp),
+                        tint = iconTint,
+                    )
             }
             Text(
                 text = title,

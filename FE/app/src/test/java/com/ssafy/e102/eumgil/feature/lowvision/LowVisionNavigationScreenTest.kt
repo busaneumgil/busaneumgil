@@ -3,7 +3,9 @@ package com.ssafy.e102.eumgil.feature.lowvision
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.feature.navigation.NavigationScreenState
+import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiState
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -24,6 +26,11 @@ class LowVisionNavigationScreenTest {
             listOf("\uD604\uC7AC \uC704\uCE58", "\uC548\uB0B4 \uC885\uB8CC"),
             lowVisionNavigationActionCards().map(LowVisionNavigationActionCard::label),
         )
+    }
+
+    @Test
+    fun `navigation exit card completes navigation directly without hidden confirm dialog`() {
+        assertEquals(NavigationUiAction.NavigationCompleteClicked, lowVisionNavigationExitAction())
     }
 
     @Test
@@ -135,5 +142,18 @@ class LowVisionNavigationScreenTest {
                 loadErrorMessage = null,
             ),
         )
+    }
+
+    @Test
+    fun `navigation route wires low vision tts events and initial briefing trigger`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionNavigationRoute.kt")
+                .readText()
+
+        assertTrue(source.contains("AndroidTextToSpeechController"))
+        assertTrue(source.contains("viewModel.updateTextToSpeechState"))
+        assertTrue(source.contains("is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)"))
+        assertTrue(source.contains("NavigationUiEvent.StopBriefing -> textToSpeechController.stop()"))
+        assertTrue(source.contains("NavigationUiAction.NavigationEntered"))
     }
 }

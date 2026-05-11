@@ -1,16 +1,22 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,70 +24,90 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
+import com.ssafy.e102.eumgil.R
 
 private val CompleteBackground = Color(0xFF0D0D0F)
 private val CompleteYellow = LowVisionScreenDefaults.brandYellow
 private val CompleteBlack = Color(0xFF000000)
 
+internal object LowVisionNavigationCompleteLayoutDefaults {
+    val horizontalPadding = 24.dp
+    val verticalPadding = 44.dp
+    val cardGap = 28.dp
+    val cardCornerRadius = 26.dp
+    val saveIconSize = 132.dp
+    val completeIconSize = 168.dp
+    val titleFontSize = 64.sp
+    val titleLineHeight = 72.sp
+}
+
+internal data class LowVisionNavigationCompleteCard(
+    val label: String,
+    @DrawableRes val iconRes: Int,
+)
+
+internal fun lowVisionNavigationCompleteCards(): List<LowVisionNavigationCompleteCard> =
+    listOf(
+        LowVisionNavigationCompleteCard(
+            label = "\uB3C4\uCC29\uC9C0 \uC800\uC7A5",
+            iconRes = R.drawable.ic_voice_location_pin,
+        ),
+        LowVisionNavigationCompleteCard(
+            label = "\uC644\uB8CC",
+            iconRes = R.drawable.ic_status_check,
+        ),
+    )
+
 @Composable
 fun LowVisionNavigationCompleteScreen(
     isSaveEnabled: Boolean,
     onSaveClick: () -> Unit,
-    onTabSelected: (LowVisionBottomTab) -> Unit,
+    onCompleteClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val cards = lowVisionNavigationCompleteCards()
+
     Column(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(CompleteBackground)
-                .statusBarsPadding(),
+                .statusBarsPadding()
+                .padding(
+                    horizontal = LowVisionNavigationCompleteLayoutDefaults.horizontalPadding,
+                    vertical = LowVisionNavigationCompleteLayoutDefaults.verticalPadding,
+                ),
+        verticalArrangement = Arrangement.spacedBy(LowVisionNavigationCompleteLayoutDefaults.cardGap),
     ) {
-        Column(
+        LowVisionCompleteSaveCard(
+            card = cards[0],
+            enabled = isSaveEnabled,
+            onClick = onSaveClick,
             modifier =
                 Modifier
-                    .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 28.dp, vertical = 34.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(32.dp),
-        ) {
-            Text(
-                text = "안내 완료",
-                color = Color.White,
-                fontSize = 52.sp,
-                lineHeight = 60.sp,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-                letterSpacing = 0.sp,
-            )
-
-            LowVisionCompleteSaveButton(
-                enabled = isSaveEnabled,
-                onClick = onSaveClick,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .heightIn(min = 360.dp),
-            )
-        }
-
-        LowVisionBottomNav(
-            selectedTab = LowVisionBottomTab.HOME,
-            onTabSelected = onTabSelected,
+                    .weight(1f),
+        )
+        LowVisionCompleteDoneCard(
+            card = cards[1],
+            onClick = onCompleteClick,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
         )
     }
 }
 
 @Composable
-private fun LowVisionCompleteSaveButton(
+private fun LowVisionCompleteSaveCard(
+    card: LowVisionNavigationCompleteCard,
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -91,31 +117,109 @@ private fun LowVisionCompleteSaveButton(
     Surface(
         modifier =
             modifier
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(LowVisionNavigationCompleteLayoutDefaults.cardCornerRadius))
                 .lowVisionButtonSemantics(
-                    label = "목적지 저장",
-                    actionHint = "저장 후 북마크로 이동합니다.",
+                    label = card.label,
+                    actionHint = "\uB450 \uBC88 \uD0ED\uD558\uBA74 \uB3C4\uCC29\uC9C0\uB97C \uC800\uC7A5\uD569\uB2C8\uB2E4.",
                 )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(LowVisionNavigationCompleteLayoutDefaults.cardCornerRadius),
         color = CompleteYellow.copy(alpha = alpha),
     ) {
-        Box(
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(24.dp),
-            contentAlignment = Alignment.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(LowVisionNavigationCompleteLayoutDefaults.saveIconSize)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(CompleteBlack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = card.iconRes),
+                    contentDescription = null,
+                    tint = CompleteYellow,
+                    modifier = Modifier.size(92.dp),
+                )
+            }
+            Spacer(modifier = Modifier.height(44.dp))
             Text(
-                text = "목적지 저장",
+                text = card.label,
                 color = CompleteBlack,
-                fontSize = 54.sp,
-                lineHeight = 62.sp,
+                fontSize = LowVisionNavigationCompleteLayoutDefaults.titleFontSize,
+                lineHeight = LowVisionNavigationCompleteLayoutDefaults.titleLineHeight,
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.sp,
-                maxLines = 2,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LowVisionCompleteDoneCard(
+    card: LowVisionNavigationCompleteCard,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(LowVisionNavigationCompleteLayoutDefaults.cardCornerRadius))
+                .border(
+                    width = 2.dp,
+                    color = CompleteYellow,
+                    shape = RoundedCornerShape(LowVisionNavigationCompleteLayoutDefaults.cardCornerRadius),
+                )
+                .lowVisionButtonSemantics(
+                    label = card.label,
+                    actionHint = "\uB450 \uBC88 \uD0ED\uD558\uBA74 \uC800\uC2DC\uB825\uC790 \uD648\uC73C\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.",
+                )
+                .clickable(role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(LowVisionNavigationCompleteLayoutDefaults.cardCornerRadius),
+        color = CompleteBackground,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Transparent,
+                border = androidx.compose.foundation.BorderStroke(8.dp, CompleteYellow),
+            ) {
+                Icon(
+                    painter = painterResource(id = card.iconRes),
+                    contentDescription = null,
+                    tint = CompleteYellow,
+                    modifier =
+                        Modifier
+                            .size(LowVisionNavigationCompleteLayoutDefaults.completeIconSize)
+                            .padding(28.dp),
+                )
+            }
+            Spacer(modifier = Modifier.height(48.dp))
+            Text(
+                text = card.label,
+                color = CompleteYellow,
+                fontSize = LowVisionNavigationCompleteLayoutDefaults.titleFontSize,
+                lineHeight = LowVisionNavigationCompleteLayoutDefaults.titleLineHeight,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                letterSpacing = 0.sp,
+                maxLines = 1,
             )
         }
     }

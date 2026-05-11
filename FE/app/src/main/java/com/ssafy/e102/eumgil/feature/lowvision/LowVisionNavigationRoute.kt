@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,9 +16,15 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
+import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
+import com.ssafy.e102.eumgil.feature.navigation.NavigationTtsStatus
+import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiEvent
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 @Composable
 fun LowVisionNavigationRoute(
@@ -50,6 +57,11 @@ fun LowVisionNavigationRoute(
     val selectedDestination by
         appContainer.destinationSelectionRepository.selectedDestination.collectAsStateWithLifecycle()
     var loadErrorMessage by remember { mutableStateOf<String?>(null) }
+    val textToSpeechController =
+        remember(appContext) {
+            AndroidTextToSpeechController(context = appContext)
+        }
+    val textToSpeechState by textToSpeechController.state.collectAsStateWithLifecycle()
     val currentLocationAddressResolver =
         remember(appContext) { AndroidCurrentLocationAddressResolver(context = appContext) }
     val currentLocationAddress =
@@ -57,6 +69,34 @@ fun LowVisionNavigationRoute(
             coordinate = uiState.mapOverlay.currentLocation?.coordinate,
             addressResolver = currentLocationAddressResolver,
         )
+
+    LaunchedEffect(textToSpeechState) {
+        viewModel.updateTextToSpeechState(
+            isEnabled = textToSpeechState.enabled,
+            canSpeak = textToSpeechState.canSpeak,
+            status = textToSpeechState.availability.toLowVisionNavigationTtsStatus(),
+        )
+    }
+
+    LaunchedEffect(viewModel, onNavigateToComplete, onNavigateToBookmark) {
+        launch(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.uiEvent.collect { event ->
+                when (event) {
+                    NavigationUiEvent.NavigateBack -> Unit
+                    is NavigationUiEvent.NavigateToRouteDetail -> Unit
+                    NavigationUiEvent.NavigateToMap,
+                    NavigationUiEvent.NavigateToArrival,
+                        -> onNavigateToComplete()
+
+                    NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
+                    is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
+                    NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
+                    is NavigationUiEvent.SetVoiceGuidanceEnabled ->
+                        textToSpeechController.setEnabled(event.enabled)
+                }
+            }
+        }
+    }
 
     LaunchedEffect(selectedDestination) {
         loadErrorMessage = null
@@ -72,16 +112,14 @@ fun LowVisionNavigationRoute(
             loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE
         } else {
             viewModel.bindNavigationRequest(request)
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
         }
     }
 
-    LaunchedEffect(viewModel, onNavigateToComplete, onNavigateToBookmark) {
-        viewModel.uiEvent.collect { event ->
-            when {
-                shouldNavigateLowVisionHome(event) -> onNavigateToComplete()
-                event == NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
-                else -> Unit
-            }
+    DisposableEffect(textToSpeechController) {
+        onDispose {
+            textToSpeechController.stop()
+            textToSpeechController.shutdown()
         }
     }
 
@@ -99,6 +137,13 @@ fun LowVisionNavigationRoute(
 
 internal fun shouldNavigateLowVisionHome(event: NavigationUiEvent): Boolean =
     event == NavigationUiEvent.NavigateToMap || event == NavigationUiEvent.NavigateToArrival
+
+private fun TextToSpeechAvailability.toLowVisionNavigationTtsStatus(): NavigationTtsStatus =
+    when (this) {
+        TextToSpeechAvailability.Initializing -> NavigationTtsStatus.Initializing
+        TextToSpeechAvailability.Ready -> NavigationTtsStatus.Ready
+        TextToSpeechAvailability.Unavailable -> NavigationTtsStatus.Unavailable
+    }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     when (this) {

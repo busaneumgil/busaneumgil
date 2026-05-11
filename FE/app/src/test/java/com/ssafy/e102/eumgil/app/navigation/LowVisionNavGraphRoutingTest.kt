@@ -51,9 +51,17 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
-    fun `low vision navigation exit returns to low vision home`() {
+    fun `low vision navigation completion moves to low vision complete screen`() {
         assertEquals(
-            LowVisionRoute.Home.route,
+            LowVisionRoute.NavigationComplete.route,
+            resolveNavigationCompletionRoute(selectedPrimaryUserType = "low_vision"),
+        )
+    }
+
+    @Test
+    fun `low vision navigation exit moves to low vision complete screen`() {
+        assertEquals(
+            LowVisionRoute.NavigationComplete.route,
             resolveLowVisionNavigationExitRoute(),
         )
     }

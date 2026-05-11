@@ -57,7 +57,7 @@ fun LowVisionNavigationCompleteRoute(
         LowVisionNavigationCompleteScreen(
             isSaveEnabled = uiState.isExitEnabled,
             onSaveClick = { viewModel.onAction(NavigationUiAction.SaveBookmarkClicked) },
-            onTabSelected = onTabSelected,
+            onCompleteClick = { onTabSelected(LowVisionBottomTab.HOME) },
             modifier = modifier,
         )
     }

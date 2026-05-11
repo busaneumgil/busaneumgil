@@ -105,6 +105,9 @@ internal fun lowVisionNavigationBottomTabs(): List<LowVisionBottomTab> =
 
 internal const val LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE: String = "길 안내를 불러오지 못했습니다."
 
+internal fun lowVisionNavigationExitAction(): NavigationUiAction =
+    NavigationUiAction.NavigationCompleteClicked
+
 internal fun shouldShowLowVisionNavigationLoadError(
     uiState: NavigationUiState,
     loadErrorMessage: String?,
@@ -238,7 +241,7 @@ fun LowVisionNavigationScreen(
                 LowVisionExitNavigationCard(
                     card = lowVisionNavigationActionCards()[1],
                     enabled = uiState.isExitEnabled,
-                    onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
+                    onClick = { onAction(lowVisionNavigationExitAction()) },
                     modifier =
                         Modifier
                             .fillMaxWidth()

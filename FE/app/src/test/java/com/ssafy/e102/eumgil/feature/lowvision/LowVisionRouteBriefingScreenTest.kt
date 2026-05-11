@@ -59,4 +59,19 @@ class LowVisionRouteBriefingScreenTest {
 
         assertTrue(source.contains("speechRate = ROUTE_BRIEFING_TTS_SPEECH_RATE"))
     }
+
+    @Test
+    fun `briefing and navigation route loading are not keyed by live location updates`() {
+        val briefingRouteSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionRouteBriefingRoute.kt")
+                .readText()
+        val navigationRouteSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionNavigationRoute.kt")
+                .readText()
+
+        assertFalse(briefingRouteSource.contains("collectAsStateWithLifecycle()") && briefingRouteSource.contains("latestLocation by"))
+        assertFalse(navigationRouteSource.contains("collectAsStateWithLifecycle()") && navigationRouteSource.contains("latestLocation by"))
+        assertFalse(briefingRouteSource.contains("LaunchedEffect(viewModel, selectedDestination, latestLocation)"))
+        assertFalse(navigationRouteSource.contains("LaunchedEffect(selectedDestination, latestLocation)"))
+    }
 }

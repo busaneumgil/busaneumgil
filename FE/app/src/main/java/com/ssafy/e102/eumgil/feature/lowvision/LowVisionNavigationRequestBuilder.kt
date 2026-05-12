@@ -282,9 +282,9 @@ private fun RoutePolyline.toLowVisionRouteSegments(totalDistanceMeters: Int): Li
             distanceMeters = proportionalDistance,
             guidanceMessage =
                 when (index) {
-                    0 -> "Continue straight from the start."
-                    path.lastIndex - 1 -> "Continue toward the destination."
-                    else -> "Continue on the suggested route."
+                    0 -> "Start the route."
+                    path.lastIndex - 1 -> "Approach the destination."
+                    else -> "Follow the next route segment."
                 },
         )
     }

@@ -35,13 +35,6 @@ services:
       GF_AUTH_GITLAB_ALLOWED_GROUPS: ${GITLAB_ALLOWED_GROUPS}
       GF_AUTH_GITLAB_USE_PKCE: "true"
       GF_AUTH_GITLAB_USE_REFRESH_TOKEN: "true"
-      GRAFANA_CLOUDWATCH_AUTH_TYPE: ${GRAFANA_CLOUDWATCH_AUTH_TYPE:-keys}
-      GRAFANA_CLOUDWATCH_DEFAULT_REGION: ${GRAFANA_CLOUDWATCH_DEFAULT_REGION:-ap-northeast-2}
-      GRAFANA_CLOUDWATCH_CUSTOM_NAMESPACES: ${GRAFANA_CLOUDWATCH_CUSTOM_NAMESPACES:-}
-      GRAFANA_CLOUDWATCH_ASSUME_ROLE_ARN: ${GRAFANA_CLOUDWATCH_ASSUME_ROLE_ARN:-}
-      GRAFANA_CLOUDWATCH_EXTERNAL_ID: ${GRAFANA_CLOUDWATCH_EXTERNAL_ID:-}
-      GRAFANA_CLOUDWATCH_ACCESS_KEY_ID: ${GRAFANA_CLOUDWATCH_ACCESS_KEY_ID:-}
-      GRAFANA_CLOUDWATCH_SECRET_ACCESS_KEY: ${GRAFANA_CLOUDWATCH_SECRET_ACCESS_KEY:-}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -52,8 +45,6 @@ services:
     image: prom/prometheus:v2.55.1
     container_name: e102-prometheus
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -63,6 +54,7 @@ services:
       - prometheus-data:/prometheus
     networks:
       - ops
+      - dev-stack
 
   loki:
     image: grafana/loki:3.2.1
@@ -85,6 +77,17 @@ services:
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - ops
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: e102-blackbox-exporter
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     networks:
       - ops
 
@@ -121,11 +124,10 @@ services:
     container_name: e102-redis-exporter
     restart: unless-stopped
     environment:
-      REDIS_ADDR: ${DEV_REDIS_EXPORTER_ADDR:-redis://host.docker.internal:6379}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      REDIS_ADDR: ${DEV_REDIS_EXPORTER_ADDR:-redis://redis:6379}
     networks:
       - ops
+      - dev-stack
 
   sonarqube-db:
     image: postgres:16-alpine
@@ -171,3 +173,6 @@ networks:
   ops:
     external: true
     name: e102-ops
+  dev-stack:
+    external: true
+    name: s14p31e102-dev_default

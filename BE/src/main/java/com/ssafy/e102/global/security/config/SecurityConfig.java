@@ -58,6 +58,8 @@ public class SecurityConfig {
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.POST, "/auth/social-login", "/auth/signup", "/auth/reissue")
 				.permitAll()
+				.requestMatchers("/health", "/health/**")
+				.permitAll()
 				.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus")
 				.permitAll()
 				.requestMatchers("/actuator/**")

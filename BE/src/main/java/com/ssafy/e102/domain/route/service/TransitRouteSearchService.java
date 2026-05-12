@@ -871,7 +871,8 @@ public class TransitRouteSearchService {
 			GraphHopperRoutePath path = graphHopperRouteClient.route(new GraphHopperRouteRequest(
 				from,
 				to,
-				resolvedProfile));
+				resolvedProfile,
+				false));
 			return walkRoutePayloadService.toWalkLeg(
 				sequence,
 				walkRole(hasNextTransit),

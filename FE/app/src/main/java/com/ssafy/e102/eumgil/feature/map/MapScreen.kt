@@ -1408,7 +1408,7 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
+        FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
 
 @DrawableRes
@@ -1426,7 +1426,7 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
         PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        PlaceCategory.OTHER -> R.drawable.ic_nav_facility
+        PlaceCategory.OTHER -> R.drawable.ic_place_other
         null -> R.drawable.ic_nav_facility
     }
 

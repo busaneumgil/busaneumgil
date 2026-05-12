@@ -247,6 +247,25 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `facility detail and recent destinations use dedicated other icon asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Other facility category should map to a dedicated place icon asset in the detail sheet.",
+            source.contains("FacilityCategory.OTHER -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Recent destinations should reuse the dedicated other place icon.",
+            source.contains("PlaceCategory.OTHER -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Dedicated other place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_other.png").exists(),
+        )
+    }
+
+    @Test
     fun `facility detail route entry button reuses the active current location icon`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()

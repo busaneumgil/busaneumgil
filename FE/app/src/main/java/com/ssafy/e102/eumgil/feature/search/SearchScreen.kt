@@ -926,6 +926,7 @@ private fun SearchResultAccessibilityTagRow(
         uiState.labelResIds.forEach { labelResId ->
             SearchResultAccessibilityTagChip(
                 text = stringResource(id = labelResId),
+                iconRes = searchResultAccessibilityTagIconRes(labelResId),
                 isOverflow = false,
             )
         }
@@ -941,6 +942,7 @@ private fun SearchResultAccessibilityTagRow(
 @Composable
 private fun SearchResultAccessibilityTagChip(
     text: String,
+    @DrawableRes iconRes: Int? = null,
     isOverflow: Boolean,
 ) {
     val containerColor =
@@ -970,14 +972,48 @@ private fun SearchResultAccessibilityTagChip(
                     },
             ),
     ) {
-        Text(
-            text = text,
+        Row(
             modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
-            style = MaterialTheme.typography.labelMedium,
-            color = contentColor,
-        )
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            iconRes?.let { resId ->
+                Icon(
+                    painter = painterResource(id = resId),
+                    contentDescription = null,
+                    modifier = Modifier.size(searchResultAccessibilityTagIconSizeDp(resId).dp),
+                    tint = contentColor,
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                color = contentColor,
+            )
+        }
     }
 }
+
+@DrawableRes
+private fun searchResultAccessibilityTagIconRes(
+    @StringRes labelResId: Int,
+): Int? =
+    when (labelResId) {
+        R.string.place_accessibility_label_accessible_toilet -> R.drawable.ic_accessibility_tag_accessible_toilet
+        R.string.place_accessibility_label_elevator -> R.drawable.ic_accessibility_tag_elevator
+        R.string.place_accessibility_label_accessible_parking -> R.drawable.ic_accessibility_tag_accessible_parking
+        R.string.place_accessibility_label_step_free -> R.drawable.ic_accessibility_tag_step_free
+        R.string.place_accessibility_label_guidance_facility -> R.drawable.ic_accessibility_tag_guidance_facility
+        else -> null
+    }
+
+private fun searchResultAccessibilityTagIconSizeDp(
+    @DrawableRes iconRes: Int,
+): Int =
+    when (iconRes) {
+        R.drawable.ic_accessibility_tag_accessible_toilet -> 16
+        else -> 14
+    }
 
 @Composable
 private fun SearchStateCard(

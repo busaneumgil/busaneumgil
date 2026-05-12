@@ -559,27 +559,80 @@ private fun FacilityDetailTagCard(
     label: String,
     modifier: Modifier = Modifier,
 ) {
+    val iconRes = facilityAccessibilityTagIconRes(label)
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
     ) {
-        Box(
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .height(44.dp)
                     .padding(horizontal = EumSpacing.small),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
+            iconRes?.let { resId ->
+                Icon(
+                    painter = painterResource(id = resId),
+                    contentDescription = null,
+                    modifier = Modifier.size(facilityAccessibilityTagIconSizeDp(resId).dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
             Text(
                 text = label,
-                modifier = Modifier.align(androidx.compose.ui.Alignment.Center),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
         }
     }
 }
+
+@Composable
+@DrawableRes
+private fun facilityAccessibilityTagIconRes(label: String): Int? {
+    val normalizedLabel = label.trim()
+    val bareGuidanceLabel = stringResource(id = R.string.place_accessibility_label_guidance_facility).substringBeforeLast(' ')
+    return when (normalizedLabel) {
+        stringResource(id = R.string.map_facility_detail_tag_accessible_toilet),
+        stringResource(id = R.string.place_accessibility_label_accessible_toilet),
+        -> R.drawable.ic_accessibility_tag_accessible_toilet
+
+        stringResource(id = R.string.map_facility_detail_tag_elevator),
+        stringResource(id = R.string.place_accessibility_label_elevator),
+        -> R.drawable.ic_accessibility_tag_elevator
+
+        stringResource(id = R.string.map_facility_detail_tag_accessible_parking),
+        stringResource(id = R.string.place_accessibility_label_accessible_parking),
+        -> R.drawable.ic_accessibility_tag_accessible_parking
+
+        stringResource(id = R.string.map_facility_detail_tag_step_free_entrance),
+        stringResource(id = R.string.place_accessibility_label_step_free),
+        -> R.drawable.ic_accessibility_tag_step_free
+
+        stringResource(id = R.string.map_facility_detail_tag_charging_station),
+        -> R.drawable.ic_accessibility_tag_charging_station
+
+        bareGuidanceLabel,
+        stringResource(id = R.string.map_facility_detail_tag_guidance_facility),
+        stringResource(id = R.string.place_accessibility_label_guidance_facility),
+        -> R.drawable.ic_accessibility_tag_guidance_facility
+
+        else -> null
+    }
+}
+
+private fun facilityAccessibilityTagIconSizeDp(
+    @DrawableRes iconRes: Int,
+): Int =
+    when (iconRes) {
+        R.drawable.ic_accessibility_tag_accessible_toilet -> 18
+        else -> 16
+    }
 
 @Composable
 private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {

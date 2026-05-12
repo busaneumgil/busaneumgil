@@ -320,7 +320,7 @@ private fun ReportHistoryThumbnail(hasPhoto: Boolean) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_report),
+                painter = painterResource(id = R.drawable.ic_mypage_report_history),
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
                 tint =

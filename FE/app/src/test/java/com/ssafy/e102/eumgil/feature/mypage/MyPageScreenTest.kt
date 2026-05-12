@@ -87,4 +87,16 @@ class MyPageScreenTest {
             source.contains("indication = null"),
         )
     }
+
+    @Test
+    fun `my page report history menu uses dedicated icon resource`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "My page report history should use its own dedicated drawable resource instead of reusing a generic report asset.",
+            source.contains("iconRes = R.drawable.ic_mypage_report_history"),
+        )
+    }
 }

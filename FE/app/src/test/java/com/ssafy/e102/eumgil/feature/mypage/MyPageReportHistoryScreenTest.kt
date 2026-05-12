@@ -53,4 +53,23 @@ class MyPageReportHistoryScreenTest {
             source.contains("indication = null"),
         )
     }
+
+    @Test
+    fun `report history placeholder icon uses my page specific drawable without changing tab icon`() {
+        val reportHistorySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageReportHistoryScreen.kt")
+                .readText()
+        val topLevelDestinationSource =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/TopLevelDestination.kt")
+                .readText()
+
+        assertTrue(
+            "My page report history placeholder should use the dedicated My page drawable.",
+            reportHistorySource.contains("R.drawable.ic_mypage_report_history"),
+        )
+        assertTrue(
+            "The top-level report tab should keep the existing report navigation icon.",
+            topLevelDestinationSource.contains("iconRes = R.drawable.ic_nav_report"),
+        )
+    }
 }

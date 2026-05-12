@@ -255,7 +255,7 @@ private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.REPORT_HISTORY,
                 titleRes = R.string.my_page_menu_report_history,
-                iconRes = R.drawable.ic_report_other,
+                iconRes = R.drawable.ic_mypage_report_history,
                 onClick = onMenuClick,
             )
             MyPageMenuRow(

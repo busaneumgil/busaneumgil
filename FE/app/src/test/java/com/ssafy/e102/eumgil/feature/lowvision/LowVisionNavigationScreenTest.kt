@@ -107,6 +107,11 @@ class LowVisionNavigationScreenTest {
         assertEquals(12.dp, LowVisionNavigationLayoutDefaults.currentLocationVerticalPadding)
         assertEquals(76.sp, LowVisionNavigationLayoutDefaults.metricNumberFontSize)
         assertEquals(34.sp, LowVisionNavigationLayoutDefaults.metricUnitFontSize)
+        assertEquals(22.dp, LowVisionNavigationLayoutDefaults.exitCardVerticalPadding)
+        assertEquals(92.dp, LowVisionNavigationLayoutDefaults.exitIconContainerSize)
+        assertEquals(16.dp, LowVisionNavigationLayoutDefaults.exitIconTextGap)
+        assertEquals(48.sp, LowVisionNavigationLayoutDefaults.exitLabelFontSize)
+        assertEquals(54.sp, LowVisionNavigationLayoutDefaults.exitLabelLineHeight)
     }
 
     @Test

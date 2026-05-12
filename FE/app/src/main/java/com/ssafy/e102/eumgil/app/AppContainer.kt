@@ -91,7 +91,12 @@ class AppContainer(
     private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
     private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        SearchLocalDataSource(dataStore = searchDataStore)
+        SearchLocalDataSource(
+            dataStore = searchDataStore,
+            currentUserScopeProvider = {
+                authSessionRepository.getAuthGateState().authSession?.userId
+            },
+        )
     }
 
     private val httpJsonClient by lazy(LazyThreadSafetyMode.NONE) {

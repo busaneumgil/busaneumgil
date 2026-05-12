@@ -1,12 +1,10 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
-import android.Manifest
 import android.app.Application
-import android.content.pm.PackageManager
 import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.permission.hasGrantedMicrophonePermission
 import com.ssafy.e102.eumgil.core.stt.KeywordSpottingManager
 import com.ssafy.e102.eumgil.core.stt.SherpaManager
 import kotlinx.coroutines.Dispatchers
@@ -47,25 +45,7 @@ class LowVisionViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val context = getApplication<Application>()
-                SherpaManager.ensureKwsModelsExtracted(context)
-
-                if (ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.RECORD_AUDIO,
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    Log.w(TAG, "RECORD_AUDIO 권한 없음 — 웨이크워드 감지 비활성화")
-                    return@launch
-                }
-
-                if (!SherpaManager.kwsModelsExist(context)) {
-                    Log.e(TAG, "KWS 모델 없음 — 웨이크워드 감지 비활성화")
-                    return@launch
-                }
-
-                kwsManager = KeywordSpottingManager(context)
-                Log.d(TAG, "KWS 초기화 완료 — 웨이크워드 청취 시작")
-                startSpotting()
+                initializeKeywordSpotting(context)
             } catch (e: Exception) {
                 Log.e(TAG, "KWS 초기화 실패: ${e.message}", e)
             }
@@ -90,22 +70,45 @@ class LowVisionViewModel(application: Application) : AndroidViewModel(applicatio
      * VoiceInput 사용 후 돌아왔을 때 웨이크워드 감지가 자동으로 재개된다.
      *
      * - KWS가 이미 실행 중이면 아무 작업도 하지 않는다.
-     * - [kwsManager]가 null이면(init 코루틴 진행 중) 아무 작업도 하지 않는다.
-     *   init이 완료되면 [startSpotting]을 직접 호출하므로 문제없다.
+     * - [kwsManager]가 null이면 권한 허용 이후 진입한 경우를 포함해 초기화 후 재시작을 시도한다.
      */
     fun resumeSpotting() {
         if (kwsJob?.isActive == true) return
-        if (kwsManager == null) return
         val context = getApplication<Application>()
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!context.hasGrantedMicrophonePermission()) {
             Log.w(TAG, "RECORD_AUDIO 권한 없음 — KWS 재시작 스킵")
             return
         }
+        if (kwsManager == null) {
+            Log.d(TAG, "kwsManager null — 초기화 후 KWS 시작")
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    initializeKeywordSpotting(context)
+                } catch (e: Exception) {
+                    Log.e(TAG, "KWS 재초기화 실패: ${e.message}", e)
+                }
+            }
+            return
+        }
         Log.d(TAG, "KWS 재시작")
+        startSpotting()
+    }
+
+    private suspend fun initializeKeywordSpotting(context: Application) {
+        SherpaManager.ensureKwsModelsExtracted(context)
+
+        if (!context.hasGrantedMicrophonePermission()) {
+            Log.w(TAG, "RECORD_AUDIO 권한 없음 — 웨이크워드 감지 비활성화")
+            return
+        }
+
+        if (!SherpaManager.kwsModelsExist(context)) {
+            Log.e(TAG, "KWS 모델 없음 — 웨이크워드 감지 비활성화")
+            return
+        }
+
+        kwsManager = KeywordSpottingManager(context)
+        Log.d(TAG, "KWS 초기화 완료 — 웨이크워드 청취 시작")
         startSpotting()
     }
 

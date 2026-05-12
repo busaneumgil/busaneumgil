@@ -1,9 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import android.Manifest
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,7 +9,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,6 +21,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
+import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
+import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageAppInfoRoute
@@ -248,12 +248,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             if (!isGranted) navController.popBackStack()
         }
         LaunchedEffect(Unit) {
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.RECORD_AUDIO,
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            when (context.resolveMicrophonePermissionState()) {
+                MicrophonePermissionState.GRANTED -> Unit
+                MicrophonePermissionState.DENIED -> micPermissionLauncher.launch(MICROPHONE_PERMISSION)
+                MicrophonePermissionState.UNAVAILABLE -> navController.popBackStack()
             }
         }
         SearchVoiceInputRoute(

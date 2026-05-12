@@ -84,16 +84,28 @@ class MapFacilityDetailSheetConfigurationTest {
             "Legacy guide card should no longer be rendered in the place detail sheet.",
             source.contains("FacilityDetailSlotCard("),
         )
+        assertFalse(
+            "Guide message section should no longer be rendered in the place detail sheet body.",
+            source.contains("FacilityDetailGuideMessageSection("),
+        )
+        assertFalse(
+            "Empty accessibility placeholder chips should not be rendered when no accessibility info exists.",
+            source.contains("map_facility_detail_accessibility_empty"),
+        )
     }
 
     @Test
-    fun `facility detail bottom sheet shell removes divider chrome`() {
+    fun `facility detail bottom sheet shell removes divider chrome and hides empty detail spacing`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
 
         assertFalse(
             "Detail sheet header/body/action sections should be separated by spacing rather than dividers.",
             source.contains("HorizontalDivider"),
+        )
+        assertTrue(
+            "Detail sheet shell should skip the body column entirely when there is no accessibility content.",
+            source.contains("if (state.hasDetailContent)"),
         )
     }
 

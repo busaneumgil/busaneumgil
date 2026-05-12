@@ -1,7 +1,10 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
@@ -17,8 +20,13 @@ import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RecentSearch
+import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockRouteFixtures
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteFailureKind
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
@@ -27,12 +35,16 @@ import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -114,6 +126,8 @@ class RouteSettingViewModelTest {
             assertTrue(uiState.selectedRoute?.previewPoints?.size ?: 0 >= 2)
             assertEquals(null, uiState.selectedRoute?.previewFallbackNotice)
             assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertTrue(uiState.cta.isEnabled)
+            assertEquals(null, uiState.routePreviewMap.fallbackMessage)
             assertEquals(RouteOption.SAFE, uiState.routePreviewMap.routeOption)
             assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
             assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
@@ -171,7 +185,7 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.isUsingFallbackDestination)
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
-            assertEquals("검색 handoff 전에는 기본 도착지를 유지합니다.", uiState.destinationFallbackMessage)
+            assertEquals("목적지를 선택하면 경로를 보여드릴게요.", uiState.destinationFallbackMessage)
             assertEquals(null, uiState.destination.metadataLabel)
             assertEquals("부산역", uiState.destination.name)
             assertEquals("부산 동구 중앙대로 206", uiState.destination.supportingText)
@@ -350,7 +364,7 @@ class RouteSettingViewModelTest {
             assertEquals("No selected route is available for the preview map.", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.cta.isEnabled)
-            assertEquals("표시할 경로가 준비되면 시작 CTA를 활성화합니다.", uiState.cta.supportingText)
+            assertEquals("경로 정보를 불러오는 동안 안내 시작 버튼을 잠시 비활성화합니다.", uiState.cta.supportingText)
             assertFalse(uiState.isStartEnabled)
         }
 
@@ -369,9 +383,207 @@ class RouteSettingViewModelTest {
 
             assertFalse(uiState.cta.isEnabled)
             assertEquals("경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다.", uiState.cta.supportingText)
-            assertEquals("route load failed", uiState.loadErrorMessage)
+            assertEquals("전체 경로를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", uiState.loadErrorMessage)
             assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
-            assertEquals("route load failed", uiState.routePreviewMap.fallbackMessage)
+            assertEquals("전체 경로를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", uiState.routePreviewMap.fallbackMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
+    fun `first real location after fallback walk failure forces route reload`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val currentLocationManager = ViewModelTestCurrentLocationManager()
+            val routeRepository = FallbackFailureRecoveryRouteRepository()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = currentLocationManager,
+                )
+
+            advanceUntilIdle()
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(DEFAULT_TEST_ORIGIN_COORDINATE, routeRepository.lastWalkQuery?.origin?.coordinate)
+            assertTrue(viewModel.uiState.value.loadErrorMessage?.isNotBlank() == true)
+
+            viewModel.startLocationUpdates()
+            advanceUntilIdle()
+            assertEquals(2, routeRepository.walkSearchCount)
+            assertEquals(DEFAULT_TEST_ORIGIN_COORDINATE, routeRepository.lastWalkQuery?.origin?.coordinate)
+
+            val actualLocation =
+                LocationSnapshot(
+                    latitude = 35.1802,
+                    longitude = 129.0764,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_716_000_000_000L,
+                )
+            currentLocationManager.updateLocation(actualLocation)
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(3, routeRepository.walkSearchCount)
+            assertEquals(
+                GeoCoordinate(
+                    latitude = actualLocation.latitude,
+                    longitude = actualLocation.longitude,
+                ),
+                routeRepository.lastWalkQuery?.origin?.coordinate,
+            )
+            assertEquals(RouteOriginState.CURRENT_LOCATION_RESOLVED, uiState.originState)
+            assertEquals(
+                GeoCoordinate(
+                    latitude = actualLocation.latitude,
+                    longitude = actualLocation.longitude,
+                ),
+                uiState.origin.coordinate,
+            )
+            assertEquals(null, uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertTrue(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
+    fun `route timeout exposes timeout specific failure copy`() =
+        runTest {
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository =
+                        routeApiFailingRepository(
+                            routeApiException(
+                                failureKind = RouteFailureKind.CLIENT_TIMEOUT,
+                                status = "ROUTE_CLIENT_TIMEOUT",
+                                message = "temporary timeout",
+                            ),
+                        ),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.cta.isEnabled)
+            assertEquals("경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals("경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", uiState.routePreviewMap.fallbackMessage)
+            assertEquals(null, uiState.loadNoticeMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
+    fun `route network failure exposes connectivity specific failure copy`() =
+        runTest {
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository =
+                        routeApiFailingRepository(
+                            routeApiException(
+                                failureKind = RouteFailureKind.UNKNOWN_HOST,
+                                status = "ROUTE_UNKNOWN_HOST",
+                                message = "network unavailable",
+                            ),
+                        ),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.cta.isEnabled)
+            assertEquals("네트워크 연결 상태를 확인한 뒤 다시 시도해 주세요.", uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals("네트워크 연결 상태를 확인한 뒤 다시 시도해 주세요.", uiState.routePreviewMap.fallbackMessage)
+            assertEquals(null, uiState.loadNoticeMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
+    fun `route no path failure exposes no route specific failure copy`() =
+        runTest {
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository =
+                        routeApiFailingRepository(
+                            routeApiException(
+                                failureKind = RouteFailureKind.HTTP_RESPONSE,
+                                status = "RT4040",
+                                message = "no route",
+                                httpStatusCode = 404,
+                            ),
+                        ),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.cta.isEnabled)
+            assertEquals("탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요.", uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.NO_ROUTE, uiState.routePreviewMap.status)
+            assertEquals("탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요.", uiState.routePreviewMap.fallbackMessage)
+            assertEquals(null, uiState.loadNoticeMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
+    fun `route same endpoint failure exposes same endpoint specific failure copy`() =
+        runTest {
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository =
+                        routeApiFailingRepository(
+                            routeApiException(
+                                failureKind = RouteFailureKind.HTTP_RESPONSE,
+                                status = "RT4004",
+                                message = "same endpoint",
+                                httpStatusCode = 400,
+                            ),
+                        ),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.cta.isEnabled)
+            assertEquals("출발지와 도착지를 다르게 선택해 주세요.", uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals("출발지와 도착지를 다르게 선택해 주세요.", uiState.routePreviewMap.fallbackMessage)
+            assertEquals(null, uiState.loadNoticeMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
+    fun `same origin and destination are blocked before route search request`() =
+        runTest {
+            val samePlace = testDestination()
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedOrigin(samePlace)
+                    updateSelectedDestination(samePlace)
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = failIfCalledRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals("출발지와 도착지를 다르게 선택해 주세요.", uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals("출발지와 도착지를 다르게 선택해 주세요.", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
         }
 
@@ -471,6 +683,30 @@ class RouteSettingViewModelTest {
             )
             assertEquals("음향 신호", detailSteps[3].badgeLabel)
             assertEquals(RouteDetailTone.INFO, detailSteps[3].badgeTone)
+        }
+
+    @Test
+    fun `detail steps hide pending meta label when crosswalk distance is missing`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = crosswalkMissingDistanceRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val crosswalkStep =
+                viewModel.uiState.value.selectedRoute
+                    ?.detailSteps
+                    ?.firstOrNull { step -> step.kind == RouteDetailStepKind.CROSSWALK }
+
+            assertEquals("횡단보도 건너기", crosswalkStep?.title)
+            assertEquals(null, crosswalkStep?.metaLabel)
         }
 
     @Test
@@ -603,6 +839,123 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `initial long walk keeps transit selected while default transit finishes`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = DelayedTransitRouteRepository(walkSafeDistanceMeters = 820)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val interimState = viewModel.uiState.value
+
+            assertTrue(interimState.isLoading)
+            assertEquals(RouteTravelMode.TRANSIT, interimState.selectedTravelMode)
+            assertEquals(RouteTravelMode.TRANSIT, interimState.pendingTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, interimState.selectedOption)
+            assertTrue(interimState.optionCards.isEmpty())
+            assertEquals(null, interimState.selectedRoute)
+            assertEquals(RoutePreviewMapStatus.LOADING, interimState.routePreviewMap.status)
+            assertFalse(interimState.routePreviewMap.isDisplayable)
+            assertTrue(interimState.loadNoticeMessage?.isNotBlank() == true)
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.transitSearchCount)
+
+            routeRepository.completeTransitSuccess()
+            advanceUntilIdle()
+
+            val finalState = viewModel.uiState.value
+
+            assertEquals(RouteTravelMode.TRANSIT, finalState.selectedTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, finalState.selectedOption)
+            assertEquals("Transit Recommended", finalState.selectedRoute?.title)
+            assertEquals(null, finalState.loadNoticeMessage)
+        }
+
+    @Test
+    fun `transit timeout after successful long walk keeps walk result visible`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitTimeoutRouteRepository(walkSafeDistanceMeters = 820)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(RouteTravelMode.WALK, uiState.selectedTravelMode)
+            assertEquals(RouteOption.SAFE, uiState.selectedOption)
+            assertEquals("Safe Route", uiState.selectedRoute?.title)
+            assertEquals(null, uiState.loadErrorMessage)
+            assertTrue(uiState.loadNoticeMessage?.isNotBlank() == true)
+            assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertTrue(uiState.routePreviewMap.isDisplayable)
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.transitSearchCount)
+            return@runTest
+
+            assertEquals(RouteTravelMode.TRANSIT, uiState.selectedTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, uiState.selectedOption)
+            assertTrue(uiState.optionCards.isEmpty())
+            assertEquals(null, uiState.selectedRoute)
+            assertEquals("경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", uiState.loadErrorMessage)
+            assertEquals(null, uiState.loadNoticeMessage)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals("경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", uiState.routePreviewMap.fallbackMessage)
+            assertFalse(uiState.routePreviewMap.isDisplayable)
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.transitSearchCount)
+        }
+
+    @Test
+    fun `manual transit selection keeps transit state when transit search times out`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitTimeoutRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            assertEquals(RouteTravelMode.WALK, viewModel.uiState.value.selectedTravelMode)
+
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(RouteTravelMode.TRANSIT, uiState.selectedTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, uiState.selectedOption)
+            assertTrue(uiState.optionCards.isEmpty())
+            assertEquals(null, uiState.selectedRoute)
+            assertEquals("경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", uiState.loadErrorMessage)
+            assertEquals(null, uiState.loadNoticeMessage)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals("경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", uiState.routePreviewMap.fallbackMessage)
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.transitSearchCount)
+        }
+
+    @Test
     fun `manual travel mode change loads the selected mode search surface`() =
         runTest {
             val destinationSelectionRepository =
@@ -638,6 +991,64 @@ class RouteSettingViewModelTest {
             assertEquals(RouteTravelMode.WALK, viewModel.uiState.value.selectedTravelMode)
             assertEquals(2, routeRepository.walkSearchCount)
             assertEquals(1, routeRepository.transitSearchCount)
+        }
+
+    @Test
+    fun `manual transit selection exposes remote success debug info`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(null, uiState.loadErrorMessage)
+            assertTrue(uiState.loadDebugMessage?.contains("mode=TRANSIT") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("path=/routes/search/transit") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("result=success") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("source=SERVER_API") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("fromCache=false") == true)
+        }
+
+    @Test
+    fun `manual transit selection exposes auth gate debug info when session is missing`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = MissingSessionTransitRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(RouteTravelMode.TRANSIT, uiState.selectedTravelMode)
+            assertEquals("로그인이 필요해요. 다시 로그인한 뒤 시도해 주세요.", uiState.loadErrorMessage)
+            assertTrue(uiState.loadDebugMessage?.contains("mode=TRANSIT") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("path=/routes/search/transit") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("result=failure") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("layer=AUTH_GATE") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("httpStatus=401") == true)
+            assertTrue(uiState.loadDebugMessage?.contains("status=ROUTE_AUTH_MISSING_SESSION") == true)
         }
 
     @Test
@@ -716,6 +1127,53 @@ class RouteSettingViewModelTest {
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
             assertTrue(viewModel.uiState.value.ctaAcknowledged)
         }
+
+    @Test
+    fun `start action saves direct destination as recent before emitting navigation handoff`() =
+        runTest {
+            val destination = testDestination()
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(destination)
+                }
+            val saveGate = CompletableDeferred<Unit>()
+            val searchRepository = FakeSearchRepository(saveGate = saveGate)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    searchRepository = searchRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            runCurrent()
+
+            assertEquals(1, searchRepository.pendingSaveCount)
+            assertTrue(searchRepository.savedRecentDestinations.isEmpty())
+            assertFalse(uiEvent.isCompleted)
+
+            saveGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    RecentDestination(
+                        placeId = destination.placeId,
+                        name = destination.name,
+                        address = destination.address,
+                        latitude = destination.latitude,
+                        longitude = destination.longitude,
+                        category = destination.category,
+                    ),
+                ),
+                searchRepository.savedRecentDestinations,
+            )
+            assertTrue(uiEvent.await() is RouteSettingUiEvent.StartNavigationRequested)
+        }
 }
 
 private fun testRouteRepository(): RouteRepository {
@@ -781,6 +1239,30 @@ private fun invalidDestination(): PlaceDestination =
         category = PlaceCategory.OTHER,
     )
 
+private class FakeSearchRepository(
+    private val saveGate: CompletableDeferred<Unit>? = null,
+) : SearchRepository {
+    val savedRecentDestinations = mutableListOf<RecentDestination>()
+    var pendingSaveCount: Int = 0
+        private set
+
+    override suspend fun search(query: SearchQuery): List<SearchResult> = emptyList()
+
+    override suspend fun getRecentSearches(): List<RecentSearch> = emptyList()
+
+    override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> = savedRecentDestinations
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) {
+        pendingSaveCount += 1
+        saveGate?.await()
+        savedRecentDestinations += destination
+    }
+}
+
+private val DEFAULT_TEST_ORIGIN_COORDINATE = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+
 private abstract class BaseTestRouteRepository : RouteRepository {
     override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
         error("getTransitRouteSearchData was not expected")
@@ -807,6 +1289,48 @@ private abstract class BaseTestRouteRepository : RouteRepository {
         sessionId: String,
         score: Int,
     ): RouteRatingData = RouteRatingData(ratingId = 0L)
+}
+
+private class ViewModelTestCurrentLocationManager : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)
+
+    override val latestLocation = mutableLatestLocation.asStateFlow()
+
+    override fun refreshLatestLocation() = Unit
+
+    override fun startLocationUpdates() = Unit
+
+    override fun stopLocationUpdates() = Unit
+
+    fun updateLocation(snapshot: LocationSnapshot?) {
+        mutableLatestLocation.value = snapshot
+    }
+}
+
+private class FallbackFailureRecoveryRouteRepository : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var lastWalkQuery: RouteSearchQuery? = null
+        private set
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        lastWalkQuery = query
+        return if (query.origin.coordinate == DEFAULT_TEST_ORIGIN_COORDINATE) {
+            throw routeApiException(
+                failureKind = RouteFailureKind.HTTP_RESPONSE,
+                status = "RT4040",
+                message = "no walk route for fallback origin",
+                httpStatusCode = 404,
+            )
+        } else {
+            buildWalkSearchData(
+                query = query,
+                searchId = "walk-search-$walkSearchCount",
+                safeDistanceMeters = 720,
+            )
+        }
+    }
 }
 
 private class TransitModeRecordingRouteRepository(
@@ -851,6 +1375,113 @@ private class TransitModeRecordingRouteRepository(
         )
     }
 }
+
+private class DelayedTransitRouteRepository(
+    private val walkSafeDistanceMeters: Int,
+) : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var transitSearchCount: Int = 0
+        private set
+
+    private val transitResult = CompletableDeferred<Result<RouteSearchData>>()
+    private var latestTransitQuery: RouteSearchQuery? = null
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "walk-search-$walkSearchCount",
+            safeDistanceMeters = walkSafeDistanceMeters,
+        )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        transitSearchCount += 1
+        latestTransitQuery = query
+        return transitResult.await().getOrThrow()
+    }
+
+    fun completeTransitSuccess() {
+        val query = checkNotNull(latestTransitQuery) { "Transit query was not requested." }
+        transitResult.complete(
+            Result.success(
+                buildTransitSearchData(
+                    query = query,
+                    searchId = "transit-search-$transitSearchCount",
+                ),
+            ),
+        )
+    }
+}
+
+private class TransitTimeoutRouteRepository(
+    private val walkSafeDistanceMeters: Int,
+) : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var transitSearchCount: Int = 0
+        private set
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "walk-search-$walkSearchCount",
+            safeDistanceMeters = walkSafeDistanceMeters,
+        )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        transitSearchCount += 1
+        throw routeApiException(
+            failureKind = RouteFailureKind.CLIENT_TIMEOUT,
+            status = "ROUTE_CLIENT_TIMEOUT",
+            message = "temporary timeout",
+        )
+    }
+}
+
+private class MissingSessionTransitRouteRepository(
+    private val walkSafeDistanceMeters: Int,
+) : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var transitSearchCount: Int = 0
+        private set
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "walk-search-$walkSearchCount",
+            safeDistanceMeters = walkSafeDistanceMeters,
+        )
+    }
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        transitSearchCount += 1
+        throw routeApiException(
+            failureKind = RouteFailureKind.HTTP_RESPONSE,
+            status = "ROUTE_AUTH_MISSING_SESSION",
+            message = "인증이 필요합니다.",
+            httpStatusCode = 401,
+        )
+    }
+}
+
+private fun routeApiException(
+    failureKind: RouteFailureKind,
+    status: String,
+    message: String,
+    httpStatusCode: Int = 0,
+): RouteApiException =
+    RouteApiException(
+        httpStatusCode = httpStatusCode,
+        status = status,
+        message = message,
+        failureKind = failureKind,
+    )
 
 private fun RouteSearchData.withSafeWalkDistance(distanceMeters: Int): RouteSearchData =
     copy(
@@ -1073,6 +1704,20 @@ private fun failingRouteRepository(): RouteRepository =
             error("route load failed")
     }
 
+private fun routeApiFailingRepository(
+    failure: RouteApiException,
+): RouteRepository =
+    object : BaseTestRouteRepository() {
+        override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            throw failure
+    }
+
+private fun failIfCalledRouteRepository(): RouteRepository =
+    object : BaseTestRouteRepository() {
+        override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            error("Route search should have been blocked before repository access")
+    }
+
 private fun directionalRouteRepository(): RouteRepository =
     object : BaseTestRouteRepository() {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
@@ -1144,6 +1789,63 @@ private fun directionalRouteRepository(): RouteRepository =
                 source =
                     RouteSearchSource.serverApi(
                         label = "Directional route payload",
+                    ),
+            )
+    }
+
+private fun crosswalkMissingDistanceRouteRepository(): RouteRepository =
+    object : BaseTestRouteRepository() {
+        override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            RouteSearchData(
+                query = query,
+                result =
+                    RouteSearchResult(
+                        origin = query.origin,
+                        destination = query.destination,
+                        routes =
+                            listOf(
+                                RouteCandidate(
+                                    routeOption = RouteOption.SAFE,
+                                    title = "Crosswalk Pending Route",
+                                    summary =
+                                        RouteSummary(
+                                            distanceMeters = 80,
+                                            estimatedTimeMinutes = 2,
+                                            riskLevel = RouteRiskLevel.LOW,
+                                        ),
+                                    preview =
+                                        RoutePreviewModel(
+                                            polyline =
+                                                RoutePolyline(
+                                                    points =
+                                                        listOf(
+                                                            query.origin.coordinate,
+                                                            GeoCoordinate(35.17965, 129.07555),
+                                                            query.destination.coordinate,
+                                                        ),
+                                                ),
+                                            segmentCount = 1,
+                                            renderableSegmentCount = 1,
+                                            fallbackSegmentCount = 0,
+                                        ),
+                                    segments =
+                                        listOf(
+                                            RouteSegment(
+                                                sequence = 1,
+                                                distanceMeters = 0,
+                                                safetyFlags =
+                                                    RouteSegmentSafetyFlags(
+                                                        hasCrosswalk = true,
+                                                    ),
+                                                guidanceMessage = "",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                source =
+                    RouteSearchSource.serverApi(
+                        label = "Crosswalk pending route payload",
                     ),
             )
     }

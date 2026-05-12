@@ -63,6 +63,22 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
+    fun `initial renderer loading overlay waits through a short grace period before showing`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "The initial map loading overlay should wait through a short grace period so fast renderer startups do not flash a centered loading card.",
+            source.contains("delay(KAKAO_RENDERER_LOADING_OVERLAY_DELAY_MILLIS)"),
+        )
+        assertTrue(
+            "Kakao map viewport should route fallback overlay visibility through the dedicated loading-overlay policy helper.",
+            source.contains("shouldShowKakaoRendererFallbackOverlay("),
+        )
+    }
+
+    @Test
     fun `special map markers keep a compose overlay backup anchored by screen point`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
@@ -79,6 +95,18 @@ class KakaoMapViewportConfigurationTest {
         assertTrue(
             "Projected marker overlays should include the selected destination marker so bookmarked places are not camera-only state.",
             source.contains("selectedDestinationCoordinate"),
+        )
+    }
+
+    @Test
+    fun `projected overlay markers are clipped to the viewport bounds`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Projected marker overlays should be clipped to the map viewport so current-location or origin pins cannot bleed over the navigation info sheet.",
+            source.contains("clipToBounds()"),
         )
     }
 

@@ -177,11 +177,10 @@ class DefaultSearchRepository(
 
     private fun isAuthenticationFailure(throwable: Throwable): Boolean =
         throwable is SearchApiException &&
-            (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)
+            throwable.httpStatusCode == HTTP_UNAUTHORIZED
 
     private companion object {
         private const val HTTP_UNAUTHORIZED = 401
-        private const val HTTP_FORBIDDEN = 403
         private const val SEARCH_STATUS_MISSING_SESSION = "SEARCH_AUTH_MISSING_SESSION"
         private const val SEARCH_STATUS_AUTHENTICATION_FAILED = "SEARCH_AUTHENTICATION_FAILED"
         private const val AUTH_REQUIRED_MESSAGE = "인증이 필요합니다."

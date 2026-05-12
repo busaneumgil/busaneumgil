@@ -168,11 +168,10 @@ class DefaultPlacesRepository(
 
     private fun isAuthenticationFailure(throwable: Throwable): Boolean =
         throwable is PlacesApiException &&
-            (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)
+            throwable.httpStatusCode == HTTP_UNAUTHORIZED
 
     private companion object {
         private const val HTTP_UNAUTHORIZED = 401
-        private const val HTTP_FORBIDDEN = 403
         private const val PLACE_STATUS_MISSING_SESSION = "PLACE_AUTH_MISSING_SESSION"
         private const val PLACE_STATUS_AUTHENTICATION_FAILED = "PLACE_AUTHENTICATION_FAILED"
         private const val AUTH_REQUIRED_MESSAGE = "인증이 필요합니다."

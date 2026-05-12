@@ -171,6 +171,22 @@ class MapCategoryFilterBarConfigurationTest {
     }
 
     @Test
+    fun `map category filter bar uses dedicated other icon asset for other category`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "Other category chip should use a dedicated place icon asset instead of the generic facility navigation icon.",
+            source.contains("FacilityCategory.OTHER -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Dedicated other place drawable should exist for category chip surfaces.",
+            File("src/main/res/drawable/ic_place_other.png").exists(),
+        )
+    }
+
+    @Test
     fun `map category filter bar error copy explains the facility load failure in user terms`() {
         val stringsSource =
             File("src/main/res/values/strings.xml")

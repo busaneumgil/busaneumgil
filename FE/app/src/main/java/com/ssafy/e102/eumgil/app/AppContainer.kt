@@ -21,6 +21,7 @@ import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSour
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.HttpJsonTimeoutConfig
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
@@ -130,6 +131,11 @@ class AppContainer(
             accessTokenProvider = {
                 authSessionRepository.getAuthGateState().authSession?.accessToken
             },
+            timeoutConfig =
+                HttpJsonTimeoutConfig(
+                    connectTimeoutMillis = ROUTE_CONNECT_TIMEOUT_MILLIS,
+                    readTimeoutMillis = ROUTE_READ_TIMEOUT_MILLIS,
+                ),
         )
     }
     private val userRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
@@ -307,5 +313,10 @@ class AppContainer(
 
     val currentLocationManager: CurrentLocationManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidCurrentLocationManager(context = appContext)
+    }
+
+    private companion object {
+        private const val ROUTE_CONNECT_TIMEOUT_MILLIS = 5_000
+        private const val ROUTE_READ_TIMEOUT_MILLIS = 7_000
     }
 }

@@ -1,5 +1,5 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentPayload } from "../types";
+import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
 import { loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
 import { deletedEdgeIds, draftSegmentFeatures, resetPolygonDeleteSelection, segmentsTouchingPolygon, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
@@ -34,6 +34,11 @@ interface SegmentMapProps {
     safe?: GeoPoint[];
     fast?: GeoPoint[];
   };
+  routePoints?: {
+    start?: GeoPoint | null;
+    end?: GeoPoint | null;
+  };
+  toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend";
 }
 
 export interface RoadviewDockState {
@@ -43,6 +48,20 @@ export interface RoadviewDockState {
 }
 
 const ROADVIEW_DEFAULT_MESSAGE = "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.";
+const DETAIL_SEGMENT_MAX_LEVEL = 4;
+const segmentFeatureTypes: SegmentFeatureType[] = ["CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"];
+const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
+  CROSSWALK: "횡단보도",
+  AUDIO_SIGNAL: "음향신호기",
+  BRAILLE_BLOCK: "점자블록",
+  STAIRS: "계단",
+};
+const segmentFeatureColors: Record<SegmentFeatureType, string> = {
+  CROSSWALK: "#2563eb",
+  AUDIO_SIGNAL: "#0f766e",
+  BRAILLE_BLOCK: "#7c3aed",
+  STAIRS: "#7c2d12",
+};
 
 export function SegmentMap({
   payload,
@@ -64,6 +83,8 @@ export function SegmentMap({
   routePointPickMode = null,
   onRoutePointPick,
   routeLines,
+  routePoints,
+  toolbarMode = "editor",
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -76,6 +97,8 @@ export function SegmentMap({
   const pendingEditOverlaysRef = useRef<KakaoOverlay[]>([]);
   const referenceOverlaysRef = useRef<KakaoOverlay[]>([]);
   const routeOverlaysRef = useRef<KakaoOverlay[]>([]);
+  const routePointOverlaysRef = useRef<KakaoOverlay[]>([]);
+  const segmentFeatureOverlaysRef = useRef<KakaoOverlay[]>([]);
   const selectedSegmentOverlayRef = useRef<KakaoOverlay | null>(null);
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
   const segmentOverlayByEdgeRef = useRef<Map<string, KakaoOverlay[]>>(new Map());
@@ -95,8 +118,20 @@ export function SegmentMap({
   const [pendingAddCount, setPendingAddCount] = useState(0);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [mapLevel, setMapLevel] = useState(6);
   const [polygonDeleteActive, setPolygonDeleteActive] = useState(false);
   const [polygonPointCount, setPolygonPointCount] = useState(0);
+  const [roadSegmentLayers, setRoadSegmentLayers] = useState({
+    sideLine: true,
+    crossWalk: true,
+    transitionConnector: true,
+  });
+  const [segmentFeatureLayers, setSegmentFeatureLayers] = useState<Record<SegmentFeatureType, boolean>>({
+    CROSSWALK: true,
+    AUDIO_SIGNAL: true,
+    BRAILLE_BLOCK: true,
+    STAIRS: true,
+  });
 
   useEffect(() => {
     onDraftEditRef.current = onDraftEdit;
@@ -123,6 +158,7 @@ export function SegmentMap({
           center,
           level: 6,
         });
+        setMapLevel(mapRef.current.getLevel?.() ?? 6);
         roadviewClientRef.current = window.kakao.maps.RoadviewClient ? new window.kakao.maps.RoadviewClient() : null;
         setMapReady(true);
         window.kakao.maps.event.addListener(mapRef.current, "click", (event: unknown) => {
@@ -130,6 +166,9 @@ export function SegmentMap({
           if (!latLng) return;
           const coord: [number, number] = [latLng.getLng(), latLng.getLat()];
           handleMapCoordinate(coord, latLng);
+        });
+        window.kakao.maps.event.addListener(mapRef.current, "zoom_changed", () => {
+          setMapLevel(mapRef.current?.getLevel?.() ?? 6);
         });
       })
       .catch((reason: Error) => setMapError(reason.message));
@@ -146,9 +185,18 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    const useHitArea = toolbarMode === "editor";
+    const canRenderDetails = shouldRenderDetailedSegments();
+    const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    const segmentFeatures = canRenderDetails
+      ? allSegmentFeatures.filter(shouldShowRoadSegmentLayer)
+      : [];
     segmentFeatures.forEach((feature) => {
       const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
+        if (routePointPickModeRef.current) {
+          handleMapCoordinate(coord, latLng);
+          return;
+        }
         if (modeRef.current === "select") {
           onSelectSegmentRef.current(feature);
           drawSelectedSegment(feature);
@@ -164,7 +212,7 @@ export function SegmentMap({
           segmentType: feature.properties.segmentType,
           reason: "ADMIN_click_delete",
         } as EditAction);
-      });
+      }, { hitArea: useHitArea });
       if (segmentOverlays) {
         overlaysRef.current.push(...segmentOverlays);
         segmentOverlayByEdgeRef.current.set(String(feature.properties.edgeId), segmentOverlays);
@@ -178,15 +226,24 @@ export function SegmentMap({
     });
 
     centerMapForPayload(segmentFeatures, bridgeFeatures);
-    renderPendingEditOverlays();
+    if (canRenderDetails) {
+      renderPendingEditOverlays();
+    } else {
+      clearPendingEditOverlays();
+    }
     renderReferenceOverlays();
+    renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, mapReady]);
+  }, [payload, bridgePayload, mapLevel, mapReady, roadSegmentLayers, toolbarMode]);
 
   useEffect(() => {
-    renderPendingEditOverlays();
+    if (shouldRenderDetailedSegments()) {
+      renderPendingEditOverlays();
+    } else {
+      clearPendingEditOverlays();
+    }
     syncDeletedSegmentOverlays();
-  }, [draftEdits]);
+  }, [draftEdits, mapLevel]);
 
   useEffect(() => {
     renderReferenceOverlays();
@@ -197,13 +254,21 @@ export function SegmentMap({
   }, [routeLines, mapReady]);
 
   useEffect(() => {
-    if (!selectedSegment) {
+    renderRoutePointOverlays();
+  }, [routePoints, mapReady]);
+
+  useEffect(() => {
+    renderSegmentFeatureOverlays();
+  }, [draftEdits, mapReady, payload, segmentFeatureLayers, toolbarMode]);
+
+  useEffect(() => {
+    if (!selectedSegment || !shouldRenderDetailedSegments()) {
       selectedSegmentOverlayRef.current?.setMap(null);
       selectedSegmentOverlayRef.current = null;
       return;
     }
     drawSelectedSegment(selectedSegment);
-  }, [selectedSegment]);
+  }, [mapLevel, selectedSegment]);
 
   function setMode(nextMode: EditorMode) {
     if (!editable && (nextMode === "add" || nextMode === "delete")) {
@@ -225,6 +290,10 @@ export function SegmentMap({
   function setAddType(nextAddType: AddType) {
     addTypeRef.current = nextAddType;
     setAddTypeState(nextAddType);
+  }
+
+  function shouldRenderDetailedSegments() {
+    return mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
   }
 
   function handleMapCoordinate(coord: Coord, latLng: unknown) {
@@ -291,8 +360,7 @@ export function SegmentMap({
 
   function renderPendingEditOverlays() {
     if (!window.kakao?.maps || !mapRef.current) return;
-    pendingEditOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
-    pendingEditOverlaysRef.current = [];
+    clearPendingEditOverlays();
 
     draftSegmentFeatures(draftEditsRef.current).forEach((feature) => {
       const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, () => undefined, { draft: true, hitArea: false });
@@ -335,6 +403,20 @@ export function SegmentMap({
     });
   }
 
+  function shouldShowRoadSegmentLayer(feature: SegmentFeature) {
+    if (toolbarMode !== "roadSegmentLegend") {
+      return true;
+    }
+    const segmentType = feature.properties.segmentType;
+    if (segmentType === "CROSS_WALK" || segmentType === "SIDE_WALK") {
+      return roadSegmentLayers.crossWalk;
+    }
+    if (segmentType === "TRANSITION_CONNECTOR") {
+      return roadSegmentLayers.transitionConnector;
+    }
+    return roadSegmentLayers.sideLine;
+  }
+
   function renderRouteOverlays() {
     if (!window.kakao?.maps || !mapRef.current) return;
     routeOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
@@ -349,6 +431,39 @@ export function SegmentMap({
       fastLine.setMap(mapRef.current);
       routeOverlaysRef.current.push(fastLine);
     }
+  }
+
+  function renderRoutePointOverlays() {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    const map = mapRef.current;
+    routePointOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    routePointOverlaysRef.current = [];
+    const start = routePoints?.start ? createRoutePointOverlay(routePoints.start, "출발", "start", map) : null;
+    const end = routePoints?.end ? createRoutePointOverlay(routePoints.end, "도착", "end", map) : null;
+    if (start) routePointOverlaysRef.current.push(start);
+    if (end) routePointOverlaysRef.current.push(end);
+  }
+
+  function renderSegmentFeatureOverlays() {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    const map = mapRef.current;
+    segmentFeatureOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    segmentFeatureOverlaysRef.current = [];
+    if (toolbarMode !== "segmentFeatureLegend" || !shouldRenderDetailedSegments()) return;
+    const activeTypes = new Set(segmentFeatureTypes.filter((featureType) => segmentFeatureLayers[featureType]));
+    if (!activeTypes.size) return;
+    const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    segmentFeatures.forEach((feature) => {
+      const overlay = createSegmentFeatureOverlay(feature, activeTypes);
+      if (!overlay) return;
+      overlay.setMap(map);
+      segmentFeatureOverlaysRef.current.push(overlay);
+    });
+  }
+
+  function clearPendingEditOverlays() {
+    pendingEditOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    pendingEditOverlaysRef.current = [];
   }
 
   function centerMapForPayload(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
@@ -395,6 +510,7 @@ export function SegmentMap({
   }
 
   function selectNearestSegment(coord: Coord, maxDistanceM: number, openRoadview = true) {
+    if (!shouldRenderDetailedSegments()) return;
     const candidates = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     const nearest = candidates
       .map((feature) => ({ feature, distanceM: pointLineDistanceM(coord, feature.geometry.coordinates) }))
@@ -576,25 +692,63 @@ export function SegmentMap({
     return new window.kakao!.maps.LatLng(coord[1], coord[0]);
   }
 
+  const detailedSegmentsVisible = shouldRenderDetailedSegments();
+  const segmentFeatureCounts = countSegmentFeatureTypes(visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits));
+
   return (
     <section className="map-shell">
       <div ref={containerRef} className="map-canvas" />
-      <div className="map-toolbar">
-        <button className={mode === "select" ? "selected-tool" : ""} onClick={() => setMode("select")}>Select</button>
-        <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
-        <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
-        <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
-          <option value="SIDE_LINE">SIDE_LINE</option>
-          <option value="CROSS_WALK">CROSS_WALK</option>
-        </select>
-        {mode === "delete" && (
-          <>
-            <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>Drag</button>
-            <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>Delete all</button>
-          </>
-        )}
-        <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
-      </div>
+      {toolbarMode === "editor" ? (
+        <div className="map-toolbar">
+          <button className={mode === "select" ? "selected-tool" : ""} onClick={() => setMode("select")}>Select</button>
+          <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
+          <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
+          <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
+            <option value="SIDE_LINE">SIDE_LINE</option>
+            <option value="CROSS_WALK">CROSS_WALK</option>
+          </select>
+          {mode === "delete" && (
+            <>
+              <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>Drag</button>
+              <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>Delete all</button>
+            </>
+          )}
+          <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
+        </div>
+      ) : toolbarMode === "roadSegmentLegend" ? (
+        <div className="map-toolbar attribute-legend">
+          <LegendItem
+            color="#c9342f"
+            label="SIDE_LINE"
+            active={roadSegmentLayers.sideLine}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, sideLine: !layers.sideLine }))}
+          />
+          <LegendItem
+            color="#2563eb"
+            label="CROSS_WALK / SIDE_WALK"
+            active={roadSegmentLayers.crossWalk}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, crossWalk: !layers.crossWalk }))}
+          />
+          <LegendItem
+            color="#64748b"
+            label="TRANSITION_CONNECTOR"
+            active={roadSegmentLayers.transitionConnector}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, transitionConnector: !layers.transitionConnector }))}
+          />
+        </div>
+      ) : (
+        <div className="map-toolbar attribute-legend">
+          {segmentFeatureTypes.map((featureType) => (
+            <LegendItem
+              key={featureType}
+              color={segmentFeatureColors[featureType]}
+              label={`${segmentFeatureLabels[featureType]} ${segmentFeatureCounts.get(featureType) ?? 0}`}
+              active={segmentFeatureLayers[featureType]}
+              onClick={() => setSegmentFeatureLayers((layers) => ({ ...layers, [featureType]: !layers[featureType] }))}
+            />
+          ))}
+        </div>
+      )}
       <div className="map-status">
         {loading
           ? "loading..."
@@ -602,9 +756,30 @@ export function SegmentMap({
             ? `payload 오류: ${error.message}`
             : mapError
               ? `지도 오류: ${mapError}`
-              : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""}`}
+              : !detailedSegmentsVisible
+                ? `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
+                : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""}`}
       </div>
     </section>
+  );
+}
+
+function LegendItem({
+  color,
+  label,
+  active,
+  onClick,
+}: {
+  color: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className={`legend-item legend-toggle ${active ? "active" : ""}`} onClick={onClick}>
+      <span style={{ backgroundColor: color }} />
+      {label}
+    </button>
   );
 }
 
@@ -618,6 +793,46 @@ function createRoutePolyline(points: GeoPoint[], color: string, strokeWeight: nu
     strokeStyle: "solid",
     zIndex: 30,
   });
+}
+
+function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" | "end", map: KakaoMap): KakaoOverlay | null {
+  if (!window.kakao?.maps) return null;
+  const marker = document.createElement("div");
+  marker.className = `route-point-marker ${type}`;
+  marker.textContent = label;
+  return new window.kakao.maps.CustomOverlay({
+    map,
+    position: new window.kakao.maps.LatLng(point.lat, point.lng),
+    content: marker,
+    xAnchor: 0.5,
+    yAnchor: 1,
+    zIndex: 36,
+  });
+}
+
+function createSegmentFeatureOverlay(feature: SegmentFeature, activeTypes: Set<SegmentFeatureType>): KakaoOverlay | null {
+  if (!window.kakao?.maps) return null;
+  const matchedType = segmentFeatureTypes.find((featureType) => activeTypes.has(featureType) && feature.properties.featureTypes?.includes(featureType));
+  if (!matchedType) return null;
+  return new window.kakao.maps.Polyline({
+    path: feature.geometry.coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
+    strokeWeight: matchedType === "STAIRS" ? 9 : 8,
+    strokeColor: segmentFeatureColors[matchedType],
+    strokeOpacity: 0.78,
+    strokeStyle: matchedType === "BRAILLE_BLOCK" ? "shortdash" : "solid",
+    clickable: false,
+    zIndex: 25,
+  });
+}
+
+function countSegmentFeatureTypes(features: SegmentFeature[]) {
+  const counts = new Map<SegmentFeatureType, number>();
+  features.forEach((feature) => {
+    feature.properties.featureTypes?.forEach((featureType) => {
+      counts.set(featureType, (counts.get(featureType) ?? 0) + 1);
+    });
+  });
+  return counts;
 }
 
 function createBridgeOverlay(feature: BridgeFeature, map: KakaoMap): KakaoOverlay[] | null {

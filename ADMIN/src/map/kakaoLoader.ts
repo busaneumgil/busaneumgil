@@ -24,6 +24,7 @@ declare global {
 export interface KakaoMap {
   setCenter: (latLng: unknown) => void;
   setBounds?: (bounds: unknown) => void;
+  getLevel?: () => number;
   setLevel: (level: number) => void;
 }
 

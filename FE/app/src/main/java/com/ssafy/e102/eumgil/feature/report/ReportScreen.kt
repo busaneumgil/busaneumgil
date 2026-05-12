@@ -3,11 +3,13 @@ package com.ssafy.e102.eumgil.feature.report
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -177,6 +180,7 @@ private fun ReportBottomBar(
                 label = "다음",
                 enabled = uiState.isLocationStepConfirmable,
                 onClick = { onAction(ReportUiAction.NextStepClicked) },
+                suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
         ReportStep.DetailInput -> {
             val submitting = uiState.submitState is ReportSubmitState.Submitting
@@ -184,17 +188,22 @@ private fun ReportBottomBar(
                 label = if (submitting) "제출 중" else "다음",
                 enabled = uiState.isSubmitEnabled,
                 onClick = { onAction(ReportUiAction.SubmitClicked) },
+                suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
         }
         ReportStep.Complete -> Unit
     }
 }
 
+internal fun shouldSuppressReportPrimaryActionRipple(step: ReportStep): Boolean =
+    step == ReportStep.Complete
+
 @Composable
 private fun ReportPrimaryActionBar(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
+    suppressRipple: Boolean = false,
 ) {
     Surface(
         modifier =
@@ -204,17 +213,73 @@ private fun ReportPrimaryActionBar(
         shadowElevation = 8.dp,
         tonalElevation = 2.dp,
     ) {
-        Button(
-            onClick = onClick,
-            enabled = enabled,
+        if (suppressRipple) {
+            NoRippleReportPrimaryActionButton(
+                onClick = onClick,
+                enabled = enabled,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(EumSpacing.medium),
+                contentPadding = PaddingValues(vertical = EumSpacing.small),
+            ) {
+                Text(text = label)
+            }
+        } else {
+            Button(
+                onClick = onClick,
+                enabled = enabled,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(EumSpacing.medium),
+                contentPadding = PaddingValues(vertical = EumSpacing.small),
+            ) {
+                Text(text = label)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoRippleReportPrimaryActionButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape = RoundedCornerShape(EumRadius.small),
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    border: BorderStroke? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = if (enabled) containerColor else disabledContainerColor,
+        contentColor = if (enabled) contentColor else disabledContentColor,
+        border = border,
+    ) {
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            contentPadding = PaddingValues(vertical = EumSpacing.small),
-        ) {
-            Text(text = label)
-        }
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .padding(contentPadding),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
     }
 }
 

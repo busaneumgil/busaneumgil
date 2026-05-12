@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,14 +32,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +48,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -152,7 +152,7 @@ fun RecentDestinationBottomSheetShell(
                         .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
                 handleModifier =
                     Modifier
-                        .height(24.dp)
+                        .height(MapBottomSheetHandleHeight)
                         .semantics {
                             role = Role.Button
                             contentDescription = "최근 목적지 시트 닫기"
@@ -189,15 +189,25 @@ fun RecentDestinationBottomSheetShell(
                 ) {
                     Text(
                         text = state.title,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    TextButton(onClick = onViewAllClick) {
-                        Text(
-                            text = "전체보기",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    RecentDestinationViewAllAction(onClick = onViewAllClick) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "전체보기",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                            Text(
+                                text = ">",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
                     }
                 }
 
@@ -229,20 +239,15 @@ private fun RecentDestinationRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f),
-        ) {
-            Icon(
-                painter = painterResource(id = state.iconRes),
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .padding(10.dp)
-                        .size(20.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
+        Icon(
+            painter = painterResource(id = state.iconRes),
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .padding(top = 2.dp)
+                    .size(28.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
 
         Column(
             modifier = Modifier.weight(1f),
@@ -283,14 +288,11 @@ private fun RecentDestinationRow(
             }
         }
 
-        Button(
+        RecentDestinationRouteButton(
             onClick = onRouteClick,
             shape = RoundedCornerShape(12.dp),
-            colors =
-                ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
             Icon(
@@ -303,6 +305,64 @@ private fun RecentDestinationRow(
                 text = "길찾기",
                 style = MaterialTheme.typography.labelLarge,
             )
+        }
+    }
+}
+
+@Composable
+private fun RecentDestinationViewAllAction(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier =
+            modifier
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun RecentDestinationRouteButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(12.dp),
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .padding(contentPadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            content()
         }
     }
 }

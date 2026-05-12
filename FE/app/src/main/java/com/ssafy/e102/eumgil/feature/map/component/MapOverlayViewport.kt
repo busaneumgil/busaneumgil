@@ -52,7 +52,7 @@ internal fun MapOverlayViewport(
                         supportingText = "",
                     ),
                 onMarkerClick = {},
-                onCameraMoveEnd = { _, _, _ -> },
+                onCameraMoveEnd = { _, _, _, _ -> },
                 onMapClick = {},
                 modifier = describedModifier,
             )

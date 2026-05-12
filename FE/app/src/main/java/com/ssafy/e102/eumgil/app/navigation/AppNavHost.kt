@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -129,7 +130,20 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     destinations = TopLevelDestination.entries,
                     currentRoute = currentTopLevelRoute,
                     onDestinationSelected = { destination ->
-                        navController.navigateToTopLevel(destination)
+                        if (
+                            shouldNavigateToTopLevelMapForHomeEntry(
+                                currentRoute = currentRoute,
+                                destination = destination,
+                            )
+                        ) {
+                            Log.i(
+                                APP_NAV_HOST_LOG_TAG,
+                                "Map home tab selected from aliased route=$currentRoute; forcing home reentry reset",
+                            )
+                            navController.navigateToTopLevelMapForHomeEntry()
+                        } else {
+                            navController.navigateToTopLevel(destination)
+                        }
                     },
                 )
             }
@@ -167,10 +181,21 @@ internal fun String?.toCurrentTopLevelRoute(): String? =
         this == SearchRoute.Entry.route -> TopLevelRoute.Map.route
         this?.startsWith("search/") == true -> TopLevelRoute.Map.route
         this == NavigationRoute.Guidance.route -> null
-        this == ArrivalRoute.Entry.route -> TopLevelRoute.Map.route
+        this == ArrivalRoute.Entry.route -> null
         this?.startsWith("route_setting") == true -> null
         else -> null
     }
+
+internal fun shouldNavigateToTopLevelMapForHomeEntry(
+    currentRoute: String?,
+    destination: TopLevelDestination,
+): Boolean =
+    destination == TopLevelDestination.Map &&
+        currentRoute != TopLevelRoute.Map.route &&
+        currentRoute != TopLevelRoute.SavedRoute.route &&
+        currentRoute.toCurrentTopLevelRoute() != null
+
+private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
 
 @Composable
 private fun MobilityKwsEffect(

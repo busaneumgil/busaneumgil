@@ -302,6 +302,61 @@ class PlacesRepositoryTest {
         }
 
     @Test
+    fun `getPlaces surfaces forbidden response without clearing auth session`() =
+        runBlocking {
+            val authSessionRepository =
+                FakeAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "access-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+                                throw PlacesApiException(
+                                    httpStatusCode = 403,
+                                    status = "A4030",
+                                    message = "Forbidden.",
+                                )
+                            }
+                        },
+                    localDataSource = PlacesLocalDataSource(),
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")),
+                )
+
+            val failure =
+                runCatching {
+                    repository.getPlaces(
+                        PlaceQuery(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                        ),
+                    )
+                }.exceptionOrNull() as? PlacesApiException
+
+            requireNotNull(failure)
+            assertEquals(403, failure.httpStatusCode)
+            assertEquals("A4030", failure.status)
+            assertEquals("Forbidden.", failure.message)
+            assertEquals("access-token", authSessionRepository.getAuthGateState().authSession?.accessToken)
+            assertEquals("refresh-token", authSessionRepository.getAuthGateState().authSession?.refreshToken)
+        }
+
+    @Test
     fun `getPlaceDetail returns remote detail and caches it when remote succeeds`() =
         runBlocking {
             val localDataSource = PlacesLocalDataSource()

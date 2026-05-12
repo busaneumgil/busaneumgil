@@ -56,16 +56,11 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
             return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
         }
 
-        val rawCoordinates = coordinatePayload.split(",")
-        if (rawCoordinates.size < MINIMUM_RENDERABLE_POINT_COUNT) {
+        val coordinates = parseCoordinates(coordinatePayload)
+            ?: return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
+        if (coordinates.size < MINIMUM_RENDERABLE_POINT_COUNT) {
             return RouteGeometryParseResult(status = RouteGeometryParseStatus.INSUFFICIENT_POINTS)
         }
-
-        val coordinates =
-            rawCoordinates.map { rawCoordinate ->
-                parseCoordinate(rawCoordinate)
-                    ?: return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
-            }
 
         return RouteGeometryParseResult(
             polyline = RoutePolyline(points = coordinates),
@@ -74,19 +69,64 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
         )
     }
 
-    private fun parseCoordinate(rawCoordinate: String): GeoCoordinate? {
-        val parts = rawCoordinate.trim().split(COORDINATE_SEPARATOR)
-        if (parts.size < 2) return null
+    private fun parseCoordinates(coordinatePayload: String): List<GeoCoordinate>? {
+        val coordinates = mutableListOf<GeoCoordinate>()
+        var cursor = 0
 
-        val longitude = parts[0].toDoubleOrNull() ?: return null
-        val latitude = parts[1].toDoubleOrNull() ?: return null
-        if (longitude !in MIN_LONGITUDE..MAX_LONGITUDE || latitude !in MIN_LATITUDE..MAX_LATITUDE) {
-            return null
+        while (cursor < coordinatePayload.length) {
+            cursor = coordinatePayload.skipWhitespace(cursor)
+            if (cursor >= coordinatePayload.length) break
+
+            val longitudeToken = coordinatePayload.readToken(cursor) ?: return null
+            val longitude = longitudeToken.value.toDoubleOrNull() ?: return null
+            cursor = coordinatePayload.skipWhitespace(longitudeToken.nextIndex)
+
+            val latitudeToken = coordinatePayload.readToken(cursor) ?: return null
+            val latitude = latitudeToken.value.toDoubleOrNull() ?: return null
+            if (longitude !in MIN_LONGITUDE..MAX_LONGITUDE || latitude !in MIN_LATITUDE..MAX_LATITUDE) {
+                return null
+            }
+            coordinates +=
+                GeoCoordinate(
+                    latitude = latitude,
+                    longitude = longitude,
+                )
+
+            cursor = coordinatePayload.skipWhitespace(latitudeToken.nextIndex)
+            if (cursor >= coordinatePayload.length) break
+            if (coordinatePayload[cursor] != COORDINATE_DELIMITER) {
+                return null
+            }
+            cursor += 1
         }
 
-        return GeoCoordinate(
-            latitude = latitude,
-            longitude = longitude,
+        return coordinates
+    }
+
+    private fun String.skipWhitespace(startIndex: Int): Int {
+        var index = startIndex
+        while (index < length && this[index].isWhitespace()) {
+            index += 1
+        }
+        return index
+    }
+
+    private fun String.readToken(startIndex: Int): ParsedToken? {
+        if (startIndex >= length) return null
+
+        var endIndex = startIndex
+        while (endIndex < length) {
+            val character = this[endIndex]
+            if (character.isWhitespace() || character == COORDINATE_DELIMITER) {
+                break
+            }
+            endIndex += 1
+        }
+        if (endIndex == startIndex) return null
+
+        return ParsedToken(
+            value = substring(startIndex, endIndex),
+            nextIndex = endIndex,
         )
     }
 
@@ -97,6 +137,11 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
         private const val MAX_LATITUDE: Double = 90.0
         private const val MIN_LONGITUDE: Double = -180.0
         private const val MAX_LONGITUDE: Double = 180.0
-        private val COORDINATE_SEPARATOR = Regex("\\s+")
+        private const val COORDINATE_DELIMITER: Char = ','
     }
 }
+
+private data class ParsedToken(
+    val value: String,
+    val nextIndex: Int,
+)

@@ -12,12 +12,17 @@ import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 data class RouteSettingUiState(
     val isLoading: Boolean = true,
     val loadErrorMessage: String? = null,
+    val loadNoticeMessage: String? = null,
+    val loadDebugMessage: String? = null,
+    val originState: RouteOriginState = RouteOriginState.CURRENT_LOCATION_LOADING,
+    val originStatus: RouteOriginStatusUiState? = null,
     val origin: RouteLocationUiState = RouteLocationUiState(),
     val destination: RouteLocationUiState = RouteLocationUiState(),
     val destinationHandoffState: RouteDestinationHandoffState = RouteDestinationHandoffState.EMPTY,
     val destinationFallbackMessage: String? = null,
     val isUsingFallbackDestination: Boolean = true,
     val selectedTravelMode: RouteTravelMode = RouteTravelMode.WALK,
+    val pendingTravelMode: RouteTravelMode? = null,
     val selectedOption: RouteOption = RouteOption.SAFE,
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
     val selectedRoute: RouteSelectedRouteUiState? = null,
@@ -37,6 +42,11 @@ data class RouteLocationUiState(
     val coordinate: GeoCoordinate? = null,
     val category: PlaceCategory? = null,
     val metadataLabel: String? = null,
+)
+
+data class RouteOriginStatusUiState(
+    val label: String,
+    val tone: RouteOriginStatusTone = RouteOriginStatusTone.NEUTRAL,
 )
 
 data class RoutePreviewMapUiState(
@@ -143,6 +153,19 @@ enum class RouteDestinationHandoffState {
     INVALID_COORDINATE,
 }
 
+enum class RouteOriginState {
+    MANUAL_SELECTION,
+    CURRENT_LOCATION_LOADING,
+    CURRENT_LOCATION_RESOLVED,
+    CURRENT_LOCATION_UNAVAILABLE,
+}
+
+enum class RouteOriginStatusTone {
+    NEUTRAL,
+    INFO,
+    WARNING,
+}
+
 enum class RoutePreviewMapStatus {
     LOADING,
     READY,
@@ -228,6 +251,8 @@ sealed interface RouteSettingUiAction {
 
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
+
+    data object RequestLocationPermission : RouteSettingUiEvent
 
     data class NavigateToSearch(
         val editingTarget: RouteEditingTarget,

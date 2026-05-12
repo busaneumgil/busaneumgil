@@ -82,12 +82,41 @@ internal data class KakaoMapScreenPoint(
     val y: Int,
 )
 
+internal fun resolveSelectedMapPinViewportVisibility(
+    selectedMapPinCoordinate: MapCoordinate?,
+    viewportWidth: Int,
+    viewportHeight: Int,
+    projectScreenPoint: (MapCoordinate) -> KakaoMapScreenPoint?,
+): Boolean? {
+    val coordinate = selectedMapPinCoordinate ?: return null
+    if (viewportWidth <= 0 || viewportHeight <= 0) return null
+
+    val screenPoint = projectScreenPoint(coordinate) ?: return false
+    return isKakaoScreenPointInsideViewport(
+        screenPoint = screenPoint,
+        viewportWidth = viewportWidth,
+        viewportHeight = viewportHeight,
+    )
+}
+
+internal fun isKakaoScreenPointInsideViewport(
+    screenPoint: KakaoMapScreenPoint,
+    viewportWidth: Int,
+    viewportHeight: Int,
+): Boolean =
+    screenPoint.x in 0 until viewportWidth &&
+        screenPoint.y in 0 until viewportHeight
+
 internal enum class KakaoProjectedMarkerKind {
     CURRENT_LOCATION,
     SELECTED_DESTINATION,
     SELECTED_MAP_PIN,
     ROUTE_ORIGIN,
     ROUTE_DESTINATION,
+    ROUTE_SEGMENT_JUNCTION,
+}
+
+internal enum class KakaoOverlayMarkerKind {
     ROUTE_SEGMENT_JUNCTION,
 }
 
@@ -100,6 +129,20 @@ internal data class KakaoProjectedMarkerRenderState(
     val anchorPointY: Float,
     val sizeDp: Int,
     val zIndex: Float,
+    val fillColorArgb: Int? = null,
+    val strokeColorArgb: Int? = null,
+)
+
+internal data class KakaoOverlayMarkerRenderState(
+    val markerId: String,
+    val coordinate: MapCoordinate,
+    val kind: KakaoOverlayMarkerKind,
+    val anchorPointX: Float,
+    val anchorPointY: Float,
+    val sizeDp: Int,
+    val zIndex: Float,
+    val fillColorArgb: Int,
+    val strokeColorArgb: Int,
 )
 
 internal data class KakaoProjectedMarkerOverlay(
@@ -111,6 +154,13 @@ internal data class KakaoProjectedMarkerOverlay(
     val anchorPointY: Float,
     val sizeDp: Int,
     val zIndex: Float,
+    val fillColorArgb: Int? = null,
+    val strokeColorArgb: Int? = null,
+)
+
+internal data class KakaoProjectedMarkerProjectionResult(
+    val overlays: List<KakaoProjectedMarkerOverlay>,
+    val shouldRetry: Boolean,
 )
 
 internal data class KakaoRouteLineRenderState(
@@ -148,6 +198,11 @@ internal data class KakaoRendererFailure(
 ) {
     val debugSummary: String
         get() = "$reasonLabel: $detailMessage"
+}
+
+internal enum class KakaoRendererLoadingPhase {
+    INITIALIZING,
+    AUTOMATIC_RETRY,
 }
 
 internal enum class KakaoMapLifecycleCommand {
@@ -195,6 +250,25 @@ internal fun createKakaoRendererTimeoutFailure(): KakaoRendererFailure =
         detailMessage = KAKAO_RENDERER_TIMEOUT_DETAIL_FALLBACK,
     )
 
+internal fun shouldAutoRestartKakaoRenderer(
+    failure: KakaoRendererFailure,
+    attemptedAutomaticRecoveryCount: Int,
+): Boolean =
+    attemptedAutomaticRecoveryCount < 1 &&
+        (
+            failure.reasonLabel == KAKAO_RENDERER_TIMEOUT_REASON_LABEL ||
+                failure.reasonLabel == KAKAO_RENDERER_DESTROYED_REASON_LABEL
+        )
+
+internal fun resolveKakaoRendererLoadingPhase(
+    attemptedAutomaticRecoveryCount: Int,
+): KakaoRendererLoadingPhase =
+    if (attemptedAutomaticRecoveryCount > 0) {
+        KakaoRendererLoadingPhase.AUTOMATIC_RETRY
+    } else {
+        KakaoRendererLoadingPhase.INITIALIZING
+    }
+
 internal fun resolveKakaoRendererFailureAfterUnexpectedDestroy(
     existingFailure: KakaoRendererFailure?,
 ): KakaoRendererFailure = existingFailure ?: createKakaoRendererDestroyedFailure()
@@ -235,8 +309,9 @@ internal fun createKakaoProjectedMarkerRenderStates(
     selectedDestinationCoordinate: MapCoordinate?,
     selectedMapPinCoordinate: MapCoordinate?,
     overlayPoints: List<MapViewportPointOverlay> = emptyList(),
-): List<KakaoProjectedMarkerRenderState> =
-    buildList {
+): List<KakaoProjectedMarkerRenderState> {
+    val projectedMarkers =
+        buildList {
         currentLocation?.let { coordinate ->
             add(
                 KakaoProjectedMarkerRenderState(
@@ -289,6 +364,14 @@ internal fun createKakaoProjectedMarkerRenderStates(
             )
         }
     }
+    logProjectedSegmentMarkerDebugSummary(projectedMarkers)
+    return projectedMarkers
+}
+
+internal fun createKakaoOverlayMarkerRenderStates(
+    overlayPoints: List<MapViewportPointOverlay>,
+): List<KakaoOverlayMarkerRenderState> =
+    overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState)
 
 internal fun createKakaoRouteLineRenderStates(
     polylines: List<MapViewportPolylineOverlay>,
@@ -344,9 +427,226 @@ internal fun createKakaoProjectedMarkerOverlays(
                 anchorPointY = marker.anchorPointY,
                 sizeDp = marker.sizeDp,
                 zIndex = marker.zIndex,
+                fillColorArgb = marker.fillColorArgb,
+                strokeColorArgb = marker.strokeColorArgb,
             )
         }
     }
+
+internal fun createKakaoProjectedMarkerProjectionResult(
+    projectedMarkers: List<KakaoProjectedMarkerRenderState>,
+    projectScreenPoint: (MapCoordinate) -> KakaoMapScreenPoint?,
+): KakaoProjectedMarkerProjectionResult {
+    val overlays = createKakaoProjectedMarkerOverlays(projectedMarkers, projectScreenPoint)
+    return KakaoProjectedMarkerProjectionResult(
+        overlays = overlays,
+        shouldRetry = projectedMarkers.isNotEmpty() && overlays.isEmpty(),
+    )
+}
+
+internal fun createProjectedSegmentMarkerDebugSummary(
+    projectedMarkers: List<KakaoProjectedMarkerRenderState>,
+): String {
+    val segmentMarkers =
+        projectedMarkers.filter { marker ->
+            marker.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION
+        }
+    return buildString {
+        append("total=")
+        append(projectedMarkers.size)
+        append(" segmentProjected=")
+        append(segmentMarkers.size)
+        append(" details=[")
+        append(
+            segmentMarkers.joinToString(separator = "; ") { marker ->
+                buildString {
+                    append("id=")
+                    append(marker.markerId)
+                    append(" coord=")
+                    append(marker.coordinate.toDebugCoordinate())
+                    append(" sizeDp=")
+                    append(marker.sizeDp)
+                    append(" z=")
+                    append(marker.zIndex)
+                    append(" fill=")
+                    append(marker.fillColorArgb.toDebugColor())
+                    append(" stroke=")
+                    append(marker.strokeColorArgb.toDebugColor())
+                }
+            },
+        )
+        append("]")
+    }
+}
+
+internal fun createProjectedSegmentMarkerPipelineDebugSummary(
+    projectedMarkers: List<KakaoProjectedMarkerRenderState>,
+    projectionResult: KakaoProjectedMarkerProjectionResult,
+    isCameraMoveInProgress: Boolean,
+    retryScheduled: Boolean,
+    retryCount: Int,
+): String {
+    val segmentProjectedCount =
+        projectedMarkers.count { marker ->
+            marker.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION
+        }
+    val segmentRendered =
+        projectionResult.overlays.filter { overlay ->
+            overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION
+        }
+    return buildString {
+        append("projected=")
+        append(projectedMarkers.size)
+        append(" segmentProjected=")
+        append(segmentProjectedCount)
+        append(" overlays=")
+        append(projectionResult.overlays.size)
+        append(" segmentRendered=")
+        append(segmentRendered.size)
+        append(" shouldRetry=")
+        append(projectionResult.shouldRetry)
+        append(" retryScheduled=")
+        append(retryScheduled)
+        append(" retryCount=")
+        append(retryCount)
+        append(" cameraMoving=")
+        append(isCameraMoveInProgress)
+        append(" details=[")
+        append(
+            segmentRendered.joinToString(separator = "; ") { overlay ->
+                buildString {
+                    append("id=")
+                    append(overlay.markerId)
+                    append(" screen=")
+                    append(overlay.screenPoint.x)
+                    append(",")
+                    append(overlay.screenPoint.y)
+                    append(" sizeDp=")
+                    append(overlay.sizeDp)
+                    append(" z=")
+                    append(overlay.zIndex)
+                    append(" fill=")
+                    append(overlay.fillColorArgb.toDebugColor())
+                    append(" stroke=")
+                    append(overlay.strokeColorArgb.toDebugColor())
+                }
+            },
+        )
+        append("]")
+    }
+}
+
+internal fun createRenderedSegmentJunctionOverlayDebugSummary(
+    overlays: List<KakaoProjectedMarkerOverlay>,
+): String {
+    val segmentRendered =
+        overlays.filter { overlay ->
+            overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION
+        }
+    return buildString {
+        append("count=")
+        append(segmentRendered.size)
+        append(" details=[")
+        append(
+            segmentRendered.joinToString(separator = "; ") { overlay ->
+                buildString {
+                    append("id=")
+                    append(overlay.markerId)
+                    append(" screen=")
+                    append(overlay.screenPoint.x)
+                    append(",")
+                    append(overlay.screenPoint.y)
+                    append(" sizeDp=")
+                    append(overlay.sizeDp)
+                    append(" z=")
+                    append(overlay.zIndex)
+                    append(" fill=")
+                    append(overlay.fillColorArgb.toDebugColor())
+                    append(" stroke=")
+                    append(overlay.strokeColorArgb.toDebugColor())
+                }
+            },
+        )
+        append("]")
+    }
+}
+
+internal fun createProjectedSegmentRenderPathDebugSummary(
+    overlays: List<KakaoProjectedMarkerOverlay>,
+): String {
+    val segmentRendered =
+        overlays.filter { overlay ->
+            overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION
+        }
+    return buildString {
+        append("renderPath=projected")
+        append(" overlayCount=")
+        append(overlays.size)
+        append(" segmentCount=")
+        append(segmentRendered.size)
+        append(" details=[")
+        append(
+            segmentRendered.joinToString(separator = "; ") { overlay ->
+                buildString {
+                    append("id=")
+                    append(overlay.markerId)
+                    append(" screen=")
+                    append(overlay.screenPoint.x)
+                    append(",")
+                    append(overlay.screenPoint.y)
+                    append(" sizeDp=")
+                    append(overlay.sizeDp)
+                    append(" z=")
+                    append(overlay.zIndex)
+                    append(" fill=")
+                    append(overlay.fillColorArgb.toDebugColor())
+                    append(" stroke=")
+                    append(overlay.strokeColorArgb.toDebugColor())
+                }
+            },
+        )
+        append("]")
+    }
+}
+
+internal fun createNativeSegmentRenderPathDebugSummary(
+    layerId: String,
+    markers: List<KakaoOverlayMarkerRenderState>,
+): String {
+    val segmentMarkers =
+        markers.filter { marker ->
+            marker.kind == KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION
+        }
+    return buildString {
+        append("renderPath=native-label")
+        append(" layer=")
+        append(layerId)
+        append(" markerCount=")
+        append(markers.size)
+        append(" segmentCount=")
+        append(segmentMarkers.size)
+        append(" details=[")
+        append(
+            segmentMarkers.joinToString(separator = "; ") { marker ->
+                buildString {
+                    append("id=")
+                    append(marker.markerId)
+                    append(" coord=")
+                    append(marker.coordinate.toDebugCoordinate())
+                    append(" sizeDp=")
+                    append(marker.sizeDp)
+                    append(" z=")
+                    append(marker.zIndex)
+                    append(" fill=")
+                    append(marker.fillColorArgb.toDebugColor())
+                    append(" stroke=")
+                    append(marker.strokeColorArgb.toDebugColor())
+                }
+            },
+        )
+        append("]")
+    }
+}
 
 internal fun createKakaoMarkerDebugSummary(
     markerOverlayState: MapMarkerOverlayState,
@@ -382,6 +682,8 @@ private data class KakaoOverlayPointMarkerSpec(
     val sizeDp: Int,
     val anchorPointY: Float,
     val zIndex: Float,
+    val fillColorArgb: Int? = null,
+    val strokeColorArgb: Int? = null,
 )
 
 private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
@@ -420,14 +722,7 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
                     null
                 }
 
-            MapViewportPointKind.SEGMENT_JUNCTION ->
-                KakaoOverlayPointMarkerSpec(
-                    kind = KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION,
-                    iconResId = 0,
-                    sizeDp = 16,
-                    anchorPointY = 0.5f,
-                    zIndex = 3.6f,
-                )
+            MapViewportPointKind.SEGMENT_JUNCTION -> null
 
             MapViewportPointKind.FACILITY,
             MapViewportPointKind.CAMERA_FOCUS,
@@ -444,6 +739,24 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
         anchorPointY = markerSpec.anchorPointY,
         sizeDp = markerSpec.sizeDp,
         zIndex = markerSpec.zIndex,
+        fillColorArgb = markerSpec.fillColorArgb,
+        strokeColorArgb = markerSpec.strokeColorArgb,
+    )
+}
+
+private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMarkerRenderState? {
+    if (kind != MapViewportPointKind.SEGMENT_JUNCTION) return null
+    val palette = (tone ?: MapViewportOverlayTone.PRIMARY).toSegmentMarkerPalette()
+    return KakaoOverlayMarkerRenderState(
+        markerId = "overlay-$overlayId",
+        coordinate = coordinate,
+        kind = KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION,
+        anchorPointX = 0.5f,
+        anchorPointY = 0.5f,
+        sizeDp = 16,
+        zIndex = 3.6f,
+        fillColorArgb = palette.fillColorArgb,
+        strokeColorArgb = palette.strokeColorArgb,
     )
 }
 
@@ -527,7 +840,7 @@ internal fun facilityMarkerGlyphResId(category: FacilityCategory): Int =
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
-        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
+        FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
 
 internal fun resolveKakaoFacilityMarkerSizeDp(
@@ -555,3 +868,22 @@ internal const val KAKAO_RENDERER_TIMEOUT_DETAIL_FALLBACK = "Renderer did not be
 internal const val KAKAO_ZOOM_CAMERA_ANIMATION_DURATION_MILLIS = 220
 
 private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", this)
+
+private var lastProjectedSegmentMarkerDebugSummary: String? = null
+
+private fun logProjectedSegmentMarkerDebugSummary(
+    projectedMarkers: List<KakaoProjectedMarkerRenderState>,
+) {
+    val summary = createProjectedSegmentMarkerDebugSummary(projectedMarkers)
+    if (summary == lastProjectedSegmentMarkerDebugSummary) return
+    lastProjectedSegmentMarkerDebugSummary = summary
+    println("SegmentMarkerTrace[KakaoProjectedMarkers] $summary")
+}
+
+private fun MapCoordinate.toDebugCoordinate(): String =
+    String.format(Locale.US, "%.6f,%.6f", latitude, longitude)
+
+private fun Int?.toDebugColor(): String =
+    this?.let { color ->
+        String.format(Locale.US, "0x%08X", color)
+    } ?: "null"

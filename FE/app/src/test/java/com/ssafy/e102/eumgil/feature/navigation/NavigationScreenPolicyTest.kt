@@ -46,14 +46,16 @@ class NavigationScreenPolicyTest {
                                 ),
                             ),
                     ),
-                focusedSegmentCard =
-                    NavigationFocusedSegmentCardUiState(
-                        sequenceLabel = "2 / 2",
-                        instruction = "Cross the street",
-                        distanceLabel = "80m",
-                        riskLabel = "Medium",
-                        supportingText = "Focused segment details",
-                    ),
+                    focusedSegmentCard =
+                        NavigationFocusedSegmentCardUiState(
+                            sequenceLabel = "2 / 2",
+                            instruction = "Cross the street",
+                            heroTitle = "횡단보도 건너기",
+                            heroDescription = "Cross the street",
+                            distanceLabel = "80m",
+                            riskLabel = "Medium",
+                            supportingText = "Focused segment details",
+                        ),
             )
 
         val policy = navigationScreenPolicy(uiState)
@@ -82,6 +84,7 @@ class NavigationScreenPolicyTest {
 
         assertEquals(116.dp, policy.minHeight)
         assertEquals(192.dp, policy.maxHeight)
+        assertEquals(64.dp, policy.directionIconSize)
         assertFalse(policy.showBottomDivider)
     }
 
@@ -90,6 +93,61 @@ class NavigationScreenPolicyTest {
         val policy = navigationHeroLayoutPolicy(480.dp)
 
         assertEquals(132.dp, policy.maxHeight)
+    }
+
+    @Test
+    fun `hero content prioritizes focused segment guidance over the active step card`() {
+        val heroContent =
+            navigationHeroContent(
+                NavigationUiState(
+                    stepCard =
+                        NavigationStepCardUiState(
+                            heroTitle = "직진 이동",
+                            heroDescription = "Proceed straight on the current route",
+                            instruction = "Proceed straight on the current route",
+                            distanceLabel = "120m",
+                            guidanceAction = NavigationGuidanceAction.STRAIGHT,
+                        ),
+                    focusedSegmentCard =
+                        NavigationFocusedSegmentCardUiState(
+                            sequenceLabel = "2 / 3",
+                            instruction = "Cross the street and head toward the elevator",
+                            heroTitle = "횡단보도 건너기",
+                            heroDescription = "Cross the street and head toward the elevator",
+                            distanceLabel = "80m",
+                            riskLabel = "Low",
+                            supportingText = "Focused segment",
+                            guidanceAction = NavigationGuidanceAction.CROSSWALK,
+                        ),
+                ),
+            )
+
+        assertEquals(NavigationGuidanceAction.CROSSWALK, heroContent.guidanceAction)
+        assertEquals("횡단보도 건너기", heroContent.title)
+        assertEquals("Cross the street and head toward the elevator", heroContent.description)
+        assertEquals("80m", heroContent.distanceLabel)
+    }
+
+    @Test
+    fun `hero content falls back to the active step card when no focused segment is open`() {
+        val heroContent =
+            navigationHeroContent(
+                NavigationUiState(
+                    stepCard =
+                        NavigationStepCardUiState(
+                            heroTitle = "우회전",
+                            heroDescription = "Turn right after the crosswalk",
+                            instruction = "Turn right after the crosswalk",
+                            distanceLabel = "240m",
+                            guidanceAction = NavigationGuidanceAction.TURN_RIGHT,
+                        ),
+                ),
+            )
+
+        assertEquals(NavigationGuidanceAction.TURN_RIGHT, heroContent.guidanceAction)
+        assertEquals("우회전", heroContent.title)
+        assertEquals("Turn right after the crosswalk", heroContent.description)
+        assertEquals("240m", heroContent.distanceLabel)
     }
 
     @Test

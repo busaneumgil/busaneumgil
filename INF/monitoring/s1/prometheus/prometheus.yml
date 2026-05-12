@@ -26,8 +26,51 @@ scrape_configs:
   - job_name: s1-dev-backend
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["host.docker.internal:18080"]
+      - targets: ["backend:18080"]
         labels:
           environment: dev
           runtime_stack: s1-dev
           service: backend
+
+  - job_name: blackbox-prod-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["https://api.busaneumgil.com/health"]
+        labels:
+          environment: prod
+          runtime_stack: s2-prod
+          service: backend
+          target_name: api
+      - targets: ["https://api.busaneumgil.com/health/db"]
+        labels:
+          environment: prod
+          runtime_stack: s2-prod
+          service: backend
+          target_name: db
+      - targets: ["https://api.busaneumgil.com/health/redis"]
+        labels:
+          environment: prod
+          runtime_stack: s2-prod
+          service: backend
+          target_name: redis
+      - targets: ["https://ai.busaneumgil.com/health"]
+        labels:
+          environment: prod
+          runtime_stack: s2-prod
+          service: ai
+          target_name: ai
+      - targets: ["https://admin.busaneumgil.com/health"]
+        labels:
+          environment: prod
+          runtime_stack: s2-prod
+          service: admin
+          target_name: admin
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

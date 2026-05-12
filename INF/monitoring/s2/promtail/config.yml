@@ -16,12 +16,18 @@ scrape_configs:
     pipeline_stages:
       - docker: {}
       - regex:
-          expression: "(?i)^(?:.*?\\s)?(?:(?:level|lvl|severity)=)?(?P<level>debug|info|warn|warning|error|fatal|critical)(?:\\s|$)"
+          expression: '(?i)^(?:.*?[[:space:]])?(?:(?:level|lvl|severity)=)?(?P<level>debug|info|warn|warning|error|fatal|critical)(?:[[:space:]]|$)'
       - labels:
           level:
     relabel_configs:
       - replacement: docker
         target_label: job
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
+        regex: "s14p31e102-prod"
+        action: keep
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        regex: "backend|ai|graphhopper|admin"
+        action: keep
       - source_labels: ["__meta_docker_container_name"]
         regex: "/(.*)"
         target_label: container

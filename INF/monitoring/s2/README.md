@@ -24,11 +24,21 @@ LOKI_PUSH_URL=http://<s1-private-ip>:3100/loki/api/v1/push
 
 `LOKI_PUSH_URL`은 외부 공개 주소보다 `S1 private IP` 또는 내부 전용 도메인을 우선 사용한다.
 
+현재 운영 반영 기준 fallback은 아래 ingress다.
+
+```text
+LOKI_PUSH_URL=https://plg.busaneumgil.com/loki/api/v1/push
+```
+
+이 경로는 `S2` IP만 허용하며, 직접 private 경로를 열기 전까지 운영 로그 수집용으로 사용할 수 있다.
+
 ## 실행
 
 ```bash
 docker compose --env-file ./.env up -d
 ```
+
+`docker-compose.yml`은 `.env`를 `env_file`로 읽으므로 같은 경로에 `LOKI_PUSH_URL`을 둔다.
 
 ## Grafana 조회 기준
 

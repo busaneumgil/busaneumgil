@@ -49,7 +49,7 @@ fun MapTopSearchBar(
                 onClickLabel = accessibilityLabel,
                 onClick = onClick,
             ),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.medium),
         shadowElevation = 10.dp,
         tonalElevation = 1.dp,

@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -85,6 +86,22 @@ class MapFloatingControlsConfigurationTest {
         assertTrue(
             "The disabled current-location icon asset should exist in drawable.",
             File("src/main/res/drawable/ic_map_current_location_disabled.png").exists(),
+        )
+    }
+
+    @Test
+    fun `shared map floating controls use opaque surfaces over the map`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/map/EumMapFloatingControls.kt")
+                .readText()
+
+        assertTrue(
+            "Zoom and recenter controls should use the base surface color to keep the chrome visually solid.",
+            source.contains("color = MaterialTheme.colorScheme.surface,"),
+        )
+        assertFalse(
+            "Zoom and recenter controls should not use translucent surfaces over the map.",
+            source.contains("surface.copy(alpha = 0.98f)"),
         )
     }
 }

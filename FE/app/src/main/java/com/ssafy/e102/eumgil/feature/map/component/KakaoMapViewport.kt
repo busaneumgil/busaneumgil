@@ -77,7 +77,7 @@ import kotlin.math.roundToInt
 internal fun KakaoMapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
-    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
     onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -276,7 +276,7 @@ private class KakaoMapViewportController {
     private var kakaoMap: KakaoMap? = null
     private var latestState: MapViewportUiState? = null
     private var markerClickHandler: ((String) -> Unit)? = null
-    private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean) -> Unit)? = null
+    private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean, Boolean?) -> Unit)? = null
     private var mapClickHandler: ((MapTapPayload) -> Unit)? = null
     private var facilityMarkerStyleCache: KakaoFacilityMarkerStyleCache? = null
     private var overlayMarkerStyleCache: KakaoOverlayMarkerStyleCache? = null
@@ -317,7 +317,7 @@ private class KakaoMapViewportController {
         context: Context,
         initialState: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
-        onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
+        onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ): MapView {
         latestState = initialState
@@ -341,7 +341,7 @@ private class KakaoMapViewportController {
     fun render(
         state: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
-        onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
+        onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ) {
         latestState = state
@@ -532,6 +532,22 @@ private class KakaoMapViewportController {
                                 latitude = cameraPosition.position.latitude,
                                 longitude = cameraPosition.position.longitude,
                             )
+                        val selectedMapPinVisibleInViewport =
+                            resolveSelectedMapPinViewportVisibility(
+                                selectedMapPinCoordinate = latestState?.selectedMapPinCoordinate,
+                                viewportWidth = mapView?.width ?: 0,
+                                viewportHeight = mapView?.height ?: 0,
+                            ) { coordinate ->
+                                readyMap
+                                    .toScreenPoint(
+                                        LatLng.from(
+                                            coordinate.latitude,
+                                            coordinate.longitude,
+                                        ),
+                                    )?.let { point ->
+                                        KakaoMapScreenPoint(x = point.x, y = point.y)
+                                    }
+                            }
                         lastRenderedCameraTarget =
                             syncRenderedKakaoCameraTarget(
                                 previousTarget = lastRenderedCameraTarget,
@@ -543,6 +559,7 @@ private class KakaoMapViewportController {
                             movedCenter,
                             cameraPosition.zoomLevel,
                             gestureType.isUserDrivenCameraMove(),
+                            selectedMapPinVisibleInViewport,
                         )
                         stopProjectedMarkerTracking()
                         updateProjectedMarkerOverlays(readyMap = readyMap, state = latestState)

@@ -97,6 +97,7 @@ sealed interface MapUiAction {
         val center: MapCoordinate,
         val zoomLevel: Int,
         val isUserGesture: Boolean = false,
+        val isSelectedMapPinVisibleInViewport: Boolean? = null,
     ) : MapUiAction
 
     data class MarkerCategoryFilterToggled(

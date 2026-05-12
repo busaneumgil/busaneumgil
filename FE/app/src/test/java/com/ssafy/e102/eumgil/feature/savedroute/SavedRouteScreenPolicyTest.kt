@@ -62,8 +62,16 @@ class SavedRouteScreenPolicyTest {
             stateActionsSection.contains("NoRippleSavedRouteNavigationButton("),
         )
         assertTrue(
+            "Saved-route empty and error CTAs should center content across the weighted button width.",
+            stateActionsSection.contains("fullWidthContent = true"),
+        )
+        assertTrue(
             "Saved-route primary CTA should use the no-ripple navigation button when it opens route guidance.",
             primaryActionSection.contains("NoRippleSavedRouteNavigationButton("),
+        )
+        assertTrue(
+            "Saved-route list action buttons should avoid forcing full-width content inside list rows.",
+            !primaryActionSection.contains("fullWidthContent = true"),
         )
         assertTrue(
             "Saved-route no-ripple CTA helper should disable ripple indication explicitly.",

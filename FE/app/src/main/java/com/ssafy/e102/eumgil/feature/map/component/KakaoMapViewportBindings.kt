@@ -82,6 +82,31 @@ internal data class KakaoMapScreenPoint(
     val y: Int,
 )
 
+internal fun resolveSelectedMapPinViewportVisibility(
+    selectedMapPinCoordinate: MapCoordinate?,
+    viewportWidth: Int,
+    viewportHeight: Int,
+    projectScreenPoint: (MapCoordinate) -> KakaoMapScreenPoint?,
+): Boolean? {
+    val coordinate = selectedMapPinCoordinate ?: return null
+    if (viewportWidth <= 0 || viewportHeight <= 0) return null
+
+    val screenPoint = projectScreenPoint(coordinate) ?: return false
+    return isKakaoScreenPointInsideViewport(
+        screenPoint = screenPoint,
+        viewportWidth = viewportWidth,
+        viewportHeight = viewportHeight,
+    )
+}
+
+internal fun isKakaoScreenPointInsideViewport(
+    screenPoint: KakaoMapScreenPoint,
+    viewportWidth: Int,
+    viewportHeight: Int,
+): Boolean =
+    screenPoint.x in 0 until viewportWidth &&
+        screenPoint.y in 0 until viewportHeight
+
 internal enum class KakaoProjectedMarkerKind {
     CURRENT_LOCATION,
     SELECTED_DESTINATION,

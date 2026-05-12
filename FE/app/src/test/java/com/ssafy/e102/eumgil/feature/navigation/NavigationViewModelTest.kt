@@ -286,6 +286,56 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `saving destination bookmark completes navigation into saved route when repository save succeeds`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository = FakeBookmarkRepository()
+            val routeRepository = FakeRouteRepository(endSessionId = "ended-session")
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    bookmarkRepository = bookmarkRepository,
+                    routeRepository = routeRepository,
+                )
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(2).toList() }
+
+            viewModel.onAction(NavigationUiAction.SaveBookmarkClicked)
+            advanceUntilIdle()
+
+            assertEquals(1, bookmarkRepository.savedBookmarks.size)
+            assertEquals(listOf("walk-route-1"), routeRepository.endRouteCalls)
+            assertEquals(
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToSavedRoute),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
+    fun `saving destination bookmark failure keeps navigation active and suppresses bookmark navigation`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository = FakeBookmarkRepository(failSave = true)
+            val routeRepository = FakeRouteRepository(endSessionId = "ended-session")
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    bookmarkRepository = bookmarkRepository,
+                    routeRepository = routeRepository,
+                )
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SaveBookmarkClicked)
+            advanceUntilIdle()
+
+            assertTrue(locationManager.isUpdating)
+            assertTrue(bookmarkRepository.savedBookmarks.isEmpty())
+            assertTrue(routeRepository.endRouteCalls.isEmpty())
+        }
+
+    @Test
     fun `accurate repeated off route updates reroute and end latest route id on completion`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -371,8 +421,10 @@ private class FakeCurrentLocationManager : CurrentLocationManager {
 
 private class FakeBookmarkRepository(
     bookmarks: List<BookmarkData> = emptyList(),
+    private val failSave: Boolean = false,
 ) : BookmarkRepository {
     val bookmarks = MutableStateFlow(bookmarks)
+    val savedBookmarks = mutableListOf<BookmarkData>()
 
     override fun observeBookmarks(): Flow<List<BookmarkData>> = bookmarks
 
@@ -380,7 +432,9 @@ private class FakeBookmarkRepository(
         bookmarks.value.any { bookmark -> bookmark.placeId == placeId }
 
     override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData {
+        if (failSave) error("bookmark save failed")
         bookmarks.value = bookmarks.value.filterNot { it.placeId == bookmark.placeId } + bookmark
+        savedBookmarks += bookmark
         return bookmark
     }
 

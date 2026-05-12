@@ -33,6 +33,7 @@ fun SavedRouteRoute(
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeBookmarkRepository = appContainer.routeBookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                searchRepository = appContainer.searchRepository,
             )
         }
     val viewModel =

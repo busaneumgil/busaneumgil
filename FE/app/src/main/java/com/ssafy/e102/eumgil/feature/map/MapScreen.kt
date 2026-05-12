@@ -102,12 +102,13 @@ fun MapScreen(
                     onMarkerClick = { markerId ->
                         onAction(MapUiAction.MarkerTapped(markerId))
                     },
-                    onCameraMoveEnd = { center, zoomLevel, isUserGesture ->
+                    onCameraMoveEnd = { center, zoomLevel, isUserGesture, isSelectedMapPinVisibleInViewport ->
                         onAction(
                             MapUiAction.ViewportCameraChanged(
                                 center = center,
                                 zoomLevel = zoomLevel,
                                 isUserGesture = isUserGesture,
+                                isSelectedMapPinVisibleInViewport = isSelectedMapPinVisibleInViewport,
                             ),
                         )
                     },

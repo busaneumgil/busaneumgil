@@ -400,10 +400,25 @@ class NavigationViewModel(
 
     private fun saveDestinationBookmarkAndNavigate() {
         viewModelScope.launch {
-            navigationRequest?.toDestinationBookmarkData()?.let { bookmark ->
-                bookmarkRepository.saveBookmark(bookmark)
-            }
-            completeNavigation(NavigationUiEvent.NavigateToSavedRoute)
+            val bookmark = navigationRequest?.toDestinationBookmarkData()
+            val saveResult =
+                runCatching {
+                    bookmark?.let { pendingBookmark ->
+                        bookmarkRepository.saveBookmark(pendingBookmark)
+                    }
+                }
+
+            saveResult
+                .onSuccess {
+                    println(
+                        "BookmarkSaveTrace[NavigationViewModel] result=success placeId=${bookmark?.placeId.orEmpty()}",
+                    )
+                    completeNavigation(NavigationUiEvent.NavigateToSavedRoute)
+                }.onFailure { throwable ->
+                    println(
+                        "BookmarkSaveTrace[NavigationViewModel] result=failure placeId=${bookmark?.placeId.orEmpty()} message=${throwable.message.orEmpty()}",
+                    )
+                }
         }
     }
 

@@ -252,6 +252,8 @@ sealed interface RouteSettingUiAction {
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
 
+    data object RequestLocationPermission : RouteSettingUiEvent
+
     data class NavigateToSearch(
         val editingTarget: RouteEditingTarget,
     ) : RouteSettingUiEvent

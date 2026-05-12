@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.savedroute
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
 import com.ssafy.e102.eumgil.core.model.hasValidCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
@@ -12,6 +13,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,7 @@ class SavedRouteViewModel(
     private val bookmarkRepository: BookmarkRepository,
     private val routeBookmarkRepository: RouteBookmarkRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
+    private val searchRepository: SearchRepository? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SavedRouteUiState())
     val uiState: StateFlow<SavedRouteUiState> = mutableUiState.asStateFlow()
@@ -346,7 +349,10 @@ class SavedRouteViewModel(
 
         destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
         destinationSelectionRepository.updateSelectedDestination(destination)
-        emitUiEvent(event)
+        viewModelScope.launch {
+            persistRecentDestination(destination)
+            mutableUiEvent.emit(event)
+        }
     }
 
     private fun handoffRouteBookmark(bookmarkId: String) {
@@ -382,6 +388,13 @@ class SavedRouteViewModel(
         }
     }
 
+    private suspend fun persistRecentDestination(destination: PlaceDestination) {
+        val repository = searchRepository ?: return
+        runCatching {
+            repository.saveRecentDestination(destination.toRecentDestination())
+        }
+    }
+
     companion object {
         private const val BOOKMARK_REMOVE_SUCCESS_MESSAGE = "선택한 북마크를 삭제했습니다."
         private const val BOOKMARK_REMOVE_FAILURE_MESSAGE = "일부 북마크를 삭제하지 못했습니다. 다시 시도해 주세요."
@@ -398,6 +411,7 @@ class SavedRouteViewModel(
             bookmarkRepository: BookmarkRepository,
             routeBookmarkRepository: RouteBookmarkRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
+            searchRepository: SearchRepository? = null,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -407,6 +421,7 @@ class SavedRouteViewModel(
                             bookmarkRepository = bookmarkRepository,
                             routeBookmarkRepository = routeBookmarkRepository,
                             destinationSelectionRepository = destinationSelectionRepository,
+                            searchRepository = searchRepository,
                         ) as T
                     }
 
@@ -449,6 +464,16 @@ private fun SavedPlaceUiModel.toPlaceDestination(): PlaceDestination =
         latitude = latitude,
         longitude = longitude,
         category = category.toPlaceCategoryOrNull(),
+    )
+
+private fun PlaceDestination.toRecentDestination(): RecentDestination =
+    RecentDestination(
+        placeId = placeId,
+        name = name,
+        address = address,
+        latitude = latitude,
+        longitude = longitude,
+        category = category,
     )
 
 private fun SavedRouteBookmarkUiModel.toOriginPlaceDestination(): PlaceDestination =

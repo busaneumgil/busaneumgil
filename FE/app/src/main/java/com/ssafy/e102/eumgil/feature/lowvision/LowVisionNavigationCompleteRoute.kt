@@ -34,8 +34,18 @@ fun LowVisionNavigationCompleteRoute(
             onSaveClick = {
                 val destination = selectedDestination ?: return@LowVisionNavigationCompleteScreen
                 coroutineScope.launch {
-                    appContainer.bookmarkRepository.saveBookmark(destination.toLowVisionBookmarkData())
-                    onNavigateToBookmark()
+                    runCatching {
+                        appContainer.bookmarkRepository.saveBookmark(destination.toLowVisionBookmarkData())
+                    }.onSuccess {
+                        println(
+                            "BookmarkSaveTrace[LowVisionNavigationCompleteRoute] result=success placeId=${destination.placeId}",
+                        )
+                        onNavigateToBookmark()
+                    }.onFailure { throwable ->
+                        println(
+                            "BookmarkSaveTrace[LowVisionNavigationCompleteRoute] result=failure placeId=${destination.placeId} message=${throwable.message.orEmpty()}",
+                        )
+                    }
                 }
             },
             onCompleteClick = onCompleteClick,

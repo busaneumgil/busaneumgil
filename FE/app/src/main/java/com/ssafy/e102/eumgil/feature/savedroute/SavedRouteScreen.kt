@@ -530,6 +530,7 @@ private fun SavedBookmarkStateActions(
         NoRippleSavedRouteNavigationButton(
             onClick = onPrimaryActionClick,
             modifier = Modifier.weight(1f),
+            fullWidthContent = true,
         ) {
             Text(text = primaryActionLabel)
         }
@@ -538,6 +539,7 @@ private fun SavedBookmarkStateActions(
                 onClick = onSecondaryActionClick,
                 modifier = Modifier.weight(1f),
                 isOutlined = true,
+                fullWidthContent = true,
             ) {
                 Text(text = secondaryActionLabel)
             }
@@ -551,6 +553,7 @@ private fun NoRippleSavedRouteNavigationButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isOutlined: Boolean = false,
+    fullWidthContent: Boolean = false,
     shape: RoundedCornerShape = RoundedCornerShape(EumRadius.full),
     contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
     content: @Composable RowScope.() -> Unit,
@@ -586,8 +589,11 @@ private fun NoRippleSavedRouteNavigationButton(
     ) {
         Row(
             modifier =
-                Modifier
-                    .fillMaxWidth()
+                (if (fullWidthContent) {
+                    Modifier.fillMaxWidth()
+                } else {
+                    Modifier
+                })
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,

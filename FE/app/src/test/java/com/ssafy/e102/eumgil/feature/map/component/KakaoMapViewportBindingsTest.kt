@@ -405,6 +405,43 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `selected map pin visibility resolves true only when projected point stays inside viewport bounds`() {
+        val selectedPin = MapCoordinate(latitude = 35.1798, longitude = 129.0762)
+
+        assertEquals(
+            true,
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = selectedPin,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { KakaoMapScreenPoint(x = 540, y = 960) },
+        )
+        assertEquals(
+            false,
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = selectedPin,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { KakaoMapScreenPoint(x = 1200, y = 960) },
+        )
+        assertEquals(
+            false,
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = selectedPin,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { null },
+        )
+        assertNull(
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = null,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { KakaoMapScreenPoint(x = 540, y = 960) },
+        )
+    }
+
+    @Test
     fun `projected marker projection result does not wait for native segment junction markers`() {
         val currentLocation = MapCoordinate(latitude = 35.1798, longitude = 129.0762)
         val projectedMarkers =
@@ -622,12 +659,14 @@ class KakaoMapViewportBindingsTest {
                 R.drawable.ic_place_charging,
                 R.drawable.ic_place_healthcare,
                 R.drawable.ic_nav_facility,
+                R.drawable.ic_place_other,
             ),
             listOf(
                 facilityMarkerGlyphResId(FacilityCategory.RESTAURANT),
                 facilityMarkerGlyphResId(FacilityCategory.CHARGING_STATION),
                 facilityMarkerGlyphResId(FacilityCategory.HEALTHCARE),
                 facilityMarkerGlyphResId(FacilityCategory.TOURIST_SPOT),
+                facilityMarkerGlyphResId(FacilityCategory.OTHER),
             ),
         )
     }

@@ -30,6 +30,12 @@ fun RouteSettingEntryRoute(
     initialRouteOption: RouteOption? = null,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
+    val activity = remember(context) { context.findComponentActivity() }
     val viewModel = rememberRouteSettingViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var initialRouteOptionApplied by rememberSaveable(initialRouteOption) { mutableStateOf(false) }
@@ -38,6 +44,8 @@ fun RouteSettingEntryRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.RequestLocationPermission ->
+                    activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
                 is RouteSettingUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
@@ -97,6 +105,7 @@ fun RouteDetailEntryRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.RequestLocationPermission -> Unit
                 is RouteSettingUiEvent.NavigateToSearch -> Unit
                 is RouteSettingUiEvent.NavigateToRouteDetail -> Unit
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
@@ -128,6 +137,9 @@ private fun rememberRouteSettingViewModel(): RouteSettingViewModel {
                 routeRepository = appContainer.routeRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 currentLocationManager = appContainer.currentLocationManager,
+                locationPermissionManager = appContainer.locationPermissionManager,
+                placesRepository = appContainer.placesRepository,
+                searchRepository = appContainer.searchRepository,
             )
         }
 

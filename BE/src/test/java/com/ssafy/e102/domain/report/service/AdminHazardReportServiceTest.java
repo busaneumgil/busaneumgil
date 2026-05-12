@@ -19,6 +19,7 @@ import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
@@ -43,6 +44,9 @@ class AdminHazardReportServiceTest {
 	@Mock
 	private HazardReportImageRepository hazardReportImageRepository;
 
+	@Mock
+	private AdminAuditLogService adminAuditLogService;
+
 	private AdminHazardReportService adminHazardReportService;
 	private GeoPointConverter geoPointConverter;
 
@@ -53,7 +57,8 @@ class AdminHazardReportServiceTest {
 		adminHazardReportService = new AdminHazardReportService(
 			hazardReportRepository,
 			hazardReportImageRepository,
-			geoPointConverter);
+			geoPointConverter,
+			adminAuditLogService);
 	}
 
 	@Test
@@ -112,7 +117,7 @@ class AdminHazardReportServiceTest {
 			ReportStatus.APPROVED))
 			.thenReturn(1);
 
-		AdminHazardReportStatusResponse response = adminHazardReportService.approveHazardReport(1L);
+		AdminHazardReportStatusResponse response = adminHazardReportService.approveHazardReport(UUID.randomUUID(), 1L);
 
 		assertThat(response.reportId()).isEqualTo(1L);
 		assertThat(response.status()).isEqualTo(ReportStatus.APPROVED);
@@ -127,7 +132,7 @@ class AdminHazardReportServiceTest {
 			ReportStatus.REJECTED))
 			.thenReturn(1);
 
-		AdminHazardReportStatusResponse response = adminHazardReportService.rejectHazardReport(1L);
+		AdminHazardReportStatusResponse response = adminHazardReportService.rejectHazardReport(UUID.randomUUID(), 1L);
 
 		assertThat(response.reportId()).isEqualTo(1L);
 		assertThat(response.status()).isEqualTo(ReportStatus.REJECTED);
@@ -143,7 +148,7 @@ class AdminHazardReportServiceTest {
 			.thenReturn(0);
 		when(hazardReportRepository.existsById(1L)).thenReturn(true);
 
-		assertThatThrownBy(() -> adminHazardReportService.approveHazardReport(1L))
+		assertThatThrownBy(() -> adminHazardReportService.approveHazardReport(UUID.randomUUID(), 1L))
 			.isInstanceOf(HazardReportException.class)
 			.extracting("errorCode")
 			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
@@ -159,7 +164,7 @@ class AdminHazardReportServiceTest {
 			.thenReturn(0);
 		when(hazardReportRepository.existsById(1L)).thenReturn(false);
 
-		assertThatThrownBy(() -> adminHazardReportService.approveHazardReport(1L))
+		assertThatThrownBy(() -> adminHazardReportService.approveHazardReport(UUID.randomUUID(), 1L))
 			.isInstanceOf(HazardReportException.class)
 			.extracting("errorCode")
 			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND);

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tansta
 import {
   createAdminRoadNetworkEditJob,
   fetchAdminAreaAssignments,
+  fetchAdminAuditLogs,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
   fetchAdminPlaceDetail,
@@ -31,6 +32,7 @@ import { RouteTuningPage } from "./route/RouteTuningPage";
 import { useAdminStore } from "./store/adminStore";
 import type {
   AccessibilityFeatureType,
+  AdminAuditLog,
   AdminMeResponse,
   AdminPage,
   AdminPlaceDetailResponse,
@@ -88,6 +90,10 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   users: {
     label: "사용자 관리",
     description: "관리자 권한과 구·동 담당자, 작업 상태를 관리합니다.",
+  },
+  logs: {
+    label: "변경 로그",
+    description: "관리자 화면에서 수행한 변경 작업을 최신순으로 확인합니다.",
   },
 };
 
@@ -188,6 +194,13 @@ function AdminApp() {
     enabled: isAdminAuthenticated,
     retry: false,
     refetchInterval: 30_000,
+  });
+
+  const auditLogsQuery = useQuery({
+    queryKey: ["admin-audit-logs", accessToken],
+    queryFn: () => fetchAdminAuditLogs({ cursor: null, size: 50, accessToken }),
+    enabled: page === "logs" && isAdminAuthenticated,
+    retry: false,
   });
 
   const payloadQuery = useQuery({
@@ -488,6 +501,15 @@ function AdminApp() {
             onUpdateUserRole={(userId, role) => updateUserRoleMutation.mutate({ userId, role })}
             onUpsertAssignment={(request) => upsertAssignmentMutation.mutate(request)}
             onUpdateAssignmentStatus={(assignmentId, status) => updateAssignmentStatusMutation.mutate({ assignmentId, status })}
+          />
+        )}
+
+        {page === "logs" && (
+          <AuditLogsPage
+            logs={auditLogsQuery.data?.logs ?? []}
+            loading={auditLogsQuery.isLoading}
+            error={auditLogsQuery.error}
+            onRefresh={() => void auditLogsQuery.refetch()}
           />
         )}
 
@@ -927,6 +949,69 @@ function AssignmentTable({
   );
 }
 
+function AuditLogsPage({
+  logs,
+  loading,
+  error,
+  onRefresh,
+}: {
+  logs: AdminAuditLog[];
+  loading: boolean;
+  error?: Error | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="audit-log-page">
+      <div className="panel-toolbar">
+        <div>
+          <h3>변경 로그</h3>
+          <p className="muted">관리자 화면에서 성공적으로 반영된 변경 작업만 기록됩니다.</p>
+        </div>
+        <button type="button" onClick={onRefresh} disabled={loading}>
+          새로고침
+        </button>
+      </div>
+      {loading && <p className="muted">변경 로그를 불러오는 중입니다.</p>}
+      {error && <p className="error-box">{error.message}</p>}
+      <div className="audit-log-list">
+        {logs.map((log) => (
+          <article key={log.logId} className="audit-log-card">
+            <header>
+              <strong>{adminAuditActionLabel(log.action)}</strong>
+              <time>{formatDateTime(log.createdAt)}</time>
+            </header>
+            <p>{log.summary}</p>
+            <dl className="audit-log-meta">
+              <div>
+                <dt>작업자</dt>
+                <dd title={log.actorUserId}>{shortId(log.actorUserId)}</dd>
+              </div>
+              <div>
+                <dt>대상</dt>
+                <dd>{log.targetType}{log.targetId ? ` #${log.targetId}` : ""}</dd>
+              </div>
+              <div>
+                <dt>구/동</dt>
+                <dd>{log.gu && log.dong ? `${log.gu} ${log.dong}` : "-"}</dd>
+              </div>
+            </dl>
+            {Boolean(log.beforeJson || log.afterJson) && (
+              <details className="audit-log-json">
+                <summary>변경 전/후 보기</summary>
+                <div>
+                  <pre>{formatJson(log.beforeJson)}</pre>
+                  <pre>{formatJson(log.afterJson)}</pre>
+                </div>
+              </details>
+            )}
+          </article>
+        ))}
+        {!loading && !logs.length && <p className="muted">표시할 변경 로그가 없습니다.</p>}
+      </div>
+    </section>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="metric">
@@ -957,6 +1042,38 @@ function shortId(userId: string) {
 
 function adminUserLabel(user: AdminUserResponse) {
   return shortId(user.userId);
+}
+
+function adminAuditActionLabel(action: string) {
+  switch (action) {
+    case "USER_ROLE_UPDATE":
+      return "사용자 권한 변경";
+    case "AREA_ASSIGNMENT_UPSERT":
+      return "담당자 지정";
+    case "AREA_ASSIGNMENT_STATUS_UPDATE":
+      return "작업 상태 변경";
+    case "ROAD_NETWORK_EDIT_APPLY":
+      return "보행 네트워크 반영";
+    case "ROAD_SEGMENT_ATTRIBUTES_UPDATE":
+      return "segment 속성 변경";
+    case "PLACE_BASIC_UPDATE":
+      return "편의시설 기본 정보 변경";
+    case "PLACE_ACCESSIBILITY_FEATURES_REPLACE":
+      return "편의시설 접근성 변경";
+    case "HAZARD_REPORT_APPROVE":
+      return "제보 승인";
+    case "HAZARD_REPORT_REJECT":
+      return "제보 반려";
+    default:
+      return action;
+  }
+}
+
+function formatJson(value: unknown) {
+  if (value == null) {
+    return "-";
+  }
+  return JSON.stringify(value, null, 2);
 }
 
 function formatDateTime(value: string) {

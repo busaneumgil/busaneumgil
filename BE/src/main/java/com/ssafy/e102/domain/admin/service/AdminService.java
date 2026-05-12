@@ -18,6 +18,7 @@ import com.ssafy.e102.domain.admin.dto.request.AdminAreaAssignmentUpsertRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminUserRoleUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaAssignmentListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaAssignmentResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminAuditLogListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminMeResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminUserListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminUserResponse;
@@ -44,6 +45,7 @@ public class AdminService {
 		"ADMIN_USER_WRITE",
 		"ADMIN_AREA_ASSIGNMENT_READ",
 		"ADMIN_AREA_ASSIGNMENT_WRITE",
+		"ADMIN_AUDIT_LOG_READ",
 		"ADMIN_PLACE_READ",
 		"ADMIN_PLACE_WRITE",
 		"ADMIN_ROUTE_TUNING_READ",
@@ -53,14 +55,17 @@ public class AdminService {
 	private final UserRepository userRepository;
 	private final AdminAreaRepository adminAreaRepository;
 	private final AdminAreaAssignmentRepository adminAreaAssignmentRepository;
+	private final AdminAuditLogService adminAuditLogService;
 
 	public AdminService(
 		UserRepository userRepository,
 		AdminAreaRepository adminAreaRepository,
-		AdminAreaAssignmentRepository adminAreaAssignmentRepository) {
+		AdminAreaAssignmentRepository adminAreaAssignmentRepository,
+		AdminAuditLogService adminAuditLogService) {
 		this.userRepository = userRepository;
 		this.adminAreaRepository = adminAreaRepository;
 		this.adminAreaAssignmentRepository = adminAreaAssignmentRepository;
+		this.adminAuditLogService = adminAuditLogService;
 	}
 
 	public AdminMeResponse getMe(UUID userId) {
@@ -83,8 +88,20 @@ public class AdminService {
 			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "자기 자신의 관리자 권한은 해제할 수 없습니다.");
 		}
 		User user = requireUser(targetUserId);
+		AdminUserResponse before = AdminUserResponse.from(user);
 		user.changeRole(request.role());
-		return AdminUserResponse.from(user);
+		AdminUserResponse after = AdminUserResponse.from(user);
+		adminAuditLogService.record(
+			actorUserId,
+			"USER_ROLE_UPDATE",
+			"USER",
+			targetUserId.toString(),
+			null,
+			null,
+			"사용자 권한을 " + before.role() + "에서 " + after.role() + "로 변경",
+			before,
+			after);
+		return after;
 	}
 
 	public AdminAreaAssignmentListResponse getAreaAssignments() {
@@ -122,32 +139,65 @@ public class AdminService {
 	}
 
 	@Transactional
-	public AdminAreaAssignmentResponse upsertAreaAssignment(AdminAreaAssignmentUpsertRequest request) {
+	public AdminAreaAssignmentResponse upsertAreaAssignment(UUID actorUserId,
+		AdminAreaAssignmentUpsertRequest request) {
 		validateArea(request.gu(), request.dong());
 		User assignee = request.assigneeUserId() == null ? null : requireAdminUser(request.assigneeUserId());
 		AdminAreaAssignment assignment = adminAreaAssignmentRepository
 			.findByGuAndDongAndAssignmentType(request.gu(), request.dong(), request.assignmentType())
-			.orElseGet(() -> adminAreaAssignmentRepository.save(AdminAreaAssignment.create(
+			.orElse(null);
+		AdminAreaAssignmentResponse before = assignment == null ? null : AdminAreaAssignmentResponse.from(assignment);
+		if (assignment == null) {
+			assignment = adminAreaAssignmentRepository.save(AdminAreaAssignment.create(
 				request.gu(),
 				request.dong(),
 				request.assignmentType(),
 				null,
-				AdminAreaWorkStatus.NOT_STARTED)));
+				AdminAreaWorkStatus.NOT_STARTED));
+		}
 		assignment.assign(assignee);
 		if (request.status() != null) {
 			assignment.changeStatus(request.status());
 		}
-		return AdminAreaAssignmentResponse.from(assignment);
+		AdminAreaAssignmentResponse after = AdminAreaAssignmentResponse.from(assignment);
+		adminAuditLogService.record(
+			actorUserId,
+			"AREA_ASSIGNMENT_UPSERT",
+			"AREA_ASSIGNMENT",
+			after.assignmentId() == null ? null : String.valueOf(after.assignmentId()),
+			after.gu(),
+			after.dong(),
+			after.assignmentType() + " 담당자/상태 변경",
+			before,
+			after);
+		return after;
 	}
 
 	@Transactional
 	public AdminAreaAssignmentResponse updateAreaAssignmentStatus(
+		UUID actorUserId,
 		Long assignmentId,
 		AdminAreaAssignmentStatusUpdateRequest request) {
 		AdminAreaAssignment assignment = adminAreaAssignmentRepository.findById(assignmentId)
 			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "담당 구/동을 찾을 수 없습니다."));
+		AdminAreaAssignmentResponse before = AdminAreaAssignmentResponse.from(assignment);
 		assignment.changeStatus(request.status());
-		return AdminAreaAssignmentResponse.from(assignment);
+		AdminAreaAssignmentResponse after = AdminAreaAssignmentResponse.from(assignment);
+		adminAuditLogService.record(
+			actorUserId,
+			"AREA_ASSIGNMENT_STATUS_UPDATE",
+			"AREA_ASSIGNMENT",
+			String.valueOf(assignmentId),
+			after.gu(),
+			after.dong(),
+			after.assignmentType() + " 작업 상태를 " + before.status() + "에서 " + after.status() + "로 변경",
+			before,
+			after);
+		return after;
+	}
+
+	public AdminAuditLogListResponse getAuditLogs(Long cursor, int size) {
+		return adminAuditLogService.getLogs(cursor, size);
 	}
 
 	public void requireCanEditArea(UUID userId, String gu, String dong, AdminAreaAssignmentType assignmentType) {

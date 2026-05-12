@@ -16,8 +16,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.core.MethodParameter;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
@@ -27,6 +33,7 @@ import com.ssafy.e102.domain.report.service.AdminHazardReportService;
 import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.report.type.ReportType;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
+import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 class AdminHazardReportControllerTest {
 
@@ -34,11 +41,29 @@ class AdminHazardReportControllerTest {
 	private AdminHazardReportService adminHazardReportService;
 
 	private MockMvc mockMvc;
+	private UUID adminUserId;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
+		adminUserId = UUID.randomUUID();
 		mockMvc = MockMvcBuilders.standaloneSetup(new AdminHazardReportController(adminHazardReportService))
+			.setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+				@Override
+				public boolean supportsParameter(MethodParameter parameter) {
+					return parameter.hasParameterAnnotation(AuthenticationPrincipal.class)
+						&& parameter.getParameterType().equals(AuthPrincipal.class);
+				}
+
+				@Override
+				public Object resolveArgument(
+					MethodParameter parameter,
+					ModelAndViewContainer mavContainer,
+					NativeWebRequest webRequest,
+					WebDataBinderFactory binderFactory) {
+					return new AuthPrincipal(adminUserId);
+				}
+			})
 			.build();
 	}
 
@@ -102,7 +127,7 @@ class AdminHazardReportControllerTest {
 	@Test
 	@DisplayName("관리자 제보 승인은 변경된 상태를 반환한다")
 	void approveHazardReport() throws Exception {
-		when(adminHazardReportService.approveHazardReport(1L))
+		when(adminHazardReportService.approveHazardReport(adminUserId, 1L))
 			.thenReturn(new AdminHazardReportStatusResponse(1L, ReportStatus.APPROVED));
 
 		mockMvc.perform(patch("/admin/hazard-reports/1/approve"))
@@ -110,13 +135,13 @@ class AdminHazardReportControllerTest {
 			.andExpect(jsonPath("$.data.reportId").value(1))
 			.andExpect(jsonPath("$.data.status").value("APPROVED"));
 
-		verify(adminHazardReportService).approveHazardReport(1L);
+		verify(adminHazardReportService).approveHazardReport(adminUserId, 1L);
 	}
 
 	@Test
 	@DisplayName("관리자 제보 반려는 변경된 상태를 반환한다")
 	void rejectHazardReport() throws Exception {
-		when(adminHazardReportService.rejectHazardReport(1L))
+		when(adminHazardReportService.rejectHazardReport(adminUserId, 1L))
 			.thenReturn(new AdminHazardReportStatusResponse(1L, ReportStatus.REJECTED));
 
 		mockMvc.perform(patch("/admin/hazard-reports/1/reject"))
@@ -124,6 +149,6 @@ class AdminHazardReportControllerTest {
 			.andExpect(jsonPath("$.data.reportId").value(1))
 			.andExpect(jsonPath("$.data.status").value("REJECTED"));
 
-		verify(adminHazardReportService).rejectHazardReport(1L);
+		verify(adminHazardReportService).rejectHazardReport(adminUserId, 1L);
 	}
 }

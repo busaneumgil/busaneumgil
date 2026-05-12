@@ -1770,7 +1770,7 @@ private fun buildTransitRouteCandidate(
                 RouteLeg(
                     sequence = 4,
                     type = RouteLegType.WALK,
-                    role = RouteLegRole.TRANSIT_TO_WALK,
+                    role = RouteLegRole.WALK_TO_DESTINATION,
                     polyline = RoutePolyline(points = previewPoints.drop(3)),
                 ),
             ),

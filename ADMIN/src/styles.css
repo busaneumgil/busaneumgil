@@ -1544,6 +1544,21 @@ select {
   gap: 10px;
 }
 
+.audit-log-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.audit-log-filters label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .audit-log-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-m);

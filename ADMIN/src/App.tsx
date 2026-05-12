@@ -70,6 +70,13 @@ const accessibilityFeatureTypes: AccessibilityFeatureType[] = [
   "guidanceFacility",
 ];
 
+const auditLogActions = [
+  { value: "ROAD_NETWORK_EDIT_APPLY", label: "보행 네트워크 반영" },
+  { value: "ROAD_SEGMENT_ATTRIBUTES_UPDATE", label: "segment 속성 변경" },
+  { value: "PLACE_BASIC_UPDATE", label: "편의시설 기본 정보 변경" },
+  { value: "PLACE_ACCESSIBILITY_FEATURES_REPLACE", label: "편의시설 접근성 변경" },
+];
+
 const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
     label: "보행 네트워크",
@@ -123,6 +130,10 @@ function AdminApp() {
   const [adminPrincipal, setAdminPrincipal] = useState<AdminMeResponse | null>(null);
   const [activeRoadEditJobId, setActiveRoadEditJobId] = useState<number | null>(null);
   const [lastRoadEditJob, setLastRoadEditJob] = useState<RoadNetworkEditJobResponse | null>(null);
+  const [auditLogAction, setAuditLogAction] = useState("");
+  const [auditLogGu, setAuditLogGu] = useState("");
+  const [auditLogDong, setAuditLogDong] = useState("");
+  const [auditLogActorUserId, setAuditLogActorUserId] = useState("");
   const completedRoadEditJobIdRef = useRef<number | null>(null);
   const submittedRoadEditAssignmentIdRef = useRef<string | null>(null);
   const {
@@ -170,14 +181,14 @@ function AdminApp() {
   const areasQuery = useQuery({
     queryKey: ["admin-areas", accessToken],
     queryFn: () => fetchAdminAreas(accessToken),
-    enabled: (showsAreaSelector || page === "users") && isAdminAuthenticated,
+    enabled: (showsAreaSelector || page === "users" || page === "logs") && isAdminAuthenticated,
     retry: false,
   });
 
   const adminUsersQuery = useQuery({
     queryKey: ["admin-users", accessToken],
     queryFn: () => fetchAdminUsers(accessToken),
-    enabled: page === "users" && isAdminAuthenticated,
+    enabled: (page === "users" || page === "logs") && isAdminAuthenticated,
     retry: false,
   });
 
@@ -197,8 +208,16 @@ function AdminApp() {
   });
 
   const auditLogsQuery = useQuery({
-    queryKey: ["admin-audit-logs", accessToken],
-    queryFn: () => fetchAdminAuditLogs({ cursor: null, size: 50, accessToken }),
+    queryKey: ["admin-audit-logs", accessToken, auditLogAction, auditLogGu, auditLogDong, auditLogActorUserId],
+    queryFn: () => fetchAdminAuditLogs({
+      action: auditLogAction,
+      gu: auditLogGu,
+      dong: auditLogDong,
+      actorUserId: auditLogActorUserId,
+      cursor: null,
+      size: 50,
+      accessToken,
+    }),
     enabled: page === "logs" && isAdminAuthenticated,
     retry: false,
   });
@@ -326,6 +345,19 @@ function AdminApp() {
     const areas = areasQuery.data ?? [];
     return areas.filter((area) => area.gu === selectedGu);
   }, [areasQuery.data, selectedGu]);
+
+  const auditLogGuOptions = useMemo(() => {
+    return Array.from(new Set((areasQuery.data ?? []).map((area) => area.gu))).sort();
+  }, [areasQuery.data]);
+
+  const auditLogDongOptions = useMemo(() => {
+    const areas = areasQuery.data ?? [];
+    return areas
+      .filter((area) => !auditLogGu || area.gu === auditLogGu)
+      .map((area) => area.dong)
+      .filter((dong, index, dongs) => dongs.indexOf(dong) === index)
+      .sort();
+  }, [areasQuery.data, auditLogGu]);
 
   const selectedAssignment = useMemo(() => {
     return (areaAssignmentsQuery.data ?? []).find((assignment) =>
@@ -507,8 +539,22 @@ function AdminApp() {
         {page === "logs" && (
           <AuditLogsPage
             logs={auditLogsQuery.data?.logs ?? []}
+            action={auditLogAction}
+            gu={auditLogGu}
+            dong={auditLogDong}
+            actorUserId={auditLogActorUserId}
+            guOptions={auditLogGuOptions}
+            dongOptions={auditLogDongOptions}
+            users={adminUsersQuery.data ?? []}
             loading={auditLogsQuery.isLoading}
             error={auditLogsQuery.error}
+            onActionChange={setAuditLogAction}
+            onGuChange={(gu) => {
+              setAuditLogGu(gu);
+              setAuditLogDong("");
+            }}
+            onDongChange={setAuditLogDong}
+            onActorUserIdChange={setAuditLogActorUserId}
             onRefresh={() => void auditLogsQuery.refetch()}
           />
         )}
@@ -951,13 +997,35 @@ function AssignmentTable({
 
 function AuditLogsPage({
   logs,
+  action,
+  gu,
+  dong,
+  actorUserId,
+  guOptions,
+  dongOptions,
+  users,
   loading,
   error,
+  onActionChange,
+  onGuChange,
+  onDongChange,
+  onActorUserIdChange,
   onRefresh,
 }: {
   logs: AdminAuditLog[];
+  action: string;
+  gu: string;
+  dong: string;
+  actorUserId: string;
+  guOptions: string[];
+  dongOptions: string[];
+  users: AdminUserResponse[];
   loading: boolean;
   error?: Error | null;
+  onActionChange: (action: string) => void;
+  onGuChange: (gu: string) => void;
+  onDongChange: (dong: string) => void;
+  onActorUserIdChange: (userId: string) => void;
   onRefresh: () => void;
 }) {
   return (
@@ -970,6 +1038,52 @@ function AuditLogsPage({
         <button type="button" onClick={onRefresh} disabled={loading}>
           새로고침
         </button>
+      </div>
+      <div className="audit-log-filters">
+        <label>
+          작업 종류
+          <select value={action} onChange={(event) => onActionChange(event.target.value)}>
+            <option value="">전체</option>
+            {auditLogActions.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          구
+          <select value={gu} onChange={(event) => onGuChange(event.target.value)}>
+            <option value="">전체</option>
+            {guOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          동
+          <select value={dong} onChange={(event) => onDongChange(event.target.value)}>
+            <option value="">전체</option>
+            {dongOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          작업자
+          <select value={actorUserId} onChange={(event) => onActorUserIdChange(event.target.value)}>
+            <option value="">전체</option>
+            {users.map((user) => (
+              <option key={user.userId} value={user.userId}>
+                {adminUserLabel(user)}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {loading && <p className="muted">변경 로그를 불러오는 중입니다.</p>}
       {error && <p className="error-box">{error.message}</p>}

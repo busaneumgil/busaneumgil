@@ -94,9 +94,17 @@ public class AdminController {
 	public ApiResponse<AdminAuditLogListResponse> getAuditLogs(
 		@Parameter(description = "이전 페이지 마지막 logId") @RequestParam(required = false)
 		Long cursor,
+		@Parameter(description = "작업 종류 필터") @RequestParam(required = false)
+		String action,
+		@Parameter(description = "구 필터") @RequestParam(required = false)
+		String gu,
+		@Parameter(description = "동 필터") @RequestParam(required = false)
+		String dong,
+		@Parameter(description = "작업자 userId 필터") @RequestParam(required = false)
+		UUID actorUserId,
 		@Parameter(description = "조회 개수. 허용 범위는 1~100이다.") @RequestParam(required = false)
 		Integer size) {
 		int normalizedSize = size == null ? 50 : Math.min(Math.max(size, 1), 100);
-		return ApiResponse.success(adminService.getAuditLogs(cursor, normalizedSize));
+		return ApiResponse.success(adminService.getAuditLogs(cursor, action, gu, dong, actorUserId, normalizedSize));
 	}
 }

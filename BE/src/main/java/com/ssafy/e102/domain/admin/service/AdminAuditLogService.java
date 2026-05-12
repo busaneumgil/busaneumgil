@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.service;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,50 +32,61 @@ public class AdminAuditLogService {
 	}
 
 	public AdminAuditLogListResponse getLogs(Long cursor, int size) {
+		return getLogs(cursor, null, null, null, null, size);
+	}
+
+	public AdminAuditLogListResponse getLogs(
+		Long cursor,
+		String action,
+		String gu,
+		String dong,
+		UUID actorUserId,
+		int size) {
 		int querySize = size + 1;
-		List<AdminAuditLogResponse> rows = cursor == null
-			? jdbcTemplate.query(
-				"""
-					select
-						log_id,
-						actor_user_id,
-						action,
-						target_type,
-						target_id,
-						gu,
-						dong,
-						summary,
-						before_json::text as before_json,
-						after_json::text as after_json,
-						created_at
-					from admin_audit_logs
-					order by log_id desc
-					limit ?
-					""",
-				this::toResponse,
-				querySize)
-			: jdbcTemplate.query(
-				"""
-					select
-						log_id,
-						actor_user_id,
-						action,
-						target_type,
-						target_id,
-						gu,
-						dong,
-						summary,
-						before_json::text as before_json,
-						after_json::text as after_json,
-						created_at
-					from admin_audit_logs
-					where log_id < ?
-					order by log_id desc
-					limit ?
-					""",
-				this::toResponse,
-				cursor,
-				querySize);
+		List<Object> params = new ArrayList<>();
+		StringBuilder sql = new StringBuilder("""
+			select
+				log_id,
+				actor_user_id,
+				action,
+				target_type,
+				target_id,
+				gu,
+				dong,
+				summary,
+				before_json::text as before_json,
+				after_json::text as after_json,
+				created_at
+			from admin_audit_logs
+			where 1 = 1
+			""");
+		if (cursor != null) {
+			sql.append(" and log_id < ?");
+			params.add(cursor);
+		}
+		String normalizedAction = blankToNull(action);
+		if (normalizedAction != null) {
+			sql.append(" and action = ?");
+			params.add(normalizedAction);
+		}
+		String normalizedGu = blankToNull(gu);
+		if (normalizedGu != null) {
+			sql.append(" and gu = ?");
+			params.add(normalizedGu);
+		}
+		String normalizedDong = blankToNull(dong);
+		if (normalizedDong != null) {
+			sql.append(" and dong = ?");
+			params.add(normalizedDong);
+		}
+		if (actorUserId != null) {
+			sql.append(" and actor_user_id = ?");
+			params.add(actorUserId);
+		}
+		sql.append(" order by log_id desc limit ?");
+		params.add(querySize);
+
+		List<AdminAuditLogResponse> rows = jdbcTemplate.query(sql.toString(), this::toResponse, params.toArray());
 		boolean hasNext = rows.size() > size;
 		List<AdminAuditLogResponse> content = hasNext ? rows.subList(0, size) : rows;
 		Long nextCursor = hasNext ? content.get(content.size() - 1).logId() : null;

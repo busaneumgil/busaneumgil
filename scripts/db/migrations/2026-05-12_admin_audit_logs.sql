@@ -18,6 +18,9 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_actor
   ON admin_audit_logs(actor_user_id, created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_action
+  ON admin_audit_logs(action, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_area
   ON admin_audit_logs(gu, dong, created_at DESC);
 

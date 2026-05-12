@@ -158,8 +158,14 @@ public class AdminService {
 		return AdminAreaAssignmentResponse.from(assignment);
 	}
 
-	public AdminAuditLogListResponse getAuditLogs(Long cursor, int size) {
-		return adminAuditLogService.getLogs(cursor, size);
+	public AdminAuditLogListResponse getAuditLogs(
+		Long cursor,
+		String action,
+		String gu,
+		String dong,
+		UUID actorUserId,
+		int size) {
+		return adminAuditLogService.getLogs(cursor, action, gu, dong, actorUserId, size);
 	}
 
 	public void requireCanEditArea(UUID userId, String gu, String dong, AdminAreaAssignmentType assignmentType) {

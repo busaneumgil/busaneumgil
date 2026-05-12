@@ -586,6 +586,12 @@ class RouteSettingViewModel(
                                         searchId = searchId,
                                         routeId = routeId,
                                         sessionId = sessionData.sessionId,
+                                        initialRemainingDistanceMeters =
+                                            sessionData.totalDistanceMeters ?: selectedRoute.summary.distanceMeters,
+                                        initialRemainingDurationSeconds =
+                                            sessionData.totalDurationSeconds
+                                                ?: selectedRoute.summary.durationSeconds
+                                                ?: selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
                                     ),
                             ),
                     ),
@@ -2158,6 +2164,7 @@ private const val ROUTE_NO_ROUTE_ERROR_MESSAGE = "탐색 가능한 경로가 없
 private const val ROUTE_TIMEOUT_ERROR_MESSAGE = "경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요."
 private const val ROUTE_NETWORK_ERROR_MESSAGE = "네트워크 연결 상태를 확인한 뒤 다시 시도해 주세요."
 private const val TRANSIT_LOADING_NOTICE_MESSAGE = "대중교통 경로를 불러오는 동안 보행 경로를 먼저 보여드릴게요."
+private const val SECONDS_PER_MINUTE = 60
 private val DEFAULT_TRAVEL_MODE = RouteTravelMode.WALK
 private val WALK_DEFAULT_SELECTED_OPTION = RouteOption.SAFE
 private val TRANSIT_DEFAULT_SELECTED_OPTION = RouteOption.RECOMMENDED

@@ -218,6 +218,19 @@ class RouteSearchDtoMapperTest {
 
     @Test
     fun `parse helper functions read session refresh reroute and rating envelopes`() {
+        val selected =
+            parseRouteSelectResponseDto(
+                """
+                {
+                  "status": "S2000",
+                  "data": {
+                    "sessionId": "session-select-1",
+                    "totalDistanceMeter": 950.0,
+                    "totalDurationSecond": 960
+                  }
+                }
+                """.trimIndent(),
+            )
         val session =
             parseRouteSessionResponseDto(
                 """
@@ -290,6 +303,9 @@ class RouteSearchDtoMapperTest {
                 """.trimIndent(),
             )
 
+        assertEquals("session-select-1", selected.sessionId)
+        assertEquals(950.0, selected.totalDistanceMeter ?: -1.0, 0.0)
+        assertEquals(960, selected.totalDurationSecond)
         assertEquals("session-1", session.sessionId)
         assertEquals("BUS", refresh.type)
         assertEquals("ARRIVING_SOON", refresh.arrivalStatus)

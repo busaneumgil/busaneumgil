@@ -277,4 +277,6 @@ data class RouteNavigationSelectionHandoff(
     val searchId: String,
     val routeId: String,
     val sessionId: String,
+    val initialRemainingDistanceMeters: Int? = null,
+    val initialRemainingDurationSeconds: Int? = null,
 )

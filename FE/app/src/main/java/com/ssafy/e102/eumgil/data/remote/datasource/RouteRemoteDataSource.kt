@@ -12,12 +12,14 @@ import com.ssafy.e102.eumgil.data.route.RouteRerouteResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSelectRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSelectResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSessionResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshResponseDto
 import com.ssafy.e102.eumgil.data.route.parseRouteRatingResponseDto
 import com.ssafy.e102.eumgil.data.route.parseRouteRerouteResponseDto
 import com.ssafy.e102.eumgil.data.route.parseRouteSearchResponseDto
+import com.ssafy.e102.eumgil.data.route.parseRouteSelectResponseDto
 import com.ssafy.e102.eumgil.data.route.parseRouteSessionResponseDto
 import com.ssafy.e102.eumgil.data.route.parseRouteTransitRefreshResponseDto
 import java.io.IOException
@@ -69,11 +71,11 @@ open class RouteRemoteDataSource internal constructor(
     open suspend fun selectRoute(
         routeId: String,
         request: RouteSelectRequestDto,
-    ): RouteSessionResponseDto =
+    ): RouteSelectResponseDto =
         postRouteRequest(
             path = "/routes/$routeId/select",
             body = createSelectRouteBody(request),
-            responseParser = ::parseRouteSessionResponseDto,
+            responseParser = ::parseRouteSelectResponseDto,
         )
 
     open suspend fun refreshTransit(

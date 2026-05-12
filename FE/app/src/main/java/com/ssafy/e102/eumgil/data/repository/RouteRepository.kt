@@ -21,6 +21,7 @@ import com.ssafy.e102.eumgil.data.route.RouteRerouteResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSelectRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSelectResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSessionResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitArrivalDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshRequestDto
@@ -31,14 +32,20 @@ import kotlinx.coroutines.withContext
 import com.ssafy.e102.eumgil.data.route.toDomain
 import com.ssafy.e102.eumgil.data.route.toRequestDto
 import com.ssafy.e102.eumgil.data.route.toRouteCandidate
+import kotlin.math.roundToInt
 
 interface RouteRepository {
     // Primary read-model entry point for 199 route setting and 200/201/202 handoff consumers.
     suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData
 
+    suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData = getRouteSearchData(query)
+
     suspend fun searchRoutes(query: RouteSearchQuery): RouteSearchResult = getRouteSearchData(query).result
 
     suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData
+
+    suspend fun getFreshTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        getTransitRouteSearchData(query)
 
     suspend fun searchTransitRoutes(query: RouteSearchQuery): RouteSearchResult = getTransitRouteSearchData(query).result
 
@@ -87,6 +94,16 @@ class DefaultRouteRepository(
         getSearchData(
             query = query,
             requestPath = ROUTE_SEARCH_WALK_PATH,
+            useCache = true,
+        ) { request ->
+            remoteDataSource.searchWalkRoutes(request)
+        }
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        getSearchData(
+            query = query,
+            requestPath = ROUTE_SEARCH_WALK_PATH,
+            useCache = false,
         ) { request ->
             remoteDataSource.searchWalkRoutes(request)
         }
@@ -95,6 +112,16 @@ class DefaultRouteRepository(
         getSearchData(
             query = query,
             requestPath = ROUTE_SEARCH_TRANSIT_PATH,
+            useCache = true,
+        ) { request ->
+            remoteDataSource.searchTransitRoutes(request)
+        }
+
+    override suspend fun getFreshTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        getSearchData(
+            query = query,
+            requestPath = ROUTE_SEARCH_TRANSIT_PATH,
+            useCache = false,
         ) { request ->
             remoteDataSource.searchTransitRoutes(request)
         }
@@ -160,10 +187,13 @@ class DefaultRouteRepository(
     private suspend fun getSearchData(
         query: RouteSearchQuery,
         requestPath: String,
+        useCache: Boolean,
         remoteSearch: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto,
     ): RouteSearchData {
-        localDataSource.getCachedSearchData(query)?.let { cachedSearchData ->
-            return cachedSearchData.copy(source = cachedSearchData.source.asCached())
+        if (useCache) {
+            localDataSource.getCachedSearchData(query)?.let { cachedSearchData ->
+                return cachedSearchData.copy(source = cachedSearchData.source.asCached())
+            }
         }
 
         val response = runAuthenticatedRemoteRequest(requestPath = requestPath) { remoteSearch(query.toRequestDto()) }
@@ -256,6 +286,8 @@ private fun safeLogInfo(
 
 data class RouteSessionData(
     val sessionId: String,
+    val totalDistanceMeters: Int? = null,
+    val totalDurationSeconds: Int? = null,
 )
 
 data class RouteTransitArrivalData(
@@ -278,8 +310,17 @@ data class RouteRatingData(
     val ratingId: Long,
 )
 
+private fun RouteSelectResponseDto.toRepositoryData(): RouteSessionData =
+    RouteSessionData(
+        sessionId = sessionId,
+        totalDistanceMeters = totalDistanceMeter.toRoundedMeters(),
+        totalDurationSeconds = totalDurationSecond?.takeIf { durationSeconds -> durationSeconds >= 0 },
+    )
+
 private fun RouteSessionResponseDto.toRepositoryData(): RouteSessionData =
-    RouteSessionData(sessionId = sessionId)
+    RouteSessionData(
+        sessionId = sessionId,
+    )
 
 private fun RouteTransitRefreshResponseDto.toRepositoryData(): RouteTransitRefreshData =
     RouteTransitRefreshData(
@@ -302,6 +343,11 @@ private fun RouteRerouteResponseDto.toRepositoryData(geometryParser: RouteGeomet
 
 private fun RouteRatingResponseDto.toRepositoryData(): RouteRatingData =
     RouteRatingData(ratingId = ratingId)
+
+private fun Double?.toRoundedMeters(): Int? =
+    this
+        ?.takeIf { value -> value >= 0.0 }
+        ?.roundToInt()
 
 private fun GeoCoordinate.toPointDto(): RoutePointDto =
     RoutePointDto(

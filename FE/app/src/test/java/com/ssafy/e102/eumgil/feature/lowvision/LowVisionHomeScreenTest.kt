@@ -58,6 +58,28 @@ class LowVisionHomeScreenTest {
     }
 
     @Test
+    fun `current location display announces resolved address when available`() {
+        val display =
+            lowVisionCurrentLocationDisplay(
+                snapshot =
+                    LocationSnapshot(
+                        latitude = 35.179612,
+                        longitude = 129.075634,
+                        accuracyMeters = 4.8f,
+                        recordedAtEpochMillis = 1_000L,
+                    ),
+                address = "\uBD80\uC0B0\uAD11\uC5ED\uC2DC \uBD80\uC0B0\uC9C4\uAD6C \uC11C\uBA74\uC5ED \uC778\uADFC",
+            )
+
+        assertEquals("\uD604\uC7AC \uC704\uCE58", display.title)
+        assertEquals("", display.supportingText)
+        assertEquals(
+            "\uD604\uC7AC \uC704\uCE58 \uBD80\uC0B0\uAD11\uC5ED\uC2DC \uBD80\uC0B0\uC9C4\uAD6C \uC11C\uBA74\uC5ED \uC778\uADFC",
+            display.talkBackText,
+        )
+    }
+
+    @Test
     fun `current location display announces gps loading before first fix`() {
         val display = lowVisionCurrentLocationDisplay(latitude = null, longitude = null)
 

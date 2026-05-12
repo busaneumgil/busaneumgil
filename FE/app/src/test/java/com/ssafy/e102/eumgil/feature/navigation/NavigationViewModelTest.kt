@@ -81,6 +81,29 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `selection handoff remaining metrics seed initial navigation summary`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    selectionHandoff =
+                        RouteNavigationSelectionHandoff(
+                            searchId = "search-1",
+                            routeId = "walk-route-1",
+                            sessionId = "session-1",
+                            initialRemainingDistanceMeters = 720,
+                            initialRemainingDurationSeconds = 540,
+                        ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("720m", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("9분", viewModel.uiState.value.remainingEtaLabel)
+        }
+
+    @Test
     fun `walk to transit leg triggers transit refresh near boarding stop`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()

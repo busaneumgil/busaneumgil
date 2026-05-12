@@ -97,9 +97,15 @@ class NavigationViewModel(
         latestLocationCoordinate = request.origin.coordinate
         latestProgress = routeSession?.route?.evaluateProgress(request.origin.coordinate)
         latestRemainingDistanceMeters =
-            latestProgress?.remainingRouteDistanceMeters ?: request.selectedRoute.totalDistanceMeters()
+            request.selectionHandoff?.initialRemainingDistanceMeters
+                ?.takeIf { distanceMeters -> distanceMeters >= 0 }
+                ?: latestProgress?.remainingRouteDistanceMeters
+                ?: request.selectedRoute.totalDistanceMeters()
         latestEstimatedMinutes =
-            latestProgress?.remainingDurationSeconds?.toEtaMinutes()
+            request.selectionHandoff?.initialRemainingDurationSeconds
+                ?.takeIf { durationSeconds -> durationSeconds >= 0 }
+                ?.toEtaMinutes()
+                ?: latestProgress?.remainingDurationSeconds?.toEtaMinutes()
                 ?: request.selectedRoute.summary.estimatedTimeMinutes
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)

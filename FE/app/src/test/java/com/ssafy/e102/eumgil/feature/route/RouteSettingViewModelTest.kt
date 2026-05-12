@@ -37,6 +37,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -673,6 +674,7 @@ class RouteSettingViewModelTest {
 
             advanceUntilIdle()
             val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
 
             viewModel.onAction(RouteSettingUiAction.RouteOptionDetailClicked(RouteOption.SHORTEST))
             advanceUntilIdle()
@@ -971,6 +973,7 @@ class RouteSettingViewModelTest {
 
             advanceUntilIdle()
             val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
 
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
             advanceUntilIdle()
@@ -988,6 +991,8 @@ class RouteSettingViewModelTest {
             assertEquals("transit-search-1", selectionHandoff.searchId)
             assertEquals("pt_rt_recommended_001", selectionHandoff.routeId)
             assertEquals("session-pt_rt_recommended_001", selectionHandoff.sessionId)
+            assertEquals(2500, selectionHandoff.initialRemainingDistanceMeters)
+            assertEquals(900, selectionHandoff.initialRemainingDurationSeconds)
         }
 
     @Test
@@ -1015,6 +1020,7 @@ class RouteSettingViewModelTest {
 
             advanceUntilIdle()
             val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
 
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
             advanceUntilIdle()
@@ -1051,7 +1057,12 @@ private fun testRouteRepository(): RouteRepository {
         override suspend fun selectRoute(
             routeId: String,
             searchId: String,
-        ): RouteSessionData = RouteSessionData(sessionId = "session-$routeId")
+        ): RouteSessionData =
+            RouteSessionData(
+                sessionId = "session-$routeId",
+                totalDistanceMeters = 2500,
+                totalDurationSeconds = 900,
+            )
     }
 }
 
@@ -1150,7 +1161,11 @@ private class TransitModeRecordingRouteRepository(
     ): RouteSessionData {
         lastSelectedRouteId = routeId
         lastSelectedSearchId = searchId
-        return RouteSessionData(sessionId = "session-$routeId")
+        return RouteSessionData(
+            sessionId = "session-$routeId",
+            totalDistanceMeters = 2500,
+            totalDurationSeconds = 900,
+        )
     }
 }
 

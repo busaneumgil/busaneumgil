@@ -497,7 +497,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToArrival = {
-                navController.navigate(resolveNavigationCompletionRoute()) {
+                navController.navigate(resolveNavigationCompletionRoute(selectedPrimaryUserType)) {
                     launchSingleTop = true
                     popUpTo(NavigationRoute.Guidance.route) {
                         inclusive = true

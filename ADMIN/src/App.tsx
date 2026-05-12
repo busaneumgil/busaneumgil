@@ -8,6 +8,7 @@ import {
   fetchAdminPlaceDetail,
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
+  fetchAdminHazardReports,
   fetchAdminUsers,
   adminAccessTokenRefreshedEvent,
   getStoredAdminAccessToken,
@@ -181,6 +182,14 @@ function AdminApp() {
     retry: false,
   });
 
+  const pendingHazardReportsQuery = useQuery({
+    queryKey: ["admin-hazard-reports-pending-count", accessToken],
+    queryFn: () => fetchAdminHazardReports({ status: "PENDING", cursor: null, size: 20, accessToken }),
+    enabled: isAdminAuthenticated,
+    retry: false,
+    refetchInterval: 30_000,
+  });
+
   const payloadQuery = useQuery({
     queryKey: ["admin-road-network", selectedGu, selectedDong, accessToken],
     queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
@@ -314,6 +323,10 @@ function AdminApp() {
 
   const canEditSelectedArea = selectedAssignment?.assigneeUserId === currentAdmin?.userId;
   const selectedAssignmentLabel = selectedAssignment?.assigneeLabel || selectedAssignment?.assigneeUserId || "미지정";
+  const pendingHazardCount = pendingHazardReportsQuery.data?.content.length ?? 0;
+  const pendingHazardBadge = pendingHazardReportsQuery.data?.hasNext
+    ? `${pendingHazardCount}+`
+    : String(pendingHazardCount);
 
   function logoutAdmin() {
     void logoutAdminSession(accessToken).catch(() => undefined);
@@ -365,6 +378,11 @@ function AdminApp() {
             <button key={item} className={page === item ? "active" : ""} onClick={() => setPage(item)} title={pageMeta[item].label}>
               <span className="nav-dot" aria-hidden="true" />
               <span className="nav-label">{pageMeta[item].label}</span>
+              {item === "hazards" && pendingHazardCount > 0 && (
+                <span className="nav-badge" aria-label={`대기 제보 ${pendingHazardBadge}건`}>
+                  {pendingHazardBadge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -509,12 +527,10 @@ function AdminApp() {
                 </div>
               </section>
               <section className="panel-section">
-                <h3>선택 segment</h3>
-                {selectedSegment ? (
-                  <SegmentReferenceDetails segment={selectedSegment} />
-                ) : (
-                  <p className="muted">Select 모드에서 segment를 클릭하면 DB에 저장된 기본 정보를 표시합니다.</p>
-                )}
+                <h3>편집 기준</h3>
+                <p className="muted">
+                  보행 네트워크 탭은 segment 추가, 삭제, DB 반영에만 사용합니다. 통행, 계단, 보도 폭 같은 segment 속성 검수는 경로 검수 탭에서 진행합니다.
+                </p>
               </section>
               <section className="panel-section">
                 <h3>변경 draft</h3>
@@ -695,11 +711,31 @@ function UserManagementPage({
   onUpsertAssignment: (request: { gu: string; dong: string; assignmentType: AssignmentType; assigneeUserId: string | null; status: WorkStatus }) => void;
   onUpdateAssignmentStatus: (assignmentId: number, status: WorkStatus) => void;
 }) {
-  const adminUsers = users.filter((user) => user.role === "ADMIN");
+  const sortedUsers = [...users].sort((left, right) => {
+    if (left.userId === currentAdmin.userId) return -1;
+    if (right.userId === currentAdmin.userId) return 1;
+    return left.userId.localeCompare(right.userId);
+  });
+  const adminUsers = sortedUsers.filter((user) => user.role === "ADMIN");
   const assignmentByArea = new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}:${assignment.assignmentType}`, assignment]));
   const normalizedAreas = areas.length
     ? areas
     : [...new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}`, { gu: assignment.gu, dong: assignment.dong }])).values()];
+  const guOptions = [...new Set(normalizedAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
+  const [selectedGuFilter, setSelectedGuFilter] = useState("");
+  const guOptionsKey = guOptions.join("|");
+  useEffect(() => {
+    if (!guOptions.length) {
+      if (selectedGuFilter) setSelectedGuFilter("");
+      return;
+    }
+    if (!selectedGuFilter || !guOptions.includes(selectedGuFilter)) {
+      setSelectedGuFilter(guOptions[0]);
+    }
+  }, [guOptionsKey, selectedGuFilter]);
+  const filteredAreas = selectedGuFilter
+    ? normalizedAreas.filter((area) => area.gu === selectedGuFilter)
+    : normalizedAreas;
 
   return (
     <div className="user-management-layout">
@@ -713,20 +749,18 @@ function UserManagementPage({
               <tr>
                 <th>사용자</th>
                 <th>소셜</th>
-                <th>사용자 유형</th>
                 <th>권한</th>
                 <th>변경</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {sortedUsers.map((user) => (
                 <tr key={user.userId}>
                   <td>
                     <strong>{adminUserLabel(user)}</strong>
                     <span>{user.userId}</span>
                   </td>
                   <td>{user.socialProvider} / {user.socialProviderUserId}</td>
-                  <td>{user.selectedPrimaryUserType}{user.selectedMobilitySubtype ? ` / ${user.selectedMobilitySubtype}` : ""}</td>
                   <td>{user.role}</td>
                   <td>
                     <select
@@ -737,13 +771,12 @@ function UserManagementPage({
                       <option value="USER">USER</option>
                       <option value="ADMIN">ADMIN</option>
                     </select>
-                    {user.userId === currentAdmin.userId && <small>본인 권한은 변경할 수 없습니다.</small>}
                   </td>
                 </tr>
               ))}
               {!users.length && (
                 <tr>
-                  <td colSpan={5}>사용자가 없습니다.</td>
+                  <td colSpan={4}>사용자가 없습니다.</td>
                 </tr>
               )}
             </tbody>
@@ -754,10 +787,20 @@ function UserManagementPage({
       <section className="panel-section">
         <h3>구·동 담당자 및 작업 상태</h3>
         <p className="muted">보행 네트워크와 편의시설 담당자를 분리합니다. 담당자로 지정된 관리자만 해당 영역을 수정할 수 있습니다.</p>
+        <div className="assignment-filter-row">
+          <label>
+            구
+            <select value={selectedGuFilter} onChange={(event) => setSelectedGuFilter(event.target.value)}>
+              {guOptions.map((gu) => (
+                <option key={gu} value={gu}>{gu}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <AssignmentTable
           title="보행 네트워크 담당 현황"
           assignmentType="ROAD_NETWORK"
-          normalizedAreas={normalizedAreas}
+          normalizedAreas={filteredAreas}
           assignmentByArea={assignmentByArea}
           adminUsers={adminUsers}
           assignmentPending={assignmentPending}
@@ -767,7 +810,7 @@ function UserManagementPage({
         <AssignmentTable
           title="편의시설 담당 현황"
           assignmentType="FACILITY"
-          normalizedAreas={normalizedAreas}
+          normalizedAreas={filteredAreas}
           assignmentByArea={assignmentByArea}
           adminUsers={adminUsers}
           assignmentPending={assignmentPending}
@@ -893,28 +936,6 @@ function Metric({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function SegmentReferenceDetails({ segment }: { segment: SegmentFeature }) {
-  return (
-    <>
-      <dl className="attribute-detail-list">
-        <AttributeRow label="edge" value={String(segment.properties.edgeId)} />
-        <AttributeRow label="from" value={String(segment.properties.fromNodeId ?? "-")} />
-        <AttributeRow label="to" value={String(segment.properties.toNodeId ?? "-")} />
-        <AttributeRow label="type" value={String(segment.properties.segmentType ?? "-")} />
-        <AttributeRow label="length" value={`${formatNumber(Number(segment.properties.lengthMeter))}m`} />
-        <AttributeRow label="통행" value={formatOptionalProperty(segment.properties.walkAccess)} />
-        <AttributeRow label="계단" value={formatOptionalProperty(segment.properties.stairsState)} />
-        <AttributeRow label="보도 폭" value={formatOptionalProperty(segment.properties.widthState)} />
-        <AttributeRow label="노면" value={formatOptionalProperty(segment.properties.surfaceState)} />
-        <AttributeRow label="신호등" value={formatOptionalProperty(segment.properties.signalState)} />
-        <AttributeRow label="음향신호기" value={formatOptionalProperty(segment.properties.audioSignalState)} />
-        <AttributeRow label="점자블록" value={formatOptionalProperty(segment.properties.brailleBlockState)} />
-      </dl>
-      <p className="muted">CSV 서버를 거치지 않고 DB road_segments 기준으로 조회한 값입니다.</p>
-    </>
-  );
-}
-
 const workStatusOptions: WorkStatus[] = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "HOLD"];
 
 function workStatusLabel(status: WorkStatus) {
@@ -935,7 +956,7 @@ function shortId(userId: string) {
 }
 
 function adminUserLabel(user: AdminUserResponse) {
-  return `${user.socialProvider} ${user.socialProviderUserId}`;
+  return shortId(user.userId);
 }
 
 function formatDateTime(value: string) {
@@ -1127,13 +1148,6 @@ function AttributeRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
-}
-
-function formatOptionalProperty(value: string | number | null | undefined) {
-  if (value === null || value === undefined || value === "") {
-    return "-";
-  }
-  return String(value);
 }
 
 function accessibilityFeatureLabel(featureType: AccessibilityFeatureType) {

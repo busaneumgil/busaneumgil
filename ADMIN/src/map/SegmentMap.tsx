@@ -48,6 +48,7 @@ export interface RoadviewDockState {
 }
 
 const ROADVIEW_DEFAULT_MESSAGE = "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.";
+const DETAIL_SEGMENT_MAX_LEVEL = 4;
 const segmentFeatureTypes: SegmentFeatureType[] = ["CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"];
 const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
   CROSSWALK: "횡단보도",
@@ -117,6 +118,7 @@ export function SegmentMap({
   const [pendingAddCount, setPendingAddCount] = useState(0);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [mapLevel, setMapLevel] = useState(6);
   const [polygonDeleteActive, setPolygonDeleteActive] = useState(false);
   const [polygonPointCount, setPolygonPointCount] = useState(0);
   const [roadSegmentLayers, setRoadSegmentLayers] = useState({
@@ -156,6 +158,7 @@ export function SegmentMap({
           center,
           level: 6,
         });
+        setMapLevel(mapRef.current.getLevel?.() ?? 6);
         roadviewClientRef.current = window.kakao.maps.RoadviewClient ? new window.kakao.maps.RoadviewClient() : null;
         setMapReady(true);
         window.kakao.maps.event.addListener(mapRef.current, "click", (event: unknown) => {
@@ -163,6 +166,9 @@ export function SegmentMap({
           if (!latLng) return;
           const coord: [number, number] = [latLng.getLng(), latLng.getLat()];
           handleMapCoordinate(coord, latLng);
+        });
+        window.kakao.maps.event.addListener(mapRef.current, "zoom_changed", () => {
+          setMapLevel(mapRef.current?.getLevel?.() ?? 6);
         });
       })
       .catch((reason: Error) => setMapError(reason.message));
@@ -180,8 +186,11 @@ export function SegmentMap({
     segmentOverlayByEdgeRef.current.clear();
 
     const useHitArea = toolbarMode === "editor";
-    const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)
-      .filter(shouldShowRoadSegmentLayer);
+    const canRenderDetails = shouldRenderDetailedSegments();
+    const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    const segmentFeatures = canRenderDetails
+      ? allSegmentFeatures.filter(shouldShowRoadSegmentLayer)
+      : [];
     segmentFeatures.forEach((feature) => {
       const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
         if (routePointPickModeRef.current) {
@@ -217,16 +226,24 @@ export function SegmentMap({
     });
 
     centerMapForPayload(segmentFeatures, bridgeFeatures);
-    renderPendingEditOverlays();
+    if (canRenderDetails) {
+      renderPendingEditOverlays();
+    } else {
+      clearPendingEditOverlays();
+    }
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, mapReady, roadSegmentLayers]);
+  }, [payload, bridgePayload, mapLevel, mapReady, roadSegmentLayers, toolbarMode]);
 
   useEffect(() => {
-    renderPendingEditOverlays();
+    if (shouldRenderDetailedSegments()) {
+      renderPendingEditOverlays();
+    } else {
+      clearPendingEditOverlays();
+    }
     syncDeletedSegmentOverlays();
-  }, [draftEdits]);
+  }, [draftEdits, mapLevel]);
 
   useEffect(() => {
     renderReferenceOverlays();
@@ -245,13 +262,13 @@ export function SegmentMap({
   }, [draftEdits, mapReady, payload, segmentFeatureLayers, toolbarMode]);
 
   useEffect(() => {
-    if (!selectedSegment) {
+    if (!selectedSegment || !shouldRenderDetailedSegments()) {
       selectedSegmentOverlayRef.current?.setMap(null);
       selectedSegmentOverlayRef.current = null;
       return;
     }
     drawSelectedSegment(selectedSegment);
-  }, [selectedSegment]);
+  }, [mapLevel, selectedSegment]);
 
   function setMode(nextMode: EditorMode) {
     if (!editable && (nextMode === "add" || nextMode === "delete")) {
@@ -273,6 +290,10 @@ export function SegmentMap({
   function setAddType(nextAddType: AddType) {
     addTypeRef.current = nextAddType;
     setAddTypeState(nextAddType);
+  }
+
+  function shouldRenderDetailedSegments() {
+    return mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
   }
 
   function handleMapCoordinate(coord: Coord, latLng: unknown) {
@@ -339,8 +360,7 @@ export function SegmentMap({
 
   function renderPendingEditOverlays() {
     if (!window.kakao?.maps || !mapRef.current) return;
-    pendingEditOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
-    pendingEditOverlaysRef.current = [];
+    clearPendingEditOverlays();
 
     draftSegmentFeatures(draftEditsRef.current).forEach((feature) => {
       const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, () => undefined, { draft: true, hitArea: false });
@@ -429,7 +449,7 @@ export function SegmentMap({
     const map = mapRef.current;
     segmentFeatureOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     segmentFeatureOverlaysRef.current = [];
-    if (toolbarMode !== "segmentFeatureLegend") return;
+    if (toolbarMode !== "segmentFeatureLegend" || !shouldRenderDetailedSegments()) return;
     const activeTypes = new Set(segmentFeatureTypes.filter((featureType) => segmentFeatureLayers[featureType]));
     if (!activeTypes.size) return;
     const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
@@ -439,6 +459,11 @@ export function SegmentMap({
       overlay.setMap(map);
       segmentFeatureOverlaysRef.current.push(overlay);
     });
+  }
+
+  function clearPendingEditOverlays() {
+    pendingEditOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    pendingEditOverlaysRef.current = [];
   }
 
   function centerMapForPayload(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
@@ -485,6 +510,7 @@ export function SegmentMap({
   }
 
   function selectNearestSegment(coord: Coord, maxDistanceM: number, openRoadview = true) {
+    if (!shouldRenderDetailedSegments()) return;
     const candidates = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     const nearest = candidates
       .map((feature) => ({ feature, distanceM: pointLineDistanceM(coord, feature.geometry.coordinates) }))
@@ -666,6 +692,7 @@ export function SegmentMap({
     return new window.kakao!.maps.LatLng(coord[1], coord[0]);
   }
 
+  const detailedSegmentsVisible = shouldRenderDetailedSegments();
   const segmentFeatureCounts = countSegmentFeatureTypes(visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits));
 
   return (
@@ -729,7 +756,9 @@ export function SegmentMap({
             ? `payload 오류: ${error.message}`
             : mapError
               ? `지도 오류: ${mapError}`
-              : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""}`}
+              : !detailedSegmentsVisible
+                ? `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
+                : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""}`}
       </div>
     </section>
   );

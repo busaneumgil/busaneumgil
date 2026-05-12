@@ -177,7 +177,7 @@ private fun categoryFilterIcon(category: FacilityCategory): Int =
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
+        FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
 
 internal fun categoryFilterIconSizeDp(category: FacilityCategory): Int =

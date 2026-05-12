@@ -3,12 +3,59 @@ package com.ssafy.e102.eumgil.feature.search
 import com.ssafy.e102.eumgil.app.navigation.SearchRoute
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
-import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SearchScreenTest {
+    @Test
+    fun `origin editing target resolves origin specific search copy`() {
+        assertEquals(
+            SearchCopyUiState(
+                entryTitleRes = R.string.search_origin_screen_title,
+                resultsTitleRes = R.string.search_origin_results_screen_title,
+                entryHeadlineRes = R.string.search_origin_screen_entry_headline,
+                queryPlaceholderRes = R.string.search_origin_screen_query_placeholder,
+                voiceInputTitleRes = R.string.search_origin_voice_input_title,
+                voiceInputHeadlineRes = R.string.search_origin_voice_input_headline,
+                voiceInputDescriptionRes = R.string.search_origin_voice_input_description,
+                voiceInputExamplePhraseRes = R.string.search_origin_voice_input_example_phrase,
+                initialTitleRes = R.string.search_origin_screen_initial_title,
+                initialDescriptionRes = R.string.search_origin_screen_initial_description,
+                resultSummaryRes = R.string.search_origin_screen_result_summary,
+                emptyResultDescriptionRes = R.string.search_origin_screen_empty_result_description,
+                resultActionLabelRes = R.string.search_origin_screen_result_action_label,
+                resultSelectableDescriptionRes = R.string.search_origin_screen_result_selectable,
+            ),
+            resolveSearchCopyUiState(RouteEditingTarget.ORIGIN),
+        )
+    }
+
+    @Test
+    fun `destination editing target resolves destination specific search copy`() {
+        assertEquals(
+            SearchCopyUiState(
+                entryTitleRes = R.string.search_screen_title,
+                resultsTitleRes = R.string.search_results_screen_title,
+                entryHeadlineRes = R.string.search_screen_entry_headline,
+                queryPlaceholderRes = R.string.search_screen_query_placeholder,
+                voiceInputTitleRes = R.string.search_voice_input_title,
+                voiceInputHeadlineRes = R.string.search_voice_input_headline,
+                voiceInputDescriptionRes = R.string.search_voice_input_description,
+                voiceInputExamplePhraseRes = R.string.search_voice_input_example_phrase,
+                initialTitleRes = R.string.search_screen_initial_title,
+                initialDescriptionRes = R.string.search_screen_initial_description,
+                resultSummaryRes = R.string.search_screen_result_summary,
+                emptyResultDescriptionRes = R.string.search_screen_empty_result_description,
+                resultActionLabelRes = R.string.search_screen_result_action_label,
+                resultSelectableDescriptionRes = R.string.search_screen_result_selectable,
+            ),
+            resolveSearchCopyUiState(RouteEditingTarget.DESTINATION),
+        )
+    }
+
     @Test
     fun `search screen destination exposes entry results and voice input modes`() {
         assertEquals(

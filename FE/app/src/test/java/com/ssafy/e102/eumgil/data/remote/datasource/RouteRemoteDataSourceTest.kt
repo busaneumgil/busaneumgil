@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.data.remote.datasource
 
+import com.ssafy.e102.eumgil.data.remote.HttpJsonTimeoutConfig
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.route.RoutePointDto
 import com.ssafy.e102.eumgil.data.route.RouteRatingRequestDto
@@ -8,6 +9,10 @@ import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSelectRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshRequestDto
 import kotlinx.coroutines.runBlocking
+import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -388,9 +393,168 @@ class RouteRemoteDataSourceTest {
             }
         }
 
+    @Test
+    fun `searchWalkRoutes normalizes client timeout into route api exception`() =
+        runBlocking {
+            val dataSource =
+                RouteRemoteDataSource(
+                    postRequestExecutor = { _, _, _ ->
+                        throw SocketTimeoutException("Read timed out")
+                    },
+                )
+
+            val failure = runCatching { dataSource.searchWalkRoutes(routeSearchRequest()) }.exceptionOrNull()
+
+            requireNotNull(failure)
+            assertTrue(failure is RouteApiException)
+            failure as RouteApiException
+            assertEquals(0, failure.httpStatusCode)
+            assertEquals("ROUTE_CLIENT_TIMEOUT", failure.status)
+            assertEquals(RouteFailureKind.CLIENT_TIMEOUT, failure.failureKind)
+        }
+
+    @Test
+    fun `searchWalkRoutes normalizes connection failure into route api exception`() =
+        runBlocking {
+            val dataSource =
+                RouteRemoteDataSource(
+                    postRequestExecutor = { _, _, _ ->
+                        throw ConnectException("Connection refused")
+                    },
+                )
+
+            val failure = runCatching { dataSource.searchWalkRoutes(routeSearchRequest()) }.exceptionOrNull()
+
+            requireNotNull(failure)
+            assertTrue(failure is RouteApiException)
+            failure as RouteApiException
+            assertEquals(0, failure.httpStatusCode)
+            assertEquals("ROUTE_CONNECTION_FAILED", failure.status)
+            assertEquals(RouteFailureKind.CONNECTION_FAILURE, failure.failureKind)
+        }
+
+    @Test
+    fun `searchWalkRoutes normalizes unknown host into route api exception`() =
+        runBlocking {
+            val dataSource =
+                RouteRemoteDataSource(
+                    postRequestExecutor = { _, _, _ ->
+                        throw UnknownHostException("route.example.invalid")
+                    },
+                )
+
+            val failure = runCatching { dataSource.searchWalkRoutes(routeSearchRequest()) }.exceptionOrNull()
+
+            requireNotNull(failure)
+            assertTrue(failure is RouteApiException)
+            failure as RouteApiException
+            assertEquals(0, failure.httpStatusCode)
+            assertEquals("ROUTE_UNKNOWN_HOST", failure.status)
+            assertEquals(RouteFailureKind.UNKNOWN_HOST, failure.failureKind)
+        }
+
+    @Test
+    fun `searchWalkRoutes normalizes generic io exception into route api exception`() =
+        runBlocking {
+            val dataSource =
+                RouteRemoteDataSource(
+                    postRequestExecutor = { _, _, _ ->
+                        throw IOException("socket closed")
+                    },
+                )
+
+            val failure = runCatching { dataSource.searchWalkRoutes(routeSearchRequest()) }.exceptionOrNull()
+
+            requireNotNull(failure)
+            assertTrue(failure is RouteApiException)
+            failure as RouteApiException
+            assertEquals(0, failure.httpStatusCode)
+            assertEquals("ROUTE_NETWORK_IO_ERROR", failure.status)
+            assertEquals(RouteFailureKind.NETWORK_IO, failure.failureKind)
+        }
+
+    @Test
+    fun `searchWalkRoutes preserves server 504 route status and message`() =
+        runBlocking {
+            val dataSource =
+                RouteRemoteDataSource(
+                    postRequestExecutor = { _, _, _ ->
+                        HttpJsonResponse(
+                            statusCode = 504,
+                            body =
+                                """
+                                {
+                                  "status": "EX5040",
+                                  "message": "외부 경로 정보 응답이 지연되고 있습니다."
+                                }
+                                """.trimIndent(),
+                        )
+                    },
+                )
+
+            val failure = runCatching { dataSource.searchWalkRoutes(routeSearchRequest()) }.exceptionOrNull()
+
+            requireNotNull(failure)
+            assertTrue(failure is RouteApiException)
+            failure as RouteApiException
+            assertEquals(504, failure.httpStatusCode)
+            assertEquals("EX5040", failure.status)
+            assertEquals("외부 경로 정보 응답이 지연되고 있습니다.", failure.message)
+            assertEquals(RouteFailureKind.HTTP_RESPONSE, failure.failureKind)
+        }
+
+    @Test
+    fun `route constructor passes explicit timeout config to executor factory`() =
+        runBlocking {
+            var capturedBaseUrl: String? = null
+            var capturedTimeoutConfig: HttpJsonTimeoutConfig? = null
+            val timeoutConfig =
+                HttpJsonTimeoutConfig(
+                    connectTimeoutMillis = 4_000,
+                    readTimeoutMillis = 7_000,
+                )
+            val dataSource =
+                RouteRemoteDataSource(
+                    baseUrl = "https://route.example.com",
+                    timeoutConfig = timeoutConfig,
+                    postRequestExecutorFactory = { baseUrl: String, configuredTimeouts: HttpJsonTimeoutConfig ->
+                        capturedBaseUrl = baseUrl
+                        capturedTimeoutConfig = configuredTimeouts
+                        { _: String, _: String, _: Map<String, String> ->
+                            HttpJsonResponse(
+                                statusCode = 200,
+                                body =
+                                    """
+                                    {
+                                      "status": "S2000",
+                                      "data": {
+                                        "searchId": "rs_timeout_config_001",
+                                        "routes": []
+                                      }
+                                    }
+                                    """.trimIndent(),
+                            )
+                        }
+                    },
+                )
+
+            val response = dataSource.searchWalkRoutes(routeSearchRequest())
+
+            assertEquals("https://route.example.com", capturedBaseUrl)
+            assertEquals(timeoutConfig, requireNotNull(capturedTimeoutConfig))
+            assertEquals("rs_timeout_config_001", response.searchId)
+        }
+
     private data class RecordedCall(
         val path: String,
         val body: String,
         val headers: Map<String, String>,
     )
 }
+
+private fun routeSearchRequest(): RouteSearchRequestDto =
+    RouteSearchRequestDto(
+        startPoint = RoutePointDto(lat = 35.1796, lng = 129.0756),
+        endPoint = RoutePointDto(lat = 35.1151, lng = 129.0414),
+        routeOptions = listOf("SAFE"),
+    )

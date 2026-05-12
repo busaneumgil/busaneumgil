@@ -564,14 +564,16 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
             )
 
         MapViewportPointKind.SEGMENT_JUNCTION ->
-            ViewportPointMarkerSpec(
-                label = null,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = Color(0xFF2A7BFF),
-                borderColor = Color(0xFF0F4FC6),
-                size = 16.dp,
-                fontSize = 1.sp,
-            )
+            (tone ?: MapViewportOverlayTone.PRIMARY).toSegmentMarkerPalette().let { palette ->
+                ViewportPointMarkerSpec(
+                    label = null,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = Color(palette.fillColorArgb),
+                    borderColor = Color(palette.strokeColorArgb),
+                    size = 16.dp,
+                    fontSize = 1.sp,
+                )
+            }
 
         MapViewportPointKind.CAMERA_FOCUS ->
             ViewportPointMarkerSpec(

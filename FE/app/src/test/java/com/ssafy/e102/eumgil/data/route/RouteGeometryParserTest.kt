@@ -69,4 +69,22 @@ class RouteGeometryParserTest {
         assertEquals(RouteGeometryParseStatus.INSUFFICIENT_POINTS, result.status)
         assertTrue(result.polyline.points.isEmpty())
     }
+
+    @Test
+    fun `parse accepts repeated whitespace and line breaks between coordinate tokens`() {
+        val result =
+            parser.parse(
+                """
+                LINESTRING(
+                    129.075600   35.179600,
+                    129.076000
+                    35.179900
+                )
+                """.trimIndent(),
+            )
+
+        assertEquals(RouteGeometryParseStatus.SUCCESS, result.status)
+        assertEquals(2, result.parsedPointCount)
+        assertTrue(result.polyline.isRenderable)
+    }
 }

@@ -157,7 +157,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding limits focused projection to focused segment and focus coordinate`() {
+    fun `navigation binding keeps focused polyline visible but limits projection to the focus halo`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -209,7 +209,7 @@ class MapViewportOverlayBindingsTest {
         )
         assertFalse(overlayState.polylines.first().includeInProjection)
         assertFalse(overlayState.polylines[1].includeInProjection)
-        assertTrue(overlayState.polylines[2].includeInProjection)
+        assertFalse(overlayState.polylines[2].includeInProjection)
         assertEquals(
             listOf(
                 MapViewportPointKind.CURRENT_LOCATION,
@@ -223,6 +223,12 @@ class MapViewportOverlayBindingsTest {
         assertFalse(overlayState.points[1].includeInProjection)
         assertFalse(overlayState.points[2].includeInProjection)
         assertTrue(overlayState.points[3].includeInProjection)
+        assertEquals(
+            listOf(MapViewportPointKind.FOCUS_HALO),
+            overlayState.points
+                .filter { point -> point.includeInProjection }
+                .map { point -> point.kind },
+        )
     }
 
     @Test
@@ -288,7 +294,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding adds segment markers for every renderable segment without affecting projection`() {
+    fun `navigation binding adds segment start markers except the first segment and skips empty polylines`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -317,6 +323,7 @@ class MapViewportOverlayBindingsTest {
                                     distanceMeters = 320,
                                     riskLevel = RouteRiskLevel.MEDIUM,
                                     guidanceMessage = "Second",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
                                 ),
                                 NavigationMapSegmentUiState(
                                     sequence = 3,
@@ -328,22 +335,343 @@ class MapViewportOverlayBindingsTest {
                                     distanceMeters = 400,
                                     riskLevel = RouteRiskLevel.LOW,
                                     guidanceMessage = "Third",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 4,
+                                    polyline = emptyList(),
+                                    distanceMeters = 40,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Ignored",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
                                 ),
                             ),
                     ),
             )
 
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
-        assertEquals(3, junctionPoints.size)
+        assertEquals(2, junctionPoints.size)
         assertEquals(
             listOf(
-                MapCoordinate(latitude = 35.1725, longitude = 129.054),
-                MapCoordinate(latitude = 35.178, longitude = 129.063),
-                MapCoordinate(latitude = 35.1855, longitude = 129.074),
+                MapCoordinate(latitude = 35.175, longitude = 129.058),
+                MapCoordinate(latitude = 35.181, longitude = 129.068),
             ),
             junctionPoints.map { it.coordinate },
         )
+        assertEquals(
+            listOf(MapViewportOverlayTone.PRIMARY, MapViewportOverlayTone.TERTIARY),
+            junctionPoints.map { it.tone },
+        )
         assertTrue(junctionPoints.none { it.includeInProjection })
+    }
+
+    @Test
+    fun `navigation binding keeps single coordinate segment start markers when a start point exists`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Hidden first",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                                        ),
+                                    distanceMeters = 120,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Single walk",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 3,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                                        ),
+                                    distanceMeters = 400,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Single transit",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 4,
+                                    polyline = emptyList(),
+                                    distanceMeters = 40,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Empty",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                            ),
+                    ),
+            )
+
+        val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
+        assertEquals(
+            listOf(
+                MapCoordinate(latitude = 35.176, longitude = 129.060),
+                MapCoordinate(latitude = 35.181, longitude = 129.068),
+            ),
+            junctionPoints.map { it.coordinate },
+        )
+        assertEquals(
+            listOf(MapViewportOverlayTone.PRIMARY, MapViewportOverlayTone.TERTIARY),
+            junctionPoints.map { it.tone },
+        )
+    }
+
+    @Test
+    fun `navigation binding uses fallback segment start coordinates when later segment polylines are empty`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "First",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline = emptyList(),
+                                    segmentStartCoordinate = GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                                    distanceMeters = 120,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Sparse walk",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 3,
+                                    polyline = emptyList(),
+                                    distanceMeters = 200,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Still empty",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                ),
+                            ),
+                    ),
+            )
+
+        val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
+        assertEquals(1, junctionPoints.size)
+        assertEquals(
+            MapCoordinate(latitude = 35.176, longitude = 129.060),
+            junctionPoints.single().coordinate,
+        )
+        assertEquals(MapViewportOverlayTone.PRIMARY, junctionPoints.single().tone)
+    }
+
+    @Test
+    fun `navigation binding includes single coordinate segment junctions in active camera projection`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "First",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                                        ),
+                                    distanceMeters = 120,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Single walk",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                            ),
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+
+        val cameraState = createKakaoRouteCameraRenderState(overlayState)
+
+        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.SEGMENT_JUNCTION && it.includeInProjection })
+        assertTrue(
+            cameraState?.points?.contains(MapCoordinate(latitude = 35.176, longitude = 129.060)) == true,
+        )
+    }
+
+    @Test
+    fun `navigation binding includes the focused segment junction in focused camera projection`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "First",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                                            GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                                        ),
+                                    distanceMeters = 400,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Focused transit",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                    isFocused = true,
+                                ),
+                            ),
+                        focusCoordinate = GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                        mapFocusMode = NavigationMapFocusMode.FOCUSED,
+                    ),
+            )
+
+        val projectionPoints = overlayState.points.filter { it.includeInProjection }
+
+        assertEquals(
+            listOf(
+                MapViewportPointKind.SEGMENT_JUNCTION,
+                MapViewportPointKind.FOCUS_HALO,
+            ),
+            projectionPoints.map { it.kind },
+        )
+        assertEquals(
+            MapCoordinate(latitude = 35.176, longitude = 129.060),
+            projectionPoints.first().coordinate,
+        )
+    }
+
+    @Test
+    fun `segment junction debug summary reports generated overlays and focus projection exclusions`() {
+        val mapOverlay =
+            NavigationMapOverlayUiState(
+                isDisplayable = true,
+                currentLocation =
+                    NavigationMapPointUiState(
+                        label = "Current",
+                        coordinate = GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                    ),
+                origin =
+                    NavigationMapPointUiState(
+                        label = "Origin",
+                        coordinate = GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                    ),
+                destination =
+                    NavigationMapPointUiState(
+                        label = "Destination",
+                        coordinate = GeoCoordinate(latitude = 35.190, longitude = 129.080),
+                    ),
+                routeSegments =
+                    listOf(
+                        NavigationMapSegmentUiState(
+                            sequence = 1,
+                            polyline =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                    GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                ),
+                            distanceMeters = 300,
+                            riskLevel = RouteRiskLevel.LOW,
+                            guidanceMessage = "Hidden first",
+                            travelKind = NavigationSegmentTravelKind.WALK,
+                        ),
+                        NavigationMapSegmentUiState(
+                            sequence = 2,
+                            polyline =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                                ),
+                            distanceMeters = 120,
+                            riskLevel = RouteRiskLevel.LOW,
+                            guidanceMessage = "Single walk",
+                            travelKind = NavigationSegmentTravelKind.WALK,
+                        ),
+                        NavigationMapSegmentUiState(
+                            sequence = 3,
+                            polyline =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                                ),
+                            distanceMeters = 400,
+                            riskLevel = RouteRiskLevel.LOW,
+                            guidanceMessage = "Single transit",
+                            travelKind = NavigationSegmentTravelKind.TRANSIT,
+                        ),
+                    ),
+                selectedRoutePolyline =
+                    listOf(
+                        GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                        GeoCoordinate(latitude = 35.190, longitude = 129.080),
+                    ),
+                activeSegmentPolyline =
+                    listOf(
+                        GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                        GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                    ),
+                focusedSegmentPolyline =
+                    listOf(
+                        GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                        GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                    ),
+                focusCoordinate = GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                mapFocusMode = NavigationMapFocusMode.FOCUSED,
+            )
+        val overlayState = createNavigationViewportOverlayState(mapOverlay)
+
+        val summary = createSegmentJunctionOverlayDebugSummary(mapOverlay, overlayState)
+
+        assertTrue(summary.contains("focusMode=FOCUSED"))
+        assertTrue(summary.contains("junctions=2"))
+        assertTrue(
+            summary.contains(
+                "id=navigation-junction-1 coord=35.176000,129.060000 tone=PRIMARY includeInProjection=false",
+            ),
+        )
+        assertTrue(summary.contains("projectionPoints=[navigation-focus:FOCUS_HALO]"))
     }
 
     @Test

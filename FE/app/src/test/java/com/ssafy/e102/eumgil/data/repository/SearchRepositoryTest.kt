@@ -297,8 +297,8 @@ class SearchRepositoryTest {
                                 return when (requestCount) {
                                     1 ->
                                         throw SearchApiException(
-                                            httpStatusCode = 403,
-                                            status = "AUTH_403",
+                                            httpStatusCode = 401,
+                                            status = "AUTH_401",
                                             message = "인증이 필요합니다.",
                                         )
 

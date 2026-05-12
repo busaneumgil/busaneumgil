@@ -153,7 +153,7 @@ fun FacilityDetailBottomSheetShell(
                         .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
                 handleModifier =
                     Modifier
-                        .height(24.dp)
+                        .height(MapBottomSheetHandleHeight)
                         .semantics {
                             role = Role.Button
                             contentDescription = "장소 상세 시트 닫기"

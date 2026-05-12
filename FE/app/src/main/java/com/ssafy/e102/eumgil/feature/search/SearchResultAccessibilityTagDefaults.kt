@@ -20,13 +20,16 @@ private data class SearchResultAccessibilityTagSpec(
 )
 
 @StringRes
-internal fun resolveSearchResultStateDescriptionRes(result: SearchResult): Int =
+internal fun resolveSearchResultStateDescriptionRes(
+    result: SearchResult,
+    @StringRes selectableResId: Int = R.string.search_screen_result_selectable,
+): Int =
     if (result.latitude.isFinite() &&
         result.longitude.isFinite() &&
         result.latitude in -90.0..90.0 &&
         result.longitude in -180.0..180.0
     ) {
-        R.string.search_screen_result_selectable
+        selectableResId
     } else {
         R.string.search_screen_result_action_limited
     }

@@ -37,7 +37,12 @@ class SearchViewModel(
     private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(SearchUiState())
+    private val mutableUiState =
+        MutableStateFlow(
+            SearchUiState(
+                editingTarget = destinationSelectionRepository.editingTarget.value,
+            ),
+        )
     val uiState: StateFlow<SearchUiState> = mutableUiState.asStateFlow()
 
     private val mutableUiEvent = MutableSharedFlow<SearchUiEvent>()
@@ -120,6 +125,9 @@ class SearchViewModel(
 
     private fun configureEditingTarget(editingTarget: com.ssafy.e102.eumgil.data.repository.RouteEditingTarget) {
         destinationSelectionRepository.setEditingTarget(editingTarget)
+        mutableUiState.update { state ->
+            state.copy(editingTarget = editingTarget)
+        }
     }
 
     private fun handoffSearchResult(result: SearchResult): Boolean {

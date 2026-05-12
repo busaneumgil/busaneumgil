@@ -243,6 +243,38 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route setting hides walk fallback notice and debug card from the screen`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+
+        assertFalse(
+            "The route screen should not render the walk-first fallback notice card while transit recovery is in progress.",
+            source.contains("route_setting_fallback_notice_title"),
+        )
+        assertFalse(
+            "The route screen should not expose the route debug card in the FE UI.",
+            source.contains("RouteDebugStateCard(debugMessage = uiState.loadDebugMessage)"),
+        )
+    }
+
+    @Test
+    fun `route preview map does not show selected route badge overlay`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val previewMapSection =
+            source
+                .substringAfter("if (previewMap.coordinates.isNotEmpty()) {")
+                .substringBefore("RouteMapControls(")
+
+        assertFalse(
+            "Preview map should not render the selected route status badge over the map.",
+            previewMapSection.contains("RouteMapStatusBadge("),
+        )
+    }
+
+    @Test
     fun `route detail screen adds title divider and uses attached guide rows`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -283,6 +315,78 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "Attached guide rows should be visually separated with dividers, not nested cards.",
             stepsSection.contains("HorizontalDivider("),
+        )
+    }
+
+    @Test
+    fun `route setting suppresses ripple only on taps that open other route screens`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val waypointSection =
+            source
+                .substringAfter("private fun RouteWaypointRow(")
+                .substringBefore("@Composable\nprivate fun RouteOriginStatusText")
+        val detailArrowSection =
+            source
+                .substringAfter("private fun RouteOptionDetailArrowButton(")
+                .substringBefore("/*")
+
+        assertTrue(
+            "Waypoint rows should suppress ripple because they open the search screen for origin/destination editing.",
+            waypointSection.contains("indication = null"),
+        )
+        assertTrue(
+            "Waypoint rows should keep a dedicated interaction source when ripple is suppressed.",
+            waypointSection.contains("MutableInteractionSource()"),
+        )
+        assertTrue(
+            "Route option detail arrows should suppress ripple because they open the route detail screen.",
+            detailArrowSection.contains("indication = null"),
+        )
+        assertTrue(
+            "Route option detail arrows should keep a dedicated interaction source when ripple is suppressed.",
+            detailArrowSection.contains("MutableInteractionSource()"),
+        )
+    }
+
+    @Test
+    fun `resolved current location origin promotes current location label and moves address below`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val waypointCardSection =
+            source
+                .substringAfter("private fun RouteWaypointCard(")
+                .substringBefore("@Composable\nprivate fun RouteWaypointLinkedMarkers")
+        val originPresentationSection =
+            source
+                .substringAfter("private fun resolveOriginWaypointPresentation(")
+                .substringBefore("@Composable\nprivate fun RouteWaypointLinkedMarkers")
+
+        assertTrue(
+            "Origin rows should resolve a dedicated current-location presentation before rendering the waypoint text.",
+            waypointCardSection.contains("val originPresentation = resolveOriginWaypointPresentation("),
+        )
+        assertTrue(
+            "The origin row should render the resolved current-location title instead of the raw place name.",
+            waypointCardSection.contains("name = originPresentation.name"),
+        )
+        assertTrue(
+            "The origin row should render the resolved supporting address under the current-location title.",
+            waypointCardSection.contains("supportingText = originPresentation.supportingText"),
+        )
+        assertTrue(
+            "The origin row should be able to suppress the blue current-location status once it becomes the primary title.",
+            waypointCardSection.contains("status = originPresentation.status"),
+        )
+        assertTrue(
+            "Resolved current-location rows should detect the current-location status label explicitly.",
+            originPresentationSection.contains("status?.label == CURRENT_LOCATION_WAYPOINT_NAME"),
+        )
+        assertTrue(
+            "Resolved current-location rows should keep the address on the supporting line and fall back to the original name when needed.",
+            originPresentationSection.contains("supportingText?.takeIf(String::isNotBlank) ?: name"),
         )
     }
 }

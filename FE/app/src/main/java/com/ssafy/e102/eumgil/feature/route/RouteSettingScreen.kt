@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -38,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -135,6 +137,7 @@ fun RouteSettingScreen(
         ) {
             RouteWaypointCard(
                 origin = uiState.origin,
+                originStatus = uiState.originStatus,
                 destination = uiState.destination,
                 supportingMessage = supportingMessage,
                 onOriginClick = {
@@ -1007,6 +1010,7 @@ internal fun routeSettingLayoutPolicy(): RouteSettingLayoutPolicy =
 @Composable
 private fun RouteWaypointCard(
     origin: RouteLocationUiState,
+    originStatus: RouteOriginStatusUiState?,
     destination: RouteLocationUiState,
     supportingMessage: String?,
     onOriginClick: () -> Unit,
@@ -1015,6 +1019,11 @@ private fun RouteWaypointCard(
     modifier: Modifier = Modifier,
 ) {
     val policy = routeSettingLayoutPolicy()
+    val originPresentation = resolveOriginWaypointPresentation(
+        name = origin.name,
+        status = originStatus,
+        supportingText = origin.supportingText,
+    )
     val originLabel = stringResource(id = R.string.route_setting_origin_label)
     val destinationLabel = stringResource(id = R.string.route_setting_destination_label)
     val labelTextStyle = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
@@ -1072,8 +1081,9 @@ private fun RouteWaypointCard(
                     ) {
                         RouteWaypointRow(
                             label = originLabel,
-                            name = origin.name,
-                            supportingText = origin.supportingText,
+                            name = originPresentation.name,
+                            status = originPresentation.status,
+                            supportingText = originPresentation.supportingText,
                             markerColor = RouteWaypointOriginColor,
                             labelWidth = labelColumnWidth,
                             onClick = onOriginClick,
@@ -1090,6 +1100,7 @@ private fun RouteWaypointCard(
                         RouteWaypointRow(
                             label = destinationLabel,
                             name = destination.name,
+                            status = null,
                             supportingText = destination.supportingText,
                             markerColor = RouteWaypointDestinationColor,
                             labelWidth = labelColumnWidth,
@@ -1116,6 +1127,34 @@ private fun RouteWaypointCard(
         }
     }
 }
+
+private fun resolveOriginWaypointPresentation(
+    name: String,
+    status: RouteOriginStatusUiState?,
+    supportingText: String?,
+): RouteWaypointPresentation {
+    if (status?.label == CURRENT_LOCATION_WAYPOINT_NAME) {
+        val resolvedSupportingText =
+            (supportingText?.takeIf(String::isNotBlank) ?: name)
+                .takeUnless { it == CURRENT_LOCATION_WAYPOINT_NAME }
+        return RouteWaypointPresentation(
+            name = CURRENT_LOCATION_WAYPOINT_NAME,
+            supportingText = resolvedSupportingText,
+            status = null,
+        )
+    }
+    return RouteWaypointPresentation(
+        name = name,
+        supportingText = supportingText,
+        status = status,
+    )
+}
+
+private data class RouteWaypointPresentation(
+    val name: String,
+    val supportingText: String?,
+    val status: RouteOriginStatusUiState?,
+)
 
 @Composable
 private fun RouteWaypointLinkedMarkers(
@@ -1182,16 +1221,24 @@ private fun RouteWaypointPinMarker(
 private fun RouteWaypointRow(
     label: String,
     name: String,
+    status: RouteOriginStatusUiState?,
     supportingText: String?,
     markerColor: Color,
     labelWidth: Dp,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button, onClick = onClick)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
                 .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(RouteWaypointSupportingGap),
     ) {
@@ -1229,18 +1276,58 @@ private fun RouteWaypointRow(
                 horizontalArrangement = Arrangement.spacedBy(RouteWaypointTextGap),
             ) {
                 Spacer(modifier = Modifier.width(labelWidth))
-                Text(
-                    text = value,
+                Column(
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RouteWaypointSupportingTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                    verticalArrangement = Arrangement.spacedBy(RouteWaypointSupportingGap),
+                ) {
+                    status?.let { uiState ->
+                        RouteOriginStatusText(uiState = uiState)
+                    }
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RouteWaypointSupportingTextColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        if (status != null && supportingText.isNullOrBlank() && shouldShowStandaloneOriginStatus(status = status, name = name)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(RouteWaypointTextGap),
+            ) {
+                Spacer(modifier = Modifier.width(labelWidth))
+                RouteOriginStatusText(uiState = status)
             }
         }
     }
 }
+
+@Composable
+private fun RouteOriginStatusText(
+    uiState: RouteOriginStatusUiState,
+) {
+    val contentColor =
+        when (uiState.tone) {
+            RouteOriginStatusTone.INFO -> MaterialTheme.colorScheme.primary
+            RouteOriginStatusTone.WARNING -> MaterialTheme.colorScheme.tertiary
+            RouteOriginStatusTone.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+    Text(
+        text = uiState.label,
+        style = MaterialTheme.typography.labelSmall,
+        color = contentColor,
+        fontWeight = FontWeight.Medium,
+    )
+}
+
+private fun shouldShowStandaloneOriginStatus(
+    status: RouteOriginStatusUiState,
+    name: String,
+): Boolean = !name.contains(status.label)
 
 @Composable
 private fun RouteWaypointSwapButton(
@@ -1433,8 +1520,6 @@ private fun RouteMapStage(
 ) {
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
-    val routeColor = optionAccentColor(selectedRoute?.routeOption ?: RouteOption.SAFE)
-
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RouteSectionCardCornerRadius),
@@ -1471,56 +1556,11 @@ private fun RouteMapStage(
                     )
             }
 
-            if (selectedRoute != null && previewMap.isDisplayable) {
-                RouteMapStatusBadge(
-                    label = selectedRoute.optionTitle,
-                    supportingText = selectedRoute.summaryLabel,
-                    accentColor = routeColor,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(EumSpacing.medium),
-                )
-            }
-
             RouteMapControls(
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = EumSpacing.small),
-            )
-        }
-    }
-}
-
-@Composable
-private fun RouteMapStatusBadge(
-    label: String,
-    supportingText: String,
-    accentColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(RouteSectionCardCornerRadius),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
-        shadowElevation = RouteOverlayCardElevation,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = accentColor,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = supportingText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -1803,11 +1843,18 @@ private fun RouteOptionDetailArrowButton(
     accentColor: Color,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Box(
         modifier =
             Modifier
                 .size(RouteOptionDetailButtonTouchTargetSize)
-                .clickable(role = Role.Button, onClick = onClick)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
                 .semantics {
                     contentDescription = a11yLabel
                 },
@@ -2491,6 +2538,7 @@ private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_VISIBLE_OPTION_CARD_COUNT = 3
 private const val MAX_VISIBLE_ROUTE_CHIP_COUNT = 2
 private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 1
+private const val CURRENT_LOCATION_WAYPOINT_NAME = "현재 위치"
 private const val DEFAULT_PREVIEW_CENTER_LATITUDE = 35.1796
 private const val DEFAULT_PREVIEW_CENTER_LONGITUDE = 129.0756
 private val RouteStandardCardCornerRadius = 12.dp

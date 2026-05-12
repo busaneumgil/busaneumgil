@@ -2,6 +2,9 @@ package com.ssafy.e102.eumgil.feature.map
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,11 +28,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -97,12 +102,13 @@ fun MapScreen(
                     onMarkerClick = { markerId ->
                         onAction(MapUiAction.MarkerTapped(markerId))
                     },
-                    onCameraMoveEnd = { center, zoomLevel, isUserGesture ->
+                    onCameraMoveEnd = { center, zoomLevel, isUserGesture, isSelectedMapPinVisibleInViewport ->
                         onAction(
                             MapUiAction.ViewportCameraChanged(
                                 center = center,
                                 zoomLevel = zoomLevel,
                                 isUserGesture = isUserGesture,
+                                isSelectedMapPinVisibleInViewport = isSelectedMapPinVisibleInViewport,
                             ),
                         )
                     },
@@ -177,7 +183,7 @@ fun MapScreen(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         ) {
-                            Button(
+                            NoRippleMapPrimaryActionButton(
                                 onClick = { onAction(MapUiAction.FacilitySetDestinationClicked) },
                                 enabled = facilityDetailSheetUiState.isRouteActionEnabled,
                                 modifier =
@@ -185,11 +191,8 @@ fun MapScreen(
                                         .fillMaxWidth()
                                         .height(56.dp),
                                 shape = RoundedCornerShape(12.dp),
-                                colors =
-                                    ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                                    ),
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
                             ) {
                                 IconTextButtonContent(
                                     iconRes = R.drawable.ic_route_start_navigation_button,
@@ -394,6 +397,45 @@ private fun IconTextButtonContent(
     )
     Spacer(modifier = Modifier.width(EumSpacing.xSmall))
     Text(text = label)
+}
+
+@Composable
+private fun NoRippleMapPrimaryActionButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(12.dp),
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = if (enabled) containerColor else disabledContainerColor,
+        contentColor = if (enabled) contentColor else disabledContentColor,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .padding(horizontal = EumSpacing.medium),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            content = content,
+        )
+    }
 }
 
 @Composable
@@ -930,6 +972,7 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
     return MapViewportUiState(
         integrationState = integrationState,
         cameraTarget = cameraTarget,
+        rendererSessionKey = uiState.rendererSessionKey,
         currentLocation = currentLocationMarker,
         selectedDestinationCoordinate =
             viewportDestination?.let { destination ->
@@ -1366,7 +1409,7 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
+        FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
 
 @DrawableRes
@@ -1384,7 +1427,7 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
         PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        PlaceCategory.OTHER -> R.drawable.ic_nav_facility
+        PlaceCategory.OTHER -> R.drawable.ic_place_other
         null -> R.drawable.ic_nav_facility
     }
 

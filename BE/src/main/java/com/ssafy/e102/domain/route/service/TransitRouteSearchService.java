@@ -83,7 +83,7 @@ public class TransitRouteSearchService {
 	private static final int DEFAULT_BUS_BOARDING_PREP_SECOND = 2 * 60;
 	private static final int ACCESSIBLE_BUS_BOARDING_PREP_SECOND = 3 * 60;
 	private static final int OPTION_PRESELECT_LIMIT = 3;
-	private static final int BIMS_SHORTLIST_LIMIT = 5;
+	private static final int ODSAY_SHORTLIST_LIMIT = 5;
 	private static final Duration BIMS_ENRICHMENT_TIMEOUT = Duration.ofSeconds(6);
 	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
@@ -142,11 +142,12 @@ public class TransitRouteSearchService {
 
 		OdsayTransitSearchResult searchResult = odsayClient.searchPubTransPath(startPoint, endPoint);
 		String searchId = "rs_transit_" + UUID.randomUUID();
+		List<OdsayPathCandidate> odsayShortlist = selectOdsayShortlist(searchResult.paths());
 		List<TransitRouteBaseCandidate> baseCandidates = new ArrayList<>();
 		RouteException firstExternalFailure = null;
-		for (int index = 0; index < searchResult.paths().size(); index++) {
-			OdsayTransitPath path = searchResult.paths().get(index);
-			int routeIndex = index + 1;
+		for (OdsayPathCandidate pathCandidate : odsayShortlist) {
+			OdsayTransitPath path = pathCandidate.path();
+			int routeIndex = pathCandidate.routeIndex();
 			try {
 				List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(path.mapObj());
 				toCandidate(searchId, routeIndex, startPoint, endPoint, path, laneGeometries, profile, false)
@@ -178,7 +179,8 @@ public class TransitRouteSearchService {
 			}
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
-		List<TransitRouteCandidate> candidates = enrichBimsCandidates(selectBimsShortlist(baseCandidates), profile);
+		List<TransitRouteBaseCandidate> staticSelectedCandidates = selectStaticFinalCandidates(baseCandidates);
+		List<TransitRouteCandidate> candidates = enrichBimsCandidates(staticSelectedCandidates, profile);
 		if (candidates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
@@ -189,6 +191,30 @@ public class TransitRouteSearchService {
 		routeSearchCacheService.saveTransitMetadata(searchId,
 			selectedCandidates.stream().map(TransitRouteCandidate::snapshot).toList());
 		return response;
+	}
+
+	private List<OdsayPathCandidate> selectOdsayShortlist(List<OdsayTransitPath> paths) {
+		List<OdsayPathCandidate> indexedPaths = new ArrayList<>();
+		for (int index = 0; index < paths.size(); index++) {
+			indexedPaths.add(new OdsayPathCandidate(index + 1, paths.get(index)));
+		}
+		Map<String, OdsayPathCandidate> selectedByRoute = new LinkedHashMap<>();
+		addOdsayShortlistCandidates(selectedByRoute, indexedPaths, this::odsayRecommendedComparator);
+		addOdsayShortlistCandidates(selectedByRoute, indexedPaths, this::odsayMinTransferComparator);
+		addOdsayShortlistCandidates(selectedByRoute, indexedPaths, this::odsayMinWalkComparator);
+		Comparator<OdsayPathCandidate> recommendedComparator = odsayRecommendedComparator();
+		List<OdsayPathCandidate> shortlist = selectedByRoute.values()
+			.stream()
+			.sorted(recommendedComparator)
+			.limit(ODSAY_SHORTLIST_LIMIT)
+			.toList();
+		log.info(
+			"transit odsay shortlist odsayPathCount={} shortlistCount={} busLegCount={} walkLegCount={}",
+			paths.size(),
+			shortlist.size(),
+			odsayBusLegCount(shortlist),
+			odsayWalkLegCount(shortlist));
+		return shortlist;
 	}
 
 	private java.util.Optional<TransitRouteCandidate> toCandidate(
@@ -359,24 +385,32 @@ public class TransitRouteSearchService {
 			.toList();
 	}
 
-	private List<TransitRouteBaseCandidate> selectBimsShortlist(List<TransitRouteBaseCandidate> candidates) {
-		Map<String, TransitRouteBaseCandidate> selectedByRoute = new LinkedHashMap<>();
-		addShortlistCandidates(selectedByRoute, candidates, this::baseRecommendedComparator);
-		addShortlistCandidates(selectedByRoute, candidates, this::minTransferComparator);
-		addShortlistCandidates(selectedByRoute, candidates, this::minWalkComparator);
-		Comparator<TransitRouteCandidate> baseRecommendedComparator = baseRecommendedComparator();
-		List<TransitRouteBaseCandidate> shortlist = selectedByRoute.values()
-			.stream()
-			.sorted((left, right) -> baseRecommendedComparator.compare(left.candidate(), right.candidate()))
-			.limit(BIMS_SHORTLIST_LIMIT)
+	private List<TransitRouteBaseCandidate> selectStaticFinalCandidates(List<TransitRouteBaseCandidate> candidates) {
+		List<TransitRouteCandidate> selectedCandidates = selectCandidates(
+			candidates.stream().map(TransitRouteBaseCandidate::candidate).toList());
+		Map<String, TransitRouteBaseCandidate> baseCandidateByRouteId = new LinkedHashMap<>();
+		for (TransitRouteBaseCandidate candidate : candidates) {
+			baseCandidateByRouteId.putIfAbsent(candidate.candidate().route().routeId(), candidate);
+		}
+		List<TransitRouteBaseCandidate> staticSelectedCandidates = selectedCandidates.stream()
+			.map(candidate -> withSelectedCandidate(baseCandidateByRouteId.get(candidate.route().routeId()), candidate))
 			.toList();
 		log.info(
-			"transit bims shortlist odsayCandidateCount={} shortlistCount={} busLegCount={} busLaneOptionCount={}",
+			"transit static final odsayCandidateCount={} staticFinalCount={} busLegCount={} busLaneOptionCount={}",
 			candidates.size(),
-			shortlist.size(),
-			busLegCount(shortlist),
-			busLaneOptionCount(shortlist));
-		return shortlist;
+			staticSelectedCandidates.size(),
+			busLegCount(staticSelectedCandidates),
+			busLaneOptionCount(staticSelectedCandidates));
+		return staticSelectedCandidates;
+	}
+
+	private TransitRouteBaseCandidate withSelectedCandidate(
+		TransitRouteBaseCandidate baseCandidate,
+		TransitRouteCandidate selectedCandidate) {
+		if (baseCandidate == null) {
+			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
+		}
+		return new TransitRouteBaseCandidate(baseCandidate.routeIndex(), baseCandidate.path(), selectedCandidate);
 	}
 
 	private List<TransitRouteCandidate> enrichBimsCandidates(
@@ -455,15 +489,49 @@ public class TransitRouteSearchService {
 		return null;
 	}
 
-	private void addShortlistCandidates(
-		Map<String, TransitRouteBaseCandidate> selectedByRoute,
-		List<TransitRouteBaseCandidate> candidates,
-		java.util.function.Supplier<Comparator<TransitRouteCandidate>> comparatorSupplier) {
-		Comparator<TransitRouteCandidate> comparator = comparatorSupplier.get();
+	private void addOdsayShortlistCandidates(
+		Map<String, OdsayPathCandidate> selectedByRoute,
+		List<OdsayPathCandidate> candidates,
+		java.util.function.Supplier<Comparator<OdsayPathCandidate>> comparatorSupplier) {
+		Comparator<OdsayPathCandidate> comparator = comparatorSupplier.get();
 		candidates.stream()
-			.sorted((left, right) -> comparator.compare(left.candidate(), right.candidate()))
+			.sorted(comparator)
 			.limit(OPTION_PRESELECT_LIMIT)
-			.forEach(candidate -> selectedByRoute.putIfAbsent(routeKey(candidate.candidate().route()), candidate));
+			.forEach(candidate -> selectedByRoute.putIfAbsent(routeKey(candidate.path()), candidate));
+	}
+
+	private Comparator<OdsayPathCandidate> odsayRecommendedComparator() {
+		return Comparator.comparingInt((OdsayPathCandidate candidate) -> candidate.path().totalTimeMinute())
+			.thenComparingInt(candidate -> transferCount(candidate.path()))
+			.thenComparingInt(candidate -> candidate.path().totalWalkMeter());
+	}
+
+	private Comparator<OdsayPathCandidate> odsayMinTransferComparator() {
+		return Comparator.comparingInt((OdsayPathCandidate candidate) -> transferCount(candidate.path()))
+			.thenComparingInt(candidate -> candidate.path().totalTimeMinute())
+			.thenComparingInt(candidate -> candidate.path().totalWalkMeter());
+	}
+
+	private Comparator<OdsayPathCandidate> odsayMinWalkComparator() {
+		return Comparator.comparingInt((OdsayPathCandidate candidate) -> candidate.path().totalWalkMeter())
+			.thenComparingInt(candidate -> candidate.path().totalTimeMinute())
+			.thenComparingInt(candidate -> transferCount(candidate.path()));
+	}
+
+	private int odsayBusLegCount(List<OdsayPathCandidate> candidates) {
+		return candidates.stream()
+			.flatMap(candidate -> candidate.path().legs().stream())
+			.filter(leg -> leg.type() == TransportMode.BUS)
+			.mapToInt(leg -> 1)
+			.sum();
+	}
+
+	private int odsayWalkLegCount(List<OdsayPathCandidate> candidates) {
+		return candidates.stream()
+			.flatMap(candidate -> candidate.path().legs().stream())
+			.filter(leg -> leg.type() == TransportMode.WALK)
+			.mapToInt(leg -> 1)
+			.sum();
 	}
 
 	private int busLegCount(List<TransitRouteBaseCandidate> candidates) {
@@ -537,6 +605,30 @@ public class TransitRouteSearchService {
 			return route.routeId();
 		}
 		return String.join("|", transitLegKeys);
+	}
+
+	private String routeKey(OdsayTransitPath path) {
+		List<String> transitLegKeys = path.legs()
+			.stream()
+			.filter(leg -> leg.type() == TransportMode.BUS || leg.type() == TransportMode.SUBWAY)
+			.map(leg -> "%s:%s:%s:%s".formatted(
+				leg.type(),
+				routeNo(leg),
+				odsayStopKey(leg.startName(), leg.startId(), leg.startLocalStationId(), leg.startArsId()),
+				odsayStopKey(leg.endName(), leg.endId(), leg.endLocalStationId(), leg.endArsId())))
+			.toList();
+		if (transitLegKeys.isEmpty()) {
+			return path.mapObj();
+		}
+		return String.join("|", transitLegKeys);
+	}
+
+	private String odsayStopKey(String name, String odsayStationId, String localStationId, String arsId) {
+		return "%s:%s:%s:%s".formatted(
+			name == null ? "" : name,
+			odsayStationId == null ? "" : odsayStationId,
+			localStationId == null ? "" : localStationId,
+			arsId == null ? "" : arsId);
 	}
 
 	private String stopKey(RouteStopResponse stop) {
@@ -683,6 +775,11 @@ public class TransitRouteSearchService {
 			leg.arrivingStop(),
 			leg.isLowFloor(),
 			leg.badges());
+	}
+
+	private record OdsayPathCandidate(
+		int routeIndex,
+		OdsayTransitPath path) {
 	}
 
 	private record TransitRouteBaseCandidate(

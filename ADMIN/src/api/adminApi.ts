@@ -224,7 +224,7 @@ export async function fetchAdminAuditLogs({
   accessToken,
 }: FetchAdminAuditLogsParams): Promise<AdminAuditLogListResponse> {
   const params = new URLSearchParams({ size: String(size) });
-  if (cursor) params.set("cursor", String(cursor));
+  if (cursor != null) params.set("cursor", String(cursor));
   if (action) params.set("action", action);
   if (gu) params.set("gu", gu);
   if (dong) params.set("dong", dong);

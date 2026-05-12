@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -104,6 +105,12 @@ public class AdminAuditLogService {
 		String summary,
 		Object before,
 		Object after) {
+		String beforeJson = writeNullableJson(before);
+		String afterJson = writeNullableJson(after);
+		if (Objects.equals(beforeJson, afterJson)) {
+			return;
+		}
+
 		jdbcTemplate.update(
 			"""
 				insert into admin_audit_logs (
@@ -126,8 +133,8 @@ public class AdminAuditLogService {
 			blankToNull(gu),
 			blankToNull(dong),
 			requireText(summary, "관리자 로그 summary는 필수입니다."),
-			writeNullableJson(before),
-			writeNullableJson(after));
+			beforeJson,
+			afterJson);
 	}
 
 	private AdminAuditLogResponse toResponse(ResultSet resultSet, int rowNum) throws SQLException {

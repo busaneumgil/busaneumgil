@@ -1644,6 +1644,12 @@ select {
   word-break: break-word;
 }
 
+.audit-log-more-button {
+  display: block;
+  min-width: 160px;
+  margin: 12px auto 0;
+}
+
 .table-card {
   margin: 16px;
   border: 1px solid var(--border);

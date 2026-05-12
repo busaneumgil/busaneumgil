@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import {
   createAdminRoadNetworkEditJob,
   fetchAdminAreaAssignments,
@@ -207,20 +207,23 @@ function AdminApp() {
     refetchInterval: 30_000,
   });
 
-  const auditLogsQuery = useQuery({
+  const auditLogsQuery = useInfiniteQuery({
     queryKey: ["admin-audit-logs", accessToken, auditLogAction, auditLogGu, auditLogDong, auditLogActorUserId],
-    queryFn: () => fetchAdminAuditLogs({
+    queryFn: ({ pageParam }) => fetchAdminAuditLogs({
       action: auditLogAction,
       gu: auditLogGu,
       dong: auditLogDong,
       actorUserId: auditLogActorUserId,
-      cursor: null,
+      cursor: pageParam,
       size: 50,
       accessToken,
     }),
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.nextCursor : undefined),
     enabled: page === "logs" && isAdminAuthenticated,
     retry: false,
   });
+  const auditLogs = auditLogsQuery.data?.pages.flatMap((logPage) => logPage.logs) ?? [];
 
   const payloadQuery = useQuery({
     queryKey: ["admin-road-network", selectedGu, selectedDong, accessToken],
@@ -538,7 +541,7 @@ function AdminApp() {
 
         {page === "logs" && (
           <AuditLogsPage
-            logs={auditLogsQuery.data?.logs ?? []}
+            logs={auditLogs}
             action={auditLogAction}
             gu={auditLogGu}
             dong={auditLogDong}
@@ -547,6 +550,8 @@ function AdminApp() {
             dongOptions={auditLogDongOptions}
             users={adminUsersQuery.data ?? []}
             loading={auditLogsQuery.isLoading}
+            loadingMore={auditLogsQuery.isFetchingNextPage}
+            hasNext={Boolean(auditLogsQuery.hasNextPage)}
             error={auditLogsQuery.error}
             onActionChange={setAuditLogAction}
             onGuChange={(gu) => {
@@ -556,6 +561,7 @@ function AdminApp() {
             onDongChange={setAuditLogDong}
             onActorUserIdChange={setAuditLogActorUserId}
             onRefresh={() => void auditLogsQuery.refetch()}
+            onLoadMore={() => void auditLogsQuery.fetchNextPage()}
           />
         )}
 
@@ -1005,12 +1011,15 @@ function AuditLogsPage({
   dongOptions,
   users,
   loading,
+  loadingMore,
+  hasNext,
   error,
   onActionChange,
   onGuChange,
   onDongChange,
   onActorUserIdChange,
   onRefresh,
+  onLoadMore,
 }: {
   logs: AdminAuditLog[];
   action: string;
@@ -1021,12 +1030,15 @@ function AuditLogsPage({
   dongOptions: string[];
   users: AdminUserResponse[];
   loading: boolean;
+  loadingMore: boolean;
+  hasNext: boolean;
   error?: Error | null;
   onActionChange: (action: string) => void;
   onGuChange: (gu: string) => void;
   onDongChange: (dong: string) => void;
   onActorUserIdChange: (userId: string) => void;
   onRefresh: () => void;
+  onLoadMore: () => void;
 }) {
   return (
     <section className="audit-log-page">
@@ -1122,6 +1134,16 @@ function AuditLogsPage({
         ))}
         {!loading && !logs.length && <p className="muted">표시할 변경 로그가 없습니다.</p>}
       </div>
+      {hasNext && (
+        <button
+          className="audit-log-more-button"
+          type="button"
+          onClick={onLoadMore}
+          disabled={loadingMore}
+        >
+          {loadingMore ? "불러오는 중..." : "더 보기"}
+        </button>
+      )}
     </section>
   );
 }

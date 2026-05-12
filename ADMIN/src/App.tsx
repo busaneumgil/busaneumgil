@@ -8,6 +8,7 @@ import {
   fetchAdminPlaceDetail,
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
+  fetchAdminHazardReports,
   fetchAdminUsers,
   adminAccessTokenRefreshedEvent,
   getStoredAdminAccessToken,
@@ -181,6 +182,14 @@ function AdminApp() {
     retry: false,
   });
 
+  const pendingHazardReportsQuery = useQuery({
+    queryKey: ["admin-hazard-reports-pending-count", accessToken],
+    queryFn: () => fetchAdminHazardReports({ status: "PENDING", cursor: null, size: 20, accessToken }),
+    enabled: isAdminAuthenticated,
+    retry: false,
+    refetchInterval: 30_000,
+  });
+
   const payloadQuery = useQuery({
     queryKey: ["admin-road-network", selectedGu, selectedDong, accessToken],
     queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
@@ -314,6 +323,10 @@ function AdminApp() {
 
   const canEditSelectedArea = selectedAssignment?.assigneeUserId === currentAdmin?.userId;
   const selectedAssignmentLabel = selectedAssignment?.assigneeLabel || selectedAssignment?.assigneeUserId || "미지정";
+  const pendingHazardCount = pendingHazardReportsQuery.data?.content.length ?? 0;
+  const pendingHazardBadge = pendingHazardReportsQuery.data?.hasNext
+    ? `${pendingHazardCount}+`
+    : String(pendingHazardCount);
 
   function logoutAdmin() {
     void logoutAdminSession(accessToken).catch(() => undefined);
@@ -365,6 +378,11 @@ function AdminApp() {
             <button key={item} className={page === item ? "active" : ""} onClick={() => setPage(item)} title={pageMeta[item].label}>
               <span className="nav-dot" aria-hidden="true" />
               <span className="nav-label">{pageMeta[item].label}</span>
+              {item === "hazards" && pendingHazardCount > 0 && (
+                <span className="nav-badge" aria-label={`대기 제보 ${pendingHazardBadge}건`}>
+                  {pendingHazardBadge}
+                </span>
+              )}
             </button>
           ))}
         </nav>

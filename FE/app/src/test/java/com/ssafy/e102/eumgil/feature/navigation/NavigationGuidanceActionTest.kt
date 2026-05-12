@@ -45,4 +45,33 @@ class NavigationGuidanceActionTest {
             ).toNavigationGuidanceAction(),
         )
     }
+
+    @Test
+    fun `hero detail mirrors route detail style copy for english turn guidance`() {
+        val detail =
+            RouteSegment(
+                sequence = 1,
+                distanceMeters = 120,
+                guidanceMessage = "turn right after the crosswalk",
+            ).toNavigationHeroDetail()
+
+        assertEquals("우회전", detail.title)
+        assertEquals("120 m 정도 이동 후 오른쪽 방향으로 이동하세요.", detail.description)
+        assertEquals(NavigationGuidanceAction.TURN_RIGHT, detail.guidanceAction)
+    }
+
+    @Test
+    fun `hero detail keeps generated crosswalk copy instead of raw segment text`() {
+        val detail =
+            RouteSegment(
+                sequence = 2,
+                distanceMeters = 80,
+                guidanceMessage = "횡단보도를 건너 엘리베이터 방향으로 이동하세요.",
+                safetyFlags = RouteSegmentSafetyFlags(hasCrosswalk = true),
+            ).toNavigationHeroDetail()
+
+        assertEquals("횡단보도 건너기", detail.title)
+        assertEquals("주변 차량이 멈췄는지 확인한 뒤 횡단보도를 조심해서 건너세요.", detail.description)
+        assertEquals(NavigationGuidanceAction.CROSSWALK, detail.guidanceAction)
+    }
 }

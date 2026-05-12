@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -174,7 +175,11 @@ internal fun KakaoMapViewport(
                 hasLoadingGracePeriodElapsed = hasLoadingGracePeriodElapsed,
             )
 
-        Box(modifier = modifier) {
+        Box(
+            modifier =
+                modifier
+                    .clipToBounds(),
+        ) {
             AndroidView(
                 factory = { context ->
                     controller.bind(

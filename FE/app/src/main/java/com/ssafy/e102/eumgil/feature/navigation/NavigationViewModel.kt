@@ -1198,14 +1198,17 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     focusedSegmentIndex: Int,
 ): NavigationFocusedSegmentCardUiState? {
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
+    val heroDetail = focusedSegment.toNavigationHeroDetail()
 
     return NavigationFocusedSegmentCardUiState(
         sequenceLabel = "${focusedSegment.sequence} / ${selectedRoute.segments.size.coerceAtLeast(1)}",
         instruction = focusedSegment.guidanceMessage,
+        heroTitle = heroDetail.title,
+        heroDescription = heroDetail.description,
         distanceLabel = focusedSegment.distanceMeters.toNavigationDistanceLabel(),
         riskLabel = focusedSegment.riskLevel.toRiskLabel(),
         supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
-        guidanceAction = focusedSegment.toNavigationGuidanceAction(),
+        guidanceAction = heroDetail.guidanceAction,
     )
 }
 
@@ -1414,6 +1417,7 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
                 segment.guidanceMessage.isNotBlank()
             }
             ?: selectedRoute.segments.firstOrNull()
+    val heroDetail = primarySegment?.toNavigationHeroDetail()
 
     return NavigationStepCardUiState(
         sectionLabel = "다음 안내",
@@ -1422,6 +1426,9 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
         distanceLabel =
             primarySegment?.distanceMeters?.toNavigationDistanceLabel()
                 ?: selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
+        heroTitle = heroDetail?.title ?: "경로 안내",
+        heroDescription =
+            heroDetail?.description ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 경로 안내를 준비하고 있습니다.",
         instruction =
             primarySegment?.guidanceMessage
                 ?.trim()
@@ -1432,7 +1439,7 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
                 "${presentation.statusLabel} ${presentation.supportingText}"
             } ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
                 "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
-        guidanceAction = primarySegment?.toNavigationGuidanceAction() ?: NavigationGuidanceAction.STRAIGHT,
+        guidanceAction = heroDetail?.guidanceAction ?: NavigationGuidanceAction.STRAIGHT,
         metrics =
             listOf(
                 NavigationStepMetricUiState(
@@ -1457,6 +1464,8 @@ private fun RouteNavigationRequest.toEmptyStepCardUiState(): NavigationStepCardU
         statusLabel = selectedRoute.routeOption.toRouteOptionLabel(),
         emphasisLabel = selectedRoute.summary.riskLevel.toRiskLabel(),
         distanceLabel = selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
+        heroTitle = "경로 안내",
+        heroDescription = "현재 안내 메시지를 준비하지 못했습니다.",
         instruction = "현재 안내 메시지를 준비하지 못했습니다.",
         supportingText =
             "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 거리와 예상 시간 요약만 먼저 표시합니다.",

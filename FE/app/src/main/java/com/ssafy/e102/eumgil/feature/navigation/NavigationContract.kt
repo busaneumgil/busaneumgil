@@ -122,6 +122,8 @@ data class NavigationSegmentRailItemUiState(
 data class NavigationFocusedSegmentCardUiState(
     val sequenceLabel: String,
     val instruction: String,
+    val heroTitle: String,
+    val heroDescription: String,
     val distanceLabel: String,
     val riskLabel: String,
     val supportingText: String,
@@ -138,6 +140,8 @@ data class NavigationStepCardUiState(
     val statusLabel: String = "준비 중",
     val emphasisLabel: String = "경로 확인",
     val distanceLabel: String = "확인 중",
+    val heroTitle: String = "경로 안내",
+    val heroDescription: String = "현재 구간의 이동 정보를 확인하고 있습니다.",
     val instruction: String = "경로 안내를 준비하고 있습니다",
     val supportingText: String = "현재 위치를 확인한 뒤 안내를 시작합니다.",
     val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,

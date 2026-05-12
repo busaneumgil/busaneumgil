@@ -99,6 +99,18 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
+    fun `projected overlay markers are clipped to the viewport bounds`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Projected marker overlays should be clipped to the map viewport so current-location or origin pins cannot bleed over the navigation info sheet.",
+            source.contains("clipToBounds()"),
+        )
+    }
+
+    @Test
     fun `blank map taps bind to terrain click listener so selected pin can be dropped`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")

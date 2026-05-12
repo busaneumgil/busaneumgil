@@ -187,7 +187,15 @@ internal data class NavigationScreenPolicy(
 internal data class NavigationHeroLayoutPolicy(
     val minHeight: Dp,
     val maxHeight: Dp,
+    val directionIconSize: Dp,
     val showBottomDivider: Boolean,
+)
+
+internal data class NavigationHeroContentUiState(
+    val guidanceAction: NavigationGuidanceAction,
+    val title: String,
+    val description: String,
+    val distanceLabel: String,
 )
 
 internal data class NavigationBottomBarLayoutPolicy(
@@ -205,8 +213,20 @@ internal fun navigationHeroLayoutPolicy(screenHeight: Dp): NavigationHeroLayoutP
     NavigationHeroLayoutPolicy(
         minHeight = 116.dp,
         maxHeight = (screenHeight * 0.24f).coerceAtLeast(132.dp),
+        directionIconSize = 64.dp,
         showBottomDivider = false,
     )
+
+internal fun navigationHeroContent(uiState: NavigationUiState): NavigationHeroContentUiState {
+    val focusedSegmentCard = uiState.focusedSegmentCard
+
+    return NavigationHeroContentUiState(
+        guidanceAction = focusedSegmentCard?.guidanceAction ?: uiState.stepCard.guidanceAction,
+        title = focusedSegmentCard?.heroTitle ?: uiState.stepCard.heroTitle,
+        description = focusedSegmentCard?.heroDescription ?: uiState.stepCard.heroDescription,
+        distanceLabel = focusedSegmentCard?.distanceLabel ?: uiState.stepCard.distanceLabel,
+    )
+}
 
 internal fun navigationBottomBarLayoutPolicy(
     showSegmentRail: Boolean,
@@ -221,8 +241,7 @@ private fun NavigationHeroCard(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
 ) {
-    val heroGuidanceAction = uiState.focusedSegmentCard?.guidanceAction ?: uiState.stepCard.guidanceAction
-    val heroDistanceLabel = uiState.focusedSegmentCard?.distanceLabel ?: uiState.stepCard.distanceLabel
+    val heroContent = navigationHeroContent(uiState)
     val layoutPolicy = navigationHeroLayoutPolicy(LocalConfiguration.current.screenHeightDp.dp)
 
     Surface(
@@ -251,21 +270,23 @@ private fun NavigationHeroCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     NavigationHeroDirectionIcon(
-                        guidanceAction = heroGuidanceAction,
+                        guidanceAction = heroContent.guidanceAction,
+                        iconSize = layoutPolicy.directionIconSize,
                     )
                     Column(
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Text(
-                            text = heroGuidanceAction.label,
+                            text = heroContent.title,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                         Text(
-                            text = heroDistanceLabel,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
+                            text = heroContent.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
                 }
@@ -286,12 +307,13 @@ private fun NavigationHeroCard(
 @Composable
 private fun NavigationHeroDirectionIcon(
     guidanceAction: NavigationGuidanceAction,
+    iconSize: Dp,
 ) {
     Icon(
         painter = painterResource(id = guidanceAction.iconRes()),
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(34.dp),
+        modifier = Modifier.size(iconSize),
     )
 }
 

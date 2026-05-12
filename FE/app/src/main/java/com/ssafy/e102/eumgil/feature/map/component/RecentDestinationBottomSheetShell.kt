@@ -245,7 +245,7 @@ private fun RecentDestinationRow(
             modifier =
                 Modifier
                     .padding(top = 2.dp)
-                    .size(28.dp),
+                    .size(36.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
 

@@ -34,6 +34,7 @@ interface SegmentMapProps {
     safe?: GeoPoint[];
     fast?: GeoPoint[];
   };
+  toolbarMode?: "editor" | "roadSegmentLegend";
 }
 
 export interface RoadviewDockState {
@@ -64,6 +65,7 @@ export function SegmentMap({
   routePointPickMode = null,
   onRoutePointPick,
   routeLines,
+  toolbarMode = "editor",
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -97,6 +99,11 @@ export function SegmentMap({
   const [mapReady, setMapReady] = useState(false);
   const [polygonDeleteActive, setPolygonDeleteActive] = useState(false);
   const [polygonPointCount, setPolygonPointCount] = useState(0);
+  const [roadSegmentLayers, setRoadSegmentLayers] = useState({
+    sideLine: true,
+    crossWalk: true,
+    transitionConnector: true,
+  });
 
   useEffect(() => {
     onDraftEditRef.current = onDraftEdit;
@@ -146,9 +153,14 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)
+      .filter(shouldShowRoadSegmentLayer);
     segmentFeatures.forEach((feature) => {
       const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
+        if (routePointPickModeRef.current) {
+          handleMapCoordinate(coord, latLng);
+          return;
+        }
         if (modeRef.current === "select") {
           onSelectSegmentRef.current(feature);
           drawSelectedSegment(feature);
@@ -181,7 +193,7 @@ export function SegmentMap({
     renderPendingEditOverlays();
     renderReferenceOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, mapReady]);
+  }, [payload, bridgePayload, mapReady, roadSegmentLayers]);
 
   useEffect(() => {
     renderPendingEditOverlays();
@@ -333,6 +345,20 @@ export function SegmentMap({
         if (overlay) referenceOverlaysRef.current.push(overlay);
       });
     });
+  }
+
+  function shouldShowRoadSegmentLayer(feature: SegmentFeature) {
+    if (toolbarMode !== "roadSegmentLegend") {
+      return true;
+    }
+    const segmentType = feature.properties.segmentType;
+    if (segmentType === "CROSS_WALK" || segmentType === "SIDE_WALK") {
+      return roadSegmentLayers.crossWalk;
+    }
+    if (segmentType === "TRANSITION_CONNECTOR") {
+      return roadSegmentLayers.transitionConnector;
+    }
+    return roadSegmentLayers.sideLine;
   }
 
   function renderRouteOverlays() {
@@ -579,22 +605,45 @@ export function SegmentMap({
   return (
     <section className="map-shell">
       <div ref={containerRef} className="map-canvas" />
-      <div className="map-toolbar">
-        <button className={mode === "select" ? "selected-tool" : ""} onClick={() => setMode("select")}>Select</button>
-        <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
-        <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
-        <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
-          <option value="SIDE_LINE">SIDE_LINE</option>
-          <option value="CROSS_WALK">CROSS_WALK</option>
-        </select>
-        {mode === "delete" && (
-          <>
-            <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>Drag</button>
-            <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>Delete all</button>
-          </>
-        )}
-        <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
-      </div>
+      {toolbarMode === "editor" ? (
+        <div className="map-toolbar">
+          <button className={mode === "select" ? "selected-tool" : ""} onClick={() => setMode("select")}>Select</button>
+          <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
+          <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
+          <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
+            <option value="SIDE_LINE">SIDE_LINE</option>
+            <option value="CROSS_WALK">CROSS_WALK</option>
+          </select>
+          {mode === "delete" && (
+            <>
+              <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>Drag</button>
+              <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>Delete all</button>
+            </>
+          )}
+          <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
+        </div>
+      ) : (
+        <div className="map-toolbar attribute-legend">
+          <LegendItem
+            color="#c9342f"
+            label="SIDE_LINE"
+            active={roadSegmentLayers.sideLine}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, sideLine: !layers.sideLine }))}
+          />
+          <LegendItem
+            color="#2563eb"
+            label="CROSS_WALK / SIDE_WALK"
+            active={roadSegmentLayers.crossWalk}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, crossWalk: !layers.crossWalk }))}
+          />
+          <LegendItem
+            color="#64748b"
+            label="TRANSITION_CONNECTOR"
+            active={roadSegmentLayers.transitionConnector}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, transitionConnector: !layers.transitionConnector }))}
+          />
+        </div>
+      )}
       <div className="map-status">
         {loading
           ? "loading..."
@@ -605,6 +654,25 @@ export function SegmentMap({
               : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""}`}
       </div>
     </section>
+  );
+}
+
+function LegendItem({
+  color,
+  label,
+  active,
+  onClick,
+}: {
+  color: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className={`legend-item legend-toggle ${active ? "active" : ""}`} onClick={onClick}>
+      <span style={{ backgroundColor: color }} />
+      {label}
+    </button>
   );
 }
 

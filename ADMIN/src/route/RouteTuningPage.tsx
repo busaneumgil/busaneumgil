@@ -155,6 +155,7 @@ export function RouteTuningPage({
         roadviewContainerRef={roadviewContainerRef}
         onRoadviewChange={onRoadviewChange}
         editable={false}
+        toolbarMode="roadSegmentLegend"
         routePointPickMode={routePickEnabled ? pointMode : null}
         onRoutePointPick={handleRoutePointPick}
         routeLines={{

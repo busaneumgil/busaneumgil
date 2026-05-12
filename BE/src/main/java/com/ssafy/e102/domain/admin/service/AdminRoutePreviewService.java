@@ -22,7 +22,6 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoutePreviewItemResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutePreviewResponse;
 import com.ssafy.e102.domain.admin.type.AdminRouteProfileGroup;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
-import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.domain.route.type.AccessibilityState;
@@ -63,11 +62,13 @@ public class AdminRoutePreviewService {
 		Map<Long, Set<SegmentFeatureType>> featureTypesByEdgeId = loadFeatureTypes(segments);
 		RouteGraph graph = buildGraph(segments, featureTypesByEdgeId);
 		Long startNodeId = graph.nearestNodeId(request.startPoint()
-			.lat(), request.startPoint()
-			.lng());
+			.lat(),
+			request.startPoint()
+				.lng());
 		Long endNodeId = graph.nearestNodeId(request.endPoint()
-			.lat(), request.endPoint()
-			.lng());
+			.lat(),
+			request.endPoint()
+				.lng());
 
 		return new AdminRoutePreviewResponse(
 			findRoute(
@@ -155,7 +156,11 @@ public class AdminRoutePreviewService {
 				break;
 			}
 			for (GraphEdge edge : graph.edgesFrom(current.nodeId())) {
-				double nextCost = current.cost() + weightedCost(edge, profileGroup, safe);
+				double edgeCost = weightedCost(edge, profileGroup, safe);
+				if (!Double.isFinite(edgeCost)) {
+					continue;
+				}
+				double nextCost = current.cost() + edgeCost;
 				if (nextCost < distances.getOrDefault(edge.toNodeId(), Double.MAX_VALUE)) {
 					distances.put(edge.toNodeId(), nextCost);
 					previousEdges.put(edge.toNodeId(), edge);
@@ -202,8 +207,9 @@ public class AdminRoutePreviewService {
 	private List<GeoPointResponse> toRouteCoordinates(List<GraphEdge> routeEdges, AdminRoutePreviewRequest request) {
 		List<GeoPointResponse> coordinates = new ArrayList<>();
 		coordinates.add(new GeoPointResponse(request.startPoint()
-			.lat(), request.startPoint()
-			.lng()));
+			.lat(),
+			request.startPoint()
+				.lng()));
 		for (GraphEdge edge : routeEdges) {
 			for (GeoPointResponse coordinate : edge.coordinates()) {
 				if (!coordinates.isEmpty() && samePoint(coordinates.get(coordinates.size() - 1), coordinate)) {
@@ -213,8 +219,9 @@ public class AdminRoutePreviewService {
 			}
 		}
 		GeoPointResponse endPoint = new GeoPointResponse(request.endPoint()
-			.lat(), request.endPoint()
-			.lng());
+			.lat(),
+			request.endPoint()
+				.lng());
 		if (coordinates.isEmpty() || !samePoint(coordinates.get(coordinates.size() - 1), endPoint)) {
 			coordinates.add(endPoint);
 		}
@@ -238,22 +245,26 @@ public class AdminRoutePreviewService {
 		RoadSegment segment = edge.segment();
 		Set<SegmentFeatureType> featureTypes = edge.featureTypes();
 
-		factor *= stateFactor(segment.getWalkAccess(), safe ? 100.0 : 20.0, safe ? 1.4 : 1.1);
+		if (segment.getWalkAccess() == AccessibilityState.NO) {
+			return Double.POSITIVE_INFINITY;
+		}
+		factor *= unknownFactor(segment.getWalkAccess(), safe ? 1.4 : 1.1);
 		if (isWheelchair(profileGroup)) {
-			factor *= stateFactor(segment.getStairsState(), safe ? 100.0 : 30.0, safe ? 1.8 : 1.3);
+			factor *= stairsFactor(segment.getStairsState(), safe ? 100.0 : 30.0, safe ? 1.8 : 1.3);
 			if (featureTypes.contains(SegmentFeatureType.STAIRS)) {
 				factor *= safe ? 100.0 : 30.0;
 			}
 			factor *= widthFactor(segment.getWidthState(), safe);
 			factor *= surfaceFactor(segment.getSurfaceState(), safe ? 4.0 : 2.0);
 		} else if (profileGroup == AdminRouteProfileGroup.VISUAL) {
-			factor *= stateFactor(segment.getStairsState(), safe ? 4.0 : 2.0, safe ? 1.4 : 1.1);
+			factor *= stairsFactor(segment.getStairsState(), safe ? 4.0 : 2.0, safe ? 1.4 : 1.1);
 			factor *= visualGuideFactor(segment, featureTypes, safe);
 			factor *= surfaceFactor(segment.getSurfaceState(), safe ? 2.0 : 1.3);
 		} else {
-			factor *= stateFactor(segment.getStairsState(), safe ? 1.6 : 1.2, 1.05);
+			factor *= stairsFactor(segment.getStairsState(), safe ? 1.6 : 1.2, 1.05);
 			factor *= surfaceFactor(segment.getSurfaceState(), safe ? 1.5 : 1.1);
 		}
+		factor *= slopeFactor(segment.getAvgSlopePercent(), profileGroup, safe);
 
 		return Math.max(edge.lengthMeter() * factor, 0.1);
 	}
@@ -263,12 +274,45 @@ public class AdminRoutePreviewService {
 			|| profileGroup == AdminRouteProfileGroup.WHEELCHAIR_AUTO;
 	}
 
-	private double stateFactor(AccessibilityState state, double noFactor, double unknownFactor) {
-		if (state == AccessibilityState.NO) {
-			return noFactor;
+	private double unknownFactor(AccessibilityState state, double unknownFactor) {
+		if (state == AccessibilityState.UNKNOWN) {
+			return unknownFactor;
+		}
+		return 1.0;
+	}
+
+	private double stairsFactor(AccessibilityState state, double yesFactor, double unknownFactor) {
+		if (state == AccessibilityState.YES) {
+			return yesFactor;
 		}
 		if (state == AccessibilityState.UNKNOWN) {
 			return unknownFactor;
+		}
+		return 1.0;
+	}
+
+	private double slopeFactor(BigDecimal avgSlopePercent, AdminRouteProfileGroup profileGroup, boolean safe) {
+		if (avgSlopePercent == null) {
+			return 1.0;
+		}
+		double slope = Math.abs(avgSlopePercent.doubleValue());
+		if (isWheelchair(profileGroup)) {
+			if (slope >= 8.0) {
+				return safe ? 12.0 : 4.0;
+			}
+			if (slope >= 5.0) {
+				return safe ? 4.0 : 2.0;
+			}
+			if (slope >= 3.0) {
+				return safe ? 1.8 : 1.3;
+			}
+			return 1.0;
+		}
+		if (slope >= 10.0) {
+			return safe ? 3.0 : 1.5;
+		}
+		if (slope >= 6.0) {
+			return safe ? 1.8 : 1.2;
 		}
 		return 1.0;
 	}
@@ -313,7 +357,8 @@ public class AdminRoutePreviewService {
 		return factor;
 	}
 
-	private record NodeCost(Long nodeId, double cost) {}
+	private record NodeCost(Long nodeId, double cost) {
+	}
 
 	private record GraphEdge(
 		RoadSegment segment,

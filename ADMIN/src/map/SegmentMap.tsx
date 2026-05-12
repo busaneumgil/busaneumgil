@@ -1,5 +1,5 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentPayload } from "../types";
+import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentPayload } from "../types";
 import { loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
 import { deletedEdgeIds, draftSegmentFeatures, resetPolygonDeleteSelection, segmentsTouchingPolygon, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
@@ -28,6 +28,12 @@ interface SegmentMapProps {
   roadviewContainerRef: RefObject<HTMLDivElement | null>;
   onRoadviewChange: (state: RoadviewDockState) => void;
   editable?: boolean;
+  routePointPickMode?: "start" | "end" | null;
+  onRoutePointPick?: (point: GeoPoint) => void;
+  routeLines?: {
+    safe?: GeoPoint[];
+    fast?: GeoPoint[];
+  };
 }
 
 export interface RoadviewDockState {
@@ -55,6 +61,9 @@ export function SegmentMap({
   roadviewContainerRef,
   onRoadviewChange,
   editable = true,
+  routePointPickMode = null,
+  onRoutePointPick,
+  routeLines,
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -66,6 +75,7 @@ export function SegmentMap({
   const tempOverlaysRef = useRef<KakaoOverlay[]>([]);
   const pendingEditOverlaysRef = useRef<KakaoOverlay[]>([]);
   const referenceOverlaysRef = useRef<KakaoOverlay[]>([]);
+  const routeOverlaysRef = useRef<KakaoOverlay[]>([]);
   const selectedSegmentOverlayRef = useRef<KakaoOverlay | null>(null);
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
   const segmentOverlayByEdgeRef = useRef<Map<string, KakaoOverlay[]>>(new Map());
@@ -78,6 +88,8 @@ export function SegmentMap({
   const polygonDeleteActiveRef = useRef(false);
   const onDraftEditRef = useRef(onDraftEdit);
   const onSelectSegmentRef = useRef(onSelectSegment);
+  const routePointPickModeRef = useRef(routePointPickMode);
+  const onRoutePointPickRef = useRef(onRoutePointPick);
   const [mode, setModeState] = useState<EditorMode>("select");
   const [addType, setAddTypeState] = useState<AddType>("SIDE_LINE");
   const [pendingAddCount, setPendingAddCount] = useState(0);
@@ -90,7 +102,9 @@ export function SegmentMap({
     onDraftEditRef.current = onDraftEdit;
     onSelectSegmentRef.current = onSelectSegment;
     draftEditsRef.current = draftEdits;
-  }, [draftEdits, onDraftEdit, onSelectSegment]);
+    routePointPickModeRef.current = routePointPickMode;
+    onRoutePointPickRef.current = onRoutePointPick;
+  }, [draftEdits, onDraftEdit, onRoutePointPick, onSelectSegment, routePointPickMode]);
 
   useEffect(() => {
     if (!editable && (modeRef.current === "add" || modeRef.current === "delete")) {
@@ -179,6 +193,10 @@ export function SegmentMap({
   }, [mode, referenceLayers, roadAttributePayload, stairPayload, audioSignalPayload, brailleBlockPayload]);
 
   useEffect(() => {
+    renderRouteOverlays();
+  }, [routeLines, mapReady]);
+
+  useEffect(() => {
     if (!selectedSegment) {
       selectedSegmentOverlayRef.current?.setMap(null);
       selectedSegmentOverlayRef.current = null;
@@ -210,6 +228,11 @@ export function SegmentMap({
   }
 
   function handleMapCoordinate(coord: Coord, latLng: unknown) {
+    if (routePointPickModeRef.current) {
+      onRoutePointPickRef.current?.({ lat: coord[1], lng: coord[0] });
+      return;
+    }
+
     if (modeRef.current === "select") {
       selectNearestSegment(coord, 35, false);
       return;
@@ -312,13 +335,30 @@ export function SegmentMap({
     });
   }
 
+  function renderRouteOverlays() {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    routeOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    routeOverlaysRef.current = [];
+    const safeLine = createRoutePolyline(routeLines?.safe ?? [], "#dc2626", 7);
+    const fastLine = createRoutePolyline(routeLines?.fast ?? [], "#2563eb", 5);
+    if (safeLine) {
+      safeLine.setMap(mapRef.current);
+      routeOverlaysRef.current.push(safeLine);
+    }
+    if (fastLine) {
+      fastLine.setMap(mapRef.current);
+      routeOverlaysRef.current.push(fastLine);
+    }
+  }
+
   function centerMapForPayload(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
     if (!window.kakao?.maps || !mapRef.current) return;
     const bbox = payload?.bbox;
-    if (bbox) {
-      const centerLng = (bbox[0] + bbox[2]) / 2;
-      const centerLat = (bbox[1] + bbox[3]) / 2;
-      mapRef.current.setCenter(new window.kakao.maps.LatLng(centerLat, centerLng));
+    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
+      const bounds = new window.kakao.maps.LatLngBounds();
+      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
+      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
+      mapRef.current.setBounds(bounds);
       return;
     }
     const firstCoord = segmentFeatures[0]?.geometry.coordinates[0] ?? bridgeFeatures[0]?.geometry.coordinates[0];
@@ -566,6 +606,18 @@ export function SegmentMap({
       </div>
     </section>
   );
+}
+
+function createRoutePolyline(points: GeoPoint[], color: string, strokeWeight: number): KakaoOverlay | null {
+  if (!window.kakao?.maps || points.length < 2) return null;
+  return new window.kakao.maps.Polyline({
+    path: points.map((point) => new window.kakao!.maps.LatLng(point.lat, point.lng)),
+    strokeWeight,
+    strokeColor: color,
+    strokeOpacity: 0.92,
+    strokeStyle: "solid",
+    zIndex: 30,
+  });
 }
 
 function createBridgeOverlay(feature: BridgeFeature, map: KakaoMap): KakaoOverlay[] | null {

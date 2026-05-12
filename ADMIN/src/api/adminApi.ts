@@ -2,6 +2,7 @@ import type {
   AreaOption,
   AdminPlaceDetailResponse,
   AdminPlaceUpdateRequest,
+  AdminRoadSegmentAttributesUpdateRequest,
   AdminRoutePreviewRequest,
   AdminRoutePreviewResponse,
   AdminHazardReportDetail,
@@ -21,6 +22,8 @@ import type {
   TokenResponse,
   UserRole,
   WorkStatus,
+  AssignmentType,
+  GeoPoint,
 } from "../types";
 
 const configuredBackendApiUrl = import.meta.env.VITE_BACKEND_API_URL as string | undefined;
@@ -204,6 +207,7 @@ export async function upsertAdminAreaAssignment(
   request: {
     gu: string;
     dong: string;
+    assignmentType: AssignmentType;
     assigneeUserId: string | null;
     status: WorkStatus;
   },
@@ -299,6 +303,39 @@ export async function previewAdminRoute(
     },
     body: JSON.stringify(request),
   });
+}
+
+export async function updateAdminRoadSegmentAttributes(
+  edgeId: string | number,
+  gu: string,
+  dong: string,
+  request: AdminRoadSegmentAttributesUpdateRequest,
+  accessToken: string,
+) {
+  const params = new URLSearchParams({ gu, dong });
+  return requestAdminJson<SegmentPayload["segments"]["features"][number]["properties"]>(
+    `/admin/road-network/segments/${edgeId}/attributes?${params.toString()}`,
+    accessToken,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
+}
+
+export async function reverseGeocodePlace(point: GeoPoint, accessToken: string) {
+  const params = new URLSearchParams({ lat: String(point.lat), lng: String(point.lng) });
+  return requestAdminJson<{
+    displayAddress: string | null;
+    roadAddress: string | null;
+    address: string | null;
+    region1DepthName: string | null;
+    region2DepthName: string | null;
+    region3DepthName: string | null;
+  }>(`/places/reverse-geocode?${params.toString()}`, accessToken);
 }
 
 export async function fetchAdminFacilityPayload({

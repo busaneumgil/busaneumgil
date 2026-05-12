@@ -25,6 +25,7 @@ export interface TokenResponse {
 }
 
 export type WorkStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
+export type AssignmentType = "ROAD_NETWORK" | "FACILITY";
 
 export type AdminPage = "network" | "routeTuning" | "facilities" | "hazards" | "users";
 
@@ -52,6 +53,7 @@ export interface Assignment {
   assignmentId: number | null;
   gu: string;
   dong: string;
+  assignmentType: AssignmentType;
   assigneeUserId: string | null;
   assigneeLabel: string | null;
   status: WorkStatus;
@@ -335,6 +337,20 @@ export interface GeoPoint {
   lng: number;
 }
 
+export type AccessibilityState = "YES" | "NO" | "UNKNOWN";
+export type WidthState = "ADEQUATE_150" | "ADEQUATE_120" | "NARROW" | "UNKNOWN";
+export type SurfaceState = "PAVED" | "UNPAVED" | "UNKNOWN";
+
+export interface AdminRoadSegmentAttributesUpdateRequest {
+  walkAccess?: AccessibilityState | null;
+  brailleBlockState?: AccessibilityState | null;
+  audioSignalState?: AccessibilityState | null;
+  widthState?: WidthState | null;
+  surfaceState?: SurfaceState | null;
+  stairsState?: AccessibilityState | null;
+  signalState?: AccessibilityState | null;
+}
+
 export type WalkRouteProfile =
   | "PEDESTRIAN_SAFE"
   | "PEDESTRIAN_FAST"
@@ -345,25 +361,12 @@ export type WalkRouteProfile =
   | "WHEELCHAIR_AUTO_SAFE"
   | "WHEELCHAIR_AUTO_FAST";
 
-export interface AdminRouteTuningRequest {
-  slopeLowPercent: number;
-  slopeMiddlePercent: number;
-  slopeHighPercent: number;
-  slopeLowPenalty: number;
-  slopeMiddlePenalty: number;
-  slopeHighPenalty: number;
-  narrowWidthPenalty: number;
-  unpavedSurfacePenalty: number;
-  stairsPenalty: number;
-  signalCrosswalkBonus: number;
-  distanceInfluence: number;
-}
+export type AdminRouteProfileGroup = "PEDESTRIAN" | "VISUAL" | "WHEELCHAIR_MANUAL" | "WHEELCHAIR_AUTO";
 
 export interface AdminRoutePreviewRequest {
   startPoint: GeoPoint;
   endPoint: GeoPoint;
-  profile: WalkRouteProfile;
-  tuning: AdminRouteTuningRequest;
+  profileGroup: AdminRouteProfileGroup;
 }
 
 export interface AdminRoutePreviewItemResponse {
@@ -375,8 +378,8 @@ export interface AdminRoutePreviewItemResponse {
 }
 
 export interface AdminRoutePreviewResponse {
-  baseRoute: AdminRoutePreviewItemResponse;
-  tunedRoute: AdminRoutePreviewItemResponse;
+  safeRoute: AdminRoutePreviewItemResponse;
+  fastRoute: AdminRoutePreviewItemResponse;
 }
 
 export interface AdminMeResponse {

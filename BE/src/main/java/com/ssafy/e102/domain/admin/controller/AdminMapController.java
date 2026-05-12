@@ -16,6 +16,7 @@ import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUp
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoutePreviewRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadNetworkEditApplyRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
@@ -23,6 +24,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoutePreviewResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
 import com.ssafy.e102.domain.admin.service.AdminRoutePreviewService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditJobService;
@@ -97,12 +99,29 @@ public class AdminMapController {
 		return ApiResponse.success(adminRoadNetworkEditJobService.findById(jobId));
 	}
 
-	@Operation(summary = "관리자 경로 튜닝 미리보기", description = "GraphHopper 프로필 수치를 임시 custom model로 적용해 기본 경로와 조정 경로를 비교한다.")
+	@Operation(summary = "관리자 경로 미리보기", description = "선택한 보행 사용자 유형의 안전/빠른 GraphHopper 프로필 경로를 비교한다.")
 	@PostMapping("/routes/preview")
 	public ApiResponse<AdminRoutePreviewResponse> previewRoute(
 		@RequestBody @Valid
 		AdminRoutePreviewRequest request) {
 		return ApiResponse.success(adminRoutePreviewService.preview(request));
+	}
+
+	@Operation(summary = "관리자 보행 segment 속성 수정", description = "선택한 보행 네트워크 segment의 검수 속성을 수정한다.")
+	@PatchMapping("/road-network/segments/{edgeId}/attributes")
+	public ApiResponse<AdminRoadSegmentPropertiesResponse> updateRoadSegmentAttributes(
+		@Parameter(hidden = true) @AuthenticationPrincipal
+		AuthPrincipal principal,
+		@Parameter(description = "수정할 segment ID") @PathVariable @Positive
+		Long edgeId,
+		@Parameter(description = "담당 구") @RequestParam
+		String gu,
+		@Parameter(description = "담당 동") @RequestParam
+		String dong,
+		@RequestBody @Valid
+		AdminRoadSegmentAttributesUpdateRequest request) {
+		return ApiResponse
+			.success(adminMapService.updateRoadSegmentAttributes(principal.userId(), edgeId, gu, dong, request));
 	}
 
 	@Operation(summary = "관리자 편의시설 조회", description = "데이터베이스에 적재된 장소를 지도 표시용 형식으로 조회한다.")

@@ -93,4 +93,35 @@ public class RoadSegment {
 		roadSegment.lengthMeter = lengthMeter;
 		return roadSegment;
 	}
+
+	public void updateAttributes(
+		AccessibilityState walkAccess,
+		AccessibilityState brailleBlockState,
+		AccessibilityState audioSignalState,
+		WidthState widthState,
+		SurfaceState surfaceState,
+		AccessibilityState stairsState,
+		AccessibilityState signalState) {
+		if (walkAccess != null) {
+			this.walkAccess = walkAccess;
+		}
+		if (brailleBlockState != null) {
+			this.brailleBlockState = brailleBlockState;
+		}
+		if (audioSignalState != null) {
+			this.audioSignalState = audioSignalState;
+		}
+		if (widthState != null) {
+			this.widthState = widthState;
+		}
+		if (surfaceState != null) {
+			this.surfaceState = surfaceState;
+		}
+		if (stairsState != null) {
+			this.stairsState = stairsState;
+		}
+		if (signalState != null) {
+			this.signalState = signalState;
+		}
+	}
 }

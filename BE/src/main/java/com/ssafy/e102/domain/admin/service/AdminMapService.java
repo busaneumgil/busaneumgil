@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
@@ -38,6 +39,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkSummaryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
+import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
 import com.ssafy.e102.domain.place.exception.PlaceErrorCode;
@@ -47,6 +49,8 @@ import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.global.exception.BusinessException;
+import com.ssafy.e102.global.exception.CommonErrorCode;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 
 @Service
@@ -168,6 +172,30 @@ public class AdminMapService {
 	}
 
 	@Transactional
+	public AdminRoadSegmentPropertiesResponse updateRoadSegmentAttributes(
+		UUID userId,
+		Long edgeId,
+		String gu,
+		String dong,
+		AdminRoadSegmentAttributesUpdateRequest request) {
+		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.ROAD_NETWORK);
+		if (!roadSegmentRepository.existsIntersectingAreaByEdgeId(edgeId, gu, dong)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "담당 구/동의 segment만 수정할 수 있습니다.");
+		}
+		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
+			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment를 찾을 수 없습니다."));
+		roadSegment.updateAttributes(
+			request.walkAccess(),
+			request.brailleBlockState(),
+			request.audioSignalState(),
+			request.widthState(),
+			request.surfaceState(),
+			request.stairsState(),
+			request.signalState());
+		return toRoadSegmentProperties(roadSegment);
+	}
+
+	@Transactional
 	public AdminPlaceDetailResponse updatePlace(
 		UUID userId,
 		Long placeId,
@@ -235,7 +263,7 @@ public class AdminMapService {
 	}
 
 	private void validateEditablePlace(UUID userId, Long placeId, String gu, String dong) {
-		adminService.requireCanEditArea(userId, gu, dong);
+		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.FACILITY);
 		if (!placeRepository.existsIntersectingAreaByPlaceId(placeId, gu, dong)) {
 			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "담당 구/동의 장소만 수정할 수 있습니다.");
 		}
@@ -269,19 +297,23 @@ public class AdminMapService {
 		RoadSegment roadSegment) {
 		return AdminGeoJsonFeatureResponse.of(
 			AdminLineStringGeometryResponse.of(toCoordinates(roadSegment.getGeom())),
-			new AdminRoadSegmentPropertiesResponse(
-				roadSegment.getEdgeId(),
-				roadSegment.getFromNodeId(),
-				roadSegment.getToNodeId(),
-				roadSegment.getSegmentType(),
-				roadSegment.getLengthMeter(),
-				roadSegment.getWalkAccess(),
-				roadSegment.getBrailleBlockState(),
-				roadSegment.getAudioSignalState(),
-				roadSegment.getWidthState(),
-				roadSegment.getSurfaceState(),
-				roadSegment.getStairsState(),
-				roadSegment.getSignalState()));
+			toRoadSegmentProperties(roadSegment));
+	}
+
+	private AdminRoadSegmentPropertiesResponse toRoadSegmentProperties(RoadSegment roadSegment) {
+		return new AdminRoadSegmentPropertiesResponse(
+			roadSegment.getEdgeId(),
+			roadSegment.getFromNodeId(),
+			roadSegment.getToNodeId(),
+			roadSegment.getSegmentType(),
+			roadSegment.getLengthMeter(),
+			roadSegment.getWalkAccess(),
+			roadSegment.getBrailleBlockState(),
+			roadSegment.getAudioSignalState(),
+			roadSegment.getWidthState(),
+			roadSegment.getSurfaceState(),
+			roadSegment.getStairsState(),
+			roadSegment.getSignalState());
 	}
 
 	private AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminFacilityPropertiesResponse> toFacilityFeature(

@@ -543,6 +543,31 @@ select {
   color: var(--muted);
 }
 
+.legend-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 5px 10px;
+  background: var(--color-gray-50);
+  color: var(--color-gray-700);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.legend-chip.active {
+  border-color: var(--color-primary-600);
+  background: var(--color-primary-200);
+  color: var(--color-primary-600);
+}
+
 .review-stage {
   min-height: calc(100vh - 58px);
   padding: 28px;

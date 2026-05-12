@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.admin.entity;
 
 import com.ssafy.e102.domain.admin.type.AdminAreaWorkStatus;
+import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.global.entity.BaseEntity;
 
@@ -25,9 +26,10 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "admin_area_assignments", indexes = {
 	@Index(name = "idx_admin_area_assignments_assignee", columnList = "assignee_user_id"),
-	@Index(name = "idx_admin_area_assignments_status", columnList = "status")
+	@Index(name = "idx_admin_area_assignments_status", columnList = "status"),
+	@Index(name = "idx_admin_area_assignments_type_status", columnList = "assignment_type,status")
 }, uniqueConstraints = {
-	@UniqueConstraint(name = "uk_admin_area_assignments_area", columnNames = {"gu", "dong"})
+	@UniqueConstraint(name = "uk_admin_area_assignments_area_type", columnNames = {"gu", "dong", "assignment_type"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AdminAreaAssignment extends BaseEntity {
@@ -43,6 +45,10 @@ public class AdminAreaAssignment extends BaseEntity {
 	@Column(name = "dong", nullable = false, length = 50)
 	private String dong;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "assignment_type", nullable = false, length = 30)
+	private AdminAreaAssignmentType assignmentType;
+
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "assignee_user_id")
 	private User assignee;
@@ -54,11 +60,13 @@ public class AdminAreaAssignment extends BaseEntity {
 	public static AdminAreaAssignment create(
 		String gu,
 		String dong,
+		AdminAreaAssignmentType assignmentType,
 		User assignee,
 		AdminAreaWorkStatus status) {
 		AdminAreaAssignment assignment = new AdminAreaAssignment();
 		assignment.gu = requireText(gu, "구는 필수입니다.");
 		assignment.dong = requireText(dong, "동은 필수입니다.");
+		assignment.assignmentType = requireAssignmentType(assignmentType);
 		assignment.assignee = assignee;
 		assignment.status = status == null ? AdminAreaWorkStatus.NOT_STARTED : status;
 		return assignment;
@@ -80,5 +88,12 @@ public class AdminAreaAssignment extends BaseEntity {
 			throw new IllegalArgumentException(message);
 		}
 		return value.trim();
+	}
+
+	private static AdminAreaAssignmentType requireAssignmentType(AdminAreaAssignmentType assignmentType) {
+		if (assignmentType == null) {
+			throw new IllegalArgumentException("담당 유형은 필수입니다.");
+		}
+		return assignmentType;
 	}
 }

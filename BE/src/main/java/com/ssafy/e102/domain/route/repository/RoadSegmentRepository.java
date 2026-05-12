@@ -47,4 +47,26 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 		String gu,
 		@Param("dong")
 		String dong);
+
+	@Query(value = """
+		select exists (
+			select 1
+			from road_segments rs
+			join admin_areas aa
+				on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
+			where rs.edge_id = :edgeId
+				and aa.gu = :gu
+				and (
+					aa.dong = :dong
+					or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+				)
+		)
+		""", nativeQuery = true)
+	boolean existsIntersectingAreaByEdgeId(
+		@Param("edgeId")
+		Long edgeId,
+		@Param("gu")
+		String gu,
+		@Param("dong")
+		String dong);
 }

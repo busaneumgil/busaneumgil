@@ -4,6 +4,7 @@ declare global {
       maps: {
         load: (callback: () => void) => void;
         LatLng: new (lat: number, lng: number) => unknown;
+        LatLngBounds: new () => { extend: (latLng: unknown) => void };
         Map: new (container: HTMLElement, options: Record<string, unknown>) => KakaoMap;
         Polyline: new (options: Record<string, unknown>) => KakaoOverlay;
         Polygon: new (options: Record<string, unknown>) => KakaoOverlay;
@@ -22,6 +23,7 @@ declare global {
 
 export interface KakaoMap {
   setCenter: (latLng: unknown) => void;
+  setBounds?: (bounds: unknown) => void;
   setLevel: (level: number) => void;
 }
 

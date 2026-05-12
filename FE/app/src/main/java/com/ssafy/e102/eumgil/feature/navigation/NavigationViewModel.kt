@@ -1236,12 +1236,19 @@ private fun RouteWaypoint.toNavigationMapPointUiState(fallbackLabel: String): Na
 
 private fun RouteCandidate.resolveSegmentStartCoordinate(segmentIndex: Int): GeoCoordinate? {
     val segment = segments.getOrNull(segmentIndex) ?: return null
-
-    segment.polyline.points.firstOrNull()?.let { return it }
     val sourceLeg = segment.resolveSourceLeg(legs = legs)
-    if (segment.isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)) {
-        sourceLeg?.polyline?.points?.firstOrNull()?.let { return it }
-    }
+
+    segment.polyline
+        .takeIf(RoutePolyline::isRenderable)
+        ?.points
+        ?.firstOrNull()
+        ?.let { return it }
+    segment.anchorCoordinate?.let { return it }
+    segment.resolveSourceLegStartCoordinate(
+        segmentIndex = segmentIndex,
+        segments = segments,
+        sourceLeg = sourceLeg,
+    )?.let { return it }
 
     val fallbackPolyline = navigationPolylinePoints()
     if (fallbackPolyline.isNotEmpty()) {
@@ -1254,10 +1261,19 @@ private fun RouteCandidate.resolveSegmentStartCoordinate(segmentIndex: Int): Geo
 
 private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): GeoCoordinate? {
     val segment = segments.getOrNull(segmentIndex) ?: return null
-
-    segment.polyline.points.toNavigationFocusCoordinate()?.let { return it }
     val sourceLeg = segment.resolveSourceLeg(legs = legs)
-    sourceLeg?.toNavigationFocusCoordinate()?.let { return it }
+
+    segment.polyline
+        .takeIf(RoutePolyline::isRenderable)
+        ?.points
+        ?.toNavigationFocusCoordinate()
+        ?.let { return it }
+    segment.anchorCoordinate?.let { return it }
+    segment.resolveSourceLegFocusCoordinate(
+        segmentIndex = segmentIndex,
+        segments = segments,
+        sourceLeg = sourceLeg,
+    )?.let { return it }
 
     val fallbackPolyline = navigationPolylinePoints()
     if (fallbackPolyline.isEmpty()) return null
@@ -1284,6 +1300,38 @@ private fun RouteSegment.isFirstSegmentOfSourceLeg(
 ): Boolean {
     val sourceLegSequence = sourceLegSequence ?: return false
     return segments.indexOfFirst { candidateSegment -> candidateSegment.sourceLegSequence == sourceLegSequence } == segmentIndex
+}
+
+private fun RouteSegment.resolveSourceLegStartCoordinate(
+    segmentIndex: Int,
+    segments: List<RouteSegment>,
+    sourceLeg: RouteLeg?,
+): GeoCoordinate? {
+    val resolvedSourceLeg = sourceLeg ?: return null
+    return if (
+        resolvedSourceLeg.type != RouteLegType.WALK ||
+        isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)
+    ) {
+        resolvedSourceLeg.polyline.points.firstOrNull()
+    } else {
+        null
+    }
+}
+
+private fun RouteSegment.resolveSourceLegFocusCoordinate(
+    segmentIndex: Int,
+    segments: List<RouteSegment>,
+    sourceLeg: RouteLeg?,
+): GeoCoordinate? {
+    val resolvedSourceLeg = sourceLeg ?: return null
+    return if (
+        resolvedSourceLeg.type != RouteLegType.WALK ||
+        isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)
+    ) {
+        resolvedSourceLeg.toNavigationFocusCoordinate()
+    } else {
+        null
+    }
 }
 
 private fun RouteLeg.toNavigationFocusCoordinate(): GeoCoordinate? =

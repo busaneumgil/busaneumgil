@@ -169,6 +169,28 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `segment tap prefers anchor coordinate over source leg start when walk segment polyline is missing`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testPointAnchorNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 0))
+            advanceUntilIdle()
+
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertEquals(
+                POINT_ANCHOR_EVENT_POINT,
+                viewModel.uiState.value.mapOverlay.routeSegments.first().segmentStartCoordinate,
+            )
+            assertEquals(
+                POINT_ANCHOR_EVENT_POINT,
+                viewModel.uiState.value.mapOverlay.focusCoordinate,
+            )
+        }
+
+    @Test
     fun `segment tap resolves the missing segment focus to its route start coordinate`() =
         runTest {
             val viewModel = createViewModel()
@@ -961,11 +983,90 @@ private fun testLegPolylineFallbackNavigationRequest(): RouteNavigationRequest =
             ),
     )
 
+private fun testPointAnchorNavigationRequest(): RouteNavigationRequest =
+    RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = "Origin",
+                coordinate = POINT_ANCHOR_ROUTE_START_POINT,
+            ),
+        destination =
+            RouteWaypoint(
+                name = "Destination",
+                coordinate = POINT_ANCHOR_ROUTE_END_POINT,
+            ),
+        selectedRoute =
+            RouteCandidate(
+                serverRouteId = "point-anchor-route-1",
+                routeOption = RouteOption.SAFE,
+                title = "Point Anchor Route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 320,
+                        estimatedTimeMinutes = 5,
+                        riskLevel = RouteRiskLevel.LOW,
+                        durationSeconds = 300,
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        POINT_ANCHOR_ROUTE_START_POINT,
+                                        POINT_ANCHOR_EVENT_POINT,
+                                        POINT_ANCHOR_ROUTE_END_POINT,
+                                    ),
+                            ),
+                        segmentCount = 1,
+                        renderableSegmentCount = 0,
+                    ),
+                legs =
+                    listOf(
+                        RouteLeg(
+                            sequence = 1,
+                            role = RouteLegRole.WALK_ONLY,
+                            distanceMeters = 320,
+                            durationSeconds = 300,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            POINT_ANCHOR_ROUTE_START_POINT,
+                                            POINT_ANCHOR_ROUTE_END_POINT,
+                                        ),
+                                ),
+                        ),
+                    ),
+                segments =
+                    listOf(
+                        RouteSegment(
+                            sequence = 1,
+                            polyline = RoutePolyline(),
+                            anchorCoordinate = POINT_ANCHOR_EVENT_POINT,
+                            distanceMeters = 320,
+                            guidanceMessage = "Crosswalk ahead",
+                            sourceLegSequence = 1,
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Point anchor navigation test route"),
+        selectionHandoff =
+            RouteNavigationSelectionHandoff(
+                searchId = "search-5",
+                routeId = "point-anchor-route-1",
+                sessionId = "session-5",
+            ),
+    )
+
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1815, longitude = 129.0756)
 private val LEG_FALLBACK_START_POINT = GeoCoordinate(latitude = 35.1802, longitude = 129.0718)
+private val POINT_ANCHOR_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1804, longitude = 129.0710)
+private val POINT_ANCHOR_EVENT_POINT = GeoCoordinate(latitude = 35.1805, longitude = 129.0722)
+private val POINT_ANCHOR_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1808, longitude = 129.0745)
 private val SPARSE_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1800, longitude = 129.0700)
 private val SPARSE_ROUTE_BRANCH_POINT_1 = GeoCoordinate(latitude = 35.1800, longitude = 129.0740)
 private val SPARSE_ROUTE_BRANCH_POINT_2 = GeoCoordinate(latitude = 35.1800, longitude = 129.0760)

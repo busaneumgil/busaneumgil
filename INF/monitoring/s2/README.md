@@ -5,7 +5,7 @@
 ## 목표
 
 - `prod` 서비스 로그를 `Grafana Explore`와 `E102 운영 관측 개요` 대시보드에서 바로 찾을 수 있게 한다.
-- `prod metric`은 아직 `CloudWatch`를 1차 기준으로 유지하고, 로그만 먼저 `Loki`에 붙인다.
+- `prod` 상태 카드는 S1 blackbox-exporter가 `api/ai/admin`과 backend의 `db/redis` dependency health endpoint를 검사한다.
 - backend actuator는 여전히 `127.0.0.1:18080`에만 바인딩한다.
 
 ## 배치 위치
@@ -48,7 +48,7 @@ docker compose --env-file ./.env up -d
 
 ## 후속 확장
 
-- `prod metric`을 Grafana에서 직접 보려면 아래 둘 중 하나를 추가로 선택한다.
+- `prod`의 JVM/Hikari 같은 상세 metric을 Grafana에서 직접 보려면 아래 둘 중 하나를 추가로 선택한다.
   - `S2 -> S1` private scrape 경로 개방
   - agent 기반 metric forwarding 구성
-- 지금 단계에서는 로그 2차 조회만 먼저 붙이고, 1차 운영 알람은 CloudWatch/SNS를 유지한다.
+- 지금 단계에서는 `서비스 health + backend dependency health + prod 로그`를 기본 운영 관측으로 본다.

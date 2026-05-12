@@ -154,7 +154,9 @@ public class GraphHopperRouteClient {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		GraphHopperPathResponse path = response.paths().get(0);
-		validateSnapDistance(request, path);
+		if (request.enforceSnapDistanceLimit()) {
+			validateSnapDistance(request, path);
+		}
 		validateWalkAccess(path);
 		List<GraphHopperCoordinate> coordinates = path.coordinates();
 		if (coordinates.isEmpty()) {

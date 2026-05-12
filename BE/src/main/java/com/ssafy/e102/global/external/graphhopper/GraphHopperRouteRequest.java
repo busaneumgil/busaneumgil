@@ -11,5 +11,13 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 public record GraphHopperRouteRequest(
 	GeoPointRequest startPoint,
 	GeoPointRequest endPoint,
-	WalkRouteProfile profile) {
+	WalkRouteProfile profile,
+	boolean enforceSnapDistanceLimit) {
+
+	public GraphHopperRouteRequest(
+		GeoPointRequest startPoint,
+		GeoPointRequest endPoint,
+		WalkRouteProfile profile) {
+		this(startPoint, endPoint, profile, true);
+	}
 }

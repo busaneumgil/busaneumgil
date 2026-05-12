@@ -576,7 +576,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
   - 예시: `"129.083214:35.179032"`
 - OSM 전용 `osm_node_id`는 이 버전에서 제거됐다. `vertex_id`가 유일한 PK이며 `source_node_key`가 natural key 역할을 한다.
 - `road_segments`의 시작/종료점으로 사용된 anchor node만 저장한다.
-- 관리자 페이지에서 새 segment를 추가할 때 1.5m 이내 기존 node가 있으면 해당 node를 재사용하고, 없으면 `road_nodes_vertex_id_seq`로 신규 node를 생성한다.
+- 관리자 페이지에서 새 segment를 추가할 때 1.0m 이내 기존 node가 있으면 해당 node를 재사용하고, 없으면 `road_nodes_vertex_id_seq`로 신규 node를 생성한다.
 
 ---
 
@@ -965,6 +965,51 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 ---
 
+## 12) admin_area_assignments *(관리자 운영용)*
+
+### 역할
+
+관리자 페이지에서 구/동별 담당자와 작업 상태를 관리한다.
+
+보행 네트워크 편집과 장소/접근성 수정은 이 테이블에 담당자로 지정된 관리자만 수행할 수 있다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 담당 ID | assignment_id | BIGINT | NOT NULL | DB sequence |
+| 구 | gu | VARCHAR(50) | NOT NULL |  |
+| 동 | dong | VARCHAR(50) | NOT NULL |  |
+| 담당 관리자 | assignee_user_id | UUID | NULL |  |
+| 작업 상태 | status | VARCHAR(30) | NOT NULL | NOT_STARTED |
+| 생성 시각 | created_at | TIMESTAMP | NOT NULL | now() |
+| 수정 시각 | updated_at | TIMESTAMP | NOT NULL | now() |
+
+### 제약과 인덱스
+
+- `assignment_id` PK
+- `(gu, dong)` UNIQUE
+- `assignee_user_id`는 `users.user_id`를 참조한다.
+- `idx_admin_area_assignments_assignee`: `(assignee_user_id)`
+- `idx_admin_area_assignments_status`: `(status)`
+
+### status 후보값
+
+| 값 | 의미 |
+| --- | --- |
+| `NOT_STARTED` | 미시작 |
+| `IN_PROGRESS` | 진행중 |
+| `COMPLETED` | 완료 |
+| `HOLD` | 보류 |
+
+### 비고
+
+- 담당자는 `users.role=ADMIN`인 사용자만 지정할 수 있다.
+- `gu`, `dong`은 `admin_areas`의 선택 가능한 구/동과 맞춰 사용한다.
+- 물리 FK는 `users`에만 둔다. `admin_areas`와는 구/동 문자열 계약으로 맞춘다.
+
+---
+
 ## 5. 관계 명세
 
 ### users - bookmarks
@@ -996,6 +1041,12 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 - `users 1 : N route_sessions`
 - `route_sessions.user_id`와 `route_sessions.route_id` 또는 `route_sessions.session_id` 기준으로 경로 세션 소유권을 검증한다.
 - 회원 탈퇴 시 route session은 route rating 삭제 후 삭제한다.
+
+### users - admin_area_assignments
+
+- `users 1 : N admin_area_assignments`
+- `admin_area_assignments.assignee_user_id`는 담당 관리자 userId를 참조한다.
+- 담당자는 `users.role=ADMIN`인 사용자만 지정한다.
 
 ### hazard_reports - hazard_report_images
 
@@ -1040,3 +1091,8 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - FK 관계가 아니다.
 - 관리자 검수 화면에서 `admin_areas.geom`과 `road_segments.geom`의 공간 교차 여부로 구/동별 보행 네트워크를 조회한다.
+
+### admin_areas - admin_area_assignments
+
+- 물리 FK 관계가 아니다.
+- `gu`, `dong` 문자열 계약으로 관리자 화면의 선택 가능한 구/동과 담당자 row를 맞춘다.

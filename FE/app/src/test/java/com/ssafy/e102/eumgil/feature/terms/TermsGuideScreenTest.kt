@@ -2,9 +2,11 @@ package com.ssafy.e102.eumgil.feature.terms
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TermsGuideScreenTest {
@@ -55,5 +57,35 @@ class TermsGuideScreenTest {
         assertEquals(74.dp, TermsGuideLayoutDefaults.moreButtonMinHeight)
         assertEquals(28.dp, TermsGuideLayoutDefaults.bottomContentHorizontalPadding)
         assertEquals(28.dp, TermsGuideLayoutDefaults.bottomContentBottomPadding)
+    }
+
+    @Test
+    fun `main agreement card exposes semantic click action for talkback activation`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/terms/TermsGuideScreen.kt")
+                .readText()
+
+        assertTrue(
+            "TalkBack double-tap dispatches the semantics click action, so the main agreement card must use clickable.",
+            source.contains(".clickable("),
+        )
+        assertTrue(
+            "The TalkBack action label should use the same agreement card description announced to users.",
+            source.contains("onClickLabel = cardA11y"),
+        )
+        assertFalse(
+            "Pointer-only double-tap handling is invisible to TalkBack activation.",
+            source.contains("detectTapGestures"),
+        )
+    }
+
+    @Test
+    fun `terms guide screen applies system safe zones`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/terms/TermsGuideScreen.kt")
+                .readText()
+
+        assertTrue(source.contains(".statusBarsPadding()"))
+        assertTrue(source.contains(".navigationBarsPadding()"))
     }
 }

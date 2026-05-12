@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.feature.navigation.NavigationBriefingItem
@@ -67,13 +68,18 @@ internal fun List<LowVisionRouteBriefingStepUiState>.briefingSpeechTextFrom(
 ): String =
     visibleBriefingSteps(startIndex).toBriefingSpeechText()
 
-internal fun List<LowVisionRouteBriefingStepUiState>.toBriefingSpeechText(): String =
-    buildString {
-        append("경로 브리핑 ")
+internal fun List<LowVisionRouteBriefingStepUiState>.toBriefingSpeechText(): String {
+    val title = "\uACBD\uB85C \uBE0C\uB9AC\uD551"
+    if (isEmpty()) return title
+
+    return buildList {
+        add(title)
         this@toBriefingSpeechText.forEach { step ->
-            append("${step.sequence}번 ${step.instruction}. ")
+            add("${step.sequence}\uBC88")
+            add(step.instruction.trim().trimEnd('.'))
         }
-    }.trim()
+    }.joinToString(separator = ". ", postfix = ".")
+}
 
 class LowVisionRouteBriefingViewModel(
     private val routeRepository: RouteRepository,
@@ -82,11 +88,7 @@ class LowVisionRouteBriefingViewModel(
     private val mutableUiState = MutableStateFlow(LowVisionRouteBriefingUiState())
     val uiState = mutableUiState.asStateFlow()
 
-    init {
-        loadBriefing()
-    }
-
-    private fun loadBriefing() {
+    fun loadBriefing(origin: RouteWaypoint) {
         mutableUiState.update { state ->
             state.copy(
                 isLoading = true,
@@ -96,7 +98,10 @@ class LowVisionRouteBriefingViewModel(
 
         viewModelScope.launch {
             runCatching {
-                routeRepository.buildLowVisionNavigationPlan(destinationSelectionRepository)
+                routeRepository.buildLowVisionNavigationPlan(
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    origin = origin,
+                )
             }.onSuccess { plan ->
                 mutableUiState.update { state ->
                     state.copy(

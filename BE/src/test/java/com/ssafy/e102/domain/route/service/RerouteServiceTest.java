@@ -1,7 +1,7 @@
 package com.ssafy.e102.domain.route.service;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -225,6 +225,7 @@ class RerouteServiceTest {
 		assertThat(response.route().legs().get(0).instruction()).isEqualTo("기존 경로까지 이동하세요.");
 		assertThat(response.route().legs().get(0).geometry()).isEqualTo("LINESTRING(128.936 35.1195, 128.936 35.12)");
 		assertThat(response.route().legs().get(1).sequence()).isEqualTo(2);
+		assertThat(response.route().estimatedTimeMinute()).isEqualTo(2);
 		verify(walkRouteSearchService).search(userId, new WalkRouteSearchRequest(
 			new GeoPointRequest(35.1195, 128.9360),
 			new GeoPointRequest(35.12, 128.936)));
@@ -254,6 +255,40 @@ class RerouteServiceTest {
 			new GeoPointRequest(35.1200, 128.9400),
 			new GeoPointRequest(35.1315, 128.8823)));
 		assertSavedRerouteSession(response.route().routeId(), 35.1200, 128.9400);
+	}
+
+	@Test
+	@DisplayName("복귀 경로 후보가 없으면 기존 no-route 오류 RT4040을 반환한다")
+	void returnsRouteNotFoundWhenWalkRepairPathIsMissing() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(walkRouteSearchService.search(userId, new WalkRouteSearchRequest(
+			new GeoPointRequest(35.1195, 128.9360),
+			new GeoPointRequest(35.12, 128.936))))
+			.thenThrow(new RouteException(RouteErrorCode.ROUTE_NOT_FOUND));
+
+		assertRouteError(
+			() -> service.reroute(userId, new RerouteRequest("rt_001", new GeoPointRequest(35.1195, 128.9360))),
+			RouteErrorCode.ROUTE_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("전체 재탐색 후보가 없으면 기존 no-route 오류 RT4040을 반환한다")
+	void returnsRouteNotFoundWhenFullReroutePathIsMissing() {
+		UUID userId = UUID.randomUUID();
+		RouteSession routeSession = routeSession(routeSummary("rt_001"));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
+			.thenReturn(Optional.of(routeSession));
+		when(walkRouteSearchService.search(userId, new WalkRouteSearchRequest(
+			new GeoPointRequest(35.1200, 128.9400),
+			new GeoPointRequest(35.1315, 128.8823))))
+			.thenReturn(new WalkRouteSearchResponse("rs_walk_reroute", List.of()));
+
+		assertRouteError(
+			() -> service.reroute(userId, new RerouteRequest("rt_001", new GeoPointRequest(35.1200, 128.9400))),
+			RouteErrorCode.ROUTE_NOT_FOUND);
 	}
 
 	@Test

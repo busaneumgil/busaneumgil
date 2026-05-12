@@ -6,6 +6,11 @@ import org.junit.Test
 
 class TextToSpeechControllerTest {
     @Test
+    fun `route briefing uses normal speed speech rate`() {
+        assertEquals(1.0f, ROUTE_BRIEFING_TTS_SPEECH_RATE)
+    }
+
+    @Test
     fun `no op tts controller stays unavailable and ignores commands`() {
         val controller = NoOpTextToSpeechController
 

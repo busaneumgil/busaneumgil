@@ -2,13 +2,16 @@ package com.ssafy.e102.global.external.graphhopper;
 
 import java.net.URI;
 import java.net.SocketTimeoutException;
-import java.util.Locale;
+import java.util.Map;
 import java.util.List;
+import java.util.Locale;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -22,6 +25,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
+import com.ssafy.e102.global.geo.GeoDistanceCalculator;
+import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 /**
  * Backend route service에서 GraphHopper runtime의 `/route` API로 나가는 단일 통로다.
@@ -33,9 +38,11 @@ import com.ssafy.e102.domain.route.exception.RouteException;
 public class GraphHopperRouteClient {
 
 	private static final Logger log = LoggerFactory.getLogger(GraphHopperRouteClient.class);
+	private static final double MAX_SNAP_DISTANCE_METER = 10.0;
 
 	private static final List<String> WALK_PATH_DETAILS = List.of(
 		"edge_id",
+		"walk_access",
 		"segment_type",
 		"signal_state",
 		"audio_signal_state",
@@ -46,18 +53,25 @@ public class GraphHopperRouteClient {
 
 	private final RestTemplate restTemplate;
 	private final GraphHopperProperties properties;
+	private final ObjectMapper objectMapper;
 
 	@Autowired
-	public GraphHopperRouteClient(RestTemplateBuilder builder, GraphHopperProperties properties) {
+	public GraphHopperRouteClient(RestTemplateBuilder builder, GraphHopperProperties properties,
+		ObjectMapper objectMapper) {
 		this(builder
 			.connectTimeout(properties.connectTimeout())
 			.readTimeout(properties.readTimeout())
-			.build(), properties);
+			.build(), properties, objectMapper);
 	}
 
 	GraphHopperRouteClient(RestTemplate restTemplate, GraphHopperProperties properties) {
+		this(restTemplate, properties, new ObjectMapper());
+	}
+
+	GraphHopperRouteClient(RestTemplate restTemplate, GraphHopperProperties properties, ObjectMapper objectMapper) {
 		this.properties = properties;
 		this.restTemplate = restTemplate;
+		this.objectMapper = objectMapper;
 	}
 
 	public GraphHopperRoutePath route(GraphHopperRouteRequest request) {
@@ -70,7 +84,7 @@ public class GraphHopperRouteClient {
 					.build(),
 				GraphHopperRouteResponse.class)
 				.getBody();
-			return extractFirstPath(response);
+			return extractFirstPath(request, response);
 		} catch (HttpStatusCodeException exception) {
 			RouteErrorCode errorCode = graphHopperHttpErrorCode(exception);
 			log.warn(
@@ -111,6 +125,54 @@ public class GraphHopperRouteClient {
 		}
 	}
 
+	public GraphHopperRoutePath routeWithCustomModel(GraphHopperRouteRequest request, JsonNode customModel) {
+		try {
+			GraphHopperRouteResponse response = restTemplate.exchange(
+				RequestEntity
+					.post(routePostUri())
+					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(routePostBody(request, customModel)),
+				GraphHopperRouteResponse.class)
+				.getBody();
+			return extractFirstPath(request, response);
+		} catch (HttpStatusCodeException exception) {
+			RouteErrorCode errorCode = graphHopperHttpErrorCode(exception);
+			log.warn(
+				"external route call failed provider={} operation={} status={} body={}",
+				"graphhopper",
+				"route-custom-model",
+				exception.getStatusCode(),
+				exception.getResponseBodyAsString(),
+				exception);
+			throw new RouteException(errorCode, errorCode.getMessage(), exception);
+		} catch (ResourceAccessException exception) {
+			RouteErrorCode errorCode = hasTimeoutCause(exception)
+				? RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT
+				: RouteErrorCode.EXTERNAL_ROUTE_API_FAILED;
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"graphhopper",
+				"route-custom-model",
+				errorCode.getStatus(),
+				exception.getMessage(),
+				exception);
+			throw new RouteException(errorCode, errorCode.getMessage(), exception);
+		} catch (RestClientException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"graphhopper",
+				"route-custom-model",
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+				exception.getMessage(),
+				exception);
+			throw new RouteException(
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(),
+				exception);
+		}
+	}
+
 	private RouteErrorCode graphHopperHttpErrorCode(HttpStatusCodeException exception) {
 		if (isGraphHopperNoRoute(exception.getResponseBodyAsString())) {
 			return RouteErrorCode.ROUTE_NOT_FOUND;
@@ -141,21 +203,72 @@ public class GraphHopperRouteClient {
 			.toUri();
 	}
 
-	private String point(com.ssafy.e102.global.geo.dto.GeoPointRequest point) {
+	private URI routePostUri() {
+		return UriComponentsBuilder
+			.fromUriString(properties.baseUrl())
+			.path("/route")
+			.build()
+			.toUri();
+	}
+
+	private Map<String, Object> routePostBody(GraphHopperRouteRequest request, JsonNode customModel) {
+		return Map.of(
+			"profile", request.profile().getProfileName(),
+			"points", List.of(
+				List.of(request.startPoint().lng(), request.startPoint().lat()),
+				List.of(request.endPoint().lng(), request.endPoint().lat())),
+			"points_encoded", false,
+			"locale", "ko-KR",
+			"details", WALK_PATH_DETAILS,
+			"custom_model", objectMapper.convertValue(customModel, Map.class));
+	}
+
+	private String point(GeoPointRequest point) {
 		return point.lat() + "," + point.lng();
 	}
 
-	private GraphHopperRoutePath extractFirstPath(GraphHopperRouteResponse response) {
+	private GraphHopperRoutePath extractFirstPath(GraphHopperRouteRequest request, GraphHopperRouteResponse response) {
 		if (response == null || response.paths() == null || response.paths().isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		GraphHopperPathResponse path = response.paths().get(0);
+		if (request.enforceSnapDistanceLimit()) {
+			validateSnapDistance(request, path);
+		}
+		validateWalkAccess(path);
 		List<GraphHopperCoordinate> coordinates = path.coordinates();
 		if (coordinates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
 		}
 		// 이후 step/payload service는 GraphHopper 원본 JSON이 아니라 이 정제된 path만 사용한다.
 		return new GraphHopperRoutePath(path.distance(), path.time(), coordinates, path.pathDetails());
+	}
+
+	private void validateSnapDistance(GraphHopperRouteRequest request, GraphHopperPathResponse path) {
+		List<GraphHopperCoordinate> snappedCoordinates = path.snappedCoordinates();
+		if (snappedCoordinates.size() < 2) {
+			return;
+		}
+		if (snapDistanceMeter(request.startPoint(), snappedCoordinates.get(0)) > MAX_SNAP_DISTANCE_METER
+			|| snapDistanceMeter(request.endPoint(),
+				snappedCoordinates.get(snappedCoordinates.size() - 1)) > MAX_SNAP_DISTANCE_METER) {
+			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
+		}
+	}
+
+	private double snapDistanceMeter(GeoPointRequest requestedPoint, GraphHopperCoordinate snappedCoordinate) {
+		return GeoDistanceCalculator.distanceMeter(
+			requestedPoint,
+			new GeoPointRequest(snappedCoordinate.lat().doubleValue(), snappedCoordinate.lng().doubleValue()));
+	}
+
+	private void validateWalkAccess(GraphHopperPathResponse path) {
+		if (path.pathDetails()
+			.getOrDefault("walk_access", List.of())
+			.stream()
+			.anyMatch(detail -> "NO".equalsIgnoreCase(detail.value()))) {
+			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
+		}
 	}
 
 	private boolean hasTimeoutCause(Throwable throwable) {

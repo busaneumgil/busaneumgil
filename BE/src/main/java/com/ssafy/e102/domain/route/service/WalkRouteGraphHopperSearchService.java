@@ -63,7 +63,7 @@ public class WalkRouteGraphHopperSearchService {
 		try {
 			// 외부 응답 원본은 client 내부 DTO로 닫고, route service에는 정제된 path만 넘긴다.
 			GraphHopperRoutePath path = graphHopperRouteClient.route(
-				new GraphHopperRouteRequest(startPoint, endPoint, profile));
+				new GraphHopperRouteRequest(startPoint, endPoint, profile, false));
 			candidates.add(new WalkRouteCandidate(routeOption, profile, path));
 		} catch (RouteException exception) {
 			// 한 option만 경로가 없을 수 있으므로 RT4040은 후보 제외로 다루고, 둘 다 없을 때만 실패한다.

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
+import com.ssafy.e102.eumgil.feature.navigation.NavigationScreenState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiState
 
@@ -62,6 +63,12 @@ internal object LowVisionNavigationLayoutDefaults {
     val currentLocationVerticalPadding = 12.dp
     val currentLocationLabelFontSize = 44.sp
     val currentLocationLabelLineHeight = 50.sp
+    val exitCardVerticalPadding = 22.dp
+    val exitIconContainerSize = 92.dp
+    val exitIconSize = 48.dp
+    val exitIconTextGap = 16.dp
+    val exitLabelFontSize = 48.sp
+    val exitLabelLineHeight = 54.sp
 }
 
 internal data class LowVisionNavigationMetricSection(
@@ -89,7 +96,7 @@ internal fun lowVisionNavigationActionCards(): List<LowVisionNavigationActionCar
             iconRes = R.drawable.ic_voice_location_pin,
         ),
         LowVisionNavigationActionCard(
-            label = "\uC548\uB0B4 \uC885\uB8CC",
+            label = "\uC548\uB0B4 \uC644\uB8CC",
             iconRes = R.drawable.ic_action_close,
         ),
     )
@@ -101,6 +108,16 @@ internal fun lowVisionNavigationBottomTabs(): List<LowVisionBottomTab> =
         LowVisionBottomTab.CATEGORY,
         LowVisionBottomTab.MY_PAGE,
     )
+
+internal const val LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE: String = "길 안내를 불러오지 못했습니다."
+
+internal fun lowVisionNavigationExitAction(): NavigationUiAction =
+    NavigationUiAction.NavigationCompleteClicked
+
+internal fun shouldShowLowVisionNavigationLoadError(
+    uiState: NavigationUiState,
+    loadErrorMessage: String?,
+): Boolean = uiState.screenState == NavigationScreenState.Loading && !loadErrorMessage.isNullOrBlank()
 
 internal fun lowVisionNavigationDisplayMetric(
     section: LowVisionNavigationMetricSection,
@@ -176,6 +193,8 @@ fun LowVisionNavigationScreen(
     onAction: (NavigationUiAction) -> Unit,
     modifier: Modifier = Modifier,
     onTabSelected: (LowVisionBottomTab) -> Unit = {},
+    loadErrorMessage: String? = null,
+    currentLocationAddress: String? = null,
 ) {
     Column(
         modifier =
@@ -195,38 +214,86 @@ fun LowVisionNavigationScreen(
                     ),
             verticalArrangement = Arrangement.spacedBy(LowVisionNavigationLayoutDefaults.contentGap),
         ) {
-            LowVisionNavigationMetricHeader(
-                uiState = uiState,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(LowVisionNavigationLayoutDefaults.metricHeaderHeight),
-            )
+            if (shouldShowLowVisionNavigationLoadError(uiState, loadErrorMessage)) {
+                LowVisionNavigationLoadError(
+                    message = loadErrorMessage.orEmpty(),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                )
+            } else {
+                LowVisionNavigationMetricHeader(
+                    uiState = uiState,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(LowVisionNavigationLayoutDefaults.metricHeaderHeight),
+                )
 
-            LowVisionCurrentLocationCard(
-                card = lowVisionNavigationActionCards().first(),
-                display = lowVisionCurrentLocationDisplay(uiState.mapOverlay.currentLocation?.coordinate),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-            )
+                LowVisionCurrentLocationCard(
+                    card = lowVisionNavigationActionCards().first(),
+                    display =
+                        lowVisionCurrentLocationDisplay(
+                            coordinate = uiState.mapOverlay.currentLocation?.coordinate,
+                            address = currentLocationAddress,
+                        ),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                )
 
-            LowVisionExitNavigationCard(
-                card = lowVisionNavigationActionCards()[1],
-                enabled = uiState.isExitEnabled,
-                onClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1.55f),
-            )
+                LowVisionExitNavigationCard(
+                    card = lowVisionNavigationActionCards()[1],
+                    enabled = uiState.isExitEnabled,
+                    onClick = { onAction(lowVisionNavigationExitAction()) },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1.55f),
+                )
+            }
         }
 
         LowVisionBottomNav(
             selectedTab = LowVisionBottomTab.HOME,
             onTabSelected = onTabSelected,
         )
+    }
+}
+
+@Composable
+private fun LowVisionNavigationLoadError(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .clearAndSetSemantics {
+                    contentDescription = message
+                },
+        shape = RoundedCornerShape(18.dp),
+        color = LowVisionNavigationPanel,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = message,
+                color = LowVisionNavigationYellow,
+                fontSize = 56.sp,
+                lineHeight = 64.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -404,7 +471,7 @@ private fun LowVisionExitNavigationCard(
                 .clip(RoundedCornerShape(18.dp))
                 .lowVisionButtonSemantics(
                     label = card.label,
-                    actionHint = "\uB450 \uBC88 \uD0ED\uD558\uBA74 \uAE38 \uC548\uB0B4\uB97C \uC885\uB8CC\uD569\uB2C8\uB2E4.",
+                    actionHint = "\uB450 \uBC88 \uD0ED\uD558\uBA74 \uAE38 \uC548\uB0B4\uB97C \uC644\uB8CC\uD569\uB2C8\uB2E4.",
                 )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(18.dp),
@@ -414,7 +481,10 @@ private fun LowVisionExitNavigationCard(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 24.dp, vertical = 36.dp),
+                    .padding(
+                        horizontal = 24.dp,
+                        vertical = LowVisionNavigationLayoutDefaults.exitCardVerticalPadding,
+                    ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -423,23 +493,23 @@ private fun LowVisionExitNavigationCard(
                 color = LowVisionNavigationCoral.copy(alpha = contentAlpha),
             ) {
                 Box(
-                    modifier = Modifier.size(112.dp),
+                    modifier = Modifier.size(LowVisionNavigationLayoutDefaults.exitIconContainerSize),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         painter = painterResource(id = card.iconRes),
                         contentDescription = null,
                         tint = Color.Black,
-                        modifier = Modifier.size(58.dp),
+                        modifier = Modifier.size(LowVisionNavigationLayoutDefaults.exitIconSize),
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(38.dp))
+            Spacer(modifier = Modifier.height(LowVisionNavigationLayoutDefaults.exitIconTextGap))
             Text(
                 text = card.label,
                 color = LowVisionNavigationInactive.copy(alpha = contentAlpha),
-                fontSize = 60.sp,
-                lineHeight = 68.sp,
+                fontSize = LowVisionNavigationLayoutDefaults.exitLabelFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.exitLabelLineHeight,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center,

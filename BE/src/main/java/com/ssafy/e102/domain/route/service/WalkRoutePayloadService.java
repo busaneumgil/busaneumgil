@@ -329,24 +329,40 @@ public class WalkRoutePayloadService {
 		WalkRouteProfile profile,
 		BigDecimal totalDistanceMeter,
 		BigDecimal routeLength) {
-		return path.details()
+		List<GuidanceEventCandidate> candidates = new ArrayList<>();
+		List<GraphHopperPathDetail> details = path.details()
 			.getOrDefault("avg_slope_percent", List.of())
 			.stream()
-			.flatMap(
-				detail -> slopeGuidanceEventType(profile, detail.value())
-					.flatMap(type -> eventDistanceMeter(
-						path.coordinates(),
-						detail.fromIndex(),
-						totalDistanceMeter,
-						routeLength)
-						.map(distanceMeter -> new GuidanceEventCandidate(
-							type,
-							detail.fromIndex(),
-							distanceMeter,
-							slopePriority(type),
-							1)))
-					.stream())
+			.sorted(Comparator
+				.comparingInt(GraphHopperPathDetail::fromIndex)
+				.thenComparingInt(GraphHopperPathDetail::toIndex))
 			.toList();
+
+		RouteGuidanceEventType previousType = null;
+		int previousToIndex = -1;
+		for (GraphHopperPathDetail detail : details) {
+			Optional<RouteGuidanceEventType> type = slopeGuidanceEventType(profile, detail.value());
+			if (type.isEmpty()) {
+				previousType = null;
+				previousToIndex = -1;
+				continue;
+			}
+			RouteGuidanceEventType currentType = type.get();
+			boolean continuousSameType = currentType == previousType && detail.fromIndex() <= previousToIndex;
+			if (!continuousSameType) {
+				continuousAccessibilityEventCandidate(
+					path.coordinates(),
+					currentType,
+					detail.fromIndex(),
+					totalDistanceMeter,
+					routeLength,
+					slopePriority(currentType))
+					.ifPresent(candidates::add);
+			}
+			previousType = currentType;
+			previousToIndex = Math.max(previousToIndex, detail.toIndex());
+		}
+		return candidates;
 	}
 
 	private Optional<RouteGuidanceEventType> slopeGuidanceEventType(WalkRouteProfile profile, String value) {
@@ -402,20 +418,57 @@ public class WalkRoutePayloadService {
 		AlertRule rule,
 		BigDecimal totalDistanceMeter,
 		BigDecimal routeLength) {
-		return path.details()
+		List<GuidanceEventCandidate> candidates = new ArrayList<>();
+		List<GraphHopperPathDetail> details = path.details()
 			.getOrDefault(rule.detailName(), List.of())
 			.stream()
-			.filter(detail -> rule.expectedValues().contains(detail.value()))
-			.flatMap(
-				detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
-					.map(distanceMeter -> new GuidanceEventCandidate(
-						rule.type(),
-						detail.fromIndex(),
-						distanceMeter,
-						rule.priority(),
-						1))
-					.stream())
+			.sorted(Comparator
+				.comparingInt(GraphHopperPathDetail::fromIndex)
+				.thenComparingInt(GraphHopperPathDetail::toIndex))
 			.toList();
+
+		RouteGuidanceEventType previousType = null;
+		int previousToIndex = -1;
+		for (GraphHopperPathDetail detail : details) {
+			if (!rule.expectedValues().contains(detail.value())) {
+				previousType = null;
+				previousToIndex = -1;
+				continue;
+			}
+			boolean continuousSameType = rule.type() == previousType && detail.fromIndex() <= previousToIndex;
+			if (!continuousSameType) {
+				continuousAccessibilityEventCandidate(
+					path.coordinates(),
+					rule.type(),
+					detail.fromIndex(),
+					totalDistanceMeter,
+					routeLength,
+					rule.priority())
+					.ifPresent(candidates::add);
+			}
+			previousType = rule.type();
+			previousToIndex = Math.max(previousToIndex, detail.toIndex());
+		}
+		return candidates;
+	}
+
+	private Optional<GuidanceEventCandidate> continuousAccessibilityEventCandidate(
+		List<GraphHopperCoordinate> coordinates,
+		RouteGuidanceEventType type,
+		int fromIndex,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength,
+		int priority) {
+		if (type == RouteGuidanceEventType.LOW_SLOPE && fromIndex == 0) {
+			return Optional.empty();
+		}
+		return eventDistanceMeter(coordinates, fromIndex, totalDistanceMeter, routeLength)
+			.map(distanceMeter -> new GuidanceEventCandidate(
+				type,
+				fromIndex,
+				distanceMeter,
+				priority,
+				1));
 	}
 
 	private Optional<BigDecimal> eventDistanceMeter(

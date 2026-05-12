@@ -27,7 +27,7 @@ export interface TokenResponse {
 export type WorkStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
 export type AssignmentType = "ROAD_NETWORK" | "FACILITY";
 
-export type AdminPage = "network" | "routeTuning" | "facilities" | "hazards" | "users";
+export type AdminPage = "network" | "routeTuning" | "facilities" | "hazards" | "users" | "logs";
 
 export type EditableSegmentType = "SIDE_LINE" | "CROSS_WALK";
 export type SegmentFeatureType = "CROSSWALK" | "AUDIO_SIGNAL" | "BRAILLE_BLOCK" | "STAIRS";
@@ -409,6 +409,27 @@ export interface AdminUserListResponse {
 
 export interface AdminAreaAssignmentListResponse {
   assignments: Assignment[];
+}
+
+export interface AdminAuditLog {
+  logId: number;
+  actorUserId: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  gu: string | null;
+  dong: string | null;
+  summary: string;
+  beforeJson: unknown | null;
+  afterJson: unknown | null;
+  createdAt: string;
+}
+
+export interface AdminAuditLogListResponse {
+  logs: AdminAuditLog[];
+  size: number;
+  nextCursor: number | null;
+  hasNext: boolean;
 }
 
 export interface AdminHazardReportSummary {

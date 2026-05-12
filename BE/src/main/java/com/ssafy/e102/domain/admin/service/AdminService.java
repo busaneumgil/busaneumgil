@@ -18,6 +18,7 @@ import com.ssafy.e102.domain.admin.dto.request.AdminAreaAssignmentUpsertRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminUserRoleUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaAssignmentListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaAssignmentResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminAuditLogListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminMeResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminUserListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminUserResponse;
@@ -44,6 +45,7 @@ public class AdminService {
 		"ADMIN_USER_WRITE",
 		"ADMIN_AREA_ASSIGNMENT_READ",
 		"ADMIN_AREA_ASSIGNMENT_WRITE",
+		"ADMIN_AUDIT_LOG_READ",
 		"ADMIN_PLACE_READ",
 		"ADMIN_PLACE_WRITE",
 		"ADMIN_ROUTE_TUNING_READ",
@@ -53,14 +55,17 @@ public class AdminService {
 	private final UserRepository userRepository;
 	private final AdminAreaRepository adminAreaRepository;
 	private final AdminAreaAssignmentRepository adminAreaAssignmentRepository;
+	private final AdminAuditLogService adminAuditLogService;
 
 	public AdminService(
 		UserRepository userRepository,
 		AdminAreaRepository adminAreaRepository,
-		AdminAreaAssignmentRepository adminAreaAssignmentRepository) {
+		AdminAreaAssignmentRepository adminAreaAssignmentRepository,
+		AdminAuditLogService adminAuditLogService) {
 		this.userRepository = userRepository;
 		this.adminAreaRepository = adminAreaRepository;
 		this.adminAreaAssignmentRepository = adminAreaAssignmentRepository;
+		this.adminAuditLogService = adminAuditLogService;
 	}
 
 	public AdminMeResponse getMe(UUID userId) {
@@ -127,12 +132,15 @@ public class AdminService {
 		User assignee = request.assigneeUserId() == null ? null : requireAdminUser(request.assigneeUserId());
 		AdminAreaAssignment assignment = adminAreaAssignmentRepository
 			.findByGuAndDongAndAssignmentType(request.gu(), request.dong(), request.assignmentType())
-			.orElseGet(() -> adminAreaAssignmentRepository.save(AdminAreaAssignment.create(
+			.orElse(null);
+		if (assignment == null) {
+			assignment = adminAreaAssignmentRepository.save(AdminAreaAssignment.create(
 				request.gu(),
 				request.dong(),
 				request.assignmentType(),
 				null,
-				AdminAreaWorkStatus.NOT_STARTED)));
+				AdminAreaWorkStatus.NOT_STARTED));
+		}
 		assignment.assign(assignee);
 		if (request.status() != null) {
 			assignment.changeStatus(request.status());
@@ -148,6 +156,16 @@ public class AdminService {
 			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "담당 구/동을 찾을 수 없습니다."));
 		assignment.changeStatus(request.status());
 		return AdminAreaAssignmentResponse.from(assignment);
+	}
+
+	public AdminAuditLogListResponse getAuditLogs(
+		Long cursor,
+		String action,
+		String gu,
+		String dong,
+		UUID actorUserId,
+		int size) {
+		return adminAuditLogService.getLogs(cursor, action, gu, dong, actorUserId, size);
 	}
 
 	public void requireCanEditArea(UUID userId, String gu, String dong, AdminAreaAssignmentType assignmentType) {

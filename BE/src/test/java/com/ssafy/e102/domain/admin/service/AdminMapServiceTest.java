@@ -43,6 +43,7 @@ import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
@@ -56,6 +57,9 @@ class AdminMapServiceTest {
 
 	@Mock
 	private RoadSegmentRepository roadSegmentRepository;
+
+	@Mock
+	private SegmentFeatureRepository segmentFeatureRepository;
 
 	@Mock
 	private PlaceRepository placeRepository;
@@ -77,6 +81,7 @@ class AdminMapServiceTest {
 		adminMapService = new AdminMapService(
 			adminAreaRepository,
 			roadSegmentRepository,
+			segmentFeatureRepository,
 			placeRepository,
 			placeAccessibilityFeatureRepository,
 			geoPointConverter,
@@ -105,6 +110,7 @@ class AdminMapServiceTest {
 		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동", 10))
 			.thenReturn(List.of(roadSegment));
 		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
+		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
 
 		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 10);
 

@@ -1,7 +1,17 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteLeg
+import com.ssafy.e102.eumgil.core.model.RouteLegType
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import java.util.Locale
+
+internal fun RouteCandidate.toRouteDetailStepKind(segment: RouteSegment): RouteDetailStepKind =
+    when (segment.resolveSourceLeg(legs = legs)?.type) {
+        RouteLegType.BUS -> RouteDetailStepKind.BUS
+        RouteLegType.SUBWAY -> RouteDetailStepKind.SUBWAY
+        else -> segment.toRouteDetailStepKind()
+    }
 
 internal fun RouteSegment.toRouteDetailStepKind(): RouteDetailStepKind {
     val normalizedGuidance = guidanceMessage.trim().lowercase(Locale.US)
@@ -22,6 +32,11 @@ internal fun RouteSegment.toRouteDetailStepKind(): RouteDetailStepKind {
         else -> RouteDetailStepKind.STRAIGHT
     }
 }
+
+internal fun RouteSegment.resolveSourceLeg(legs: List<RouteLeg>): RouteLeg? =
+    sourceLegSequence?.let { sourceLegSequence ->
+        legs.firstOrNull { leg -> leg.sequence == sourceLegSequence }
+    }
 
 private fun String.containsAnyRouteGuidanceKeyword(vararg keywords: String): Boolean =
     keywords.any { keyword -> contains(keyword, ignoreCase = true) }

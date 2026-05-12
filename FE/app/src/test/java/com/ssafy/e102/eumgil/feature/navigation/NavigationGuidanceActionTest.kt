@@ -1,7 +1,17 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteLeg
+import com.ssafy.e102.eumgil.core.model.RouteLegRole
+import com.ssafy.e102.eumgil.core.model.RouteLegType
+import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RoutePolyline
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
+import com.ssafy.e102.eumgil.core.model.RouteSummary
+import com.ssafy.e102.eumgil.core.model.RouteTransitStop
+import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -74,4 +84,79 @@ class NavigationGuidanceActionTest {
         assertEquals("주변 차량이 멈췄는지 확인한 뒤 횡단보도를 조심해서 건너세요.", detail.description)
         assertEquals(NavigationGuidanceAction.CROSSWALK, detail.guidanceAction)
     }
+
+    @Test
+    fun `transit route uses bus and subway actions from source legs`() {
+        val route = transitRouteCandidateForNavigationTest()
+        val busSegment = route.segments[0]
+        val subwaySegment = route.segments[1]
+
+        assertEquals(NavigationGuidanceAction.BUS, route.toNavigationGuidanceAction(busSegment))
+        assertEquals(NavigationGuidanceAction.SUBWAY, route.toNavigationGuidanceAction(subwaySegment))
+
+        val busDetail = route.toNavigationHeroDetail(busSegment)
+        assertEquals("버스 탑승", busDetail.title)
+        assertEquals("시청 정류장에서 1001번 버스를 타고 이동하세요.", busDetail.description)
+        assertEquals(NavigationGuidanceAction.BUS, busDetail.guidanceAction)
+
+        val subwayDetail = route.toNavigationHeroDetail(subwaySegment)
+        assertEquals("지하철 탑승", subwayDetail.title)
+        assertEquals("시청역에서 2호선 지하철을 타고 이동하세요.", subwayDetail.description)
+        assertEquals(NavigationGuidanceAction.SUBWAY, subwayDetail.guidanceAction)
+    }
+}
+
+private fun transitRouteCandidateForNavigationTest(): RouteCandidate {
+    val previewPoints =
+        listOf(
+            GeoCoordinate(35.1796, 129.0756),
+            GeoCoordinate(35.1788, 129.0738),
+            GeoCoordinate(35.1776, 129.0708),
+        )
+
+    return RouteCandidate(
+        routeOption = RouteOption.RECOMMENDED,
+        title = "Transit Test Route",
+        transportMode = RouteTransportMode.PUBLIC_TRANSIT,
+        summary =
+            RouteSummary(
+                distanceMeters = 3_200,
+                estimatedTimeMinutes = 24,
+                riskLevel = com.ssafy.e102.eumgil.core.model.RouteRiskLevel.LOW,
+            ),
+        legs =
+            listOf(
+                RouteLeg(
+                    sequence = 1,
+                    type = RouteLegType.BUS,
+                    role = RouteLegRole.TRANSIT,
+                    routeNo = "1001",
+                    boardingStop = RouteTransitStop(name = "시청 정류장", coordinate = previewPoints[0]),
+                    polyline = RoutePolyline(points = previewPoints.take(2)),
+                ),
+                RouteLeg(
+                    sequence = 2,
+                    type = RouteLegType.SUBWAY,
+                    role = RouteLegRole.TRANSIT,
+                    routeNo = "2호선",
+                    boardingStop = RouteTransitStop(name = "시청역", coordinate = previewPoints[1]),
+                    polyline = RoutePolyline(points = previewPoints.drop(1)),
+                ),
+            ),
+        segments =
+            listOf(
+                RouteSegment(
+                    sequence = 1,
+                    distanceMeters = 1_200,
+                    guidanceMessage = "Next transit segment",
+                    sourceLegSequence = 1,
+                ),
+                RouteSegment(
+                    sequence = 2,
+                    distanceMeters = 2_000,
+                    guidanceMessage = "Next transit segment",
+                    sourceLegSequence = 2,
+                ),
+            ),
+    )
 }

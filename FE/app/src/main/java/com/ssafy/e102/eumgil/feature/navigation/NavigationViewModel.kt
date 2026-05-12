@@ -1200,7 +1200,7 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
                     instruction = segment.guidanceMessage,
                     distanceLabel = segment.distanceMeters.toNavigationDistanceLabel(),
                     riskLabel = segment.riskLevel.toRiskLabel(),
-                    guidanceAction = segment.toNavigationGuidanceAction(),
+                    guidanceAction = selectedRoute.toNavigationGuidanceAction(segment),
                     isActive = index == activeSegmentIndex,
                     isFocused = index == focusedSegmentIndex,
                     isCompleted = index < activeSegmentIndex,
@@ -1213,7 +1213,7 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     focusedSegmentIndex: Int,
 ): NavigationFocusedSegmentCardUiState? {
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
-    val heroDetail = focusedSegment.toNavigationHeroDetail()
+    val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
 
     return NavigationFocusedSegmentCardUiState(
         sequenceLabel = "${focusedSegment.sequence} / ${selectedRoute.segments.size.coerceAtLeast(1)}",
@@ -1432,7 +1432,7 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
                 segment.guidanceMessage.isNotBlank()
             }
             ?: selectedRoute.segments.firstOrNull()
-    val heroDetail = primarySegment?.toNavigationHeroDetail()
+    val heroDetail = primarySegment?.let(selectedRoute::toNavigationHeroDetail)
 
     return NavigationStepCardUiState(
         sectionLabel = "다음 안내",
@@ -1484,7 +1484,9 @@ private fun RouteNavigationRequest.toEmptyStepCardUiState(): NavigationStepCardU
         instruction = "현재 안내 메시지를 준비하지 못했습니다.",
         supportingText =
             "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 거리와 예상 시간 요약만 먼저 표시합니다.",
-        guidanceAction = selectedRoute.segments.firstOrNull()?.toNavigationGuidanceAction() ?: NavigationGuidanceAction.STRAIGHT,
+        guidanceAction =
+            selectedRoute.segments.firstOrNull()?.let(selectedRoute::toNavigationGuidanceAction)
+                ?: NavigationGuidanceAction.STRAIGHT,
         metrics =
             listOf(
                 NavigationStepMetricUiState(

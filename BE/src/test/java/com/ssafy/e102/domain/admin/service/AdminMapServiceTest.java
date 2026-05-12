@@ -10,6 +10,7 @@ import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,9 +63,13 @@ class AdminMapServiceTest {
 	@Mock
 	private PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
 
+	@Mock
+	private AdminService adminService;
+
 	private AdminMapService adminMapService;
 	private GeometryFactory geometryFactory;
 	private GeoPointConverter geoPointConverter;
+	private UUID adminUserId;
 
 	@BeforeEach
 	void setUp() {
@@ -74,8 +79,10 @@ class AdminMapServiceTest {
 			roadSegmentRepository,
 			placeRepository,
 			placeAccessibilityFeatureRepository,
-			geoPointConverter);
+			geoPointConverter,
+			adminService);
 		geometryFactory = new GeometryFactory();
+		adminUserId = UUID.randomUUID();
 	}
 
 	@Test
@@ -154,11 +161,15 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 장소 기본 정보를 부분 수정한다")
 	void updatePlace() throws Exception {
 		Place place = place();
+		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.empty());
 
 		AdminPlaceDetailResponse response = adminMapService.updatePlace(
+			adminUserId,
 			1L,
+			"강서구",
+			"명지동",
 			new AdminPlaceUpdateRequest(
 				" 부산광역시청 ",
 				PlaceCategory.PUBLIC_OFFICE,
@@ -179,11 +190,15 @@ class AdminMapServiceTest {
 		Place place = place();
 		Place otherPlace = place();
 		ReflectionTestUtils.setField(otherPlace, "placeId", 2L);
+		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.of(otherPlace));
 
 		assertThatThrownBy(() -> adminMapService.updatePlace(
+			adminUserId,
 			1L,
+			"강서구",
+			"명지동",
 			new AdminPlaceUpdateRequest(null, null, null, null, "67890")))
 			.isInstanceOf(PlaceException.class);
 	}
@@ -192,12 +207,16 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 장소 접근성 속성은 요청 목록으로 전체 교체한다")
 	void updatePlaceAccessibilityFeatures() throws Exception {
 		Place place = place();
+		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
 		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
 		when(placeAccessibilityFeatureRepository.saveAll(any()))
 			.thenAnswer(invocation -> invocation.getArgument(0));
 
 		AdminPlaceDetailResponse response = adminMapService.updatePlaceAccessibilityFeatures(
+			adminUserId,
 			1L,
+			"강서구",
+			"명지동",
 			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.accessibleToilet,
@@ -214,10 +233,14 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 장소 접근성 속성은 같은 유형을 중복 요청할 수 없다")
 	void updatePlaceAccessibilityFeaturesDuplicateType() throws Exception {
 		Place place = place();
+		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
 		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
 
 		assertThatThrownBy(() -> adminMapService.updatePlaceAccessibilityFeatures(
+			adminUserId,
 			1L,
+			"강서구",
+			"명지동",
 			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, false)))))

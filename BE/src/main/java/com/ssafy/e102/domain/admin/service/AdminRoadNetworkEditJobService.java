@@ -2,6 +2,7 @@ package com.ssafy.e102.domain.admin.service;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskRejectedException;
@@ -38,7 +39,8 @@ public class AdminRoadNetworkEditJobService {
 		this.taskExecutor = taskExecutor;
 	}
 
-	public AdminRoadNetworkEditJobResponse create(AdminRoadNetworkEditApplyRequest request) {
+	public AdminRoadNetworkEditJobResponse create(UUID userId, AdminRoadNetworkEditApplyRequest request) {
+		editService.validateEditableRequest(userId, request);
 		int totalEdits = request.edits().size();
 		Long jobId = jdbcTemplate.queryForObject(
 			"""
@@ -56,7 +58,7 @@ public class AdminRoadNetworkEditJobService {
 			writeJson(request),
 			totalEdits);
 		try {
-			taskExecutor.execute(() -> run(jobId, request));
+			taskExecutor.execute(() -> run(jobId, userId, request));
 		} catch (TaskRejectedException exception) {
 			markFailed(jobId, "편집 반영 작업 대기열이 가득 찼습니다.");
 		}
@@ -100,10 +102,10 @@ public class AdminRoadNetworkEditJobService {
 			AdminRoadNetworkEditJobStatus.RUNNING.name());
 	}
 
-	private void run(Long jobId, AdminRoadNetworkEditApplyRequest request) {
+	private void run(Long jobId, UUID userId, AdminRoadNetworkEditApplyRequest request) {
 		try {
 			markRunning(jobId);
-			AdminRoadNetworkEditApplyResponse result = editService.apply(request);
+			AdminRoadNetworkEditApplyResponse result = editService.apply(userId, request);
 			markSucceeded(jobId, request.edits().size(), result);
 		} catch (Exception exception) {
 			markFailed(jobId, exception);

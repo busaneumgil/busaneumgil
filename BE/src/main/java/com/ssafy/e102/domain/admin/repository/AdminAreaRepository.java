@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.ssafy.e102.domain.admin.entity.AdminArea;
 
@@ -15,4 +16,19 @@ public interface AdminAreaRepository extends JpaRepository<AdminArea, Long> {
 		order by adminArea.gu asc, adminArea.dong asc
 		""")
 	List<Object[]> findDistinctAreas();
+
+	@Query("""
+		select count(adminArea) > 0
+		from AdminArea adminArea
+		where adminArea.gu = :gu
+			and (
+				adminArea.dong = :dong
+				or replace(replace(replace(replace(adminArea.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+			)
+		""")
+	boolean existsArea(
+		@Param("gu")
+		String gu,
+		@Param("dong")
+		String dong);
 }

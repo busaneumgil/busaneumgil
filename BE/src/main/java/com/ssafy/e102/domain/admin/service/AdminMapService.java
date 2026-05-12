@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.locationtech.jts.geom.Envelope;
@@ -60,18 +61,21 @@ public class AdminMapService {
 	private final PlaceRepository placeRepository;
 	private final PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
 	private final GeoPointConverter geoPointConverter;
+	private final AdminService adminService;
 
 	public AdminMapService(
 		AdminAreaRepository adminAreaRepository,
 		RoadSegmentRepository roadSegmentRepository,
 		PlaceRepository placeRepository,
 		PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter,
+		AdminService adminService) {
 		this.adminAreaRepository = adminAreaRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.placeRepository = placeRepository;
 		this.placeAccessibilityFeatureRepository = placeAccessibilityFeatureRepository;
 		this.geoPointConverter = geoPointConverter;
+		this.adminService = adminService;
 	}
 
 	public AdminAreaListResponse getAreas() {
@@ -164,7 +168,13 @@ public class AdminMapService {
 	}
 
 	@Transactional
-	public AdminPlaceDetailResponse updatePlace(Long placeId, AdminPlaceUpdateRequest request) {
+	public AdminPlaceDetailResponse updatePlace(
+		UUID userId,
+		Long placeId,
+		String gu,
+		String dong,
+		AdminPlaceUpdateRequest request) {
+		validateEditablePlace(userId, placeId, gu, dong);
 		Place place = getPlaceWithAccessibilityFeatures(placeId);
 		validateProviderPlaceIdOwner(placeId, normalizeNullableText(request.providerPlaceId()));
 		place.updateBasicInfo(
@@ -178,8 +188,12 @@ public class AdminMapService {
 
 	@Transactional
 	public AdminPlaceDetailResponse updatePlaceAccessibilityFeatures(
+		UUID userId,
 		Long placeId,
+		String gu,
+		String dong,
 		AdminPlaceAccessibilityFeaturesUpdateRequest request) {
+		validateEditablePlace(userId, placeId, gu, dong);
 		Place place = requirePlace(placeId);
 		validateUniqueFeatureTypes(request.features());
 		placeAccessibilityFeatureRepository.deleteAllByPlace_PlaceId(placeId);
@@ -218,6 +232,13 @@ public class AdminMapService {
 			.ifPresent(ignored -> {
 				throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "이미 다른 장소에 연결된 providerPlaceId입니다.");
 			});
+	}
+
+	private void validateEditablePlace(UUID userId, Long placeId, String gu, String dong) {
+		adminService.requireCanEditArea(userId, gu, dong);
+		if (!placeRepository.existsIntersectingAreaByPlaceId(placeId, gu, dong)) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "담당 구/동의 장소만 수정할 수 있습니다.");
+		}
 	}
 
 	private void validateUniqueFeatureTypes(

@@ -990,6 +990,50 @@ select {
   gap: 14px;
 }
 
+.user-management-layout {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.user-management-layout .panel-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--color-white);
+  padding: 14px;
+  margin: 0;
+}
+
+.admin-table-scroll {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+
+.admin-table th,
+.admin-table td {
+  vertical-align: top;
+}
+
+.admin-table td strong,
+.admin-table td span,
+.admin-table td small {
+  display: block;
+}
+
+.admin-table td span,
+.admin-table td small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-table select {
+  min-width: 150px;
+}
+
 .admin-auth-panel {
   display: grid;
   grid-template-columns: minmax(120px, 180px) minmax(300px, 1fr) minmax(260px, 380px) minmax(240px, 360px);

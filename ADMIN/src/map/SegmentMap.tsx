@@ -27,6 +27,7 @@ interface SegmentMapProps {
   brailleBlockPayload?: ReferencePointPayload;
   roadviewContainerRef: RefObject<HTMLDivElement | null>;
   onRoadviewChange: (state: RoadviewDockState) => void;
+  editable?: boolean;
 }
 
 export interface RoadviewDockState {
@@ -53,6 +54,7 @@ export function SegmentMap({
   brailleBlockPayload,
   roadviewContainerRef,
   onRoadviewChange,
+  editable = true,
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -95,6 +97,12 @@ export function SegmentMap({
     onSelectSegmentRef.current = onSelectSegment;
     draftEditsRef.current = draftEdits;
   }, [draftEdits, onDraftEdit, onSelectSegment]);
+
+  useEffect(() => {
+    if (!editable && (modeRef.current === "add" || modeRef.current === "delete")) {
+      setMode("select");
+    }
+  }, [editable]);
 
   useEffect(() => {
     let disposed = false;
@@ -186,6 +194,9 @@ export function SegmentMap({
   }, [selectedSegment]);
 
   function setMode(nextMode: EditorMode) {
+    if (!editable && (nextMode === "add" || nextMode === "delete")) {
+      return;
+    }
     modeRef.current = nextMode;
     setModeState(nextMode);
     if (nextMode !== "add") {
@@ -207,6 +218,10 @@ export function SegmentMap({
   function handleMapCoordinate(coord: Coord, latLng: unknown) {
     if (modeRef.current === "select") {
       selectNearestSegment(coord, 35, false);
+      return;
+    }
+
+    if (!editable && (modeRef.current === "add" || modeRef.current === "delete")) {
       return;
     }
 
@@ -578,9 +593,9 @@ export function SegmentMap({
       <div ref={containerRef} className="map-canvas" />
       <div className="map-toolbar">
         <button className={mode === "select" ? "selected-tool" : ""} onClick={() => setMode("select")}>Select</button>
-        <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")}>Delete</button>
-        <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")}>Add</button>
-        <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add"}>
+        <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
+        <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
+        <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
           <option value="SIDE_LINE">SIDE_LINE</option>
           <option value="CROSS_WALK">CROSS_WALK</option>
         </select>
@@ -589,8 +604,8 @@ export function SegmentMap({
         <button onClick={drawRoutePreview}>안내</button>
         {mode === "delete" && (
           <>
-            <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)}>Drag</button>
-            <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3}>Delete all</button>
+            <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>Drag</button>
+            <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>Delete all</button>
           </>
         )}
         <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>

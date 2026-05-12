@@ -1,3 +1,4 @@
+export type UserRole = "USER" | "ADMIN";
 export type AdminRole = "ADMIN";
 
 export type SocialProvider = "KAKAO" | "NAVER" | "GOOGLE";
@@ -23,9 +24,9 @@ export interface TokenResponse {
   refreshToken: string;
 }
 
-export type WorkStatus = "TODO" | "DRAFT" | "REVIEW" | "APPLIED" | "REOPENED";
+export type WorkStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
 
-export type AdminPage = "network" | "facilities" | "hazards";
+export type AdminPage = "network" | "facilities" | "hazards" | "users";
 
 export type EditableSegmentType = "SIDE_LINE" | "CROSS_WALK";
 
@@ -48,25 +49,13 @@ export type AccessibilityFeatureType =
   | "guidanceFacility";
 
 export interface Assignment {
-  assignmentId: string;
+  assignmentId: number | null;
   gu: string;
   dong: string;
-  assigneeId: string;
-  assigneeName: string;
+  assigneeUserId: string | null;
+  assigneeLabel: string | null;
   status: WorkStatus;
-  changeSummary: ChangeSummary;
-  assigneeMemo: string;
-  adminMemo: string;
-  updatedAt: string;
-  reviewedAt?: string;
-  appliedAt?: string;
-}
-
-export interface ChangeSummary {
-  addedSideLine: number;
-  addedCrossWalk: number;
-  deletedSegments: number;
-  deletedNodes: number;
+  updatedAt: string | null;
 }
 
 export interface AreaOption {
@@ -350,6 +339,25 @@ export interface AdminMeResponse {
   userId: string;
   role: AdminRole;
   permissions: string[];
+}
+
+export interface AdminUserResponse {
+  userId: string;
+  socialProvider: SocialProvider;
+  socialProviderUserId: string;
+  selectedPrimaryUserType: string;
+  selectedMobilitySubtype: string | null;
+  role: UserRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminUserListResponse {
+  users: AdminUserResponse[];
+}
+
+export interface AdminAreaAssignmentListResponse {
+  assignments: Assignment[];
 }
 
 export interface AdminHazardReportSummary {

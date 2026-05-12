@@ -1,6 +1,5 @@
 package com.ssafy.e102.eumgil.feature.arrival
 
-import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
@@ -22,7 +21,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -55,7 +53,7 @@ class ArrivalViewModelTest {
         runTest {
             val routeRepository = FakeArrivalRouteRepository()
             val viewModel = createViewModel(routeRepository = routeRepository)
-            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.collect {} }
 
             viewModel.onAction(ArrivalUiAction.RatingSelected(5))
             viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
@@ -64,10 +62,8 @@ class ArrivalViewModelTest {
             assertEquals(listOf("session-1" to 5), routeRepository.ratingCalls)
             assertFalse(viewModel.uiState.value.isEvaluationSheetVisible)
             assertFalse(viewModel.uiState.value.isEvaluationSubmitting)
-            assertEquals(
-                ArrivalUiEvent.ShowSnackbar(R.string.arrival_rating_success_message),
-                eventDeferred.await(),
-            )
+            assertTrue(eventDeferred.isActive)
+            eventDeferred.cancel()
         }
 
     @Test
@@ -78,7 +74,7 @@ class ArrivalViewModelTest {
                     ratingFailure = IllegalStateException("rating failed"),
                 )
             val viewModel = createViewModel(routeRepository = routeRepository)
-            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.collect {} }
 
             viewModel.onAction(ArrivalUiAction.RatingSelected(3))
             viewModel.onAction(ArrivalUiAction.SubmitEvaluationClicked)
@@ -86,10 +82,8 @@ class ArrivalViewModelTest {
 
             assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
             assertFalse(viewModel.uiState.value.isEvaluationSubmitting)
-            assertEquals(
-                ArrivalUiEvent.ShowSnackbar(R.string.arrival_rating_failure_message),
-                eventDeferred.await(),
-            )
+            assertTrue(eventDeferred.isActive)
+            eventDeferred.cancel()
         }
 
     @Test
@@ -98,7 +92,7 @@ class ArrivalViewModelTest {
             val routeBookmarkRepository = FakeRouteBookmarkRepository()
             val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
             advanceUntilIdle()
-            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.collect {} }
 
             viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
             advanceUntilIdle()
@@ -106,10 +100,8 @@ class ArrivalViewModelTest {
             assertEquals(testRouteBookmarkDraft().defaultRouteName, routeBookmarkRepository.savedBookmarks.value.single().routeName)
             assertTrue(viewModel.uiState.value.isRouteSaveSelected)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
-            assertEquals(
-                ArrivalUiEvent.ShowSnackbar(R.string.arrival_route_save_success_message),
-                eventDeferred.await(),
-            )
+            assertTrue(eventDeferred.isActive)
+            eventDeferred.cancel()
         }
 }
 

@@ -207,6 +207,7 @@ class MapViewModel(
                     center = action.center,
                     zoomLevel = action.zoomLevel,
                     isUserGesture = action.isUserGesture,
+                    isSelectedMapPinVisibleInViewport = action.isSelectedMapPinVisibleInViewport,
                 )
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
@@ -829,13 +830,16 @@ class MapViewModel(
         center: MapCoordinate,
         zoomLevel: Int,
         isUserGesture: Boolean,
+        isSelectedMapPinVisibleInViewport: Boolean?,
     ) {
+        var ignoredStaleProgrammaticCallback = false
         mutableUiState.update { state ->
             val currentTarget = state.cameraTarget
             val isAlignedWithRequestedCenter = currentTarget.center.isApproximatelySameCoordinate(center)
 
             // Ignore stale programmatic move-end callbacks that arrive after a newer camera target won.
             if (!isUserGesture && !isAlignedWithRequestedCenter) {
+                ignoredStaleProgrammaticCallback = true
                 return@update state
             }
             val hasCameraChanged =
@@ -857,6 +861,12 @@ class MapViewModel(
                     isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
                 )
             }
+        }
+        if (ignoredStaleProgrammaticCallback) return
+
+        if (isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {
+            renderSelectedFacilityState()
+            renderUiState()
         }
     }
 
@@ -1064,8 +1074,7 @@ class MapViewModel(
     }
 
     private fun shouldKeepCurrentLocationCameraWhileLocationRefreshes(): Boolean =
-        isRouteStarted &&
-            latestPermissionState is LocationPermissionState.Granted &&
+        latestPermissionState is LocationPermissionState.Granted &&
             latestLocation == null &&
             mutableUiState.value.cameraTarget.source == MapCameraSource.CURRENT_LOCATION
 
@@ -1183,6 +1192,19 @@ class MapViewModel(
         if (clearMapTapSelection) {
             clearMapTapSelectionState(clearPin = true)
         }
+        return true
+    }
+
+    private fun clearOffscreenSelectedMapPinState(): Boolean {
+        val hasSelectedMapPinState =
+            selectedMapPinCoordinate != null ||
+                selectedDestinationPreview != null ||
+                selectedMapTapDetail != null ||
+                isMapTapDetailLoading ||
+                mapTapDetailErrorMessage != null
+        if (!hasSelectedMapPinState) return false
+
+        clearMapTapSelectionState(clearPin = true)
         return true
     }
 

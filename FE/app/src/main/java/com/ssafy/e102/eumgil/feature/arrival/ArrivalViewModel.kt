@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.feature.arrival
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -91,28 +90,18 @@ class ArrivalViewModel(
                 routeBookmarkRepository.saveRouteBookmark(
                     draft.toSaveRequest(),
                 )
-            }.onSuccess { savedBookmark ->
+            }.onSuccess {
                 mutableUiState.update { state ->
                     state.copy(
                         isRouteSaveSelected = true,
                         isRouteSaveUpdating = false,
                     )
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_route_save_success_message,
-                    ),
-                )
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 mutableUiState.update { state ->
                     state.copy(isRouteSaveUpdating = false)
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_route_save_failure_message,
-                    ),
-                )
             }
         }
     }
@@ -139,21 +128,11 @@ class ArrivalViewModel(
                         isEvaluationSheetVisible = false,
                     )
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_rating_success_message,
-                    ),
-                )
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 mutableUiState.update { state ->
                     state.copy(isEvaluationSubmitting = false)
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_rating_failure_message,
-                    ),
-                )
             }
         }
     }

@@ -58,8 +58,4 @@ sealed interface ArrivalUiEvent {
     data object NavigateToMap : ArrivalUiEvent
 
     data object NavigateToSearch : ArrivalUiEvent
-
-    data class ShowSnackbar(
-        val messageResId: Int,
-    ) : ArrivalUiEvent
 }

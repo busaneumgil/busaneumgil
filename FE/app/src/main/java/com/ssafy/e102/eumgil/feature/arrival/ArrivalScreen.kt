@@ -35,8 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,7 +78,6 @@ private const val ArrivalRatingCount = 5
 @Composable
 fun ArrivalScreen(
     uiState: ArrivalUiState,
-    snackbarHostState: SnackbarHostState,
     onAction: (ArrivalUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -108,16 +105,6 @@ fun ArrivalScreen(
                         .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.22f)),
             )
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.medium)
-                    .padding(bottom = EumSpacing.medium),
-        )
 
         ArrivalEvaluationBottomSheet(
             uiState = uiState,

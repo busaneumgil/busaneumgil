@@ -603,10 +603,6 @@
     <string name="arrival_route_save_dialog_name_label">경로명</string>
     <string name="arrival_route_save_dialog_confirm">저장</string>
     <string name="arrival_route_save_dialog_cancel">취소</string>
-    <string name="arrival_route_save_success_message">경로를 저장했어요.</string>
-    <string name="arrival_route_save_failure_message">경로를 저장하지 못했어요. 다시 시도해 주세요.</string>
-    <string name="arrival_rating_success_message">경로 평가를 저장했어요.</string>
-    <string name="arrival_rating_failure_message">경로 평가를 저장하지 못했어요. 다시 시도해 주세요.</string>
     <string name="arrival_evaluation_rating_very_dissatisfied">매우 아쉬워요</string>
     <string name="arrival_evaluation_rating_dissatisfied">아쉬워요</string>
     <string name="arrival_evaluation_rating_neutral">보통이에요</string>

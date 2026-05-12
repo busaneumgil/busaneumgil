@@ -119,6 +119,31 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
+    fun `arrival completion flow removes snackbar feedback entirely`() {
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+        val routeSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalRoute.kt").readText()
+
+        assertFalse(
+            "ArrivalScreen should not render a SnackbarHost once completion feedback is removed from this flow.",
+            screenSource.contains("SnackbarHost("),
+        )
+        assertFalse(
+            "ArrivalScreen should not require a SnackbarHostState parameter once snackbar feedback is removed.",
+            screenSource.contains("snackbarHostState: SnackbarHostState"),
+        )
+        assertFalse(
+            "ArrivalRoute should not keep a SnackbarHostState after removing snackbar feedback from arrival completion.",
+            routeSource.contains("SnackbarHostState"),
+        )
+        assertFalse(
+            "ArrivalRoute should not call showSnackbar after removing snackbar feedback from arrival completion.",
+            routeSource.contains("showSnackbar("),
+        )
+    }
+
+    @Test
     fun `arrival explore new route navigation removes completion screen from back stack`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt").readText()

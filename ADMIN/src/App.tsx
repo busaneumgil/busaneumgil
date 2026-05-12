@@ -25,6 +25,7 @@ import { FacilityMap } from "./map/FacilityMap";
 import { facilityCategoryLabel } from "./map/facilityStyle";
 import { SegmentMap, type RoadviewDockState } from "./map/SegmentMap";
 import { HazardReportsPage } from "./report/HazardReportsPage";
+import { RouteTuningPage } from "./route/RouteTuningPage";
 import { useAdminStore } from "./store/adminStore";
 import type {
   AccessibilityFeatureType,
@@ -67,6 +68,10 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
     label: "보행 네트워크",
     description: "SIDE_LINE/CROSS_WALK를 구·동 단위로 편집하고 DB 반영 전 draft를 검수합니다.",
+  },
+  routeTuning: {
+    label: "경로 튜닝",
+    description: "GraphHopper 프로필 수치를 조정해 기본 경로와 조정 경로를 비교합니다.",
   },
   facilities: {
     label: "편의시설",
@@ -125,6 +130,7 @@ function AdminApp() {
   const hasToken = Boolean(accessToken);
   const isAdminAuthenticated = hasToken && adminPrincipal?.role === "ADMIN";
   const currentAdmin = adminPrincipal;
+  const showsAreaSelector = page === "network" || page === "facilities";
 
   useEffect(() => {
     function handleAccessTokenRefreshed(event: Event) {
@@ -151,7 +157,7 @@ function AdminApp() {
   const areasQuery = useQuery({
     queryKey: ["admin-areas", accessToken],
     queryFn: () => fetchAdminAreas(accessToken),
-    enabled: page !== "hazards" && isAdminAuthenticated,
+    enabled: (showsAreaSelector || page === "users") && isAdminAuthenticated,
     retry: false,
   });
 
@@ -367,52 +373,58 @@ function AdminApp() {
               <span>{currentAdmin.userId}</span>
             </label>
             <button type="button" onClick={logoutAdmin}>로그아웃</button>
-            <label>
-              구
-              <select
-                value={selectedGu}
-                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
-                onChange={(event) => {
-                  const nextGu = event.target.value;
-                  const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
-                  setSelectedArea(nextGu, nextDong);
-                  setSelectedFacility(null);
-                  setSelectedSegment(null);
-                }}
-              >
-                {[...new Set((areasQuery.data ?? []).map((area) => area.gu))]
-                  .filter(Boolean)
-                  .map((gu) => (
-                    <option key={gu} value={gu}>
-                      {gu}
-                    </option>
-                  ))}
-                {!areasQuery.data?.length && <option value={selectedGu}>{selectedGu}</option>}
-              </select>
-            </label>
-            <label>
-              동
-              <select
-                value={selectedDong}
-                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
-                onChange={(event) => {
-                  setSelectedArea(selectedGu, event.target.value);
-                  setSelectedFacility(null);
-                  setSelectedSegment(null);
-                }}
-              >
-                {filteredDongs.map((area) => (
-                  <option key={`${area.gu}-${area.dong}`} value={area.dong}>
-                    {area.dong}
-                  </option>
-                ))}
-                {!filteredDongs.length && <option value={selectedDong}>{selectedDong}</option>}
-              </select>
-            </label>
+            {showsAreaSelector && (
+              <>
+                <label>
+                  구
+                  <select
+                    value={selectedGu}
+                    disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
+                    onChange={(event) => {
+                      const nextGu = event.target.value;
+                      const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
+                      setSelectedArea(nextGu, nextDong);
+                      setSelectedFacility(null);
+                      setSelectedSegment(null);
+                    }}
+                  >
+                    {[...new Set((areasQuery.data ?? []).map((area) => area.gu))]
+                      .filter(Boolean)
+                      .map((gu) => (
+                        <option key={gu} value={gu}>
+                          {gu}
+                        </option>
+                      ))}
+                    {!areasQuery.data?.length && <option value={selectedGu}>{selectedGu}</option>}
+                  </select>
+                </label>
+                <label>
+                  동
+                  <select
+                    value={selectedDong}
+                    disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
+                    onChange={(event) => {
+                      setSelectedArea(selectedGu, event.target.value);
+                      setSelectedFacility(null);
+                      setSelectedSegment(null);
+                    }}
+                  >
+                    {filteredDongs.map((area) => (
+                      <option key={`${area.gu}-${area.dong}`} value={area.dong}>
+                        {area.dong}
+                      </option>
+                    ))}
+                    {!filteredDongs.length && <option value={selectedDong}>{selectedDong}</option>}
+                  </select>
+                </label>
+              </>
+            )}
           </div>}
         </header>
 
         {page === "hazards" && <HazardReportsPage accessToken={accessToken} adminPrincipal={currentAdmin} onLogout={logoutAdmin} />}
+
+        {page === "routeTuning" && <RouteTuningPage accessToken={accessToken} />}
 
         {page === "users" && (
           <UserManagementPage

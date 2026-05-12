@@ -447,6 +447,102 @@ select {
   min-height: 0;
 }
 
+.route-tuning-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 430px;
+  min-height: calc(100vh - 58px);
+  background: var(--color-gray-100);
+}
+
+.route-tuning-map-panel {
+  position: relative;
+  min-height: calc(100vh - 58px);
+}
+
+.route-tuning-map {
+  position: absolute;
+  inset: 0;
+}
+
+.route-tuning-panel {
+  position: relative;
+  z-index: 25;
+  border-left: 1px solid var(--border);
+  background: var(--color-white);
+  padding: 14px;
+  overflow: auto;
+}
+
+.route-profile-select {
+  display: grid;
+  gap: 6px;
+  color: var(--color-gray-700);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.route-profile-select select {
+  width: 100%;
+  height: 36px;
+}
+
+.tuning-control-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tuning-control {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1.4fr) 72px;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-gray-700);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tuning-control input[type="range"] {
+  width: 100%;
+}
+
+.tuning-control input[type="number"] {
+  height: 32px;
+  padding: 5px 7px;
+}
+
+.route-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.route-result-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 10px;
+  background: var(--color-white);
+}
+
+.route-result-card span {
+  width: max-content;
+  border-left: 5px solid;
+  padding-left: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.route-result-card strong {
+  color: var(--color-gray-900);
+  font-size: 20px;
+}
+
+.route-result-card small {
+  color: var(--muted);
+}
+
 .review-stage {
   min-height: calc(100vh - 58px);
   padding: 28px;

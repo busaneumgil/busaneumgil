@@ -2,6 +2,8 @@ import type {
   AreaOption,
   AdminPlaceDetailResponse,
   AdminPlaceUpdateRequest,
+  AdminRoutePreviewRequest,
+  AdminRoutePreviewResponse,
   AdminHazardReportDetail,
   AdminHazardReportListResponse,
   AdminHazardReportStatusResponse,
@@ -284,6 +286,19 @@ export async function fetchAdminRoadNetworkEditJob(
   accessToken: string,
 ): Promise<RoadNetworkEditJobResponse> {
   return requestAdminJson<RoadNetworkEditJobResponse>(`/admin/road-network/edits/jobs/${jobId}`, accessToken);
+}
+
+export async function previewAdminRoute(
+  request: AdminRoutePreviewRequest,
+  accessToken: string,
+): Promise<AdminRoutePreviewResponse> {
+  return requestAdminJson<AdminRoutePreviewResponse>("/admin/routes/preview", accessToken, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
 }
 
 export async function fetchAdminFacilityPayload({

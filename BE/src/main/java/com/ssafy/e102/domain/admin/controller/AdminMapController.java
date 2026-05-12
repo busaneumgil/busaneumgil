@@ -14,14 +14,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminRoutePreviewRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadNetworkEditApplyRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutePreviewResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
+import com.ssafy.e102.domain.admin.service.AdminRoutePreviewService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditJobService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditService;
 import com.ssafy.e102.global.response.ApiResponse;
@@ -46,6 +49,7 @@ public class AdminMapController {
 	private final AdminMapService adminMapService;
 	private final AdminRoadNetworkEditService adminRoadNetworkEditService;
 	private final AdminRoadNetworkEditJobService adminRoadNetworkEditJobService;
+	private final AdminRoutePreviewService adminRoutePreviewService;
 
 	@Operation(summary = "관리자 검수 구/동 목록 조회", description = "데이터베이스에 적재된 관리자 검수 구/동 목록을 조회한다.")
 	@GetMapping("/areas")
@@ -91,6 +95,14 @@ public class AdminMapController {
 		@Parameter(description = "조회할 편집 반영 작업 ID") @PathVariable @Positive
 		Long jobId) {
 		return ApiResponse.success(adminRoadNetworkEditJobService.findById(jobId));
+	}
+
+	@Operation(summary = "관리자 경로 튜닝 미리보기", description = "GraphHopper 프로필 수치를 임시 custom model로 적용해 기본 경로와 조정 경로를 비교한다.")
+	@PostMapping("/routes/preview")
+	public ApiResponse<AdminRoutePreviewResponse> previewRoute(
+		@RequestBody @Valid
+		AdminRoutePreviewRequest request) {
+		return ApiResponse.success(adminRoutePreviewService.preview(request));
 	}
 
 	@Operation(summary = "관리자 편의시설 조회", description = "데이터베이스에 적재된 장소를 지도 표시용 형식으로 조회한다.")

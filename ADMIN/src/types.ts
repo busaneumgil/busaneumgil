@@ -26,7 +26,7 @@ export interface TokenResponse {
 
 export type WorkStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
 
-export type AdminPage = "network" | "facilities" | "hazards" | "users";
+export type AdminPage = "network" | "routeTuning" | "facilities" | "hazards" | "users";
 
 export type EditableSegmentType = "SIDE_LINE" | "CROSS_WALK";
 
@@ -333,6 +333,50 @@ export type HazardReportType =
 export interface GeoPoint {
   lat: number;
   lng: number;
+}
+
+export type WalkRouteProfile =
+  | "PEDESTRIAN_SAFE"
+  | "PEDESTRIAN_FAST"
+  | "VISUAL_SAFE"
+  | "VISUAL_FAST"
+  | "WHEELCHAIR_MANUAL_SAFE"
+  | "WHEELCHAIR_MANUAL_FAST"
+  | "WHEELCHAIR_AUTO_SAFE"
+  | "WHEELCHAIR_AUTO_FAST";
+
+export interface AdminRouteTuningRequest {
+  slopeLowPercent: number;
+  slopeMiddlePercent: number;
+  slopeHighPercent: number;
+  slopeLowPenalty: number;
+  slopeMiddlePenalty: number;
+  slopeHighPenalty: number;
+  narrowWidthPenalty: number;
+  unpavedSurfacePenalty: number;
+  stairsPenalty: number;
+  signalCrosswalkBonus: number;
+  distanceInfluence: number;
+}
+
+export interface AdminRoutePreviewRequest {
+  startPoint: GeoPoint;
+  endPoint: GeoPoint;
+  profile: WalkRouteProfile;
+  tuning: AdminRouteTuningRequest;
+}
+
+export interface AdminRoutePreviewItemResponse {
+  profile: WalkRouteProfile;
+  distanceMeter: number;
+  durationSecond: number;
+  estimatedTimeMinute: number;
+  coordinates: GeoPoint[];
+}
+
+export interface AdminRoutePreviewResponse {
+  baseRoute: AdminRoutePreviewItemResponse;
+  tunedRoute: AdminRoutePreviewItemResponse;
 }
 
 export interface AdminMeResponse {

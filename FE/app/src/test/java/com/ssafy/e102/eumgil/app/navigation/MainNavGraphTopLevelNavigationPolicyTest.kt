@@ -35,4 +35,44 @@ class MainNavGraphTopLevelNavigationPolicyTest {
         assertTrue(savedStateHandle.consumeMapHomeReentryReset())
         assertFalse(savedStateHandle.consumeMapHomeReentryReset())
     }
+
+    @Test
+    fun `map home reentry reset excludes bookmark while keeping other visible non-map routes`() {
+        assertTrue(
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = SearchRoute.Entry.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertFalse(
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = TopLevelRoute.SavedRoute.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertTrue(
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = ReportRoute.Report.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertTrue(
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = TopLevelRoute.MyPage.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertFalse(
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = TopLevelRoute.Map.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertFalse(
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = ArrivalRoute.Entry.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+    }
 }

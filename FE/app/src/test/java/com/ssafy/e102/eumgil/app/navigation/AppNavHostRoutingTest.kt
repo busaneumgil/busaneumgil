@@ -27,7 +27,7 @@ class AppNavHostRoutingTest {
     }
 
     @Test
-    fun `map tab uses home reentry reset when selected from map aliased routes`() {
+    fun `map tab skips home reentry reset for bookmark while keeping other visible non-map routes`() {
         assertEquals(
             true,
             shouldNavigateToTopLevelMapForHomeEntry(
@@ -60,6 +60,20 @@ class AppNavHostRoutingTest {
             false,
             shouldNavigateToTopLevelMapForHomeEntry(
                 currentRoute = TopLevelRoute.SavedRoute.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = ReportRoute.Report.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = TopLevelRoute.MyPage.route,
                 destination = TopLevelDestination.Map,
             ),
         )

@@ -192,7 +192,8 @@ internal fun shouldNavigateToTopLevelMapForHomeEntry(
 ): Boolean =
     destination == TopLevelDestination.Map &&
         currentRoute != TopLevelRoute.Map.route &&
-        currentRoute.toCurrentTopLevelRoute() == TopLevelRoute.Map.route
+        currentRoute != TopLevelRoute.SavedRoute.route &&
+        currentRoute.toCurrentTopLevelRoute() != null
 
 private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
 

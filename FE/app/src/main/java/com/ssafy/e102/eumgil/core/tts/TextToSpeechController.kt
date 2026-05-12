@@ -40,6 +40,7 @@ enum class TextToSpeechAvailability {
 class AndroidTextToSpeechController(
     context: Context,
     private val locale: Locale = Locale.KOREAN,
+    private val speechRate: Float = DEFAULT_TTS_SPEECH_RATE,
 ) : TextToSpeechController {
     private val appContext = context.applicationContext
     private var engine: TextToSpeech? = null
@@ -106,6 +107,15 @@ class AndroidTextToSpeechController(
         val languageSupported = initialized && languageResult.isSupportedLanguageResult()
 
         if (!languageSupported) {
+            markUnavailable()
+            return
+        }
+
+        val speechRateConfigured =
+            runCatching { engine?.setSpeechRate(speechRate) }
+                .getOrDefault(TextToSpeech.ERROR) != TextToSpeech.ERROR
+
+        if (!speechRateConfigured) {
             markUnavailable()
             return
         }
@@ -197,7 +207,10 @@ object NoOpTextToSpeechController : TextToSpeechController {
     override fun shutdown() = Unit
 }
 
+internal const val ROUTE_BRIEFING_TTS_SPEECH_RATE: Float = 1.0f
+
 private const val NAVIGATION_TTS_UTTERANCE_ID = "navigation_guidance"
+private const val DEFAULT_TTS_SPEECH_RATE: Float = 1.0f
 
 private fun Int.isSupportedLanguageResult(): Boolean =
     this != TextToSpeech.LANG_MISSING_DATA && this != TextToSpeech.LANG_NOT_SUPPORTED

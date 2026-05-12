@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 
 /**
@@ -41,6 +42,13 @@ fun LowVisionHomeRoute(
         remember(appContainer) { appContainer.locationPermissionManager }
     val currentLocation by currentLocationManager.latestLocation.collectAsStateWithLifecycle()
     val locationPermissionState by locationPermissionManager.permissionState.collectAsStateWithLifecycle()
+    val currentLocationAddressResolver =
+        remember(appContext) { AndroidCurrentLocationAddressResolver(context = appContext) }
+    val currentLocationAddress =
+        rememberLowVisionCurrentLocationAddress(
+            coordinate = currentLocation.toLowVisionCurrentLocationCoordinate(),
+            addressResolver = currentLocationAddressResolver,
+        )
 
     DisposableEffect(currentLocationManager, locationPermissionManager) {
         locationPermissionManager.refreshPermissionState()
@@ -75,7 +83,11 @@ fun LowVisionHomeRoute(
             },
             onTabSelected = onTabSelected,
             modifier = modifier,
-            currentLocationDisplay = lowVisionCurrentLocationDisplay(currentLocation),
+            currentLocationDisplay =
+                lowVisionCurrentLocationDisplay(
+                    snapshot = currentLocation,
+                    address = currentLocationAddress,
+                ),
         )
     }
 }

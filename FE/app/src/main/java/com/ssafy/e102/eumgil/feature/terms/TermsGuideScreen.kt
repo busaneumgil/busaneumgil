@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.feature.terms
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,8 +10,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -21,12 +22,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -88,7 +87,9 @@ fun TermsGuideScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
     ) {
         // 1. Header area: pagination dots + "약관 안내" title.
         Column(
@@ -138,15 +139,14 @@ fun TermsGuideScreen(
                             color = Color.White,
                             shape = RoundedCornerShape(TermsGuideLayoutDefaults.actionCardCornerRadius),
                         )
-                        .pointerInput(step) {
-                            detectTapGestures(
-                                onDoubleTap = { onAdvance() },
-                            )
-                        }
                         .semantics {
-                            role = Role.Button
                             contentDescription = cardA11y
-                        },
+                        }
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = cardA11y,
+                            onClick = onAdvance,
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(

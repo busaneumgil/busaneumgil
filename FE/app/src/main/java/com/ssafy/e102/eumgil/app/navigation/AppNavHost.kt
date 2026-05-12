@@ -18,7 +18,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -220,7 +219,7 @@ private fun MobilityKwsEffect(
 private fun AppEntryLoadingScreen(modifier: Modifier = Modifier) {
     Image(
         painter = painterResource(id = R.drawable.splash_illustration),
-        contentDescription = stringResource(id = R.string.app_name),
+        contentDescription = null,
         modifier = modifier.fillMaxSize(),
         contentScale = ContentScale.Crop,
     )

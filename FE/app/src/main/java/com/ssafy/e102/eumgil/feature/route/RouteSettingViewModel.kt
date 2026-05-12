@@ -393,6 +393,12 @@ class RouteSettingViewModel(
                                         searchId = searchId,
                                         routeId = routeId,
                                         sessionId = sessionData.sessionId,
+                                        initialRemainingDistanceMeters =
+                                            sessionData.totalDistanceMeters ?: selectedRoute.summary.distanceMeters,
+                                        initialRemainingDurationSeconds =
+                                            sessionData.totalDurationSeconds
+                                                ?: selectedRoute.summary.durationSeconds
+                                                ?: selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
                                     ),
                             ),
                     ),
@@ -1688,6 +1694,7 @@ private const val MAX_ROUTE_DETAIL_HIGHLIGHT_COUNT = 3
 private const val CURRENT_LOCATION_ORIGIN_PLACE_ID = "route-origin-current-location"
 private const val FALLBACK_ORIGIN_PLACE_ID = "route-origin-fallback"
 private const val WALK_TO_TRANSIT_THRESHOLD_METERS = 750
+private const val SECONDS_PER_MINUTE = 60
 private val DEFAULT_TRAVEL_MODE = RouteTravelMode.WALK
 private val WALK_DEFAULT_SELECTED_OPTION = RouteOption.SAFE
 private val TRANSIT_DEFAULT_SELECTED_OPTION = RouteOption.RECOMMENDED

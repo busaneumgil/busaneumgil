@@ -11,7 +11,6 @@ import type {
   SegmentPayload,
   SurfaceState,
   WidthState,
-  SegmentFeatureType,
 } from "../types";
 
 type PointMode = "start" | "end";
@@ -26,13 +25,6 @@ const profileGroups: Array<{ value: AdminRouteProfileGroup; label: string }> = [
 const accessibilityOptions: AccessibilityState[] = ["YES", "NO", "UNKNOWN"];
 const widthOptions: WidthState[] = ["ADEQUATE_150", "ADEQUATE_120", "NARROW", "UNKNOWN"];
 const surfaceOptions: SurfaceState[] = ["PAVED", "UNPAVED", "UNKNOWN"];
-const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
-  CROSSWALK: "횡단보도",
-  AUDIO_SIGNAL: "음향신호기",
-  BRAILLE_BLOCK: "점자블록",
-  STAIRS: "계단",
-};
-
 export function RouteTuningPage({
   accessToken,
   gu,
@@ -90,6 +82,8 @@ export function RouteTuningPage({
   }, [selectedSegment]);
 
   function handleRoutePointPick(point: GeoPoint) {
+    onSelectSegment(null);
+    setPreview(null);
     if (pointMode === "start") {
       setStartPoint(point);
       setPointMode("end");
@@ -150,21 +144,24 @@ export function RouteTuningPage({
         error={error}
         draftEdits={[]}
         onDraftEdit={() => undefined}
-        selectedSegment={selectedSegment}
+        selectedSegment={routePickEnabled ? null : selectedSegment}
         onSelectSegment={onSelectSegment}
         roadviewContainerRef={roadviewContainerRef}
         onRoadviewChange={onRoadviewChange}
         editable={false}
-        toolbarMode="roadSegmentLegend"
+        toolbarMode="segmentFeatureLegend"
         routePointPickMode={routePickEnabled ? pointMode : null}
         onRoutePointPick={handleRoutePointPick}
+        routePoints={{
+          start: startPoint,
+          end: endPoint,
+        }}
         routeLines={{
           safe: preview?.safeRoute.coordinates,
           fast: preview?.fastRoute.coordinates,
         }}
       />
       <aside className="detail-panel">
-        <SegmentFeatureLegend payload={payload} selectedSegment={selectedSegment} />
         <section className="panel-section">
           <h3>경로 확인</h3>
           <p className="muted">{message}</p>
@@ -183,6 +180,7 @@ export function RouteTuningPage({
               onClick={() => {
                 setRoutePickEnabled(true);
                 setPointMode("start");
+                onSelectSegment(null);
               }}
             >
               시작점 선택
@@ -193,6 +191,7 @@ export function RouteTuningPage({
               onClick={() => {
                 setRoutePickEnabled(true);
                 setPointMode("end");
+                onSelectSegment(null);
               }}
             >
               도착점 선택
@@ -244,36 +243,6 @@ export function RouteTuningPage({
         </section>
       </aside>
     </div>
-  );
-}
-
-function SegmentFeatureLegend({
-  payload,
-  selectedSegment,
-}: {
-  payload?: SegmentPayload;
-  selectedSegment: SegmentFeature | null;
-}) {
-  const counts = new Map<SegmentFeatureType, number>();
-  (payload?.segments.features ?? []).forEach((segment) => {
-    (segment.properties.featureTypes ?? []).forEach((featureType) => {
-      counts.set(featureType, (counts.get(featureType) ?? 0) + 1);
-    });
-  });
-  const selectedTypes = new Set(selectedSegment?.properties.featureTypes ?? []);
-
-  return (
-    <section className="panel-section">
-      <h3>segment_features</h3>
-      <div className="legend-chip-row">
-        {(Object.keys(segmentFeatureLabels) as SegmentFeatureType[]).map((featureType) => (
-          <span key={featureType} className={selectedTypes.has(featureType) ? "legend-chip active" : "legend-chip"}>
-            {segmentFeatureLabels[featureType]} {counts.get(featureType) ?? 0}
-          </span>
-        ))}
-      </div>
-      <p className="muted">선택한 segment에 포함된 feature는 강조 표시됩니다.</p>
-    </section>
   );
 }
 

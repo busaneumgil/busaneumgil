@@ -1,5 +1,5 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentPayload } from "../types";
+import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
 import { loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
 import { deletedEdgeIds, draftSegmentFeatures, resetPolygonDeleteSelection, segmentsTouchingPolygon, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
@@ -34,7 +34,11 @@ interface SegmentMapProps {
     safe?: GeoPoint[];
     fast?: GeoPoint[];
   };
-  toolbarMode?: "editor" | "roadSegmentLegend";
+  routePoints?: {
+    start?: GeoPoint | null;
+    end?: GeoPoint | null;
+  };
+  toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend";
 }
 
 export interface RoadviewDockState {
@@ -44,6 +48,19 @@ export interface RoadviewDockState {
 }
 
 const ROADVIEW_DEFAULT_MESSAGE = "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.";
+const segmentFeatureTypes: SegmentFeatureType[] = ["CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"];
+const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
+  CROSSWALK: "횡단보도",
+  AUDIO_SIGNAL: "음향신호기",
+  BRAILLE_BLOCK: "점자블록",
+  STAIRS: "계단",
+};
+const segmentFeatureColors: Record<SegmentFeatureType, string> = {
+  CROSSWALK: "#2563eb",
+  AUDIO_SIGNAL: "#0f766e",
+  BRAILLE_BLOCK: "#7c3aed",
+  STAIRS: "#7c2d12",
+};
 
 export function SegmentMap({
   payload,
@@ -65,6 +82,7 @@ export function SegmentMap({
   routePointPickMode = null,
   onRoutePointPick,
   routeLines,
+  routePoints,
   toolbarMode = "editor",
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -78,6 +96,8 @@ export function SegmentMap({
   const pendingEditOverlaysRef = useRef<KakaoOverlay[]>([]);
   const referenceOverlaysRef = useRef<KakaoOverlay[]>([]);
   const routeOverlaysRef = useRef<KakaoOverlay[]>([]);
+  const routePointOverlaysRef = useRef<KakaoOverlay[]>([]);
+  const segmentFeatureOverlaysRef = useRef<KakaoOverlay[]>([]);
   const selectedSegmentOverlayRef = useRef<KakaoOverlay | null>(null);
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
   const segmentOverlayByEdgeRef = useRef<Map<string, KakaoOverlay[]>>(new Map());
@@ -103,6 +123,12 @@ export function SegmentMap({
     sideLine: true,
     crossWalk: true,
     transitionConnector: true,
+  });
+  const [segmentFeatureLayers, setSegmentFeatureLayers] = useState<Record<SegmentFeatureType, boolean>>({
+    CROSSWALK: true,
+    AUDIO_SIGNAL: true,
+    BRAILLE_BLOCK: true,
+    STAIRS: true,
   });
 
   useEffect(() => {
@@ -153,6 +179,7 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
+    const useHitArea = toolbarMode === "editor";
     const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)
       .filter(shouldShowRoadSegmentLayer);
     segmentFeatures.forEach((feature) => {
@@ -176,7 +203,7 @@ export function SegmentMap({
           segmentType: feature.properties.segmentType,
           reason: "ADMIN_click_delete",
         } as EditAction);
-      });
+      }, { hitArea: useHitArea });
       if (segmentOverlays) {
         overlaysRef.current.push(...segmentOverlays);
         segmentOverlayByEdgeRef.current.set(String(feature.properties.edgeId), segmentOverlays);
@@ -192,6 +219,7 @@ export function SegmentMap({
     centerMapForPayload(segmentFeatures, bridgeFeatures);
     renderPendingEditOverlays();
     renderReferenceOverlays();
+    renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
   }, [payload, bridgePayload, mapReady, roadSegmentLayers]);
 
@@ -207,6 +235,14 @@ export function SegmentMap({
   useEffect(() => {
     renderRouteOverlays();
   }, [routeLines, mapReady]);
+
+  useEffect(() => {
+    renderRoutePointOverlays();
+  }, [routePoints, mapReady]);
+
+  useEffect(() => {
+    renderSegmentFeatureOverlays();
+  }, [draftEdits, mapReady, payload, segmentFeatureLayers, toolbarMode]);
 
   useEffect(() => {
     if (!selectedSegment) {
@@ -375,6 +411,34 @@ export function SegmentMap({
       fastLine.setMap(mapRef.current);
       routeOverlaysRef.current.push(fastLine);
     }
+  }
+
+  function renderRoutePointOverlays() {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    const map = mapRef.current;
+    routePointOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    routePointOverlaysRef.current = [];
+    const start = routePoints?.start ? createRoutePointOverlay(routePoints.start, "출발", "start", map) : null;
+    const end = routePoints?.end ? createRoutePointOverlay(routePoints.end, "도착", "end", map) : null;
+    if (start) routePointOverlaysRef.current.push(start);
+    if (end) routePointOverlaysRef.current.push(end);
+  }
+
+  function renderSegmentFeatureOverlays() {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    const map = mapRef.current;
+    segmentFeatureOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    segmentFeatureOverlaysRef.current = [];
+    if (toolbarMode !== "segmentFeatureLegend") return;
+    const activeTypes = new Set(segmentFeatureTypes.filter((featureType) => segmentFeatureLayers[featureType]));
+    if (!activeTypes.size) return;
+    const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    segmentFeatures.forEach((feature) => {
+      const overlay = createSegmentFeatureOverlay(feature, activeTypes);
+      if (!overlay) return;
+      overlay.setMap(map);
+      segmentFeatureOverlaysRef.current.push(overlay);
+    });
   }
 
   function centerMapForPayload(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
@@ -602,6 +666,8 @@ export function SegmentMap({
     return new window.kakao!.maps.LatLng(coord[1], coord[0]);
   }
 
+  const segmentFeatureCounts = countSegmentFeatureTypes(visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits));
+
   return (
     <section className="map-shell">
       <div ref={containerRef} className="map-canvas" />
@@ -622,7 +688,7 @@ export function SegmentMap({
           )}
           <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
         </div>
-      ) : (
+      ) : toolbarMode === "roadSegmentLegend" ? (
         <div className="map-toolbar attribute-legend">
           <LegendItem
             color="#c9342f"
@@ -642,6 +708,18 @@ export function SegmentMap({
             active={roadSegmentLayers.transitionConnector}
             onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, transitionConnector: !layers.transitionConnector }))}
           />
+        </div>
+      ) : (
+        <div className="map-toolbar attribute-legend">
+          {segmentFeatureTypes.map((featureType) => (
+            <LegendItem
+              key={featureType}
+              color={segmentFeatureColors[featureType]}
+              label={`${segmentFeatureLabels[featureType]} ${segmentFeatureCounts.get(featureType) ?? 0}`}
+              active={segmentFeatureLayers[featureType]}
+              onClick={() => setSegmentFeatureLayers((layers) => ({ ...layers, [featureType]: !layers[featureType] }))}
+            />
+          ))}
         </div>
       )}
       <div className="map-status">
@@ -686,6 +764,46 @@ function createRoutePolyline(points: GeoPoint[], color: string, strokeWeight: nu
     strokeStyle: "solid",
     zIndex: 30,
   });
+}
+
+function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" | "end", map: KakaoMap): KakaoOverlay | null {
+  if (!window.kakao?.maps) return null;
+  const marker = document.createElement("div");
+  marker.className = `route-point-marker ${type}`;
+  marker.textContent = label;
+  return new window.kakao.maps.CustomOverlay({
+    map,
+    position: new window.kakao.maps.LatLng(point.lat, point.lng),
+    content: marker,
+    xAnchor: 0.5,
+    yAnchor: 1,
+    zIndex: 36,
+  });
+}
+
+function createSegmentFeatureOverlay(feature: SegmentFeature, activeTypes: Set<SegmentFeatureType>): KakaoOverlay | null {
+  if (!window.kakao?.maps) return null;
+  const matchedType = segmentFeatureTypes.find((featureType) => activeTypes.has(featureType) && feature.properties.featureTypes?.includes(featureType));
+  if (!matchedType) return null;
+  return new window.kakao.maps.Polyline({
+    path: feature.geometry.coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
+    strokeWeight: matchedType === "STAIRS" ? 9 : 8,
+    strokeColor: segmentFeatureColors[matchedType],
+    strokeOpacity: 0.78,
+    strokeStyle: matchedType === "BRAILLE_BLOCK" ? "shortdash" : "solid",
+    clickable: false,
+    zIndex: 25,
+  });
+}
+
+function countSegmentFeatureTypes(features: SegmentFeature[]) {
+  const counts = new Map<SegmentFeatureType, number>();
+  features.forEach((feature) => {
+    feature.properties.featureTypes?.forEach((featureType) => {
+      counts.set(featureType, (counts.get(featureType) ?? 0) + 1);
+    });
+  });
+  return counts;
 }
 
 function createBridgeOverlay(feature: BridgeFeature, map: KakaoMap): KakaoOverlay[] | null {

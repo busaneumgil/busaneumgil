@@ -720,6 +720,29 @@ select {
   opacity: 0.45;
 }
 
+.route-point-marker {
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  height: 28px;
+  border: 2px solid var(--color-white);
+  border-radius: var(--radius-pill);
+  padding: 0 10px;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.35);
+  color: var(--color-white);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.route-point-marker.start {
+  background: var(--color-success);
+}
+
+.route-point-marker.end {
+  background: var(--color-danger);
+}
+
 .attribute-tooltip {
   display: grid;
   gap: 3px;
@@ -1142,6 +1165,20 @@ select {
   background: var(--color-white);
   padding: 14px;
   margin: 0;
+}
+
+.assignment-filter-row {
+  display: flex;
+  justify-content: flex-start;
+  margin: 12px 0;
+}
+
+.assignment-filter-row label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .admin-table-scroll {

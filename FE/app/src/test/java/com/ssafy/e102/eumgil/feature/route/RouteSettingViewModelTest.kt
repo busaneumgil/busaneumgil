@@ -1,7 +1,10 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
@@ -17,6 +20,9 @@ import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RecentSearch
+import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
 import com.ssafy.e102.eumgil.data.mock.fixture.MockRouteFixtures
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
@@ -29,6 +35,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
@@ -36,6 +43,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -381,6 +390,65 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `first real location after fallback walk failure forces route reload`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val currentLocationManager = ViewModelTestCurrentLocationManager()
+            val routeRepository = FallbackFailureRecoveryRouteRepository()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = currentLocationManager,
+                )
+
+            advanceUntilIdle()
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(DEFAULT_TEST_ORIGIN_COORDINATE, routeRepository.lastWalkQuery?.origin?.coordinate)
+            assertTrue(viewModel.uiState.value.loadErrorMessage?.isNotBlank() == true)
+
+            viewModel.startLocationUpdates()
+            advanceUntilIdle()
+            assertEquals(2, routeRepository.walkSearchCount)
+            assertEquals(DEFAULT_TEST_ORIGIN_COORDINATE, routeRepository.lastWalkQuery?.origin?.coordinate)
+
+            val actualLocation =
+                LocationSnapshot(
+                    latitude = 35.1802,
+                    longitude = 129.0764,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_716_000_000_000L,
+                )
+            currentLocationManager.updateLocation(actualLocation)
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertEquals(3, routeRepository.walkSearchCount)
+            assertEquals(
+                GeoCoordinate(
+                    latitude = actualLocation.latitude,
+                    longitude = actualLocation.longitude,
+                ),
+                routeRepository.lastWalkQuery?.origin?.coordinate,
+            )
+            assertEquals(RouteOriginState.CURRENT_LOCATION_RESOLVED, uiState.originState)
+            assertEquals(
+                GeoCoordinate(
+                    latitude = actualLocation.latitude,
+                    longitude = actualLocation.longitude,
+                ),
+                uiState.origin.coordinate,
+            )
+            assertEquals(null, uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertTrue(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
     fun `route timeout exposes timeout specific failure copy`() =
         runTest {
             val viewModel =
@@ -618,6 +686,30 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `detail steps hide pending meta label when crosswalk distance is missing`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = crosswalkMissingDistanceRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val crosswalkStep =
+                viewModel.uiState.value.selectedRoute
+                    ?.detailSteps
+                    ?.firstOrNull { step -> step.kind == RouteDetailStepKind.CROSSWALK }
+
+            assertEquals("횡단보도 건너기", crosswalkStep?.title)
+            assertEquals(null, crosswalkStep?.metaLabel)
+        }
+
+    @Test
     fun `waypoint swap action swaps displayed endpoints and preview direction`() =
         runTest {
             val destinationSelectionRepository =
@@ -747,7 +839,7 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `initial long walk exposes walk result before default transit finishes`() =
+    fun `initial long walk keeps transit selected while default transit finishes`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -764,12 +856,14 @@ class RouteSettingViewModelTest {
 
             val interimState = viewModel.uiState.value
 
-            assertFalse(interimState.isLoading)
-            assertEquals(RouteTravelMode.WALK, interimState.selectedTravelMode)
-            assertEquals(RouteOption.SAFE, interimState.selectedOption)
-            assertEquals("Safe Route", interimState.selectedRoute?.title)
-            assertEquals(RoutePreviewMapStatus.READY, interimState.routePreviewMap.status)
-            assertTrue(interimState.routePreviewMap.isDisplayable)
+            assertTrue(interimState.isLoading)
+            assertEquals(RouteTravelMode.TRANSIT, interimState.selectedTravelMode)
+            assertEquals(RouteTravelMode.TRANSIT, interimState.pendingTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, interimState.selectedOption)
+            assertTrue(interimState.optionCards.isEmpty())
+            assertEquals(null, interimState.selectedRoute)
+            assertEquals(RoutePreviewMapStatus.LOADING, interimState.routePreviewMap.status)
+            assertFalse(interimState.routePreviewMap.isDisplayable)
             assertTrue(interimState.loadNoticeMessage?.isNotBlank() == true)
             assertEquals(1, routeRepository.walkSearchCount)
             assertEquals(1, routeRepository.transitSearchCount)
@@ -1033,6 +1127,53 @@ class RouteSettingViewModelTest {
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
             assertTrue(viewModel.uiState.value.ctaAcknowledged)
         }
+
+    @Test
+    fun `start action saves direct destination as recent before emitting navigation handoff`() =
+        runTest {
+            val destination = testDestination()
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(destination)
+                }
+            val saveGate = CompletableDeferred<Unit>()
+            val searchRepository = FakeSearchRepository(saveGate = saveGate)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    searchRepository = searchRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            runCurrent()
+
+            assertEquals(1, searchRepository.pendingSaveCount)
+            assertTrue(searchRepository.savedRecentDestinations.isEmpty())
+            assertFalse(uiEvent.isCompleted)
+
+            saveGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    RecentDestination(
+                        placeId = destination.placeId,
+                        name = destination.name,
+                        address = destination.address,
+                        latitude = destination.latitude,
+                        longitude = destination.longitude,
+                        category = destination.category,
+                    ),
+                ),
+                searchRepository.savedRecentDestinations,
+            )
+            assertTrue(uiEvent.await() is RouteSettingUiEvent.StartNavigationRequested)
+        }
 }
 
 private fun testRouteRepository(): RouteRepository {
@@ -1098,6 +1239,30 @@ private fun invalidDestination(): PlaceDestination =
         category = PlaceCategory.OTHER,
     )
 
+private class FakeSearchRepository(
+    private val saveGate: CompletableDeferred<Unit>? = null,
+) : SearchRepository {
+    val savedRecentDestinations = mutableListOf<RecentDestination>()
+    var pendingSaveCount: Int = 0
+        private set
+
+    override suspend fun search(query: SearchQuery): List<SearchResult> = emptyList()
+
+    override suspend fun getRecentSearches(): List<RecentSearch> = emptyList()
+
+    override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> = savedRecentDestinations
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) {
+        pendingSaveCount += 1
+        saveGate?.await()
+        savedRecentDestinations += destination
+    }
+}
+
+private val DEFAULT_TEST_ORIGIN_COORDINATE = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+
 private abstract class BaseTestRouteRepository : RouteRepository {
     override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
         error("getTransitRouteSearchData was not expected")
@@ -1124,6 +1289,48 @@ private abstract class BaseTestRouteRepository : RouteRepository {
         sessionId: String,
         score: Int,
     ): RouteRatingData = RouteRatingData(ratingId = 0L)
+}
+
+private class ViewModelTestCurrentLocationManager : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)
+
+    override val latestLocation = mutableLatestLocation.asStateFlow()
+
+    override fun refreshLatestLocation() = Unit
+
+    override fun startLocationUpdates() = Unit
+
+    override fun stopLocationUpdates() = Unit
+
+    fun updateLocation(snapshot: LocationSnapshot?) {
+        mutableLatestLocation.value = snapshot
+    }
+}
+
+private class FallbackFailureRecoveryRouteRepository : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var lastWalkQuery: RouteSearchQuery? = null
+        private set
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        lastWalkQuery = query
+        return if (query.origin.coordinate == DEFAULT_TEST_ORIGIN_COORDINATE) {
+            throw routeApiException(
+                failureKind = RouteFailureKind.HTTP_RESPONSE,
+                status = "RT4040",
+                message = "no walk route for fallback origin",
+                httpStatusCode = 404,
+            )
+        } else {
+            buildWalkSearchData(
+                query = query,
+                searchId = "walk-search-$walkSearchCount",
+                safeDistanceMeters = 720,
+            )
+        }
+    }
 }
 
 private class TransitModeRecordingRouteRepository(
@@ -1582,6 +1789,63 @@ private fun directionalRouteRepository(): RouteRepository =
                 source =
                     RouteSearchSource.serverApi(
                         label = "Directional route payload",
+                    ),
+            )
+    }
+
+private fun crosswalkMissingDistanceRouteRepository(): RouteRepository =
+    object : BaseTestRouteRepository() {
+        override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+            RouteSearchData(
+                query = query,
+                result =
+                    RouteSearchResult(
+                        origin = query.origin,
+                        destination = query.destination,
+                        routes =
+                            listOf(
+                                RouteCandidate(
+                                    routeOption = RouteOption.SAFE,
+                                    title = "Crosswalk Pending Route",
+                                    summary =
+                                        RouteSummary(
+                                            distanceMeters = 80,
+                                            estimatedTimeMinutes = 2,
+                                            riskLevel = RouteRiskLevel.LOW,
+                                        ),
+                                    preview =
+                                        RoutePreviewModel(
+                                            polyline =
+                                                RoutePolyline(
+                                                    points =
+                                                        listOf(
+                                                            query.origin.coordinate,
+                                                            GeoCoordinate(35.17965, 129.07555),
+                                                            query.destination.coordinate,
+                                                        ),
+                                                ),
+                                            segmentCount = 1,
+                                            renderableSegmentCount = 1,
+                                            fallbackSegmentCount = 0,
+                                        ),
+                                    segments =
+                                        listOf(
+                                            RouteSegment(
+                                                sequence = 1,
+                                                distanceMeters = 0,
+                                                safetyFlags =
+                                                    RouteSegmentSafetyFlags(
+                                                        hasCrosswalk = true,
+                                                    ),
+                                                guidanceMessage = "",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                source =
+                    RouteSearchSource.serverApi(
+                        label = "Crosswalk pending route payload",
                     ),
             )
     }

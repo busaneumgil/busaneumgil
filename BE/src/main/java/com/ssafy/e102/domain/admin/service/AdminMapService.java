@@ -313,7 +313,8 @@ public class AdminMapService {
 		Map<Long, List<SegmentFeatureType>> featureTypesByEdgeId) {
 		return AdminGeoJsonFeatureResponse.of(
 			AdminLineStringGeometryResponse.of(toCoordinates(roadSegment.getGeom())),
-			toRoadSegmentProperties(roadSegment, featureTypesByEdgeId.getOrDefault(roadSegment.getEdgeId(), List.of())));
+			toRoadSegmentProperties(roadSegment,
+				featureTypesByEdgeId.getOrDefault(roadSegment.getEdgeId(), List.of())));
 	}
 
 	private AdminRoadSegmentPropertiesResponse toRoadSegmentProperties(RoadSegment roadSegment) {

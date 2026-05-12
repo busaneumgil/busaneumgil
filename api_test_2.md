@@ -711,6 +711,97 @@ k6 1 VU / 1분 샘플링 결과:
 - after 비교는 이 local 10회 표본과 같은 조건으로 수행한다.
 - 핵심 비교값은 client median/mean/p90/max와 server `latency_ms`, BIMS unique request 수다.
 
+### After 측정 결과 - local 10회 sample - 2026-05-13 01:55 KST
+
+실행 환경:
+
+- backend: local Spring Boot `http://127.0.0.1:8081`
+- Spring Boot PID: `40940`
+- 서버 상태: 개선 코드 반영을 위해 Spring Boot 재시작 후 측정
+- Spring profile: `dev`
+- dev dependency tunnel:
+  - DB `127.0.0.1:15432`
+  - Redis `127.0.0.1:16379`
+  - GraphHopper `127.0.0.1:18989`
+- 사용자 유형: 전동휠체어
+- 좌표: 신호동 행정복지센터 -> 명지1동 행정복지센터
+- 요청 간격: 2초
+- 산출물 디렉터리: `.ai/LOCAL/EVALS/transit-api-perf/20260513-014836-after-10x-warmed-local-8081`
+
+요약:
+
+| 항목 | 값 |
+| --- | ---: |
+| 성공률 | `10/10` |
+| HTTP status | 모두 `200` |
+| API status | 모두 `S2000` |
+| route count | 매 요청 `2` |
+| response size | 매 요청 `17,171 bytes` |
+| route options | 매 요청 `RECOMMENDED + MIN_TRANSFER`, `MIN_WALK` |
+| client `time_total` min | `0.871840s` |
+| client `time_total` median | `1.367307s` |
+| client `time_total` mean | `2.106353s` |
+| client `time_total` p90 | `3.150750s` |
+| client `time_total` max | `8.348405s` |
+| server `latency_ms` min | `756ms` |
+| server `latency_ms` median | `1271.5ms` |
+| server `latency_ms` mean | `1601.4ms` |
+| server `latency_ms` p90 | `2662.4ms` |
+| server `latency_ms` max | `4061ms` |
+| ODsay path count | 매 요청 `8` |
+| ODsay shortlist count | 매 요청 `5` |
+| static final count | 매 요청 `2` |
+| BIMS `uniqueArrivalRequestCount` | 매 요청 `2` |
+
+요청별 결과:
+
+| # | client `time_total` | server `latency_ms` | BIMS unique |
+| ---: | ---: | ---: | ---: |
+| 1 | `8.348405s` | `4061ms` | `2` |
+| 2 | `1.643569s` | `1549ms` | `2` |
+| 3 | `2.573233s` | `2507ms` | `2` |
+| 4 | `1.424410s` | `1350ms` | `2` |
+| 5 | `1.673720s` | `1612ms` | `2` |
+| 6 | `1.033240s` | `976ms` | `2` |
+| 7 | `1.310203s` | `1163ms` | `2` |
+| 8 | `1.266478s` | `1193ms` | `2` |
+| 9 | `0.918436s` | `847ms` | `2` |
+| 10 | `0.871840s` | `756ms` | `2` |
+
+재시작 직후 첫 요청 제외 참고값:
+
+| 항목 | 값 |
+| --- | ---: |
+| client `time_total` median | `1.310203s` |
+| client `time_total` mean | `1.412792s` |
+| client `time_total` p90 | `1.853623s` |
+| client `time_total` max | `2.573233s` |
+| server `latency_ms` median | `1193ms` |
+| server `latency_ms` mean | `1328.1ms` |
+| server `latency_ms` p90 | `1791.0ms` |
+| server `latency_ms` max | `2507ms` |
+
+Before local 10회 warmed sample 대비:
+
+| 항목 | before | after | 변화 |
+| --- | ---: | ---: | ---: |
+| client `time_total` median | `1.768989s` | `1.367307s` | `-22.7%` |
+| client `time_total` mean | `1.799666s` | `2.106353s` | `+17.0%` |
+| client `time_total` p90 | `2.304498s` | `3.150750s` | `+36.7%` |
+| client `time_total` max | `3.944978s` | `8.348405s` | `+111.6%` |
+| server `latency_ms` median | `1721.5ms` | `1271.5ms` | `-26.1%` |
+| server `latency_ms` mean | `1738.7ms` | `1601.4ms` | `-7.9%` |
+| server `latency_ms` p90 | `2246.9ms` | `2662.4ms` | `+18.5%` |
+| server `latency_ms` max | `3767ms` | `4061ms` | `+7.8%` |
+| BIMS `uniqueArrivalRequestCount` | 매 요청 `5` | 매 요청 `2` | `-60.0%` |
+
+해석:
+
+- 호출 수 관점에서는 BIMS unique request가 before `5`에서 after `2`로 줄어 의도한 최종 후보 기준 enrichment가 확인됐다.
+- client median과 server median은 개선됐지만, 재시작 직후 첫 요청의 client `8.348405s` 때문에 전체 mean/p90/max는 악화됐다.
+- 첫 요청을 제외한 2~10회 기준 client median은 `1.310203s`, p90은 `1.853623s`로 before warmed sample보다 낮다.
+- 외부 ODsay/BIMS 지연 변동성이 있으므로 release 판단에는 같은 PID를 유지한 추가 반복 표본을 한 번 더 보는 것이 안전하다.
+
 ### Dev 배포 서버 참고 측정 결과 - 10회 sample - 2026-05-13 00:39 KST
 
 목적:

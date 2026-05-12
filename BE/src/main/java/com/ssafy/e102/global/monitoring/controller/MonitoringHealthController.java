@@ -29,7 +29,8 @@ public class MonitoringHealthController {
 	}
 
 	@GetMapping("/{component}")
-	public ResponseEntity<HealthStatusResponse> componentHealth(@PathVariable String component) {
+	public ResponseEntity<HealthStatusResponse> componentHealth(@PathVariable
+	String component) {
 		if (!SUPPORTED_COMPONENTS.contains(component)) {
 			return ResponseEntity.status(HttpStatus.NOT_FOUND)
 				.body(new HealthStatusResponse(component, "NOT_FOUND"));

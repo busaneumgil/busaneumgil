@@ -104,7 +104,8 @@ class RouteSelectServiceTest {
 			org.mockito.ArgumentMatchers.any(JsonNode.class)))
 			.thenReturn(new RouteSessionResponse(sessionId));
 
-		RouteSelectResponse response = service.select(USER_ID, "rt_selected_001", new SelectRouteRequest("rs_transit_test"));
+		RouteSelectResponse response = service.select(USER_ID, "rt_selected_001",
+			new SelectRouteRequest("rs_transit_test"));
 
 		assertThat(response.sessionId()).isEqualTo(sessionId);
 		assertThat(response.totalDistanceMeter()).isEqualByComparingTo(BigDecimal.valueOf(2500));

@@ -63,6 +63,12 @@ internal object LowVisionNavigationLayoutDefaults {
     val currentLocationVerticalPadding = 12.dp
     val currentLocationLabelFontSize = 44.sp
     val currentLocationLabelLineHeight = 50.sp
+    val exitCardVerticalPadding = 22.dp
+    val exitIconContainerSize = 92.dp
+    val exitIconSize = 48.dp
+    val exitIconTextGap = 16.dp
+    val exitLabelFontSize = 48.sp
+    val exitLabelLineHeight = 54.sp
 }
 
 internal data class LowVisionNavigationMetricSection(
@@ -475,7 +481,10 @@ private fun LowVisionExitNavigationCard(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 24.dp, vertical = 36.dp),
+                    .padding(
+                        horizontal = 24.dp,
+                        vertical = LowVisionNavigationLayoutDefaults.exitCardVerticalPadding,
+                    ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -484,23 +493,23 @@ private fun LowVisionExitNavigationCard(
                 color = LowVisionNavigationCoral.copy(alpha = contentAlpha),
             ) {
                 Box(
-                    modifier = Modifier.size(112.dp),
+                    modifier = Modifier.size(LowVisionNavigationLayoutDefaults.exitIconContainerSize),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         painter = painterResource(id = card.iconRes),
                         contentDescription = null,
                         tint = Color.Black,
-                        modifier = Modifier.size(58.dp),
+                        modifier = Modifier.size(LowVisionNavigationLayoutDefaults.exitIconSize),
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(38.dp))
+            Spacer(modifier = Modifier.height(LowVisionNavigationLayoutDefaults.exitIconTextGap))
             Text(
                 text = card.label,
                 color = LowVisionNavigationInactive.copy(alpha = contentAlpha),
-                fontSize = 60.sp,
-                lineHeight = 68.sp,
+                fontSize = LowVisionNavigationLayoutDefaults.exitLabelFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.exitLabelLineHeight,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center,

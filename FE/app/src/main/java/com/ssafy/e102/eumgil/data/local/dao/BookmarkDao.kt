@@ -8,20 +8,36 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BookmarkDao {
-    @Query("SELECT * FROM bookmark ORDER BY updatedAt DESC")
-    fun observeBookmarks(): Flow<List<BookmarkEntity>>
+    @Query("SELECT * FROM bookmark WHERE accountScopeKey = :accountScopeKey ORDER BY updatedAt DESC")
+    fun observeBookmarks(accountScopeKey: String): Flow<List<BookmarkEntity>>
 
-    @Query("SELECT * FROM bookmark WHERE placeId = :placeId LIMIT 1")
-    fun observeBookmark(placeId: String): Flow<BookmarkEntity?>
+    @Query(
+        "SELECT * FROM bookmark WHERE accountScopeKey = :accountScopeKey AND placeId = :placeId LIMIT 1",
+    )
+    fun observeBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ): Flow<BookmarkEntity?>
 
-    @Query("SELECT * FROM bookmark WHERE placeId = :placeId LIMIT 1")
-    suspend fun getBookmark(placeId: String): BookmarkEntity?
+    @Query(
+        "SELECT * FROM bookmark WHERE accountScopeKey = :accountScopeKey AND placeId = :placeId LIMIT 1",
+    )
+    suspend fun getBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ): BookmarkEntity?
 
-    @Query("SELECT * FROM bookmark WHERE bookmarkTargetId = :bookmarkTargetId LIMIT 1")
-    suspend fun getBookmarkByTargetId(bookmarkTargetId: String): BookmarkEntity?
+    @Query(
+        "SELECT * FROM bookmark " +
+            "WHERE accountScopeKey = :accountScopeKey AND bookmarkTargetId = :bookmarkTargetId LIMIT 1",
+    )
+    suspend fun getBookmarkByTargetId(
+        accountScopeKey: String,
+        bookmarkTargetId: String,
+    ): BookmarkEntity?
 
-    @Query("SELECT COUNT(*) FROM bookmark")
-    suspend fun getBookmarkCount(): Int
+    @Query("SELECT COUNT(*) FROM bookmark WHERE accountScopeKey = :accountScopeKey")
+    suspend fun getBookmarkCount(accountScopeKey: String): Int
 
     @Upsert
     suspend fun upsertBookmark(bookmark: BookmarkEntity)
@@ -29,12 +45,20 @@ interface BookmarkDao {
     @Upsert
     suspend fun upsertBookmarks(bookmarks: List<BookmarkEntity>)
 
-    @Query("DELETE FROM bookmark WHERE placeId = :placeId")
-    suspend fun deleteBookmark(placeId: String)
+    @Query("DELETE FROM bookmark WHERE accountScopeKey = :accountScopeKey AND placeId = :placeId")
+    suspend fun deleteBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    )
 
-    @Query("DELETE FROM bookmark WHERE bookmarkTargetId = :bookmarkTargetId")
-    suspend fun deleteBookmarkByTargetId(bookmarkTargetId: String)
+    @Query(
+        "DELETE FROM bookmark WHERE accountScopeKey = :accountScopeKey AND bookmarkTargetId = :bookmarkTargetId",
+    )
+    suspend fun deleteBookmarkByTargetId(
+        accountScopeKey: String,
+        bookmarkTargetId: String,
+    )
 
-    @Query("DELETE FROM bookmark")
-    suspend fun clearBookmarks()
+    @Query("DELETE FROM bookmark WHERE accountScopeKey = :accountScopeKey")
+    suspend fun clearBookmarks(accountScopeKey: String)
 }

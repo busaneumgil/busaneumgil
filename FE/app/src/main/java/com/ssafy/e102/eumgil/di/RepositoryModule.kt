@@ -111,10 +111,14 @@ object RepositoryModule {
     fun provideAuthLogoutRepository(
         authRemoteDataSource: AuthRemoteDataSource,
         authSessionRepository: AuthSessionRepository,
+        bookmarkDao: BookmarkDao,
+        favoriteRouteDao: FavoriteRouteDao,
     ): AuthLogoutRepository =
         provideAuthLogoutRepositoryImpl(
             authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
+            bookmarkDao = bookmarkDao,
+            favoriteRouteDao = favoriteRouteDao,
             isMockMode = AppEnvironment.isMockMode,
         )
 
@@ -137,12 +141,14 @@ object RepositoryModule {
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,
+        authSessionRepository: AuthSessionRepository? = null,
         bookmarksRemoteDataSource: BookmarksRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
         initialBookmarks: List<BookmarkData> = emptyList(),
     ): BookmarkRepository =
         DefaultBookmarkRepository(
             bookmarkDao = bookmarkDao,
+            authSessionRepository = authSessionRepository,
             bookmarksRemoteDataSource = bookmarksRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
             initialBookmarks = initialBookmarks,
@@ -150,11 +156,13 @@ object RepositoryModule {
 
     fun provideRouteBookmarkRepository(
         favoriteRouteDao: FavoriteRouteDao,
+        authSessionRepository: AuthSessionRepository? = null,
         favoriteRoutesRemoteDataSource: FavoriteRoutesRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
     ): RouteBookmarkRepository =
         DefaultRouteBookmarkRepository(
             favoriteRouteDao = favoriteRouteDao,
+            authSessionRepository = authSessionRepository,
             favoriteRoutesRemoteDataSource = favoriteRoutesRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
         )

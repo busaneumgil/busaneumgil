@@ -24,25 +24,40 @@ interface AuthLogoutRepository {
 fun provideAuthLogoutRepository(
     authRemoteDataSource: AuthRemoteDataSource,
     authSessionRepository: AuthSessionRepository,
+    bookmarkDao: com.ssafy.e102.eumgil.data.local.dao.BookmarkDao,
+    favoriteRouteDao: com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao,
     isMockMode: Boolean,
-): AuthLogoutRepository =
-    if (isMockMode) {
-        LocalOnlyAuthLogoutRepository(authSessionRepository = authSessionRepository)
+): AuthLogoutRepository {
+    val localCacheCleaner =
+        DefaultAccountScopedLocalCacheCleaner(
+            authSessionRepository = authSessionRepository,
+            bookmarkDao = bookmarkDao,
+            favoriteRouteDao = favoriteRouteDao,
+        )
+    return if (isMockMode) {
+        LocalOnlyAuthLogoutRepository(
+            authSessionRepository = authSessionRepository,
+            localCacheCleaner = localCacheCleaner,
+        )
     } else {
         ServerAuthLogoutRepository(
             authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
+            localCacheCleaner = localCacheCleaner,
         )
     }
+}
 
 class LocalOnlyAuthLogoutRepository(
     private val authSessionRepository: AuthSessionRepository,
+    private val localCacheCleaner: AccountScopedLocalCacheCleaner,
 ) : AuthLogoutRepository {
     override suspend fun logout(): AuthLogoutResult {
         if (authSessionRepository.getAuthGateState().authSession == null) {
             return AuthLogoutResult.MissingSession
         }
 
+        localCacheCleaner.clearCurrentAccountCache()
         authSessionRepository.clearAuthSession()
         return AuthLogoutResult.Success(message = DEFAULT_LOGOUT_SUCCESS_MESSAGE)
     }
@@ -51,16 +66,19 @@ class LocalOnlyAuthLogoutRepository(
 class ServerAuthLogoutRepository(
     private val authRemoteDataSource: AuthRemoteDataSource,
     private val authSessionRepository: AuthSessionRepository,
+    private val localCacheCleaner: AccountScopedLocalCacheCleaner,
 ) : AuthLogoutRepository {
     override suspend fun logout(): AuthLogoutResult {
         val authSession = authSessionRepository.getAuthGateState().authSession ?: return AuthLogoutResult.MissingSession
 
         return try {
             val message = authRemoteDataSource.logout(accessToken = authSession.accessToken)
+            localCacheCleaner.clearCurrentAccountCache()
             authSessionRepository.clearAuthSession()
             AuthLogoutResult.Success(message = message)
         } catch (exception: AuthApiException) {
             if (exception.httpStatusCode == HTTP_UNAUTHORIZED || exception.httpStatusCode == HTTP_FORBIDDEN) {
+                localCacheCleaner.clearCurrentAccountCache()
                 authSessionRepository.clearAuthSession()
                 AuthLogoutResult.AuthenticationFailed
             } else {

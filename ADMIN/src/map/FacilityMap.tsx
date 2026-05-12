@@ -13,6 +13,8 @@ interface FacilityMapProps {
   onSelectFeature: (feature: FacilityFeature) => void;
   roadviewContainerRef: RefObject<HTMLDivElement | null>;
   onRoadviewChange: (state: RoadviewDockState) => void;
+  locationPickEnabled?: boolean;
+  onPickLocation?: (point: { lat: number; lng: number }) => void;
 }
 
 const ROADVIEW_DEFAULT_MESSAGE = "편의시설 점을 클릭하면 근처 Roadview를 엽니다.";
@@ -25,6 +27,8 @@ export function FacilityMap({
   onSelectFeature,
   roadviewContainerRef,
   onRoadviewChange,
+  locationPickEnabled = false,
+  onPickLocation,
 }: FacilityMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -36,11 +40,15 @@ export function FacilityMap({
   const selectedOverlayRef = useRef<KakaoOverlay | null>(null);
   const tooltipRef = useRef<KakaoOverlay | null>(null);
   const onSelectFeatureRef = useRef(onSelectFeature);
+  const locationPickEnabledRef = useRef(locationPickEnabled);
+  const onPickLocationRef = useRef(onPickLocation);
   const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
     onSelectFeatureRef.current = onSelectFeature;
-  }, [onSelectFeature]);
+    locationPickEnabledRef.current = locationPickEnabled;
+    onPickLocationRef.current = onPickLocation;
+  }, [locationPickEnabled, onPickLocation, onSelectFeature]);
 
   useEffect(() => {
     let disposed = false;
@@ -54,6 +62,12 @@ export function FacilityMap({
           level: 6,
         });
         roadviewClientRef.current = window.kakao.maps.RoadviewClient ? new window.kakao.maps.RoadviewClient() : null;
+        window.kakao.maps.event.addListener(mapRef.current, "click", (event: unknown) => {
+          if (!locationPickEnabledRef.current) return;
+          const latLng = (event as { latLng?: { getLng: () => number; getLat: () => number } }).latLng;
+          if (!latLng) return;
+          onPickLocationRef.current?.({ lat: latLng.getLat(), lng: latLng.getLng() });
+        });
       })
       .catch((reason: Error) => setMapError(reason.message));
 
@@ -86,6 +100,14 @@ export function FacilityMap({
       if (overlay) overlaysRef.current.push(overlay);
     });
 
+    const bbox = payload?.bbox;
+    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
+      const bounds = new window.kakao.maps.LatLngBounds();
+      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
+      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
+      mapRef.current.setBounds(bounds);
+      return;
+    }
     const firstCoord = features[0]?.geometry.coordinates;
     if (firstCoord) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));

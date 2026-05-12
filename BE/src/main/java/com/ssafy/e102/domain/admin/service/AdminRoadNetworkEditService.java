@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadNetworkEditApplyRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
+import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 import com.ssafy.e102.domain.route.type.SegmentType;
 import com.ssafy.e102.global.exception.BusinessException;
 import com.ssafy.e102.global.exception.CommonErrorCode;
@@ -98,7 +99,7 @@ public class AdminRoadNetworkEditService {
 	}
 
 	public void validateEditableRequest(UUID userId, AdminRoadNetworkEditApplyRequest request) {
-		adminService.requireCanEditArea(userId, request.gu(), request.dong());
+		adminService.requireCanEditArea(userId, request.gu(), request.dong(), AdminAreaAssignmentType.ROAD_NETWORK);
 		validateActions(request.edits());
 		validateEditsWithinArea(request.gu(), request.dong(), request.edits());
 	}

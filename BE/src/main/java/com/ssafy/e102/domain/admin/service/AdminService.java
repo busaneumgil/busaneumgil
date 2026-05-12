@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -23,6 +24,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminUserResponse;
 import com.ssafy.e102.domain.admin.entity.AdminAreaAssignment;
 import com.ssafy.e102.domain.admin.repository.AdminAreaAssignmentRepository;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
+import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 import com.ssafy.e102.domain.admin.type.AdminAreaWorkStatus;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.exception.UserErrorCode;
@@ -87,10 +89,10 @@ public class AdminService {
 
 	public AdminAreaAssignmentListResponse getAreaAssignments() {
 		Map<String, AdminAreaAssignment> assignmentsByArea = adminAreaAssignmentRepository
-			.findAllByOrderByGuAscDongAsc()
+			.findAllByOrderByGuAscDongAscAssignmentTypeAsc()
 			.stream()
 			.collect(Collectors.toMap(
-				assignment -> areaKey(assignment.getGu(), assignment.getDong()),
+				assignment -> areaKey(assignment.getGu(), assignment.getDong(), assignment.getAssignmentType()),
 				Function.identity()));
 
 		List<AdminAreaAssignmentResponse> assignments = findSelectableAreas()
@@ -98,20 +100,23 @@ public class AdminService {
 			.stream()
 			.flatMap(entry -> entry.getValue()
 				.stream()
-				.map(dong -> {
-					AdminAreaAssignment assignment = assignmentsByArea.get(areaKey(entry.getKey(), dong));
-					if (assignment != null) {
-						return AdminAreaAssignmentResponse.from(assignment);
-					}
-					return new AdminAreaAssignmentResponse(
-						null,
-						entry.getKey(),
-						dong,
-						null,
-						null,
-						AdminAreaWorkStatus.NOT_STARTED,
-						null);
-				}))
+				.flatMap(dong -> Arrays.stream(AdminAreaAssignmentType.values())
+					.map(assignmentType -> {
+						AdminAreaAssignment assignment = assignmentsByArea
+							.get(areaKey(entry.getKey(), dong, assignmentType));
+						if (assignment != null) {
+							return AdminAreaAssignmentResponse.from(assignment);
+						}
+						return new AdminAreaAssignmentResponse(
+							null,
+							entry.getKey(),
+							dong,
+							assignmentType,
+							null,
+							null,
+							AdminAreaWorkStatus.NOT_STARTED,
+							null);
+					})))
 			.toList();
 		return new AdminAreaAssignmentListResponse(assignments);
 	}
@@ -120,10 +125,12 @@ public class AdminService {
 	public AdminAreaAssignmentResponse upsertAreaAssignment(AdminAreaAssignmentUpsertRequest request) {
 		validateArea(request.gu(), request.dong());
 		User assignee = request.assigneeUserId() == null ? null : requireAdminUser(request.assigneeUserId());
-		AdminAreaAssignment assignment = adminAreaAssignmentRepository.findByGuAndDong(request.gu(), request.dong())
+		AdminAreaAssignment assignment = adminAreaAssignmentRepository
+			.findByGuAndDongAndAssignmentType(request.gu(), request.dong(), request.assignmentType())
 			.orElseGet(() -> adminAreaAssignmentRepository.save(AdminAreaAssignment.create(
 				request.gu(),
 				request.dong(),
+				request.assignmentType(),
 				null,
 				AdminAreaWorkStatus.NOT_STARTED)));
 		assignment.assign(assignee);
@@ -143,11 +150,18 @@ public class AdminService {
 		return AdminAreaAssignmentResponse.from(assignment);
 	}
 
-	public void requireCanEditArea(UUID userId, String gu, String dong) {
+	public void requireCanEditArea(UUID userId, String gu, String dong, AdminAreaAssignmentType assignmentType) {
 		if (gu == null || gu.isBlank() || dong == null || dong.isBlank()) {
 			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "수정할 구/동은 필수입니다.");
 		}
-		if (!adminAreaAssignmentRepository.existsByAssignee_UserIdAndGuAndDong(userId, gu, dong)) {
+		if (assignmentType == null) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "담당 유형은 필수입니다.");
+		}
+		if (!adminAreaAssignmentRepository.existsByAssignee_UserIdAndGuAndDongAndAssignmentType(
+			userId,
+			gu,
+			dong,
+			assignmentType)) {
 			throw new BusinessException(CommonErrorCode.FORBIDDEN, "담당 구/동만 수정할 수 있습니다.");
 		}
 	}
@@ -198,7 +212,7 @@ public class AdminService {
 			.replace("4동", "동");
 	}
 
-	private String areaKey(String gu, String dong) {
-		return gu + "\n" + dong;
+	private String areaKey(String gu, String dong, AdminAreaAssignmentType assignmentType) {
+		return gu + "\n" + dong + "\n" + assignmentType;
 	}
 }

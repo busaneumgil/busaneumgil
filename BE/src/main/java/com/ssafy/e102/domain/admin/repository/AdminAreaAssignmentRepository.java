@@ -8,14 +8,22 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.ssafy.e102.domain.admin.entity.AdminAreaAssignment;
+import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 
 public interface AdminAreaAssignmentRepository extends JpaRepository<AdminAreaAssignment, Long> {
 
 	@EntityGraph(attributePaths = "assignee")
-	List<AdminAreaAssignment> findAllByOrderByGuAscDongAsc();
+	List<AdminAreaAssignment> findAllByOrderByGuAscDongAscAssignmentTypeAsc();
 
 	@EntityGraph(attributePaths = "assignee")
-	Optional<AdminAreaAssignment> findByGuAndDong(String gu, String dong);
+	Optional<AdminAreaAssignment> findByGuAndDongAndAssignmentType(
+		String gu,
+		String dong,
+		AdminAreaAssignmentType assignmentType);
 
-	boolean existsByAssignee_UserIdAndGuAndDong(UUID assigneeUserId, String gu, String dong);
+	boolean existsByAssignee_UserIdAndGuAndDongAndAssignmentType(
+		UUID assigneeUserId,
+		String gu,
+		String dong,
+		AdminAreaAssignmentType assignmentType);
 }

@@ -1,7 +1,10 @@
 package com.ssafy.e102.global.external.odsay;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URLEncoder;
 import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,17 +57,7 @@ public class OdsayClient {
 		try {
 			JsonNode body = restTemplate.exchange(
 				RequestEntity
-					.method(HttpMethod.GET, UriComponentsBuilder
-						.fromUriString(properties.baseUrl())
-						.path("/searchPubTransPathT")
-						.queryParam("SX", startPoint.lng())
-						.queryParam("SY", startPoint.lat())
-						.queryParam("EX", endPoint.lng())
-						.queryParam("EY", endPoint.lat())
-						.queryParam("SearchType", SEARCH_TYPE_ALL)
-						.queryParam("apiKey", properties.apiKey())
-						.build()
-						.toUri())
+					.method(HttpMethod.GET, searchPubTransPathUri(startPoint, endPoint))
 					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
 					.build(),
 				JsonNode.class)
@@ -97,13 +90,7 @@ public class OdsayClient {
 		try {
 			JsonNode body = restTemplate.exchange(
 				RequestEntity
-					.method(HttpMethod.GET, UriComponentsBuilder
-						.fromUriString(properties.baseUrl())
-						.path("/loadLane")
-						.queryParam("mapObject", "0:0@" + mapObj)
-						.queryParam("apiKey", properties.apiKey())
-						.build()
-						.toUri())
+					.method(HttpMethod.GET, loadLaneUri(mapObj))
 					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
 					.build(),
 				JsonNode.class)
@@ -124,6 +111,34 @@ public class OdsayClient {
 			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
 		}
+	}
+
+	private URI searchPubTransPathUri(GeoPointRequest startPoint, GeoPointRequest endPoint) {
+		return UriComponentsBuilder
+			.fromUriString(properties.baseUrl())
+			.path("/searchPubTransPathT")
+			.queryParam("SX", startPoint.lng())
+			.queryParam("SY", startPoint.lat())
+			.queryParam("EX", endPoint.lng())
+			.queryParam("EY", endPoint.lat())
+			.queryParam("SearchType", SEARCH_TYPE_ALL)
+			.queryParam("apiKey", encodedApiKey())
+			.build(true)
+			.toUri();
+	}
+
+	private URI loadLaneUri(String mapObj) {
+		return UriComponentsBuilder
+			.fromUriString(properties.baseUrl())
+			.path("/loadLane")
+			.queryParam("mapObject", "0:0@" + mapObj)
+			.queryParam("apiKey", encodedApiKey())
+			.build(true)
+			.toUri();
+	}
+
+	private String encodedApiKey() {
+		return URLEncoder.encode(properties.apiKey(), StandardCharsets.UTF_8);
 	}
 
 	private OdsayTransitSearchResult parseSearchResult(JsonNode body) {

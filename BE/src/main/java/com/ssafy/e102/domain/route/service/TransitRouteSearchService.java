@@ -301,6 +301,8 @@ public class TransitRouteSearchService {
 				.map(event -> new RouteGuidanceEventResponse(
 					event.sequence(),
 					event.type(),
+					event.direction(),
+					event.features(),
 					event.distanceFromLegStartMeter(),
 					event.durationFromLegStartSecond() + additionalDurationSecond,
 					event.geometry()))
@@ -346,6 +348,8 @@ public class TransitRouteSearchService {
 			.map(event -> new RouteGuidanceEventResponse(
 				event.sequence(),
 				event.type(),
+				event.direction(),
+				event.features(),
 				event.distanceFromLegStartMeter(),
 				event.durationFromLegStartSecond(),
 				distanceOffset.add(event.distanceFromLegStartMeter()).setScale(2, RoundingMode.HALF_UP),

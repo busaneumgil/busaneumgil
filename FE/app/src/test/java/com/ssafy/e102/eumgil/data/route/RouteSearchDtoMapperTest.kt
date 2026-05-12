@@ -375,6 +375,57 @@ class RouteSearchDtoMapperTest {
         assertTrue(flags[2].hasSignal)
         assertTrue(flags[2].hasAudioSignal)
     }
+
+    @Test
+    fun `toDomain reuses route geometry parse result for legacy segment fallback`() {
+        val routeGeometry =
+            "LINESTRING(129.075600 35.179600, 129.076000 35.179900, 129.076500 35.180200)"
+        val segmentGeometry =
+            "LINESTRING(129.075600 35.179600, 129.076000 35.179900)"
+        val parseCounts = linkedMapOf<String?, Int>()
+        val countingParser =
+            object : RouteGeometryParser {
+                private val delegate = DefaultRouteGeometryParser()
+
+                override fun parse(geometry: String?): RouteGeometryParseResult {
+                    parseCounts[geometry] = (parseCounts[geometry] ?: 0) + 1
+                    return delegate.parse(geometry)
+                }
+            }
+
+        val result =
+            RouteSearchResponseDto(
+                routes =
+                    listOf(
+                        RouteDto(
+                            routeId = "walk_rt_safe_legacy",
+                            transportMode = "WALK",
+                            routeOption = "SAFE",
+                            title = "Legacy Walk",
+                            distanceMeter = 180.0,
+                            estimatedTimeMinute = 3,
+                            geometry = routeGeometry,
+                            segments =
+                                listOf(
+                                    RouteSegmentDto(
+                                        sequence = 1,
+                                        geometry = segmentGeometry,
+                                        distanceMeter = 180,
+                                        guidanceMessage = "Continue straight",
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).toDomain(
+                query = testRouteSearchQuery(routeOptions = listOf(RouteOption.SAFE)),
+                geometryParser = countingParser,
+            )
+
+        assertEquals(1, parseCounts[routeGeometry])
+        assertEquals(1, parseCounts[segmentGeometry])
+        assertTrue(result.routes.single().geometry.isRenderable)
+        assertTrue(result.routes.single().legs.single().polyline.isRenderable)
+    }
 }
 
 private fun testRouteSearchQuery(routeOptions: List<RouteOption>): com.ssafy.e102.eumgil.core.model.RouteSearchQuery =

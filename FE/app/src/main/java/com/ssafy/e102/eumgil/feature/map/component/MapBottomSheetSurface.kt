@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+
+private val MapBottomSheetTopPadding = EumSpacing.small
+private val MapBottomSheetHandleBottomSpacing = EumSpacing.small
+internal val MapBottomSheetHandleHeight = 16.dp
 
 @Composable
 fun MapBottomSheetSurface(
@@ -49,8 +54,13 @@ fun MapBottomSheetSurface(
         shadowElevation = 12.dp,
     ) {
         Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            modifier =
+                Modifier.padding(
+                    start = EumSpacing.medium,
+                    top = MapBottomSheetTopPadding,
+                    end = EumSpacing.medium,
+                    bottom = EumSpacing.medium,
+                ),
         ) {
             if (showHandle) {
                 Box(
@@ -66,9 +76,13 @@ fun MapBottomSheetSurface(
                                 .background(MaterialTheme.colorScheme.outlineVariant),
                     )
                 }
+                Spacer(modifier = Modifier.height(MapBottomSheetHandleBottomSpacing))
             }
 
-            content()
+            Column(
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                content = content,
+            )
         }
     }
 }

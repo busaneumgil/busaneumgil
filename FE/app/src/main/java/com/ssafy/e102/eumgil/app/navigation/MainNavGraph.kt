@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -44,7 +45,11 @@ import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
 fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
-    composable(route = TopLevelRoute.Map.route) {
+    composable(route = TopLevelRoute.Map.route) { backStackEntry ->
+        val shouldResetForHomeEntry by
+            backStackEntry.savedStateHandle
+                .getStateFlow(MAP_HOME_REENTRY_RESET_KEY, false)
+                .collectAsStateWithLifecycle()
         MapRoute(
             onNavigateToSavedRoutes = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
@@ -57,6 +62,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onNavigateToSearch = {
                 navController.navigate(SearchRoute.Entry.createRoute())
+            },
+            shouldResetForHomeEntry = shouldResetForHomeEntry,
+            onHomeReentryResetConsumed = {
+                backStackEntry.savedStateHandle.consumeMapHomeReentryReset()
             },
         )
     }
@@ -357,7 +366,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
             onNavigateToMap = {
-                navController.navigateToTopLevel(TopLevelDestination.Map)
+                navController.navigateToTopLevelMapForHomeEntry()
             },
         )
     }
@@ -425,13 +434,27 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     }
 
     composable(route = ArrivalRoute.Entry.route) {
+        val context = LocalContext.current
+        val settingsRepository =
+            remember(context) {
+                (context.applicationContext as BusanEumgilApp).appContainer.settingsRepository
+            }
+        val selectedPrimaryUserType by
+            remember(settingsRepository) {
+                settingsRepository
+                    .observeInitSettings()
+                    .map { initSettings -> initSettings.selectedPrimaryUserType }
+            }.collectAsStateWithLifecycle(initialValue = null)
         ArrivalScreenRoute(
             onNavigateToMap = {
-                navController.navigateToTopLevel(TopLevelDestination.Map)
+                navController.navigateToArrivalHome(selectedPrimaryUserType)
             },
             onNavigateToSearch = {
                 navController.navigate(SearchRoute.Entry.createRoute()) {
                     launchSingleTop = true
+                    popUpTo(ArrivalRoute.Entry.route) {
+                        inclusive = true
+                    }
                 }
             },
         )
@@ -459,7 +482,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
             },
             onNavigateToMap = {
-                navController.navigateToTopLevel(TopLevelDestination.Map)
+                navController.navigateToTopLevelMapForHomeEntry()
             },
             onNavigateToSavedRoute = {
                 if (useLowVisionUi) {
@@ -493,6 +516,13 @@ internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): Stri
         TopLevelRoute.SavedRoute.route
     }
 
+internal fun resolveArrivalHomeRoute(selectedPrimaryUserType: String?): String =
+    if (shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {
+        LowVisionRoute.Home.route
+    } else {
+        TopLevelRoute.Map.route
+    }
+
 internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
 
 internal fun resolveAppInfoGuideRoute(): String = TutorialRoute.Guide.route
@@ -501,6 +531,7 @@ internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): B
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue
 
 private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntryState"
+private const val MAP_HOME_REENTRY_RESET_KEY: String = "mapHomeReentryReset"
 
 internal data class TopLevelNavigationPolicy(
     val launchSingleTop: Boolean,
@@ -511,8 +542,8 @@ internal data class TopLevelNavigationPolicy(
 internal val DefaultTopLevelNavigationPolicy: TopLevelNavigationPolicy =
     TopLevelNavigationPolicy(
         launchSingleTop = true,
-        restoreState = false,
-        saveState = false,
+        restoreState = true,
+        saveState = true,
     )
 
 fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
@@ -523,6 +554,44 @@ fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
             saveState = DefaultTopLevelNavigationPolicy.saveState
         }
     }
+}
+
+internal fun NavController.navigateToTopLevelMapForHomeEntry() {
+    navigateToTopLevel(TopLevelDestination.Map)
+    getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestMapHomeReentryReset()
+}
+
+internal fun NavHostController.navigateToArrivalHome(selectedPrimaryUserType: String?) {
+    if (!shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {
+        navigateToTopLevelMapForHomeEntry()
+        return
+    }
+
+    val didPopToLowVisionHome =
+        popBackStack(
+            route = LowVisionRoute.Home.route,
+            inclusive = false,
+        )
+    if (!didPopToLowVisionHome) {
+        navigate(resolveArrivalHomeRoute(selectedPrimaryUserType)) {
+            launchSingleTop = true
+            popUpTo(ArrivalRoute.Entry.route) {
+                inclusive = true
+            }
+        }
+    }
+}
+
+internal fun SavedStateHandle.requestMapHomeReentryReset() {
+    set(MAP_HOME_REENTRY_RESET_KEY, true)
+}
+
+internal fun SavedStateHandle.consumeMapHomeReentryReset(): Boolean {
+    val shouldReset = get<Boolean>(MAP_HOME_REENTRY_RESET_KEY) == true
+    if (shouldReset) {
+        set(MAP_HOME_REENTRY_RESET_KEY, false)
+    }
+    return shouldReset
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

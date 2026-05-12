@@ -2,15 +2,21 @@ package com.ssafy.e102.eumgil.feature.savedroute
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.RecentDestination
+import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import kotlinx.coroutines.CompletableDeferred
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -19,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
@@ -92,6 +99,66 @@ class SavedRouteViewModelTest {
             assertEquals(SavedRouteUiEvent.NavigateToMap, uiEvent.await())
             assertEquals("bookmark-place-1", destination?.placeId)
             assertEquals(PlaceCategory.ELEVATOR, destination?.category)
+        }
+
+    @Test
+    fun `place click stores recent destination for map home sheet`() =
+        runTest {
+            val searchRepository = FakeSearchRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    searchRepository = searchRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            assertEquals(1, searchRepository.savedRecentDestinations.size)
+            assertEquals(
+                RecentDestination(
+                    placeId = "bookmark-place-1",
+                    name = "éºÂ€?ê³—ë¿­ KTX",
+                    address = "éºÂ€???ìˆ†ëŽ„ ä»¥ë¬’ë¸°?Â€æ¿¡?206",
+                    latitude = 35.1151,
+                    longitude = 129.0415,
+                    category = PlaceCategory.ELEVATOR,
+                    searchedAtMillis = 0L,
+                ),
+                searchRepository.savedRecentDestinations.single().copy(searchedAtMillis = 0L),
+            )
+        }
+
+    @Test
+    fun `place click waits for recent destination save before navigating to map`() =
+        runTest {
+            val searchRepository = FakeSearchRepository(saveGate = CompletableDeferred())
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    searchRepository = searchRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
+            runCurrent()
+
+            assertFalse(uiEvent.isCompleted)
+            assertTrue(searchRepository.pendingSaveCount > 0)
+
+            searchRepository.allowPendingSave()
+            advanceUntilIdle()
+
+            assertEquals(SavedRouteUiEvent.NavigateToMap, uiEvent.await())
+            assertEquals(1, searchRepository.savedRecentDestinations.size)
         }
 
     @Test
@@ -480,6 +547,32 @@ private class FakeRouteBookmarkRepository(
             routeBookmarks.value.filterNot { bookmark ->
                 bookmark.bookmarkId == bookmarkId
             }
+    }
+}
+
+private class FakeSearchRepository(
+    private val saveGate: CompletableDeferred<Unit>? = null,
+) : SearchRepository {
+    val savedRecentDestinations = mutableListOf<RecentDestination>()
+    var pendingSaveCount: Int = 0
+        private set
+
+    override suspend fun search(query: SearchQuery): List<SearchResult> = emptyList()
+
+    override suspend fun getRecentSearches(): List<RecentSearch> = emptyList()
+
+    override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> = savedRecentDestinations
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) {
+        pendingSaveCount += 1
+        saveGate?.await()
+        savedRecentDestinations += destination
+    }
+
+    fun allowPendingSave() {
+        saveGate?.complete(Unit)
     }
 }
 

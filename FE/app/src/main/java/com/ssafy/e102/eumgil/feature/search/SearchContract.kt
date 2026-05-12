@@ -7,6 +7,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 data class SearchUiState(
     val query: String = "",
     val hasEditedQuery: Boolean = false,
+    val editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     val recentSearches: List<RecentSearch> = emptyList(),
     val resultState: SearchResultUiState = SearchResultUiState.Initial,
     val voiceInputState: SearchVoiceInputUiState = SearchVoiceInputUiState(),

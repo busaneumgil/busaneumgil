@@ -14,17 +14,3 @@ datasources:
     type: loki
     access: proxy
     url: http://loki:3100
-
-  - name: CloudWatch
-    uid: cloudwatch
-    type: cloudwatch
-    access: proxy
-    jsonData:
-      authType: ${GRAFANA_CLOUDWATCH_AUTH_TYPE}
-      defaultRegion: ${GRAFANA_CLOUDWATCH_DEFAULT_REGION}
-      customMetricsNamespaces: ${GRAFANA_CLOUDWATCH_CUSTOM_NAMESPACES}
-      assumeRoleArn: ${GRAFANA_CLOUDWATCH_ASSUME_ROLE_ARN}
-      externalId: ${GRAFANA_CLOUDWATCH_EXTERNAL_ID}
-    secureJsonData:
-      accessKey: ${GRAFANA_CLOUDWATCH_ACCESS_KEY_ID}
-      secretKey: ${GRAFANA_CLOUDWATCH_SECRET_ACCESS_KEY}

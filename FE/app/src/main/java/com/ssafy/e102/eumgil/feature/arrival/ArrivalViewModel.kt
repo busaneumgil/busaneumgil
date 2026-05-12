@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.feature.arrival
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -38,7 +37,6 @@ class ArrivalViewModel(
             state.copy(
                 hasRatingSession = !currentRatingSessionId.isNullOrBlank(),
                 routeSaveDraft = currentRouteBookmarkDraft?.toUiState(),
-                routeNameInput = currentRouteBookmarkDraft?.defaultRouteName.orEmpty(),
                 isRouteSaveUpdating = currentRouteBookmarkDraft != null,
             )
         }
@@ -50,10 +48,7 @@ class ArrivalViewModel(
             ArrivalUiAction.HomeClicked -> emitUiEvent(ArrivalUiEvent.NavigateToMap)
             ArrivalUiAction.ExploreNewRouteClicked -> emitUiEvent(ArrivalUiEvent.NavigateToSearch)
             is ArrivalUiAction.RatingSelected -> updateSelectedRating(action.rating)
-            ArrivalUiAction.SaveRouteClicked -> openRouteSaveDialog()
-            is ArrivalUiAction.RouteNameChanged -> updateRouteName(action.value)
-            ArrivalUiAction.ConfirmRouteSaveClicked -> saveRouteBookmark()
-            ArrivalUiAction.RouteSaveDialogDismissed -> dismissRouteSaveDialog()
+            ArrivalUiAction.SaveRouteClicked -> saveRouteBookmark()
             ArrivalUiAction.SubmitEvaluationClicked -> submitEvaluation()
             ArrivalUiAction.EvaluationSheetDismissed ->
                 mutableUiState.update { state ->
@@ -82,39 +77,9 @@ class ArrivalViewModel(
         }
     }
 
-    private fun openRouteSaveDialog() {
-        mutableUiState.update { state ->
-            val draft = state.routeSaveDraft
-            if (!state.isRouteSaveEnabled || draft == null) {
-                state
-            } else {
-                state.copy(
-                    isRouteSaveDialogVisible = true,
-                    routeNameInput =
-                        state.routeNameInput.ifBlank {
-                            draft.defaultRouteName
-                        },
-                )
-            }
-        }
-    }
-
-    private fun updateRouteName(value: String) {
-        mutableUiState.update { state ->
-            state.copy(routeNameInput = value)
-        }
-    }
-
-    private fun dismissRouteSaveDialog() {
-        mutableUiState.update { state ->
-            state.copy(isRouteSaveDialogVisible = false)
-        }
-    }
-
     private fun saveRouteBookmark() {
         val draft = currentRouteBookmarkDraft ?: return
-        val currentState = uiState.value
-        if (!currentState.isRouteSaveConfirmEnabled) return
+        if (!uiState.value.isRouteSaveEnabled) return
 
         mutableUiState.update { state ->
             state.copy(isRouteSaveUpdating = true)
@@ -123,32 +88,20 @@ class ArrivalViewModel(
         viewModelScope.launch {
             runCatching {
                 routeBookmarkRepository.saveRouteBookmark(
-                    draft.toSaveRequest(routeName = currentState.routeNameInput),
+                    draft.toSaveRequest(),
                 )
-            }.onSuccess { savedBookmark ->
+            }.onSuccess {
                 mutableUiState.update { state ->
                     state.copy(
-                        routeNameInput = savedBookmark.routeName,
                         isRouteSaveSelected = true,
                         isRouteSaveUpdating = false,
-                        isRouteSaveDialogVisible = false,
                     )
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_route_save_success_message,
-                    ),
-                )
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 mutableUiState.update { state ->
                     state.copy(isRouteSaveUpdating = false)
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_route_save_failure_message,
-                    ),
-                )
             }
         }
     }
@@ -175,21 +128,11 @@ class ArrivalViewModel(
                         isEvaluationSheetVisible = false,
                     )
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_rating_success_message,
-                    ),
-                )
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 mutableUiState.update { state ->
                     state.copy(isEvaluationSubmitting = false)
                 }
-                emitUiEvent(
-                    ArrivalUiEvent.ShowSnackbar(
-                        messageResId = R.string.arrival_rating_failure_message,
-                    ),
-                )
             }
         }
     }

@@ -119,9 +119,14 @@ private fun RouteDto.toDomain(
     geometryParser: RouteGeometryParser,
     fallbackIndex: Int,
 ): RouteCandidate {
+    val routeGeometryParseResult = geometryParser.parse(geometry)
     val resolvedOption = normalizedDeclaredOption(defaultOption = defaultOption)
     val resolvedTransportMode = normalizedTransportMode(resolvedOption)
-    val resolvedLegs = toDomainLegs(geometryParser)
+    val resolvedLegs =
+        toDomainLegs(
+            geometryParser = geometryParser,
+            routeGeometryParseResult = routeGeometryParseResult,
+        )
     val resolvedSegments =
         if (resolvedLegs.isNotEmpty()) {
             resolvedLegs.toCompatibilitySegments()
@@ -130,9 +135,7 @@ private fun RouteDto.toDomain(
         }
     val previewFromSegments = resolvedSegments.toPreviewModel()
     val resolvedGeometry =
-        geometryParser
-            .parse(geometry)
-            .polyline
+        routeGeometryParseResult.polyline
             .takeIf(RoutePolyline::isRenderable)
             ?: previewFromSegments.polyline
     val distanceMeters =
@@ -174,7 +177,10 @@ private fun RouteDto.toDomain(
     )
 }
 
-private fun RouteDto.toDomainLegs(geometryParser: RouteGeometryParser): List<RouteLeg> =
+private fun RouteDto.toDomainLegs(
+    geometryParser: RouteGeometryParser,
+    routeGeometryParseResult: RouteGeometryParseResult,
+): List<RouteLeg> =
     when {
         legs.isNotEmpty() ->
             legs
@@ -198,9 +204,7 @@ private fun RouteDto.toDomainLegs(geometryParser: RouteGeometryParser): List<Rou
                         estimatedTimeMinute?.takeIf { value -> value >= 0 }
                             ?: durationSecond.toEstimatedMinutesOrNull(),
                     polyline =
-                        geometryParser
-                            .parse(geometry)
-                            .polyline
+                        routeGeometryParseResult.polyline
                             .takeIf(RoutePolyline::isRenderable)
                             ?: legacySegments.toPreviewPolyline(),
                     steps =
@@ -614,11 +618,7 @@ private fun List<RouteSegment>.toPreviewPolyline(): RoutePolyline {
     forEach { segment ->
         if (!segment.hasRenderablePolyline) return@forEach
 
-        segment.polyline.points.forEach { point ->
-            if (previewPoints.lastOrNull() != point) {
-                previewPoints += point
-            }
-        }
+        previewPoints.appendUniquePoints(segment.polyline.points)
     }
 
     return RoutePolyline(points = previewPoints)
@@ -630,14 +630,21 @@ private fun List<RouteStep>.toStepPreviewPolyline(): RoutePolyline {
     forEach { step ->
         if (!step.hasRenderablePolyline) return@forEach
 
-        step.polyline.points.forEach { point ->
-            if (previewPoints.lastOrNull() != point) {
-                previewPoints += point
-            }
-        }
+        previewPoints.appendUniquePoints(step.polyline.points)
     }
 
     return RoutePolyline(points = previewPoints)
+}
+
+private fun MutableList<GeoCoordinate>.appendUniquePoints(points: List<GeoCoordinate>) {
+    var previousPoint = lastOrNull()
+
+    points.forEach { point ->
+        if (previousPoint != point) {
+            add(point)
+            previousPoint = point
+        }
+    }
 }
 
 private fun List<RouteSegment>.maxRiskLevel(routeBadges: List<RouteBadge> = emptyList()): RouteRiskLevel {

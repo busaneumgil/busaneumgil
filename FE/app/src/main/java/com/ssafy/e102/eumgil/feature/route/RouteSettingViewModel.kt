@@ -4,8 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
+import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
@@ -19,11 +24,19 @@ import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
+import com.ssafy.e102.eumgil.core.model.toRecentDestination
 import com.ssafy.e102.eumgil.core.model.toRouteWaypointOrNull
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
+import com.ssafy.e102.eumgil.data.remote.datasource.RouteFailureKind
+import com.ssafy.e102.eumgil.feature.navigation.haversineDistanceMeters
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -37,6 +50,9 @@ class RouteSettingViewModel(
     private val routeRepository: RouteRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
     private val currentLocationManager: CurrentLocationManager = NoOpCurrentLocationManager,
+    private val locationPermissionManager: LocationPermissionManager? = null,
+    private val placesRepository: PlacesRepository? = null,
+    private val searchRepository: SearchRepository? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(RouteSettingUiState())
     val uiState = mutableUiState.asStateFlow()
@@ -49,14 +65,23 @@ class RouteSettingViewModel(
     private var latestLocationSnapshot: LocationSnapshot? = currentLocationManager.latestLocation.value
     private var hasLoadedInitialRoute: Boolean = false
     private var isStartNavigationInFlight: Boolean = false
+    private var isRouteReloadInFlight: Boolean = false
+    private var pendingRouteReloadRequest: RouteReloadRequest? = null
+    private var lastCompletedRouteReloadSignature: RouteReloadSignature? = null
+    private var lastSuccessfulAutoOrigin: RouteWaypoint? = null
+    private var hasStartedActiveLocationUpdates: Boolean = false
+    private var stagedTransitEnhancementJob: Job? = null
+    private var activeRouteLoadId: Long = 0L
 
     init {
         currentLocationManager.refreshLatestLocation()
         observeSelectionRequests()
         observeLocationUpdates()
-        viewModelScope.launch {
-            loadRouteForCurrentSelection(resetSelectedOption = true)
-        }
+        observeLocationPermissionState()
+        requestRouteReload(
+            resetSelectedOption = true,
+            force = true,
+        )
     }
 
     fun onAction(action: RouteSettingUiAction) {
@@ -71,11 +96,24 @@ class RouteSettingViewModel(
         }
     }
 
+    fun startLocationUpdates() {
+        hasStartedActiveLocationUpdates = true
+        syncLocationAccess(requestPermissionIfNeeded = true)
+    }
+
+    fun stopLocationUpdates() {
+        hasStartedActiveLocationUpdates = false
+        currentLocationManager.stopLocationUpdates()
+    }
+
     private fun observeSelectionRequests() {
         viewModelScope.launch {
             // This ViewModel is activity-scoped, so same-place reselection needs an explicit request flow.
             destinationSelectionRepository.selectionRequests.collectLatest {
-                loadRouteForCurrentSelection(resetSelectedOption = true)
+                requestRouteReload(
+                    resetSelectedOption = true,
+                    force = true,
+                )
             }
         }
     }
@@ -83,43 +121,174 @@ class RouteSettingViewModel(
     private fun observeLocationUpdates() {
         viewModelScope.launch {
             currentLocationManager.latestLocation.collectLatest { snapshot ->
-                val previousOrigin =
-                    resolveOrigin(
-                        selectedOrigin = destinationSelectionRepository.selectedOrigin.value,
-                        locationSnapshot = latestLocationSnapshot,
-                    ).routeOrigin
+                val selectedOrigin = destinationSelectionRepository.selectedOrigin.value
+                val previousLocationSnapshot = latestLocationSnapshot
                 latestLocationSnapshot = snapshot
 
-                if (!hasLoadedInitialRoute || destinationSelectionRepository.selectedOrigin.value != null) {
+                if (!hasLoadedInitialRoute || selectedOrigin != null) {
                     return@collectLatest
                 }
 
-                val currentOrigin =
-                    resolveOrigin(
-                        selectedOrigin = destinationSelectionRepository.selectedOrigin.value,
-                        locationSnapshot = snapshot,
-                    ).routeOrigin
-                if (previousOrigin != currentOrigin) {
-                    loadRouteForCurrentSelection(resetSelectedOption = true)
+                val currentOrigin = snapshot?.toRouteWaypoint() ?: return@collectLatest
+                val previousOrigin = lastSuccessfulAutoOrigin ?: previousLocationSnapshot?.toRouteWaypoint()
+                if (previousOrigin == null) {
+                    requestRouteReload(
+                        resetSelectedOption = true,
+                        force = true,
+                    )
+                    return@collectLatest
+                }
+                if (shouldReloadForAutomaticOriginUpdate(previousOrigin = previousOrigin, currentOrigin = currentOrigin, snapshot = snapshot)) {
+                    requestRouteReload(resetSelectedOption = true)
                 }
             }
         }
     }
 
-    private suspend fun loadRouteForCurrentSelection(resetSelectedOption: Boolean) {
-        hasLoadedInitialRoute = true
-        loadRouteShell(
-            originResolution =
-                resolveOrigin(
-                    selectedOrigin = destinationSelectionRepository.selectedOrigin.value,
-                    locationSnapshot = latestLocationSnapshot,
-                ),
-            destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
-            resetSelectedOption = resetSelectedOption,
+    private fun observeLocationPermissionState() {
+        val permissionManager = locationPermissionManager ?: return
+        viewModelScope.launch {
+            permissionManager.permissionState.collectLatest { permissionState ->
+                if (!hasStartedActiveLocationUpdates || !shouldUseAutomaticOrigin()) {
+                    return@collectLatest
+                }
+
+                when (permissionState) {
+                    is LocationPermissionState.Granted ->
+                        startCurrentLocationTracking(forceReload = latestLocationSnapshot == null)
+
+                    LocationPermissionState.Denied -> currentLocationManager.stopLocationUpdates()
+                    is LocationPermissionState.Unavailable -> currentLocationManager.stopLocationUpdates()
+                }
+            }
+        }
+    }
+
+    private fun syncLocationAccess(requestPermissionIfNeeded: Boolean) {
+        if (!shouldUseAutomaticOrigin()) {
+            currentLocationManager.startLocationUpdates()
+            return
+        }
+
+        val permissionManager = locationPermissionManager
+        if (permissionManager == null) {
+            startCurrentLocationTracking(forceReload = latestLocationSnapshot == null)
+            return
+        }
+
+        permissionManager.refreshPermissionState()
+        when (permissionManager.permissionState.value) {
+            is LocationPermissionState.Granted ->
+                startCurrentLocationTracking(forceReload = latestLocationSnapshot == null)
+
+            LocationPermissionState.Denied -> {
+                currentLocationManager.stopLocationUpdates()
+                if (requestPermissionIfNeeded) {
+                    emitUiEvent(RouteSettingUiEvent.RequestLocationPermission)
+                }
+                reloadAutomaticOriginIfMissing()
+            }
+
+            is LocationPermissionState.Unavailable -> {
+                currentLocationManager.stopLocationUpdates()
+                reloadAutomaticOriginIfMissing()
+            }
+        }
+    }
+
+    private fun startCurrentLocationTracking(forceReload: Boolean) {
+        currentLocationManager.startLocationUpdates()
+        if (forceReload) {
+            reloadAutomaticOriginIfMissing()
+        }
+    }
+
+    private fun reloadAutomaticOriginIfMissing() {
+        if (!shouldUseAutomaticOrigin() || latestLocationSnapshot != null) {
+            return
+        }
+
+        requestRouteReload(
+            resetSelectedOption = false,
+            force = true,
         )
     }
 
+    private fun shouldUseAutomaticOrigin(): Boolean =
+        destinationSelectionRepository.selectedOrigin.value == null
+
+    private fun requestRouteReload(
+        resetSelectedOption: Boolean,
+        force: Boolean = false,
+    ) {
+        cancelStagedTransitEnhancement()
+        pendingRouteReloadRequest =
+            pendingRouteReloadRequest.mergeWith(
+                RouteReloadRequest(
+                    resetSelectedOption = resetSelectedOption,
+                    force = force,
+                ),
+            )
+        if (isRouteReloadInFlight) {
+            return
+        }
+        isRouteReloadInFlight = true
+        viewModelScope.launch {
+            drainRouteReloadQueue()
+        }
+    }
+
+    private suspend fun drainRouteReloadQueue() {
+        try {
+            while (true) {
+                val request = pendingRouteReloadRequest ?: break
+                pendingRouteReloadRequest = null
+                performRouteReload(request)
+            }
+        } finally {
+            isRouteReloadInFlight = false
+            if (pendingRouteReloadRequest != null) {
+                requestRouteReload(
+                    resetSelectedOption = pendingRouteReloadRequest?.resetSelectedOption == true,
+                    force = pendingRouteReloadRequest?.force == true,
+                )
+            }
+        }
+    }
+
+    private suspend fun performRouteReload(request: RouteReloadRequest) {
+        val loadId = beginRouteLoad()
+        val selectedOrigin = destinationSelectionRepository.selectedOrigin.value
+        val selectedDestination = destinationSelectionRepository.selectedDestination.value
+        hasLoadedInitialRoute = true
+        val originResolution =
+            resolveOrigin(
+                selectedOrigin = selectedOrigin,
+                locationSnapshot = latestLocationSnapshot,
+            )
+        val destinationResolution = resolveDestination(selectedDestination)
+        val signature =
+            RouteReloadSignature(
+                originPlaceId = selectedOrigin?.placeId,
+                originCoordinate = originResolution.routeOrigin.coordinate,
+                destinationPlaceId = selectedDestination?.placeId,
+                destinationCoordinate = destinationResolution.routeDestination.coordinate,
+                destinationHandoffState = destinationResolution.handoffState,
+            )
+        if (!request.force && signature == lastCompletedRouteReloadSignature) {
+            return
+        }
+        loadRouteShell(
+            loadId = loadId,
+            originResolution = originResolution,
+            destinationResolution = destinationResolution,
+            resetSelectedOption = request.resetSelectedOption,
+        )
+        lastCompletedRouteReloadSignature = signature
+    }
+
     private suspend fun loadRouteShell(
+        loadId: Long,
         originResolution: RouteOriginResolution,
         destinationResolution: RouteDestinationResolution,
         resetSelectedOption: Boolean,
@@ -135,12 +304,17 @@ class RouteSettingViewModel(
             state.copy(
                 isLoading = true,
                 loadErrorMessage = null,
+                loadNoticeMessage = null,
+                loadDebugMessage = buildPendingRouteLoadDebugMessage(RouteTravelMode.WALK),
+                originState = originResolution.originState,
+                originStatus = originResolution.originStatus,
                 origin = originResolution.originUiState,
                 destination = destinationResolution.destinationUiState,
                 destinationHandoffState = destinationResolution.handoffState,
                 destinationFallbackMessage = destinationResolution.fallbackMessage,
                 isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
                 selectedTravelMode = DEFAULT_TRAVEL_MODE,
+                pendingTravelMode = null,
                 selectedOption = walkSelectedOption,
                 optionCards = emptyList(),
                 selectedRoute = null,
@@ -174,9 +348,50 @@ class RouteSettingViewModel(
             }
 
         val defaultTravelMode = determineDefaultTravelMode(walkSearchData)
-        val selectedOption = selectedOptionForMode(defaultTravelMode)
-        val activeSearchData =
-            if (defaultTravelMode == RouteTravelMode.TRANSIT) {
+        if (defaultTravelMode == RouteTravelMode.WALK) {
+            mutableUiState.value =
+                buildUiState(
+                    searchData = walkSearchData,
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                    selectedTravelMode = RouteTravelMode.WALK,
+                    requestedOption = walkSelectedOption,
+                    ctaAcknowledged = false,
+                )
+            rememberSuccessfulAutomaticOrigin(originResolution)
+            return
+        }
+
+        val transitSelectedOption = selectedOptionForMode(RouteTravelMode.TRANSIT)
+        mutableUiState.value =
+            buildPendingTransitUiState(
+                walkSearchData = walkSearchData,
+                originResolution = originResolution,
+                destinationResolution = destinationResolution,
+                selectedOption = transitSelectedOption,
+            )
+        rememberSuccessfulAutomaticOrigin(originResolution)
+        stagedTransitEnhancementJob =
+            viewModelScope.launch {
+                completeTransitEnhancement(
+                    loadId = loadId,
+                    walkSearchData = walkSearchData,
+                    transitSelectedOption = transitSelectedOption,
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                )
+            }
+    }
+
+    private suspend fun completeTransitEnhancement(
+        loadId: Long,
+        walkSearchData: RouteSearchData,
+        transitSelectedOption: RouteOption,
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+    ) {
+        try {
+            val transitSearchData =
                 runCatching {
                     fetchSearchData(
                         mode = RouteTravelMode.TRANSIT,
@@ -184,27 +399,62 @@ class RouteSettingViewModel(
                         destinationResolution = destinationResolution,
                     )
                 }.getOrElse { throwable ->
-                    applyModeLoadFailure(
-                        mode = RouteTravelMode.TRANSIT,
-                        selectedOption = selectedOption,
-                        originResolution = originResolution,
-                        destinationResolution = destinationResolution,
-                        throwable = throwable,
-                    )
+                    if (throwable is CancellationException) throw throwable
+                    latestSearchDataByMode = latestSearchDataByMode - RouteTravelMode.TRANSIT
+                    if (!isActiveRouteLoad(loadId)) {
+                        return
+                    }
+                    val walkSelectedOption = selectedOptionForMode(RouteTravelMode.WALK)
+                    mutableUiState.value =
+                        buildUiState(
+                            searchData = walkSearchData,
+                            originResolution = originResolution,
+                            destinationResolution = destinationResolution,
+                            selectedTravelMode = RouteTravelMode.WALK,
+                            requestedOption = walkSelectedOption,
+                            ctaAcknowledged = false,
+                        ).copy(
+                            loadNoticeMessage = throwable.toRouteLoadErrorMessage(),
+                            loadDebugMessage =
+                                combineRouteLoadDebugMessages(
+                                    primary = walkSearchData.toRouteLoadDebugMessage(RouteTravelMode.WALK),
+                                    secondary = throwable.toRouteLoadDebugMessage(RouteTravelMode.TRANSIT),
+                                ),
+                        )
                     return
                 }
-            } else {
-                walkSearchData
+            if (!isActiveRouteLoad(loadId)) {
+                return
             }
+            mutableUiState.value =
+                buildUiState(
+                    searchData = transitSearchData,
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                    selectedTravelMode = RouteTravelMode.TRANSIT,
+                    requestedOption = transitSelectedOption,
+                    ctaAcknowledged = false,
+                )
+        } finally {
+            if (isActiveRouteLoad(loadId)) {
+                stagedTransitEnhancementJob = null
+            }
+        }
+    }
 
-        mutableUiState.value =
-            buildUiState(
-                searchData = activeSearchData,
-                destinationResolution = destinationResolution,
-                selectedTravelMode = defaultTravelMode,
-                requestedOption = selectedOption,
-                ctaAcknowledged = false,
-            )
+    private fun beginRouteLoad(): Long {
+        activeRouteLoadId += 1L
+        return activeRouteLoadId
+    }
+
+    private fun isActiveRouteLoad(loadId: Long): Boolean = activeRouteLoadId == loadId
+
+    private fun cancelStagedTransitEnhancement() {
+        if (stagedTransitEnhancementJob != null) {
+            activeRouteLoadId += 1L
+        }
+        stagedTransitEnhancementJob?.cancel()
+        stagedTransitEnhancementJob = null
     }
 
     private fun selectTravelMode(
@@ -214,6 +464,7 @@ class RouteSettingViewModel(
         if (mutableUiState.value.selectedTravelMode == mode && requestedOption == null) {
             return
         }
+        cancelStagedTransitEnhancement()
 
         viewModelScope.launch {
             val originResolution =
@@ -228,12 +479,17 @@ class RouteSettingViewModel(
                 state.copy(
                     isLoading = true,
                     loadErrorMessage = null,
+                    loadNoticeMessage = null,
+                    loadDebugMessage = buildPendingRouteLoadDebugMessage(mode),
+                    originState = originResolution.originState,
+                    originStatus = originResolution.originStatus,
                     origin = originResolution.originUiState,
                     destination = destinationResolution.destinationUiState,
                     destinationHandoffState = destinationResolution.handoffState,
                     destinationFallbackMessage = destinationResolution.fallbackMessage,
                     isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
                     selectedTravelMode = mode,
+                    pendingTravelMode = null,
                     selectedOption = selectedOption,
                     optionCards = emptyList(),
                     selectedRoute = null,
@@ -258,12 +514,15 @@ class RouteSettingViewModel(
                 mutableUiState.value =
                     buildUiState(
                         searchData = searchData,
+                        originResolution = originResolution,
                         destinationResolution = destinationResolution,
                         selectedTravelMode = mode,
                         requestedOption = selectedOption,
                         ctaAcknowledged = false,
                     )
+                rememberSuccessfulAutomaticOrigin(originResolution)
             }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
                 applyModeLoadFailure(
                     mode = mode,
                     selectedOption = selectedOption,
@@ -276,6 +535,8 @@ class RouteSettingViewModel(
     }
 
     private fun selectRouteOption(routeOption: RouteOption) {
+        val previousState = mutableUiState.value
+        cancelStagedTransitEnhancement()
         val selectedTravelMode = routeOption.toTravelMode()
         if (mutableUiState.value.selectedTravelMode != selectedTravelMode) {
             selectTravelMode(
@@ -290,6 +551,7 @@ class RouteSettingViewModel(
             rememberSelectedOption(selectedTravelMode, routeOption)
             mutableUiState.update { state ->
                 state.copy(
+                    pendingTravelMode = null,
                     selectedOption = routeOption,
                     ctaAcknowledged = false,
                 )
@@ -300,10 +562,16 @@ class RouteSettingViewModel(
         mutableUiState.value =
             buildUiState(
                 searchData = searchData,
+                originResolution = currentOriginResolution(searchData.result.origin),
                 destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
                 selectedTravelMode = selectedTravelMode,
                 requestedOption = routeOption,
                 ctaAcknowledged = false,
+            ).copy(
+                loadNoticeMessage =
+                    previousState.loadNoticeMessage?.takeIf {
+                        previousState.pendingTravelMode == null
+                    },
             )
     }
 
@@ -339,12 +607,14 @@ class RouteSettingViewModel(
     }
 
     private fun startNavigation() {
+        cancelStagedTransitEnhancement()
         if (mutableUiState.value.ctaAcknowledged || isStartNavigationInFlight) {
             return
         }
         if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
             return
         }
+        val selectedDestination = destinationSelectionRepository.selectedDestination.value ?: return
         val selectedTravelMode = mutableUiState.value.selectedTravelMode
         val searchData = latestSearchDataByMode[selectedTravelMode] ?: return
         val selectedRoute =
@@ -378,6 +648,7 @@ class RouteSettingViewModel(
                         ctaAcknowledged = true,
                     )
                 }
+                persistRecentDestination(selectedDestination)
                 destinationSelectionRepository.clearSelectedOriginSilently()
 
                 emitUiEvent(
@@ -410,11 +681,22 @@ class RouteSettingViewModel(
         }
     }
 
+    private suspend fun persistRecentDestination(destination: PlaceDestination) {
+        val repository = searchRepository ?: return
+        runCatching {
+            repository.saveRecentDestination(destination.toRecentDestination())
+        }
+    }
+
     private suspend fun fetchSearchData(
         mode: RouteTravelMode,
         originResolution: RouteOriginResolution,
         destinationResolution: RouteDestinationResolution,
     ): RouteSearchData {
+        validateRouteSearchRequest(
+            originResolution = originResolution,
+            destinationResolution = destinationResolution,
+        )
         val query =
             buildQuery(
                 originResolution = originResolution,
@@ -446,31 +728,212 @@ class RouteSettingViewModel(
         destinationResolution: RouteDestinationResolution,
         throwable: Throwable,
     ) {
+        if (throwable is CancellationException) throw throwable
         latestSearchDataByMode = latestSearchDataByMode - mode
+        val errorMessage = throwable.toRouteLoadErrorMessage()
         mutableUiState.update { state ->
             state.copy(
                 isLoading = false,
-                loadErrorMessage = throwable.message ?: DEFAULT_ROUTE_LOAD_ERROR_MESSAGE,
+                loadErrorMessage = errorMessage,
+                loadNoticeMessage = null,
+                loadDebugMessage = throwable.toRouteLoadDebugMessage(mode),
+                originState = originResolution.originState,
+                originStatus = originResolution.originStatus,
                 origin = originResolution.originUiState,
                 destination = destinationResolution.destinationUiState,
                 destinationHandoffState = destinationResolution.handoffState,
                 destinationFallbackMessage = destinationResolution.fallbackMessage,
                 isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
                 selectedTravelMode = mode,
+                pendingTravelMode = null,
                 selectedOption = selectedOption,
                 optionCards = emptyList(),
                 selectedRoute = null,
                 routePreviewMap =
-                    errorRoutePreviewMapUiState(
+                    throwable.toRoutePreviewFailureMapUiState(
                         originCoordinate = originResolution.routeOrigin.coordinate,
                         destinationResolution = destinationResolution,
-                        message = throwable.message ?: DEFAULT_ROUTE_LOAD_ERROR_MESSAGE,
+                        message = errorMessage,
                     ),
                 sourceLabel = null,
                 cta = errorCtaUiState(),
                 ctaAcknowledged = false,
             )
         }
+    }
+
+    private fun Throwable.toRouteLoadErrorMessage(): String =
+        when (this) {
+            is RouteRequestValidationException -> message
+            is RouteApiException ->
+                when {
+                    status == ROUTE_STATUS_SAME_ENDPOINT -> ROUTE_SAME_ENDPOINT_ERROR_MESSAGE
+
+                    status == ROUTE_STATUS_NO_ROUTE -> ROUTE_NO_ROUTE_ERROR_MESSAGE
+
+                    status == ROUTE_STATUS_MISSING_SESSION ||
+                        status == ROUTE_STATUS_AUTHENTICATION_FAILED ||
+                        httpStatusCode == HTTP_UNAUTHORIZED ->
+                        ROUTE_AUTH_REQUIRED_ERROR_MESSAGE
+
+                    httpStatusCode == HTTP_REQUEST_TIMEOUT ||
+                        httpStatusCode == HTTP_GATEWAY_TIMEOUT ||
+                        failureKind == RouteFailureKind.CLIENT_TIMEOUT ->
+                        ROUTE_TIMEOUT_ERROR_MESSAGE
+
+                    failureKind == RouteFailureKind.UNKNOWN_HOST ||
+                        failureKind == RouteFailureKind.CONNECTION_FAILURE ||
+                        failureKind == RouteFailureKind.NETWORK_IO ->
+                        ROUTE_NETWORK_ERROR_MESSAGE
+
+                    else -> DEFAULT_ROUTE_LOAD_ERROR_MESSAGE
+                }
+
+            else -> DEFAULT_ROUTE_LOAD_ERROR_MESSAGE
+        }
+
+    private fun Throwable.toRoutePreviewFailureMapUiState(
+        originCoordinate: GeoCoordinate,
+        destinationResolution: RouteDestinationResolution,
+        message: String,
+    ): RoutePreviewMapUiState =
+        when {
+            this is RouteApiException && status == ROUTE_STATUS_NO_ROUTE ->
+                RoutePreviewMapUiState(
+                    status = RoutePreviewMapStatus.NO_ROUTE,
+                    originCoordinate = originCoordinate,
+                    destinationCoordinate = destinationResolution.routeDestination.coordinate,
+                    fallbackMessage = message,
+                )
+
+            else ->
+                errorRoutePreviewMapUiState(
+                    originCoordinate = originCoordinate,
+                    destinationResolution = destinationResolution,
+                    message = message,
+                )
+        }
+
+    private fun buildPendingRouteLoadDebugMessage(mode: RouteTravelMode): String =
+        listOf(
+            "mode=${mode.name}",
+            "path=${mode.routeSearchPath()}",
+            "result=pending",
+        ).joinToString(separator = "\n")
+
+    private fun combineRouteLoadDebugMessages(
+        primary: String?,
+        secondary: String?,
+    ): String? =
+        listOfNotNull(
+            primary?.takeIf(String::isNotBlank),
+            secondary?.takeIf(String::isNotBlank),
+        ).takeIf { messages -> messages.isNotEmpty() }?.joinToString(separator = "\n\n")
+
+    private fun RouteSearchData.toRouteLoadDebugMessage(mode: RouteTravelMode): String =
+        buildList {
+            add("mode=${mode.name}")
+            add("path=${mode.routeSearchPath()}")
+            add("result=success")
+            add("layer=${if (source.isFromCache) "CACHE" else "REMOTE"}")
+            add("source=${source.type.name}")
+            add("fromCache=${source.isFromCache}")
+            searchId?.takeIf(String::isNotBlank)?.let { resolvedSearchId ->
+                add("searchId=$resolvedSearchId")
+            }
+        }.joinToString(separator = "\n")
+
+    private fun Throwable.toRouteLoadDebugMessage(mode: RouteTravelMode): String =
+        when (this) {
+            is RouteRequestValidationException ->
+                buildList {
+                    add("mode=${mode.name}")
+                    add("path=${mode.routeSearchPath()}")
+                    add("result=failure")
+                    add("layer=CLIENT")
+                    add("validation=${validation.name}")
+                    add("message=$message")
+                }.joinToString(separator = "\n")
+
+            is RouteApiException ->
+                buildList {
+                    add("mode=${mode.name}")
+                    add("path=${mode.routeSearchPath()}")
+                    add("result=failure")
+                    add("layer=${routeFailureLayer()}")
+                    add("failureKind=${failureKind.name}")
+                    add("httpStatus=$httpStatusCode")
+                    if (status.isNotBlank()) {
+                        add("status=$status")
+                    }
+                    if (message.isNotBlank()) {
+                        add("message=$message")
+                    }
+                }.joinToString(separator = "\n")
+
+            else ->
+                listOf(
+                    "mode=${mode.name}",
+                    "path=${mode.routeSearchPath()}",
+                    "result=failure",
+                    "layer=UNKNOWN",
+                    "throwable=${this::class.simpleName.orEmpty()}",
+                    message?.takeIf(String::isNotBlank)?.let { resolvedMessage -> "message=$resolvedMessage" },
+                ).filterNotNull().joinToString(separator = "\n")
+        }
+
+    private fun RouteApiException.routeFailureLayer(): String =
+        if (status == ROUTE_STATUS_MISSING_SESSION || status == ROUTE_STATUS_AUTHENTICATION_FAILED) {
+            "AUTH_GATE"
+        } else {
+            "REMOTE"
+        }
+
+    private fun RouteTravelMode.routeSearchPath(): String =
+        when (this) {
+            RouteTravelMode.WALK -> ROUTE_SEARCH_WALK_PATH
+            RouteTravelMode.TRANSIT -> ROUTE_SEARCH_TRANSIT_PATH
+        }
+
+    private fun validateRouteSearchRequest(
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+    ) {
+        if (destinationResolution.handoffState != RouteDestinationHandoffState.DIRECT) {
+            return
+        }
+        if (originResolution.routeOrigin.coordinate == destinationResolution.routeDestination.coordinate) {
+            throw RouteRequestValidationException(
+                validation = RouteRequestValidation.SAME_ENDPOINT,
+                message = ROUTE_SAME_ENDPOINT_ERROR_MESSAGE,
+            )
+        }
+    }
+
+    private fun rememberSuccessfulAutomaticOrigin(originResolution: RouteOriginResolution) {
+        lastSuccessfulAutoOrigin =
+            if (destinationSelectionRepository.selectedOrigin.value == null) {
+                originResolution.routeOrigin
+            } else {
+                null
+            }
+    }
+
+    private fun shouldReloadForAutomaticOriginUpdate(
+        previousOrigin: RouteWaypoint,
+        currentOrigin: RouteWaypoint,
+        snapshot: LocationSnapshot,
+    ): Boolean {
+        if (previousOrigin.coordinate == currentOrigin.coordinate) {
+            return false
+        }
+        val movementMeters = haversineDistanceMeters(previousOrigin.coordinate, currentOrigin.coordinate)
+        val significanceThresholdMeters =
+            maxOf(
+                AUTOMATIC_ORIGIN_RELOAD_THRESHOLD_METERS,
+                snapshot.accuracyMeters?.toDouble() ?: 0.0,
+            )
+        return movementMeters >= significanceThresholdMeters
     }
 
     private fun selectedOptionForMode(
@@ -489,6 +952,14 @@ class RouteSettingViewModel(
         selectedOptionByMode = selectedOptionByMode + (mode to option)
     }
 
+    private fun currentOriginResolution(routeOrigin: RouteWaypoint): RouteOriginResolution =
+        RouteOriginResolution(
+            routeOrigin = routeOrigin,
+            originUiState = mutableUiState.value.origin,
+            originState = mutableUiState.value.originState,
+            originStatus = mutableUiState.value.originStatus,
+        )
+
     private fun applyNavigationStartFailure() {
         mutableUiState.update { state ->
             state.copy(
@@ -500,13 +971,14 @@ class RouteSettingViewModel(
 
     private fun buildUiState(
         searchData: RouteSearchData,
+        originResolution: RouteOriginResolution,
         destinationResolution: RouteDestinationResolution,
         selectedTravelMode: RouteTravelMode,
         requestedOption: RouteOption,
         ctaAcknowledged: Boolean,
     ): RouteSettingUiState {
         val availableRoutes = searchData.routes.sortedBy { route -> route.routeOption.routeSortOrder() }
-        val resolvedOrigin = originLocationUiState(searchData.result.origin)
+        val resolvedOrigin = originResolution.originUiState
         val resolvedDestination = destinationLocationUiState(searchData.result.destination)
         val resolvedOption =
             if (searchData.findRoute(requestedOption) != null) {
@@ -532,12 +1004,17 @@ class RouteSettingViewModel(
         return RouteSettingUiState(
             isLoading = false,
             loadErrorMessage = null,
+            loadNoticeMessage = null,
+            loadDebugMessage = searchData.toRouteLoadDebugMessage(selectedTravelMode),
+            originState = originResolution.originState,
+            originStatus = originResolution.originStatus,
             origin = resolvedOrigin,
             destination = resolvedDestination,
             destinationHandoffState = destinationResolution.handoffState,
             destinationFallbackMessage = destinationResolution.fallbackMessage,
             isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
             selectedTravelMode = selectedTravelMode,
+            pendingTravelMode = null,
             selectedOption = resolvedOption,
             optionCards =
                 availableRoutes.map { route ->
@@ -557,6 +1034,43 @@ class RouteSettingViewModel(
             ctaAcknowledged = ctaAcknowledged,
         )
     }
+
+    private fun buildPendingTransitUiState(
+        walkSearchData: RouteSearchData,
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+        selectedOption: RouteOption,
+    ): RouteSettingUiState =
+        RouteSettingUiState(
+            isLoading = true,
+            loadErrorMessage = null,
+            loadNoticeMessage = TRANSIT_LOADING_NOTICE_MESSAGE,
+            loadDebugMessage =
+                combineRouteLoadDebugMessages(
+                    primary = walkSearchData.toRouteLoadDebugMessage(RouteTravelMode.WALK),
+                    secondary = buildPendingRouteLoadDebugMessage(RouteTravelMode.TRANSIT),
+                ),
+            originState = originResolution.originState,
+            originStatus = originResolution.originStatus,
+            origin = originResolution.originUiState,
+            destination = destinationResolution.destinationUiState,
+            destinationHandoffState = destinationResolution.handoffState,
+            destinationFallbackMessage = destinationResolution.fallbackMessage,
+            isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
+            selectedTravelMode = RouteTravelMode.TRANSIT,
+            pendingTravelMode = RouteTravelMode.TRANSIT,
+            selectedOption = selectedOption,
+            optionCards = emptyList(),
+            selectedRoute = null,
+            routePreviewMap =
+                loadingRoutePreviewMapUiState(
+                    originCoordinate = originResolution.routeOrigin.coordinate,
+                    destinationResolution = destinationResolution,
+                ),
+            sourceLabel = null,
+            cta = loadingCtaUiState(),
+            ctaAcknowledged = false,
+        )
 
     private fun originLocationUiState(
         origin: RouteWaypoint = DEFAULT_ORIGIN,
@@ -581,7 +1095,7 @@ class RouteSettingViewModel(
                 },
         )
 
-    private fun resolveOrigin(
+    private suspend fun resolveOrigin(
         selectedOrigin: PlaceDestination?,
         locationSnapshot: LocationSnapshot?,
     ): RouteOriginResolution =
@@ -591,24 +1105,86 @@ class RouteSettingViewModel(
                 RouteOriginResolution(
                     routeOrigin = routeOrigin,
                     originUiState = originLocationUiState(routeOrigin),
+                    originState = RouteOriginState.MANUAL_SELECTION,
+                    originStatus = null,
                 )
             }
-            ?: locationSnapshot
-                ?.toRouteWaypoint()
-                ?.let { routeOrigin ->
-                    RouteOriginResolution(
-                        routeOrigin = routeOrigin,
-                        originUiState =
-                            originLocationUiState(
-                                origin = routeOrigin,
-                                addressFallback = CURRENT_LOCATION_ORIGIN_SUPPORTING_TEXT,
-                            ),
-                    )
-                }
-            ?: RouteOriginResolution(
-                routeOrigin = DEFAULT_ORIGIN,
-                originUiState = originLocationUiState(DEFAULT_ORIGIN),
-            )
+            ?: locationSnapshot?.let { snapshot ->
+                resolveCurrentLocationOrigin(
+                    routeOrigin = snapshot.toRouteWaypoint(),
+                )
+            }
+            ?: if (hasStartedActiveLocationUpdates) {
+                RouteOriginResolution(
+                    routeOrigin = DEFAULT_ORIGIN,
+                    originUiState =
+                        RouteLocationUiState(
+                            placeId = FALLBACK_ORIGIN_PLACE_ID,
+                            name = DEFAULT_ORIGIN_LABEL,
+                            supportingText = CURRENT_LOCATION_UNAVAILABLE_SUPPORTING_TEXT,
+                            coordinate = DEFAULT_ORIGIN.coordinate,
+                            metadataLabel = null,
+                        ),
+                    originState = RouteOriginState.CURRENT_LOCATION_UNAVAILABLE,
+                    originStatus =
+                        RouteOriginStatusUiState(
+                            label = ORIGIN_STATUS_LOCATION_REQUIRED,
+                            tone = RouteOriginStatusTone.WARNING,
+                        ),
+                )
+            } else {
+                RouteOriginResolution(
+                    routeOrigin = DEFAULT_ORIGIN,
+                    originUiState =
+                        RouteLocationUiState(
+                            placeId = FALLBACK_ORIGIN_PLACE_ID,
+                            name = CURRENT_LOCATION_LOADING_LABEL,
+                            supportingText = null,
+                            coordinate = DEFAULT_ORIGIN.coordinate,
+                            metadataLabel = null,
+                        ),
+                    originState = RouteOriginState.CURRENT_LOCATION_LOADING,
+                    originStatus =
+                        RouteOriginStatusUiState(
+                            label = ORIGIN_STATUS_LOADING,
+                            tone = RouteOriginStatusTone.INFO,
+                        ),
+                )
+            }
+
+    private suspend fun resolveCurrentLocationOrigin(
+        routeOrigin: RouteWaypoint,
+    ): RouteOriginResolution {
+        val resolvedOrigin = resolveCurrentLocationDisplay(routeOrigin)
+        return RouteOriginResolution(
+            routeOrigin = resolvedOrigin,
+            originUiState = originLocationUiState(resolvedOrigin),
+            originState = RouteOriginState.CURRENT_LOCATION_RESOLVED,
+            originStatus =
+                RouteOriginStatusUiState(
+                    label = ORIGIN_STATUS_CURRENT_LOCATION,
+                    tone = RouteOriginStatusTone.INFO,
+                ),
+        )
+    }
+
+    private suspend fun resolveCurrentLocationDisplay(
+        routeOrigin: RouteWaypoint,
+    ): RouteWaypoint {
+        val repository = placesRepository ?: return routeOrigin
+        val detail =
+            runCatching {
+                repository.getMapTappedPlaceDetail(
+                    MapPlaceDetailRequest(
+                        latitude = routeOrigin.coordinate.latitude,
+                        longitude = routeOrigin.coordinate.longitude,
+                        clickType = MapPlaceClickType.ADDRESS,
+                    ),
+                )
+            }.getOrNull()
+
+        return detail?.toCurrentLocationRouteWaypoint(fallback = routeOrigin) ?: routeOrigin
+    }
 
     private fun resolveDestination(selectedDestination: PlaceDestination?): RouteDestinationResolution =
         when {
@@ -617,7 +1193,7 @@ class RouteSettingViewModel(
                     routeDestination = DEFAULT_DESTINATION,
                     destinationUiState = destinationLocationUiState(DEFAULT_DESTINATION),
                     handoffState = RouteDestinationHandoffState.EMPTY,
-                    fallbackMessage = DESTINATION_FALLBACK_EMPTY_MESSAGE,
+                    fallbackMessage = DESTINATION_FALLBACK_EMPTY_MESSAGE_USER,
                 )
 
             else -> {
@@ -627,7 +1203,7 @@ class RouteSettingViewModel(
                         routeDestination = DEFAULT_DESTINATION,
                         destinationUiState = destinationLocationUiState(DEFAULT_DESTINATION),
                         handoffState = RouteDestinationHandoffState.INVALID_COORDINATE,
-                        fallbackMessage = DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE,
+                        fallbackMessage = DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE_USER,
                     )
                 } else {
                     RouteDestinationResolution(
@@ -927,6 +1503,9 @@ class RouteSettingViewModel(
             routeRepository: RouteRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
             currentLocationManager: CurrentLocationManager,
+            locationPermissionManager: LocationPermissionManager,
+            placesRepository: PlacesRepository,
+            searchRepository: SearchRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -936,6 +1515,9 @@ class RouteSettingViewModel(
                             routeRepository = routeRepository,
                             destinationSelectionRepository = destinationSelectionRepository,
                             currentLocationManager = currentLocationManager,
+                            locationPermissionManager = locationPermissionManager,
+                            placesRepository = placesRepository,
+                            searchRepository = searchRepository,
                         ) as T
                     }
 
@@ -964,6 +1546,15 @@ private fun LocationSnapshot.toRouteWaypoint(): RouteWaypoint =
         name = DEFAULT_ORIGIN_LABEL,
         placeId = CURRENT_LOCATION_ORIGIN_PLACE_ID,
         coordinate = GeoCoordinate(latitude = latitude, longitude = longitude),
+    )
+
+private fun MapTappedPlaceDetail.toCurrentLocationRouteWaypoint(
+    fallback: RouteWaypoint,
+): RouteWaypoint =
+    fallback.copy(
+        name = name.takeIf(String::isNotBlank) ?: fallback.name,
+        address = address.takeIf(String::isNotBlank) ?: fallback.address,
+        category = category ?: fallback.category,
     )
 
 private fun RouteWaypoint.toLocationUiState(addressFallback: String?): RouteLocationUiState =
@@ -1287,7 +1878,7 @@ private fun RouteSegment.detailStepMetaLabel(kind: RouteDetailStepKind): String?
             if (distanceMeters > 0) {
                 distanceMeters.toDistanceLabel()
             } else {
-                DETAIL_STEP_META_PENDING
+                null
             }
     }
 
@@ -1413,7 +2004,7 @@ private fun Int.toStepIndexLabel(): String = toString().padStart(2, '0')
 private fun loadingCtaUiState(): RouteSettingCtaUiState =
     RouteSettingCtaUiState(
         label = CTA_LABEL_START,
-        supportingText = CTA_SUPPORTING_LOADING,
+        supportingText = CTA_SUPPORTING_LOADING_USER,
         isEnabled = false,
     )
 
@@ -1597,7 +2188,7 @@ private const val DEFAULT_ORIGIN_LABEL = "현재 위치"
 private const val DEFAULT_ORIGIN_SUPPORTING_TEXT = "실시간 위치 연동 전까지 데모 좌표를 출발지로 사용합니다."
 private const val CURRENT_LOCATION_ORIGIN_SUPPORTING_TEXT = "GPS 현재 위치를 출발지로 사용 중입니다."
 private const val DEFAULT_DESTINATION_ADDRESS_FALLBACK = "주소 정보 없음"
-private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "경로를 불러오지 못했습니다."
+private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "전체 경로를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
 private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동합니다."
 private const val CTA_LABEL_START = "길 안내 시작"
 private const val CTA_SUPPORTING_READY = "선택한 경로로 길 안내를 시작할 수 있습니다."
@@ -1687,6 +2278,15 @@ private const val DETAIL_STEP_BADGE_CROSSWALK = "신호 확인"
 private const val DETAIL_STEP_BADGE_ELEVATOR = "엘리베이터 있음"
 private const val DETAIL_STEP_BADGE_CONSTRUCTION = "공사 구간"
 private const val DETAIL_STEP_BADGE_CURB_GAP = "단차 있음"
+private const val CURRENT_LOCATION_LOADING_LABEL = "현재 위치 확인 중"
+private const val CURRENT_LOCATION_UNAVAILABLE_SUPPORTING_TEXT = "현재 위치를 가져오지 못했어요. 출발지를 직접 선택해 주세요."
+private const val ORIGIN_STATUS_MANUAL = "직접 선택"
+private const val ORIGIN_STATUS_LOADING = "위치 확인 중"
+private const val ORIGIN_STATUS_CURRENT_LOCATION = "현재 위치"
+private const val ORIGIN_STATUS_LOCATION_REQUIRED = "위치 확인 필요"
+private const val CTA_SUPPORTING_LOADING_USER = "경로 정보를 불러오는 동안 안내 시작 버튼을 잠시 비활성화합니다."
+private const val DESTINATION_FALLBACK_EMPTY_MESSAGE_USER = "목적지를 선택하면 경로를 보여드릴게요."
+private const val DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE_USER = "목적지 정보를 다시 확인한 뒤 경로를 보여드릴게요."
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
 private const val MAX_ROUTE_DETAIL_CHIP_COUNT = 4
@@ -1694,6 +2294,22 @@ private const val MAX_ROUTE_DETAIL_HIGHLIGHT_COUNT = 3
 private const val CURRENT_LOCATION_ORIGIN_PLACE_ID = "route-origin-current-location"
 private const val FALLBACK_ORIGIN_PLACE_ID = "route-origin-fallback"
 private const val WALK_TO_TRANSIT_THRESHOLD_METERS = 750
+private const val AUTOMATIC_ORIGIN_RELOAD_THRESHOLD_METERS = 25.0
+private const val HTTP_UNAUTHORIZED = 401
+private const val HTTP_REQUEST_TIMEOUT = 408
+private const val HTTP_GATEWAY_TIMEOUT = 504
+private const val ROUTE_SEARCH_WALK_PATH = "/routes/search/walk"
+private const val ROUTE_SEARCH_TRANSIT_PATH = "/routes/search/transit"
+private const val ROUTE_STATUS_SAME_ENDPOINT = "RT4004"
+private const val ROUTE_STATUS_NO_ROUTE = "RT4040"
+private const val ROUTE_STATUS_MISSING_SESSION = "ROUTE_AUTH_MISSING_SESSION"
+private const val ROUTE_STATUS_AUTHENTICATION_FAILED = "ROUTE_AUTHENTICATION_FAILED"
+private const val ROUTE_AUTH_REQUIRED_ERROR_MESSAGE = "로그인이 필요해요. 다시 로그인한 뒤 시도해 주세요."
+private const val ROUTE_SAME_ENDPOINT_ERROR_MESSAGE = "출발지와 도착지를 다르게 선택해 주세요."
+private const val ROUTE_NO_ROUTE_ERROR_MESSAGE = "탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요."
+private const val ROUTE_TIMEOUT_ERROR_MESSAGE = "경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요."
+private const val ROUTE_NETWORK_ERROR_MESSAGE = "네트워크 연결 상태를 확인한 뒤 다시 시도해 주세요."
+private const val TRANSIT_LOADING_NOTICE_MESSAGE = "대중교통 경로를 불러오고 있어요."
 private const val SECONDS_PER_MINUTE = 60
 private val DEFAULT_TRAVEL_MODE = RouteTravelMode.WALK
 private val WALK_DEFAULT_SELECTED_OPTION = RouteOption.SAFE
@@ -1711,6 +2327,8 @@ private data class RouteOptionCardPresentation(
 private data class RouteOriginResolution(
     val routeOrigin: RouteWaypoint,
     val originUiState: RouteLocationUiState,
+    val originState: RouteOriginState,
+    val originStatus: RouteOriginStatusUiState?,
 )
 
 private data class RouteDestinationResolution(
@@ -1722,6 +2340,38 @@ private data class RouteDestinationResolution(
     val isUsingFallbackDestination: Boolean
         get() = handoffState != RouteDestinationHandoffState.DIRECT
 }
+
+private data class RouteReloadRequest(
+    val resetSelectedOption: Boolean,
+    val force: Boolean,
+)
+
+private data class RouteReloadSignature(
+    val originPlaceId: String?,
+    val originCoordinate: GeoCoordinate,
+    val destinationPlaceId: String?,
+    val destinationCoordinate: GeoCoordinate,
+    val destinationHandoffState: RouteDestinationHandoffState,
+)
+
+private enum class RouteRequestValidation {
+    SAME_ENDPOINT,
+}
+
+private class RouteRequestValidationException(
+    val validation: RouteRequestValidation,
+    override val message: String,
+) : IllegalStateException(message)
+
+private fun RouteReloadRequest?.mergeWith(next: RouteReloadRequest): RouteReloadRequest =
+    when (this) {
+        null -> next
+        else ->
+            RouteReloadRequest(
+                resetSelectedOption = resetSelectedOption || next.resetSelectedOption,
+                force = force || next.force,
+            )
+    }
 
 private object NoOpCurrentLocationManager : CurrentLocationManager {
     private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)

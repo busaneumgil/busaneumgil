@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -29,6 +30,12 @@ fun RouteSettingEntryRoute(
     initialRouteOption: RouteOption? = null,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
+    val activity = remember(context) { context.findComponentActivity() }
     val viewModel = rememberRouteSettingViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var initialRouteOptionApplied by rememberSaveable(initialRouteOption) { mutableStateOf(false) }
@@ -37,6 +44,8 @@ fun RouteSettingEntryRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.RequestLocationPermission ->
+                    activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
                 is RouteSettingUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
@@ -44,9 +53,16 @@ fun RouteSettingEntryRoute(
         }
     }
 
-    LaunchedEffect(viewModel, autoStartNavigation, uiState.isStartEnabled, uiState.ctaAcknowledged) {
-        if (autoStartNavigation && uiState.isStartEnabled && !uiState.ctaAcknowledged) {
+    LaunchedEffect(viewModel, autoStartNavigation, uiState.isStartEnabled, uiState.ctaAcknowledged, uiState.pendingTravelMode) {
+        if (autoStartNavigation && uiState.isStartEnabled && !uiState.ctaAcknowledged && uiState.pendingTravelMode == null) {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+        }
+    }
+
+    DisposableEffect(viewModel) {
+        viewModel.startLocationUpdates()
+        onDispose {
+            viewModel.stopLocationUpdates()
         }
     }
 
@@ -55,7 +71,7 @@ fun RouteSettingEntryRoute(
             !initialRouteOptionApplied &&
             initialRouteOption != null &&
             !uiState.isLoading &&
-            uiState.optionCards.isNotEmpty()
+            uiState.optionCards.any { optionCard -> optionCard.routeOption == initialRouteOption }
         ) {
             if (uiState.selectedOption != initialRouteOption) {
                 viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(initialRouteOption))
@@ -89,6 +105,7 @@ fun RouteDetailEntryRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.RequestLocationPermission -> Unit
                 is RouteSettingUiEvent.NavigateToSearch -> Unit
                 is RouteSettingUiEvent.NavigateToRouteDetail -> Unit
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
@@ -120,6 +137,9 @@ private fun rememberRouteSettingViewModel(): RouteSettingViewModel {
                 routeRepository = appContainer.routeRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 currentLocationManager = appContainer.currentLocationManager,
+                locationPermissionManager = appContainer.locationPermissionManager,
+                placesRepository = appContainer.placesRepository,
+                searchRepository = appContainer.searchRepository,
             )
         }
 

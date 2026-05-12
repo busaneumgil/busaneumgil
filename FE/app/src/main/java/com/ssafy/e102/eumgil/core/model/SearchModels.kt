@@ -86,3 +86,13 @@ fun RecentDestination.toPlaceDestination(): PlaceDestination =
         longitude = longitude,
         category = category,
     )
+
+fun PlaceDestination.toRecentDestination(): RecentDestination =
+    RecentDestination(
+        placeId = placeId,
+        name = name,
+        address = address,
+        latitude = latitude,
+        longitude = longitude,
+        category = category,
+    )

@@ -232,6 +232,7 @@ select {
 }
 
 .sidebar nav button {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -260,6 +261,22 @@ select {
 
 .sidebar nav button.active {
   box-shadow: inset 3px 0 0 var(--color-primary-600);
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: auto;
+  border-radius: var(--radius-pill);
+  padding: 0 5px;
+  background: var(--color-danger);
+  color: var(--color-white);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .sidebar-collapsed .sidebar {
@@ -336,6 +353,17 @@ select {
 .sidebar-collapsed .sidebar nav button.active .nav-dot {
   width: 18px;
   background: var(--color-primary-600);
+}
+
+.sidebar-collapsed .nav-badge {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  min-width: 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  color: transparent;
 }
 
 .workspace {
@@ -670,17 +698,20 @@ select {
 }
 
 .map-toolbar {
-  position: absolute;
+  position: sticky;
   z-index: 20;
   top: 10px;
-  left: 10px;
   display: flex;
+  width: max-content;
+  max-width: calc(100% - 20px);
   gap: 6px;
+  margin: 10px;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
   background: var(--color-white);
   box-shadow: var(--shadow-map-overlay);
+  overflow-x: auto;
 }
 
 .attribute-legend {
@@ -718,6 +749,29 @@ select {
 
 .legend-toggle:not(.active) {
   opacity: 0.45;
+}
+
+.route-point-marker {
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  height: 28px;
+  border: 2px solid var(--color-white);
+  border-radius: var(--radius-pill);
+  padding: 0 10px;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.35);
+  color: var(--color-white);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.route-point-marker.start {
+  background: var(--color-success);
+}
+
+.route-point-marker.end {
+  background: var(--color-danger);
 }
 
 .attribute-tooltip {
@@ -1142,6 +1196,20 @@ select {
   background: var(--color-white);
   padding: 14px;
   margin: 0;
+}
+
+.assignment-filter-row {
+  display: flex;
+  justify-content: flex-start;
+  margin: 12px 0;
+}
+
+.assignment-filter-row label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .admin-table-scroll {

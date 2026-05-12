@@ -47,6 +47,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,7 +55,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -290,6 +293,52 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `search preview clears map pin state when selected pin leaves viewport`() =
+        runTest {
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val locationManager = FakeCurrentLocationManager()
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-offscreen",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                    zoomLevel = viewModel.uiState.value.cameraTarget.resolvedZoomLevel(),
+                    isUserGesture = true,
+                    isSelectedMapPinVisibleInViewport = false,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
     fun `search preview CTA confirms selection and dismissal does not mutate route state`() =
         runTest {
             val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
@@ -377,6 +426,159 @@ class MapViewModelTest {
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertNull(destinationSelectionRepository.selectedDestination.value)
+        }
+
+    @Test
+    fun `home reentry resets destination and preview state to current location when available`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val selectedDestination = testDestination()
+            val previewDestination =
+                PlaceDestination(
+                    placeId = "preview-home-reset",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+            destinationSelectionRepository.updateSelectedDestination(selectedDestination)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                        ),
+                    currentLocationManager = FakeCurrentLocationManager(initialLocation = currentLocation),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+            destinationPreviewRepository.requestPreview(
+                destination = previewDestination,
+                accessibilityTagKeys = listOf("elevator"),
+            )
+            advanceUntilIdle()
+
+            viewModel.onHomeReentered()
+            advanceUntilIdle()
+
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(viewModel.uiState.value.selectedDestination)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.destinationPreview)
+            assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
+            assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
+            assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(currentLocation.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(currentLocation.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+        }
+
+    @Test
+    fun `home reentry falls back without restoring selected destination when current location is unavailable`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val selectedDestination = testDestination()
+            destinationSelectionRepository.updateSelectedDestination(selectedDestination)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                        ),
+                    currentLocationManager = FakeCurrentLocationManager(initialLocation = null),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onHomeReentered()
+            advanceUntilIdle()
+
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(viewModel.uiState.value.selectedDestination)
+            assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
+            assertEquals(MapCameraSource.DEFAULT_BUSAN, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(MapDefaults.BUSAN_CENTER.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(MapDefaults.BUSAN_CENTER.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+        }
+
+    @Test
+    fun `home reentry keeps prior current location camera while refreshed location is pending`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                        ),
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
+
+            locationManager.updateLocation(null)
+            viewModel.onHomeReentered()
+            advanceUntilIdle()
+
+            assertEquals(1, locationManager.refreshLatestLocationCallCount)
+            assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
+            assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(currentLocation.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(currentLocation.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+            assertEquals(MapLocationStatus.Loading, viewModel.uiState.value.locationStatus)
+        }
+
+    @Test
+    fun `home reentry after route stop keeps prior current location camera while refreshed location is pending`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                        ),
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+            assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
+
+            viewModel.onRouteStopped()
+            locationManager.updateLocation(null)
+
+            viewModel.onHomeReentered()
+            advanceUntilIdle()
+
+            assertEquals(1, locationManager.refreshLatestLocationCallCount)
+            assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
+            assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(currentLocation.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(currentLocation.longitude, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+            assertEquals(MapLocationStatus.Loading, viewModel.uiState.value.locationStatus)
         }
 
     @Test
@@ -999,6 +1201,69 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `external poi tap falls back to tapped coordinate when detail coordinate is invalid`() =
+        runTest {
+            val tappedCoordinate = MapCoordinate(latitude = 35.1799, longitude = 129.0752)
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val placesRepository =
+                FakePlacesRepository(
+                    mapTapDetail =
+                        testMapTappedDetail(
+                            bookmarkTargetId = "kakao:poi-123",
+                            detailType = MapPlaceDetailType.EXTERNAL_POI,
+                            provider = "KAKAO",
+                            providerPlaceId = "poi-123",
+                            name = "Kakao Cafe",
+                            providerCategory = "Cafe",
+                            address = "10 Cafe-ro, Busan",
+                            latitude = Double.NaN,
+                            longitude = Double.NaN,
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(
+                MapUiAction.MapTapped(
+                    MapTapPayload(
+                        coordinate = tappedCoordinate,
+                        clickType = MapTapClickType.POI,
+                        provider = "KAKAO",
+                        providerPlaceId = "poi-123",
+                        nameHint = "Cafe Hint",
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            val detail = requireNotNull(viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
+            assertEquals(tappedCoordinate.latitude, detail.latitude, 0.0)
+            assertEquals(tappedCoordinate.longitude, detail.longitude, 0.0)
+
+            viewModel.onAction(MapUiAction.FacilitySetDestinationClicked)
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+            val selectedDestination = requireNotNull(destinationSelectionRepository.selectedDestination.value)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals("Kakao Cafe", selectedDestination.name)
+            assertEquals(tappedCoordinate.latitude, selectedDestination.latitude, 0.0)
+            assertEquals(tappedCoordinate.longitude, selectedDestination.longitude, 0.0)
+        }
+
+    @Test
     fun `external poi bookmark posts snapshot and deletes by returned target id`() =
         runTest {
             val tappedCoordinate = MapCoordinate(latitude = 35.1799, longitude = 129.0752)
@@ -1394,6 +1659,57 @@ class MapViewModelTest {
             assertEquals(
                 listOf("place-4", "place-3", "place-2"),
                 viewModel.uiState.value.recentDestinations.map { recentDestination -> recentDestination.placeId },
+            )
+        }
+
+    @Test
+    fun `recent destinations stay stale until next refresh when save completes after first route start`() =
+        runTest {
+            val searchRepository = FakeSearchRepository(saveGate = CompletableDeferred())
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destination = testDestination().copy(placeId = "bookmark-place-1")
+            val recentDestination =
+                recentDestination(
+                    placeId = destination.placeId,
+                    searchedAtMillis = 1_000L,
+                )
+                    .copy(
+                        latitude = destination.latitude,
+                        longitude = destination.longitude,
+                    )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    searchRepository = searchRepository,
+                )
+
+            backgroundScope.launch {
+                searchRepository.saveRecentDestination(recentDestination)
+            }
+            runCurrent()
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.recentDestinations.isEmpty())
+
+            searchRepository.allowPendingSave()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.recentDestinations.isEmpty())
+
+            viewModel.onRouteStopped()
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("bookmark-place-1"),
+                viewModel.uiState.value.recentDestinations.map { item -> item.placeId },
             )
         }
 
@@ -2074,10 +2390,14 @@ private class FakeCurrentLocationManager(
     initialLocation: LocationSnapshot? = null,
 ) : CurrentLocationManager {
     private val mutableLatestLocation = MutableStateFlow(initialLocation)
+    var refreshLatestLocationCallCount: Int = 0
+        private set
 
     override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
 
-    override fun refreshLatestLocation() = Unit
+    override fun refreshLatestLocation() {
+        refreshLatestLocationCallCount += 1
+    }
 
     override fun startLocationUpdates() = Unit
 
@@ -2118,8 +2438,11 @@ private class FakeBookmarkRepository(
 }
 
 private class FakeSearchRepository(
-    private val recentDestinations: List<RecentDestination> = emptyList(),
+    recentDestinations: List<RecentDestination> = emptyList(),
+    private val saveGate: CompletableDeferred<Unit>? = null,
 ) : SearchRepository {
+    private val storedRecentDestinations = recentDestinations.toMutableList()
+
     override suspend fun search(query: com.ssafy.e102.eumgil.core.model.SearchQuery) =
         emptyList<com.ssafy.e102.eumgil.core.model.SearchResult>()
 
@@ -2127,9 +2450,16 @@ private class FakeSearchRepository(
 
     override suspend fun saveRecentSearch(keyword: String) = Unit
 
-    override suspend fun getRecentDestinations(): List<RecentDestination> = recentDestinations
+    override suspend fun getRecentDestinations(): List<RecentDestination> = storedRecentDestinations.toList()
 
-    override suspend fun saveRecentDestination(destination: RecentDestination) = Unit
+    override suspend fun saveRecentDestination(destination: RecentDestination) {
+        saveGate?.await()
+        storedRecentDestinations += destination
+    }
+
+    fun allowPendingSave() {
+        saveGate?.complete(Unit)
+    }
 }
 
 private class FakePlacesRepository(

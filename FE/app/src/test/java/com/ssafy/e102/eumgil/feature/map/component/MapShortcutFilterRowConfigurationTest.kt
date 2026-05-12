@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.map.component
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
@@ -67,14 +68,14 @@ class MapShortcutFilterRowConfigurationTest {
     }
 
     @Test
-    fun `map shortcut filter row keeps leading icons in service main blue`() {
+    fun `map shortcut filter row keeps enabled icons in service main blue and mutes disabled icons`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
                 .readText()
 
         assertTrue(
-            "MAP top shortcut filter icons should always tint to Primary 600.",
-            source.contains("tint = EumPrimary600"),
+            "MAP top shortcut filter icons should keep enabled chips in Primary 600.",
+            source.contains("val iconTint = if (enabled) EumPrimary600 else MaterialTheme.colorScheme.onSurfaceVariant"),
         )
     }
 
@@ -107,6 +108,18 @@ class MapShortcutFilterRowConfigurationTest {
         assertTrue(
             "MAP top shortcut filters should announce unselected state for accessibility.",
             source.contains("R.string.a11y_option_unselected"),
+        )
+    }
+
+    @Test
+    fun `map shortcut filter row keeps disabled styling without lowering whole chip opacity`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+
+        assertFalse(
+            "Shortcut filter chips should not lower the entire chip alpha because it leaves a ghosted shell over the map.",
+            source.contains(".alpha(if (chip.isEnabled) 1f else 0.52f)"),
         )
     }
 

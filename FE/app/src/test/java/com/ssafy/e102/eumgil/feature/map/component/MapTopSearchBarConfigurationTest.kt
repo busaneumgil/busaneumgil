@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,6 +19,22 @@ class MapTopSearchBarConfigurationTest {
         assertTrue(
             "Map top search bar should provide its own interaction source when ripple indication is disabled.",
             source.contains("MutableInteractionSource"),
+        )
+    }
+
+    @Test
+    fun `map top search bar uses an opaque surface over the map`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapTopSearchBar.kt")
+                .readText()
+
+        assertTrue(
+            "Map top search bar should use the base surface color without transparency so the map does not bleed through.",
+            source.contains("color = MaterialTheme.colorScheme.surface,"),
+        )
+        assertFalse(
+            "Map top search bar should not use a translucent surface over the moving map.",
+            source.contains("surface.copy(alpha = 0.98f)"),
         )
     }
 }

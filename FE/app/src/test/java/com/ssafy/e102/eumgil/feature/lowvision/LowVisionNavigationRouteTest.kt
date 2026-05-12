@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchResult
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRatingData
@@ -178,6 +179,33 @@ class LowVisionNavigationRouteTest {
             assertTrue(request?.selectedRoute?.previewPolyline?.isRenderable == true)
             assertTrue(request?.selectionHandoff?.initialRemainingDistanceMeters ?: 0 > 0)
             assertTrue(request?.selectionHandoff?.initialRemainingDurationSeconds ?: 0 > 0)
+        }
+
+    @Test
+    fun `low vision navigation creates distinct briefing messages for repaired route steps`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "real-place-id",
+                    name = "Real Place",
+                    address = "Busan",
+                    latitude = 35.2,
+                    longitude = 129.2,
+                ),
+            )
+            val routeRepository = IncompleteFreshRouteRepository()
+
+            val request = routeRepository.buildLowVisionNavigationRequest(destinationSelectionRepository)
+            val instructions =
+                request
+                    ?.selectedRoute
+                    ?.segments
+                    .orEmpty()
+                    .map(RouteSegment::toCompactBriefingInstruction)
+
+            assertTrue(instructions.size >= 2)
+            assertEquals(instructions.size, instructions.distinct().size)
         }
 
     @Test

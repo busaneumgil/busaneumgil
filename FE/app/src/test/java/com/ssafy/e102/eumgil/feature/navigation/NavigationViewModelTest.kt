@@ -286,6 +286,37 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `back click opens exit confirmation before completing navigation`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository = FakeRouteRepository(endSessionId = "ended-session")
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                )
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(2).toList() }
+
+            viewModel.onAction(NavigationUiAction.BackClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isExitConfirmDialogVisible)
+            assertTrue(routeRepository.endRouteCalls.isEmpty())
+
+            viewModel.onAction(NavigationUiAction.ConfirmExitNavigationClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isExitConfirmDialogVisible)
+            assertEquals(listOf("walk-route-1"), routeRepository.endRouteCalls)
+            assertEquals(
+                listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
     fun `saving destination bookmark completes navigation into saved route when repository save succeeds`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()

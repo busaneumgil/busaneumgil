@@ -125,7 +125,7 @@ class NavigationViewModel(
     fun onAction(action: NavigationUiAction) {
         when (action) {
             NavigationUiAction.NavigationEntered -> requestInitialBriefingIfNeeded()
-            NavigationUiAction.BackClicked -> finishNavigation(NavigationUiEvent.NavigateBack)
+            NavigationUiAction.BackClicked -> requestExitNavigationConfirmation()
             NavigationUiAction.RouteDetailClicked -> {
                 uiState.value.selectedRouteOption?.let { routeOption ->
                     if (uiState.value.canOpenRouteDetail) {
@@ -133,12 +133,7 @@ class NavigationViewModel(
                     }
                 }
             }
-            NavigationUiAction.ExitNavigationClicked -> {
-                if (uiState.value.isExitEnabled) {
-                    isExitConfirmDialogVisible = true
-                    publishNavigationState()
-                }
-            }
+            NavigationUiAction.ExitNavigationClicked -> requestExitNavigationConfirmation()
             NavigationUiAction.ExitNavigationDismissed -> {
                 if (isExitConfirmDialogVisible) {
                     isExitConfirmDialogVisible = false
@@ -366,6 +361,12 @@ class NavigationViewModel(
         if (initialBriefingRequested) return
         initialBriefingRequested = true
         requestBriefing()
+    }
+
+    private fun requestExitNavigationConfirmation() {
+        if (!uiState.value.isExitEnabled) return
+        isExitConfirmDialogVisible = true
+        publishNavigationState()
     }
 
     private fun onVoiceGuidanceToggled(enabled: Boolean) {

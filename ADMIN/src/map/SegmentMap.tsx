@@ -6,9 +6,9 @@ import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
 import { roadAttributeStrokeColor, roadAttributeStrokeStyle, roadAttributeStrokeWeight } from "./roadAttributeStyle";
 import { roadviewUnavailableMessage, shouldOpenRoadviewForMode } from "./roadviewMode";
 import { pointLineDistanceM } from "./referenceMatching";
-import { buildRoutePreview, type Coord } from "./routeGraph";
 
-type EditorMode = "select" | "delete" | "add" | "from" | "to" | "roadview";
+type Coord = [number, number];
+type EditorMode = "select" | "delete" | "add" | "roadview";
 type AddType = EditableSegmentType;
 
 interface SegmentMapProps {
@@ -27,6 +27,7 @@ interface SegmentMapProps {
   brailleBlockPayload?: ReferencePointPayload;
   roadviewContainerRef: RefObject<HTMLDivElement | null>;
   onRoadviewChange: (state: RoadviewDockState) => void;
+  editable?: boolean;
 }
 
 export interface RoadviewDockState {
@@ -53,6 +54,7 @@ export function SegmentMap({
   brailleBlockPayload,
   roadviewContainerRef,
   onRoadviewChange,
+  editable = true,
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -68,11 +70,6 @@ export function SegmentMap({
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
   const segmentOverlayByEdgeRef = useRef<Map<string, KakaoOverlay[]>>(new Map());
   const polygonShapeRef = useRef<KakaoOverlay | null>(null);
-  const routeFromMarkerRef = useRef<KakaoOverlay | null>(null);
-  const routeToMarkerRef = useRef<KakaoOverlay | null>(null);
-  const routeLineRef = useRef<KakaoOverlay | null>(null);
-  const routeFromRef = useRef<Coord | null>(null);
-  const routeToRef = useRef<Coord | null>(null);
   const draftEditsRef = useRef<EditAction[]>(draftEdits);
   const modeRef = useRef<EditorMode>("select");
   const addTypeRef = useRef<AddType>("SIDE_LINE");
@@ -84,7 +81,6 @@ export function SegmentMap({
   const [mode, setModeState] = useState<EditorMode>("select");
   const [addType, setAddTypeState] = useState<AddType>("SIDE_LINE");
   const [pendingAddCount, setPendingAddCount] = useState(0);
-  const [routeStatus, setRouteStatus] = useState("from/to 미지정");
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [polygonDeleteActive, setPolygonDeleteActive] = useState(false);
@@ -95,6 +91,12 @@ export function SegmentMap({
     onSelectSegmentRef.current = onSelectSegment;
     draftEditsRef.current = draftEdits;
   }, [draftEdits, onDraftEdit, onSelectSegment]);
+
+  useEffect(() => {
+    if (!editable && (modeRef.current === "add" || modeRef.current === "delete")) {
+      setMode("select");
+    }
+  }, [editable]);
 
   useEffect(() => {
     let disposed = false;
@@ -186,6 +188,9 @@ export function SegmentMap({
   }, [selectedSegment]);
 
   function setMode(nextMode: EditorMode) {
+    if (!editable && (nextMode === "add" || nextMode === "delete")) {
+      return;
+    }
     modeRef.current = nextMode;
     setModeState(nextMode);
     if (nextMode !== "add") {
@@ -210,13 +215,12 @@ export function SegmentMap({
       return;
     }
 
-    if (shouldOpenRoadviewForMode(modeRef.current)) {
-      showRoadviewAt(latLng);
+    if (!editable && (modeRef.current === "add" || modeRef.current === "delete")) {
       return;
     }
 
-    if (modeRef.current === "from" || modeRef.current === "to") {
-      setRoutePoint(modeRef.current, coord);
+    if (shouldOpenRoadviewForMode(modeRef.current)) {
+      showRoadviewAt(latLng);
       return;
     }
 
@@ -245,47 +249,6 @@ export function SegmentMap({
     tempOverlaysRef.current = [];
     polygonShapeRef.current?.setMap(null);
     polygonShapeRef.current = null;
-  }
-
-  function setRoutePoint(which: "from" | "to", coord: Coord) {
-    if (which === "from") {
-      routeFromRef.current = coord;
-      routeFromMarkerRef.current?.setMap(null);
-      routeFromMarkerRef.current = drawPoint(coord, "#16a34a", 5);
-    } else {
-      routeToRef.current = coord;
-      routeToMarkerRef.current?.setMap(null);
-      routeToMarkerRef.current = drawPoint(coord, "#dc2626", 5);
-    }
-    routeLineRef.current?.setMap(null);
-    routeLineRef.current = null;
-    setRouteStatus(`${which.toUpperCase()} 지정됨`);
-  }
-
-  function drawRoutePreview() {
-    if (!window.kakao?.maps || !mapRef.current) return;
-    const route = buildRoutePreview(
-      payload?.segments.features ?? [],
-      draftEditsRef.current,
-      routeFromRef.current,
-      routeToRef.current,
-    );
-    routeLineRef.current?.setMap(null);
-    routeLineRef.current = null;
-    if (!route) {
-      setRouteStatus("path not connected");
-      return;
-    }
-    const line = new window.kakao.maps.Polyline({
-      map: mapRef.current,
-      path: route.coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
-      strokeColor: "#16a34a",
-      strokeWeight: 6,
-      strokeOpacity: 0.95,
-      strokeStyle: "solid",
-    });
-    routeLineRef.current = line;
-    setRouteStatus(`route ${route.distanceMeter.toFixed(1)}m`);
   }
 
   function drawPoint(coord: Coord, color: string, radius: number): KakaoOverlay | null {
@@ -578,19 +541,16 @@ export function SegmentMap({
       <div ref={containerRef} className="map-canvas" />
       <div className="map-toolbar">
         <button className={mode === "select" ? "selected-tool" : ""} onClick={() => setMode("select")}>Select</button>
-        <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")}>Delete</button>
-        <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")}>Add</button>
-        <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add"}>
+        <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
+        <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
+        <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
           <option value="SIDE_LINE">SIDE_LINE</option>
           <option value="CROSS_WALK">CROSS_WALK</option>
         </select>
-        <button className={mode === "from" ? "selected-tool" : ""} onClick={() => setMode("from")}>From</button>
-        <button className={mode === "to" ? "selected-tool" : ""} onClick={() => setMode("to")}>To</button>
-        <button onClick={drawRoutePreview}>안내</button>
         {mode === "delete" && (
           <>
-            <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)}>Drag</button>
-            <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3}>Delete all</button>
+            <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>Drag</button>
+            <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>Delete all</button>
           </>
         )}
         <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
@@ -602,7 +562,7 @@ export function SegmentMap({
             ? `payload 오류: ${error.message}`
             : mapError
               ? `지도 오류: ${mapError}`
-              : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""} · ${routeStatus}`}
+              : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""}`}
       </div>
     </section>
   );

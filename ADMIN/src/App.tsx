@@ -2,17 +2,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import {
   createAdminRoadNetworkEditJob,
+  fetchAdminAreaAssignments,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
   fetchAdminPlaceDetail,
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
+  fetchAdminUsers,
   adminAccessTokenRefreshedEvent,
   getStoredAdminAccessToken,
   logoutAdminSession,
   storeAdminAccessToken,
+  updateAdminAreaAssignmentStatus,
   updateAdminPlace,
   updateAdminPlaceAccessibilityFeatures,
+  updateAdminUserRole,
+  upsertAdminAreaAssignment,
 } from "./api/adminApi";
 import { AdminAuthPanel } from "./auth/AdminAuthPanel";
 import { adminShellClassName } from "./layout/adminLayout";
@@ -20,6 +25,7 @@ import { FacilityMap } from "./map/FacilityMap";
 import { facilityCategoryLabel } from "./map/facilityStyle";
 import { SegmentMap, type RoadviewDockState } from "./map/SegmentMap";
 import { HazardReportsPage } from "./report/HazardReportsPage";
+import { RouteTuningPage } from "./route/RouteTuningPage";
 import { useAdminStore } from "./store/adminStore";
 import type {
   AccessibilityFeatureType,
@@ -32,6 +38,10 @@ import type {
   PlaceCategory,
   RoadNetworkEditJobResponse,
   SegmentFeature,
+  WorkStatus,
+  AdminUserResponse,
+  Assignment,
+  UserRole,
 } from "./types";
 
 const placeCategories: PlaceCategory[] = [
@@ -59,6 +69,10 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
     label: "보행 네트워크",
     description: "SIDE_LINE/CROSS_WALK를 구·동 단위로 편집하고 DB 반영 전 draft를 검수합니다.",
   },
+  routeTuning: {
+    label: "경로 튜닝",
+    description: "GraphHopper 프로필 수치를 조정해 기본 경로와 조정 경로를 비교합니다.",
+  },
   facilities: {
     label: "편의시설",
     description: "보행약자 편의시설 위치와 접근성 속성을 검수합니다.",
@@ -66,6 +80,10 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   hazards: {
     label: "제보 관리",
     description: "사용자가 등록한 도로 상태 제보를 확인하고 승인 또는 반려합니다.",
+  },
+  users: {
+    label: "사용자 관리",
+    description: "관리자 권한과 구·동 담당자, 작업 상태를 관리합니다.",
   },
 };
 
@@ -105,14 +123,14 @@ function AdminApp() {
     setSelectedArea,
     undoDraftEdit,
     clearDraft,
-    requestReview,
     addDraftEdit,
-    markApplied,
+    clearDraftForAssignment,
   } = useAdminStore();
 
   const hasToken = Boolean(accessToken);
   const isAdminAuthenticated = hasToken && adminPrincipal?.role === "ADMIN";
   const currentAdmin = adminPrincipal;
+  const showsAreaSelector = page === "network" || page === "facilities";
 
   useEffect(() => {
     function handleAccessTokenRefreshed(event: Event) {
@@ -139,7 +157,21 @@ function AdminApp() {
   const areasQuery = useQuery({
     queryKey: ["admin-areas", accessToken],
     queryFn: () => fetchAdminAreas(accessToken),
-    enabled: page !== "hazards" && isAdminAuthenticated,
+    enabled: (showsAreaSelector || page === "users") && isAdminAuthenticated,
+    retry: false,
+  });
+
+  const adminUsersQuery = useQuery({
+    queryKey: ["admin-users", accessToken],
+    queryFn: () => fetchAdminUsers(accessToken),
+    enabled: page === "users" && isAdminAuthenticated,
+    retry: false,
+  });
+
+  const areaAssignmentsQuery = useQuery({
+    queryKey: ["admin-area-assignments", accessToken],
+    queryFn: () => fetchAdminAreaAssignments(accessToken),
+    enabled: isAdminAuthenticated,
     retry: false,
   });
 
@@ -186,9 +218,33 @@ function AdminApp() {
     },
   });
 
+  const updateUserRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: UserRole }) =>
+      updateAdminUserRole(userId, role, accessToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+  });
+
+  const upsertAssignmentMutation = useMutation({
+    mutationFn: (request: { gu: string; dong: string; assigneeUserId: string | null; status: WorkStatus }) =>
+      upsertAdminAreaAssignment(request, accessToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-area-assignments"] });
+    },
+  });
+
+  const updateAssignmentStatusMutation = useMutation({
+    mutationFn: ({ assignmentId, status }: { assignmentId: number; status: WorkStatus }) =>
+      updateAdminAreaAssignmentStatus(assignmentId, status, accessToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-area-assignments"] });
+    },
+  });
+
   const updatePlaceMutation = useMutation({
     mutationFn: ({ placeId, request }: { placeId: number; request: AdminPlaceUpdateRequest }) =>
-      updateAdminPlace(placeId, request, accessToken),
+      updateAdminPlace(placeId, selectedGu, selectedDong, request, accessToken),
     onSuccess: (place) => {
       queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
       queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
@@ -197,7 +253,7 @@ function AdminApp() {
 
   const updatePlaceFeaturesMutation = useMutation({
     mutationFn: ({ placeId, features }: { placeId: number; features: PlaceAccessibilityFeature[] }) =>
-      updateAdminPlaceAccessibilityFeatures(placeId, features, accessToken),
+      updateAdminPlaceAccessibilityFeatures(placeId, selectedGu, selectedDong, features, accessToken),
     onSuccess: (place) => {
       queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
       queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
@@ -229,18 +285,26 @@ function AdminApp() {
       return;
     }
     completedRoadEditJobIdRef.current = activeRoadEditJob.jobId;
-    markApplied(submittedRoadEditAssignmentIdRef.current ?? undefined);
+    clearDraftForAssignment(submittedRoadEditAssignmentIdRef.current ?? undefined);
     submittedRoadEditAssignmentIdRef.current = null;
     setSelectedSegment(null);
     setActiveRoadEditJobId(null);
     queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
     queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
-  }, [activeRoadEditJob, markApplied]);
+    queryClient.invalidateQueries({ queryKey: ["admin-area-assignments"] });
+  }, [activeRoadEditJob, clearDraftForAssignment]);
 
   const filteredDongs = useMemo(() => {
     const areas = areasQuery.data ?? [];
     return areas.filter((area) => area.gu === selectedGu);
   }, [areasQuery.data, selectedGu]);
+
+  const selectedAssignment = useMemo(() => {
+    return (areaAssignmentsQuery.data ?? []).find((assignment) => assignment.gu === selectedGu && assignment.dong === selectedDong) ?? null;
+  }, [areaAssignmentsQuery.data, selectedDong, selectedGu]);
+
+  const canEditSelectedArea = selectedAssignment?.assigneeUserId === currentAdmin?.userId;
+  const selectedAssignmentLabel = selectedAssignment?.assigneeLabel || selectedAssignment?.assigneeUserId || "미지정";
 
   function logoutAdmin() {
     void logoutAdminSession(accessToken).catch(() => undefined);
@@ -303,58 +367,80 @@ function AdminApp() {
             <h1>{pageMeta[page].label}</h1>
             <p>{pageMeta[page].description}</p>
           </div>
-          {page !== "hazards" && <div className="topbar-actions">
+          {page !== "hazards" && page !== "users" && <div className="topbar-actions">
             <label className="backend-field">
               Admin
               <span>{currentAdmin.userId}</span>
             </label>
             <button type="button" onClick={logoutAdmin}>로그아웃</button>
-            <label>
-              구
-              <select
-                value={selectedGu}
-                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
-                onChange={(event) => {
-                  const nextGu = event.target.value;
-                  const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
-                  setSelectedArea(nextGu, nextDong);
-                  setSelectedFacility(null);
-                  setSelectedSegment(null);
-                }}
-              >
-                {[...new Set((areasQuery.data ?? []).map((area) => area.gu))]
-                  .filter(Boolean)
-                  .map((gu) => (
-                    <option key={gu} value={gu}>
-                      {gu}
-                    </option>
-                  ))}
-                {!areasQuery.data?.length && <option value={selectedGu}>{selectedGu}</option>}
-              </select>
-            </label>
-            <label>
-              동
-              <select
-                value={selectedDong}
-                disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
-                onChange={(event) => {
-                  setSelectedArea(selectedGu, event.target.value);
-                  setSelectedFacility(null);
-                  setSelectedSegment(null);
-                }}
-              >
-                {filteredDongs.map((area) => (
-                  <option key={`${area.gu}-${area.dong}`} value={area.dong}>
-                    {area.dong}
-                  </option>
-                ))}
-                {!filteredDongs.length && <option value={selectedDong}>{selectedDong}</option>}
-              </select>
-            </label>
+            {showsAreaSelector && (
+              <>
+                <label>
+                  구
+                  <select
+                    value={selectedGu}
+                    disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
+                    onChange={(event) => {
+                      const nextGu = event.target.value;
+                      const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
+                      setSelectedArea(nextGu, nextDong);
+                      setSelectedFacility(null);
+                      setSelectedSegment(null);
+                    }}
+                  >
+                    {[...new Set((areasQuery.data ?? []).map((area) => area.gu))]
+                      .filter(Boolean)
+                      .map((gu) => (
+                        <option key={gu} value={gu}>
+                          {gu}
+                        </option>
+                      ))}
+                    {!areasQuery.data?.length && <option value={selectedGu}>{selectedGu}</option>}
+                  </select>
+                </label>
+                <label>
+                  동
+                  <select
+                    value={selectedDong}
+                    disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
+                    onChange={(event) => {
+                      setSelectedArea(selectedGu, event.target.value);
+                      setSelectedFacility(null);
+                      setSelectedSegment(null);
+                    }}
+                  >
+                    {filteredDongs.map((area) => (
+                      <option key={`${area.gu}-${area.dong}`} value={area.dong}>
+                        {area.dong}
+                      </option>
+                    ))}
+                    {!filteredDongs.length && <option value={selectedDong}>{selectedDong}</option>}
+                  </select>
+                </label>
+              </>
+            )}
           </div>}
         </header>
 
         {page === "hazards" && <HazardReportsPage accessToken={accessToken} adminPrincipal={currentAdmin} onLogout={logoutAdmin} />}
+
+        {page === "routeTuning" && <RouteTuningPage accessToken={accessToken} />}
+
+        {page === "users" && (
+          <UserManagementPage
+            currentAdmin={currentAdmin}
+            users={adminUsersQuery.data ?? []}
+            assignments={areaAssignmentsQuery.data ?? []}
+            areas={areasQuery.data ?? []}
+            loading={adminUsersQuery.isLoading || areaAssignmentsQuery.isLoading}
+            error={adminUsersQuery.error || areaAssignmentsQuery.error}
+            userRolePending={updateUserRoleMutation.isPending}
+            assignmentPending={upsertAssignmentMutation.isPending || updateAssignmentStatusMutation.isPending}
+            onUpdateUserRole={(userId, role) => updateUserRoleMutation.mutate({ userId, role })}
+            onUpsertAssignment={(request) => upsertAssignmentMutation.mutate(request)}
+            onUpdateAssignmentStatus={(assignmentId, status) => updateAssignmentStatusMutation.mutate({ assignmentId, status })}
+          />
+        )}
 
         {page === "network" && (
           <div className="editor-layout">
@@ -368,6 +454,7 @@ function AdminApp() {
               onSelectSegment={setSelectedSegment}
               roadviewContainerRef={roadviewContainerRef}
               onRoadviewChange={setRoadviewDock}
+              editable={canEditSelectedArea}
             />
             <aside className="detail-panel">
               <section className="panel-section roadview-dock-section">
@@ -419,15 +506,19 @@ function AdminApp() {
               </section>
               <section className="panel-section">
                 <h3>검수 흐름</h3>
+                <dl className="attribute-detail-list">
+                  <AttributeRow label="담당자" value={selectedAssignmentLabel} />
+                  <AttributeRow label="상태" value={workStatusLabel(selectedAssignment?.status ?? "NOT_STARTED")} />
+                </dl>
+                {!canEditSelectedArea && (
+                  <p className="error-box">현재 계정은 {selectedGu} {selectedDong} 담당자가 아니므로 수정할 수 없습니다.</p>
+                )}
                 <button
                   className="primary"
                   onClick={() => applyRoadNetworkMutation.mutate()}
-                  disabled={!draftEdits.length || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
+                  disabled={!draftEdits.length || !canEditSelectedArea || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                 >
                   {applyRoadNetworkMutation.isPending || isRoadEditJobRunning ? "DB 반영 중" : "DB 반영"}
-                </button>
-                <button onClick={requestReview} disabled={!draftEdits.length || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}>
-                  Request Review
                 </button>
                 {activeRoadEditJob && (
                   <p className="muted">
@@ -501,6 +592,12 @@ function AdminApp() {
                     savingBasic={updatePlaceMutation.isPending}
                     savingFeatures={updatePlaceFeaturesMutation.isPending}
                     saveError={updatePlaceMutation.error || updatePlaceFeaturesMutation.error}
+                    editable={canEditSelectedArea}
+                    assignmentMessage={
+                      canEditSelectedArea
+                        ? `${selectedGu} ${selectedDong} 담당자로 수정할 수 있습니다.`
+                        : `${selectedGu} ${selectedDong} 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
+                    }
                     onSaveBasic={(placeId, request) => updatePlaceMutation.mutate({ placeId, request })}
                     onSaveFeatures={(placeId, features) => updatePlaceFeaturesMutation.mutate({ placeId, features })}
                   />
@@ -534,6 +631,172 @@ function App() {
   );
 }
 
+function UserManagementPage({
+  currentAdmin,
+  users,
+  assignments,
+  areas,
+  loading,
+  error,
+  userRolePending,
+  assignmentPending,
+  onUpdateUserRole,
+  onUpsertAssignment,
+  onUpdateAssignmentStatus,
+}: {
+  currentAdmin: AdminMeResponse;
+  users: AdminUserResponse[];
+  assignments: Assignment[];
+  areas: { gu: string; dong: string }[];
+  loading: boolean;
+  error?: Error | null;
+  userRolePending: boolean;
+  assignmentPending: boolean;
+  onUpdateUserRole: (userId: string, role: UserRole) => void;
+  onUpsertAssignment: (request: { gu: string; dong: string; assigneeUserId: string | null; status: WorkStatus }) => void;
+  onUpdateAssignmentStatus: (assignmentId: number, status: WorkStatus) => void;
+}) {
+  const adminUsers = users.filter((user) => user.role === "ADMIN");
+  const assignmentByArea = new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}`, assignment]));
+  const normalizedAreas = areas.length
+    ? areas
+    : assignments.map((assignment) => ({ gu: assignment.gu, dong: assignment.dong }));
+
+  return (
+    <div className="user-management-layout">
+      <section className="panel-section">
+        <h3>관리자 권한</h3>
+        {loading && <p className="muted">사용자 정보를 불러오는 중입니다.</p>}
+        {error && <p className="error-box">{error.message}</p>}
+        <div className="admin-table-scroll">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>사용자</th>
+                <th>소셜</th>
+                <th>사용자 유형</th>
+                <th>권한</th>
+                <th>변경</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.userId}>
+                  <td>
+                    <strong>{shortId(user.userId)}</strong>
+                    <span>{user.userId}</span>
+                  </td>
+                  <td>{user.socialProvider} / {user.socialProviderUserId}</td>
+                  <td>{user.selectedPrimaryUserType}{user.selectedMobilitySubtype ? ` / ${user.selectedMobilitySubtype}` : ""}</td>
+                  <td>{user.role}</td>
+                  <td>
+                    <select
+                      value={user.role}
+                      disabled={userRolePending || user.userId === currentAdmin.userId}
+                      onChange={(event) => onUpdateUserRole(user.userId, event.target.value as UserRole)}
+                    >
+                      <option value="USER">USER</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                    {user.userId === currentAdmin.userId && <small>본인 권한은 변경할 수 없습니다.</small>}
+                  </td>
+                </tr>
+              ))}
+              {!users.length && (
+                <tr>
+                  <td colSpan={5}>사용자가 없습니다.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel-section">
+        <h3>구·동 담당자 및 작업 상태</h3>
+        <p className="muted">담당자로 지정된 관리자만 해당 구·동의 보행 네트워크와 장소/접근성 데이터를 수정할 수 있습니다.</p>
+        <div className="admin-table-scroll">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>구</th>
+                <th>동</th>
+                <th>담당자</th>
+                <th>상태</th>
+                <th>수정일</th>
+              </tr>
+            </thead>
+            <tbody>
+              {normalizedAreas.map((area) => {
+                const assignment = assignmentByArea.get(`${area.gu}:${area.dong}`);
+                const status = assignment?.status ?? "NOT_STARTED";
+                return (
+                  <tr key={`${area.gu}:${area.dong}`}>
+                    <td>{area.gu}</td>
+                    <td>{area.dong}</td>
+                    <td>
+                      <select
+                        value={assignment?.assigneeUserId ?? ""}
+                        disabled={assignmentPending}
+                        onChange={(event) =>
+                          onUpsertAssignment({
+                            gu: area.gu,
+                            dong: area.dong,
+                            assigneeUserId: event.target.value || null,
+                            status,
+                          })
+                        }
+                      >
+                        <option value="">미지정</option>
+                        {adminUsers.map((user) => (
+                          <option key={user.userId} value={user.userId}>
+                            {user.socialProvider} {shortId(user.userId)}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        value={status}
+                        disabled={assignmentPending}
+                        onChange={(event) => {
+                          const nextStatus = event.target.value as WorkStatus;
+                          if (assignment?.assignmentId) {
+                            onUpdateAssignmentStatus(assignment.assignmentId, nextStatus);
+                            return;
+                          }
+                          onUpsertAssignment({
+                            gu: area.gu,
+                            dong: area.dong,
+                            assigneeUserId: assignment?.assigneeUserId ?? null,
+                            status: nextStatus,
+                          });
+                        }}
+                      >
+                        {workStatusOptions.map((item) => (
+                          <option key={item} value={item}>
+                            {workStatusLabel(item)}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>{assignment?.updatedAt ? formatDateTime(assignment.updatedAt) : "-"}</td>
+                  </tr>
+                );
+              })}
+              {!normalizedAreas.length && (
+                <tr>
+                  <td colSpan={5}>구·동 목록이 없습니다.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="metric">
@@ -552,10 +815,40 @@ function SegmentReferenceDetails({ segment }: { segment: SegmentFeature }) {
         <AttributeRow label="to" value={String(segment.properties.toNodeId ?? "-")} />
         <AttributeRow label="type" value={String(segment.properties.segmentType ?? "-")} />
         <AttributeRow label="length" value={`${formatNumber(Number(segment.properties.lengthMeter))}m`} />
+        <AttributeRow label="통행" value={formatOptionalProperty(segment.properties.walkAccess)} />
+        <AttributeRow label="계단" value={formatOptionalProperty(segment.properties.stairsState)} />
+        <AttributeRow label="보도 폭" value={formatOptionalProperty(segment.properties.widthState)} />
+        <AttributeRow label="노면" value={formatOptionalProperty(segment.properties.surfaceState)} />
+        <AttributeRow label="신호등" value={formatOptionalProperty(segment.properties.signalState)} />
+        <AttributeRow label="음향신호기" value={formatOptionalProperty(segment.properties.audioSignalState)} />
+        <AttributeRow label="점자블록" value={formatOptionalProperty(segment.properties.brailleBlockState)} />
       </dl>
       <p className="muted">CSV 서버를 거치지 않고 DB road_segments 기준으로 조회한 값입니다.</p>
     </>
   );
+}
+
+const workStatusOptions: WorkStatus[] = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "HOLD"];
+
+function workStatusLabel(status: WorkStatus) {
+  switch (status) {
+    case "NOT_STARTED":
+      return "미시작";
+    case "IN_PROGRESS":
+      return "진행중";
+    case "COMPLETED":
+      return "완료";
+    case "HOLD":
+      return "보류";
+  }
+}
+
+function shortId(userId: string) {
+  return userId.length > 8 ? userId.slice(0, 8) : userId;
+}
+
+function formatDateTime(value: string) {
+  return value.replace("T", " ").slice(0, 16);
 }
 
 function FacilityDetails({
@@ -566,6 +859,8 @@ function FacilityDetails({
   savingBasic,
   savingFeatures,
   saveError,
+  editable,
+  assignmentMessage,
   onSaveBasic,
   onSaveFeatures,
 }: {
@@ -576,6 +871,8 @@ function FacilityDetails({
   savingBasic: boolean;
   savingFeatures: boolean;
   saveError?: Error | null;
+  editable: boolean;
+  assignmentMessage: string;
   onSaveBasic: (placeId: number, request: AdminPlaceUpdateRequest) => void;
   onSaveFeatures: (placeId: number, features: PlaceAccessibilityFeature[]) => void;
 }) {
@@ -650,16 +947,17 @@ function FacilityDetails({
       {loading && <p className="muted">상세 정보를 불러오는 중입니다.</p>}
       {error && <p className="error-box">{error.message}</p>}
       {saveError && <p className="error-box">{saveError.message}</p>}
+      <p className={editable ? "muted" : "error-box"}>{assignmentMessage}</p>
       {detail && (
         <>
           <div className="admin-form-grid">
             <label>
               이름
-              <input value={name} onChange={(event) => setName(event.target.value)} />
+              <input value={name} disabled={!editable} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
               카테고리
-              <select value={category} onChange={(event) => setCategory(event.target.value as PlaceCategory)}>
+              <select value={category} disabled={!editable} onChange={(event) => setCategory(event.target.value as PlaceCategory)}>
                 {placeCategories.map((item) => (
                   <option key={item} value={item}>
                     {facilityCategoryLabel(item)}
@@ -669,23 +967,23 @@ function FacilityDetails({
             </label>
             <label>
               주소
-              <input value={address} onChange={(event) => setAddress(event.target.value)} />
+              <input value={address} disabled={!editable} onChange={(event) => setAddress(event.target.value)} />
             </label>
             <label>
               providerPlaceId
-              <input value={providerPlaceId} onChange={(event) => setProviderPlaceId(event.target.value)} />
+              <input value={providerPlaceId} disabled={!editable} onChange={(event) => setProviderPlaceId(event.target.value)} />
             </label>
             <label>
               lat
-              <input value={lat} onChange={(event) => setLat(event.target.value)} />
+              <input value={lat} disabled={!editable} onChange={(event) => setLat(event.target.value)} />
             </label>
             <label>
               lng
-              <input value={lng} onChange={(event) => setLng(event.target.value)} />
+              <input value={lng} disabled={!editable} onChange={(event) => setLng(event.target.value)} />
             </label>
           </div>
           <div className="button-row">
-            <button className="primary" type="button" onClick={saveBasic} disabled={savingBasic || !canSave}>
+            <button className="primary" type="button" onClick={saveBasic} disabled={savingBasic || !canSave || !editable}>
               {savingBasic ? "저장 중" : "기본 정보 저장"}
             </button>
           </div>
@@ -694,6 +992,7 @@ function FacilityDetails({
               <label key={featureType}>
                 <input
                   type="checkbox"
+                  disabled={!editable}
                   checked={features[featureType]}
                   onChange={(event) => setFeatures((value) => ({ ...value, [featureType]: event.target.checked }))}
                 />
@@ -702,7 +1001,7 @@ function FacilityDetails({
             ))}
           </div>
           <div className="button-row">
-            <button className="primary" type="button" onClick={saveFeatures} disabled={savingFeatures || !canSave}>
+            <button className="primary" type="button" onClick={saveFeatures} disabled={savingFeatures || !canSave || !editable}>
               {savingFeatures ? "저장 중" : "접근성 저장"}
             </button>
           </div>
@@ -719,6 +1018,13 @@ function AttributeRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function formatOptionalProperty(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+  return String(value);
 }
 
 function accessibilityFeatureLabel(featureType: AccessibilityFeatureType) {

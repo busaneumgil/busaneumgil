@@ -83,6 +83,13 @@ public class User extends BaseEntity {
 		this.selectedMobilitySubtype = normalizeMobilitySubtype(selectedPrimaryUserType, selectedMobilitySubtype);
 	}
 
+	public void changeRole(UserRole role) {
+		if (role == null) {
+			throw new UserException(UserErrorCode.INVALID_USER_REQUEST, "사용자 권한은 필수입니다.");
+		}
+		this.role = role;
+	}
+
 	private static void validateSocialIdentity(SocialProvider socialProvider, String socialProviderUserId) {
 		if (socialProvider == null) {
 			throw new UserException(UserErrorCode.INVALID_USER_REQUEST, "소셜 제공자는 필수입니다.");

@@ -703,6 +703,23 @@ select {
   border-radius: var(--radius-pill);
 }
 
+.legend-toggle {
+  min-height: 32px;
+  border-radius: var(--radius-pill);
+  padding: 6px 10px;
+  background: var(--color-white);
+}
+
+.legend-toggle.active {
+  border-color: var(--color-primary-400);
+  background: var(--color-primary-200);
+  color: var(--color-primary-600);
+}
+
+.legend-toggle:not(.active) {
+  opacity: 0.45;
+}
+
 .attribute-tooltip {
   display: grid;
   gap: 3px;

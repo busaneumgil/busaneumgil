@@ -87,6 +87,13 @@ export interface SegmentFeature {
     toNodeId?: number | string;
     segmentType?: EditableSegmentType | "SIDE_WALK" | "TRANSITION_CONNECTOR" | string;
     lengthMeter?: number | string;
+    walkAccess?: string | null;
+    brailleBlockState?: string | null;
+    audioSignalState?: string | null;
+    widthState?: string | null;
+    surfaceState?: string | null;
+    stairsState?: string | null;
+    signalState?: string | null;
   };
 }
 

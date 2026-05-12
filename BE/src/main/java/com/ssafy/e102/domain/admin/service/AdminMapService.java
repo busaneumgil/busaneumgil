@@ -183,6 +183,7 @@ public class AdminMapService {
 		Place place = requirePlace(placeId);
 		validateUniqueFeatureTypes(request.features());
 		placeAccessibilityFeatureRepository.deleteAllByPlace_PlaceId(placeId);
+		placeAccessibilityFeatureRepository.flush();
 		List<PlaceAccessibilityFeature> savedFeatures = placeAccessibilityFeatureRepository.saveAll(
 			request.features()
 				.stream()

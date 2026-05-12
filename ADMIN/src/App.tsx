@@ -552,6 +552,13 @@ function SegmentReferenceDetails({ segment }: { segment: SegmentFeature }) {
         <AttributeRow label="to" value={String(segment.properties.toNodeId ?? "-")} />
         <AttributeRow label="type" value={String(segment.properties.segmentType ?? "-")} />
         <AttributeRow label="length" value={`${formatNumber(Number(segment.properties.lengthMeter))}m`} />
+        <AttributeRow label="통행" value={formatOptionalProperty(segment.properties.walkAccess)} />
+        <AttributeRow label="계단" value={formatOptionalProperty(segment.properties.stairsState)} />
+        <AttributeRow label="보도 폭" value={formatOptionalProperty(segment.properties.widthState)} />
+        <AttributeRow label="노면" value={formatOptionalProperty(segment.properties.surfaceState)} />
+        <AttributeRow label="신호등" value={formatOptionalProperty(segment.properties.signalState)} />
+        <AttributeRow label="음향신호기" value={formatOptionalProperty(segment.properties.audioSignalState)} />
+        <AttributeRow label="점자블록" value={formatOptionalProperty(segment.properties.brailleBlockState)} />
       </dl>
       <p className="muted">CSV 서버를 거치지 않고 DB road_segments 기준으로 조회한 값입니다.</p>
     </>
@@ -719,6 +726,13 @@ function AttributeRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function formatOptionalProperty(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+  return String(value);
 }
 
 function accessibilityFeatureLabel(featureType: AccessibilityFeatureType) {

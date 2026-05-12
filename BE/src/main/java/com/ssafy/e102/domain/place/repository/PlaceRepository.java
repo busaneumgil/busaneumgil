@@ -28,7 +28,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 		select distinct p.*
 		from places p
 		join admin_areas aa
-			on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 500)::geometry)
+			on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 100)::geometry)
 		where aa.gu = :gu
 			and (
 				aa.dong = :dong

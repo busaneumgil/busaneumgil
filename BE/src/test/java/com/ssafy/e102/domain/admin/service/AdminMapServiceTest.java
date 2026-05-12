@@ -204,6 +204,7 @@ class AdminMapServiceTest {
 					false))));
 
 		verify(placeAccessibilityFeatureRepository).deleteAllByPlace_PlaceId(1L);
+		verify(placeAccessibilityFeatureRepository).flush();
 		assertThat(response.accessibilityFeatures())
 			.extracting("featureType")
 			.containsExactly(AccessibilityFeatureType.accessibleToilet, AccessibilityFeatureType.elevator);

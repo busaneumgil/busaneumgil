@@ -120,6 +120,16 @@ class SplashConfigurationTest {
     }
 
     @Test
+    fun `startup splash illustration does not announce app name to talkback`() {
+        val appNavHost = File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt").readText()
+
+        assertFalse(
+            "Startup splash illustration is decorative and should not make TalkBack announce the app name.",
+            appNavHost.contains("contentDescription = stringResource(id = R.string.app_name)"),
+        )
+    }
+
+    @Test
     fun `app nav host observes auth state and redirects to login when session is cleared`() {
         val appNavHost = File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt").readText()
 

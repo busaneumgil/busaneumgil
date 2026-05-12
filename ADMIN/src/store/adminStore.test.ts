@@ -11,21 +11,14 @@ describe("adminStore role model", () => {
     expect(useAdminStore.getState().role).toBe("ADMIN");
   });
 
-  it("tracks work owners as assignees instead of service USER accounts", () => {
-    const assignment = useAdminStore.getState().assignments[0];
-
-    expect(assignment.assigneeId).toMatch(/^member-/);
-    expect("assignedUserId" in assignment).toBe(false);
-  });
-
   it("starts from the real editing workspace instead of a placeholder dashboard", () => {
     expect(useAdminStore.getState().page).toBe("network");
   });
 
   it("models second MVP workspaces as task tabs", () => {
-    const pages: AdminPage[] = ["network", "facilities"];
+    const pages: AdminPage[] = ["network", "facilities", "hazards", "users"];
 
-    expect(pages).toEqual(["network", "facilities"]);
+    expect(pages).toEqual(["network", "facilities", "hazards", "users"]);
   });
 
   it("persists draft edits locally until they are cleared or applied", () => {
@@ -62,7 +55,7 @@ describe("adminStore role model", () => {
       },
     });
 
-    useAdminStore.getState().selectAssignment("assign-gangseo-myeongji");
+    useAdminStore.getState().setSelectedArea("강서구", "명지동");
     useAdminStore.getState().clearDraft();
     useAdminStore.getState().addDraftEdit({
       action: "delete_segment",

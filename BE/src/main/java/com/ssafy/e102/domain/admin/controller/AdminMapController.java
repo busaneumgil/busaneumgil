@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.admin.controller;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -13,17 +14,21 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminRoutePreviewRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadNetworkEditApplyRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutePreviewResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
+import com.ssafy.e102.domain.admin.service.AdminRoutePreviewService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditJobService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditService;
 import com.ssafy.e102.global.response.ApiResponse;
+import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -44,6 +49,7 @@ public class AdminMapController {
 	private final AdminMapService adminMapService;
 	private final AdminRoadNetworkEditService adminRoadNetworkEditService;
 	private final AdminRoadNetworkEditJobService adminRoadNetworkEditJobService;
+	private final AdminRoutePreviewService adminRoutePreviewService;
 
 	@Operation(summary = "관리자 검수 구/동 목록 조회", description = "데이터베이스에 적재된 관리자 검수 구/동 목록을 조회한다.")
 	@GetMapping("/areas")
@@ -66,17 +72,21 @@ public class AdminMapController {
 	@Operation(summary = "관리자 보행 네트워크 편집 반영", description = "관리자 페이지의 추가/삭제 편집안을 보행 네트워크 테이블에 반영한다.")
 	@PostMapping("/road-network/edits/apply")
 	public ApiResponse<AdminRoadNetworkEditApplyResponse> applyRoadNetworkEdits(
+		@Parameter(hidden = true) @AuthenticationPrincipal
+		AuthPrincipal principal,
 		@RequestBody @Valid
 		AdminRoadNetworkEditApplyRequest request) {
-		return ApiResponse.success(adminRoadNetworkEditService.apply(request));
+		return ApiResponse.success(adminRoadNetworkEditService.apply(principal.userId(), request));
 	}
 
 	@Operation(summary = "관리자 보행 네트워크 편집 반영 작업 생성", description = "대량 추가/삭제 편집안을 비동기 작업으로 등록하고 작업 ID를 반환한다.")
 	@PostMapping("/road-network/edits/jobs")
 	public ApiResponse<AdminRoadNetworkEditJobResponse> createRoadNetworkEditJob(
+		@Parameter(hidden = true) @AuthenticationPrincipal
+		AuthPrincipal principal,
 		@RequestBody @Valid
 		AdminRoadNetworkEditApplyRequest request) {
-		return ApiResponse.success(adminRoadNetworkEditJobService.create(request));
+		return ApiResponse.success(adminRoadNetworkEditJobService.create(principal.userId(), request));
 	}
 
 	@Operation(summary = "관리자 보행 네트워크 편집 반영 작업 조회", description = "비동기 편집 반영 작업의 처리 상태와 결과를 조회한다.")
@@ -85,6 +95,14 @@ public class AdminMapController {
 		@Parameter(description = "조회할 편집 반영 작업 ID") @PathVariable @Positive
 		Long jobId) {
 		return ApiResponse.success(adminRoadNetworkEditJobService.findById(jobId));
+	}
+
+	@Operation(summary = "관리자 경로 튜닝 미리보기", description = "GraphHopper 프로필 수치를 임시 custom model로 적용해 기본 경로와 조정 경로를 비교한다.")
+	@PostMapping("/routes/preview")
+	public ApiResponse<AdminRoutePreviewResponse> previewRoute(
+		@RequestBody @Valid
+		AdminRoutePreviewRequest request) {
+		return ApiResponse.success(adminRoutePreviewService.preview(request));
 	}
 
 	@Operation(summary = "관리자 편의시설 조회", description = "데이터베이스에 적재된 장소를 지도 표시용 형식으로 조회한다.")
@@ -110,20 +128,33 @@ public class AdminMapController {
 	@Operation(summary = "관리자 장소 기본 정보 수정", description = "관리자 페이지에서 장소명, 카테고리, 주소, 좌표, 외부 제공자 장소 ID를 수정한다. 값이 비어 있는 필드는 기존 값을 유지한다.")
 	@PatchMapping("/places/{placeId}")
 	public ApiResponse<AdminPlaceDetailResponse> updatePlace(
+		@Parameter(hidden = true) @AuthenticationPrincipal
+		AuthPrincipal principal,
 		@Parameter(description = "수정할 장소 ID") @PathVariable @Positive
 		Long placeId,
+		@Parameter(description = "담당 구") @RequestParam
+		String gu,
+		@Parameter(description = "담당 동") @RequestParam
+		String dong,
 		@RequestBody @Valid
 		AdminPlaceUpdateRequest request) {
-		return ApiResponse.success(adminMapService.updatePlace(placeId, request));
+		return ApiResponse.success(adminMapService.updatePlace(principal.userId(), placeId, gu, dong, request));
 	}
 
 	@Operation(summary = "관리자 장소 접근성 속성 교체", description = "관리자 페이지에서 해당 장소의 접근성 속성 목록을 요청 목록으로 전체 교체한다.")
 	@PutMapping("/places/{placeId}/accessibility-features")
 	public ApiResponse<AdminPlaceDetailResponse> updatePlaceAccessibilityFeatures(
+		@Parameter(hidden = true) @AuthenticationPrincipal
+		AuthPrincipal principal,
 		@Parameter(description = "수정할 장소 ID") @PathVariable @Positive
 		Long placeId,
+		@Parameter(description = "담당 구") @RequestParam
+		String gu,
+		@Parameter(description = "담당 동") @RequestParam
+		String dong,
 		@RequestBody @Valid
 		AdminPlaceAccessibilityFeaturesUpdateRequest request) {
-		return ApiResponse.success(adminMapService.updatePlaceAccessibilityFeatures(placeId, request));
+		return ApiResponse
+			.success(adminMapService.updatePlaceAccessibilityFeatures(principal.userId(), placeId, gu, dong, request));
 	}
 }

@@ -1,3 +1,4 @@
+export type UserRole = "USER" | "ADMIN";
 export type AdminRole = "ADMIN";
 
 export type SocialProvider = "KAKAO" | "NAVER" | "GOOGLE";
@@ -23,9 +24,9 @@ export interface TokenResponse {
   refreshToken: string;
 }
 
-export type WorkStatus = "TODO" | "DRAFT" | "REVIEW" | "APPLIED" | "REOPENED";
+export type WorkStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
 
-export type AdminPage = "network" | "facilities" | "hazards";
+export type AdminPage = "network" | "routeTuning" | "facilities" | "hazards" | "users";
 
 export type EditableSegmentType = "SIDE_LINE" | "CROSS_WALK";
 
@@ -48,25 +49,13 @@ export type AccessibilityFeatureType =
   | "guidanceFacility";
 
 export interface Assignment {
-  assignmentId: string;
+  assignmentId: number | null;
   gu: string;
   dong: string;
-  assigneeId: string;
-  assigneeName: string;
+  assigneeUserId: string | null;
+  assigneeLabel: string | null;
   status: WorkStatus;
-  changeSummary: ChangeSummary;
-  assigneeMemo: string;
-  adminMemo: string;
-  updatedAt: string;
-  reviewedAt?: string;
-  appliedAt?: string;
-}
-
-export interface ChangeSummary {
-  addedSideLine: number;
-  addedCrossWalk: number;
-  deletedSegments: number;
-  deletedNodes: number;
+  updatedAt: string | null;
 }
 
 export interface AreaOption {
@@ -87,6 +76,13 @@ export interface SegmentFeature {
     toNodeId?: number | string;
     segmentType?: EditableSegmentType | "SIDE_WALK" | "TRANSITION_CONNECTOR" | string;
     lengthMeter?: number | string;
+    walkAccess?: string | null;
+    brailleBlockState?: string | null;
+    audioSignalState?: string | null;
+    widthState?: string | null;
+    surfaceState?: string | null;
+    stairsState?: string | null;
+    signalState?: string | null;
   };
 }
 
@@ -339,10 +335,73 @@ export interface GeoPoint {
   lng: number;
 }
 
+export type WalkRouteProfile =
+  | "PEDESTRIAN_SAFE"
+  | "PEDESTRIAN_FAST"
+  | "VISUAL_SAFE"
+  | "VISUAL_FAST"
+  | "WHEELCHAIR_MANUAL_SAFE"
+  | "WHEELCHAIR_MANUAL_FAST"
+  | "WHEELCHAIR_AUTO_SAFE"
+  | "WHEELCHAIR_AUTO_FAST";
+
+export interface AdminRouteTuningRequest {
+  slopeLowPercent: number;
+  slopeMiddlePercent: number;
+  slopeHighPercent: number;
+  slopeLowPenalty: number;
+  slopeMiddlePenalty: number;
+  slopeHighPenalty: number;
+  narrowWidthPenalty: number;
+  unpavedSurfacePenalty: number;
+  stairsPenalty: number;
+  signalCrosswalkBonus: number;
+  distanceInfluence: number;
+}
+
+export interface AdminRoutePreviewRequest {
+  startPoint: GeoPoint;
+  endPoint: GeoPoint;
+  profile: WalkRouteProfile;
+  tuning: AdminRouteTuningRequest;
+}
+
+export interface AdminRoutePreviewItemResponse {
+  profile: WalkRouteProfile;
+  distanceMeter: number;
+  durationSecond: number;
+  estimatedTimeMinute: number;
+  coordinates: GeoPoint[];
+}
+
+export interface AdminRoutePreviewResponse {
+  baseRoute: AdminRoutePreviewItemResponse;
+  tunedRoute: AdminRoutePreviewItemResponse;
+}
+
 export interface AdminMeResponse {
   userId: string;
   role: AdminRole;
   permissions: string[];
+}
+
+export interface AdminUserResponse {
+  userId: string;
+  socialProvider: SocialProvider;
+  socialProviderUserId: string;
+  selectedPrimaryUserType: string;
+  selectedMobilitySubtype: string | null;
+  role: UserRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminUserListResponse {
+  users: AdminUserResponse[];
+}
+
+export interface AdminAreaAssignmentListResponse {
+  assignments: Assignment[];
 }
 
 export interface AdminHazardReportSummary {

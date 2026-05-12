@@ -2,9 +2,12 @@ package com.ssafy.e102.global.external.graphhopper;
 
 import java.net.URI;
 import java.net.SocketTimeoutException;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,18 +53,25 @@ public class GraphHopperRouteClient {
 
 	private final RestTemplate restTemplate;
 	private final GraphHopperProperties properties;
+	private final ObjectMapper objectMapper;
 
 	@Autowired
-	public GraphHopperRouteClient(RestTemplateBuilder builder, GraphHopperProperties properties) {
+	public GraphHopperRouteClient(RestTemplateBuilder builder, GraphHopperProperties properties,
+		ObjectMapper objectMapper) {
 		this(builder
 			.connectTimeout(properties.connectTimeout())
 			.readTimeout(properties.readTimeout())
-			.build(), properties);
+			.build(), properties, objectMapper);
 	}
 
 	GraphHopperRouteClient(RestTemplate restTemplate, GraphHopperProperties properties) {
+		this(restTemplate, properties, new ObjectMapper());
+	}
+
+	GraphHopperRouteClient(RestTemplate restTemplate, GraphHopperProperties properties, ObjectMapper objectMapper) {
 		this.properties = properties;
 		this.restTemplate = restTemplate;
+		this.objectMapper = objectMapper;
 	}
 
 	public GraphHopperRoutePath route(GraphHopperRouteRequest request) {
@@ -115,6 +125,54 @@ public class GraphHopperRouteClient {
 		}
 	}
 
+	public GraphHopperRoutePath routeWithCustomModel(GraphHopperRouteRequest request, JsonNode customModel) {
+		try {
+			GraphHopperRouteResponse response = restTemplate.exchange(
+				RequestEntity
+					.post(routePostUri())
+					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(routePostBody(request, customModel)),
+				GraphHopperRouteResponse.class)
+				.getBody();
+			return extractFirstPath(request, response);
+		} catch (HttpStatusCodeException exception) {
+			RouteErrorCode errorCode = graphHopperHttpErrorCode(exception);
+			log.warn(
+				"external route call failed provider={} operation={} status={} body={}",
+				"graphhopper",
+				"route-custom-model",
+				exception.getStatusCode(),
+				exception.getResponseBodyAsString(),
+				exception);
+			throw new RouteException(errorCode, errorCode.getMessage(), exception);
+		} catch (ResourceAccessException exception) {
+			RouteErrorCode errorCode = hasTimeoutCause(exception)
+				? RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT
+				: RouteErrorCode.EXTERNAL_ROUTE_API_FAILED;
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"graphhopper",
+				"route-custom-model",
+				errorCode.getStatus(),
+				exception.getMessage(),
+				exception);
+			throw new RouteException(errorCode, errorCode.getMessage(), exception);
+		} catch (RestClientException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} message={}",
+				"graphhopper",
+				"route-custom-model",
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+				exception.getMessage(),
+				exception);
+			throw new RouteException(
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(),
+				exception);
+		}
+	}
+
 	private RouteErrorCode graphHopperHttpErrorCode(HttpStatusCodeException exception) {
 		if (isGraphHopperNoRoute(exception.getResponseBodyAsString())) {
 			return RouteErrorCode.ROUTE_NOT_FOUND;
@@ -143,6 +201,26 @@ public class GraphHopperRouteClient {
 			.queryParam("details", WALK_PATH_DETAILS.toArray())
 			.build()
 			.toUri();
+	}
+
+	private URI routePostUri() {
+		return UriComponentsBuilder
+			.fromUriString(properties.baseUrl())
+			.path("/route")
+			.build()
+			.toUri();
+	}
+
+	private Map<String, Object> routePostBody(GraphHopperRouteRequest request, JsonNode customModel) {
+		return Map.of(
+			"profile", request.profile().getProfileName(),
+			"points", List.of(
+				List.of(request.startPoint().lng(), request.startPoint().lat()),
+				List.of(request.endPoint().lng(), request.endPoint().lat())),
+			"points_encoded", false,
+			"locale", "ko-KR",
+			"details", WALK_PATH_DETAILS,
+			"custom_model", objectMapper.convertValue(customModel, Map.class));
 	}
 
 	private String point(GeoPointRequest point) {

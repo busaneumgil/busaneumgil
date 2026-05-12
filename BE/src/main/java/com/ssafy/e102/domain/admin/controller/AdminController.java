@@ -74,23 +74,19 @@ public class AdminController {
 	@Operation(summary = "관리자 구/동 담당자 지정", description = "구/동 담당자와 작업 상태를 생성 또는 수정한다.")
 	@PutMapping("/area-assignments")
 	public ApiResponse<AdminAreaAssignmentResponse> upsertAreaAssignment(
-		@Parameter(hidden = true) @AuthenticationPrincipal
-		AuthPrincipal principal,
 		@RequestBody @Valid
 		AdminAreaAssignmentUpsertRequest request) {
-		return ApiResponse.success(adminService.upsertAreaAssignment(principal.userId(), request));
+		return ApiResponse.success(adminService.upsertAreaAssignment(request));
 	}
 
 	@Operation(summary = "관리자 구/동 작업 상태 수정", description = "구/동 담당 항목의 작업 상태를 수정한다.")
 	@PatchMapping("/area-assignments/{assignmentId}/status")
 	public ApiResponse<AdminAreaAssignmentResponse> updateAreaAssignmentStatus(
-		@Parameter(hidden = true) @AuthenticationPrincipal
-		AuthPrincipal principal,
 		@Parameter(description = "담당 항목 ID") @PathVariable
 		Long assignmentId,
 		@RequestBody @Valid
 		AdminAreaAssignmentStatusUpdateRequest request) {
-		return ApiResponse.success(adminService.updateAreaAssignmentStatus(principal.userId(), assignmentId, request));
+		return ApiResponse.success(adminService.updateAreaAssignmentStatus(assignmentId, request));
 	}
 
 	@Operation(summary = "관리자 변경 로그 조회", description = "관리자 화면에서 수행한 변경 작업을 최신순으로 조회한다.")

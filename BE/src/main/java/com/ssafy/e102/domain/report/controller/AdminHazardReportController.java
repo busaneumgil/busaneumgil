@@ -1,6 +1,5 @@
 package com.ssafy.e102.domain.report.controller;
 
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -15,7 +14,6 @@ import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse
 import com.ssafy.e102.domain.report.service.AdminHazardReportService;
 import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.global.response.ApiResponse;
-import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -60,20 +58,16 @@ public class AdminHazardReportController {
 	@Operation(summary = "제보 승인", description = "대기 상태의 도로 상태 제보를 승인 상태로 변경한다. 이미 처리된 제보는 다시 처리할 수 없다.")
 	@PatchMapping("/{reportId}/approve")
 	public ApiResponse<AdminHazardReportStatusResponse> approveHazardReport(
-		@Parameter(hidden = true) @AuthenticationPrincipal
-		AuthPrincipal principal,
 		@Parameter(description = "승인할 제보 ID") @PathVariable @Positive
 		Long reportId) {
-		return ApiResponse.success(adminHazardReportService.approveHazardReport(principal.userId(), reportId));
+		return ApiResponse.success(adminHazardReportService.approveHazardReport(reportId));
 	}
 
 	@Operation(summary = "제보 반려", description = "대기 상태의 도로 상태 제보를 반려 상태로 변경한다. 현재 ERD에는 반려 사유를 저장하지 않는다.")
 	@PatchMapping("/{reportId}/reject")
 	public ApiResponse<AdminHazardReportStatusResponse> rejectHazardReport(
-		@Parameter(hidden = true) @AuthenticationPrincipal
-		AuthPrincipal principal,
 		@Parameter(description = "반려할 제보 ID") @PathVariable @Positive
 		Long reportId) {
-		return ApiResponse.success(adminHazardReportService.rejectHazardReport(principal.userId(), reportId));
+		return ApiResponse.success(adminHazardReportService.rejectHazardReport(reportId));
 	}
 }

@@ -1046,12 +1046,6 @@ function adminUserLabel(user: AdminUserResponse) {
 
 function adminAuditActionLabel(action: string) {
   switch (action) {
-    case "USER_ROLE_UPDATE":
-      return "사용자 권한 변경";
-    case "AREA_ASSIGNMENT_UPSERT":
-      return "담당자 지정";
-    case "AREA_ASSIGNMENT_STATUS_UPDATE":
-      return "작업 상태 변경";
     case "ROAD_NETWORK_EDIT_APPLY":
       return "보행 네트워크 반영";
     case "ROAD_SEGMENT_ATTRIBUTES_UPDATE":
@@ -1060,10 +1054,6 @@ function adminAuditActionLabel(action: string) {
       return "편의시설 기본 정보 변경";
     case "PLACE_ACCESSIBILITY_FEATURES_REPLACE":
       return "편의시설 접근성 변경";
-    case "HAZARD_REPORT_APPROVE":
-      return "제보 승인";
-    case "HAZARD_REPORT_REJECT":
-      return "제보 반려";
     default:
       return action;
   }

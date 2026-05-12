@@ -2,7 +2,6 @@ package com.ssafy.e102.domain.report.service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
@@ -11,7 +10,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
@@ -34,17 +32,14 @@ public class AdminHazardReportService {
 	private final HazardReportRepository hazardReportRepository;
 	private final HazardReportImageRepository hazardReportImageRepository;
 	private final GeoPointConverter geoPointConverter;
-	private final AdminAuditLogService adminAuditLogService;
 
 	public AdminHazardReportService(
 		HazardReportRepository hazardReportRepository,
 		HazardReportImageRepository hazardReportImageRepository,
-		GeoPointConverter geoPointConverter,
-		AdminAuditLogService adminAuditLogService) {
+		GeoPointConverter geoPointConverter) {
 		this.hazardReportRepository = hazardReportRepository;
 		this.hazardReportImageRepository = hazardReportImageRepository;
 		this.geoPointConverter = geoPointConverter;
-		this.adminAuditLogService = adminAuditLogService;
 	}
 
 	public AdminHazardReportListResponse getHazardReports(
@@ -67,13 +62,13 @@ public class AdminHazardReportService {
 	}
 
 	@Transactional
-	public AdminHazardReportStatusResponse approveHazardReport(UUID actorUserId, Long reportId) {
-		return updateHazardReportStatus(actorUserId, reportId, ReportStatus.APPROVED);
+	public AdminHazardReportStatusResponse approveHazardReport(Long reportId) {
+		return updateHazardReportStatus(reportId, ReportStatus.APPROVED);
 	}
 
 	@Transactional
-	public AdminHazardReportStatusResponse rejectHazardReport(UUID actorUserId, Long reportId) {
-		return updateHazardReportStatus(actorUserId, reportId, ReportStatus.REJECTED);
+	public AdminHazardReportStatusResponse rejectHazardReport(Long reportId) {
+		return updateHazardReportStatus(reportId, ReportStatus.REJECTED);
 	}
 
 	private Slice<HazardReport> findHazardReports(ReportStatus status, Long cursor, PageRequest pageRequest) {
@@ -110,10 +105,7 @@ public class AdminHazardReportService {
 			.orElseThrow(() -> new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND));
 	}
 
-	private AdminHazardReportStatusResponse updateHazardReportStatus(
-		UUID actorUserId,
-		Long reportId,
-		ReportStatus nextStatus) {
+	private AdminHazardReportStatusResponse updateHazardReportStatus(Long reportId, ReportStatus nextStatus) {
 		int updatedCount = hazardReportRepository.updateStatusIfCurrentStatus(
 			reportId,
 			ReportStatus.PENDING,
@@ -121,18 +113,7 @@ public class AdminHazardReportService {
 		if (updatedCount == 0) {
 			throw getStatusUpdateFailure(reportId);
 		}
-		AdminHazardReportStatusResponse response = new AdminHazardReportStatusResponse(reportId, nextStatus);
-		adminAuditLogService.record(
-			actorUserId,
-			nextStatus == ReportStatus.APPROVED ? "HAZARD_REPORT_APPROVE" : "HAZARD_REPORT_REJECT",
-			"HAZARD_REPORT",
-			String.valueOf(reportId),
-			null,
-			null,
-			"도로 상태 제보를 " + nextStatus + " 상태로 변경 reportId=" + reportId,
-			new AdminHazardReportStatusResponse(reportId, ReportStatus.PENDING),
-			response);
-		return response;
+		return new AdminHazardReportStatusResponse(reportId, nextStatus);
 	}
 
 	private HazardReportException getStatusUpdateFailure(Long reportId) {

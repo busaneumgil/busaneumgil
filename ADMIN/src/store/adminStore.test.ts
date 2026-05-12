@@ -16,9 +16,9 @@ describe("adminStore role model", () => {
   });
 
   it("models second MVP workspaces as task tabs", () => {
-    const pages: AdminPage[] = ["network", "facilities", "hazards", "users"];
+    const pages: AdminPage[] = ["network", "facilities", "hazards", "users", "logs"];
 
-    expect(pages).toEqual(["network", "facilities", "hazards", "users"]);
+    expect(pages).toEqual(["network", "facilities", "hazards", "users", "logs"]);
   });
 
   it("persists draft edits locally until they are cleared or applied", () => {

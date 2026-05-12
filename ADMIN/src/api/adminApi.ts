@@ -10,6 +10,7 @@ import type {
   AdminHazardReportStatusResponse,
   AdminMeResponse,
   AdminAreaAssignmentListResponse,
+  AdminAuditLogListResponse,
   AdminUserListResponse,
   AdminUserResponse,
   FacilityPayload,
@@ -60,6 +61,16 @@ export class ApiRequestError extends Error {
 
 interface FetchAdminHazardReportsParams {
   status?: HazardReportStatus | "";
+  cursor?: number | null;
+  size?: number;
+  accessToken: string;
+}
+
+interface FetchAdminAuditLogsParams {
+  action?: string;
+  gu?: string;
+  dong?: string;
+  actorUserId?: string;
   cursor?: number | null;
   size?: number;
   accessToken: string;
@@ -201,6 +212,24 @@ export async function fetchAdminAreas(accessToken: string): Promise<AreaOption[]
 export async function fetchAdminAreaAssignments(accessToken: string) {
   const response = await requestAdminJson<AdminAreaAssignmentListResponse>("/admin/area-assignments", accessToken);
   return response.assignments;
+}
+
+export async function fetchAdminAuditLogs({
+  action,
+  gu,
+  dong,
+  actorUserId,
+  cursor,
+  size = 50,
+  accessToken,
+}: FetchAdminAuditLogsParams): Promise<AdminAuditLogListResponse> {
+  const params = new URLSearchParams({ size: String(size) });
+  if (cursor != null) params.set("cursor", String(cursor));
+  if (action) params.set("action", action);
+  if (gu) params.set("gu", gu);
+  if (dong) params.set("dong", dong);
+  if (actorUserId) params.set("actorUserId", actorUserId);
+  return requestAdminJson<AdminAuditLogListResponse>(`/admin/audit-logs?${params.toString()}`, accessToken);
 }
 
 export async function upsertAdminAreaAssignment(

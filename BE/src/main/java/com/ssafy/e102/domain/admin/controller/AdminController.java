@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.admin.dto.request.AdminAreaAssignmentStatusUpdateRequest;
@@ -16,6 +17,7 @@ import com.ssafy.e102.domain.admin.dto.request.AdminAreaAssignmentUpsertRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminUserRoleUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaAssignmentListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaAssignmentResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminAuditLogListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminMeResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminUserListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminUserResponse;
@@ -85,5 +87,24 @@ public class AdminController {
 		@RequestBody @Valid
 		AdminAreaAssignmentStatusUpdateRequest request) {
 		return ApiResponse.success(adminService.updateAreaAssignmentStatus(assignmentId, request));
+	}
+
+	@Operation(summary = "관리자 변경 로그 조회", description = "관리자 화면에서 수행한 변경 작업을 최신순으로 조회한다.")
+	@GetMapping("/audit-logs")
+	public ApiResponse<AdminAuditLogListResponse> getAuditLogs(
+		@Parameter(description = "이전 페이지 마지막 logId") @RequestParam(required = false)
+		Long cursor,
+		@Parameter(description = "작업 종류 필터") @RequestParam(required = false)
+		String action,
+		@Parameter(description = "구 필터") @RequestParam(required = false)
+		String gu,
+		@Parameter(description = "동 필터") @RequestParam(required = false)
+		String dong,
+		@Parameter(description = "작업자 userId 필터") @RequestParam(required = false)
+		UUID actorUserId,
+		@Parameter(description = "조회 개수. 허용 범위는 1~100이다.") @RequestParam(required = false)
+		Integer size) {
+		int normalizedSize = size == null ? 50 : Math.min(Math.max(size, 1), 100);
+		return ApiResponse.success(adminService.getAuditLogs(cursor, action, gu, dong, actorUserId, normalizedSize));
 	}
 }

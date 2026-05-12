@@ -1,8 +1,10 @@
 package com.ssafy.e102.domain.admin.dto.response;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import com.ssafy.e102.domain.route.type.AccessibilityState;
+import com.ssafy.e102.domain.route.type.SegmentFeatureType;
 import com.ssafy.e102.domain.route.type.SegmentType;
 import com.ssafy.e102.domain.route.type.SurfaceState;
 import com.ssafy.e102.domain.route.type.WidthState;
@@ -27,5 +29,6 @@ public record AdminRoadSegmentPropertiesResponse(
 	WidthState widthState,
 	SurfaceState surfaceState,
 	AccessibilityState stairsState,
-	AccessibilityState signalState) {
+	AccessibilityState signalState,
+	List<SegmentFeatureType> featureTypes) {
 }

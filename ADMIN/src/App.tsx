@@ -73,7 +73,7 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
     description: "SIDE_LINE/CROSS_WALK를 구·동 단위로 편집하고 DB 반영 전 draft를 검수합니다.",
   },
   routeTuning: {
-    label: "경로 튜닝",
+    label: "경로 검수",
     description: "구·동별 보행 네트워크 속성을 조정하고 프로필별 안전/빠른 경로를 비교합니다.",
   },
   facilities: {

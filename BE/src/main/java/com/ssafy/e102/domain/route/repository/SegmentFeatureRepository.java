@@ -9,4 +9,6 @@ import com.ssafy.e102.domain.route.entity.SegmentFeature;
 public interface SegmentFeatureRepository extends JpaRepository<SegmentFeature, Long> {
 
 	List<SegmentFeature> findByEdgeId(Long edgeId);
+
+	List<SegmentFeature> findByEdgeIdIn(List<Long> edgeIds);
 }

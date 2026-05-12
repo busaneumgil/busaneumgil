@@ -48,7 +48,10 @@ import com.ssafy.e102.domain.place.repository.PlaceAccessibilityFeatureRepositor
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
+import com.ssafy.e102.domain.route.type.SegmentFeatureType;
 import com.ssafy.e102.global.exception.BusinessException;
 import com.ssafy.e102.global.exception.CommonErrorCode;
 import com.ssafy.e102.global.geo.GeoPointConverter;
@@ -62,6 +65,7 @@ public class AdminMapService {
 
 	private final AdminAreaRepository adminAreaRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
+	private final SegmentFeatureRepository segmentFeatureRepository;
 	private final PlaceRepository placeRepository;
 	private final PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
 	private final GeoPointConverter geoPointConverter;
@@ -70,12 +74,14 @@ public class AdminMapService {
 	public AdminMapService(
 		AdminAreaRepository adminAreaRepository,
 		RoadSegmentRepository roadSegmentRepository,
+		SegmentFeatureRepository segmentFeatureRepository,
 		PlaceRepository placeRepository,
 		PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository,
 		GeoPointConverter geoPointConverter,
 		AdminService adminService) {
 		this.adminAreaRepository = adminAreaRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
+		this.segmentFeatureRepository = segmentFeatureRepository;
 		this.placeRepository = placeRepository;
 		this.placeAccessibilityFeatureRepository = placeAccessibilityFeatureRepository;
 		this.geoPointConverter = geoPointConverter;
@@ -119,9 +125,18 @@ public class AdminMapService {
 			segmentCount = roadSegmentRepository.count();
 		}
 
+		Map<Long, List<SegmentFeatureType>> featureTypesByEdgeId = segmentFeatureRepository
+			.findByEdgeIdIn(roadSegments.stream()
+				.map(RoadSegment::getEdgeId)
+				.toList())
+			.stream()
+			.collect(Collectors.groupingBy(
+				SegmentFeature::getEdgeId,
+				Collectors.mapping(SegmentFeature::getFeatureType, Collectors.toList())));
+
 		List<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse>> features = roadSegments
 			.stream()
-			.map(this::toRoadSegmentFeature)
+			.map(roadSegment -> toRoadSegmentFeature(roadSegment, featureTypesByEdgeId))
 			.toList();
 
 		return new AdminRoadNetworkResponse(
@@ -294,13 +309,20 @@ public class AdminMapService {
 	}
 
 	private AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse> toRoadSegmentFeature(
-		RoadSegment roadSegment) {
+		RoadSegment roadSegment,
+		Map<Long, List<SegmentFeatureType>> featureTypesByEdgeId) {
 		return AdminGeoJsonFeatureResponse.of(
 			AdminLineStringGeometryResponse.of(toCoordinates(roadSegment.getGeom())),
-			toRoadSegmentProperties(roadSegment));
+			toRoadSegmentProperties(roadSegment, featureTypesByEdgeId.getOrDefault(roadSegment.getEdgeId(), List.of())));
 	}
 
 	private AdminRoadSegmentPropertiesResponse toRoadSegmentProperties(RoadSegment roadSegment) {
+		return toRoadSegmentProperties(roadSegment, List.of());
+	}
+
+	private AdminRoadSegmentPropertiesResponse toRoadSegmentProperties(
+		RoadSegment roadSegment,
+		List<SegmentFeatureType> featureTypes) {
 		return new AdminRoadSegmentPropertiesResponse(
 			roadSegment.getEdgeId(),
 			roadSegment.getFromNodeId(),
@@ -313,7 +335,11 @@ public class AdminMapService {
 			roadSegment.getWidthState(),
 			roadSegment.getSurfaceState(),
 			roadSegment.getStairsState(),
-			roadSegment.getSignalState());
+			roadSegment.getSignalState(),
+			featureTypes.stream()
+				.distinct()
+				.sorted(Comparator.comparing(Enum::name))
+				.toList());
 	}
 
 	private AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminFacilityPropertiesResponse> toFacilityFeature(

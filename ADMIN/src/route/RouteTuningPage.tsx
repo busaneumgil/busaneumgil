@@ -11,6 +11,7 @@ import type {
   SegmentPayload,
   SurfaceState,
   WidthState,
+  SegmentFeatureType,
 } from "../types";
 
 type PointMode = "start" | "end";
@@ -25,6 +26,12 @@ const profileGroups: Array<{ value: AdminRouteProfileGroup; label: string }> = [
 const accessibilityOptions: AccessibilityState[] = ["YES", "NO", "UNKNOWN"];
 const widthOptions: WidthState[] = ["ADEQUATE_150", "ADEQUATE_120", "NARROW", "UNKNOWN"];
 const surfaceOptions: SurfaceState[] = ["PAVED", "UNPAVED", "UNKNOWN"];
+const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
+  CROSSWALK: "횡단보도",
+  AUDIO_SIGNAL: "음향신호기",
+  BRAILLE_BLOCK: "점자블록",
+  STAIRS: "계단",
+};
 
 export function RouteTuningPage({
   accessToken,
@@ -100,9 +107,9 @@ export function RouteTuningPage({
       return;
     }
     setPreviewLoading(true);
-    setMessage("GraphHopper 안전/빠른 경로를 계산하는 중입니다.");
+    setMessage("DB 보행 네트워크 기준 안전/빠른 경로를 계산하는 중입니다.");
     try {
-      const result = await previewAdminRoute({ startPoint, endPoint, profileGroup }, accessToken);
+      const result = await previewAdminRoute({ gu, dong, startPoint, endPoint, profileGroup }, accessToken);
       setPreview(result);
       setMessage("빨간선은 안전 경로, 파란선은 빠른 경로입니다.");
     } catch (error) {
@@ -117,7 +124,7 @@ export function RouteTuningPage({
     setSavingAttributes(true);
     try {
       await updateAdminRoadSegmentAttributes(selectedSegment.properties.edgeId, gu, dong, attributeDraft, accessToken);
-      setMessage("segment 속성을 저장했습니다. GraphHopper 경로 반영은 graph-cache 재생성 후 확인해야 합니다.");
+      setMessage("segment 속성을 저장했습니다. DB 기준 경로 미리보기에는 바로 반영됩니다.");
       onSegmentUpdated();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "segment 속성 저장 실패");
@@ -156,9 +163,18 @@ export function RouteTuningPage({
         }}
       />
       <aside className="detail-panel">
+        <SegmentFeatureLegend payload={payload} selectedSegment={selectedSegment} />
         <section className="panel-section">
           <h3>경로 확인</h3>
           <p className="muted">{message}</p>
+          <label className="route-profile-select">
+            프로필
+            <select value={profileGroup} onChange={(event) => setProfileGroup(event.target.value as AdminRouteProfileGroup)}>
+              {profileGroups.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
+              ))}
+            </select>
+          </label>
           <div className="button-row">
             <button
               type="button"
@@ -182,14 +198,6 @@ export function RouteTuningPage({
             </button>
             <button type="button" onClick={resetRoutePoints}>초기화</button>
           </div>
-          <label className="route-profile-select">
-            프로필
-            <select value={profileGroup} onChange={(event) => setProfileGroup(event.target.value as AdminRouteProfileGroup)}>
-              {profileGroups.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-          </label>
           <div className="button-row">
             <button className="primary" type="button" onClick={previewRoute} disabled={previewLoading || !startPoint || !endPoint}>
               {previewLoading ? "계산 중" : "안전/빠른 경로 비교"}
@@ -197,8 +205,8 @@ export function RouteTuningPage({
           </div>
           {preview && (
             <div className="route-result-grid">
-              <RouteResultCard label="안전" color="#dc2626" route={preview.safeRoute} />
               <RouteResultCard label="빠른" color="#2563eb" route={preview.fastRoute} />
+              <RouteResultCard label="안전" color="#dc2626" route={preview.safeRoute} />
             </div>
           )}
         </section>
@@ -222,7 +230,7 @@ export function RouteTuningPage({
                 <StateSelect label="보도 폭" value={attributeDraft.widthState ?? "UNKNOWN"} options={widthOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, widthState: value as WidthState }))} />
                 <StateSelect label="노면" value={attributeDraft.surfaceState ?? "UNKNOWN"} options={surfaceOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, surfaceState: value as SurfaceState }))} />
               </div>
-              <p className="muted">저장 값은 DB road_segments에 반영됩니다. 운영 경로 결과는 GraphHopper graph-cache 재생성 전까지 기존 캐시 기준일 수 있습니다.</p>
+              <p className="muted">저장 값은 DB road_segments에 반영됩니다. 이 화면의 경로 미리보기는 DB 기준으로 계산되며, 운영 앱 경로는 graph-cache 재생성 전까지 기존 캐시 기준일 수 있습니다.</p>
               <div className="button-row">
                 <button className="primary" type="button" onClick={saveSegmentAttributes} disabled={!canEdit || savingAttributes}>
                   {savingAttributes ? "저장 중" : "segment 속성 저장"}
@@ -235,6 +243,36 @@ export function RouteTuningPage({
         </section>
       </aside>
     </div>
+  );
+}
+
+function SegmentFeatureLegend({
+  payload,
+  selectedSegment,
+}: {
+  payload?: SegmentPayload;
+  selectedSegment: SegmentFeature | null;
+}) {
+  const counts = new Map<SegmentFeatureType, number>();
+  (payload?.segments.features ?? []).forEach((segment) => {
+    (segment.properties.featureTypes ?? []).forEach((featureType) => {
+      counts.set(featureType, (counts.get(featureType) ?? 0) + 1);
+    });
+  });
+  const selectedTypes = new Set(selectedSegment?.properties.featureTypes ?? []);
+
+  return (
+    <section className="panel-section">
+      <h3>segment_features</h3>
+      <div className="legend-chip-row">
+        {(Object.keys(segmentFeatureLabels) as SegmentFeatureType[]).map((featureType) => (
+          <span key={featureType} className={selectedTypes.has(featureType) ? "legend-chip active" : "legend-chip"}>
+            {segmentFeatureLabels[featureType]} {counts.get(featureType) ?? 0}
+          </span>
+        ))}
+      </div>
+      <p className="muted">선택한 segment에 포함된 feature는 강조 표시됩니다.</p>
+    </section>
   );
 }
 

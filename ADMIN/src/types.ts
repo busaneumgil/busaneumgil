@@ -30,6 +30,7 @@ export type AssignmentType = "ROAD_NETWORK" | "FACILITY";
 export type AdminPage = "network" | "routeTuning" | "facilities" | "hazards" | "users";
 
 export type EditableSegmentType = "SIDE_LINE" | "CROSS_WALK";
+export type SegmentFeatureType = "CROSSWALK" | "AUDIO_SIGNAL" | "BRAILLE_BLOCK" | "STAIRS";
 
 export type PlaceCategory =
   | "FOOD_CAFE"
@@ -85,6 +86,7 @@ export interface SegmentFeature {
     surfaceState?: string | null;
     stairsState?: string | null;
     signalState?: string | null;
+    featureTypes?: SegmentFeatureType[];
   };
 }
 
@@ -364,6 +366,8 @@ export type WalkRouteProfile =
 export type AdminRouteProfileGroup = "PEDESTRIAN" | "VISUAL" | "WHEELCHAIR_MANUAL" | "WHEELCHAIR_AUTO";
 
 export interface AdminRoutePreviewRequest {
+  gu: string;
+  dong: string;
   startPoint: GeoPoint;
   endPoint: GeoPoint;
   profileGroup: AdminRouteProfileGroup;

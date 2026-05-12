@@ -99,7 +99,7 @@ public class AdminMapController {
 		return ApiResponse.success(adminRoadNetworkEditJobService.findById(jobId));
 	}
 
-	@Operation(summary = "관리자 경로 미리보기", description = "선택한 보행 사용자 유형의 안전/빠른 GraphHopper 프로필 경로를 비교한다.")
+	@Operation(summary = "관리자 경로 미리보기", description = "선택한 구/동의 DB road_segments 기준으로 보행 사용자 유형별 안전/빠른 경로를 비교한다.")
 	@PostMapping("/routes/preview")
 	public ApiResponse<AdminRoutePreviewResponse> previewRoute(
 		@RequestBody @Valid

@@ -319,7 +319,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route detail departure and arrival reuse waypoint pins with detail icon sizing`() {
+    fun `route detail departure and arrival reuse labeled rail pins with detail icon sizing`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -329,8 +329,12 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nprivate fun RouteScreenTopBar")
 
         assertTrue(
-            "Route detail start and arrival should reuse the shared waypoint pin asset instead of straight/check glyphs.",
-            source.contains("RouteDetailStepKind.ARRIVAL -> R.drawable.ic_route_waypoint_pin"),
+            "Route detail start should reuse the in-use labeled origin pin asset.",
+            source.contains("RouteDetailStepKind.START -> R.drawable.ic_navigation_rail_origin_pin"),
+        )
+        assertTrue(
+            "Route detail arrival should reuse the in-use labeled destination pin asset.",
+            source.contains("RouteDetailStepKind.ARRIVAL -> R.drawable.ic_navigation_rail_destination_pin"),
         )
         assertTrue(
             "Transit detail rows should reuse the shared bus icon from the route map surface.",
@@ -341,11 +345,11 @@ class RouteSettingLayoutPolicyTest {
             source.contains("RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway"),
         )
         assertTrue(
-            "Route detail leading icons should branch explicitly for the shared waypoint pin treatment.",
-            leadingIconSection.contains("if (kind.usesWaypointPinIcon())"),
+            "Route detail leading icons should branch explicitly for the labeled rail pin treatment.",
+            leadingIconSection.contains("if (usesLabeledWaypointPinIcon)"),
         )
         assertTrue(
-            "Waypoint pin icons in route detail should keep the shared 22x24 aspect ratio while matching the other detail icon height.",
+            "Labeled rail pins in route detail should keep the shared 22x24 aspect ratio while matching the other detail icon height.",
             leadingIconSection.contains("modifier = Modifier.size(width = RouteDetailWaypointPinWidth, height = RouteDetailWaypointPinHeight)"),
         )
         assertTrue(
@@ -353,8 +357,8 @@ class RouteSettingLayoutPolicyTest {
             leadingIconSection.contains("modifier = Modifier.size(kind.leadingIconSize())"),
         )
         assertTrue(
-            "Route detail should preserve a dedicated helper for waypoint pin steps.",
-            source.contains("private fun RouteDetailStepKind.usesWaypointPinIcon(): Boolean ="),
+            "Route detail should preserve a dedicated helper for labeled start/destination pin steps.",
+            source.contains("private fun RouteDetailStepKind.usesLabeledWaypointPinIcon(): Boolean ="),
         )
         assertTrue(
             "Route detail should keep a dedicated helper for smaller transit icon sizing.",

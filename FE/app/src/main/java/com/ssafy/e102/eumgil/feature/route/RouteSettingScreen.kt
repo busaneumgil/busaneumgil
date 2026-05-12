@@ -787,31 +787,33 @@ private fun RouteDetailStepLeadingIcon(
     tone: RouteDetailTone,
     contentColor: Color,
 ) {
-    val (containerColor, iconTint) =
-        when (kind) {
-            RouteDetailStepKind.ARRIVAL ->
-                RouteWaypointDestinationColor.copy(alpha = 0.14f) to RouteWaypointDestinationColor
-
-            RouteDetailStepKind.START ->
-                RouteWaypointOriginColor.copy(alpha = 0.14f) to RouteWaypointOriginColor
-
-            else -> contentColor.copy(alpha = 0.14f) to contentColor
+    val usesLabeledWaypointPinIcon = kind.usesLabeledWaypointPinIcon()
+    val containerColor =
+        if (usesLabeledWaypointPinIcon || tone == RouteDetailTone.NEUTRAL) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            contentColor.copy(alpha = 0.14f)
+        }
+    val borderColor =
+        if (usesLabeledWaypointPinIcon) {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+        } else {
+            contentColor.copy(alpha = 0.16f)
         }
 
     Surface(
         modifier = Modifier.size(RouteDetailStepLeadingIconContainerSize),
         shape = RoundedCornerShape(RouteStandardCardCornerRadius),
-        color = if (tone == RouteDetailTone.NEUTRAL) MaterialTheme.colorScheme.surface else containerColor,
-        border = BorderStroke(1.dp, iconTint.copy(alpha = 0.16f)),
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            if (kind.usesWaypointPinIcon()) {
+            if (usesLabeledWaypointPinIcon) {
                 Image(
                     painter = painterResource(id = routeDetailStepIconRes(kind = kind)),
                     contentDescription = null,
                     modifier = Modifier.size(width = RouteDetailWaypointPinWidth, height = RouteDetailWaypointPinHeight),
                     contentScale = ContentScale.FillBounds,
-                    colorFilter = ColorFilter.tint(iconTint),
                 )
             } else {
                 Icon(
@@ -822,7 +824,7 @@ private fun RouteDetailStepLeadingIcon(
                         if (kind.usesDirectionalStepIcon()) {
                             Color.Unspecified
                         } else {
-                            iconTint
+                            contentColor
                         },
                 )
             }
@@ -2318,9 +2320,8 @@ private fun routeDetailToneColors(tone: RouteDetailTone): Pair<Color, Color> =
 
 private fun routeDetailStepIconRes(kind: RouteDetailStepKind): Int =
     when (kind) {
-        RouteDetailStepKind.START,
-        RouteDetailStepKind.ARRIVAL,
-            -> R.drawable.ic_route_waypoint_pin
+        RouteDetailStepKind.START -> R.drawable.ic_navigation_rail_origin_pin
+        RouteDetailStepKind.ARRIVAL -> R.drawable.ic_navigation_rail_destination_pin
 
         RouteDetailStepKind.BUS -> R.drawable.ic_place_bus
         RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway
@@ -2346,7 +2347,7 @@ private fun RouteDetailStepKind.usesDirectionalStepIcon(): Boolean =
         this == RouteDetailStepKind.TURN_RIGHT ||
         this == RouteDetailStepKind.FALLBACK
 
-private fun RouteDetailStepKind.usesWaypointPinIcon(): Boolean =
+private fun RouteDetailStepKind.usesLabeledWaypointPinIcon(): Boolean =
     this == RouteDetailStepKind.START || this == RouteDetailStepKind.ARRIVAL
 
 private fun RouteDetailStepKind.leadingIconSize(): Dp =

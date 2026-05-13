@@ -4,6 +4,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,20 +22,29 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -57,7 +69,6 @@ import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
-import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
@@ -73,6 +84,7 @@ fun NavigationScreen(
 ) {
     val screenPolicy = navigationScreenPolicy(uiState)
     val railWidth = (LocalConfiguration.current.screenWidthDp.dp / 7).coerceIn(48.dp, 60.dp)
+    var isSidePanelExpanded by remember(uiState.screenState) { mutableStateOf(false) }
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -81,7 +93,9 @@ fun NavigationScreen(
             modifier = Modifier.fillMaxSize(),
             topBar = {
                 NavigationTopBar(
+                    uiState = uiState,
                     onBackClick = { onAction(NavigationUiAction.BackClicked) },
+                    onCloseClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
                 )
             },
             bottomBar = {
@@ -107,33 +121,59 @@ fun NavigationScreen(
                     uiState = uiState,
                     onAction = onAction,
                 )
-                Row(
+                Box(
                     modifier =
                         Modifier
                             .weight(1f)
                             .fillMaxWidth(),
                 ) {
-                    if (screenPolicy.showSegmentRail) {
-                        NavigationSegmentRail(
-                            uiState = uiState.segmentSync,
-                            onSegmentTapped = { index ->
-                                onAction(NavigationUiAction.SegmentTapped(index = index))
-                            },
-                            onReturnToActiveSegmentClick = {
-                                onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
-                            },
-                            onRouteDetailClick = { onAction(NavigationUiAction.RouteDetailClicked) },
-                            isRouteDetailEnabled = uiState.canOpenRouteDetail,
-                            modifier =
-                                Modifier
-                                    .width(railWidth)
-                                    .fillMaxHeight(),
-                        )
-                    }
                     NavigationMapStage(
                         uiState = uiState,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxSize(),
                     )
+                    if (screenPolicy.showSegmentRail) {
+                        if (isSidePanelExpanded) {
+                            NavigationExpandedSidePanel(
+                                uiState = uiState,
+                                onCollapse = { isSidePanelExpanded = false },
+                                onSegmentTapped = { index ->
+                                    isSidePanelExpanded = false
+                                    onAction(NavigationUiAction.SegmentTapped(index = index))
+                                },
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight(),
+                            )
+                        } else {
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight(),
+                            ) {
+                                NavigationSegmentRail(
+                                    uiState = uiState.segmentSync,
+                                    onSegmentTapped = { index ->
+                                        onAction(NavigationUiAction.SegmentTapped(index = index))
+                                    },
+                                    onReturnToActiveSegmentClick = {
+                                        onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
+                                    },
+                                    onRouteDetailClick = { onAction(NavigationUiAction.RouteDetailClicked) },
+                                    isRouteDetailEnabled = uiState.canOpenRouteDetail,
+                                    modifier =
+                                        Modifier
+                                            .width(railWidth)
+                                            .fillMaxHeight(),
+                                )
+                                NavigationSidePanelExpandHandle(
+                                    onClick = { isSidePanelExpanded = true },
+                                    modifier = Modifier.align(Alignment.Bottom),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -150,20 +190,48 @@ fun NavigationScreen(
 
 @Composable
 private fun NavigationTopBar(
+    uiState: NavigationUiState,
     onBackClick: () -> Unit,
+    onCloseClick: () -> Unit,
 ) {
-    val policy = navigationTopBarPolicy()
-    EumCenteredTopBar(
-        title = stringResource(id = R.string.navigation_screen_title),
-        onBackClick = if (policy.showBackButton) onBackClick else null,
-        backContentDescription =
-            if (policy.showBackButton) {
-                stringResource(id = R.string.navigation_back)
-            } else {
-                null
-            },
-        titleFontWeight = policy.titleFontWeight,
-    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.primary,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_back),
+                    contentDescription = stringResource(id = R.string.navigation_back),
+                    tint = Color.White,
+                )
+            }
+            Text(
+                text = navigationRouteSummary(uiState),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+            IconButton(onClick = onCloseClick) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_close),
+                    contentDescription = stringResource(id = R.string.map_facility_detail_close),
+                    tint = Color.White,
+                )
+            }
+        }
+    }
 }
 
 internal data class NavigationTopBarPolicy(
@@ -238,6 +306,192 @@ internal fun navigationBottomBarLayoutPolicy(
     NavigationBottomBarLayoutPolicy(
         topDividerStartInset = if (showSegmentRail) railWidth else 0.dp,
     )
+
+@Composable
+private fun NavigationExpandedSidePanel(
+    uiState: NavigationUiState,
+    onCollapse: () -> Unit,
+    onSegmentTapped: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    val dragState =
+        rememberDraggableState { delta ->
+            dragOffsetPx += delta
+        }
+    val panelWidth = LocalConfiguration.current.screenWidthDp.dp * 0.86f
+
+    Surface(
+        modifier =
+            modifier
+                .width(panelWidth)
+                .draggable(
+                    state = dragState,
+                    orientation = Orientation.Horizontal,
+                    onDragStopped = {
+                        if (dragOffsetPx < -NavigationSidePanelSwipeThresholdPx) {
+                            onCollapse()
+                        }
+                        dragOffsetPx = 0f
+                    },
+                ),
+        shape =
+            RoundedCornerShape(
+                topEnd = NavigationSidePanelCornerRadius,
+                bottomEnd = NavigationSidePanelCornerRadius,
+            ),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                        .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                Text(
+                    text = navigationRouteSummary(uiState),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                IconButton(onClick = onCollapse) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_action_close),
+                        contentDescription = stringResource(id = R.string.map_facility_detail_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            uiState.segmentSync.railItems.forEach { item ->
+                NavigationSidePanelRow(
+                    item = item,
+                    onClick = { onSegmentTapped(item.index) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavigationSidePanelRow(
+    item: NavigationSegmentRailItemUiState,
+    onClick: () -> Unit,
+) {
+    Column {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 76.dp)
+                    .clickable(role = Role.Button, onClick = onClick)
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            Icon(
+                painter = painterResource(id = item.guidanceAction.iconRes()),
+                contentDescription = null,
+                tint = if (item.isFocused || item.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(NavigationSidePanelIconSize),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = item.instruction,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (item.isFocused || item.isActive) FontWeight.SemiBold else FontWeight.Normal,
+                )
+                Text(
+                    text = item.distanceLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_map_current_location),
+                        contentDescription = "지도 위치 보기",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.84f))
+    }
+}
+
+@Composable
+private fun NavigationSidePanelExpandHandle(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    val dragState =
+        rememberDraggableState { delta ->
+            dragOffsetPx += delta
+        }
+    Surface(
+        modifier =
+            modifier
+                .padding(bottom = EumSpacing.small)
+                .size(width = 28.dp, height = 56.dp)
+                .draggable(
+                    state = dragState,
+                    orientation = Orientation.Horizontal,
+                    onDragStopped = {
+                        if (dragOffsetPx > NavigationSidePanelSwipeThresholdPx) {
+                            onClick()
+                        }
+                        dragOffsetPx = 0f
+                    },
+                )
+                .clickable(role = Role.Button, onClick = onClick),
+        shape =
+            RoundedCornerShape(
+                topEnd = NavigationSidePanelHandleRadius,
+                bottomEnd = NavigationSidePanelHandleRadius,
+            ),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 3.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_control_next),
+                contentDescription = "안내 패널 펼치기",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+private fun navigationRouteSummary(uiState: NavigationUiState): String =
+    uiState.focusedSegmentCard?.sequenceLabel?.takeIf { it.isNotBlank() }
+        ?: uiState.stepCard.sectionLabel.takeIf { it.isNotBlank() }
+        ?: "출발지 -> 도착지"
 
 @Composable
 private fun NavigationHeroCard(
@@ -797,4 +1051,8 @@ private const val DEFAULT_NAVIGATION_CENTER_LATITUDE = 35.1796
 private const val DEFAULT_NAVIGATION_CENTER_LONGITUDE = 129.0756
 private const val MIN_NAVIGATION_LATITUDE_SPAN = 0.0035
 private const val MIN_NAVIGATION_LONGITUDE_SPAN = 0.0045
+private const val NavigationSidePanelSwipeThresholdPx = 80f
 private val NavigationMapMarkerSize = 38.dp
+private val NavigationSidePanelCornerRadius = 20.dp
+private val NavigationSidePanelHandleRadius = 14.dp
+private val NavigationSidePanelIconSize = 32.dp

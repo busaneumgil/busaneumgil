@@ -866,4 +866,32 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals(listOf("selected-map-pin"), markerStates.map { it.markerId })
     }
+
+    @Test
+    fun `route polylines generate kakao direction arrow overlay markers`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+            )
+
+        assertEquals(1, markerStates.size)
+        assertEquals(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW, markerStates.single().kind)
+        assertEquals("arrow-route-preview-0", markerStates.single().markerId)
+        assertEquals(35.1700, markerStates.single().coordinate.latitude, 0.000001)
+        assertEquals(129.0510, markerStates.single().coordinate.longitude, 0.000001)
+        assertEquals(0f, markerStates.single().rotationDegrees, 0.01f)
+    }
 }

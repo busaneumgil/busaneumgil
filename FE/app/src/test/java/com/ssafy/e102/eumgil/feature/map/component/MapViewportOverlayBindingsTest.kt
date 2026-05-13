@@ -359,7 +359,7 @@ class MapViewportOverlayBindingsTest {
             junctionPoints.map { it.coordinate },
         )
         assertEquals(
-            listOf(MapViewportOverlayTone.PRIMARY, MapViewportOverlayTone.TERTIARY),
+            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
             junctionPoints.map { it.tone },
         )
         assertTrue(junctionPoints.none { it.includeInProjection })
@@ -429,7 +429,7 @@ class MapViewportOverlayBindingsTest {
             junctionPoints.map { it.coordinate },
         )
         assertEquals(
-            listOf(MapViewportOverlayTone.PRIMARY, MapViewportOverlayTone.TERTIARY),
+            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
             junctionPoints.map { it.tone },
         )
     }
@@ -482,7 +482,7 @@ class MapViewportOverlayBindingsTest {
             MapCoordinate(latitude = 35.176, longitude = 129.060),
             junctionPoints.single().coordinate,
         )
-        assertEquals(MapViewportOverlayTone.PRIMARY, junctionPoints.single().tone)
+        assertEquals(MapViewportOverlayTone.NEUTRAL, junctionPoints.single().tone)
     }
 
     @Test
@@ -668,7 +668,7 @@ class MapViewportOverlayBindingsTest {
         assertTrue(summary.contains("junctions=2"))
         assertTrue(
             summary.contains(
-                "id=navigation-junction-1 coord=35.176000,129.060000 tone=PRIMARY includeInProjection=false",
+                "id=navigation-junction-1 coord=35.176000,129.060000 tone=NEUTRAL includeInProjection=false",
             ),
         )
         assertTrue(summary.contains("projectionPoints=[navigation-focus:FOCUS_HALO]"))
@@ -729,9 +729,9 @@ class MapViewportOverlayBindingsTest {
                 .map { it.tone }
 
         assertEquals(
-            listOf(MapViewportOverlayTone.PRIMARY, MapViewportOverlayTone.TERTIARY),
+            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
             baselineTones,
         )
-        assertEquals(MapViewportOverlayTone.TERTIARY, overlayState.polylines.last().tone)
+        assertEquals(MapViewportOverlayTone.NAVY, overlayState.polylines.last().tone)
     }
 }

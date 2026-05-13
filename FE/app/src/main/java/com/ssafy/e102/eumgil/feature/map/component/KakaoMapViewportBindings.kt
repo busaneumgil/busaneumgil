@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import java.util.Locale
+import kotlin.math.atan2
 
 internal const val KAKAO_MAP_PROVIDER_NAME = "Kakao Map"
 
@@ -118,6 +119,7 @@ internal enum class KakaoProjectedMarkerKind {
 
 internal enum class KakaoOverlayMarkerKind {
     ROUTE_SEGMENT_JUNCTION,
+    ROUTE_DIRECTION_ARROW,
 }
 
 internal data class KakaoProjectedMarkerRenderState(
@@ -143,6 +145,7 @@ internal data class KakaoOverlayMarkerRenderState(
     val zIndex: Float,
     val fillColorArgb: Int,
     val strokeColorArgb: Int,
+    val rotationDegrees: Float = 0f,
 )
 
 internal data class KakaoProjectedMarkerOverlay(
@@ -370,8 +373,42 @@ internal fun createKakaoProjectedMarkerRenderStates(
 
 internal fun createKakaoOverlayMarkerRenderStates(
     overlayPoints: List<MapViewportPointOverlay>,
+    polylines: List<MapViewportPolylineOverlay> = emptyList(),
 ): List<KakaoOverlayMarkerRenderState> =
-    overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState)
+    overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState) +
+        polylines.flatMap(::createKakaoRouteDirectionArrowRenderStates)
+
+private fun createKakaoRouteDirectionArrowRenderStates(
+    polyline: MapViewportPolylineOverlay,
+): List<KakaoOverlayMarkerRenderState> =
+    polyline.points
+        .zipWithNext()
+        .mapIndexedNotNull { index, (start, end) ->
+            val deltaLatitude = end.latitude - start.latitude
+            val deltaLongitude = end.longitude - start.longitude
+            val approximateLength = kotlin.math.abs(deltaLatitude) + kotlin.math.abs(deltaLongitude)
+            if (approximateLength < KAKAO_ROUTE_DIRECTION_ARROW_MIN_DELTA) return@mapIndexedNotNull null
+
+            KakaoOverlayMarkerRenderState(
+                markerId = "arrow-${polyline.overlayId}-$index",
+                coordinate =
+                    MapCoordinate(
+                        latitude = start.latitude + (deltaLatitude * 0.5),
+                        longitude = start.longitude + (deltaLongitude * 0.5),
+                    ),
+                kind = KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 14,
+                zIndex = 4.4f,
+                fillColorArgb = 0xFFFFFFFF.toInt(),
+                strokeColorArgb = 0x00FFFFFF,
+                rotationDegrees =
+                    Math
+                        .toDegrees(atan2(-deltaLatitude, deltaLongitude))
+                        .toFloat(),
+            )
+        }
 
 internal fun createKakaoRouteLineRenderStates(
     polylines: List<MapViewportPolylineOverlay>,
@@ -760,6 +797,8 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
     )
 }
 
+private const val KAKAO_ROUTE_DIRECTION_ARROW_MIN_DELTA = 0.00018
+
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()
     return when (style) {
@@ -815,6 +854,18 @@ private fun MapViewportOverlayTone.toKakaoRouteLinePalette(): KakaoRouteLinePale
             KakaoRouteLinePalette(
                 lineColor = 0xFFE7832F.toInt(),
                 casingColor = 0xFFB85B16.toInt(),
+            )
+
+        MapViewportOverlayTone.NEUTRAL ->
+            KakaoRouteLinePalette(
+                lineColor = 0xFF9CA3AF.toInt(),
+                casingColor = 0xFF6B7280.toInt(),
+            )
+
+        MapViewportOverlayTone.NAVY ->
+            KakaoRouteLinePalette(
+                lineColor = 0xFF28427F.toInt(),
+                casingColor = 0xFF172554.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->

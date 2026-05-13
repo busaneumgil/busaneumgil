@@ -6,6 +6,7 @@ import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRequest
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
@@ -74,6 +75,10 @@ sealed interface MapUiAction {
     data object FacilityDetailDismissed : MapUiAction
 
     data object FacilitySetDestinationClicked : MapUiAction
+
+    data class FacilitySetRouteEndpointClicked(
+        val editingTarget: RouteEditingTarget,
+    ) : MapUiAction
 
     data class ShortcutFilterClicked(
         val key: MapShortcutFilterKey,

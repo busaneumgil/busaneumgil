@@ -10,6 +10,7 @@
 - 인증: GitLab OAuth
 - 권한: Matrix Authorization
 - dev 배포 잡: `e102-dev-deploy`
+- GraphHopper 자동 갱신 잡: `e102-graphhopper-refresh`
 - 대상 브랜치: `develop`
 - 배포 대상: S1 dev Docker Compose stack
 
@@ -83,7 +84,7 @@ PostgreSQL은 HTTP reverse proxy 대상이 아니므로 `/db`로 열지 않는�
 9. AI `/health` payload, AI `/voice/analyze` invalid-request schema, backend `/v3/api-docs`, GraphHopper `/healthcheck` smoke test
 10. compose 상태 출력
 
-GraphHopper는 S1 dev stack에 포함한다. runtime은 graph-cache serve only 구조이며, Jenkins dev pipeline은 cache가 비어 있을 때만 build job을 실행한다.
+GraphHopper는 S1 dev stack에 포함한다. runtime은 graph-cache serve only 구조이며, Jenkins dev pipeline은 cache가 비어 있거나 fingerprint가 바뀌었을 때 build job을 실행한다. GraphHopper 기동 후 `/healthcheck`가 실패하면 cache rebuild와 runtime `--force-recreate`를 1회 자동 수행해 dev 환경의 꺼진 엔진을 복구한다.
 
 Mattermost 알림:
 
@@ -138,10 +139,12 @@ prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Je
 |---|---:|---|
 | `DEPLOY_BRANCH` | `master` | S2 prod에 배포할 브랜치 |
 | `BUILD_GRAPHHOPPER` | `false` | PostgreSQL LineString에서 graph-cache를 새로 생성 |
-| `DEPLOY_GRAPHHOPPER` | `false` | GraphHopper runtime까지 기동 |
+| `DEPLOY_GRAPHHOPPER` | `true` | GraphHopper runtime까지 기동 |
 | `ROLLBACK` | `false` | 이전 app image tag와 이전 graph-cache로 rollback |
 
-초기 운영에서는 `BUILD_GRAPHHOPPER=false`, `DEPLOY_GRAPHHOPPER=false`로 backend/AI 배포만 먼저 안정화한다. `road_nodes`, `road_segments` 데이터 적재가 준비되면 GraphHopper 파라미터를 켠다.
+현재 운영에서는 경로 추천 기능이 GraphHopper를 기본 의존성으로 사용하므로 `DEPLOY_GRAPHHOPPER=true`를 기본값으로 둔다. 일반 애플리케이션 배포에서 graph-cache를 매번 새로 만드는 것은 아니므로 `BUILD_GRAPHHOPPER`만 선택적으로 켠다.
+
+`BUILD_GRAPHHOPPER=true`는 기존 단일 graph-cache publish가 아니라 `scripts/graphhopper/prod-bluegreen-refresh.sh`를 실행한다. 운영 주기 갱신은 아래 `e102-graphhopper-refresh` 잡이 담당하므로, 일반 애플리케이션 배포에서 매번 켤 필요는 없다.
 
 Mattermost 알림:
 
@@ -150,6 +153,72 @@ Mattermost 알림:
 - 실패: 발송
 
 메시지 포맷은 기존 GitLab/MR 알림 톤을 따라 Markdown block 형태로 맞춘다.
+
+## `e102-graphhopper-refresh`
+
+prod GraphHopper runtime은 blue/green slot으로 운영한다.
+
+```text
+backend
+  -> Redis graphhopper:active-slot 조회
+  -> graphhopper-blue 또는 graphhopper-green 호출
+```
+
+Jenkins `e102-graphhopper-refresh`는 3시간마다 실행된다.
+
+처리 순서:
+
+1. 지정 브랜치 checkout
+2. workspace와 `.env.prod`를 S2 `/home/ubuntu/e102/prod`로 업로드
+3. `scripts/graphhopper/prod-bluegreen-refresh.sh` 실행
+4. 현재 active slot health를 확인하고, 꺼져 있으면 start/restart로 self-heal
+5. active 복구가 실패하고 previous slot이 건강하면 Redis active를 previous로 임시 failover
+6. 현재 active slot의 반대편 candidate slot을 중지
+7. prod DB에서 OSM/PBF/graph-cache를 candidate volume에 생성
+8. candidate GraphHopper runtime 기동
+9. `/healthcheck`와 8개 profile route smoke 실행
+10. smoke 통과 시 Redis active slot 전환
+11. 실패 시 기존 active slot 유지, switch 이후 실패면 previous slot으로 rollback
+12. refresh report JSON과 container 상태 출력
+
+Redis key 계약:
+
+| Key | 값 |
+|---|---|
+| `graphhopper:active-slot` | `blue` 또는 `green` |
+| `graphhopper:previous-slot` | fallback 대상 slot |
+| `graphhopper:active-build-id` | 마지막 성공 build id |
+| `graphhopper:blue:url` | `http://graphhopper-blue:8989` |
+| `graphhopper:green:url` | `http://graphhopper-green:8989` |
+
+운영 원칙:
+
+- Jenkins는 3시간 cron, SSH 실행, report/알림만 담당한다.
+- GraphHopper 갱신 상태 전이는 S2의 `prod-bluegreen-refresh.sh`가 담당한다.
+- active slot이 이미 내려가 있으면 refresh 전에 해당 slot을 먼저 start/restart한다.
+- active self-heal이 실패해도 previous slot이 정상이면 previous로 failover한 뒤 candidate rebuild를 진행한다.
+- candidate import나 smoke가 실패하면 Redis active slot은 바꾸지 않는다.
+- 전환 후 backend smoke가 설정되어 있고 실패하면 active slot을 previous로 되돌린다.
+- Mattermost 실패 알림은 Jenkins failure post action이 발송한다.
+
+## `e102-monitoring-deploy`
+
+S1 monitoring/Grafana/Prometheus/nginx 설정은 prod 앱 배포와 별도 경로로 반영한다.
+
+처리 순서:
+
+1. 지정 브랜치 checkout
+2. `scripts/deploy/s1-monitoring-sync.sh` 실행
+3. `INF/monitoring/s1/**`를 `/home/ubuntu/e102/ops`로 동기화
+4. `INF/jenkins/s1/nginx.conf`를 `/home/ubuntu/e102/jenkins/nginx.conf`로 동기화
+5. monitoring stack 재적용
+6. nginx 설정이 바뀐 경우 `e102-jenkins-proxy` 재시작
+
+운영 원칙:
+
+- prod backend에 새 `/health` endpoint가 배포돼도, S1 monitoring이 옛 probe를 보고 있으면 false DOWN이 날 수 있다.
+- 따라서 `INF/monitoring/**` 또는 `INF/jenkins/s1/nginx.conf` 변경은 `e102-monitoring-deploy`를 같이 태우는 것을 기본 절차로 본다.
+- sync 스크립트는 `s14p31e102-dev_default` 네트워크가 아직 없으면 bootstrap network를 먼저 만든다.
 
 ## Webhook
 

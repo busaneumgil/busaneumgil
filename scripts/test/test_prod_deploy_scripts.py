@@ -29,6 +29,7 @@ REFRESH_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / 
 MONITORING_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "05-monitoring-deploy-job.groovy"
 PROD_CREDENTIAL_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "prod-deploy-credentials.groovy"
 JENKINS_README = ROOT_DIR / "INF" / "jenkins" / "README.md"
+PROD_TERRAFORM = ROOT_DIR / "INF" / "terraform" / "envs" / "prod" / "main.tf"
 PROD_DEPLOY = ROOT_DIR / "scripts" / "deploy" / "prod-deploy.sh"
 PROD_ROLLBACK = ROOT_DIR / "scripts" / "deploy" / "prod-rollback.sh"
 PROD_SMOKE = ROOT_DIR / "scripts" / "deploy" / "prod-smoke.sh"
@@ -160,7 +161,9 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('if [ "$SMOKE_ADMIN" = "true" ]; then', content)
         self.assertIn('http://127.0.0.1:${ADMIN_PORT}/health', content)
         self.assertIn('http://127.0.0.1:${ADMIN_PORT}/', content)
-        self.assertIn('wait_for_any_url "GraphHopper"', content)
+        self.assertIn('GRAPHHOPPER_ACTIVE_SLOT_KEY="${GRAPHHOPPER_ACTIVE_SLOT_KEY:-graphhopper:active-slot}"', content)
+        self.assertIn('wait_for_active_graphhopper_slot', content)
+        self.assertIn('redis_get "$GRAPHHOPPER_ACTIVE_SLOT_KEY"', content)
         self.assertIn('GRAPHHOPPER_BLUE_ADMIN_PORT="${GRAPHHOPPER_BLUE_ADMIN_PORT:-18990}"', content)
         self.assertIn('GRAPHHOPPER_GREEN_ADMIN_PORT="${GRAPHHOPPER_GREEN_ADMIN_PORT:-18992}"', content)
 
@@ -169,8 +172,11 @@ class ProdDeployScriptsTest(unittest.TestCase):
 
         self.assertIn("graphhopper-blue:", content)
         self.assertIn("graphhopper-green:", content)
+        self.assertIn("graphhopper-candidate:", content)
         self.assertIn("graphhopper-prod-blue-data:/graphhopper/data", content)
         self.assertIn("graphhopper-prod-green-data:/graphhopper/data", content)
+        self.assertIn("graphhopper-prod-candidate-data:/graphhopper/data", content)
+        self.assertIn("GRAPHHOPPER_CANDIDATE_ADMIN_PORT:-18994", content)
         self.assertIn("GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BLUE_URL:-http://graphhopper-blue:8989}", content)
         self.assertIn("GRAPHHOPPER_ACTIVE_SLOT_KEY", content)
         self.assertIn('wget -qO- http://127.0.0.1/health >/dev/null', content)
@@ -182,12 +188,26 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('candidate_slot="$(other_slot "$active_slot")"', content)
         self.assertIn('ensure_slot_runtime "$active_slot"', content)
         self.assertIn('Failing over active slot to previous', content)
+        self.assertIn('graphhopper-candidate', content)
+        self.assertIn('arming temporary previous fallback', content)
+        self.assertIn('publish_candidate_cache_to_slot', content)
         self.assertIn('stop "graphhopper-$candidate_slot"', content)
         self.assertIn('smoke-graphhopper-profiles.py', content)
         self.assertLess(content.index('smoke-graphhopper-profiles.py'), content.index('echo "switching active GraphHopper slot'))
         self.assertIn('rollback_switch', content)
+        self.assertIn('ROLLBACK_FAILED', content)
+        self.assertIn('verify_active_slot_after_switch', content)
         self.assertIn('GRAPHHOPPER_OLD_SLOT_DRAIN_SECONDS', content)
         self.assertIn('"warningMessage"', content)
+
+    def test_prod_terraform_uses_blue_green_graphhopper_health_ports(self):
+        content = PROD_TERRAFORM.read_text(encoding="utf-8")
+
+        self.assertIn("location = /graphhopper-blue/healthcheck", content)
+        self.assertIn("location = /graphhopper-green/healthcheck", content)
+        self.assertIn("proxy_pass http://127.0.0.1:18990/healthcheck;", content)
+        self.assertIn("proxy_pass http://127.0.0.1:18992/healthcheck;", content)
+        self.assertNotIn("proxy_pass http://127.0.0.1:8990/healthcheck;", content)
 
     def test_prod_up_runs_prod_smoke_after_start(self):
         content = PROD_UP.read_text(encoding="utf-8")
@@ -303,6 +323,8 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("disableConcurrentBuilds()", pipeline_content)
         self.assertIn("prod-bluegreen-refresh.sh", pipeline_content)
         self.assertIn("GraphHopper 자동 갱신이 실패했습니다.", pipeline_content)
+        self.assertIn("warningFromRefreshReport", pipeline_content)
+        self.assertIn("warningMessage", pipeline_content)
         self.assertIn("CpsScmFlowDefinition", seed_content)
         self.assertIn("INF/jenkins/pipelines/e102-graphhopper-refresh.Jenkinsfile", seed_content)
         self.assertIn("*/master", seed_content)

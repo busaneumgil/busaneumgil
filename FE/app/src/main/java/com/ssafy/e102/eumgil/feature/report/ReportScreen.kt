@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -497,14 +498,27 @@ private fun ReportLocationStep(
         Column(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
+            val resolvingCurrent = input.isResolvingCurrentLocation
             OutlinedButton(
                 onClick = { onAction(ReportUiAction.CurrentLocationResetClicked) },
+                enabled = !resolvingCurrent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = "현재 위치로 설정")
+                if (resolvingCurrent) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+                    Text(text = "위치 확인 중...")
+                } else {
+                    Text(text = "현재 위치로 설정")
+                }
             }
             OutlinedButton(
                 onClick = { onAction(ReportUiAction.LocationPickerClicked) },
+                enabled = !resolvingCurrent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(text = "지도에서 위치 선택")

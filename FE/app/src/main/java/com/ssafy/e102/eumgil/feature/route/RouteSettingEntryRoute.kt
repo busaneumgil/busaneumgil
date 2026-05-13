@@ -2,23 +2,30 @@ package com.ssafy.e102.eumgil.feature.route
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.external.createDuribalDialIntent
+import com.ssafy.e102.eumgil.core.external.requestLowFloorBusReservation
+import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 @Composable
 fun RouteSettingEntryRoute(
@@ -38,7 +45,11 @@ fun RouteSettingEntryRoute(
     val activity = remember(context) { context.findComponentActivity() }
     val viewModel = rememberRouteSettingViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
     var initialRouteOptionApplied by rememberSaveable(initialRouteOption) { mutableStateOf(false) }
+    var isDuribalConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
+    var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToSearch, onNavigateToRouteDetail, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
@@ -83,6 +94,42 @@ fun RouteSettingEntryRoute(
     RouteSettingScreen(
         uiState = uiState,
         onAction = viewModel::onAction,
+        isDuribalConfirmDialogVisible = isDuribalConfirmDialogVisible,
+        onDuribalCallClick = { isDuribalConfirmDialogVisible = true },
+        onDuribalConfirmDismiss = { isDuribalConfirmDialogVisible = false },
+        onDuribalConfirm = {
+            isDuribalConfirmDialogVisible = false
+            context.startActivity(createDuribalDialIntent())
+        },
+        pendingLowFloorReservation = pendingLowFloorReservation,
+        isLowFloorReservationRequesting = isLowFloorReservationRequesting,
+        onLowFloorReservationClick = { reservation -> pendingLowFloorReservation = reservation },
+        onLowFloorReservationDismiss = {
+            if (!isLowFloorReservationRequesting) {
+                pendingLowFloorReservation = null
+            }
+        },
+        onLowFloorReservationConfirm = {
+            pendingLowFloorReservation?.let { reservation ->
+                isLowFloorReservationRequesting = true
+                coroutineScope.launch {
+                    val success =
+                        runCatching { requestLowFloorBusReservation(reservation) }
+                            .getOrDefault(false)
+                    isLowFloorReservationRequesting = false
+                    pendingLowFloorReservation = null
+                    Toast.makeText(
+                        context,
+                        if (success) {
+                            context.getString(R.string.route_setting_low_floor_reservation_success)
+                        } else {
+                            context.getString(R.string.route_setting_low_floor_reservation_failure)
+                        },
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        },
         modifier = modifier,
     )
 }
@@ -96,6 +143,10 @@ fun RouteDetailEntryRoute(
 ) {
     val viewModel = rememberRouteSettingViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
+    var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(viewModel, routeOption) {
         viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
@@ -118,6 +169,35 @@ fun RouteDetailEntryRoute(
         onBackClick = onNavigateBack,
         onStartClick = {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+        },
+        pendingLowFloorReservation = pendingLowFloorReservation,
+        isLowFloorReservationRequesting = isLowFloorReservationRequesting,
+        onLowFloorReservationClick = { reservation -> pendingLowFloorReservation = reservation },
+        onLowFloorReservationDismiss = {
+            if (!isLowFloorReservationRequesting) {
+                pendingLowFloorReservation = null
+            }
+        },
+        onLowFloorReservationConfirm = {
+            pendingLowFloorReservation?.let { reservation ->
+                isLowFloorReservationRequesting = true
+                coroutineScope.launch {
+                    val success =
+                        runCatching { requestLowFloorBusReservation(reservation) }
+                            .getOrDefault(false)
+                    isLowFloorReservationRequesting = false
+                    pendingLowFloorReservation = null
+                    Toast.makeText(
+                        context,
+                        if (success) {
+                            context.getString(R.string.route_setting_low_floor_reservation_success)
+                        } else {
+                            context.getString(R.string.route_setting_low_floor_reservation_failure)
+                        },
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
         },
         modifier = modifier,
     )

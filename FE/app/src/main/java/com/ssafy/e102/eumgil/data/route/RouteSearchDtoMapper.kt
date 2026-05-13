@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.data.route
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.RouteAlert
 import com.ssafy.e102.eumgil.core.model.RouteAlertType
 import com.ssafy.e102.eumgil.core.model.RouteBadge
@@ -307,7 +308,26 @@ private fun RouteTransitLaneOptionDto.toDomain(): RouteTransitLaneOption =
         estimatedTimeMinutes = estimatedTimeMinute?.takeIf { value -> value >= 0 },
         durationSeconds = durationSecond?.takeIf { value -> value >= 0 },
         isLowFloor = isLowFloor,
+        lowFloorReservation = lowFloorReservation?.toDomainOrNull(),
     )
+
+private fun LowFloorBusReservationDto.toDomainOrNull(): LowFloorBusReservation? {
+    val resolvedStopName = stopName?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    val resolvedArsNo = arsNo?.filter(Char::isDigit)?.takeIf(String::isNotEmpty) ?: return null
+    val resolvedRouteNo = routeNo?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    val resolvedVehicleNo = vehicleNo?.filter(Char::isDigit)?.takeIf(String::isNotEmpty) ?: return null
+    val resolvedRemainingMinute = remainingMinute?.takeIf { value -> value >= 0 } ?: return null
+
+    return LowFloorBusReservation(
+        stopName = resolvedStopName,
+        arsNo = resolvedArsNo,
+        routeNo = resolvedRouteNo,
+        vehicleNo = resolvedVehicleNo,
+        remainingMinute = resolvedRemainingMinute,
+        remainingStopCount = remainingStopCount?.takeIf { value -> value >= 0 },
+        requestUrl = requestUrl?.trim()?.takeIf(String::isNotEmpty),
+    )
+}
 
 private fun List<RouteGuidanceEventDto>.toDomainSteps(geometryParser: RouteGeometryParser): List<RouteStep> {
     var previousDistanceMeters = 0
@@ -766,6 +786,18 @@ private fun JSONObject.toTransitLaneOptionDto(): RouteTransitLaneOptionDto =
         durationSecond = optNullableInt("durationSecond"),
         estimatedTimeMinute = optNullableInt("estimatedTimeMinute"),
         isLowFloor = optNullableBoolean("isLowFloor"),
+        lowFloorReservation = optJSONObject("lowFloorReservation")?.toLowFloorBusReservationDto(),
+    )
+
+private fun JSONObject.toLowFloorBusReservationDto(): LowFloorBusReservationDto =
+    LowFloorBusReservationDto(
+        stopName = optNullableString("stopName"),
+        arsNo = optNullableString("arsNo"),
+        routeNo = optNullableString("routeNo"),
+        vehicleNo = optNullableString("vehicleNo"),
+        remainingMinute = optNullableInt("remainingMinute"),
+        remainingStopCount = optNullableInt("remainingStopCount"),
+        requestUrl = optNullableString("requestUrl"),
     )
 
 private fun JSONArray.toStepDtos(): List<RouteStepDto> =

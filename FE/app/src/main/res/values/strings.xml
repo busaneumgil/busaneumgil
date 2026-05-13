@@ -406,6 +406,8 @@
     <string name="search_screen_recent_delete">%1$s 삭제</string>
     <string name="search_screen_result_action_label">도착지 미리보기 열기</string>
     <string name="search_screen_result_selectable">도착지 미리보기 가능</string>
+    <string name="search_screen_result_distance_meters">현재 위치에서 %1$d m</string>
+    <string name="search_screen_result_distance_kilometers">현재 위치에서 %1$.1f km</string>
     <string name="search_origin_screen_title">출발지 검색</string>
     <string name="search_origin_results_screen_title">출발지 검색 결과</string>
     <string name="search_origin_screen_entry_headline">출발지를 어디로 할까요?</string>
@@ -423,6 +425,8 @@
     <string name="search_screen_result_action_limited">길찾기 제한됨, 접근성 정보 확인 필요</string>
     <string name="search_screen_result_a11y_with_address">%1$s, %2$s</string>
     <string name="search_screen_result_a11y_without_address">%1$s</string>
+    <string name="search_screen_result_a11y_with_address_and_distance">%1$s, %2$s, %3$s</string>
+    <string name="search_screen_result_a11y_without_address_with_distance">%1$s, %2$s</string>
     <string name="place_accessibility_label_entry_available">출입 가능</string>
     <string name="place_accessibility_label_step_free">단차 없음</string>
     <string name="place_accessibility_label_ramp">경사로 있음</string>

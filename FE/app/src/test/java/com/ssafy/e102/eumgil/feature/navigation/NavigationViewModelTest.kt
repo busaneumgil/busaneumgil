@@ -559,6 +559,68 @@ class NavigationViewModelTest {
             assertEquals("-", viewModel.uiState.value.remainingDistanceLabel)
             assertEquals("-", viewModel.uiState.value.remainingEtaLabel)
         }
+
+    @Test
+    fun `low vision far off route throttles fresh remaining route search for small movement`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository =
+                FakeRouteRepository(
+                    freshWalkSearchData =
+                        lowVisionRemainingSearchData(
+                            routeId = "actual-walk-route",
+                            routeOption = RouteOption.SAFE,
+                            distanceMeters = 710,
+                            estimatedTimeMinutes = 13,
+                            durationSeconds = 780,
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                    initialLowVisionMode = true,
+                )
+
+            viewModel.bindNavigationRequest(testFarOffRouteNavigationRequest())
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = NEAR_OFF_ROUTE_POINT.latitude,
+                    longitude = NEAR_OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = SLIGHTLY_SHIFTED_OFF_ROUTE_POINT.latitude,
+                    longitude = SLIGHTLY_SHIFTED_OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 3_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, routeRepository.freshWalkQueries.size)
+            assertEquals("710m", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("13\uBD84", viewModel.uiState.value.remainingEtaLabel)
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = FARTHER_SHIFTED_OFF_ROUTE_POINT.latitude,
+                    longitude = FARTHER_SHIFTED_OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 8_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(2, routeRepository.freshWalkQueries.size)
+        }
 }
 
 private fun createViewModel(
@@ -1344,6 +1406,8 @@ private val FAR_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1000, longitude 
 private val FAR_ROUTE_MID_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0100)
 private val FAR_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0200)
 private val NEAR_OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1060, longitude = 129.0200)
+private val SLIGHTLY_SHIFTED_OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.10611, longitude = 129.0200)
+private val FARTHER_SHIFTED_OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.10636, longitude = 129.0200)
 private val FAR_OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1100, longitude = 129.0200)
 
 private val TRANSIT_START_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0600)

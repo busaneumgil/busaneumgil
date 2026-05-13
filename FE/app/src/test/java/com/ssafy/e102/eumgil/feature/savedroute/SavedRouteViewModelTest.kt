@@ -584,6 +584,88 @@ class SavedRouteViewModelTest {
                 viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
             )
         }
+
+    @Test
+    fun `low vision place bookmark list ignores tiny location shifts until movement is meaningful`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository =
+                FakeBookmarkRepository(
+                    bookmarks =
+                        listOf(
+                            testPlaceBookmark(
+                                latitude = 35.1796,
+                                longitude = 129.07500,
+                            ).copy(
+                                placeId = "alpha-place",
+                                placeName = "Alpha Place",
+                            ),
+                            testPlaceBookmark(
+                                latitude = 35.1796,
+                                longitude = 129.07560,
+                            ).copy(
+                                placeId = "beta-place",
+                                placeName = "Beta Place",
+                            ),
+                        ),
+                )
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = locationManager,
+                    initialLowVisionMode = true,
+                )
+
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.07510,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            val initialOrder = viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId)
+            assertEquals(
+                listOf(2, 2),
+                listOf(initialOrder.size, initialOrder.toSet().size),
+            )
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.07518,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                initialOrder,
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.07552,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 3_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                initialOrder.reversed(),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+        }
 }
 
 private class FakeBookmarkRepository(

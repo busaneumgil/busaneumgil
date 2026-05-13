@@ -1067,6 +1067,259 @@ class ReportViewModelTest {
             assertEquals(ReportStep.TypeSelection, resetState.currentStep)
             assertEquals(null, resetState.reportType.value)
         }
+
+    // ─── Task 1.2 — Draft 충돌 confirm 다이얼로그 ─────────────────────────────
+
+    @Test
+    fun `selecting report type on fresh form with existing draft emits ShowDraftDiscardDialog`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "기존 임시저장 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+            val event = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
+            advanceUntilIdle()
+
+            val emitted = event.await()
+            assertTrue(emitted is ReportUiEvent.ShowDraftDiscardDialog)
+            assertEquals(
+                ReportType.BRAILLE_BLOCK,
+                (emitted as ReportUiEvent.ShowDraftDiscardDialog).pendingType,
+            )
+
+            // 다이얼로그가 뜨는 동안에는 아직 reportType이 적용되지 않아야 한다.
+            val midState = viewModel.uiState.value
+            assertNull(midState.reportType.value)
+            assertEquals(ReportStep.TypeSelection, midState.currentStep)
+            assertNull(repository.deletedDraftId)
+        }
+
+    @Test
+    fun `selecting report type without existing draft applies type immediately without dialog`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ReportType.RAMP, state.reportType.value)
+            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+        }
+
+    @Test
+    fun `selecting different type after resuming draft also emits ShowDraftDiscardDialog`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "복원할 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
+            advanceUntilIdle()
+
+            // resume 후 reportType.value가 채워져 있어도 draft가 DB에 남아있으므로,
+            // 다른 type 클릭은 잠재적 데이터 손실 → 다이얼로그 노출.
+            val event = async { viewModel.uiEvent.first() }
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.SIDEWALK_WIDTH))
+            advanceUntilIdle()
+
+            val emitted = event.await()
+            assertTrue(emitted is ReportUiEvent.ShowDraftDiscardDialog)
+            assertEquals(
+                ReportType.SIDEWALK_WIDTH,
+                (emitted as ReportUiEvent.ShowDraftDiscardDialog).pendingType,
+            )
+            // 다이얼로그 노출 시점에는 type이 아직 SIDEWALK_WIDTH로 바뀌지 않아야 한다.
+            assertEquals(ReportType.STAIRS_STEP, viewModel.uiState.value.reportType.value)
+        }
+
+    @Test
+    fun `selecting same type as current is idempotent and does not emit dialog`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "복원할 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
+            advanceUntilIdle()
+
+            // 현재 STAIRS_STEP인 상태에서 같은 STAIRS_STEP을 다시 누르면 다이얼로그 없이 idempotent.
+            // (TypeSelection 단계라면 다음 단계로 진행만 한다.)
+            viewModel.onAction(ReportUiAction.BackClicked)
+            advanceUntilIdle()
+            // 이제 TypeSelection으로 복귀
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ReportType.STAIRS_STEP, state.reportType.value)
+            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+        }
+
+    @Test
+    fun `save draft then back nav then select different type emits ShowDraftDiscardDialog`() =
+        runTest {
+            // 사용자가 실제로 보고한 시나리오:
+            // 1) 단차 + 설명 입력 + 임시저장
+            // 2) TypeSelection 단계로 복귀 (뒤로가기 또는 탭 재진입)
+            // 3) 다른 type(기타 장애물) 클릭 → 다이얼로그 노출되어야 함
+            val repository = FakeReportRepository()
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            viewModel.onAction(ReportUiAction.DescriptionChanged("단차 관련 내용"))
+            viewModel.onAction(ReportUiAction.SaveDraftClicked)
+            advanceUntilIdle()
+
+            // 임시저장 직후 hasExistingDraft가 true, draftId가 채워졌는지 확인
+            val savedState = viewModel.uiState.value
+            assertTrue(savedState.hasExistingDraft)
+            assertEquals("draft-1", savedState.draftId)
+
+            // TypeSelection 단계로 강제 복귀 (실제 앱에서는 뒤로가기 또는 탭 재진입으로 발생)
+            viewModel.onAction(ReportUiAction.BackClicked)
+            advanceUntilIdle()
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+
+            // 다른 type 클릭 → 다이얼로그 emit 검증
+            val event = async {
+                viewModel.uiEvent.first { it is ReportUiEvent.ShowDraftDiscardDialog }
+            }
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            advanceUntilIdle()
+
+            val emitted = event.await() as ReportUiEvent.ShowDraftDiscardDialog
+            assertEquals(ReportType.OTHER_OBSTACLE, emitted.pendingType)
+            // 다이얼로그가 뜨는 동안 type은 아직 STAIRS_STEP 유지, 설명도 그대로 (사용자 결정 대기)
+            val midState = viewModel.uiState.value
+            assertEquals(ReportType.STAIRS_STEP, midState.reportType.value)
+            assertEquals("단차 관련 내용", midState.description.value)
+        }
+
+    @Test
+    fun `DiscardDraftAndStartNew deletes draft resets form and applies new type`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "기존 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DiscardDraftAndStartNew(ReportType.OTHER_OBSTACLE))
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals("draft-1", repository.deletedDraftId)
+            assertEquals(ReportType.OTHER_OBSTACLE, state.reportType.value)
+            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+            assertNull(state.draftId)
+            assertFalse(state.hasExistingDraft)
+        }
+
+    @Test
+    fun `ResumeDraftFromDialog restores saved draft state`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.RAMP.apiValue,
+                            description = "복원할 설명",
+                            address = "부산역",
+                            latitude = 35.1151,
+                            longitude = 129.0414,
+                            locationSource = ReportLocationSource.MapPin.name,
+                            photoUri = null,
+                            photoMimeType = null,
+                            photoSizeBytes = null,
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = ReportViewModel(reportRepository = repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.ResumeDraftFromDialog)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ReportType.RAMP, state.reportType.value)
+            assertEquals("복원할 설명", state.description.value)
+            assertEquals("부산역", state.location.addressText)
+        }
 }
 
 private class FakeReportRepository(

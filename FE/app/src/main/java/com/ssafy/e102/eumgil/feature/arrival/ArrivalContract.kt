@@ -10,6 +10,7 @@ data class ArrivalUiState(
     val isEvaluationSubmitting: Boolean = false,
     val routeSaveDraft: ArrivalRouteSaveDraftUiState? = null,
     val isRouteSaveSelected: Boolean = false,
+    val routeSaveBookmarkId: String? = null,
     val isRouteSaveUpdating: Boolean = false,
 ) {
     val isEvaluationSubmitEnabled: Boolean
@@ -19,7 +20,7 @@ data class ArrivalUiState(
         get() = routeSaveDraft != null
 
     val isRouteSaveEnabled: Boolean
-        get() = hasRouteSaveTarget && !isRouteSaveUpdating && !isRouteSaveSelected
+        get() = hasRouteSaveTarget && !isRouteSaveUpdating
 }
 
 data class ArrivalRouteSaveDraftUiState(

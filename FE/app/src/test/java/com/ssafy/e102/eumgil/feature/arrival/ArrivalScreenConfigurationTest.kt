@@ -39,23 +39,39 @@ class ArrivalScreenConfigurationTest {
 
         assertTrue(
             "Arrival completion content should define a dedicated hero-band height so the illustration reads like a background section instead of a card.",
-            source.contains("private val ArrivalHeroBandHeight = 236.dp"),
+            source.contains("private val ArrivalHeroBandHeight = 332.dp"),
         )
         assertTrue(
-            "Arrival completion content should crop the illustration to fill the hero band width.",
-            source.contains("contentScale = ContentScale.Crop"),
+            "Arrival completion content should scale the illustration by width so the full skyline remains visible inside the hero band.",
+            source.contains("contentScale = ContentScale.FillWidth"),
         )
         assertTrue(
-            "Arrival completion content should anchor the illustration to the bottom of the hero band to preserve the skyline composition from the approved design.",
+            "Arrival completion content should keep the artwork box attached to the bottom edge of the hero band so the lower skyline still reads as a background section.",
             source.contains(".align(Alignment.BottomCenter)"),
         )
         assertTrue(
-            "Arrival completion content should leave the hero band full-bleed by moving horizontal padding into inner content blocks.",
-            source.contains("private val ArrivalHeroBandTopSpacing = 20.dp"),
+            "Arrival completion content should preserve the original artwork ratio instead of forcing a cropped fixed-height box.",
+            source.contains("private const val ArrivalHeroArtworkAspectRatio = 1440f / 900f"),
         )
         assertTrue(
-            "Arrival completion content should push the hero band slightly lower from the top edge to match the approved composition.",
+            "Arrival completion content should size the artwork from its aspect ratio so the top and bottom of the illustration are both kept intact.",
+            source.contains(".aspectRatio(ArrivalHeroArtworkAspectRatio)"),
+        )
+        assertTrue(
+            "Arrival completion content should keep the taller hero band offset from the top edge to leave room for the brand lockup.",
+            source.contains("private val ArrivalHeroBandTopSpacing = 36.dp"),
+        )
+        assertTrue(
+            "Arrival completion content should lower the artwork slightly inside the hero band so the skyline reads further down the page.",
+            source.contains("private val ArrivalHeroArtworkBottomSpacing = 28.dp"),
+        )
+        assertTrue(
+            "Arrival completion content should push the hero band slightly lower from the top edge to match the updated composition.",
             source.contains("Spacer(modifier = Modifier.height(ArrivalHeroBandTopSpacing))"),
+        )
+        assertFalse(
+            "Arrival completion content should no longer force the artwork into a fixed height that clips the skyline.",
+            source.contains("private val ArrivalHeroArtworkHeight = 156.dp"),
         )
         assertFalse(
             "Arrival completion content should not keep the old root padding that inset the hero band on both sides.",

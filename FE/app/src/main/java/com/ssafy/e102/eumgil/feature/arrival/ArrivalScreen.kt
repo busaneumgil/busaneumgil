@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -60,7 +63,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.feature.map.component.MapBottomSheetHandleHeight
@@ -71,8 +76,15 @@ private val ArrivalSuccessColor = Color(0xFF16A34A)
 private val ArrivalRatingSelectedColor = Color(0xFFFACC15)
 private val ArrivalEvaluationSectionSpacing = EumSpacing.small
 private val ArrivalEvaluationRatingFeedbackPlaceholderHeight = 8.dp
-private val ArrivalHeroBandHeight = 236.dp
-private val ArrivalHeroBandTopSpacing = 20.dp
+private val ArrivalHeroBandHeight = 332.dp
+private val ArrivalHeroBandTopSpacing = 36.dp
+private val ArrivalHeroArtworkBottomSpacing = 28.dp
+private val ArrivalHeroBackgroundFadeHeight = 40.dp
+private val ArrivalHeroLogoTopPadding = 58.dp
+private val ArrivalHeroLogoWidth = 108.dp
+private val ArrivalHeroLogoHeight = 60.dp
+private val ArrivalRouteSaveIconSize = 24.dp
+private const val ArrivalHeroArtworkAspectRatio = 1440f / 900f
 private const val ArrivalRatingCount = 5
 
 @Composable
@@ -88,9 +100,19 @@ fun ArrivalScreen(
                 .background(MaterialTheme.colorScheme.background),
     ) {
         ArrivalCompletionContent(
-            onHomeClicked = { onAction(ArrivalUiAction.HomeClicked) },
-            onExploreNewRouteClicked = { onAction(ArrivalUiAction.ExploreNewRouteClicked) },
+            modifier = Modifier.fillMaxSize(),
         )
+
+        if (!uiState.isEvaluationSheetVisible) {
+            ArrivalCompletionActions(
+                onHomeClicked = { onAction(ArrivalUiAction.HomeClicked) },
+                onExploreNewRouteClicked = { onAction(ArrivalUiAction.ExploreNewRouteClicked) },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(1f),
+            )
+        }
 
         AnimatedVisibility(
             visible = uiState.isEvaluationSheetVisible,
@@ -116,8 +138,6 @@ fun ArrivalScreen(
 
 @Composable
 private fun ArrivalCompletionContent(
-    onHomeClicked: () -> Unit,
-    onExploreNewRouteClicked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -138,7 +158,7 @@ private fun ArrivalCompletionContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top,
         ) {
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = stringResource(id = R.string.arrival_screen_headline),
@@ -158,55 +178,62 @@ private fun ArrivalCompletionContent(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+    }
+}
 
-        Column(
+@Composable
+private fun ArrivalCompletionActions(
+    onHomeClicked: () -> Unit,
+    onExploreNewRouteClicked: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = EumSpacing.large)
+                .padding(bottom = EumSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Button(
+            onClick = onHomeClicked,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.large)
-                    .padding(bottom = EumSpacing.xxSmall),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    .height(56.dp),
+            shape = RoundedCornerShape(EumRadius.medium),
         ) {
-            Button(
-                onClick = onHomeClicked,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                shape = RoundedCornerShape(EumRadius.medium),
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_nav_home_filled),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(modifier = Modifier.width(EumSpacing.xxSmall))
-                Text(
-                    text = stringResource(id = R.string.arrival_action_go_home),
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-            OutlinedButton(
-                onClick = onExploreNewRouteClicked,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                shape = RoundedCornerShape(EumRadius.medium),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_nav_search),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(modifier = Modifier.width(EumSpacing.xxSmall))
-                Text(
-                    text = stringResource(id = R.string.arrival_action_explore_new_route),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
+            Icon(
+                painter = painterResource(id = R.drawable.ic_nav_home_filled),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+            )
+            Spacer(modifier = Modifier.width(EumSpacing.xxSmall))
+            Text(
+                text = stringResource(id = R.string.arrival_action_go_home),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        OutlinedButton(
+            onClick = onExploreNewRouteClicked,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+            shape = RoundedCornerShape(EumRadius.medium),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_nav_search),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.width(EumSpacing.xxSmall))
+            Text(
+                text = stringResource(id = R.string.arrival_action_explore_new_route),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
@@ -225,12 +252,59 @@ private fun ArrivalHeroBand(
         Image(
             painter = painterResource(id = R.drawable.arrival_completion_background),
             contentDescription = null,
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.FillWidth,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .align(Alignment.BottomCenter),
+                    .aspectRatio(ArrivalHeroArtworkAspectRatio)
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = ArrivalHeroArtworkBottomSpacing),
         )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(ArrivalHeroBackgroundFadeHeight)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        brush =
+                            Brush.verticalGradient(
+                                colors =
+                                    listOf(
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+                                        MaterialTheme.colorScheme.background,
+                                    ),
+                            ),
+                    ),
+        )
+
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = ArrivalHeroLogoTopPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.app_logo),
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .width(ArrivalHeroLogoWidth)
+                        .height(ArrivalHeroLogoHeight),
+                contentScale = ContentScale.Fit,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.xxSmall))
+            Text(
+                text = stringResource(id = R.string.auth_login_service_name),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -413,6 +487,12 @@ private fun ArrivalEvaluationBottomSheet(
                                 .navigationBarsPadding(),
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                     ) {
+                        val routeSaveAccentColor =
+                            if (uiState.isRouteSaveEnabled) {
+                                EumPrimary600
+                            } else {
+                                EumPrimary600.copy(alpha = 0.38f)
+                            }
                         OutlinedButton(
                             onClick = { onAction(ArrivalUiAction.SaveRouteClicked) },
                             enabled = uiState.isRouteSaveEnabled,
@@ -421,49 +501,59 @@ private fun ArrivalEvaluationBottomSheet(
                                     .fillMaxWidth()
                                     .height(48.dp),
                             shape = RoundedCornerShape(EumRadius.medium),
-                            border =
-                                BorderStroke(
-                                    1.dp,
-                                    if (uiState.isRouteSaveSelected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.outline
-                                    },
+                            colors =
+                                ButtonDefaults.outlinedButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    contentColor = routeSaveAccentColor,
+                                    disabledContainerColor = MaterialTheme.colorScheme.surface,
+                                    disabledContentColor = routeSaveAccentColor,
                                 ),
+                            border = BorderStroke(1.dp, routeSaveAccentColor),
                         ) {
-                            Icon(
-                                painter =
-                                    painterResource(
-                                        id =
-                                            if (uiState.isRouteSaveSelected) {
-                                                R.drawable.ic_nav_bookmark_selected
-                                            } else {
-                                                R.drawable.ic_nav_bookmark_outline
-                                            },
-                                    ),
-                                contentDescription = null,
-                                tint = Color.Unspecified,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(modifier = Modifier.width(EumSpacing.xxSmall))
-                            Text(
-                                text =
-                                    stringResource(
-                                        id =
-                                            if (uiState.isRouteSaveSelected) {
-                                                R.string.arrival_evaluation_route_saved
-                                            } else {
-                                                R.string.arrival_evaluation_save_route
-                                            },
-                                    ),
-                                style = MaterialTheme.typography.labelLarge,
-                                color =
-                                    if (uiState.isRouteSaveSelected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterEnd,
+                                ) {
+                                    Icon(
+                                        painter =
+                                            painterResource(
+                                                id =
+                                                    if (uiState.isRouteSaveSelected) {
+                                                        R.drawable.ic_nav_bookmark_selected
+                                                    } else {
+                                                        R.drawable.ic_nav_bookmark_outline
+                                                    },
+                                            ),
+                                        contentDescription = null,
+                                        tint = routeSaveAccentColor,
+                                        modifier = Modifier.size(ArrivalRouteSaveIconSize),
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text =
+                                            stringResource(
+                                                id =
+                                                    if (uiState.isRouteSaveSelected) {
+                                                        R.string.arrival_evaluation_route_save_cancel
+                                                    } else {
+                                                        R.string.arrival_evaluation_save_route
+                                                    },
+                                            ),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = routeSaveAccentColor,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
 
                         Button(

@@ -609,6 +609,7 @@
     <string name="arrival_evaluation_title">경로 평가</string>
     <string name="arrival_evaluation_save_route">이 경로 저장하기</string>
     <string name="arrival_evaluation_route_saved">경로 저장 완료</string>
+    <string name="arrival_evaluation_route_save_cancel">경로 저장 취소</string>
     <string name="arrival_evaluation_submit">평가 등록</string>
     <string name="arrival_evaluation_close">평가 건너뛰기</string>
     <string name="arrival_evaluation_question">이번 경로는 어떠셨나요?</string>

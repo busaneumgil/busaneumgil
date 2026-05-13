@@ -50,6 +50,8 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("job_name: blackbox-dev-http", prometheus_content)
         self.assertIn('targets: ["http://graphhopper:8990/healthcheck"]', prometheus_content)
         self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper/healthcheck"]', prometheus_content)
+        self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper-blue/healthcheck"]', prometheus_content)
+        self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper-green/healthcheck"]', prometheus_content)
 
     def test_promtail_separates_dev_and_ops_runtime_labels(self):
         dev_promtail = S1_PROMTAIL_CONFIG.read_text(encoding="utf-8")

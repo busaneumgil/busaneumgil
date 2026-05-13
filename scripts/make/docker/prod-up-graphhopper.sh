@@ -7,9 +7,15 @@ source "$ROOT_DIR/scripts/make/lib/prod-db-tunnel.sh"
 PROD_COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/docker-compose.prod.yml")
 
 graphhopper_admin_port() {
-  local port
-  port="$(env_value GRAPHHOPPER_ADMIN_PORT)"
-  echo "${port:-8990}"
+  local blue_port
+  blue_port="$(env_value GRAPHHOPPER_BLUE_ADMIN_PORT)"
+  echo "${blue_port:-18990}"
+}
+
+graphhopper_green_admin_port() {
+  local green_port
+  green_port="$(env_value GRAPHHOPPER_GREEN_ADMIN_PORT)"
+  echo "${green_port:-18992}"
 }
 
 admin_port() {
@@ -44,7 +50,7 @@ wait_for_graphhopper_healthcheck() {
   done
 
   echo "prod GraphHopper did not become healthy: $url" >&2
-  "${PROD_COMPOSE[@]}" --profile graphhopper logs --tail=120 graphhopper >&2 || true
+  "${PROD_COMPOSE[@]}" --profile graphhopper logs --tail=120 graphhopper-blue graphhopper-green >&2 || true
   return 1
 }
 
@@ -106,16 +112,14 @@ wait_for_admin_health() {
   return 1
 }
 
-if graphhopper_cache_ready; then
-  echo "prod GraphHopper graph-cache is already present."
-else
-  echo "prod GraphHopper graph-cache is missing or empty. Running graphhopper-prod-build first."
-  "$ROOT_DIR/scripts/make/docker/graphhopper-prod-build.sh"
-fi
+echo "refreshing prod GraphHopper blue/green slot before runtime start."
+"$ROOT_DIR/scripts/graphhopper/prod-bluegreen-refresh.sh"
 
 prepare_prod_runtime_env
-"${PROD_COMPOSE[@]}" --profile graphhopper up -d --build graphhopper
-wait_for_graphhopper_healthcheck "$(graphhopper_admin_port)"
+"${PROD_COMPOSE[@]}" --profile graphhopper up -d --no-recreate graphhopper-blue graphhopper-green
+if ! wait_for_graphhopper_healthcheck "$(graphhopper_admin_port)"; then
+  wait_for_graphhopper_healthcheck "$(graphhopper_green_admin_port)"
+fi
 "${PROD_COMPOSE[@]}" --profile graphhopper up -d --force-recreate backend ai admin
 wait_for_backend_http
 wait_for_admin_health "$(admin_port)"

@@ -44,6 +44,15 @@ graphhopper:
   base-url: ${GRAPHHOPPER_BASE_URL:http://localhost:8989}
   connect-timeout: ${GRAPHHOPPER_CONNECT_TIMEOUT:5s}
   read-timeout: ${GRAPHHOPPER_READ_TIMEOUT:5s}
+  active-slot-key: ${GRAPHHOPPER_ACTIVE_SLOT_KEY:graphhopper:active-slot}
+  previous-slot-key: ${GRAPHHOPPER_PREVIOUS_SLOT_KEY:graphhopper:previous-slot}
+  blue-url-key: ${GRAPHHOPPER_BLUE_URL_KEY:graphhopper:blue:url}
+  green-url-key: ${GRAPHHOPPER_GREEN_URL_KEY:graphhopper:green:url}
+  blue-url: ${GRAPHHOPPER_BLUE_URL:http://graphhopper-blue:8989}
+  green-url: ${GRAPHHOPPER_GREEN_URL:http://graphhopper-green:8989}
+  health-url: ${GRAPHHOPPER_HEALTH_URL:http://localhost:8990/healthcheck}
+  blue-health-url: ${GRAPHHOPPER_BLUE_HEALTH_URL:http://graphhopper-blue:8990/healthcheck}
+  green-health-url: ${GRAPHHOPPER_GREEN_HEALTH_URL:http://graphhopper-green:8990/healthcheck}
 
 management:
   server:

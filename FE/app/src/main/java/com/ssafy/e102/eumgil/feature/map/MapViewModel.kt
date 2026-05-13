@@ -20,6 +20,7 @@ import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
@@ -30,6 +31,7 @@ import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.observeAccountScopeKey
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MIN_ZOOM_LEVEL
@@ -38,6 +40,8 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
@@ -66,6 +70,7 @@ class MapViewModel(
     private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val facilitySeedRepository: FacilitySeedRepository,
     private val bookmarkRepository: BookmarkRepository,
+    private val authSessionRepository: AuthSessionRepository? = null,
     private val searchRepository: SearchRepository = NoOpSearchRepository,
     private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
@@ -112,6 +117,7 @@ class MapViewModel(
         observeSelectedDestination()
         observeSelectionRequests()
         observeDestinationPreviewRequests()
+        observeAccountScope()
         observePermissionState()
         observeLocationUpdates()
         loadMarkerBrowseState()
@@ -646,6 +652,48 @@ class MapViewModel(
                 }
             }
         }
+    }
+
+    private fun observeAccountScope() {
+        val authSessionRepository = authSessionRepository ?: return
+
+        viewModelScope.launch {
+            var isInitialEmission = true
+            authSessionRepository.observeAccountScopeKey().collectLatest {
+                if (isInitialEmission) {
+                    isInitialEmission = false
+                    return@collectLatest
+                }
+
+                handleAccountScopeChanged()
+            }
+        }
+    }
+
+    private fun handleAccountScopeChanged() {
+        selectedDestination = null
+        facilityBrowseData = null
+        markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+        recentDestinations = emptyList()
+        lastPlacesBrowseAnchorSource = null
+        lastMarkerOverlayLogSnapshot = null
+        isRecenterButtonActive = false
+
+        clearSelectedFacilitySelection()
+        mutableUiState.update { state ->
+            state.copy(
+                selectedDestination = null,
+                recentDestinations = emptyList(),
+                markerOverlayState = MapMarkerOverlayState(),
+                markerFilterState = MapMarkerFilterUiState(),
+                shortcutFilterState = createShortcutFilterState(browseData = null),
+            )
+        }
+        renderSelectedFacilityState()
+        applyFallbackCameraTarget()
+        loadMarkerBrowseState()
+        refreshRecentDestinations()
+        renderUiState()
     }
 
     private fun observeSelectionRequests() {
@@ -1506,6 +1554,7 @@ class MapViewModel(
             destinationPreviewRepository: DestinationPreviewRepository,
             facilitySeedRepository: FacilitySeedRepository,
             bookmarkRepository: BookmarkRepository,
+            authSessionRepository: AuthSessionRepository? = null,
             searchRepository: SearchRepository,
             placesRepository: PlacesRepository? = null,
         ): ViewModelProvider.Factory =
@@ -1520,6 +1569,7 @@ class MapViewModel(
                             destinationPreviewRepository = destinationPreviewRepository,
                             facilitySeedRepository = facilitySeedRepository,
                             bookmarkRepository = bookmarkRepository,
+                            authSessionRepository = authSessionRepository,
                             searchRepository = searchRepository,
                             placesRepository = placesRepository,
                         ) as T

@@ -26,6 +26,9 @@ fun provideAuthLogoutRepository(
     authSessionRepository: AuthSessionRepository,
     bookmarkDao: com.ssafy.e102.eumgil.data.local.dao.BookmarkDao,
     favoriteRouteDao: com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao,
+    placesLocalDataSource: com.ssafy.e102.eumgil.data.local.datasource.PlacesLocalDataSource,
+    destinationSelectionRepository: DestinationSelectionRepository,
+    destinationPreviewRepository: DestinationPreviewRepository,
     isMockMode: Boolean,
 ): AuthLogoutRepository {
     val localCacheCleaner =
@@ -33,6 +36,9 @@ fun provideAuthLogoutRepository(
             authSessionRepository = authSessionRepository,
             bookmarkDao = bookmarkDao,
             favoriteRouteDao = favoriteRouteDao,
+            placesLocalDataSource = placesLocalDataSource,
+            destinationSelectionRepository = destinationSelectionRepository,
+            destinationPreviewRepository = destinationPreviewRepository,
         )
     return if (isMockMode) {
         LocalOnlyAuthLogoutRepository(

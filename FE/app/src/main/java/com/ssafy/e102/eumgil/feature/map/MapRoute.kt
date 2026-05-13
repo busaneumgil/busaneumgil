@@ -17,12 +17,14 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import kotlinx.coroutines.flow.collect
 
 @Composable
 fun MapRoute(
+    viewModelStoreOwner: ViewModelStoreOwner,
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
     onNavigateToRouteSetting: () -> Unit = {},
@@ -46,14 +48,14 @@ fun MapRoute(
                 destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 facilitySeedRepository = appContainer.facilitySeedRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
+                authSessionRepository = appContainer.authSessionRepository,
                 searchRepository = appContainer.searchRepository,
                 placesRepository = appContainer.placesRepository,
             )
         }
     val viewModel =
-        remember(activity, viewModelFactory) {
-            val owner = checkNotNull(activity) { "MapRoute requires a ComponentActivity host." }
-            ViewModelProvider(owner, viewModelFactory)[MapViewModel::class.java]
+        remember(viewModelStoreOwner, viewModelFactory) {
+            ViewModelProvider(viewModelStoreOwner, viewModelFactory)[MapViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }

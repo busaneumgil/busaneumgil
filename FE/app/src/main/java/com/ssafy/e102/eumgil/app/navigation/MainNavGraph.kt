@@ -51,6 +51,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 .getStateFlow(MAP_HOME_REENTRY_RESET_KEY, false)
                 .collectAsStateWithLifecycle()
         MapRoute(
+            viewModelStoreOwner = backStackEntry,
             onNavigateToSavedRoutes = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
             },

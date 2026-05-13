@@ -7,6 +7,8 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.AccessibilityTag
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
@@ -36,9 +38,10 @@ import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
-import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.TestAuthSessionRepository
 import com.ssafy.e102.eumgil.feature.map.component.createKakaoCameraRenderState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -2147,6 +2150,78 @@ class MapViewModelTest {
             assertEquals("101", destinationSelectionRepository.selectedDestination.value?.placeId)
             assertEquals("Accessible Cafe", destinationSelectionRepository.selectedDestination.value?.name)
             assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+        }
+
+    @Test
+    fun `account scope change clears stale map preview state and reloads places`() =
+        runTest {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "access-token-a",
+                                    refreshToken = "refresh-token-a",
+                                    userId = "user-a",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "scoped-place-1",
+                                name = "Scoped Place",
+                                address = "1 Scoped-ro, Busan",
+                                latitude = 35.1801,
+                                longitude = 129.0722,
+                                category = PlaceCategory.WELFARE,
+                            ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    authSessionRepository = authSessionRepository,
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            destinationPreviewRepository.requestPreview(destination = testDestination())
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertEquals(1, placesRepository.queries.size)
+
+            authSessionRepository.updateAuthSession(
+                authSession =
+                    AuthSession(
+                        accessToken = "access-token-b",
+                        refreshToken = "refresh-token-b",
+                        userId = "user-b",
+                    ),
+                isProfileCompleted = true,
+            )
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.selectedMarkerId)
+            assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.detail)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.destinationPreview)
+            assertEquals(2, placesRepository.queries.size)
         }
 
     @Test

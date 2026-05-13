@@ -34,17 +34,19 @@ class AuthLogoutRepositoryTest {
                 FakeLogoutAuthRemoteDataSource(
                     logoutMessage = "로그아웃되었습니다.",
                 )
+            val localCacheCleaner = RecordingAccountScopedLocalCacheCleaner()
             val repository =
                 ServerAuthLogoutRepository(
                     authRemoteDataSource = remoteDataSource,
                     authSessionRepository = authSessionRepository,
-                    localCacheCleaner = RecordingAccountScopedLocalCacheCleaner(),
+                    localCacheCleaner = localCacheCleaner,
                 )
 
             val result = repository.logout()
 
             assertEquals("access-token", remoteDataSource.latestLogoutAccessToken)
             assertTrue(authSessionRepository.clearAuthSessionCalled)
+            assertTrue(localCacheCleaner.clearCalled)
             assertEquals(AuthLogoutResult.Success(message = "로그아웃되었습니다."), result)
         }
 

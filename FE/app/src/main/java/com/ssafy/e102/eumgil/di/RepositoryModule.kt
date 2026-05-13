@@ -115,12 +115,18 @@ object RepositoryModule {
         authSessionRepository: AuthSessionRepository,
         bookmarkDao: BookmarkDao,
         favoriteRouteDao: FavoriteRouteDao,
+        placesLocalDataSource: PlacesLocalDataSource,
+        destinationSelectionRepository: DestinationSelectionRepository,
+        destinationPreviewRepository: DestinationPreviewRepository,
     ): AuthLogoutRepository =
         provideAuthLogoutRepositoryImpl(
             authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
             bookmarkDao = bookmarkDao,
             favoriteRouteDao = favoriteRouteDao,
+            placesLocalDataSource = placesLocalDataSource,
+            destinationSelectionRepository = destinationSelectionRepository,
+            destinationPreviewRepository = destinationPreviewRepository,
             isMockMode = AppEnvironment.isMockMode,
         )
 

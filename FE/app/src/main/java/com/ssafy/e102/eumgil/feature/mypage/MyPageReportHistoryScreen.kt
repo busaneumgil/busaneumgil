@@ -31,8 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -254,7 +258,7 @@ private fun ReportHistoryCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            ReportHistoryThumbnail(hasPhoto = report.photoUri != null)
+            ReportHistoryThumbnail(photoUri = report.photoUri)
         }
     }
 }
@@ -298,37 +302,66 @@ private fun ReportHistoryDetailCard(detail: MyPageReportHistoryDetailUiModel) {
     }
 }
 
+/**
+ * 마이페이지 제보 내역 카드의 썸네일.
+ *
+ * - `photoUri`가 있으면 Coil `SubcomposeAsyncImage`로 실제 이미지 렌더링
+ * - 로딩 중·실패·null인 경우에는 기존 fallback (아이콘 + tinted 배경) 유지
+ *   → mock URI(`content://mock/...`) 같은 깨지는 URI도 graceful하게 처리됨
+ */
 @Composable
-private fun ReportHistoryThumbnail(hasPhoto: Boolean) {
+private fun ReportHistoryThumbnail(photoUri: String?) {
     val spec = reportHistoryLayoutSpec()
+    val hasPhotoSource = !photoUri.isNullOrBlank()
+    val context = LocalContext.current
 
     Surface(
         modifier = Modifier.size(width = 88.dp, height = 76.dp),
         shape = RoundedCornerShape(spec.thumbnailCornerRadiusDp.dp),
         color =
-            if (hasPhoto) {
+            if (hasPhotoSource) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
             } else {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
             },
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_mypage_report_history),
+        if (hasPhotoSource) {
+            SubcomposeAsyncImage(
+                model =
+                    ImageRequest.Builder(context)
+                        .data(photoUri)
+                        .crossfade(true)
+                        .build(),
                 contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint =
-                    if (hasPhoto) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                loading = { ReportHistoryThumbnailFallback(tinted = true) },
+                error = { ReportHistoryThumbnailFallback(tinted = false) },
             )
+        } else {
+            ReportHistoryThumbnailFallback(tinted = false)
         }
+    }
+}
+
+@Composable
+private fun ReportHistoryThumbnailFallback(tinted: Boolean) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_mypage_report_history),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint =
+                if (tinted) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+        )
     }
 }
 

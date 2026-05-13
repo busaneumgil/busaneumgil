@@ -43,6 +43,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusState
@@ -1037,6 +1041,7 @@ private fun ReportPhotoThumb(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     Box(
         modifier =
             modifier
@@ -1051,17 +1056,23 @@ private fun ReportPhotoThumb(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         ) {
-            Box(
+            // Coil SubcomposeAsyncImage로 실제 사진 썸네일 렌더링. 로딩 중·실패 시에는
+            // fallback Composable(회색 박스 + 라벨)로 graceful degradation.
+            // mock URI(`content://mock/...`)이거나 권한 없는 URI는 자연스럽게 error 상태 처리.
+            // (`AsyncImage`는 painter-only fallback만 받으므로 Composable 슬롯을 위해
+            // `SubcomposeAsyncImage` 사용.)
+            SubcomposeAsyncImage(
+                model =
+                    ImageRequest.Builder(context)
+                        .data(photo.localUri)
+                        .crossfade(true)
+                        .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "사진",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                loading = { ReportPhotoThumbFallback(label = "사진") },
+                error = { ReportPhotoThumbFallback(label = "불러오기 실패") },
+            )
         }
         Surface(
             modifier =
@@ -1089,6 +1100,25 @@ private fun ReportPhotoThumb(
                 )
             }
         }
+    }
+}
+
+/**
+ * SubcomposeAsyncImage가 로딩 중이거나 실패했을 때 표시되는 fallback. 기존 텍스트 라벨 패턴
+ * 그대로 유지하여 사용자 입장에서 카드 영역이 비어 보이지 않게 한다.
+ */
+@Composable
+private fun ReportPhotoThumbFallback(label: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

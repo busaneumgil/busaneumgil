@@ -4,11 +4,16 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -46,6 +51,10 @@ fun ReportRoute(
     val scrollState = rememberScrollState()
     val view = LocalView.current
 
+    // ViewModel이 `ShowDraftDiscardDialog`를 emit하면 pendingType이 채워지고 AlertDialog가 노출된다.
+    // 사용자가 어느 한 선택지를 누르거나 다이얼로그 바깥을 탭하면 다시 null로 초기화한다.
+    var draftConflictPendingType: ReportType? by remember { mutableStateOf(null) }
+
     LaunchedEffect(viewModel) {
         // 탭 재진입 시 완료 화면이면 자동으로 새 제보 시작 상태로 초기화 (T10).
         // 작성 중·실패 상태는 보존되어야 하므로 ViewModel에서 분기 처리한다.
@@ -66,16 +75,36 @@ fun ReportRoute(
                     view.announceForAccessibility(event.message)
                 }
                 ReportUiEvent.ScrollToFirstError -> scrollState.animateScrollTo(0)
+                is ReportUiEvent.ShowDraftDiscardDialog -> {
+                    draftConflictPendingType = event.pendingType
+                }
                 ReportUiEvent.OpenLocationPicker,
                 ReportUiEvent.OpenPhotoPicker,
                 ReportUiEvent.RequestLocationPermission,
-                ReportUiEvent.ShowDraftDiscardDialog,
                 is ReportUiEvent.NavigateToReportComplete -> Unit
                 // OpenLocationPicker / OpenPhotoPicker / RequestLocationPermission: Story 2·3 범위
-                // ShowDraftDiscardDialog: Task 1.2 범위
                 // NavigateToReportComplete: 현재 화면 내 step 전환과 중복이라 무시 (후속 정리 대상)
             }
         }
+    }
+
+    val pendingType = draftConflictPendingType
+    if (pendingType != null) {
+        ReportDraftConflictDialog(
+            onDiscardAndStartNew = {
+                viewModel.onAction(ReportUiAction.DiscardDraftAndStartNew(pendingType))
+                draftConflictPendingType = null
+            },
+            onResume = {
+                viewModel.onAction(ReportUiAction.ResumeDraftFromDialog)
+                draftConflictPendingType = null
+            },
+            onDismiss = {
+                // 다이얼로그 바깥 탭 / 시스템 back: 아무 변경 없이 닫는다.
+                // 사용자는 BottomSheet나 type 카드 재선택으로 다시 의사결정할 수 있다.
+                draftConflictPendingType = null
+            },
+        )
     }
 
     ReportScreen(
@@ -84,6 +113,33 @@ fun ReportRoute(
         snackbarHostState = snackbarHostState,
         scrollState = scrollState,
         modifier = modifier,
+    )
+}
+
+@Composable
+private fun ReportDraftConflictDialog(
+    onDiscardAndStartNew: () -> Unit,
+    onResume: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "기존 작성 내용") },
+        text = {
+            Text(
+                text = "기존에 작성하던 내용이 있습니다. 삭제하고 새로 작성하시겠습니까?",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDiscardAndStartNew) {
+                Text(text = "삭제하고 새로 작성")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onResume) {
+                Text(text = "이어서 작성")
+            }
+        },
     )
 }
 

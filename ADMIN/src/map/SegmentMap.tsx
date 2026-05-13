@@ -8,7 +8,7 @@ import { roadviewUnavailableMessage, shouldOpenRoadviewForMode } from "./roadvie
 import { pointLineDistanceM } from "./referenceMatching";
 
 type Coord = [number, number];
-type EditorMode = "select" | "delete" | "add" | "roadview";
+type EditorMode = "idle" | "delete" | "add" | "roadview";
 type AddType = EditableSegmentType;
 
 interface SegmentMapProps {
@@ -39,6 +39,9 @@ interface SegmentMapProps {
     end?: GeoPoint | null;
   };
   toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend";
+  draftEditCount?: number;
+  onUndoDraftEdit?: () => void;
+  onClearDraftEdits?: () => void;
 }
 
 export interface RoadviewDockState {
@@ -85,6 +88,9 @@ export function SegmentMap({
   routeLines,
   routePoints,
   toolbarMode = "editor",
+  draftEditCount = 0,
+  onUndoDraftEdit,
+  onClearDraftEdits,
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -106,7 +112,7 @@ export function SegmentMap({
   const polygonShapeRef = useRef<KakaoOverlay | null>(null);
   const centeredPayloadRef = useRef<{ payload?: SegmentPayload; bridgePayload?: BridgePayload }>({});
   const draftEditsRef = useRef<EditAction[]>(draftEdits);
-  const modeRef = useRef<EditorMode>("select");
+  const modeRef = useRef<EditorMode>("idle");
   const addTypeRef = useRef<AddType>("SIDE_LINE");
   const addPointsRef = useRef<Array<[number, number]>>([]);
   const polygonPointsRef = useRef<Coord[]>([]);
@@ -115,12 +121,13 @@ export function SegmentMap({
   const onSelectSegmentRef = useRef(onSelectSegment);
   const routePointPickModeRef = useRef(routePointPickMode);
   const onRoutePointPickRef = useRef(onRoutePointPick);
-  const [mode, setModeState] = useState<EditorMode>("select");
+  const [mode, setModeState] = useState<EditorMode>("idle");
   const [addType, setAddTypeState] = useState<AddType>("SIDE_LINE");
   const [pendingAddCount, setPendingAddCount] = useState(0);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapLevel, setMapLevel] = useState(6);
+  const [snapMessage, setSnapMessage] = useState<string | null>(null);
   const [polygonDeleteActive, setPolygonDeleteActive] = useState(false);
   const [polygonPointCount, setPolygonPointCount] = useState(0);
   const [roadSegmentLayers, setRoadSegmentLayers] = useState({
@@ -134,6 +141,7 @@ export function SegmentMap({
     BRAILLE_BLOCK: true,
     STAIRS: true,
   });
+  const detailedSegmentsVisible = mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
 
   useEffect(() => {
     onDraftEditRef.current = onDraftEdit;
@@ -145,7 +153,7 @@ export function SegmentMap({
 
   useEffect(() => {
     if (!editable && (modeRef.current === "add" || modeRef.current === "delete")) {
-      setMode("select");
+      setMode("idle");
     }
   }, [editable]);
 
@@ -191,8 +199,8 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const useHitArea = toolbarMode === "editor";
-    const canRenderDetails = shouldRenderDetailedSegments();
+    const useHitArea = toolbarMode === "editor" && mode === "delete";
+    const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     const segmentFeatures = canRenderDetails
       ? allSegmentFeatures.filter(shouldShowRoadSegmentLayer)
@@ -203,9 +211,13 @@ export function SegmentMap({
           handleMapCoordinate(coord, latLng);
           return;
         }
-        if (modeRef.current === "select") {
+        if (toolbarMode !== "editor") {
           onSelectSegmentRef.current(feature);
           drawSelectedSegment(feature);
+          return;
+        }
+        if (modeRef.current === "delete" && polygonDeleteActiveRef.current) {
+          handleMapCoordinate(coord, latLng);
           return;
         }
         if (modeRef.current !== "delete") {
@@ -240,20 +252,20 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, mapLevel, mapReady, roadSegmentLayers, toolbarMode]);
+  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, roadSegmentLayers, toolbarMode]);
 
   useEffect(() => {
-    if (shouldRenderDetailedSegments()) {
+    if (detailedSegmentsVisible) {
       renderPendingEditOverlays();
     } else {
       clearPendingEditOverlays();
     }
     syncDeletedSegmentOverlays();
-  }, [draftEdits, mapLevel]);
+  }, [draftEdits, detailedSegmentsVisible]);
 
   useEffect(() => {
     renderReferenceOverlays();
-  }, [mode, referenceLayers, roadAttributePayload, stairPayload, audioSignalPayload, brailleBlockPayload]);
+  }, [detailedSegmentsVisible, mode, referenceLayers, roadAttributePayload, stairPayload, audioSignalPayload, brailleBlockPayload]);
 
   useEffect(() => {
     renderRouteOverlays();
@@ -265,16 +277,16 @@ export function SegmentMap({
 
   useEffect(() => {
     renderSegmentFeatureOverlays();
-  }, [draftEdits, mapReady, payload, segmentFeatureLayers, toolbarMode]);
+  }, [detailedSegmentsVisible, draftEdits, mapReady, payload, segmentFeatureLayers, toolbarMode]);
 
   useEffect(() => {
-    if (!selectedSegment || !shouldRenderDetailedSegments()) {
+    if (!selectedSegment || !detailedSegmentsVisible) {
       selectedSegmentOverlayRef.current?.setMap(null);
       selectedSegmentOverlayRef.current = null;
       return;
     }
     drawSelectedSegment(selectedSegment);
-  }, [mapLevel, selectedSegment]);
+  }, [detailedSegmentsVisible, selectedSegment]);
 
   function setMode(nextMode: EditorMode) {
     if (!editable && (nextMode === "add" || nextMode === "delete")) {
@@ -299,7 +311,7 @@ export function SegmentMap({
   }
 
   function shouldRenderDetailedSegments() {
-    return mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
+    return detailedSegmentsVisible;
   }
 
   function handleMapCoordinate(coord: Coord, latLng: unknown) {
@@ -308,7 +320,7 @@ export function SegmentMap({
       return;
     }
 
-    if (modeRef.current === "select") {
+    if (toolbarMode !== "editor") {
       selectNearestSegment(coord, 35, false);
       return;
     }
@@ -323,7 +335,8 @@ export function SegmentMap({
     }
 
     if (modeRef.current === "add") {
-      addPointsRef.current = [...addPointsRef.current, coord];
+      const nextCoord = addTypeRef.current === "CROSS_WALK" ? snapCrossWalkEndpoint(coord) : coord;
+      addPointsRef.current = [...addPointsRef.current, nextCoord];
       redrawAddPreview();
       setPendingAddCount(addPointsRef.current.length);
       const result = twoPointAddDraft(addTypeRef.current, addPointsRef.current);
@@ -383,6 +396,7 @@ export function SegmentMap({
     referenceOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     referenceOverlaysRef.current = [];
     hideRoadAttributeTooltip();
+    if (!shouldRenderDetailedSegments()) return;
 
     if (referenceLayers?.roadAttributes) {
       (roadAttributePayload?.roadAttributes.features ?? []).filter(shouldShowRoadAttributeReference).forEach((feature) => {
@@ -390,7 +404,7 @@ export function SegmentMap({
           onClick: (coord) => selectNearestSegment(coord, 50),
           onMouseOver: (coord) => showRoadAttributeTooltip(feature, coord),
           onMouseOut: hideRoadAttributeTooltip,
-        }, modeRef.current === "select");
+        }, toolbarMode !== "editor");
         if (overlays) referenceOverlaysRef.current.push(...overlays);
       });
     }
@@ -628,7 +642,7 @@ export function SegmentMap({
     roadviewMarkerRef.current?.setMap(null);
     roadviewMarkerRef.current = null;
     roadviewArrowElRef.current = null;
-    if (modeRef.current === "roadview") setMode("select");
+    if (modeRef.current === "roadview") setMode("idle");
   }
 
   function showRoadviewPanel(message: string) {
@@ -706,7 +720,21 @@ export function SegmentMap({
     return new window.kakao!.maps.LatLng(coord[1], coord[0]);
   }
 
-  const detailedSegmentsVisible = shouldRenderDetailedSegments();
+  function snapCrossWalkEndpoint(coord: Coord): Coord {
+    const candidates = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)
+      .filter((feature) => {
+        const segmentType = feature.properties.segmentType;
+        return segmentType === "SIDE_LINE" || segmentType === "SIDE_WALK";
+      });
+    const nearest = nearestPointOnSegments(coord, candidates);
+    if (!nearest || nearest.distanceM > 1.5) {
+      setSnapMessage(null);
+      return coord;
+    }
+    setSnapMessage(`CROSS_WALK 끝점을 기존 선 위로 ${nearest.distanceM.toFixed(1)}m 보정했습니다.`);
+    return nearest.coord;
+  }
+
   const segmentFeatureCounts = countSegmentFeatureTypes(visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits));
 
   return (
@@ -714,7 +742,6 @@ export function SegmentMap({
       <div ref={containerRef} className="map-canvas" />
       {toolbarMode === "editor" ? (
         <div className="map-toolbar">
-          <button className={mode === "select" ? "selected-tool" : ""} onClick={() => setMode("select")}>Select</button>
           <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
           <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
           <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
@@ -723,11 +750,15 @@ export function SegmentMap({
           </select>
           {mode === "delete" && (
             <>
-              <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>Drag</button>
-              <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>Delete all</button>
+              <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>영역 선택</button>
+              <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>영역 삭제</button>
+              {polygonDeleteActive && <span className="toolbar-hint">지도에서 3~5개 점을 찍어 삭제 영역을 만듭니다.</span>}
             </>
           )}
           <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
+          <span className="draft-count-badge">변경 {draftEditCount}건</span>
+          <button onClick={onUndoDraftEdit} disabled={!draftEditCount || !onUndoDraftEdit}>Undo</button>
+          <button onClick={onClearDraftEdits} disabled={!draftEditCount || !onClearDraftEdits}>Clear</button>
         </div>
       ) : toolbarMode === "roadSegmentLegend" ? (
         <div className="map-toolbar attribute-legend">
@@ -772,7 +803,7 @@ export function SegmentMap({
               ? `지도 오류: ${mapError}`
               : !detailedSegmentsVisible
                 ? `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
-                : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · polygon ${polygonPointCount}/5` : ""}`}
+                : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · 영역 ${polygonPointCount}/5점` : ""}${snapMessage ? ` · ${snapMessage}` : ""}`}
       </div>
     </section>
   );
@@ -1008,6 +1039,56 @@ function createPolyline(
     clickable: true,
     zIndex,
   });
+}
+
+function nearestPointOnSegments(point: Coord, segments: SegmentFeature[]): { coord: Coord; distanceM: number } | null {
+  let nearest: { coord: Coord; distanceM: number } | null = null;
+  segments.forEach((feature) => {
+    const coordinates = feature.geometry.coordinates;
+    coordinates.slice(1).forEach((coord, index) => {
+      const projected = nearestPointOnLineSegment(point, coordinates[index], coord);
+      if (!nearest || projected.distanceM < nearest.distanceM) {
+        nearest = projected;
+      }
+    });
+  });
+  return nearest;
+}
+
+function nearestPointOnLineSegment(point: Coord, start: Coord, end: Coord): { coord: Coord; distanceM: number } {
+  const originLat = point[1];
+  const pointMeters = lngLatToLocalMeters(point, originLat);
+  const startMeters = lngLatToLocalMeters(start, originLat);
+  const endMeters = lngLatToLocalMeters(end, originLat);
+  const dx = endMeters.x - startMeters.x;
+  const dy = endMeters.y - startMeters.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared === 0
+    ? 0
+    : Math.max(0, Math.min(1, ((pointMeters.x - startMeters.x) * dx + (pointMeters.y - startMeters.y) * dy) / lengthSquared));
+  const projectedMeters = {
+    x: startMeters.x + dx * t,
+    y: startMeters.y + dy * t,
+  };
+  return {
+    coord: localMetersToLngLat(projectedMeters, originLat),
+    distanceM: Math.hypot(pointMeters.x - projectedMeters.x, pointMeters.y - projectedMeters.y),
+  };
+}
+
+function lngLatToLocalMeters([lng, lat]: Coord, originLat: number) {
+  const metersPerDegreeLat = 111_320;
+  const metersPerDegreeLng = 111_320 * Math.cos((originLat * Math.PI) / 180);
+  return {
+    x: lng * metersPerDegreeLng,
+    y: lat * metersPerDegreeLat,
+  };
+}
+
+function localMetersToLngLat(point: { x: number; y: number }, originLat: number): Coord {
+  const metersPerDegreeLat = 111_320;
+  const metersPerDegreeLng = 111_320 * Math.cos((originLat * Math.PI) / 180);
+  return [point.x / metersPerDegreeLng, point.y / metersPerDegreeLat];
 }
 
 function escapeHtml(value: string): string {

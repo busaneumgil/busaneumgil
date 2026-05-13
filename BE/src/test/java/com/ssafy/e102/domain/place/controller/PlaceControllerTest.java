@@ -177,6 +177,7 @@ class PlaceControllerTest {
 				"부산시민공원",
 				null,
 				"여행 > 관광,명소 > 공원",
+				"051-123-4567",
 				"부산광역시 부산진구 시민공원로 73",
 				new GeoPointResponse(35.1686, 129.0576),
 				List.of(),
@@ -199,7 +200,8 @@ class PlaceControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.bookmarkTargetId").value("tgt_9d13f0b44d68abcd"))
 			.andExpect(jsonPath("$.data.detailType").value("EXTERNAL_POI"))
-			.andExpect(jsonPath("$.data.name").value("부산시민공원"));
+			.andExpect(jsonPath("$.data.name").value("부산시민공원"))
+			.andExpect(jsonPath("$.data.phone").value("051-123-4567"));
 
 		verify(placeService).getPlaceDetail(userId, request);
 		SecurityContextHolder.clearContext();

@@ -185,6 +185,20 @@ sealed interface ReportUiAction {
 
     data object DraftDiscardClicked : ReportUiAction
 
+    /**
+     * Draft 충돌 다이얼로그에서 "삭제하고 새로 작성"을 선택했을 때 dispatch된다.
+     * 기존 draft를 삭제한 뒤 [type]으로 새 제보 작성을 시작한다.
+     */
+    data class DiscardDraftAndStartNew(
+        val type: ReportType,
+    ) : ReportUiAction
+
+    /**
+     * Draft 충돌 다이얼로그에서 "이어서 작성"을 선택했을 때 dispatch된다.
+     * 저장된 draft를 폼에 복원한다.
+     */
+    data object ResumeDraftFromDialog : ReportUiAction
+
     data class ReportTypeSelected(
         val type: ReportType,
     ) : ReportUiAction
@@ -244,7 +258,14 @@ sealed interface ReportUiAction {
 sealed interface ReportUiEvent {
     data object NavigateBack : ReportUiEvent
 
-    data object ShowDraftDiscardDialog : ReportUiEvent
+    /**
+     * 임시저장된 draft가 있는 상태에서 사용자가 새 유형을 선택했을 때 emit된다.
+     * Route는 [pendingType]을 보관해 두었다가 다이얼로그 응답에 따라
+     * [ReportUiAction.DiscardDraftAndStartNew] 또는 [ReportUiAction.ResumeDraftFromDialog]를 dispatch한다.
+     */
+    data class ShowDraftDiscardDialog(
+        val pendingType: ReportType,
+    ) : ReportUiEvent
 
     data object RequestLocationPermission : ReportUiEvent
 

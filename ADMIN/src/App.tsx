@@ -574,6 +574,9 @@ function AdminApp() {
               error={payloadQuery.error}
               draftEdits={draftEdits}
               onDraftEdit={addDraftEdit}
+              draftEditCount={draftEdits.length}
+              onUndoDraftEdit={undoDraftEdit}
+              onClearDraftEdits={clearDraft}
               selectedSegment={selectedSegment}
               onSelectSegment={setSelectedSegment}
               roadviewContainerRef={roadviewContainerRef}
@@ -614,17 +617,7 @@ function AdminApp() {
                   <Metric label="visible" value={payloadQuery.data?.summary?.visibleSegmentCount ?? "-"} />
                   <Metric label="전체" value={payloadQuery.data?.summary?.segmentCount ?? "-"} />
                 </div>
-                <div className="button-row">
-                  <button onClick={undoDraftEdit} disabled={!draftEdits.length}>Undo</button>
-                  <button onClick={clearDraft} disabled={!draftEdits.length}>Clear</button>
-                </div>
-                <ol className="draft-list">
-                  {draftEdits.slice(-8).map((edit, index) => (
-                    <li key={`${edit.action}-${index}`}>
-                      {edit.action} {"edgeId" in edit ? edit.edgeId : "segmentType" in edit ? edit.segmentType : ""}
-                    </li>
-                  ))}
-                </ol>
+                <p className="muted">Undo / Clear는 지도 상단 toolbar에서 처리합니다. 상세 목록은 DB 반영 전 최종 확인이 필요할 때만 별도 검토합니다.</p>
               </section>
               <section className="panel-section">
                 <h3>검수 흐름</h3>

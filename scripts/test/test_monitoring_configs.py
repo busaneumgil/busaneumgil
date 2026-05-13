@@ -15,6 +15,10 @@ MONITORING_COMPOSE = ROOT_DIR / "INF" / "monitoring" / "s1" / "docker-compose.ym
 PROMETHEUS_CONFIG = ROOT_DIR / "INF" / "monitoring" / "s1" / "prometheus" / "prometheus.yml"
 MONITORING_README = ROOT_DIR / "INF" / "monitoring" / "README.md"
 PROD_DASHBOARD = ROOT_DIR / "INF" / "monitoring" / "s1" / "grafana" / "provisioning" / "dashboards" / "json" / "e102-prod-observability.json"
+DEV_DASHBOARD = ROOT_DIR / "INF" / "monitoring" / "s1" / "grafana" / "provisioning" / "dashboards" / "json" / "e102-observability-overview.json"
+JENKINS_PROXY = ROOT_DIR / "INF" / "jenkins" / "s1" / "nginx.conf"
+MONITORING_DEPLOY_PIPELINE = ROOT_DIR / "INF" / "jenkins" / "pipelines" / "e102-monitoring-deploy.Jenkinsfile"
+MONITORING_SYNC_SCRIPT = ROOT_DIR / "scripts" / "deploy" / "s1-monitoring-sync.sh"
 
 
 class MonitoringConfigsTest(unittest.TestCase):
@@ -35,6 +39,16 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("REDIS_ADDR: ${DEV_REDIS_EXPORTER_ADDR:-redis://redis:6379}", compose_content)
         self.assertNotIn("redis://host.docker.internal:6379", compose_content)
 
+    def test_blackbox_exporter_joins_dev_network_for_dev_http_probes(self):
+        compose_content = MONITORING_COMPOSE.read_text(encoding="utf-8")
+        prometheus_content = PROMETHEUS_CONFIG.read_text(encoding="utf-8")
+
+        self.assertIn("blackbox-exporter:", compose_content)
+        self.assertIn("- dev-stack", compose_content)
+        self.assertIn("job_name: blackbox-dev-http", prometheus_content)
+        self.assertIn('targets: ["http://graphhopper:8990/healthcheck"]', prometheus_content)
+        self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper/healthcheck"]', prometheus_content)
+
     def test_prod_dashboard_explicitly_marks_dependency_health_cards(self):
         dashboard_content = PROD_DASHBOARD.read_text(encoding="utf-8")
 
@@ -43,6 +57,34 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("dependency health", dashboard_content)
         self.assertNotIn('"title": "DB 상태"', dashboard_content)
         self.assertNotIn('"title": "Redis 상태"', dashboard_content)
+
+    def test_dashboards_include_expected_status_cards(self):
+        prod_dashboard = PROD_DASHBOARD.read_text(encoding="utf-8")
+        dev_dashboard = DEV_DASHBOARD.read_text(encoding="utf-8")
+
+        self.assertIn("GraphHopper 상태", prod_dashboard)
+        self.assertIn('target_name=~\\"graphhopper|graphhopper-blue|graphhopper-green\\"', prod_dashboard)
+        self.assertIn("MinIO 상태", dev_dashboard)
+        self.assertIn("GraphHopper 상태", dev_dashboard)
+
+    def test_proxy_uses_dynamic_service_resolution_for_grafana_and_loki(self):
+        proxy_content = JENKINS_PROXY.read_text(encoding="utf-8")
+
+        self.assertIn('set $grafana_upstream "http://grafana:3000";', proxy_content)
+        self.assertIn('proxy_pass $grafana_upstream;', proxy_content)
+        self.assertIn('set $loki_upstream "http://loki:3100";', proxy_content)
+        self.assertIn('proxy_pass $loki_upstream/loki/;', proxy_content)
+        self.assertNotIn("proxy_pass http://grafana_upstream;", proxy_content)
+
+    def test_monitoring_deploy_job_syncs_runtime_files(self):
+        pipeline_content = MONITORING_DEPLOY_PIPELINE.read_text(encoding="utf-8")
+        script_content = MONITORING_SYNC_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("bash scripts/deploy/s1-monitoring-sync.sh", pipeline_content)
+        self.assertIn("docker network create e102-ops", script_content)
+        self.assertIn("docker network create", script_content)
+        self.assertIn("s14p31e102-dev_default", script_content)
+        self.assertIn("docker restart e102-jenkins-proxy", script_content)
 
 
 if __name__ == "__main__":

@@ -359,6 +359,7 @@ public class AdminRoadNetworkEditService {
 				})
 				.toList());
 		resolveAddSegmentNodes();
+		splitExistingSegmentsForCrossWalkEndpoints();
 		createdNodeIds.addAll(queryLongs("select vertex_id from admin_edit_created_points order by vertex_id"));
 		snappedNodeIds
 			.addAll(queryLongs("select vertex_id from admin_edit_snapped_points order by edit_seq, endpoint"));
@@ -369,6 +370,7 @@ public class AdminRoadNetworkEditService {
 		insertBulkRoadSegments();
 		addedEdgeIds.addAll(queryLongs("select edge_id from admin_edit_new_segments order by edge_id"));
 		validateAddedSegments(inputs, addedEdgeIds);
+		counters.createdSegmentFeatures += insertSegmentFeaturesForSplitSegments();
 		counters.createdSegmentFeatures += insertSegmentFeaturesForNewSegments();
 		counters.updatedSegmentAttributes += updateSegmentAttributesForNewSegments();
 	}
@@ -474,6 +476,268 @@ public class AdminRoadNetworkEditService {
 					where sp.edit_seq = p.edit_seq
 						and sp.endpoint = p.endpoint
 				)
+				""");
+	}
+
+	private void splitExistingSegmentsForCrossWalkEndpoints() {
+		jdbcTemplate.execute(
+			"""
+				create temp table admin_edit_crosswalk_split_points on commit drop as
+				with crosswalk_created_points as (
+					select
+						rp.edit_seq,
+						rp.endpoint,
+						rp.vertex_id,
+						ST_SetSRID(ST_MakePoint(rp.lng, rp.lat), 4326) as point_geom
+					from admin_edit_resolved_points rp
+					join admin_edit_created_points cp
+						on cp.vertex_id = rp.vertex_id
+					join admin_edit_add_segments s
+						on s.edit_seq = rp.edit_seq
+					where s.segment_type = 'CROSS_WALK'
+				),
+				nearest_segments as (
+					select distinct on (cp.edit_seq, cp.endpoint)
+						cp.edit_seq,
+						cp.endpoint,
+						cp.vertex_id,
+						rs.edge_id,
+						ST_ClosestPoint(rs.geom, cp.point_geom) as split_geom,
+						ST_LineLocatePoint(rs.geom, ST_ClosestPoint(rs.geom, cp.point_geom)) as split_fraction,
+						ST_Distance(rs.geom::geography, cp.point_geom::geography) as distance_meter
+					from crosswalk_created_points cp
+					join road_segments rs
+						on rs.segment_type in ('SIDE_LINE', 'SIDE_WALK')
+						and ST_DWithin(
+							rs.geom::geography,
+							cp.point_geom::geography,
+							""" + CROSS_WALK_PROJECTION_DISTANCE_METER + """
+						)
+					order by cp.edit_seq, cp.endpoint, distance_meter, rs.edge_id
+				),
+				filtered as (
+					select ns.*
+					from nearest_segments ns
+					join road_segments rs
+						on rs.edge_id = ns.edge_id
+					where ST_Length(ST_LineSubstring(rs.geom, 0, ns.split_fraction)::geography) > """
+				+ CROSS_WALK_PROJECTION_DISTANCE_METER + """
+					and ST_Length(ST_LineSubstring(rs.geom, ns.split_fraction, 1)::geography) > """
+				+ CROSS_WALK_PROJECTION_DISTANCE_METER + """
+					)
+					select distinct on (edge_id, round(split_fraction::numeric, 6))
+						edge_id,
+						vertex_id,
+						split_geom,
+						split_fraction
+					from filtered
+					order by edge_id, round(split_fraction::numeric, 6), distance_meter, vertex_id
+					""");
+		Long splitPointCount = jdbcTemplate.queryForObject(
+			"select count(*) from admin_edit_crosswalk_split_points",
+			Long.class);
+		jdbcTemplate.execute(
+			"""
+				create temp table admin_edit_split_segments (
+					edge_id bigint primary key,
+					old_edge_id bigint not null,
+					from_node_id bigint not null,
+					to_node_id bigint not null,
+					geom geometry(LineString, 4326) not null,
+					walk_access varchar(30) not null,
+					avg_slope_percent numeric(6, 2),
+					width_meter numeric(6, 2),
+					braille_block_state varchar(30) not null,
+					audio_signal_state varchar(30) not null,
+					width_state varchar(30) not null,
+					surface_state varchar(30) not null,
+					stairs_state varchar(30) not null,
+					signal_state varchar(30) not null,
+					segment_type varchar(30) not null
+				) on commit drop
+				""");
+		if (splitPointCount == null || splitPointCount == 0) {
+			return;
+		}
+		jdbcTemplate.execute(
+			"""
+				insert into admin_edit_split_segments (
+					edge_id,
+					old_edge_id,
+					from_node_id,
+					to_node_id,
+					geom,
+					walk_access,
+					avg_slope_percent,
+					width_meter,
+					braille_block_state,
+					audio_signal_state,
+					width_state,
+					surface_state,
+					stairs_state,
+					signal_state,
+					segment_type
+				)
+				with target_edges as (
+					select rs.*
+					from road_segments rs
+					where exists (
+						select 1
+						from admin_edit_crosswalk_split_points sp
+						where sp.edge_id = rs.edge_id
+					)
+				),
+				split_vertices as (
+					select
+						edge_id,
+						0.0::double precision as fraction,
+						from_node_id as vertex_id
+					from target_edges
+					union all
+					select edge_id, split_fraction, vertex_id
+					from admin_edit_crosswalk_split_points
+					union all
+					select
+						edge_id,
+						1.0::double precision as fraction,
+						to_node_id as vertex_id
+					from target_edges
+				),
+				ordered_vertices as (
+					select
+						edge_id,
+						fraction,
+						vertex_id,
+						lead(fraction) over (partition by edge_id order by fraction, vertex_id) as next_fraction,
+						lead(vertex_id) over (partition by edge_id order by fraction, vertex_id) as next_vertex_id
+					from split_vertices
+				)
+				select
+					nextval('road_segments_edge_id_seq') as edge_id,
+					te.edge_id as old_edge_id,
+					ov.vertex_id as from_node_id,
+					ov.next_vertex_id as to_node_id,
+					ST_LineSubstring(te.geom, ov.fraction, ov.next_fraction) as geom,
+					te.walk_access,
+					te.avg_slope_percent,
+					te.width_meter,
+					te.braille_block_state,
+					te.audio_signal_state,
+					te.width_state,
+					te.surface_state,
+					te.stairs_state,
+					te.signal_state,
+					te.segment_type
+				from ordered_vertices ov
+				join target_edges te
+					on te.edge_id = ov.edge_id
+				where ov.next_fraction is not null
+					and ov.vertex_id <> ov.next_vertex_id
+					and ST_Length(ST_LineSubstring(te.geom, ov.fraction, ov.next_fraction)::geography) > 0.01
+				""");
+		jdbcTemplate.update(
+			"""
+				insert into road_segments (
+					edge_id,
+					from_node_id,
+					to_node_id,
+					geom,
+					length_meter,
+					walk_access,
+					avg_slope_percent,
+					width_meter,
+					braille_block_state,
+					audio_signal_state,
+					width_state,
+					surface_state,
+					stairs_state,
+					signal_state,
+					segment_type
+				)
+				select
+					edge_id,
+					from_node_id,
+					to_node_id,
+					geom,
+					round(ST_Length(geom::geography)::numeric, 2),
+					walk_access,
+					avg_slope_percent,
+					width_meter,
+					braille_block_state,
+					audio_signal_state,
+					width_state,
+					surface_state,
+					stairs_state,
+					signal_state,
+					segment_type
+				from admin_edit_split_segments
+				""");
+		jdbcTemplate.update(
+			"""
+				delete from segment_features sf
+				where exists (
+					select 1
+					from admin_edit_split_segments ss
+					where ss.old_edge_id = sf.edge_id
+				)
+				""");
+		jdbcTemplate.update(
+			"""
+				delete from road_segments rs
+				where exists (
+					select 1
+					from admin_edit_split_segments ss
+					where ss.old_edge_id = rs.edge_id
+				)
+				""");
+	}
+
+	private int insertSegmentFeaturesForSplitSegments() {
+		return jdbcTemplate.update(
+			"""
+				with source_candidates as (
+					select
+						ss.edge_id,
+						sf.feature_type,
+						sf.geom,
+						sf.state,
+						sf.value_number,
+						ST_Distance(ST_Transform(sf.geom, 5179), ST_Transform(ss.geom, 5179)) as distance_meter
+					from admin_edit_split_segments ss
+					join source_features sf
+						on sf.feature_type in ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
+						and ST_DWithin(
+							ST_Transform(sf.geom, 5179),
+							ST_Transform(ss.geom, 5179),
+							source_match_threshold_meter(sf.source_file)
+						)
+				),
+				deduped as (
+					select *
+					from (
+						select
+							edge_id,
+							feature_type,
+							geom,
+							state,
+							value_number,
+							row_number() over (
+								partition by edge_id, feature_type, coalesce(state, '')
+								order by distance_meter asc
+							) as row_no
+						from source_candidates
+					) ranked
+					where row_no = 1
+				)
+				insert into segment_features (feature_id, edge_id, feature_type, geom, state, value_number)
+				select
+					nextval('segment_features_feature_id_seq'),
+					edge_id,
+					feature_type,
+					geom,
+					state,
+					value_number
+				from deduped
 				""");
 	}
 

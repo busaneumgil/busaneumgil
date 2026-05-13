@@ -38,6 +38,8 @@ class ReportViewModel(
             ReportUiAction.DraftDiscardClicked -> discardDraft()
             ReportUiAction.DraftResumeClicked -> resumeDraft()
             ReportUiAction.SaveDraftClicked -> saveDraft()
+            is ReportUiAction.DiscardDraftAndStartNew -> handleDiscardDraftAndStartNew(action.type)
+            ReportUiAction.ResumeDraftFromDialog -> resumeDraft()
 
             is ReportUiAction.ReportTypeSelected -> selectReportType(action.type)
             ReportUiAction.ReportTypeBlurred -> touchReportType()
@@ -208,6 +210,30 @@ class ReportViewModel(
     }
 
     private fun selectReportType(type: ReportType) {
+        val state = mutableUiState.value
+
+        // 같은 type을 다시 누른 경우는 idempotent. TypeSelection 단계라면 다음 단계로만 진행한다.
+        if (state.reportType.value == type) {
+            if (state.currentStep == ReportStep.TypeSelection) {
+                applyReportType(type)
+            }
+            return
+        }
+
+        // 저장된 draft가 DB에 있고 사용자가 "다른" type을 선택했다면,
+        // 현재 in-memory state(=draft와 동일하든, 사용자가 뒤로가기로 복귀했든)와 무관하게
+        // 그대로 진행 시 저장/제출 시점에 기존 draft가 덮어써지거나 삭제되어 데이터가 손실된다.
+        // 명시적 사용자 동의를 위해 다이얼로그를 띄운다.
+        val hasSavedDraft = state.hasExistingDraft && state.draftId != null
+        if (hasSavedDraft) {
+            emitUiEvent(ReportUiEvent.ShowDraftDiscardDialog(pendingType = type))
+            return
+        }
+
+        applyReportType(type)
+    }
+
+    private fun applyReportType(type: ReportType) {
         mutableUiState.update { state ->
             val nextStep =
                 if (state.currentStep == ReportStep.TypeSelection) {
@@ -223,6 +249,36 @@ class ReportViewModel(
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
+        }
+    }
+
+    private fun handleDiscardDraftAndStartNew(type: ReportType) {
+        val draftId = mutableUiState.value.draftId ?: latestDraft?.draftId
+        if (draftId == null) {
+            // Draft가 이미 없으면 폼 초기화 후 새 유형을 그대로 적용한다.
+            resetForm()
+            applyReportType(type)
+            return
+        }
+
+        viewModelScope.launch {
+            runCatching { reportRepository.deleteDraft(draftId) }
+                .onSuccess {
+                    latestDraft = null
+                    resetForm()
+                    applyReportType(type)
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장을 삭제했습니다."))
+                }.onFailure {
+                    mutableUiState.update { state ->
+                        state.copy(
+                            draftSaveState =
+                                ReportDraftSaveState.Failed(
+                                    reason = ReportFailureReason.LocalSaveFailed,
+                                ),
+                        )
+                    }
+                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장 삭제에 실패했습니다."))
+                }
         }
     }
 

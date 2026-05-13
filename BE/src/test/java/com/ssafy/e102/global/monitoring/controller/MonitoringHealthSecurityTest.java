@@ -18,6 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.e102.global.logging.RequestLoggingFilter;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperActiveHealthChecker;
 import com.ssafy.e102.global.security.config.CorsProperties;
 import com.ssafy.e102.global.security.config.SecurityConfig;
 import com.ssafy.e102.global.security.filter.JwtAuthenticationFilter;
@@ -36,6 +37,9 @@ class MonitoringHealthSecurityTest {
 	private HealthEndpoint healthEndpoint;
 
 	@MockitoBean
+	private GraphHopperActiveHealthChecker graphHopperHealthChecker;
+
+	@MockitoBean
 	private RestAuthenticationEntryPoint authenticationEntryPoint;
 
 	@MockitoBean
@@ -52,8 +56,12 @@ class MonitoringHealthSecurityTest {
 	void monitoringHealthIsPublic() throws Exception {
 		when(corsProperties.allowedOrigins()).thenReturn(List.of("http://localhost:3001"));
 		when(healthEndpoint.health()).thenReturn(Health.up().build());
+		when(graphHopperHealthChecker.check()).thenReturn(
+			new GraphHopperActiveHealthChecker.GraphHopperHealthStatus("UP", "green", "blue"));
 
 		mockMvc.perform(get("/health"))
+			.andExpect(status().isOk());
+		mockMvc.perform(get("/health/graphhopper"))
 			.andExpect(status().isOk());
 	}
 }

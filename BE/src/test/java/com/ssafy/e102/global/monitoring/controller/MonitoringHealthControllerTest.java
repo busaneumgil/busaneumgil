@@ -13,11 +13,14 @@ import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.ssafy.e102.global.external.graphhopper.GraphHopperActiveHealthChecker;
+
 class MonitoringHealthControllerTest {
 
 	private final HealthEndpoint healthEndpoint = mock(HealthEndpoint.class);
+	private final GraphHopperActiveHealthChecker graphHopperHealthChecker = mock(GraphHopperActiveHealthChecker.class);
 	private final MockMvc mockMvc = MockMvcBuilders
-		.standaloneSetup(new MonitoringHealthController(healthEndpoint))
+		.standaloneSetup(new MonitoringHealthController(healthEndpoint, graphHopperHealthChecker))
 		.build();
 
 	@Test
@@ -40,6 +43,18 @@ class MonitoringHealthControllerTest {
 			.andExpect(status().isServiceUnavailable())
 			.andExpect(jsonPath("$.status").value("DOWN"))
 			.andExpect(jsonPath("$.component").value("db"));
+	}
+
+	@Test
+	@DisplayName("graphhopper health는 active slot 기준 상태를 공개한다")
+	void graphhopperHealthReturnsActiveSlotStatus() throws Exception {
+		when(graphHopperHealthChecker.check()).thenReturn(
+			new GraphHopperActiveHealthChecker.GraphHopperHealthStatus("UP", "green", "blue"));
+
+		mockMvc.perform(get("/health/graphhopper"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("UP"))
+			.andExpect(jsonPath("$.component").value("graphhopper"));
 	}
 
 	@Test

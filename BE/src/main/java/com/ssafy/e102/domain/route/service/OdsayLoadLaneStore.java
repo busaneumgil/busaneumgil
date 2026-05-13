@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.route.service;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -109,7 +110,11 @@ public class OdsayLoadLaneStore {
 		Set<Integer> orders = new LinkedHashSet<>();
 		for (int index = 0; index < laneGeometriesJson.size(); index++) {
 			JsonNode laneGeometryJson = laneGeometriesJson.get(index);
-			int order = laneGeometryJson.hasNonNull("order") ? laneGeometryJson.path("order").asInt() : index;
+			Optional<Integer> parsedOrder = order(laneGeometryJson, laneGeometriesJson.size());
+			if (parsedOrder.isEmpty()) {
+				return Optional.empty();
+			}
+			int order = parsedOrder.get();
 			if (!orders.add(order)) {
 				return Optional.empty();
 			}
@@ -124,6 +129,18 @@ public class OdsayLoadLaneStore {
 			.sorted(Comparator.comparingInt(OrderedLaneGeometry::order))
 			.map(OrderedLaneGeometry::laneGeometry)
 			.toList());
+	}
+
+	private Optional<Integer> order(JsonNode laneGeometryJson, int laneGeometryCount) {
+		JsonNode orderNode = laneGeometryJson.get("order");
+		if (orderNode == null || !orderNode.isIntegralNumber()) {
+			return Optional.empty();
+		}
+		int order = orderNode.asInt();
+		if (order < 0 || order >= laneGeometryCount) {
+			return Optional.empty();
+		}
+		return Optional.of(order);
 	}
 
 	private TransportMode transportMode(String value) {
@@ -142,9 +159,39 @@ public class OdsayLoadLaneStore {
 	}
 
 	private boolean isLineString(String geometry) {
-		return StringUtils.hasText(geometry)
-			&& geometry.startsWith("LINESTRING(")
-			&& geometry.endsWith(")");
+		if (!StringUtils.hasText(geometry)
+			|| !geometry.startsWith("LINESTRING(")
+			|| !geometry.endsWith(")")) {
+			return false;
+		}
+		String coordinateText = geometry.substring("LINESTRING(".length(), geometry.length() - 1).trim();
+		if (!StringUtils.hasText(coordinateText)) {
+			return false;
+		}
+		String[] coordinates = coordinateText.split(",");
+		if (coordinates.length < 2) {
+			return false;
+		}
+		for (String coordinate : coordinates) {
+			if (!isLngLatCoordinate(coordinate.trim())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private boolean isLngLatCoordinate(String coordinate) {
+		String[] values = coordinate.split("\\s+");
+		if (values.length != 2) {
+			return false;
+		}
+		try {
+			new BigDecimal(values[0]);
+			new BigDecimal(values[1]);
+			return true;
+		} catch (NumberFormatException exception) {
+			return false;
+		}
 	}
 
 	private record OrderedLaneGeometry(

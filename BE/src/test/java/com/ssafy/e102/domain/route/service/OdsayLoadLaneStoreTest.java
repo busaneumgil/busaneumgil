@@ -40,6 +40,38 @@ class OdsayLoadLaneStoreTest {
 	}
 
 	@Test
+	@DisplayName("order is malformed unless it is an integral 0-based sequence")
+	void ignoresMalformedOrderValues() throws Exception {
+		List<String> mapObjs = List.of("map-string", "map-boolean", "map-decimal", "map-negative", "map-out-of-range");
+		when(odsayLoadLaneRepository.findAllByMapObjIn(mapObjs)).thenReturn(List.of(
+			row("map-string", "\"abc\""),
+			row("map-boolean", "true"),
+			row("map-decimal", "1.7"),
+			row("map-negative", "-1"),
+			row("map-out-of-range", "1")));
+
+		Map<String, List<OdsayLaneGeometry>> result = store.findValidByMapObjIn(mapObjs);
+
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	@DisplayName("LINESTRING is malformed unless it has at least two lng lat numeric coordinates")
+	void ignoresMalformedLineStrings() throws Exception {
+		List<String> mapObjs = List.of("map-empty", "map-text", "map-one-point", "map-non-number", "map-missing-lat");
+		when(odsayLoadLaneRepository.findAllByMapObjIn(mapObjs)).thenReturn(List.of(
+			rowWithGeometry("map-empty", "LINESTRING()"),
+			rowWithGeometry("map-text", "LINESTRING(foo)"),
+			rowWithGeometry("map-one-point", "LINESTRING(129.0 35.0)"),
+			rowWithGeometry("map-non-number", "LINESTRING(129.0 35.0, x 35.1)"),
+			rowWithGeometry("map-missing-lat", "LINESTRING(129.0 35.0, 129.1)")));
+
+		Map<String, List<OdsayLaneGeometry>> result = store.findValidByMapObjIn(mapObjs);
+
+		assertThat(result).isEmpty();
+	}
+
+	@Test
 	@DisplayName("유효한 loadLane JSON은 mapObj 기준 lane geometry로 복원한다")
 	void restoresValidLaneGeometries() throws Exception {
 		OdsayLoadLane row = OdsayLoadLane.create("map-1", json("""
@@ -109,5 +141,21 @@ class OdsayLoadLaneStoreTest {
 
 	private JsonNode json(String value) throws Exception {
 		return objectMapper.readTree(value);
+	}
+
+	private OdsayLoadLane row(String mapObj, String orderValue) throws Exception {
+		return OdsayLoadLane.create(mapObj, json("""
+			[
+			  {"order": %s, "transportMode": "BUS", "geometry": "LINESTRING(129.0 35.0, 129.1 35.1)"}
+			]
+			""".formatted(orderValue)));
+	}
+
+	private OdsayLoadLane rowWithGeometry(String mapObj, String geometry) throws Exception {
+		return OdsayLoadLane.create(mapObj, json("""
+			[
+			  {"order": 0, "transportMode": "BUS", "geometry": "%s"}
+			]
+			""".formatted(geometry)));
 	}
 }

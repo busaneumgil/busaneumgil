@@ -306,8 +306,9 @@ class PlaceServiceTest {
 	}
 
 	@Test
-	@DisplayName("외부 상세 조회는 POI 후보를 찾지 못하면 상세 없음 에러를 반환한다")
-	void getPlaceDetailPoiNotFound() {
+	@DisplayName("외부 상세 조회는 POI 후보를 찾지 못하면 주소 상세로 fallback한다")
+	void getPlaceDetailPoiNotFoundFallsBackToAddress() {
+		UUID userId = UUID.randomUUID();
 		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
 			35.1686,
 			129.0576,
@@ -323,11 +324,47 @@ class PlaceServiceTest {
 			1,
 			5)))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(), 0, true));
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 부산진구 범전동 200",
+				"부산 부산진구 시민공원로 73",
+				"부산",
+				"부산진구",
+				"범전동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
 
-		assertThatThrownBy(() -> placeService.getPlaceDetail(UUID.randomUUID(), request))
-			.isInstanceOf(PlaceException.class)
-			.extracting("errorCode")
-			.isEqualTo(PlaceErrorCode.PLACE_CLICK_DETAIL_NOT_FOUND);
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_ADDRESS);
+		assertThat(response.providerPlaceId()).isNull();
+		assertThat(response.name()).isEqualTo("부산 부산진구 시민공원로 73");
+		assertThat(response.address()).isEqualTo("부산 부산진구 시민공원로 73");
+	}
+
+	@Test
+	@DisplayName("외부 상세 조회는 POI 이름 힌트가 없으면 주소 상세로 fallback한다")
+	void getPlaceDetailPoiWithoutNameHintFallsBackToAddress() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.1686,
+			129.0576,
+			PlaceClickType.POI,
+			"KAKAO",
+			null,
+			null);
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 부산진구 범전동 200",
+				"부산 부산진구 시민공원로 73",
+				"부산",
+				"부산진구",
+				"범전동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_ADDRESS);
+		assertThat(response.name()).isEqualTo("부산 부산진구 시민공원로 73");
 	}
 
 	@Test

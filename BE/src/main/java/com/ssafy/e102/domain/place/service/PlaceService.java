@@ -189,8 +189,7 @@ public class PlaceService {
 			return toInternalClickDetailResponse(userId, request, internalPlace.get());
 		}
 		if (request.clickType() == PlaceClickType.POI) {
-			validateExternalPoiDetailRequest(request);
-			return getExternalPoiDetail(userId, request);
+			return getExternalPoiDetailOrAddressFallback(userId, request);
 		}
 		return getExternalAddressDetail(userId, request);
 	}
@@ -303,6 +302,7 @@ public class PlaceService {
 
 	private PlaceClickDetailResponse getExternalPoiDetail(UUID userId, PlaceClickDetailRequest request) {
 		try {
+			validateExternalPoiDetailRequest(request);
 			KakaoPlaceSearchResult result = kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
 				request.nameHint().trim(),
 				request.lat(),
@@ -336,6 +336,28 @@ public class PlaceService {
 			log.warn("지도 클릭 상세 POI 외부 API 호출 실패. request={}", request, exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED, exception);
 		}
+	}
+
+	private PlaceClickDetailResponse getExternalPoiDetailOrAddressFallback(UUID userId,
+		PlaceClickDetailRequest request) {
+		try {
+			return getExternalPoiDetail(userId, request);
+		} catch (PlaceException exception) {
+			if (!isRecoverableExternalPoiDetailFailure(exception)) {
+				throw exception;
+			}
+			log.info("지도 클릭 POI 상세 조회 실패로 주소 fallback을 수행합니다. errorCode={}, request={}",
+				exception.getErrorCode()
+					.getStatus(),
+				request);
+			return getExternalAddressDetail(userId, request);
+		}
+	}
+
+	private boolean isRecoverableExternalPoiDetailFailure(PlaceException exception) {
+		return exception.getErrorCode() == PlaceErrorCode.INVALID_PLACE_REQUEST
+			|| exception.getErrorCode() == PlaceErrorCode.PLACE_CLICK_DETAIL_NOT_FOUND
+			|| exception.getErrorCode() == PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED;
 	}
 
 	private Optional<KakaoPlaceDocument> selectPoiCandidate(

@@ -15,6 +15,7 @@ import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteLeg
+import com.ssafy.e102.eumgil.core.model.RouteLegType
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
@@ -24,6 +25,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
+import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.toRecentDestination
 import com.ssafy.e102.eumgil.core.model.toRouteWaypointOrNull
@@ -1224,6 +1226,7 @@ class RouteSettingViewModel(
         routeOption.optionCardPresentation(summary = summary).let { presentation ->
             RouteOptionCardUiState(
                 routeOption = routeOption,
+                travelMode = transportMode.toRouteTravelMode(),
                 title = presentation.title,
                 description = presentation.description,
                 distanceMeters = summary.distanceMeters,
@@ -1234,9 +1237,84 @@ class RouteSettingViewModel(
                 highlightLabel = presentation.highlightLabel,
                 metrics = presentation.metrics,
                 badges = routeBadges(includeSafePriority = false),
+                segmentBars = buildOptionSegmentBars(),
+                transitStopLabel = buildTransitStopLabel(),
+                transitOptionLabels = buildTransitOptionLabels(),
                 isSelected = isSelected,
             )
         }
+
+    private fun RouteTransportMode.toRouteTravelMode(): RouteTravelMode =
+        when (this) {
+            RouteTransportMode.WALK -> RouteTravelMode.WALK
+            RouteTransportMode.PUBLIC_TRANSIT -> RouteTravelMode.TRANSIT
+        }
+
+    private fun RouteCandidate.buildOptionSegmentBars(): List<RouteOptionSegmentBarUiState> =
+        legs
+            .filter { leg -> leg.durationSeconds != null || leg.estimatedTimeMinutes != null || leg.distanceMeters != null }
+            .map { leg ->
+                val minutes =
+                    leg.estimatedTimeMinutes
+                        ?: leg.durationSeconds?.let { seconds -> ((seconds + 59) / 60).coerceAtLeast(1) }
+                        ?: leg.distanceMeters?.let { meters -> (meters / 80).coerceAtLeast(1) }
+                        ?: 1
+                RouteOptionSegmentBarUiState(
+                    kind = leg.type.toSegmentKind(),
+                    label = "${minutes}분",
+                    weight = minutes.toFloat().coerceAtLeast(1f),
+                )
+            }
+
+    private fun RouteLegType.toSegmentKind(): RouteOptionSegmentKind =
+        when (this) {
+            RouteLegType.WALK -> RouteOptionSegmentKind.WALK
+            RouteLegType.BUS -> RouteOptionSegmentKind.BUS
+            RouteLegType.SUBWAY -> RouteOptionSegmentKind.SUBWAY
+        }
+
+    private fun RouteCandidate.buildTransitStopLabel(): String? =
+        legs
+            .firstOrNull { leg -> leg.type == RouteLegType.BUS || leg.type == RouteLegType.SUBWAY }
+            ?.let { leg ->
+                listOfNotNull(
+                    leg.boardingStop?.name,
+                    leg.alightingStop?.name?.let { stopName -> "→ $stopName" },
+                ).joinToString(separator = " ").takeIf(String::isNotBlank)
+                    ?: leg.instruction.takeIf(String::isNotBlank)
+            }
+
+    private fun RouteCandidate.buildTransitOptionLabels(): List<RouteTransitOptionLabelUiState> =
+        legs
+            .filter { leg -> leg.type == RouteLegType.BUS || leg.type == RouteLegType.SUBWAY }
+            .flatMap { leg ->
+                val routeNumbers =
+                    buildList {
+                        leg.routeNo?.takeIf(String::isNotBlank)?.let(::add)
+                        addAll(leg.laneOptions.mapNotNull { option -> option.routeNo?.takeIf(String::isNotBlank) })
+                    }.distinct()
+                val arrivalByRouteNo =
+                    leg.laneOptions
+                        .mapNotNull { option ->
+                            val routeNo = option.routeNo?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                            routeNo to option.toArrivalLabel()
+                        }.toMap()
+                routeNumbers.map { routeNo ->
+                    RouteTransitOptionLabelUiState(
+                        typeLabel =
+                            when (leg.type) {
+                                RouteLegType.SUBWAY -> "지하철"
+                                else -> if (leg.isLowFloor == true) "저상" else "일반"
+                            },
+                        routeNo = routeNo,
+                        arrivalLabel = arrivalByRouteNo[routeNo],
+                    )
+                }
+            }.take(MAX_TRANSIT_OPTION_LABEL_COUNT)
+
+    private fun com.ssafy.e102.eumgil.core.model.RouteTransitLaneOption.toArrivalLabel(): String? =
+        remainingMinute?.let { minute -> "${minute}분" }
+            ?: estimatedTimeMinutes?.let { minute -> "${minute}분" }
 
     private fun RouteCandidate.toSelectedRouteUiState(
         destination: RouteLocationUiState,
@@ -1476,6 +1554,7 @@ class RouteSettingViewModel(
                     badgeTone = RouteDetailTone.INFO,
                     kind = RouteDetailStepKind.START,
                     tone = RouteDetailTone.INFO,
+                    coordinate = preview.polyline.points.firstOrNull(),
                 ),
             )
 
@@ -1494,6 +1573,7 @@ class RouteSettingViewModel(
                     description = ROUTE_DETAIL_FALLBACK_MESSAGE,
                     kind = RouteDetailStepKind.FALLBACK,
                     tone = RouteDetailTone.NEUTRAL,
+                    coordinate = preview.polyline.points.firstOrNull(),
                 )
         }
 
@@ -1504,6 +1584,7 @@ class RouteSettingViewModel(
                 description = "$destinationName${DETAIL_STEP_ARRIVAL_SUFFIX}",
                 kind = RouteDetailStepKind.ARRIVAL,
                 tone = RouteDetailTone.INFO,
+                coordinate = preview.polyline.points.lastOrNull(),
             )
 
         return steps
@@ -1824,6 +1905,7 @@ private fun RouteSegment.toDetailStepUiState(
             badgeTone = detailStepBadgeTone(kind = kind),
             kind = kind,
             tone = detailStepTone(kind = kind),
+            coordinate = anchorCoordinate ?: polyline.points.firstOrNull(),
         )
 
 private fun RouteSegment.detailStepTitle(kind: RouteDetailStepKind): String =
@@ -2363,6 +2445,7 @@ private const val DESTINATION_FALLBACK_EMPTY_MESSAGE_USER = "목적지를 선택
 private const val DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE_USER = "목적지 정보를 다시 확인한 뒤 경로를 보여드릴게요."
 private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_ROUTE_BADGE_COUNT = 3
+private const val MAX_TRANSIT_OPTION_LABEL_COUNT = 4
 private const val MAX_ROUTE_DETAIL_CHIP_COUNT = 4
 private const val MAX_ROUTE_DETAIL_HIGHLIGHT_COUNT = 3
 private const val CURRENT_LOCATION_ORIGIN_PLACE_ID = "route-origin-current-location"

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,6 +91,9 @@ class TransitRouteSearchServiceTest {
 	private OdsayClient odsayClient;
 
 	@Mock
+	private OdsayLoadLaneStore odsayLoadLaneStore;
+
+	@Mock
 	private RouteSearchCacheService routeSearchCacheService;
 
 	private CountingExecutor bimsTaskExecutor;
@@ -110,9 +114,11 @@ class TransitRouteSearchServiceTest {
 			busanBimsClient,
 			bimsTaskExecutor,
 			odsayClient,
+			odsayLoadLaneStore,
 			routeSearchCacheService);
 		when(userProfileQueryService.getProfile(any()))
 			.thenReturn(new WalkRouteUserProfile(PrimaryUserType.MOBILITY_IMPAIRED, MobilitySubtype.POWER_WHEELCHAIR));
+		when(odsayLoadLaneStore.findValidByMapObjIn(any())).thenReturn(Map.of());
 	}
 
 	@Test
@@ -498,6 +504,46 @@ class TransitRouteSearchServiceTest {
 
 		verify(odsayClient, times(5)).loadLane(any());
 		verify(odsayClient, times(0)).loadLane("map-walk-3");
+	}
+
+	@Test
+	@DisplayName("ODsay loadLane DB hit 후보는 외부 loadLane을 다시 호출하지 않는다")
+	void usesCachedLoadLaneGeometryWhenDbHitExists() {
+		List<OdsayLaneGeometry> cachedLaneGeometries = List.of(new OdsayLaneGeometry(
+			TransportMode.BUS,
+			"LINESTRING(129.061 35.161, 129.066 35.166)"));
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(busPath("map-1", "100", 20, 300))));
+		when(odsayLoadLaneStore.findValidByMapObjIn(any())).thenReturn(Map.of("map-1", cachedLaneGeometries));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		verify(odsayClient, never()).loadLane("map-1");
+		verify(odsayLoadLaneStore, never()).saveIfAbsentOrRepairMalformed(eq("map-1"), any());
+	}
+
+	@Test
+	@DisplayName("ODsay loadLane DB miss 후보는 외부 호출 후 DB에 저장한다")
+	void savesLoadLaneGeometryWhenDbMissExists() {
+		List<OdsayLaneGeometry> laneGeometries = List.of(new OdsayLaneGeometry(
+			TransportMode.BUS,
+			"LINESTRING(129.061 35.161, 129.066 35.166)"));
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(busPath("map-1", "100", 20, 300))));
+		when(odsayClient.loadLane("map-1")).thenReturn(laneGeometries);
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		verify(odsayClient).loadLane("map-1");
+		verify(odsayLoadLaneStore).saveIfAbsentOrRepairMalformed("map-1", laneGeometries);
 	}
 
 	@Test

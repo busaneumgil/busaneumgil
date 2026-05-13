@@ -75,6 +75,8 @@ internal enum class MapViewportOverlayTone {
     PRIMARY,
     SECONDARY,
     TERTIARY,
+    NEUTRAL,
+    NAVY,
     ERROR,
 }
 
@@ -135,21 +137,23 @@ internal fun createMapMarkerViewportOverlayState(
 internal fun createRoutePreviewViewportOverlayState(
     previewMap: RoutePreviewMapUiState,
     routeTone: MapViewportOverlayTone = previewMap.routeOption.toViewportOverlayTone(),
+    guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
 ): MapViewportOverlayState =
     MapViewportOverlayState(
         points =
-            listOfNotNull(
+            buildList {
                 previewMap.originCoordinate?.toOverlayPoint(
                     overlayId = "route-origin",
                     kind = MapViewportPointKind.ORIGIN,
                     label = "O",
-                ),
+                )?.let(::add)
                 previewMap.destinationCoordinate?.toOverlayPoint(
                     overlayId = "route-destination",
                     kind = MapViewportPointKind.DESTINATION,
                     label = "D",
-                ),
-            ),
+                )?.let(::add)
+                addAll(guidanceMarkers)
+            },
         polylines =
             listOf(
                 MapViewportPolylineOverlay(
@@ -393,26 +397,26 @@ private fun List<NavigationMapSegmentUiState>.toBaselinePolylineOverlays(
 
 private fun NavigationSegmentTravelKind.toBaselineOverlayTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.PRIMARY
-        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.TERTIARY
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NEUTRAL
+        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun NavigationSegmentTravelKind.toSegmentMarkerTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.PRIMARY
-        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.TERTIARY
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NEUTRAL
+        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun NavigationSegmentTravelKind.toActiveOverlayTone(): MapViewportOverlayTone =
     when (this) {
         NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.SECONDARY
-        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.TERTIARY
+        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun NavigationSegmentTravelKind.toFocusedOverlayTone(): MapViewportOverlayTone =
     when (this) {
         NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.PRIMARY
-        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.TERTIARY
+        NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun RouteOption?.toViewportOverlayTone(): MapViewportOverlayTone =
@@ -446,6 +450,18 @@ internal fun MapViewportOverlayTone.toSegmentMarkerPalette(): MapViewportSegment
             MapViewportSegmentMarkerPalette(
                 fillColorArgb = 0xFFE7832F.toInt(),
                 strokeColorArgb = 0xFFB85B16.toInt(),
+            )
+
+        MapViewportOverlayTone.NEUTRAL ->
+            MapViewportSegmentMarkerPalette(
+                fillColorArgb = 0xFF9CA3AF.toInt(),
+                strokeColorArgb = 0xFF6B7280.toInt(),
+            )
+
+        MapViewportOverlayTone.NAVY ->
+            MapViewportSegmentMarkerPalette(
+                fillColorArgb = 0xFF28427F.toInt(),
+                strokeColorArgb = 0xFF172554.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->

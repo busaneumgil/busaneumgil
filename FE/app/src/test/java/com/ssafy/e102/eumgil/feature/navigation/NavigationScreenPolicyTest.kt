@@ -124,6 +124,35 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
+    fun `navigation screen provides expandable side panel over map for walk and transit guidance`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+
+        assertTrue(
+            "NAV-01 should keep the map as the base layer while the left rail or panel overlays it.",
+            source.contains("NavigationMapStage(") &&
+                source.contains("NavigationExpandedSidePanel(") &&
+                source.contains("NavigationSegmentRail("),
+        )
+        assertTrue(
+            "The side panel should support horizontal swipe collapse.",
+            source.contains("Orientation.Horizontal") &&
+                source.contains("NavigationSidePanelSwipeThresholdPx"),
+        )
+        assertTrue(
+            "Rows should collapse the panel and reuse SegmentTapped so map focus stays on the existing ViewModel path.",
+            source.contains("isSidePanelExpanded = false") &&
+                source.contains("NavigationUiAction.SegmentTapped(index = index)"),
+        )
+        assertTrue(
+            "Transit guidance actions should use the same side panel row path as walk guidance.",
+            source.contains("item.guidanceAction.iconRes()") &&
+                source.contains("uiState.segmentSync.railItems.forEach"),
+        )
+    }
+
+    @Test
     fun `hero content prioritizes focused segment guidance over the active step card`() {
         val heroContent =
             navigationHeroContent(

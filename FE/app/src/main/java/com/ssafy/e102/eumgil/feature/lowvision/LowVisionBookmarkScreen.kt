@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -399,6 +400,15 @@ private fun LowVisionBookmarkButton(
             lineHeight = LowVisionBookmarkLayoutDefaults.actionLabelLineHeight,
             letterSpacing = 0.sp,
             textAlign = TextAlign.Center,
+            maxLines = 2,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(
+            modifier =
+                Modifier.width(
+                    LowVisionBookmarkLayoutDefaults.actionIconSize +
+                        LowVisionBookmarkLayoutDefaults.actionIconTextGap,
+                ),
         )
     }
 }

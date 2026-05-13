@@ -18,6 +18,7 @@ internal fun MapOverlayViewport(
     overlayState: MapViewportOverlayState,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
+    onMarkerClick: (String) -> Unit = {},
 ) {
     val describedModifier =
         if (contentDescription != null) {
@@ -51,7 +52,7 @@ internal fun MapOverlayViewport(
                         description = "",
                         supportingText = "",
                     ),
-                onMarkerClick = {},
+                onMarkerClick = onMarkerClick,
                 onCameraMoveEnd = { _, _, _, _ -> },
                 onMapClick = {},
                 modifier = describedModifier,
@@ -61,6 +62,7 @@ internal fun MapOverlayViewport(
             MapViewportOverlayBackdrop(
                 overlayState = overlayState,
                 modifier = describedModifier,
+                onPointClick = onMarkerClick,
             )
     }
 }

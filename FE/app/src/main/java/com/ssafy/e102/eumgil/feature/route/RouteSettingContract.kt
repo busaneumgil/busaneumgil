@@ -69,6 +69,7 @@ data class RoutePreviewMapUiState(
 
 data class RouteOptionCardUiState(
     val routeOption: RouteOption,
+    val travelMode: RouteTravelMode = RouteTravelMode.WALK,
     val title: String,
     val description: String,
     val distanceMeters: Int,
@@ -79,7 +80,28 @@ data class RouteOptionCardUiState(
     val highlightLabel: String? = null,
     val metrics: List<RouteOptionCardMetricUiState> = emptyList(),
     val badges: List<RouteOptionBadge> = emptyList(),
+    val segmentBars: List<RouteOptionSegmentBarUiState> = emptyList(),
+    val transitStopLabel: String? = null,
+    val transitOptionLabels: List<RouteTransitOptionLabelUiState> = emptyList(),
     val isSelected: Boolean = false,
+)
+
+data class RouteOptionSegmentBarUiState(
+    val kind: RouteOptionSegmentKind,
+    val label: String,
+    val weight: Float,
+)
+
+enum class RouteOptionSegmentKind {
+    WALK,
+    BUS,
+    SUBWAY,
+}
+
+data class RouteTransitOptionLabelUiState(
+    val typeLabel: String,
+    val routeNo: String,
+    val arrivalLabel: String? = null,
 )
 
 data class RouteSelectedRouteUiState(
@@ -137,6 +159,7 @@ data class RouteDetailStepUiState(
     val badgeTone: RouteDetailTone? = null,
     val kind: RouteDetailStepKind = RouteDetailStepKind.STRAIGHT,
     val tone: RouteDetailTone = RouteDetailTone.NEUTRAL,
+    val coordinate: GeoCoordinate? = null,
 )
 
 data class RouteSettingCtaUiState(

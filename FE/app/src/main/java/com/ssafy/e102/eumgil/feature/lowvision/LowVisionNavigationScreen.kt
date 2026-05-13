@@ -351,7 +351,7 @@ private fun LowVisionNavigationMetricItem(
             color = Color.White,
             fontSize = LowVisionNavigationLayoutDefaults.metricLabelFontSize,
             lineHeight = LowVisionNavigationLayoutDefaults.metricLabelLineHeight,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.Bold,
             letterSpacing = 0.sp,
             textAlign = TextAlign.Center,
             maxLines = 1,

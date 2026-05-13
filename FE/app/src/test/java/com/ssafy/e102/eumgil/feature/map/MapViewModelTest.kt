@@ -1082,7 +1082,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `blank map tap requests address detail and exposes map tap sheet state`() =
+    fun `blank address map tap does not request detail and keeps map tap ui hidden`() =
         runTest {
             val tappedCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771)
             val placesRepository =
@@ -1114,30 +1114,13 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
             advanceUntilIdle()
 
-            val request = placesRepository.mapTapDetailRequests.single()
-            assertEquals(tappedCoordinate.latitude, request.latitude, 0.0)
-            assertEquals(tappedCoordinate.longitude, request.longitude, 0.0)
-            assertEquals(MapPlaceClickType.ADDRESS, request.clickType)
-            assertEquals(null, request.provider)
-            assertEquals(null, request.providerPlaceId)
-            assertEquals(null, request.nameHint)
-            assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
-            assertEquals("Selected Address", viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.name)
-            assertEquals("100 Jungang-daero, Busan", viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.address)
+            assertTrue(placesRepository.mapTapDetailRequests.isEmpty())
+            assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
             assertFalse(viewModel.uiState.value.facilityDetailSheetState.isMapTapDetailLoading)
-            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.mapTapDetailErrorMessage)
-            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
-
-            viewModel.onAction(MapUiAction.FacilitySetDestinationClicked)
-            advanceUntilIdle()
-
-            val event =
-                withTimeoutOrNull(100) {
-                    viewModel.uiEvent.first()
-                }
-            assertEquals("external-address:35.1775,129.0771", destinationSelectionRepository.selectedDestination.value?.placeId)
-            assertEquals("Selected Address", destinationSelectionRepository.selectedDestination.value?.name)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.mapTapDetailErrorMessage)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertNull(destinationSelectionRepository.selectedDestination.value)
         }
 
     @Test

@@ -281,14 +281,12 @@ private fun NavigationHeroCard(
                     ) {
                         Text(
                             text = heroContent.title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                         Text(
                             text = heroContent.description,
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
@@ -454,7 +452,6 @@ private fun NavigationMapMarker(
                 text = label,
                 color = MaterialTheme.colorScheme.onPrimary,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
             )
         }
@@ -482,7 +479,6 @@ private fun NavigationMapMessageCard(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = description,
@@ -580,7 +576,7 @@ private fun NavigationBottomBar(
                     Spacer(modifier = Modifier.width(EumSpacing.xSmall))
                     Text(
                         text = uiState.exitCta.label,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
@@ -606,7 +602,6 @@ private fun NavigationExitConfirmDialog(
             Text(
                 text = stringResource(id = R.string.navigation_exit_confirm_dialog_title),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
             )
         },
         text = {

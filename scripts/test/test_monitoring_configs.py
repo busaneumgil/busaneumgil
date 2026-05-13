@@ -50,6 +50,8 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("job_name: blackbox-dev-http", prometheus_content)
         self.assertIn('targets: ["http://graphhopper:8990/healthcheck"]', prometheus_content)
         self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper/healthcheck"]', prometheus_content)
+        self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper-blue/healthcheck"]', prometheus_content)
+        self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper-green/healthcheck"]', prometheus_content)
 
     def test_promtail_separates_dev_and_ops_runtime_labels(self):
         dev_promtail = S1_PROMTAIL_CONFIG.read_text(encoding="utf-8")
@@ -82,16 +84,47 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("MinIO 상태", dev_dashboard)
         self.assertIn("GraphHopper 상태", dev_dashboard)
 
-    def test_warning_error_queries_use_level_labels_instead_of_free_text_matching(self):
+    def test_warning_error_queries_use_severity_positions_instead_of_free_text_matching(self):
         prod_dashboard = PROD_DASHBOARD.read_text(encoding="utf-8")
         dev_dashboard = DEV_DASHBOARD.read_text(encoding="utf-8")
 
-        self.assertIn('level=~\\"warn|warning|error|fatal|critical\\"', prod_dashboard)
-        self.assertIn('level=~\\"warn|warning|error|fatal|critical\\"', dev_dashboard)
-        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [5m]', prod_dashboard)
-        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [1h]', prod_dashboard)
-        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [5m]', dev_dashboard)
-        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [1h]', dev_dashboard)
+        explicit_severity_filter = (
+            '(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|'
+            'WARN|WARNING|ERROR|FATAL|CRITICAL)'
+        )
+        klog_severity_filter = "^[WEFwef][0-9]{4}"
+
+        self.assertIn(explicit_severity_filter, prod_dashboard)
+        self.assertIn(explicit_severity_filter, dev_dashboard)
+        self.assertIn(klog_severity_filter, prod_dashboard)
+        self.assertIn(klog_severity_filter, dev_dashboard)
+        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\"', prod_dashboard)
+        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\"', dev_dashboard)
+        self.assertNotIn('level=~\\"(?i)(warn|warning|error|fatal|critical|w|e|f)\\"', prod_dashboard)
+        self.assertNotIn('level=~\\"(?i)(warn|warning|error|fatal|critical|w|e|f)\\"', dev_dashboard)
+
+    def test_promtail_extracts_log_level_without_free_text_keyword_scanning(self):
+        old_broad_level_regex = (
+            "(?i)^(?:.*?[[:space:]])?(?:(?:level|lvl|severity)=)?"
+            "(?P<level>debug|info|warn|warning|error|fatal|critical)"
+        )
+        explicit_level_regex = (
+            "(?i)(?:^|[[:space:]])(?:level|lvl|severity)="
+            "(?P<level>trace|debug|info|warn|warning|error|fatal|critical)"
+        )
+        klog_level_regex = "^(?P<level>[DIEWF])\\d{4}[[:space:]]"
+        uppercase_level_regex = (
+            "^(?:\\d{4}-\\d{2}-\\d{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?"
+            "(?P<level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)"
+        )
+
+        for promtail_config in (S1_PROMTAIL_CONFIG, S2_PROMTAIL_CONFIG):
+            content = promtail_config.read_text(encoding="utf-8")
+
+            self.assertNotIn(old_broad_level_regex, content)
+            self.assertIn(explicit_level_regex, content)
+            self.assertIn(klog_level_regex, content)
+            self.assertIn(uppercase_level_regex, content)
 
     def test_proxy_uses_dynamic_service_resolution_for_grafana_and_loki(self):
         proxy_content = JENKINS_PROXY.read_text(encoding="utf-8")
@@ -111,6 +144,7 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("docker network create", script_content)
         self.assertIn("s14p31e102-dev_default", script_content)
         self.assertIn("docker restart e102-jenkins-proxy", script_content)
+        self.assertIn("docker restart e102-promtail", script_content)
 
 
 if __name__ == "__main__":

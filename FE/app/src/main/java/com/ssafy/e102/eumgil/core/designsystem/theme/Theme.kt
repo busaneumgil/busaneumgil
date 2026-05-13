@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 fun BusanEumgilTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = BusanEumgilLightColorScheme,
-        typography = BusanEumgilTypography,
+        typography = PretendardTypography,
         content = content,
     )
 }

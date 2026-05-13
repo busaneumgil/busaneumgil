@@ -149,10 +149,10 @@ private fun LoginHero(modifier: Modifier = Modifier) {
             style =
                 MaterialTheme.typography.headlineMedium.copy(
                     fontSize = 36.sp,
-                    lineHeight = 44.sp,
+                    lineHeight = 46.sp,
                 ),
             color = EumPrimary600,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -164,7 +164,6 @@ private fun LoginHero(modifier: Modifier = Modifier) {
                     lineHeight = 28.sp,
                 ),
             color = EumPrimary600,
-            fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(12.dp))
@@ -172,7 +171,6 @@ private fun LoginHero(modifier: Modifier = Modifier) {
             text = stringResource(id = R.string.auth_login_service_tagline),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
     }
@@ -289,7 +287,6 @@ private fun SocialLoginButton(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 17.sp),
-                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

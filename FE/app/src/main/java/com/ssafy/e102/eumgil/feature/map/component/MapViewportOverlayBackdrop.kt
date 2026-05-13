@@ -502,7 +502,7 @@ private fun ViewportPointMarker(
                     color = spec.contentColor,
                     style =
                         MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
+                            fontWeight = FontWeight.Bold,
                             fontSize = spec.fontSize,
                         ),
                     textAlign = TextAlign.Center,

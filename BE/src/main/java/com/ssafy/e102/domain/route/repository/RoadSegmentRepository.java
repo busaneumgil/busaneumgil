@@ -21,6 +21,24 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
 			)
 		order by rs.edge_id asc
+		""", nativeQuery = true)
+	List<RoadSegment> findAllIntersectingArea(
+		@Param("gu")
+		String gu,
+		@Param("dong")
+		String dong);
+
+	@Query(value = """
+		select distinct rs.*
+		from road_segments rs
+		join admin_areas aa
+			on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
+		where aa.gu = :gu
+			and (
+				aa.dong = :dong
+				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+			)
+		order by rs.edge_id asc
 		limit :limit
 		""", nativeQuery = true)
 	List<RoadSegment> findAllIntersectingArea(

@@ -83,8 +83,10 @@ fun LowVisionVoiceInputRoute(
         }
     }
 
-    LowVisionVoiceInputScreen(
-        onCancelRecording = viewModel::cancelRecording,
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        LowVisionVoiceInputScreen(
+            onCancelRecording = viewModel::cancelRecording,
+            modifier = modifier,
+        )
+    }
 }

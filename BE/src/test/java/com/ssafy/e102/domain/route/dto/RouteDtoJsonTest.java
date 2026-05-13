@@ -10,12 +10,14 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.e102.domain.route.dto.response.LowFloorBusReservationResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceDirection;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceFeature;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
+import com.ssafy.e102.domain.route.dto.response.TransitLaneOptionResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
@@ -154,6 +156,34 @@ class RouteDtoJsonTest {
 
 		assertThat(route.get("warnings")).hasSize(1);
 		assertThat(route.get("warnings").get(0).asText()).isEqualTo("LOW_FLOOR_BUS_UNAVAILABLE");
+	}
+
+	@Test
+	@DisplayName("transit lane option은 저상버스 예약 계약을 중첩 객체로 직렬화한다")
+	void transitLaneOptionSerializesLowFloorReservationContract() throws Exception {
+		TransitLaneOptionResponse response = new TransitLaneOptionResponse(
+			"7000",
+			14,
+			840,
+			14,
+			true,
+			new LowFloorBusReservationResponse(
+				"부산역",
+				"70001",
+				"7000",
+				"1618",
+				14,
+				2));
+
+		JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(response));
+
+		JsonNode reservation = root.get("lowFloorReservation");
+		assertThat(reservation.get("stopName").asText()).isEqualTo("부산역");
+		assertThat(reservation.get("arsNo").asText()).isEqualTo("70001");
+		assertThat(reservation.get("routeNo").asText()).isEqualTo("7000");
+		assertThat(reservation.get("vehicleNo").asText()).isEqualTo("1618");
+		assertThat(reservation.get("remainingMinute").asInt()).isEqualTo(14);
+		assertThat(reservation.get("remainingStopCount").asInt()).isEqualTo(2);
 	}
 
 	@Test

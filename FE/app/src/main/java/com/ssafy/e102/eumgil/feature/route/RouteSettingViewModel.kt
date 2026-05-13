@@ -759,6 +759,7 @@ class RouteSettingViewModel(
                 sourceLabel = null,
                 cta = errorCtaUiState(),
                 ctaAcknowledged = false,
+                showsDuribalCallAction = throwable.isNoRouteFailure(),
             )
         }
     }
@@ -792,6 +793,9 @@ class RouteSettingViewModel(
 
             else -> DEFAULT_ROUTE_LOAD_ERROR_MESSAGE
         }
+
+    private fun Throwable.isNoRouteFailure(): Boolean =
+        this is RouteApiException && status == ROUTE_STATUS_NO_ROUTE
 
     private fun Throwable.toRoutePreviewFailureMapUiState(
         originCoordinate: GeoCoordinate,
@@ -1290,6 +1294,18 @@ class RouteSettingViewModel(
             detailHighlights = buildDetailHighlights(aggregateFlags),
             detailSteps = buildDetailSteps(destinationName = destination.name, hasUsableDetailSteps = hasUsableDetailSteps),
             detailFallbackMessage = if (hasUsableDetailSteps) null else ROUTE_DETAIL_FALLBACK_MESSAGE,
+            lowFloorReservations =
+                legs
+                    .flatMap { leg -> leg.laneOptions }
+                    .mapNotNull { lane -> lane.lowFloorReservation }
+                    .distinctBy { reservation ->
+                        listOf(
+                            reservation.stopName,
+                            reservation.arsNo,
+                            reservation.routeNo,
+                            reservation.vehicleNo,
+                        ).joinToString(separator = "|")
+                    },
         )
     }
 

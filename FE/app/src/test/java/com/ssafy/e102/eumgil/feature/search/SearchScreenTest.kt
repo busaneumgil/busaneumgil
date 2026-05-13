@@ -43,7 +43,7 @@ class SearchScreenTest {
                 queryPlaceholderRes = R.string.search_screen_query_placeholder,
                 voiceInputTitleRes = R.string.search_voice_input_title,
                 voiceInputHeadlineRes = R.string.search_voice_input_headline,
-                voiceInputDescriptionRes = R.string.search_voice_input_description,
+                voiceInputDescriptionRes = null,
                 voiceInputExamplePhraseRes = R.string.search_voice_input_example_phrase,
                 initialTitleRes = R.string.search_screen_initial_title,
                 initialDescriptionRes = R.string.search_screen_initial_description,
@@ -185,6 +185,23 @@ class SearchScreenTest {
                     isActive = true,
                     transcript = "recognized speech",
                     status = SearchVoiceInputStatus.Recognized,
+                    guidance = SearchVoiceInputGuidance.None,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `voice input sheet keeps listening status title without extra helper copy`() {
+        assertEquals(
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_listening_title,
+                descriptionRes = null,
+            ),
+            resolveSearchVoiceInputStatusContent(
+                SearchVoiceInputUiState(
+                    isActive = true,
+                    status = SearchVoiceInputStatus.Listening,
                     guidance = SearchVoiceInputGuidance.None,
                 ),
             ),

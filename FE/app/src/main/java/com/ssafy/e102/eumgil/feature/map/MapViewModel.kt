@@ -374,6 +374,11 @@ class MapViewModel(
             MAP_VIEW_MODEL_LOG_TAG,
             "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()} clickType=${payload.clickType.name} provider=${payload.provider.orEmpty()} providerPlaceId=${payload.providerPlaceId.orEmpty()}",
         )
+        if (payload.clickType == MapTapClickType.ADDRESS) {
+            clearSelectedFacilitySelection()
+            renderSelectedFacilityState()
+            return
+        }
         mapTapDetailRequestId += 1L
         val requestId = mapTapDetailRequestId
         selectedMapPinCoordinate = coordinate

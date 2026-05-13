@@ -3,22 +3,35 @@ package com.ssafy.e102.eumgil.feature.report
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
+import com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class ReportViewModel(
     private val reportRepository: ReportRepository,
+    private val currentLocationManager: CurrentLocationManager,
+    private val locationPermissionManager: LocationPermissionManager,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = mutableUiState.asStateFlow()
@@ -27,6 +40,14 @@ class ReportViewModel(
     val uiEvent: SharedFlow<ReportUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var latestDraft: ReportDraftData? = null
+
+    // ─── 현재 위치 one-shot resolution 상태 ───────────────────────────────
+    // 권한 요청 대기 중인지. true인 동안 RefreshLocationPermission 액션으로 흐름 재개·종료.
+    private var pendingCurrentLocationRequest = false
+    // 진행 중인 위치 fetch job (timeout 포함). 화면 이탈/취소 시 정리 대상.
+    private var currentLocationJob: Job? = null
+    // 권한 다이얼로그가 응답 없이 너무 오래 대기 시 fallback timeout.
+    private var permissionPendingTimeoutJob: Job? = null
 
     init {
         loadLatestDraft()
@@ -43,7 +64,8 @@ class ReportViewModel(
 
             is ReportUiAction.ReportTypeSelected -> selectReportType(action.type)
             ReportUiAction.ReportTypeBlurred -> touchReportType()
-            ReportUiAction.CurrentLocationResetClicked -> setCurrentLocationShell()
+            ReportUiAction.CurrentLocationResetClicked -> requestCurrentLocation()
+            ReportUiAction.RefreshLocationPermission -> handleRefreshLocationPermission()
             ReportUiAction.LocationPickerClicked -> setPickedLocationShell()
             is ReportUiAction.LocationSelected -> selectLocation(action.location, action.source)
             is ReportUiAction.AddressTextChanged -> updateAddressText(action.address)
@@ -290,18 +312,185 @@ class ReportViewModel(
         }
     }
 
-    private fun setCurrentLocationShell() {
-        val shellLocation =
-            ReportLocation(
-                latitude = 35.1796,
-                longitude = 129.0756,
-                address = "부산광역시 부산진구 중앙대로 인근",
-            )
+    // ─── 현재 위치 one-shot resolution ─────────────────────────────────────
+    //
+    // 흐름:
+    //   1) "현재 위치로 설정" 버튼 → requestCurrentLocation()
+    //   2) 권한 state 확인
+    //      - Granted → 즉시 fetchAndApplyCurrentLocation() (last known + 필요시 active fix)
+    //      - Denied  → RequestLocationPermission emit, pending 플래그 + lifecycle 타임아웃
+    //      - Unavailable → 즉시 에러 + Snackbar 안내
+    //   3) (Denied 경로) 사용자가 다이얼로그 응답 → Activity ON_RESUME → Route가
+    //      RefreshLocationPermission dispatch → handleRefreshLocationPermission()이 새 state로 분기
+    //   4) 권한이 Granted로 바뀌면 fetch로 진입. 여전히 Denied/Unavailable이면 적절한 에러 종료.
+    //
+    // 정리:
+    //   - fetch는 active provider를 임시로 켜고 첫 fresh snapshot 받으면 즉시 stop (Map의
+    //     continuous tracking과 간섭 최소화).
+    //   - onCleared / 새 요청 시작 시 이전 job 취소.
 
-        selectLocation(
-            location = shellLocation,
-            source = ReportLocationSource.CurrentLocation,
-        )
+    private fun requestCurrentLocation() {
+        // 같은 요청 중복 클릭 방어: 이미 resolving 중이면 무시.
+        if (mutableUiState.value.location.isResolvingCurrentLocation) return
+
+        setResolvingCurrentLocation(true, clearError = true)
+
+        locationPermissionManager.refreshPermissionState()
+        when (val state = locationPermissionManager.permissionState.value) {
+            is LocationPermissionState.Granted -> startCurrentLocationFetch()
+            LocationPermissionState.Denied -> {
+                pendingCurrentLocationRequest = true
+                startPermissionPendingTimeout()
+                emitUiEvent(ReportUiEvent.RequestLocationPermission)
+            }
+            is LocationPermissionState.Unavailable -> {
+                finishCurrentLocationWithUnavailable(state.reason)
+            }
+        }
+    }
+
+    private fun handleRefreshLocationPermission() {
+        // ON_RESUME에서 한 번씩 들어옴. pending 중인 요청만 처리.
+        if (!pendingCurrentLocationRequest) return
+
+        locationPermissionManager.refreshPermissionState()
+        when (val state = locationPermissionManager.permissionState.value) {
+            is LocationPermissionState.Granted -> {
+                pendingCurrentLocationRequest = false
+                cancelPermissionPendingTimeout()
+                startCurrentLocationFetch()
+            }
+            LocationPermissionState.Denied -> {
+                // 사용자가 거부했거나 다이얼로그를 닫음. one-shot 흐름 종료.
+                pendingCurrentLocationRequest = false
+                cancelPermissionPendingTimeout()
+                finishCurrentLocationWithError(ReportLocationError.PermissionDenied)
+                emitUiEvent(
+                    ReportUiEvent.ShowSnackbar(
+                        "위치 권한이 필요합니다. 권한 허용 후 다시 시도해주세요.",
+                    ),
+                )
+            }
+            is LocationPermissionState.Unavailable -> {
+                pendingCurrentLocationRequest = false
+                cancelPermissionPendingTimeout()
+                finishCurrentLocationWithUnavailable(state.reason)
+            }
+        }
+    }
+
+    private fun startCurrentLocationFetch() {
+        currentLocationJob?.cancel()
+        currentLocationJob =
+            viewModelScope.launch {
+                val snapshot = fetchFreshCurrentLocation()
+                if (snapshot != null) {
+                    applyFetchedLocation(snapshot)
+                } else {
+                    finishCurrentLocationWithError(ReportLocationError.CurrentLocationUnavailable)
+                    emitUiEvent(
+                        ReportUiEvent.ShowSnackbar(
+                            "현재 위치를 가져올 수 없습니다. 실외에서 다시 시도하거나 지도에서 선택해주세요.",
+                        ),
+                    )
+                }
+            }
+    }
+
+    private suspend fun fetchFreshCurrentLocation(): LocationSnapshot? {
+        // 1) Last known이 fresh면 즉시 사용 (active provider 호출 없이).
+        currentLocationManager.refreshLatestLocation()
+        currentLocationManager.latestLocation.value
+            ?.takeIf { it.isFreshCurrentLocation() }
+            ?.let { return it }
+
+        // 2) Active provider 임시 시작 → 첫 fresh snapshot 또는 timeout.
+        currentLocationManager.startLocationUpdates()
+        return try {
+            withTimeoutOrNull(CURRENT_LOCATION_FETCH_TIMEOUT_MS) {
+                currentLocationManager.latestLocation
+                    .filterNotNull()
+                    .filter { it.isFreshCurrentLocation() }
+                    .first()
+            }
+        } finally {
+            currentLocationManager.stopLocationUpdates()
+        }
+    }
+
+    private fun applyFetchedLocation(snapshot: LocationSnapshot) {
+        val location =
+            ReportLocation(
+                latitude = snapshot.latitude,
+                longitude = snapshot.longitude,
+                address = null, // Task 2.3 reverse geocoding에서 채움. 그 전까지 좌표만.
+            )
+        selectLocation(location = location, source = ReportLocationSource.CurrentLocation)
+        // selectLocation이 isResolvingCurrentLocation을 직접 false로 두지 않으니 명시적으로 클리어.
+        setResolvingCurrentLocation(false)
+    }
+
+    private fun finishCurrentLocationWithError(error: ReportLocationError) {
+        currentLocationJob?.cancel()
+        currentLocationJob = null
+        mutableUiState.update { state ->
+            state.copy(
+                location =
+                    state.location.copy(
+                        isResolvingCurrentLocation = false,
+                        error = error,
+                    ),
+            )
+        }
+    }
+
+    private fun finishCurrentLocationWithUnavailable(reason: LocationPermissionUnavailableReason) {
+        val message =
+            when (reason) {
+                LocationPermissionUnavailableReason.LOCATION_SERVICES_DISABLED ->
+                    "위치 서비스가 꺼져있습니다. 설정에서 위치를 켜주세요."
+                LocationPermissionUnavailableReason.NO_LOCATION_FEATURE ->
+                    "이 기기는 위치 기능을 지원하지 않습니다. 지도에서 위치를 선택해주세요."
+            }
+        finishCurrentLocationWithError(ReportLocationError.CurrentLocationUnavailable)
+        emitUiEvent(ReportUiEvent.ShowSnackbar(message))
+    }
+
+    private fun setResolvingCurrentLocation(
+        resolving: Boolean,
+        clearError: Boolean = false,
+    ) {
+        mutableUiState.update { state ->
+            state.copy(
+                location =
+                    state.location.copy(
+                        isResolvingCurrentLocation = resolving,
+                        error = if (clearError) null else state.location.error,
+                    ),
+            )
+        }
+    }
+
+    private fun startPermissionPendingTimeout() {
+        cancelPermissionPendingTimeout()
+        permissionPendingTimeoutJob =
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(PERMISSION_PENDING_TIMEOUT_MS)
+                if (pendingCurrentLocationRequest) {
+                    pendingCurrentLocationRequest = false
+                    finishCurrentLocationWithError(ReportLocationError.PermissionDenied)
+                    emitUiEvent(
+                        ReportUiEvent.ShowSnackbar(
+                            "위치 권한 응답이 없습니다. 다시 시도해주세요.",
+                        ),
+                    )
+                }
+            }
+    }
+
+    private fun cancelPermissionPendingTimeout() {
+        permissionPendingTimeoutJob?.cancel()
+        permissionPendingTimeoutJob = null
     }
 
     private fun setPickedLocationShell() {
@@ -597,13 +786,39 @@ class ReportViewModel(
         }
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        // 화면 이탈 시 진행 중인 위치 fetch, 타임아웃, active provider 모두 정리.
+        currentLocationJob?.cancel()
+        currentLocationJob = null
+        cancelPermissionPendingTimeout()
+        pendingCurrentLocationRequest = false
+        // Map 등 다른 도메인이 다시 startLocationUpdates를 호출하면 재개됨. 일시 stop OK.
+        currentLocationManager.stopLocationUpdates()
+    }
+
     companion object {
-        fun provideFactory(reportRepository: ReportRepository): ViewModelProvider.Factory =
+        // Active provider로 첫 fresh fix를 받는 최대 대기 시간. 실내·신호 약함 케이스에서
+        // 사용자를 무한히 기다리지 않게 막는다. 10초는 Map 화면 동작 감각과 일관.
+        private const val CURRENT_LOCATION_FETCH_TIMEOUT_MS = 10_000L
+        // 권한 다이얼로그가 응답 없이 머무르는 비정상 케이스 fallback. ON_RESUME이 들어오지
+        // 않는 환경에서도 일정 시간 후 흐름을 종료한다.
+        private const val PERMISSION_PENDING_TIMEOUT_MS = 20_000L
+
+        fun provideFactory(
+            reportRepository: ReportRepository,
+            currentLocationManager: CurrentLocationManager,
+            locationPermissionManager: LocationPermissionManager,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     if (modelClass.isAssignableFrom(ReportViewModel::class.java)) {
-                        return ReportViewModel(reportRepository = reportRepository) as T
+                        return ReportViewModel(
+                            reportRepository = reportRepository,
+                            currentLocationManager = currentLocationManager,
+                            locationPermissionManager = locationPermissionManager,
+                        ) as T
                     }
 
                     error("Unknown ViewModel class: ${modelClass.name}")

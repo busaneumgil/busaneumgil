@@ -9,6 +9,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,7 +17,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
@@ -39,6 +43,8 @@ fun ReportRoute(
         remember(appContainer) {
             ReportViewModel.provideFactory(
                 reportRepository = appContainer.reportRepository,
+                currentLocationManager = appContainer.currentLocationManager,
+                locationPermissionManager = appContainer.locationPermissionManager,
             )
         }
     val viewModel =
@@ -50,6 +56,7 @@ fun ReportRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollState = rememberScrollState()
     val view = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     // ViewModel이 `ShowDraftDiscardDialog`를 emit하면 pendingType이 채워지고 AlertDialog가 노출된다.
     // 사용자가 어느 한 선택지를 누르거나 다이얼로그 바깥을 탭하면 다시 null로 초기화한다.
@@ -59,6 +66,22 @@ fun ReportRoute(
         // 탭 재진입 시 완료 화면이면 자동으로 새 제보 시작 상태로 초기화 (T10).
         // 작성 중·실패 상태는 보존되어야 하므로 ViewModel에서 분기 처리한다.
         viewModel.onAction(ReportUiAction.TabReentered)
+    }
+
+    // 권한 다이얼로그가 dismiss되면 Activity가 ON_RESUME으로 돌아오는 경우가 많다.
+    // ViewModel이 pending 중인 위치 요청을 가지고 있다면 새 권한 상태로 흐름을 종료시키기 위해
+    // ON_RESUME마다 RefreshLocationPermission을 한 번씩 dispatch한다 (idempotent — pending 없으면 no-op).
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.onAction(ReportUiAction.RefreshLocationPermission)
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToReportHistory, onNavigateToMap) {
@@ -78,11 +101,15 @@ fun ReportRoute(
                 is ReportUiEvent.ShowDraftDiscardDialog -> {
                     draftConflictPendingType = event.pendingType
                 }
+                ReportUiEvent.RequestLocationPermission -> {
+                    // Activity가 살아있어야 launcher 사용 가능. Manager가 이미 Granted/Unavailable
+                    // 상태이면 자체적으로 no-op으로 처리하므로 안전.
+                    activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
+                }
                 ReportUiEvent.OpenLocationPicker,
                 ReportUiEvent.OpenPhotoPicker,
-                ReportUiEvent.RequestLocationPermission,
                 is ReportUiEvent.NavigateToReportComplete -> Unit
-                // OpenLocationPicker / OpenPhotoPicker / RequestLocationPermission: Story 2·3 범위
+                // OpenLocationPicker / OpenPhotoPicker: Story 2.2 / Story 3 범위
                 // NavigateToReportComplete: 현재 화면 내 step 전환과 중복이라 무시 (후속 정리 대상)
             }
         }

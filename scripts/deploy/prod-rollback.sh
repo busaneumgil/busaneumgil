@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 DEPLOY_STATE_DIR="${DEPLOY_STATE_DIR:-.deploy-state}"
-DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-false}"
+DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-true}"
 
 export DEPLOY_GRAPHHOPPER
 
@@ -45,15 +45,7 @@ else
 fi
 
 if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
-  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper run --rm --entrypoint sh graphhopper -c '
-    if [ ! -d /graphhopper/previous-cache ] || [ -z "$(find /graphhopper/previous-cache -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
-      echo "No previous GraphHopper graph-cache found." >&2
-      exit 1
-    fi
-    find /graphhopper/data -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-    cp -a /graphhopper/previous-cache/. /graphhopper/data/
-  '
-  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d graphhopper
+  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d --no-recreate graphhopper-blue graphhopper-green
 fi
 
 SMOKE_ADMIN="$smoke_admin" bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"

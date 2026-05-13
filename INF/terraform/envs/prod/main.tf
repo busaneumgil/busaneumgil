@@ -277,6 +277,33 @@ resource "aws_instance" "s2" {
       listen 80;
       server_name ${local.api_domain};
 
+      location = /graphhopper/healthcheck {
+        proxy_pass http://127.0.0.1:18990/healthcheck;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
+      location = /graphhopper-blue/healthcheck {
+        proxy_pass http://127.0.0.1:18990/healthcheck;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
+      location = /graphhopper-green/healthcheck {
+        proxy_pass http://127.0.0.1:18992/healthcheck;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
       location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;

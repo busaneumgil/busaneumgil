@@ -103,6 +103,7 @@ export function SegmentMap({
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
   const segmentOverlayByEdgeRef = useRef<Map<string, KakaoOverlay[]>>(new Map());
   const polygonShapeRef = useRef<KakaoOverlay | null>(null);
+  const centeredPayloadRef = useRef<{ payload?: SegmentPayload; bridgePayload?: BridgePayload }>({});
   const draftEditsRef = useRef<EditAction[]>(draftEdits);
   const modeRef = useRef<EditorMode>("select");
   const addTypeRef = useRef<AddType>("SIDE_LINE");
@@ -225,7 +226,7 @@ export function SegmentMap({
       if (bridge) overlaysRef.current.push(...bridge);
     });
 
-    centerMapForPayload(segmentFeatures, bridgeFeatures);
+    centerMapForPayloadOnce(allSegmentFeatures, bridgeFeatures);
     if (canRenderDetails) {
       renderPendingEditOverlays();
     } else {
@@ -464,6 +465,14 @@ export function SegmentMap({
   function clearPendingEditOverlays() {
     pendingEditOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     pendingEditOverlaysRef.current = [];
+  }
+
+  function centerMapForPayloadOnce(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
+    if (centeredPayloadRef.current.payload === payload && centeredPayloadRef.current.bridgePayload === bridgePayload) {
+      return;
+    }
+    centeredPayloadRef.current = { payload, bridgePayload };
+    centerMapForPayload(segmentFeatures, bridgeFeatures);
   }
 
   function centerMapForPayload(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {

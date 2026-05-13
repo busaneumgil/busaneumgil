@@ -73,7 +73,7 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
-    fun `search result click previews selected origin candidate when editing target is origin`() =
+    fun `search result preview click previews selected origin candidate when editing target is origin`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -92,7 +92,7 @@ class SearchViewModelEditingTargetTest {
             advanceUntilIdle()
             val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
-            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
             advanceUntilIdle()
 
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
@@ -103,7 +103,7 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
-    fun `search result click previews selected destination candidate when editing target is destination`() =
+    fun `search result preview click previews selected destination candidate when editing target is destination`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -122,7 +122,7 @@ class SearchViewModelEditingTargetTest {
             advanceUntilIdle()
             val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
-            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
             advanceUntilIdle()
 
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
@@ -162,7 +162,7 @@ class SearchViewModelEditingTargetTest {
             advanceUntilIdle()
             val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
-            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
             advanceUntilIdle()
 
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)

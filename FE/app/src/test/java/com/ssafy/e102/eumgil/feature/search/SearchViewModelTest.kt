@@ -650,6 +650,36 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `search result click stores selected destination and emits route setting navigation`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
+            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
+        }
+
+    @Test
     fun `search result click with invalid coordinates keeps user on search and exposes handoff error`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -722,7 +752,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only search result click requests preview but does not enrich recent destination`() =
+    fun `provider only search result click selects destination but does not enrich recent destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
@@ -755,9 +785,9 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
             advanceUntilIdle()
 
-            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
-            assertEquals("provider:kakao:987654321", destinationPreviewRepository.pendingPreview.value?.destination?.placeId)
-            assertEquals("Provider Only Cafe", destinationPreviewRepository.pendingPreview.value?.destination?.name)
+            assertEquals("provider:kakao:987654321", destinationSelectionRepository.selectedDestination.value?.placeId)
+            assertEquals("Provider Only Cafe", destinationSelectionRepository.selectedDestination.value?.name)
+            assertEquals(null, destinationPreviewRepository.pendingPreview.value)
             assertTrue(placesRepository.detailRequests.isEmpty())
             assertTrue(searchRepository.savedRecentDestinations.isEmpty())
         }

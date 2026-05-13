@@ -1431,13 +1431,6 @@ private fun RouteSearchHeaderKakao(
                                 modifier = Modifier.size(width = RouteWaypointSwapIconWidth, height = RouteWaypointSwapIconHeight),
                             )
                         }
-                        IconButton(onClick = {}) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_action_more),
-                                contentDescription = stringResource(id = R.string.terms_guide_more_button),
-                                tint = Color.White.copy(alpha = 0.72f),
-                            )
-                        }
                     }
                 }
                 IconButton(onClick = onCloseClick) {
@@ -1584,13 +1577,6 @@ private fun RouteSearchHeader(
                             painter = painterResource(id = R.drawable.ic_action_dropdown),
                             contentDescription = stringResource(id = R.string.route_setting_waypoint_swap),
                             tint = Color.White,
-                        )
-                    }
-                    IconButton(onClick = {}) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_action_more),
-                            contentDescription = stringResource(id = R.string.terms_guide_more_button),
-                            tint = Color.White.copy(alpha = 0.72f),
                         )
                     }
                 }

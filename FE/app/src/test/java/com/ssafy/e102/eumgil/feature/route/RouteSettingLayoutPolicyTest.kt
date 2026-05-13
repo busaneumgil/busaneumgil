@@ -122,7 +122,7 @@ class RouteSettingLayoutPolicyTest {
         assertTrue("The header should include a close action.", headerSection.contains("R.drawable.ic_action_close"))
         assertTrue("The header should include origin and destination waypoint rows.", headerSection.contains("RouteSearchHeaderWaypointLine("))
         assertTrue("The header should include a waypoint swap control.", headerSection.contains("onSwapClick"))
-        assertTrue("The header should include the more menu affordance.", headerSection.contains("R.drawable.ic_action_more"))
+        assertFalse("The header should not expose a non-functional more menu affordance.", headerSection.contains("R.drawable.ic_action_more"))
         assertTrue("Walk mode should render a map-anchored preview carousel instead of the transit bottom sheet.", mapStageSection.contains("RouteWalkPreviewCarousel("))
         assertTrue("Walk preview cards should expose the route detail CTA.", source.contains("text = \"경로 상세\""))
         assertTrue("Walk preview should show estimated kcal beside distance.", source.contains("estimatedWalkCaloriesLabel("))

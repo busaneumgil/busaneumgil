@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
-import { loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
+import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
 import { deletedEdgeIds, draftSegmentFeatures, resetPolygonDeleteSelection, segmentsTouchingPolygon, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
 import { roadAttributeStrokeColor, roadAttributeStrokeStyle, roadAttributeStrokeWeight } from "./roadAttributeStyle";
@@ -88,6 +88,7 @@ export function SegmentMap({
 }: SegmentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
+  const detachWheelZoomRef = useRef<(() => void) | null>(null);
   const roadviewRef = useRef<KakaoRoadview | null>(null);
   const roadviewClientRef = useRef<KakaoRoadviewClient | null>(null);
   const roadviewMarkerRef = useRef<KakaoOverlay | null>(null);
@@ -160,6 +161,8 @@ export function SegmentMap({
           level: 6,
         });
         setMapLevel(mapRef.current.getLevel?.() ?? 6);
+        detachWheelZoomRef.current?.();
+        detachWheelZoomRef.current = attachKakaoWheelZoom(containerRef.current, () => mapRef.current, setMapLevel);
         roadviewClientRef.current = window.kakao.maps.RoadviewClient ? new window.kakao.maps.RoadviewClient() : null;
         setMapReady(true);
         window.kakao.maps.event.addListener(mapRef.current, "click", (event: unknown) => {
@@ -176,6 +179,8 @@ export function SegmentMap({
 
     return () => {
       disposed = true;
+      detachWheelZoomRef.current?.();
+      detachWheelZoomRef.current = null;
     };
   }, []);
 

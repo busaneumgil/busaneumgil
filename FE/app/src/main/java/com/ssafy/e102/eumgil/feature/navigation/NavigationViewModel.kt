@@ -113,6 +113,7 @@ class NavigationViewModel(
         syncActiveSegment(latestProgress?.activeSegmentIndex ?: 0)
         publishNavigationState()
 
+        currentLocationManager.refreshLatestLocation()
         currentLocationManager.startLocationUpdates()
     }
 
@@ -206,8 +207,13 @@ class NavigationViewModel(
 
         val progress = latestProgress
         if (progress != null) {
-            latestRemainingDistanceMeters = progress.remainingRouteDistanceMeters
-            latestEstimatedMinutes = progress.remainingDurationSeconds.toEtaMinutes()
+            val remainingMetrics =
+                currentSession.route.resolveRemainingMetrics(
+                    progress = progress,
+                    destination = navigationRequest?.destination?.coordinate ?: currentCoordinate,
+                )
+            latestRemainingDistanceMeters = remainingMetrics.distanceMeters
+            latestEstimatedMinutes = remainingMetrics.estimatedMinutes
             syncActiveSegment(progress.activeSegmentIndex)
             latestTransitPresentation = currentSession.resolveTransitPresentation(progress.activeLegIndex)
             maybeRefreshTransit(currentSession, progress, snapshot)
@@ -524,11 +530,17 @@ class NavigationViewModel(
                 rerouteData.route?.let { reroutedRoute ->
                     routeSession = routeSession?.withReroutedRoute(reroutedRoute)
                     latestProgress = reroutedRoute.evaluateProgress(currentCoordinate)
+                    val remainingMetrics =
+                        latestProgress?.let { progress ->
+                            reroutedRoute.resolveRemainingMetrics(
+                                progress = progress,
+                                destination = navigationRequest?.destination?.coordinate ?: currentCoordinate,
+                            )
+                        }
                     latestRemainingDistanceMeters =
-                        latestProgress?.remainingRouteDistanceMeters ?: reroutedRoute.totalDistanceMeters()
+                        remainingMetrics?.distanceMeters ?: reroutedRoute.totalDistanceMeters()
                     latestEstimatedMinutes =
-                        latestProgress?.remainingDurationSeconds?.toEtaMinutes()
-                            ?: reroutedRoute.summary.estimatedTimeMinutes
+                        remainingMetrics?.estimatedMinutes ?: reroutedRoute.summary.estimatedTimeMinutes
                     latestTransitPresentation =
                         routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
                     val reroutedSegmentIndex = latestProgress?.activeSegmentIndex ?: 0
@@ -693,6 +705,11 @@ private data class NavigationProgressSnapshot(
     val remainingDurationSeconds: Int,
 )
 
+private data class NavigationRemainingMetrics(
+    val distanceMeters: Int,
+    val estimatedMinutes: Int,
+)
+
 private data class NavigationDeviationState(
     val consecutiveOffRouteCount: Int = 0,
     val firstOffRouteEpochMillis: Long? = null,
@@ -814,6 +831,56 @@ private fun RouteCandidate.evaluateProgress(current: GeoCoordinate): NavigationP
             (totalDurationSeconds * remainingRatio).roundToInt().coerceAtLeast(0),
     )
 }
+
+private fun RouteCandidate.resolveRemainingMetrics(
+    progress: NavigationProgressSnapshot,
+    destination: GeoCoordinate,
+): NavigationRemainingMetrics =
+    if (progress.shouldUseProjectedRemainingMetrics()) {
+        NavigationRemainingMetrics(
+            distanceMeters = progress.remainingRouteDistanceMeters,
+            estimatedMinutes = progress.remainingDurationSeconds.toEtaMinutes(),
+        )
+    } else {
+        resolveActualRemainingMetrics(
+            current = progress.coordinate,
+            destination = destination,
+        )
+    }
+
+private fun RouteCandidate.resolveActualRemainingMetrics(
+    current: GeoCoordinate,
+    destination: GeoCoordinate,
+): NavigationRemainingMetrics {
+    val directDistanceMeters =
+        haversineDistanceMeters(current, destination)
+            .roundToInt()
+            .coerceAtLeast(0)
+    if (directDistanceMeters <= 0) {
+        return NavigationRemainingMetrics(distanceMeters = 0, estimatedMinutes = 0)
+    }
+
+    val totalDistanceMeters = totalDistanceMeters()
+    val totalDurationSeconds = totalDurationSeconds()
+    val estimatedDurationSeconds =
+        if (totalDistanceMeters > 0 && totalDurationSeconds > 0) {
+            ((directDistanceMeters.toDouble() / totalDistanceMeters) * totalDurationSeconds)
+                .roundToInt()
+                .coerceAtLeast(MIN_NAVIGATION_DURATION_SECONDS)
+        } else {
+            ceil(directDistanceMeters / FALLBACK_NAVIGATION_SPEED_METERS_PER_SECOND)
+                .toInt()
+                .coerceAtLeast(MIN_NAVIGATION_DURATION_SECONDS)
+        }
+
+    return NavigationRemainingMetrics(
+        distanceMeters = directDistanceMeters,
+        estimatedMinutes = estimatedDurationSeconds.toEtaMinutes(),
+    )
+}
+
+private fun NavigationProgressSnapshot.shouldUseProjectedRemainingMetrics(): Boolean =
+    distanceToRouteMeters <= PROJECTED_PROGRESS_MAX_DISTANCE_METERS
 
 private fun RouteCandidate.resolveActiveSegmentIndex(progressRatio: Double): Int =
     resolveActiveIndex(
@@ -1047,6 +1114,9 @@ private const val REROUTE_DEVIATION_DISTANCE_METERS = 10.0
 private const val REROUTE_MAX_GPS_ACCURACY_METERS = 20f
 private const val REROUTE_OFF_ROUTE_CONSECUTIVE_COUNT = 2
 private const val REROUTE_OFF_ROUTE_DURATION_MILLIS = 3_000L
+private const val PROJECTED_PROGRESS_MAX_DISTANCE_METERS = 75.0
+private const val FALLBACK_NAVIGATION_SPEED_METERS_PER_SECOND = 1.4
+private const val MIN_NAVIGATION_DURATION_SECONDS = 60
 private const val PENDING_ACTIVE_SEGMENT_LABEL = "Current segment updated"
 
 internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {

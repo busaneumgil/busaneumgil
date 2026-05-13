@@ -436,6 +436,29 @@ class NavigationViewModelTest {
                 eventsDeferred.await(),
             )
         }
+
+    @Test
+    fun `far off route updates use current location to destination metrics instead of projected tail`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testFarOffRouteNavigationRequest())
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = FAR_OFF_ROUTE_POINT.latitude,
+                    longitude = FAR_OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("1.1km", viewModel.uiState.value.remainingDistanceLabel)
+            assertTrue(viewModel.uiState.value.remainingEtaLabel.contains("12"))
+        }
 }
 
 private fun createViewModel(
@@ -1059,6 +1082,78 @@ private fun testPointAnchorNavigationRequest(): RouteNavigationRequest =
             ),
     )
 
+private fun testFarOffRouteNavigationRequest(): RouteNavigationRequest =
+    RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = "Origin",
+                coordinate = FAR_ROUTE_START_POINT,
+            ),
+        destination =
+            RouteWaypoint(
+                name = "Destination",
+                coordinate = FAR_ROUTE_END_POINT,
+            ),
+        selectedRoute =
+            RouteCandidate(
+                serverRouteId = "far-off-route-1",
+                routeOption = RouteOption.RECOMMENDED,
+                title = "Far Off Route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 2_200,
+                        estimatedTimeMinutes = 22,
+                        riskLevel = RouteRiskLevel.LOW,
+                        durationSeconds = 1_320,
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        FAR_ROUTE_START_POINT,
+                                        FAR_ROUTE_MID_POINT,
+                                        FAR_ROUTE_END_POINT,
+                                    ),
+                            ),
+                        segmentCount = 2,
+                        renderableSegmentCount = 2,
+                    ),
+                legs =
+                    listOf(
+                        RouteLeg(
+                            sequence = 1,
+                            role = RouteLegRole.WALK_ONLY,
+                            distanceMeters = 2_200,
+                            durationSeconds = 1_320,
+                        ),
+                    ),
+                segments =
+                    listOf(
+                        RouteSegment(
+                            sequence = 1,
+                            polyline = RoutePolyline(points = listOf(FAR_ROUTE_START_POINT, FAR_ROUTE_MID_POINT)),
+                            distanceMeters = 1_100,
+                            guidanceMessage = "Head east",
+                        ),
+                        RouteSegment(
+                            sequence = 2,
+                            polyline = RoutePolyline(points = listOf(FAR_ROUTE_MID_POINT, FAR_ROUTE_END_POINT)),
+                            distanceMeters = 1_100,
+                            guidanceMessage = "Keep going",
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Far off navigation test route"),
+        selectionHandoff =
+            RouteNavigationSelectionHandoff(
+                searchId = "search-6",
+                routeId = "far-off-route-1",
+                sessionId = "session-6",
+            ),
+    )
+
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
@@ -1071,6 +1166,10 @@ private val SPARSE_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1800, longitu
 private val SPARSE_ROUTE_BRANCH_POINT_1 = GeoCoordinate(latitude = 35.1800, longitude = 129.0740)
 private val SPARSE_ROUTE_BRANCH_POINT_2 = GeoCoordinate(latitude = 35.1800, longitude = 129.0760)
 private val SPARSE_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1800, longitude = 129.0780)
+private val FAR_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0000)
+private val FAR_ROUTE_MID_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0100)
+private val FAR_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0200)
+private val FAR_OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1100, longitude = 129.0200)
 
 private val TRANSIT_START_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0600)
 private val TRANSIT_BOARDING_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0625)

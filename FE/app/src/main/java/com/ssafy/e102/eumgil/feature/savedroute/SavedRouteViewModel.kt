@@ -56,6 +56,8 @@ class SavedRouteViewModel(
     private var latestRoutes: List<SavedRouteBookmarkUiModel> = emptyList()
     private var latestLocationCoordinate: GeoCoordinate? = null
     private var isLowVisionMode: Boolean = initialLowVisionMode
+    private var lastPublishedLowVisionPlaceLocationCoordinate: GeoCoordinate? = null
+    private var lastPublishedLowVisionPlaceIds: List<String> = emptyList()
     private var observePlacesJob: Job? = null
     private var observeRoutesJob: Job? = null
 
@@ -77,6 +79,8 @@ class SavedRouteViewModel(
             currentLocationManager?.refreshLatestLocation()
         } else {
             currentLocationManager?.stopLocationUpdates()
+            lastPublishedLowVisionPlaceLocationCoordinate = null
+            lastPublishedLowVisionPlaceIds = emptyList()
         }
         if (
             latestPlaceBookmarks.isNotEmpty() ||
@@ -443,8 +447,13 @@ class SavedRouteViewModel(
         val manager = currentLocationManager ?: return
         viewModelScope.launch {
             manager.latestLocation.collectLatest { snapshot ->
-                latestLocationCoordinate = snapshot?.toGeoCoordinate()
-                if (isLowVisionMode && latestPlaceBookmarks.isNotEmpty()) {
+                val nextLocationCoordinate = snapshot?.toGeoCoordinate()
+                latestLocationCoordinate = nextLocationCoordinate
+                if (
+                    isLowVisionMode &&
+                    latestPlaceBookmarks.isNotEmpty() &&
+                    shouldRefreshLowVisionPlaceBookmarks(nextLocationCoordinate)
+                ) {
                     publishPlaceBookmarks(clearErrorMessage = false)
                 }
             }
@@ -456,6 +465,10 @@ class SavedRouteViewModel(
             latestPlaceBookmarks.toSavedPlaceUiModels(
                 currentLocation = latestLocationCoordinate.takeIf { isLowVisionMode },
             )
+        if (isLowVisionMode) {
+            lastPublishedLowVisionPlaceLocationCoordinate = latestLocationCoordinate
+            lastPublishedLowVisionPlaceIds = latestPlaces.map(SavedPlaceUiModel::placeId)
+        }
         mutableUiState.update { state ->
             val shouldClearErrorMessage =
                 clearErrorMessage &&
@@ -475,6 +488,19 @@ class SavedRouteViewModel(
                     ),
             )
         }
+    }
+
+    private fun shouldRefreshLowVisionPlaceBookmarks(nextLocationCoordinate: GeoCoordinate?): Boolean {
+        val currentCoordinate = nextLocationCoordinate ?: return false
+        val nextPlaceIds =
+            latestPlaceBookmarks.toSavedPlaceUiModels(
+                currentLocation = currentCoordinate,
+            ).map(SavedPlaceUiModel::placeId)
+        if (nextPlaceIds != lastPublishedLowVisionPlaceIds) {
+            val lastPublishedCoordinate = lastPublishedLowVisionPlaceLocationCoordinate ?: return true
+            return haversineDistanceMeters(lastPublishedCoordinate, currentCoordinate) >= LOW_VISION_PLACE_REORDER_MIN_DISTANCE_METERS
+        }
+        return false
     }
 
     companion object {
@@ -518,6 +544,8 @@ class SavedRouteViewModel(
             }
     }
 }
+
+private const val LOW_VISION_PLACE_REORDER_MIN_DISTANCE_METERS = 20.0
 
 private fun BookmarkData.toSavedPlaceUiModel(): SavedPlaceUiModel =
     SavedPlaceUiModel(

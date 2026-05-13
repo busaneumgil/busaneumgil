@@ -78,8 +78,12 @@ class NavigationViewModel(
     private var isLowVisionMode: Boolean = initialLowVisionMode
     private var lowVisionActualMetricsCacheKey: LowVisionActualMetricsKey? = null
     private var lowVisionActualMetricsCache: NavigationRemainingMetrics? = null
+    private var lowVisionActualMetricsCacheCoordinate: GeoCoordinate? = null
+    private var lowVisionActualMetricsCacheRecordedAtMillis: Long? = null
     private var lowVisionActualMetricsInFlightKey: LowVisionActualMetricsKey? = null
     private var lowVisionActualMetricsFailedKey: LowVisionActualMetricsKey? = null
+    private var lowVisionActualMetricsLastAttemptCoordinate: GeoCoordinate? = null
+    private var lowVisionActualMetricsLastAttemptRecordedAtMillis: Long? = null
 
     init {
         collectLocationUpdates()
@@ -91,8 +95,12 @@ class NavigationViewModel(
         if (!enabled) {
             lowVisionActualMetricsCacheKey = null
             lowVisionActualMetricsCache = null
+            lowVisionActualMetricsCacheCoordinate = null
+            lowVisionActualMetricsCacheRecordedAtMillis = null
             lowVisionActualMetricsInFlightKey = null
             lowVisionActualMetricsFailedKey = null
+            lowVisionActualMetricsLastAttemptCoordinate = null
+            lowVisionActualMetricsLastAttemptRecordedAtMillis = null
         }
         publishNavigationState()
     }
@@ -146,8 +154,12 @@ class NavigationViewModel(
             }
         lowVisionActualMetricsCacheKey = null
         lowVisionActualMetricsCache = null
+        lowVisionActualMetricsCacheCoordinate = null
+        lowVisionActualMetricsCacheRecordedAtMillis = null
         lowVisionActualMetricsInFlightKey = null
         lowVisionActualMetricsFailedKey = null
+        lowVisionActualMetricsLastAttemptCoordinate = null
+        lowVisionActualMetricsLastAttemptRecordedAtMillis = null
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
         initialBriefingRequested = false
@@ -253,6 +265,7 @@ class NavigationViewModel(
                 applyLowVisionActualRemainingMetrics(
                     current = currentCoordinate,
                     destination = destinationCoordinate,
+                    recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
                 )
             } else {
                 val remainingMetrics =
@@ -282,14 +295,10 @@ class NavigationViewModel(
     private fun applyLowVisionActualRemainingMetrics(
         current: GeoCoordinate,
         destination: GeoCoordinate,
+        recordedAtEpochMillis: Long,
     ) {
         val key = LowVisionActualMetricsKey.from(current = current, destination = destination)
-        val cachedMetrics =
-            if (lowVisionActualMetricsCacheKey == key) {
-                lowVisionActualMetricsCache
-            } else {
-                null
-            }
+        val cachedMetrics = resolveReusableLowVisionActualMetrics(key, current, recordedAtEpochMillis)
         if (cachedMetrics != null) {
             latestRemainingDistanceMeters = cachedMetrics.distanceMeters
             latestEstimatedMinutes = cachedMetrics.estimatedMinutes
@@ -301,14 +310,21 @@ class NavigationViewModel(
         latestEstimatedMinutes = null
         latestRemainingMetricsSource = NavigationRemainingMetricsSource.Unavailable
 
-        if (lowVisionActualMetricsInFlightKey == key || lowVisionActualMetricsFailedKey == key) {
+        if (lowVisionActualMetricsInFlightKey == key) {
             return
+        }
+        if (!shouldRequestLowVisionActualMetrics(current = current, recordedAtEpochMillis = recordedAtEpochMillis)) {
+            return
+        }
+        if (lowVisionActualMetricsFailedKey == key) {
+            lowVisionActualMetricsFailedKey = null
         }
 
         requestLowVisionActualRemainingMetrics(
             key = key,
             current = current,
             destination = destination,
+            recordedAtEpochMillis = recordedAtEpochMillis,
         )
     }
 
@@ -316,8 +332,11 @@ class NavigationViewModel(
         key: LowVisionActualMetricsKey,
         current: GeoCoordinate,
         destination: GeoCoordinate,
+        recordedAtEpochMillis: Long,
     ) {
         lowVisionActualMetricsInFlightKey = key
+        lowVisionActualMetricsLastAttemptCoordinate = current
+        lowVisionActualMetricsLastAttemptRecordedAtMillis = recordedAtEpochMillis
         viewModelScope.launch {
             val metrics =
                 try {
@@ -344,6 +363,8 @@ class NavigationViewModel(
             lowVisionActualMetricsFailedKey = null
             lowVisionActualMetricsCacheKey = key
             lowVisionActualMetricsCache = metrics
+            lowVisionActualMetricsCacheCoordinate = current
+            lowVisionActualMetricsCacheRecordedAtMillis = recordedAtEpochMillis
 
             val latestCoordinate = latestLocationCoordinate ?: return@launch
             val latestKey = LowVisionActualMetricsKey.from(current = latestCoordinate, destination = destination)
@@ -406,6 +427,39 @@ class NavigationViewModel(
                 null
             }
         return transitRoute?.toActualRouteSearchMetrics()
+    }
+
+    private fun resolveReusableLowVisionActualMetrics(
+        key: LowVisionActualMetricsKey,
+        current: GeoCoordinate,
+        recordedAtEpochMillis: Long,
+    ): NavigationRemainingMetrics? {
+        val cacheKey = lowVisionActualMetricsCacheKey ?: return null
+        val cachedMetrics = lowVisionActualMetricsCache ?: return null
+        if (!cacheKey.hasSameDestinationAs(key)) return null
+
+        val cachedCoordinate = lowVisionActualMetricsCacheCoordinate ?: return null
+        val cachedAt = lowVisionActualMetricsCacheRecordedAtMillis ?: return null
+        if (recordedAtEpochMillis - cachedAt > LOW_VISION_ACTUAL_METRICS_CACHE_MAX_AGE_MILLIS) {
+            return null
+        }
+        if (haversineDistanceMeters(cachedCoordinate, current) > LOW_VISION_ACTUAL_METRICS_REUSE_DISTANCE_METERS) {
+            return null
+        }
+        return cachedMetrics
+    }
+
+    private fun shouldRequestLowVisionActualMetrics(
+        current: GeoCoordinate,
+        recordedAtEpochMillis: Long,
+    ): Boolean {
+        val lastAttemptAt = lowVisionActualMetricsLastAttemptRecordedAtMillis ?: return true
+        val lastAttemptCoordinate = lowVisionActualMetricsLastAttemptCoordinate ?: return true
+        val elapsedMillis = recordedAtEpochMillis - lastAttemptAt
+        if (elapsedMillis >= LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_INTERVAL_MILLIS) {
+            return true
+        }
+        return haversineDistanceMeters(lastAttemptCoordinate, current) >= LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS
     }
 
     private fun shouldProcessLocation(snapshot: LocationSnapshot): Boolean {
@@ -2017,6 +2071,10 @@ private data class LowVisionActualMetricsKey(
     }
 }
 
+private fun LowVisionActualMetricsKey.hasSameDestinationAs(other: LowVisionActualMetricsKey): Boolean =
+    destinationLatitudeBucket == other.destinationLatitudeBucket &&
+        destinationLongitudeBucket == other.destinationLongitudeBucket
+
 private fun Double.toLowVisionMetricsBucket(): Int =
     (this * LOW_VISION_ACTUAL_METRICS_BUCKET_SCALE).roundToInt()
 
@@ -2027,6 +2085,10 @@ private val LOW_VISION_ACTUAL_TRANSIT_OPTIONS =
         RouteOption.MIN_TRANSFER,
         RouteOption.MIN_WALK,
     )
+private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_INTERVAL_MILLIS = 5_000L
+private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS = 20.0
+private const val LOW_VISION_ACTUAL_METRICS_REUSE_DISTANCE_METERS = 25.0
+private const val LOW_VISION_ACTUAL_METRICS_CACHE_MAX_AGE_MILLIS = 10_000L
 
 private object NoOpRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =

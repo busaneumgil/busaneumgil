@@ -45,20 +45,19 @@ fun createLowFloorBusReservationUrl(
     reservation: LowFloorBusReservation,
     now: LocalDateTime = LocalDateTime.now(busanZoneId),
 ): String =
-    reservation.requestUrl?.takeIf(String::isNotBlank)
-        ?: buildString {
-            append(LOW_FLOOR_BUS_REQUEST_BASE_URL)
-            append("?svc_yy=").append(now.year)
-            append("&svc_mm=").append(now.monthValue)
-            append("&svc_dd=").append(now.dayOfMonth)
-            append("&svc_tm=").append(now.format(lowFloorBusTimeFormatter))
-            append("&svc_wd=").append(now.dayOfWeek.value % 7)
-            append("&bstop_nm=").append(reservation.stopName.queryEncode())
-            append("&ars_no=").append(reservation.arsNo.queryEncode())
-            append("&line_no=").append(reservation.routeNo.queryEncode())
-            append("&car_no=").append(reservation.vehicleNo.queryEncode())
-            append("&wait_tm=").append(reservation.remainingMinute)
-            append("&wait_dist=").append(reservation.remainingStopCount ?: 1)
-        }
+    buildString {
+        append(LOW_FLOOR_BUS_REQUEST_BASE_URL)
+        append("?svc_yy=").append(now.year)
+        append("&svc_mm=").append(now.monthValue)
+        append("&svc_dd=").append(now.dayOfMonth)
+        append("&svc_tm=").append(now.format(lowFloorBusTimeFormatter))
+        append("&svc_wd=").append(now.dayOfWeek.value % 7)
+        append("&bstop_nm=").append(reservation.stopName.queryEncode())
+        append("&ars_no=").append(reservation.arsNo.queryEncode())
+        append("&line_no=").append(reservation.routeNo.queryEncode())
+        append("&car_no=").append(reservation.vehicleNo.queryEncode())
+        append("&wait_tm=").append(reservation.remainingMinute)
+        append("&wait_dist=").append(reservation.remainingStopCount ?: 1)
+    }
 
 private fun String.queryEncode(): String = URLEncoder.encode(this, BUSAN_BIMS_QUERY_CHARSET)

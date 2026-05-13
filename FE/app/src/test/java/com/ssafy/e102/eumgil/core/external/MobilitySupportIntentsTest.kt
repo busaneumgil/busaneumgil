@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.core.external
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MobilitySupportIntentsTest {
@@ -39,23 +38,5 @@ class MobilitySupportIntentsTest {
                 "&wait_dist=2",
             url,
         )
-    }
-
-    @Test
-    fun `createLowFloorBusReservationUrl uses sampled request url when backend provides it`() {
-        val url =
-            createLowFloorBusReservationUrl(
-                reservation =
-                    LowFloorBusReservation(
-                        stopName = "부산역",
-                        arsNo = "70001",
-                        routeNo = "7000",
-                        vehicleNo = "1618",
-                        remainingMinute = 14,
-                        requestUrl = "https://example.test/low_request.asp?sample=1",
-                    ),
-            )
-
-        assertTrue(url.endsWith("sample=1"))
     }
 }

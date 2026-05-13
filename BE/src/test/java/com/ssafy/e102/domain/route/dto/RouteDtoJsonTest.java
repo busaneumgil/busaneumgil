@@ -173,8 +173,7 @@ class RouteDtoJsonTest {
 				"7000",
 				"1618",
 				14,
-				2,
-				null));
+				2));
 
 		JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(response));
 
@@ -185,7 +184,6 @@ class RouteDtoJsonTest {
 		assertThat(reservation.get("vehicleNo").asText()).isEqualTo("1618");
 		assertThat(reservation.get("remainingMinute").asInt()).isEqualTo(14);
 		assertThat(reservation.get("remainingStopCount").asInt()).isEqualTo(2);
-		assertThat(reservation.has("requestUrl")).isFalse();
 	}
 
 	@Test

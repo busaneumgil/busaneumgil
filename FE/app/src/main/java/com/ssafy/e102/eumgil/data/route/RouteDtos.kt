@@ -81,7 +81,6 @@ data class LowFloorBusReservationDto(
     val vehicleNo: String? = null,
     val remainingMinute: Int? = null,
     val remainingStopCount: Int? = null,
-    val requestUrl: String? = null,
 )
 
 data class RouteStepDto(

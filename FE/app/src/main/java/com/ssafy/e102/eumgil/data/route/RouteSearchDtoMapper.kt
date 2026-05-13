@@ -325,7 +325,6 @@ private fun LowFloorBusReservationDto.toDomainOrNull(): LowFloorBusReservation? 
         vehicleNo = resolvedVehicleNo,
         remainingMinute = resolvedRemainingMinute,
         remainingStopCount = remainingStopCount?.takeIf { value -> value >= 0 },
-        requestUrl = requestUrl?.trim()?.takeIf(String::isNotEmpty),
     )
 }
 
@@ -797,7 +796,6 @@ private fun JSONObject.toLowFloorBusReservationDto(): LowFloorBusReservationDto 
         vehicleNo = optNullableString("vehicleNo"),
         remainingMinute = optNullableInt("remainingMinute"),
         remainingStopCount = optNullableInt("remainingStopCount"),
-        requestUrl = optNullableString("requestUrl"),
     )
 
 private fun JSONArray.toStepDtos(): List<RouteStepDto> =

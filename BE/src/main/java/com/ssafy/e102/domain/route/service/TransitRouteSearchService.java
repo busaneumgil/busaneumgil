@@ -1292,8 +1292,7 @@ public class TransitRouteSearchService {
 			routeNo,
 			arrival.vehicleNo(),
 			arrival.remainingMinute(),
-			arrival.remainingStopCount(),
-			null);
+			arrival.remainingStopCount());
 	}
 
 	private String boardingStopName(OdsayTransitLeg leg) {

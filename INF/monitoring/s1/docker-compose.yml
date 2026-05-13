@@ -90,6 +90,7 @@ services:
       - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     networks:
       - ops
+      - dev-stack
 
   node-exporter:
     image: prom/node-exporter:v1.8.2

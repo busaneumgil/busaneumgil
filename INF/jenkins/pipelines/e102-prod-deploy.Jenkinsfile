@@ -65,7 +65,7 @@ pipeline {
   parameters {
     string(name: 'DEPLOY_BRANCH', defaultValue: 'master', description: 'Git branch to deploy to S2 prod')
     booleanParam(name: 'BUILD_GRAPHHOPPER', defaultValue: false, description: 'Build graph-cache from PostgreSQL before deploying GraphHopper')
-    booleanParam(name: 'DEPLOY_GRAPHHOPPER', defaultValue: false, description: 'Start GraphHopper runtime after graph-cache is ready')
+    booleanParam(name: 'DEPLOY_GRAPHHOPPER', defaultValue: true, description: 'Start GraphHopper runtime after graph-cache is ready')
     booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Run rollback instead of deploy')
   }
 

@@ -125,8 +125,7 @@ private fun PrimaryUserTypeButton(
                     text = stringResource(id = primaryUserType.titleRes).stabilizeOnboardingWrap(),
                     style = MaterialTheme.typography.headlineMedium.onboardingHeadingLineBreak(),
                     fontSize = 38.sp,
-                    lineHeight = 42.sp,
-                    fontWeight = FontWeight.Black,
+                    lineHeight = 46.sp,
                     color = style.titleColor,
                 )
                 Text(
@@ -169,7 +168,6 @@ fun LowVisionFollowUpScreen(
                 Text(
                     text = stringResource(id = R.string.onboarding_low_vision_follow_up_card_title).stabilizeOnboardingWrap(),
                     style = MaterialTheme.typography.titleMedium.onboardingHeadingLineBreak(),
-                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 Text(
@@ -266,8 +264,7 @@ private fun MobilitySubtypeButton(
                     text = stringResource(id = mobilitySubtype.titleRes).stabilizeOnboardingWrap(),
                     style = MaterialTheme.typography.titleMedium.onboardingHeadingLineBreak(),
                     fontSize = 26.sp,
-                    lineHeight = 32.sp,
-                    fontWeight = FontWeight.Black,
+                    lineHeight = 34.sp,
                     color = style.titleColor,
                 )
                 Text(

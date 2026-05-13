@@ -146,7 +146,7 @@
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [5m])) or vector(0)",
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\" [5m])) or vector(0)",
           "queryType": "instant",
           "refId": "A"
         }
@@ -262,7 +262,7 @@
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [1h])) or vector(0)",
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\" [1h])) or vector(0)",
           "queryType": "instant",
           "refId": "A"
         }
@@ -1292,7 +1292,7 @@
       },
       "targets": [
         {
-          "expr": "{environment=\"dev\", runtime_stack=\"s1-dev\", compose_service=~\"$log_service\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\"",
+          "expr": "{environment=\"dev\", runtime_stack=\"s1-dev\", compose_service=~\"$log_service\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\"",
           "queryType": "range",
           "refId": "A"
         }

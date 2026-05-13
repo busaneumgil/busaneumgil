@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.route
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -30,6 +31,7 @@ data class RouteSettingUiState(
     val sourceLabel: String? = null,
     val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
+    val showsDuribalCallAction: Boolean = false,
 ) {
     val isStartEnabled: Boolean
         get() = cta.isEnabled
@@ -105,6 +107,7 @@ data class RouteSelectedRouteUiState(
     val detailHighlights: List<RouteDetailHighlightUiState> = emptyList(),
     val detailSteps: List<RouteDetailStepUiState> = emptyList(),
     val detailFallbackMessage: String? = null,
+    val lowFloorReservations: List<LowFloorBusReservation> = emptyList(),
 )
 
 data class RouteSummaryMetricUiState(

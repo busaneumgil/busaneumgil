@@ -52,45 +52,56 @@ public class GraphHopperRouteClient {
 		"stairs_state");
 
 	private final RestTemplate restTemplate;
-	private final GraphHopperProperties properties;
+	private final GraphHopperEndpointProvider endpointProvider;
 	private final ObjectMapper objectMapper;
 
 	@Autowired
 	public GraphHopperRouteClient(RestTemplateBuilder builder, GraphHopperProperties properties,
-		ObjectMapper objectMapper) {
+		ObjectMapper objectMapper, GraphHopperEndpointProvider endpointProvider) {
 		this(builder
 			.connectTimeout(properties.connectTimeout())
 			.readTimeout(properties.readTimeout())
-			.build(), properties, objectMapper);
+			.build(), endpointProvider, objectMapper);
 	}
 
 	GraphHopperRouteClient(RestTemplate restTemplate, GraphHopperProperties properties) {
-		this(restTemplate, properties, new ObjectMapper());
+		this(restTemplate, () -> GraphHopperEndpointSelection.fallback(properties.baseUrl()), new ObjectMapper());
 	}
 
-	GraphHopperRouteClient(RestTemplate restTemplate, GraphHopperProperties properties, ObjectMapper objectMapper) {
-		this.properties = properties;
+	GraphHopperRouteClient(
+		RestTemplate restTemplate,
+		GraphHopperEndpointProvider endpointProvider,
+		ObjectMapper objectMapper) {
 		this.restTemplate = restTemplate;
+		this.endpointProvider = endpointProvider;
 		this.objectMapper = objectMapper;
 	}
 
 	public GraphHopperRoutePath route(GraphHopperRouteRequest request) {
+		return executeWithEndpointFallback("route", baseUrl -> routeOnce(baseUrl, request));
+	}
+
+	public GraphHopperRoutePath routeWithCustomModel(GraphHopperRouteRequest request, JsonNode customModel) {
+		return executeWithEndpointFallback(
+			"route-custom-model",
+			baseUrl -> routeWithCustomModelOnce(baseUrl, request, customModel));
+	}
+
+	private GraphHopperRoutePath executeWithEndpointFallback(
+		String operation,
+		GraphHopperEndpointOperation endpointOperation) {
+		GraphHopperEndpointSelection endpoint = endpointProvider.selectEndpoint();
 		try {
-			// GraphHopper는 GET query 기반 API라 profile과 두 point를 URI에 직접 싣는다.
-			GraphHopperRouteResponse response = restTemplate.exchange(
-				RequestEntity
-					.method(HttpMethod.GET, routeUri(request))
-					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-					.build(),
-				GraphHopperRouteResponse.class)
-				.getBody();
-			return extractFirstPath(request, response);
+			return endpointOperation.execute(endpoint.activeBaseUrl());
 		} catch (HttpStatusCodeException exception) {
+			if (shouldRetryPrevious(exception, endpoint)) {
+				return retryPrevious(operation, endpointOperation, endpoint, exception);
+			}
 			RouteErrorCode errorCode = graphHopperHttpErrorCode(exception);
 			log.warn(
 				"external route call failed provider={} operation={} status={} body={}",
 				"graphhopper",
-				"route",
+				operation,
 				exception.getStatusCode(),
 				exception.getResponseBodyAsString(),
 				exception);
@@ -99,13 +110,16 @@ public class GraphHopperRouteClient {
 				errorCode.getMessage(),
 				exception);
 		} catch (ResourceAccessException exception) {
+			if (endpoint.hasPrevious()) {
+				return retryPrevious(operation, endpointOperation, endpoint, exception);
+			}
 			RouteErrorCode errorCode = hasTimeoutCause(exception)
 				? RouteErrorCode.EXTERNAL_ROUTE_API_TIMEOUT
 				: RouteErrorCode.EXTERNAL_ROUTE_API_FAILED;
 			log.warn(
 				"external route call failed provider={} operation={} status={} message={}",
 				"graphhopper",
-				"route",
+				operation,
 				errorCode.getStatus(),
 				exception.getMessage(),
 				exception);
@@ -114,7 +128,7 @@ public class GraphHopperRouteClient {
 			log.warn(
 				"external route call failed provider={} operation={} status={} message={}",
 				"graphhopper",
-				"route",
+				operation,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
 				exception.getMessage(),
 				exception);
@@ -125,23 +139,25 @@ public class GraphHopperRouteClient {
 		}
 	}
 
-	public GraphHopperRoutePath routeWithCustomModel(GraphHopperRouteRequest request, JsonNode customModel) {
+	private GraphHopperRoutePath retryPrevious(
+		String operation,
+		GraphHopperEndpointOperation endpointOperation,
+		GraphHopperEndpointSelection endpoint,
+		RuntimeException activeException) {
+		log.warn(
+			"graphhopper active endpoint failed. retrying previous endpoint operation={} activeSlot={} previousSlot={} message={}",
+			operation,
+			endpoint.activeSlot(),
+			endpoint.previousSlot(),
+			activeException.getMessage());
 		try {
-			GraphHopperRouteResponse response = restTemplate.exchange(
-				RequestEntity
-					.post(routePostUri())
-					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-					.contentType(MediaType.APPLICATION_JSON)
-					.body(routePostBody(request, customModel)),
-				GraphHopperRouteResponse.class)
-				.getBody();
-			return extractFirstPath(request, response);
+			return endpointOperation.execute(endpoint.previousBaseUrl());
 		} catch (HttpStatusCodeException exception) {
 			RouteErrorCode errorCode = graphHopperHttpErrorCode(exception);
 			log.warn(
 				"external route call failed provider={} operation={} status={} body={}",
 				"graphhopper",
-				"route-custom-model",
+				operation,
 				exception.getStatusCode(),
 				exception.getResponseBodyAsString(),
 				exception);
@@ -153,7 +169,7 @@ public class GraphHopperRouteClient {
 			log.warn(
 				"external route call failed provider={} operation={} status={} message={}",
 				"graphhopper",
-				"route-custom-model",
+				operation,
 				errorCode.getStatus(),
 				exception.getMessage(),
 				exception);
@@ -162,7 +178,7 @@ public class GraphHopperRouteClient {
 			log.warn(
 				"external route call failed provider={} operation={} status={} message={}",
 				"graphhopper",
-				"route-custom-model",
+				operation,
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
 				exception.getMessage(),
 				exception);
@@ -171,6 +187,13 @@ public class GraphHopperRouteClient {
 				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(),
 				exception);
 		}
+	}
+
+	private boolean shouldRetryPrevious(HttpStatusCodeException exception, GraphHopperEndpointSelection endpoint) {
+		if (!endpoint.hasPrevious() || isGraphHopperNoRoute(exception.getResponseBodyAsString())) {
+			return false;
+		}
+		return exception.getStatusCode().is5xxServerError() || exception.getStatusCode().is4xxClientError();
 	}
 
 	private RouteErrorCode graphHopperHttpErrorCode(HttpStatusCodeException exception) {
@@ -189,9 +212,36 @@ public class GraphHopperRouteClient {
 			|| normalizedBody.contains("connection between locations not found");
 	}
 
-	private URI routeUri(GraphHopperRouteRequest request) {
+	private GraphHopperRoutePath routeOnce(String baseUrl, GraphHopperRouteRequest request) {
+		// GraphHopper는 GET query 기반 API라 profile과 두 point를 URI에 직접 싣는다.
+		GraphHopperRouteResponse response = restTemplate.exchange(
+			RequestEntity
+				.method(HttpMethod.GET, routeUri(baseUrl, request))
+				.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+				.build(),
+			GraphHopperRouteResponse.class)
+			.getBody();
+		return extractFirstPath(request, response);
+	}
+
+	private GraphHopperRoutePath routeWithCustomModelOnce(
+		String baseUrl,
+		GraphHopperRouteRequest request,
+		JsonNode customModel) {
+		GraphHopperRouteResponse response = restTemplate.exchange(
+			RequestEntity
+				.post(routePostUri(baseUrl))
+				.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(routePostBody(request, customModel)),
+			GraphHopperRouteResponse.class)
+			.getBody();
+		return extractFirstPath(request, response);
+	}
+
+	private URI routeUri(String baseUrl, GraphHopperRouteRequest request) {
 		return UriComponentsBuilder
-			.fromUriString(properties.baseUrl())
+			.fromUriString(baseUrl)
 			.path("/route")
 			.queryParam("profile", request.profile().getProfileName())
 			.queryParam("point", point(request.startPoint()))
@@ -203,9 +253,9 @@ public class GraphHopperRouteClient {
 			.toUri();
 	}
 
-	private URI routePostUri() {
+	private URI routePostUri(String baseUrl) {
 		return UriComponentsBuilder
-			.fromUriString(properties.baseUrl())
+			.fromUriString(baseUrl)
 			.path("/route")
 			.build()
 			.toUri();
@@ -280,5 +330,11 @@ public class GraphHopperRouteClient {
 			current = current.getCause();
 		}
 		return false;
+	}
+
+	@FunctionalInterface
+	private interface GraphHopperEndpointOperation {
+
+		GraphHopperRoutePath execute(String baseUrl);
 	}
 }

@@ -122,6 +122,18 @@ scrape_configs:
           runtime_stack: s2-prod
           service: graphhopper
           target_name: graphhopper
+      - targets: ["https://api.busaneumgil.com/graphhopper-blue/healthcheck"]
+        labels:
+          environment: prod
+          runtime_stack: s2-prod
+          service: graphhopper
+          target_name: graphhopper-blue
+      - targets: ["https://api.busaneumgil.com/graphhopper-green/healthcheck"]
+        labels:
+          environment: prod
+          runtime_stack: s2-prod
+          service: graphhopper
+          target_name: graphhopper-green
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

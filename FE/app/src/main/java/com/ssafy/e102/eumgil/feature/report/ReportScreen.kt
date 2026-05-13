@@ -78,7 +78,11 @@ fun ReportScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             ReportTopBar(
-                title = reportStepTitle(uiState.currentStep),
+                title =
+                    reportStepTitle(
+                        step = uiState.currentStep,
+                        selectedType = uiState.reportType.value,
+                    ),
                 showBackButton = reportTopBarShowsBackButton(uiState.currentStep),
                 onBackClick = { onAction(ReportUiAction.BackClicked) },
             )
@@ -1192,13 +1196,34 @@ private fun ReportDescriptionSection(
     }
 }
 
-private fun reportStepTitle(step: ReportStep): String =
-    when (step) {
+/**
+ * TopBar에 노출할 단계별 라벨.
+ *
+ * 단계 식별은 화면 콘텐츠(지도 영역 / 입력 필드 등)로 충분히 인지되므로, LocationConfirm /
+ * DetailInput 단계에서는 단계명 대신 사용자가 선택한 type 라벨만 노출하여 "지금 어떤 유형의
+ * 제보를 작성 중인지"를 시각 위계의 최상위로 끌어올린다.
+ *
+ * - TypeSelection: type 선택 전이므로 "제보"
+ * - LocationConfirm / DetailInput: type이 있으면 type 라벨만, 없으면(비정상) 단계명 fallback
+ * - Complete: 본문 요약 카드에 type이 이미 노출되므로 중복 회피 차원에서 "제보 완료" 유지
+ */
+internal fun reportStepTitle(
+    step: ReportStep,
+    selectedType: ReportType? = null,
+): String {
+    val typeLabelOverride =
+        selectedType
+            ?.takeIf { step == ReportStep.LocationConfirm || step == ReportStep.DetailInput }
+            ?.label
+    if (typeLabelOverride != null) return typeLabelOverride
+
+    return when (step) {
         ReportStep.TypeSelection -> "제보"
         ReportStep.LocationConfirm -> "위치 확인"
         ReportStep.DetailInput -> "상세 정보 입력"
         ReportStep.Complete -> "제보 완료"
     }
+}
 
 private val ReportType.label: String
     get() =

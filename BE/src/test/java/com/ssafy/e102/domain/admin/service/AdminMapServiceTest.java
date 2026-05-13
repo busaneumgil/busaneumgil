@@ -111,7 +111,7 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 보행 네트워크는 행정동 경계와 교차하는 DB segment를 GeoJSON으로 변환한다")
 	void getRoadNetwork() {
 		RoadSegment roadSegment = roadSegment(1L);
-		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동", 10))
+		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동"))
 			.thenReturn(List.of(roadSegment));
 		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
 		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());

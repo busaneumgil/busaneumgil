@@ -18,6 +18,7 @@ interface FacilityMapProps {
 }
 
 const ROADVIEW_DEFAULT_MESSAGE = "편의시설 점을 클릭하면 근처 Roadview를 엽니다.";
+const ROADVIEW_MAP_CLICK_MESSAGE = "지도에서 클릭한 지점 근처 Roadview를 엽니다.";
 
 export function FacilityMap({
   payload,
@@ -44,6 +45,7 @@ export function FacilityMap({
   const locationPickEnabledRef = useRef(locationPickEnabled);
   const onPickLocationRef = useRef(onPickLocation);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     onSelectFeatureRef.current = onSelectFeature;
@@ -65,11 +67,15 @@ export function FacilityMap({
         detachWheelZoomRef.current?.();
         detachWheelZoomRef.current = attachKakaoWheelZoom(containerRef.current, () => mapRef.current);
         roadviewClientRef.current = window.kakao.maps.RoadviewClient ? new window.kakao.maps.RoadviewClient() : null;
+        setMapReady(true);
         window.kakao.maps.event.addListener(mapRef.current, "click", (event: unknown) => {
-          if (!locationPickEnabledRef.current) return;
           const latLng = (event as { latLng?: { getLng: () => number; getLat: () => number } }).latLng;
           if (!latLng) return;
-          onPickLocationRef.current?.({ lat: latLng.getLat(), lng: latLng.getLng() });
+          if (locationPickEnabledRef.current) {
+            onPickLocationRef.current?.({ lat: latLng.getLat(), lng: latLng.getLng() });
+            return;
+          }
+          showRoadviewAt(latLng, ROADVIEW_MAP_CLICK_MESSAGE);
         });
       })
       .catch((reason: Error) => setMapError(reason.message));
@@ -82,7 +88,7 @@ export function FacilityMap({
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !window.kakao?.maps) return;
+    if (!mapReady || !mapRef.current || !window.kakao?.maps) return;
 
     overlaysRef.current.forEach((overlay) => overlay.setMap(null));
     overlaysRef.current = [];
@@ -117,16 +123,17 @@ export function FacilityMap({
     if (firstCoord) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
     }
-  }, [payload]);
+  }, [mapReady, payload]);
 
   useEffect(() => {
+    if (!mapReady) return;
     if (!selectedFeature) {
       selectedOverlayRef.current?.setMap(null);
       selectedOverlayRef.current = null;
       return;
     }
     drawSelectedFeature(selectedFeature);
-  }, [selectedFeature]);
+  }, [mapReady, selectedFeature]);
 
   function hideTooltip() {
     tooltipRef.current?.setMap(null);
@@ -205,9 +212,9 @@ export function FacilityMap({
     });
   }
 
-  function showRoadviewAt(latLng: unknown) {
+  function showRoadviewAt(latLng: unknown, initialMessage = ROADVIEW_DEFAULT_MESSAGE) {
     if (!window.kakao?.maps) return;
-    setRoadviewPanelMessage(ROADVIEW_DEFAULT_MESSAGE);
+    setRoadviewPanelMessage(initialMessage);
     const unavailable = roadviewUnavailableMessage(Boolean(roadviewClientRef.current), Boolean(window.kakao.maps.Roadview));
     if (unavailable) {
       setRoadviewPanelMessage(unavailable);
@@ -226,7 +233,7 @@ export function FacilityMap({
     createRoadviewMarker(latLng);
     roadviewClientRef.current.getNearestPanoId(latLng, 80, (panoId) => {
       if (!panoId) {
-        setRoadviewPanelMessage("No Kakao Roadview was found near this facility.");
+        setRoadviewPanelMessage("No Kakao Roadview was found near this point.");
         return;
       }
       setRoadviewPanelMessage("");

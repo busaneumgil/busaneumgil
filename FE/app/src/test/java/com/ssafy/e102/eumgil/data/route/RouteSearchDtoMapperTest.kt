@@ -63,7 +63,15 @@ class RouteSearchDtoMapperTest {
                                 "remainingMinute": 3,
                                 "durationSecond": 660,
                                 "estimatedTimeMinute": 11,
-                                "isLowFloor": true
+                                "isLowFloor": true,
+                                "lowFloorReservation": {
+                                  "stopName": "Stop A",
+                                  "arsNo": "070001",
+                                  "routeNo": "100",
+                                  "vehicleNo": "1618",
+                                  "remainingMinute": 3,
+                                  "remainingStopCount": 2
+                                }
                               }
                             ],
                             "boardingStop": {
@@ -92,6 +100,11 @@ class RouteSearchDtoMapperTest {
         assertEquals("TURN_RIGHT", route.legs.first().guidanceEvents.single().type)
         assertEquals("100", route.legs[1].laneOptions.single().routeNo)
         assertEquals("Stop B", route.legs[1].arrivingStop?.name)
+        val reservation = route.legs[1].laneOptions.single().lowFloorReservation
+        assertEquals("Stop A", reservation?.stopName)
+        assertEquals("070001", reservation?.arsNo)
+        assertEquals("1618", reservation?.vehicleNo)
+        assertEquals(2, reservation?.remainingStopCount)
     }
 
     @Test

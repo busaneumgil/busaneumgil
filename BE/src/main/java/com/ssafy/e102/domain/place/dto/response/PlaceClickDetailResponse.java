@@ -15,6 +15,7 @@ public record PlaceClickDetailResponse(
 	String name,
 	PlaceCategory category,
 	String providerCategory,
+	String phone,
 	String address,
 	GeoPointResponse point,
 	List<PlaceAccessibilityFeatureResponse> accessibilityFeatures,

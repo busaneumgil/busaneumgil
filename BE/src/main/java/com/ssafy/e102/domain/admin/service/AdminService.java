@@ -73,7 +73,7 @@ public class AdminService {
 	}
 
 	public AdminUserListResponse getUsers() {
-		return new AdminUserListResponse(userRepository.findAllOrderByCreatedAtDesc()
+		return new AdminUserListResponse(userRepository.findAllByRoleOrderByCreatedAtDesc(UserRole.ADMIN)
 			.stream()
 			.map(AdminUserResponse::from)
 			.toList());

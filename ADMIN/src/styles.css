@@ -1198,6 +1198,26 @@ select {
   margin: 0;
 }
 
+.admin-promote-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.admin-promote-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-promote-form input {
+  min-width: 0;
+}
+
 .assignment-filter-row {
   display: flex;
   justify-content: flex-start;

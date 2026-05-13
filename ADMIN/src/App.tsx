@@ -785,17 +785,17 @@ function UserManagementPage({
   onUpsertAssignment: (request: { gu: string; dong: string; assignmentType: AssignmentType; assigneeUserId: string | null; status: WorkStatus }) => void;
   onUpdateAssignmentStatus: (assignmentId: number, status: WorkStatus) => void;
 }) {
-  const sortedUsers = [...users].sort((left, right) => {
+  const adminUsers = users.filter((user) => user.role === "ADMIN").sort((left, right) => {
     if (left.userId === currentAdmin.userId) return -1;
     if (right.userId === currentAdmin.userId) return 1;
     return left.userId.localeCompare(right.userId);
   });
-  const adminUsers = sortedUsers.filter((user) => user.role === "ADMIN");
   const assignmentByArea = new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}:${assignment.assignmentType}`, assignment]));
   const normalizedAreas = areas.length
     ? areas
     : [...new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}`, { gu: assignment.gu, dong: assignment.dong }])).values()];
   const guOptions = [...new Set(normalizedAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
+  const [promoteUserId, setPromoteUserId] = useState("");
   const [selectedGuFilter, setSelectedGuFilter] = useState("");
   const guOptionsKey = guOptions.join("|");
   useEffect(() => {
@@ -815,6 +815,28 @@ function UserManagementPage({
     <div className="user-management-layout">
       <section className="panel-section">
         <h3>관리자 권한</h3>
+        <form
+          className="admin-promote-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const userId = promoteUserId.trim();
+            if (!userId) return;
+            onUpdateUserRole(userId, "ADMIN");
+            setPromoteUserId("");
+          }}
+        >
+          <label>
+            userId로 관리자 추가
+            <input
+              value={promoteUserId}
+              placeholder="UUID"
+              onChange={(event) => setPromoteUserId(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={userRolePending || !promoteUserId.trim()}>
+            ADMIN 승격
+          </button>
+        </form>
         {loading && <p className="muted">사용자 정보를 불러오는 중입니다.</p>}
         {error && <p className="error-box">{error.message}</p>}
         <div className="admin-table-scroll">
@@ -828,7 +850,7 @@ function UserManagementPage({
               </tr>
             </thead>
             <tbody>
-              {sortedUsers.map((user) => (
+              {adminUsers.map((user) => (
                 <tr key={user.userId}>
                   <td>
                     <strong>{adminUserLabel(user)}</strong>
@@ -848,9 +870,9 @@ function UserManagementPage({
                   </td>
                 </tr>
               ))}
-              {!users.length && (
+              {!adminUsers.length && (
                 <tr>
-                  <td colSpan={4}>사용자가 없습니다.</td>
+                  <td colSpan={4}>관리자가 없습니다.</td>
                 </tr>
               )}
             </tbody>

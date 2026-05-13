@@ -173,13 +173,14 @@ Jenkins `e102-graphhopper-refresh`는 3시간마다 실행된다.
 3. `scripts/graphhopper/prod-bluegreen-refresh.sh` 실행
 4. 현재 active slot health를 확인하고, 꺼져 있으면 start/restart로 self-heal
 5. active 복구가 실패하고 previous slot이 건강하면 Redis active를 previous로 임시 failover
-6. 현재 active slot의 반대편 candidate slot을 중지
-7. prod DB에서 OSM/PBF/graph-cache를 candidate volume에 생성
-8. candidate GraphHopper runtime 기동
-9. `/healthcheck`와 8개 profile route smoke 실행
-10. smoke 통과 시 Redis active slot 전환
-11. 실패 시 기존 active slot 유지, switch 이후 실패면 previous slot으로 rollback
-12. refresh report JSON과 container 상태 출력
+6. blue/green slot은 유지한 채 임시 `graphhopper-candidate` volume에 OSM/PBF/graph-cache 생성
+7. 임시 candidate GraphHopper runtime 기동
+8. 임시 candidate `/healthcheck`와 8개 profile route smoke 실행
+9. publish 직전 Redis previous slot URL을 임시 candidate runtime으로 돌려 fallback 공백을 줄임
+10. 대상 blue/green slot에 cache를 복사하고 target slot health/profile smoke 실행
+11. smoke 통과 시 Redis active slot 전환 및 active-slot 검증
+12. 실패 시 기존 active slot 유지, switch 이후 실패면 previous slot으로 rollback 검증
+13. refresh report JSON과 container 상태 출력
 
 Redis key 계약:
 
@@ -198,8 +199,10 @@ Redis key 계약:
 - active slot이 이미 내려가 있으면 refresh 전에 해당 slot을 먼저 start/restart한다.
 - active self-heal이 실패해도 previous slot이 정상이면 previous로 failover한 뒤 candidate rebuild를 진행한다.
 - candidate import나 smoke가 실패하면 Redis active slot은 바꾸지 않는다.
+- rollback Redis write 후에는 active slot을 다시 읽어 rollback 성공 여부를 검증한다.
 - 전환 후 backend smoke가 설정되어 있고 실패하면 active slot을 previous로 되돌린다.
 - Mattermost 실패 알림은 Jenkins failure post action이 발송한다.
+- Mattermost 성공 알림에도 refresh warning이 있으면 함께 노출한다.
 
 ## `e102-monitoring-deploy`
 

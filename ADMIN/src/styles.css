@@ -880,6 +880,21 @@ textarea::placeholder {
   transform: rotate(45deg);
 }
 
+.segment-feature-badge {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 2px solid var(--color-white);
+  border-radius: 50%;
+  box-shadow: 0 1px 6px rgb(15 23 42 / 0.35);
+  color: var(--color-white);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: auto;
+}
+
 .map-status {
   position: absolute;
   z-index: 20;

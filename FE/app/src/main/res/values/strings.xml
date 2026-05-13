@@ -372,12 +372,10 @@
     <string name="search_voice_input_title">도착지 음성 검색</string>
     <string name="search_voice_input_close">닫기</string>
     <string name="search_voice_input_headline">도착지를 말씀해 주세요</string>
-    <string name="search_voice_input_description">말씀하신 장소를 도착지 후보로 찾아드릴게요.</string>
     <string name="search_voice_input_example_phrase">"부산역 가는 길"</string>
     <string name="search_voice_input_status_idle_title">마이크를 눌러 시작하세요</string>
     <string name="search_voice_input_status_idle_description">버튼을 누르면 STT 연결을 시작하고 음성을 텍스트로 바꿉니다.</string>
     <string name="search_voice_input_status_listening_title">듣고 있어요</string>
-    <string name="search_voice_input_status_listening_description">말씀을 마치면 인식된 문장을 먼저 보여드린 뒤 검색 결과를 보여드릴게요.</string>
     <string name="search_voice_input_status_recognized_title">이렇게 인식했어요</string>
     <string name="search_voice_input_status_recognized_description">확인한 문장으로 검색 결과를 보여드릴게요.</string>
     <string name="search_voice_input_status_retry_message">잘 듣지 못했어요 버튼을 누른 후 다시 말해주세요</string>

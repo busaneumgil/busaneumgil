@@ -38,6 +38,7 @@ internal object LowVisionHomeLayoutDefaults {
     const val currentLocationCardWeight = 1f
     val actionCardGap = 40.dp
     val actionLabelFontSize = 48.sp
+    val actionLabelLineHeight = 56.sp
     val actionLabelFontWeight = FontWeight.Black
     const val showsStatusGuide = false
     const val currentLocationAnnouncesButtonRole = false
@@ -183,6 +184,7 @@ private fun HomeYellowCard(
                 text = label,
                 color = Color.Black,
                 fontSize = LowVisionHomeLayoutDefaults.actionLabelFontSize,
+                lineHeight = LowVisionHomeLayoutDefaults.actionLabelLineHeight,
                 fontWeight = LowVisionHomeLayoutDefaults.actionLabelFontWeight,
                 letterSpacing = (-1).sp,
                 textAlign = TextAlign.Center,

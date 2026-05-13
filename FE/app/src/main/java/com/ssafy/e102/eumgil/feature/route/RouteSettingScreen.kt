@@ -576,7 +576,6 @@ private fun RouteDetailMetricCard(
         Text(
             text = value,
             style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
@@ -676,7 +675,6 @@ private fun RouteDetailHighlightSection(
         Text(
             text = stringResource(id = R.string.route_setting_detail_highlight_title),
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         if (highlights.isEmpty()) {
@@ -718,7 +716,6 @@ private fun RouteDetailHighlightCard(
             Text(
                 text = highlight.title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -761,7 +758,6 @@ private fun RouteDetailStepsSection(
         Text(
             text = stringResource(id = R.string.route_setting_detail_steps_title),
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Surface(
@@ -859,7 +855,6 @@ private fun RouteDetailOriginStepRow(
             Text(
                 text = step.title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -901,7 +896,6 @@ private fun RouteDetailFallbackRow(
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
@@ -984,7 +978,6 @@ private fun RouteDetailStepRow(
             Text(
                 text = step.title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -2029,7 +2022,6 @@ private fun RouteCompactOptionCard(
                             text = card.title,
                             style = MaterialTheme.typography.labelMedium,
                             color = titleColor,
-                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -2042,14 +2034,13 @@ private fun RouteCompactOptionCard(
                             text = compactEstimatedTimeLabel(card.estimatedTimeMinutes),
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.ExtraBold,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                         )
                         Text(
                             text = compactDistanceLabel(card.distanceMeters),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                         )
                     }
@@ -2388,7 +2379,6 @@ private fun RoutePreviewMapMarker(
                 text = label,
                 color = MaterialTheme.colorScheme.onPrimary,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
             )
         }

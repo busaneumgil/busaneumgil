@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -55,6 +56,10 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun MyPageScreen(
     uiState: MyPageUiState,
     onAction: (MyPageUiAction) -> Unit,
+    isDuribalConfirmDialogVisible: Boolean,
+    onDuribalCallClick: () -> Unit,
+    onDuribalConfirmDismiss: () -> Unit,
+    onDuribalConfirm: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
@@ -89,6 +94,7 @@ fun MyPageScreen(
             )
 
             MainMenuSection(
+                onDuribalCallClick = onDuribalCallClick,
                 onMenuClick = { menuItem ->
                     onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
                 },
@@ -123,6 +129,13 @@ fun MyPageScreen(
                 )
             }
         }
+    }
+
+    if (isDuribalConfirmDialogVisible) {
+        DuribalCallConfirmDialog(
+            onDismiss = onDuribalConfirmDismiss,
+            onConfirm = onDuribalConfirm,
+        )
     }
 }
 
@@ -232,7 +245,10 @@ private fun ProfileCard(
 }
 
 @Composable
-private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
+private fun MainMenuSection(
+    onDuribalCallClick: () -> Unit,
+    onMenuClick: (MyPageMenuItem) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
         Text(
             text = stringResource(id = R.string.my_page_main_menu_title),
@@ -240,6 +256,7 @@ private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
+        DuribalCallButton(onClick = onDuribalCallClick)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(EumRadius.medium),
@@ -266,6 +283,81 @@ private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun DuribalCallButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        shape = RoundedCornerShape(EumRadius.medium),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_mypage_duribal_call),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.onPrimary,
+        )
+        Text(
+            text = stringResource(id = R.string.my_page_duribal_call_button),
+            modifier = Modifier.padding(start = EumSpacing.small),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun DuribalCallConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(id = R.string.my_page_duribal_call_dialog_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(id = R.string.my_page_duribal_call_dialog_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                shape = RoundedCornerShape(EumRadius.scaleM),
+            ) {
+                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_confirm))
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(EumRadius.scaleM),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+            ) {
+                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_dismiss))
+            }
+        },
+    )
 }
 
 @Composable

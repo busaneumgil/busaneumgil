@@ -75,9 +75,115 @@ class SearchLocalDataSourceTest {
             )
         }
 
+    @Test
+    fun `recent searches are isolated by authenticated account scope`() =
+        runTest {
+            val dataStore = createDataStore()
+            val firstUserDataSource =
+                SearchLocalDataSource(
+                    dataStore = dataStore,
+                    currentUserScopeProvider = { "user-a" },
+                )
+            val secondUserDataSource =
+                SearchLocalDataSource(
+                    dataStore = dataStore,
+                    currentUserScopeProvider = { "user-b" },
+                )
+
+            firstUserDataSource.saveRecentSearch("부산역")
+            secondUserDataSource.saveRecentSearch("서울역")
+
+            val firstUserRecentSearches = firstUserDataSource.getRecentSearches()
+            val secondUserRecentSearches = secondUserDataSource.getRecentSearches()
+
+            assertEquals(
+                listOf(
+                    RecentSearch(
+                        keyword = "부산역",
+                        searchedAtMillis = firstUserRecentSearches.single().searchedAtMillis,
+                    ),
+                ),
+                firstUserRecentSearches,
+            )
+            assertEquals(
+                listOf(
+                    RecentSearch(
+                        keyword = "서울역",
+                        searchedAtMillis = secondUserRecentSearches.single().searchedAtMillis,
+                    ),
+                ),
+                secondUserRecentSearches,
+            )
+        }
+
+    @Test
+    fun `recent destinations are isolated by authenticated account scope`() =
+        runTest {
+            val dataStore = createDataStore()
+            val firstUserDataSource =
+                SearchLocalDataSource(
+                    dataStore = dataStore,
+                    currentUserScopeProvider = { "user-a" },
+                )
+            val secondUserDataSource =
+                SearchLocalDataSource(
+                    dataStore = dataStore,
+                    currentUserScopeProvider = { "user-b" },
+                )
+
+            firstUserDataSource.saveRecentDestination(
+                RecentDestination(
+                    placeId = "place-a",
+                    name = "부산역",
+                    address = "부산 동구 중앙대로 206",
+                    latitude = 35.1151,
+                    longitude = 129.0414,
+                ),
+            )
+            secondUserDataSource.saveRecentDestination(
+                RecentDestination(
+                    placeId = "place-b",
+                    name = "서울역",
+                    address = "서울 용산구 한강대로 405",
+                    latitude = 37.5547,
+                    longitude = 126.9706,
+                ),
+            )
+
+            val firstUserRecentDestinations = firstUserDataSource.getRecentDestinations()
+            val secondUserRecentDestinations = secondUserDataSource.getRecentDestinations()
+
+            assertEquals(
+                listOf(
+                    RecentDestination(
+                        placeId = "place-a",
+                        name = "부산역",
+                        address = "부산 동구 중앙대로 206",
+                        latitude = 35.1151,
+                        longitude = 129.0414,
+                        searchedAtMillis = firstUserRecentDestinations.single().searchedAtMillis,
+                    ),
+                ),
+                firstUserRecentDestinations,
+            )
+            assertEquals(
+                listOf(
+                    RecentDestination(
+                        placeId = "place-b",
+                        name = "서울역",
+                        address = "서울 용산구 한강대로 405",
+                        latitude = 37.5547,
+                        longitude = 126.9706,
+                        searchedAtMillis = secondUserRecentDestinations.single().searchedAtMillis,
+                    ),
+                ),
+                secondUserRecentDestinations,
+            )
+        }
+
     private fun TestScope.createDataStore() =
         PreferenceDataStoreFactory.create(
-            scope = this,
+            scope = backgroundScope,
             produceFile = {
                 File(temporaryFolder.newFolder(), "search_local.preferences_pb")
             },

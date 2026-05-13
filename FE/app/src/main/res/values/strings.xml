@@ -308,6 +308,11 @@
     <string name="my_page_mobility_subtype_other">기타 보행약자</string>
     <string name="my_page_change_user_type">사용자 유형 변경</string>
     <string name="my_page_main_menu_title">주요 메뉴</string>
+    <string name="my_page_duribal_call_button">장애인 콜택시(두리발) 호출</string>
+    <string name="my_page_duribal_call_dialog_title">장애인 콜택시 호출</string>
+    <string name="my_page_duribal_call_dialog_message">장애인 복지카드를 소지하셨나요?\n없으면 탑승 거부 및 추후 호출이 제한될 수 있습니다.</string>
+    <string name="my_page_duribal_call_dialog_confirm">예</string>
+    <string name="my_page_duribal_call_dialog_dismiss">아니오</string>
     <string name="my_page_menu_notice">공지사항</string>
     <string name="my_page_menu_report_history">제보 내역</string>
     <string name="my_page_menu_app_help">앱 정보 및 도움말</string>

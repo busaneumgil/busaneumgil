@@ -1,7 +1,5 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import android.Manifest
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
@@ -16,7 +14,6 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
@@ -29,6 +26,9 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
+import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
+import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionAppInfoRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBookmarkRoute
@@ -73,14 +73,14 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
             LowVisionHomeRoute(
                 onVoiceInputClick = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.RECORD_AUDIO,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) {
-                        navController.navigate(LowVisionRoute.VoiceInput.route)
-                    } else {
-                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    when (context.resolveMicrophonePermissionState()) {
+                        MicrophonePermissionState.GRANTED ->
+                            navController.navigate(LowVisionRoute.VoiceInput.route)
+
+                        MicrophonePermissionState.DENIED ->
+                            micPermissionLauncher.launch(MICROPHONE_PERMISSION)
+
+                        MicrophonePermissionState.UNAVAILABLE -> Unit
                     }
                 },
                 onCurrentLocationClick = {

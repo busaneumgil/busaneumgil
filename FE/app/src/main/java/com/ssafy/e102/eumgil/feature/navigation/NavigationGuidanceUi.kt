@@ -4,6 +4,8 @@ import com.ssafy.e102.eumgil.R
 
 internal fun NavigationGuidanceAction.iconRes(): Int =
     when (this) {
+        NavigationGuidanceAction.BUS -> R.drawable.ic_place_bus
+        NavigationGuidanceAction.SUBWAY -> R.drawable.ic_route_subway
         NavigationGuidanceAction.STRAIGHT -> R.drawable.ic_direction_straight
         NavigationGuidanceAction.TURN_LEFT -> R.drawable.ic_direction_turn_left
         NavigationGuidanceAction.TURN_RIGHT -> R.drawable.ic_direction_turn_right

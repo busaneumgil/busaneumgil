@@ -143,12 +143,12 @@ private fun shortcutFilterLabel(key: MapShortcutFilterKey): String =
 @DrawableRes
 private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
     when (key) {
-        MapShortcutFilterKey.TOILET -> R.drawable.ic_user_wheelchair_compact
-        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_place_elevator
-        MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging_station
+        MapShortcutFilterKey.TOILET -> R.drawable.ic_accessibility_tag_accessible_toilet
+        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_accessibility_tag_elevator
+        MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_accessibility_tag_charging_station
         MapShortcutFilterKey.FOOD_CAFE -> R.drawable.ic_place_food_cafe
         MapShortcutFilterKey.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
-        MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_accessibility_tag_accessible_room
         MapShortcutFilterKey.HEALTHCARE -> R.drawable.ic_place_healthcare
         MapShortcutFilterKey.WELFARE -> R.drawable.ic_place_welfare
         MapShortcutFilterKey.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
@@ -156,7 +156,8 @@ private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
 
 internal fun shortcutFilterIconSizeDp(key: MapShortcutFilterKey): Int =
     when (key) {
-        MapShortcutFilterKey.ELEVATOR,
+        MapShortcutFilterKey.TOILET -> 19
+        MapShortcutFilterKey.ELEVATOR -> 18
         MapShortcutFilterKey.TOURIST_SPOT,
         MapShortcutFilterKey.ACCOMMODATION,
         MapShortcutFilterKey.WELFARE,

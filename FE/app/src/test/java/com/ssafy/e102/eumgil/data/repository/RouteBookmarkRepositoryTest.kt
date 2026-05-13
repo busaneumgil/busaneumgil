@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
@@ -15,7 +17,12 @@ import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRoutePointDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -144,6 +151,86 @@ class RouteBookmarkRepositoryTest {
         }
 
     @Test
+    fun `observeRouteBookmarks switches to the new account scope when auth session changes`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "token-a", userId = "user-a"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val fakeDao =
+                FakeFavoriteRouteDao(
+                    routes =
+                        listOf(
+                            testFavoriteRouteEntity(
+                                favoriteRouteId = 7L,
+                                routeName = "route-a",
+                                accountScopeKey = "user::user-a",
+                            ),
+                            testFavoriteRouteEntity(
+                                favoriteRouteId = 8L,
+                                routeName = "route-b",
+                                accountScopeKey = "user::user-b",
+                            ),
+                        ),
+                )
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    authSessionRepository = authSessionRepository,
+                )
+
+            val emissions = mutableListOf<List<String>>()
+            val collection =
+                async {
+                    repository.observeRouteBookmarks().take(2).toList().forEach { bookmarks ->
+                        emissions += bookmarks.map { bookmark -> bookmark.routeName }
+                    }
+                }
+            yield()
+
+            authSessionRepository.updateAuthSession(
+                authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
+                isProfileCompleted = true,
+            )
+            collection.await()
+
+            assertEquals(listOf("route-a"), emissions[0])
+            assertEquals(listOf("route-b"), emissions[1])
+        }
+
+    @Test
+    fun `observeRouteBookmarks emits empty list when auth session is missing`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState = AuthGateState(authSession = null, isProfileCompleted = false),
+                )
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao =
+                        FakeFavoriteRouteDao(
+                            routes =
+                                listOf(
+                                    testFavoriteRouteEntity(
+                                        favoriteRouteId = 7L,
+                                        routeName = "route-a",
+                                        accountScopeKey = "user::user-a",
+                                    ),
+                                ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                )
+
+            val bookmarks = repository.observeRouteBookmarks().first()
+
+            assertTrue(bookmarks.isEmpty())
+        }
+
+    @Test
     fun `observeRouteBookmarks skips server fetch when access token is null`() =
         runBlocking {
             val cachedEntity = testFavoriteRouteEntity(favoriteRouteId = 1L, routeName = "cached")
@@ -201,7 +288,7 @@ class RouteBookmarkRepositoryTest {
 
             val saved = repository.saveRouteBookmark(testSaveRequest(routeId = null))
 
-            assertTrue(saved.bookmarkId.startsWith("route-bookmark:"))
+            assertTrue(saved.bookmarkId.toLong() < 0L)
             assertEquals(0, fakeDataSource.createCallCount)
             assertEquals(1, fakeDao.routes().size)
         }
@@ -221,7 +308,7 @@ class RouteBookmarkRepositoryTest {
 
             val saved = repository.saveRouteBookmark(testSaveRequest())
 
-            assertTrue(saved.bookmarkId.startsWith("route-bookmark:"))
+            assertTrue(saved.bookmarkId.toLong() < 0L)
             assertEquals(0, fakeDataSource.createCallCount)
             assertEquals(1, fakeDao.routes().size)
         }
@@ -270,6 +357,7 @@ class RouteBookmarkRepositoryTest {
         runBlocking {
             val cachedEntity =
                 FavoriteRouteEntity(
+                    accountScopeKey = TEST_ACCOUNT_SCOPE_KEY,
                     favoriteRouteId = 1L,
                     routeName = "test",
                     originName = "출발",
@@ -345,8 +433,10 @@ private fun testSaveRequest(routeId: String?): RouteBookmarkSaveRequest =
 private fun testFavoriteRouteEntity(
     favoriteRouteId: Long,
     routeName: String,
+    accountScopeKey: String = TEST_ACCOUNT_SCOPE_KEY,
 ): FavoriteRouteEntity =
     FavoriteRouteEntity(
+        accountScopeKey = accountScopeKey,
         favoriteRouteId = favoriteRouteId,
         routeName = routeName,
         originName = "출발지",
@@ -363,15 +453,32 @@ private class FakeFavoriteRouteDao(
 ) : FavoriteRouteDao {
     private val state = MutableStateFlow(routes)
 
-    fun routes(): List<FavoriteRouteEntity> = state.value
+    fun routes(accountScopeKey: String = TEST_ACCOUNT_SCOPE_KEY): List<FavoriteRouteEntity> =
+        state.value.filterByScope(accountScopeKey)
 
-    override fun observeFavoriteRoutes(): Flow<List<FavoriteRouteEntity>> = state
+    override fun observeFavoriteRoutes(accountScopeKey: String): Flow<List<FavoriteRouteEntity>> =
+        state.map { routes -> routes.filterByScope(accountScopeKey) }
 
-    override fun observeFavoriteRoute(favoriteRouteId: Long): Flow<FavoriteRouteEntity?> =
-        MutableStateFlow(state.value.firstOrNull { it.favoriteRouteId == favoriteRouteId })
+    override fun observeFavoriteRoute(
+        accountScopeKey: String,
+        favoriteRouteId: Long,
+    ): Flow<FavoriteRouteEntity?> =
+        state.map { routes ->
+            routes.firstOrNull { route ->
+                route.accountScopeKey == accountScopeKey && route.favoriteRouteId == favoriteRouteId
+            }
+        }
 
-    override suspend fun getFavoriteRoute(favoriteRouteId: Long): FavoriteRouteEntity? =
-        state.value.firstOrNull { it.favoriteRouteId == favoriteRouteId }
+    override suspend fun getFavoriteRoute(
+        accountScopeKey: String,
+        favoriteRouteId: Long,
+    ): FavoriteRouteEntity? =
+        state.value.firstOrNull { route ->
+            route.accountScopeKey == accountScopeKey && route.favoriteRouteId == favoriteRouteId
+        }
+
+    override suspend fun getFavoriteRoutes(accountScopeKey: String): List<FavoriteRouteEntity> =
+        state.value.filterByScope(accountScopeKey)
 
     override suspend fun upsertFavoriteRoute(favoriteRoute: FavoriteRouteEntity) {
         state.value = state.value.upsert(favoriteRoute)
@@ -381,21 +488,28 @@ private class FakeFavoriteRouteDao(
         favoriteRoutes.forEach { upsertFavoriteRoute(it) }
     }
 
-    override suspend fun deleteFavoriteRoute(favoriteRouteId: Long) {
-        state.value = state.value.filterNot { it.favoriteRouteId == favoriteRouteId }
+    override suspend fun deleteFavoriteRoute(
+        accountScopeKey: String,
+        favoriteRouteId: Long,
+    ) {
+        state.value =
+            state.value.filterNot { route ->
+                route.accountScopeKey == accountScopeKey && route.favoriteRouteId == favoriteRouteId
+            }
     }
 
-    override suspend fun clearFavoriteRoutes() {
-        state.value = emptyList()
+    override suspend fun clearFavoriteRoutes(accountScopeKey: String) {
+        state.value = state.value.filterNot { route -> route.accountScopeKey == accountScopeKey }
     }
+
+    private fun List<FavoriteRouteEntity>.filterByScope(accountScopeKey: String): List<FavoriteRouteEntity> =
+        filter { route -> route.accountScopeKey == accountScopeKey }
 }
 
 private fun List<FavoriteRouteEntity>.upsert(entity: FavoriteRouteEntity): List<FavoriteRouteEntity> =
-    if (entity.favoriteRouteId == 0L) {
-        this + entity.copy(favoriteRouteId = (maxOfOrNull { it.favoriteRouteId } ?: 0L) + 1L)
-    } else {
-        filterNot { it.favoriteRouteId == entity.favoriteRouteId } + entity
-    }
+    filterNot { existing ->
+        existing.accountScopeKey == entity.accountScopeKey && existing.favoriteRouteId == entity.favoriteRouteId
+    } + entity
 
 private class FakeFavoriteRoutesRemoteDataSource(
     private val serverContent: List<FavoriteRouteListItemDto> = emptyList(),
@@ -457,3 +571,5 @@ private class FakeFavoriteRoutesRemoteDataSource(
         deletedFavRouteIds.add(favRouteId)
     }
 }
+
+private const val TEST_ACCOUNT_SCOPE_KEY: String = "test-account"

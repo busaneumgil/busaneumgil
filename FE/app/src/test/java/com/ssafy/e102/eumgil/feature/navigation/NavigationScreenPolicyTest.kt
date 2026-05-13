@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class NavigationScreenPolicyTest {
     @Test
@@ -93,6 +94,33 @@ class NavigationScreenPolicyTest {
         val policy = navigationHeroLayoutPolicy(480.dp)
 
         assertEquals(132.dp, policy.maxHeight)
+    }
+
+    @Test
+    fun `transit icons use slightly smaller hero and rail sizes than turn guidance icons`() {
+        val navigationScreenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val railSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+
+        assertTrue(
+            "Navigation hero icon sizing should route transit actions through a dedicated helper.",
+            navigationScreenSource.contains("modifier = Modifier.size(guidanceAction.heroIconSize(defaultSize = iconSize))"),
+        )
+        assertTrue(
+            "Navigation hero should document the slightly reduced transit icon token.",
+            navigationScreenSource.contains("private val NavigationHeroTransitDirectionIconSize = 56.dp"),
+        )
+        assertTrue(
+            "Navigation segment rail should route transit actions through a dedicated helper.",
+            railSource.contains(".size(item.guidanceAction.railIconSize())"),
+        )
+        assertTrue(
+            "Navigation segment rail should document the slightly reduced transit icon token.",
+            railSource.contains("private val NavigationSegmentRailTransitIconSize = 30.dp"),
+        )
     }
 
     @Test

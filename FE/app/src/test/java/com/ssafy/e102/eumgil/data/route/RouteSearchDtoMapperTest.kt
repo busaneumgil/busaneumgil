@@ -211,7 +211,17 @@ class RouteSearchDtoMapperTest {
         assertEquals(RouteLegRole.WALK_TO_DESTINATION, route.legs.last().role)
         assertEquals("Stop B", route.legs[1].alightingStop?.name)
         assertEquals("Turn left.", route.legs.first().steps.first().instruction)
+        assertEquals(
+            GeoCoordinate(latitude = 35.1797, longitude = 129.0758),
+            route.legs.first().steps.first().anchorCoordinate,
+        )
+        assertFalse(route.legs.first().steps.first().hasRenderablePolyline)
         assertEquals("Arrive at destination.", route.legs.last().steps.last().instruction)
+        assertEquals(
+            GeoCoordinate(latitude = 35.1797, longitude = 129.0758),
+            route.segments.first().anchorCoordinate,
+        )
+        assertFalse(route.segments.first().hasRenderablePolyline)
         assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Audio signal crosswalk ahead." })
         assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Arrive at destination." })
     }

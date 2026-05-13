@@ -1,8 +1,11 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.core.model.RouteDefaults.DEFAULT_GUIDANCE_MESSAGE
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.feature.route.RouteDetailStepKind
+import com.ssafy.e102.eumgil.feature.route.resolveSourceLeg
 import com.ssafy.e102.eumgil.feature.route.toRouteDetailStepKind
 import java.util.Locale
 
@@ -12,19 +15,32 @@ internal data class NavigationHeroDetailUiState(
     val guidanceAction: NavigationGuidanceAction,
 )
 
+internal fun RouteCandidate.toNavigationHeroDetail(segment: RouteSegment): NavigationHeroDetailUiState {
+    val kind = toRouteDetailStepKind(segment)
+    val sourceLeg = segment.resolveSourceLeg(legs = legs)
+    return segment.toNavigationHeroDetail(kind = kind, sourceLeg = sourceLeg)
+}
+
 internal fun RouteSegment.toNavigationHeroDetail(): NavigationHeroDetailUiState {
     val kind = toRouteDetailStepKind()
-
-    return NavigationHeroDetailUiState(
-        title = navigationHeroDetailTitle(kind),
-        description = navigationHeroDetailDescription(kind),
-        guidanceAction = toNavigationGuidanceAction(),
-    )
+    return toNavigationHeroDetail(kind = kind)
 }
+
+private fun RouteSegment.toNavigationHeroDetail(
+    kind: RouteDetailStepKind,
+    sourceLeg: RouteLeg? = null,
+): NavigationHeroDetailUiState =
+    NavigationHeroDetailUiState(
+        title = navigationHeroDetailTitle(kind),
+        description = navigationHeroDetailDescription(kind = kind, sourceLeg = sourceLeg),
+        guidanceAction = kind.toNavigationGuidanceAction(),
+    )
 
 private fun RouteSegment.navigationHeroDetailTitle(kind: RouteDetailStepKind): String =
     when (kind) {
         RouteDetailStepKind.START -> "출발"
+        RouteDetailStepKind.BUS -> "버스 탑승"
+        RouteDetailStepKind.SUBWAY -> "지하철 탑승"
         RouteDetailStepKind.STRAIGHT -> "직진 이동"
         RouteDetailStepKind.TURN_LEFT -> "좌회전"
         RouteDetailStepKind.TURN_RIGHT -> "우회전"
@@ -38,7 +54,10 @@ private fun RouteSegment.navigationHeroDetailTitle(kind: RouteDetailStepKind): S
         RouteDetailStepKind.FALLBACK -> "세부 경로 확인 중"
     }
 
-private fun RouteSegment.navigationHeroDetailDescription(kind: RouteDetailStepKind): String {
+private fun RouteSegment.navigationHeroDetailDescription(
+    kind: RouteDetailStepKind,
+    sourceLeg: RouteLeg? = null,
+): String {
     val distanceLabel = distanceMeters.toNavigationHeroDistanceLabel()
     val guidanceFallback = guidanceMessage.takeIf(String::hasVisibleHangul)
 
@@ -48,6 +67,22 @@ private fun RouteSegment.navigationHeroDetailDescription(kind: RouteDetailStepKi
 
     return when (kind) {
         RouteDetailStepKind.START -> "현재 위치에서 선택한 경로 안내를 시작합니다."
+        RouteDetailStepKind.BUS ->
+            sourceLeg.toTransitHeroDetailDescription(
+                defaultDescription = "버스를 타고 이동하세요.",
+                boardingDescription = { stopName -> "${stopName}에서 버스를 타고 이동하세요." },
+                routeDescription = { routeNo -> "${routeNo}번 버스를 타고 이동하세요." },
+                boardingRouteDescription = { stopName, routeNo -> "${stopName}에서 ${routeNo}번 버스를 타고 이동하세요." },
+            )
+
+        RouteDetailStepKind.SUBWAY ->
+            sourceLeg.toTransitHeroDetailDescription(
+                defaultDescription = "지하철을 타고 이동하세요.",
+                boardingDescription = { stopName -> "${stopName}에서 지하철을 타고 이동하세요." },
+                routeDescription = { routeNo -> "${routeNo} 지하철을 타고 이동하세요." },
+                boardingRouteDescription = { stopName, routeNo -> "${stopName}에서 ${routeNo} 지하철을 타고 이동하세요." },
+            )
+
         RouteDetailStepKind.STRAIGHT ->
             if (distanceMeters > 0) {
                 "$distanceLabel 정도 직진으로 이동하세요."
@@ -83,6 +118,23 @@ private fun RouteSegment.navigationHeroDetailDescription(kind: RouteDetailStepKi
         RouteDetailStepKind.STAIRS -> "계단이 포함된 구간이어서 보조가 필요할 수 있습니다."
         RouteDetailStepKind.ARRIVAL -> HERO_DETAIL_GENERIC_DESCRIPTION
         RouteDetailStepKind.FALLBACK -> HERO_DETAIL_FALLBACK_DESCRIPTION
+    }
+}
+
+private fun RouteLeg?.toTransitHeroDetailDescription(
+    defaultDescription: String,
+    boardingDescription: (String) -> String,
+    routeDescription: (String) -> String,
+    boardingRouteDescription: (String, String) -> String,
+): String {
+    val boardingStopName = this?.boardingStop?.name?.takeIf(String::isNotBlank)
+    val routeNo = this?.routeNo?.takeIf(String::isNotBlank)
+
+    return when {
+        boardingStopName != null && routeNo != null -> boardingRouteDescription(boardingStopName, routeNo)
+        routeNo != null -> routeDescription(routeNo)
+        boardingStopName != null -> boardingDescription(boardingStopName)
+        else -> defaultDescription
     }
 }
 

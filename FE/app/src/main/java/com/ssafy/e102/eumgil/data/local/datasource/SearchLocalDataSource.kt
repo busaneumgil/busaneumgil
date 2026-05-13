@@ -19,10 +19,11 @@ import org.json.JSONObject
 
 class SearchLocalDataSource(
     private val dataStore: DataStore<Preferences>? = null,
+    private val currentUserScopeProvider: suspend () -> String? = { null },
 ) {
     private val cachedResultsByQuery = ConcurrentHashMap<String, List<SearchResult>>()
-    private val recentSearchesByKeyword = LinkedHashMap<String, RecentSearch>()
-    private val recentDestinationsByKey = LinkedHashMap<String, RecentDestination>()
+    private val recentSearchesByScope = LinkedHashMap<String, LinkedHashMap<String, RecentSearch>>()
+    private val recentDestinationsByScope = LinkedHashMap<String, LinkedHashMap<String, RecentDestination>>()
     private val recentSearchesMutex = Mutex()
     private val recentDestinationsMutex = Mutex()
 
@@ -38,7 +39,8 @@ class SearchLocalDataSource(
 
     suspend fun getRecentSearches(): List<RecentSearch> =
         recentSearchesMutex.withLock {
-            loadRecentSearches().values.sortedByDescending(RecentSearch::searchedAtMillis)
+            val storageScopeKey = resolveStorageScopeKey()
+            loadRecentSearches(storageScopeKey).values.sortedByDescending(RecentSearch::searchedAtMillis)
         }
 
     suspend fun saveRecentSearch(keyword: String) {
@@ -46,7 +48,8 @@ class SearchLocalDataSource(
         if (normalizedKeyword.isEmpty()) return
 
         recentSearchesMutex.withLock {
-            val recentSearches = loadRecentSearches()
+            val storageScopeKey = resolveStorageScopeKey()
+            val recentSearches = loadRecentSearches(storageScopeKey)
             recentSearches.remove(normalizedKeyword)
             recentSearches[normalizedKeyword] = RecentSearch(keyword = keyword.trim())
 
@@ -60,7 +63,7 @@ class SearchLocalDataSource(
                 recentSearches.remove(oldestKey)
             }
 
-            persistRecentSearches(recentSearches)
+            persistRecentSearches(storageScopeKey, recentSearches)
         }
     }
 
@@ -69,23 +72,26 @@ class SearchLocalDataSource(
         if (normalizedKeyword.isEmpty()) return
 
         recentSearchesMutex.withLock {
-            val recentSearches = loadRecentSearches()
+            val storageScopeKey = resolveStorageScopeKey()
+            val recentSearches = loadRecentSearches(storageScopeKey)
             recentSearches.remove(normalizedKeyword)
-            persistRecentSearches(recentSearches)
+            persistRecentSearches(storageScopeKey, recentSearches)
         }
     }
 
     suspend fun clearRecentSearches() {
         recentSearchesMutex.withLock {
-            val recentSearches = loadRecentSearches()
+            val storageScopeKey = resolveStorageScopeKey()
+            val recentSearches = loadRecentSearches(storageScopeKey)
             recentSearches.clear()
-            persistRecentSearches(recentSearches)
+            persistRecentSearches(storageScopeKey, recentSearches)
         }
     }
 
     suspend fun getRecentDestinations(): List<RecentDestination> =
         recentDestinationsMutex.withLock {
-            loadRecentDestinations().values.sortedByDescending(RecentDestination::searchedAtMillis)
+            val storageScopeKey = resolveStorageScopeKey()
+            loadRecentDestinations(storageScopeKey).values.sortedByDescending(RecentDestination::searchedAtMillis)
         }
 
     suspend fun saveRecentDestination(destination: RecentDestination) {
@@ -94,7 +100,8 @@ class SearchLocalDataSource(
         if (normalizedKey.isEmpty()) return
 
         recentDestinationsMutex.withLock {
-            val recentDestinations = loadRecentDestinations()
+            val storageScopeKey = resolveStorageScopeKey()
+            val recentDestinations = loadRecentDestinations(storageScopeKey)
             recentDestinations.remove(normalizedKey)
             recentDestinations[normalizedKey] = sanitizedDestination
 
@@ -108,52 +115,66 @@ class SearchLocalDataSource(
                 recentDestinations.remove(oldestKey)
             }
 
-            persistRecentDestinations(recentDestinations)
+            persistRecentDestinations(storageScopeKey, recentDestinations)
         }
     }
 
-    private suspend fun loadRecentSearches(): LinkedHashMap<String, RecentSearch> =
+    private suspend fun loadRecentSearches(storageScopeKey: String): LinkedHashMap<String, RecentSearch> =
         if (dataStore == null) {
-            recentSearchesByKeyword
+            recentSearchesByScope.getOrPut(storageScopeKey) { LinkedHashMap() }
         } else {
             decodeRecentSearches(
-                encoded = dataStore.data.first()[SearchPreferenceKeys.RECENT_SEARCHES].orEmpty(),
+                encoded = dataStore.data.first()[SearchPreferenceKeys.recentSearches(storageScopeKey)].orEmpty(),
             )
         }
 
-    private suspend fun loadRecentDestinations(): LinkedHashMap<String, RecentDestination> =
+    private suspend fun loadRecentDestinations(storageScopeKey: String): LinkedHashMap<String, RecentDestination> =
         if (dataStore == null) {
-            recentDestinationsByKey
+            recentDestinationsByScope.getOrPut(storageScopeKey) { LinkedHashMap() }
         } else {
             decodeRecentDestinations(
-                encoded = dataStore.data.first()[SearchPreferenceKeys.RECENT_DESTINATIONS].orEmpty(),
+                encoded = dataStore.data.first()[SearchPreferenceKeys.recentDestinations(storageScopeKey)].orEmpty(),
             )
         }
 
-    private suspend fun persistRecentSearches(recentSearches: LinkedHashMap<String, RecentSearch>) {
+    private suspend fun persistRecentSearches(
+        storageScopeKey: String,
+        recentSearches: LinkedHashMap<String, RecentSearch>,
+    ) {
         if (dataStore == null) return
 
         dataStore.edit { preferences ->
             if (recentSearches.isEmpty()) {
-                preferences.remove(SearchPreferenceKeys.RECENT_SEARCHES)
+                preferences.remove(SearchPreferenceKeys.recentSearches(storageScopeKey))
             } else {
-                preferences[SearchPreferenceKeys.RECENT_SEARCHES] = encodeRecentSearches(recentSearches.values)
+                preferences[SearchPreferenceKeys.recentSearches(storageScopeKey)] =
+                    encodeRecentSearches(recentSearches.values)
             }
         }
     }
 
-    private suspend fun persistRecentDestinations(recentDestinations: LinkedHashMap<String, RecentDestination>) {
+    private suspend fun persistRecentDestinations(
+        storageScopeKey: String,
+        recentDestinations: LinkedHashMap<String, RecentDestination>,
+    ) {
         if (dataStore == null) return
 
         dataStore.edit { preferences ->
             if (recentDestinations.isEmpty()) {
-                preferences.remove(SearchPreferenceKeys.RECENT_DESTINATIONS)
+                preferences.remove(SearchPreferenceKeys.recentDestinations(storageScopeKey))
             } else {
-                preferences[SearchPreferenceKeys.RECENT_DESTINATIONS] =
+                preferences[SearchPreferenceKeys.recentDestinations(storageScopeKey)] =
                     encodeRecentDestinations(recentDestinations.values)
             }
         }
     }
+
+    private suspend fun resolveStorageScopeKey(): String =
+        currentUserScopeProvider()
+            .orEmpty()
+            .trim()
+            .takeIf(String::isNotEmpty)
+            ?: DEFAULT_STORAGE_SCOPE
 
     private fun decodeRecentSearches(encoded: String): LinkedHashMap<String, RecentSearch> =
         runCatching {
@@ -320,10 +341,14 @@ class SearchLocalDataSource(
     companion object {
         private const val MAX_RECENT_SEARCHES: Int = 10
         private const val MAX_RECENT_DESTINATIONS: Int = 10
+        private const val DEFAULT_STORAGE_SCOPE: String = "guest"
     }
 }
 
 private object SearchPreferenceKeys {
-    val RECENT_SEARCHES = stringPreferencesKey("search_recent_searches")
-    val RECENT_DESTINATIONS = stringPreferencesKey("search_recent_destinations")
+    fun recentSearches(storageScopeKey: String) =
+        stringPreferencesKey("search_recent_searches::$storageScopeKey")
+
+    fun recentDestinations(storageScopeKey: String) =
+        stringPreferencesKey("search_recent_destinations::$storageScopeKey")
 }

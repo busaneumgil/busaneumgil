@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.navigation
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +78,12 @@ fun NavigationRoute(
             canSpeak = textToSpeechState.canSpeak,
             status = textToSpeechState.availability.toNavigationTtsStatus(),
         )
+    }
+
+    BackHandler(
+        enabled = !useLowVisionUi && !uiState.isExitConfirmDialogVisible,
+    ) {
+        viewModel.onAction(NavigationUiAction.BackClicked)
     }
 
     LaunchedEffect(

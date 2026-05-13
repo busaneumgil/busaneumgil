@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.savedroute
 
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
@@ -16,6 +18,7 @@ import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionReposit
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.TestAuthSessionRepository
 import kotlinx.coroutines.CompletableDeferred
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -477,6 +480,51 @@ class SavedRouteViewModelTest {
             assertFalse(viewModel.uiState.value.isEditMode)
             assertEquals(SavedBookmarkContentState.EMPTY, viewModel.uiState.value.routeContent.screenState)
             assertEquals(emptyList<SavedRouteBookmarkUiModel>(), viewModel.uiState.value.routeContent.routes)
+        }
+
+    @Test
+    fun `auth scope change resets stale edit state and reloads saved places`() =
+        runTest {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "token-a", userId = "user-a"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark()))
+            val viewModel =
+                SavedRouteViewModel(
+                    authSessionRepository = authSessionRepository,
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(SavedRouteUiAction.EditClicked)
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-1"))
+
+            bookmarkRepository.bookmarks.value =
+                listOf(
+                    testPlaceBookmark().copy(
+                        placeId = "bookmark-place-2",
+                        placeName = "광안리 해변",
+                    ),
+                )
+            authSessionRepository.updateAuthSession(
+                authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
+                isProfileCompleted = true,
+            )
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isEditMode)
+            assertTrue(viewModel.uiState.value.pendingPlaceRemovalIds.isEmpty())
+            assertEquals(
+                listOf("bookmark-place-2"),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
         }
 }
 

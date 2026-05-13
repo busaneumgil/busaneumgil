@@ -15,7 +15,7 @@ internal fun RouteCandidate.toNavigationBriefingItems(): List<NavigationBriefing
         NavigationBriefingItem(
             sequence = index + 1,
             instruction = segment.toCompactNavigationInstruction(),
-            guidanceAction = segment.toNavigationGuidanceAction(),
+            guidanceAction = toNavigationGuidanceAction(segment),
         )
     }
 

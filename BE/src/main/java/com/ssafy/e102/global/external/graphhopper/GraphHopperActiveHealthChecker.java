@@ -2,6 +2,7 @@ package com.ssafy.e102.global.external.graphhopper;
 
 import java.net.URI;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ public class GraphHopperActiveHealthChecker {
 	private final GraphHopperEndpointProvider endpointProvider;
 	private final GraphHopperProperties properties;
 
+	@Autowired
 	public GraphHopperActiveHealthChecker(
 		RestTemplateBuilder builder,
 		GraphHopperProperties properties,

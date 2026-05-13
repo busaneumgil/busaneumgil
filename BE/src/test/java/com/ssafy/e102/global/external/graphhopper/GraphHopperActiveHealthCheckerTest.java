@@ -9,11 +9,26 @@ import java.time.Duration;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 class GraphHopperActiveHealthCheckerTest {
+
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+		.withBean(RestTemplateBuilder.class, RestTemplateBuilder::new)
+		.withBean(GraphHopperProperties.class, this::properties)
+		.withBean(GraphHopperEndpointProvider.class,
+			() -> () -> new GraphHopperEndpointSelection("http://graphhopper-blue.test:8989", null, "blue", null))
+		.withBean(GraphHopperActiveHealthChecker.class);
+
+	@Test
+	@DisplayName("Spring context가 생성자 주입으로 health checker bean을 생성한다")
+	void springContextCreatesHealthChecker() {
+		contextRunner.run(context -> assertThat(context).hasSingleBean(GraphHopperActiveHealthChecker.class));
+	}
 
 	@Test
 	@DisplayName("active slot GraphHopper healthcheck가 성공하면 UP을 반환한다")

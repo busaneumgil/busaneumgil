@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -266,8 +267,11 @@ public class AdminMapService {
 		validateEditablePlace(userId, placeId, gu, dong);
 		Place beforePlace = getPlaceWithAccessibilityFeatures(placeId);
 		AdminPlaceDetailResponse before = AdminPlaceDetailResponse.of(beforePlace, geoPointConverter);
-		Place place = requirePlace(placeId);
 		validateUniqueFeatureTypes(request.features());
+		if (hasSameAccessibilityFeatures(beforePlace, request.features())) {
+			return before;
+		}
+		Place place = requirePlace(placeId);
 		placeAccessibilityFeatureRepository.deleteAllByPlace_PlaceId(placeId);
 		placeAccessibilityFeatureRepository.flush();
 		List<PlaceAccessibilityFeature> savedFeatures = placeAccessibilityFeatureRepository.saveAll(
@@ -332,6 +336,18 @@ public class AdminMapService {
 				throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "접근성 속성 유형은 중복될 수 없습니다.");
 			}
 		}
+	}
+
+	private boolean hasSameAccessibilityFeatures(
+		Place place,
+		List<AdminPlaceAccessibilityFeaturesUpdateRequest.Feature> requestedFeatures) {
+		Map<AccessibilityFeatureType, Boolean> currentFeatures = new EnumMap<>(AccessibilityFeatureType.class);
+		place.getAccessibilityFeatures()
+			.forEach(feature -> currentFeatures.put(feature.getFeatureType(), feature.isAvailable()));
+		Map<AccessibilityFeatureType, Boolean> nextFeatures = new EnumMap<>(AccessibilityFeatureType.class);
+		requestedFeatures
+			.forEach(feature -> nextFeatures.put(feature.featureType(), Boolean.TRUE.equals(feature.isAvailable())));
+		return currentFeatures.equals(nextFeatures);
 	}
 
 	private String normalizeNullableText(String value) {

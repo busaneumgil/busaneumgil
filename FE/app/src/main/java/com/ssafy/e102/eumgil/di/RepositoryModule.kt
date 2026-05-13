@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.di
 
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
+import com.ssafy.e102.eumgil.core.location.AddressSearchResolver
+import com.ssafy.e102.eumgil.core.location.NoOpAddressSearchResolver
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
@@ -222,6 +224,7 @@ object RepositoryModule {
         sourcePolicy: RepositorySourcePolicy,
         authSessionRepository: AuthSessionRepository? = null,
         authRemoteDataSource: AuthRemoteDataSource? = null,
+        addressSearchResolver: AddressSearchResolver = NoOpAddressSearchResolver,
     ): SearchRepository =
         DefaultSearchRepository(
             remoteDataSource = remoteDataSource,
@@ -230,6 +233,7 @@ object RepositoryModule {
             sourcePolicy = sourcePolicy,
             authSessionRepository = authSessionRepository,
             authRemoteDataSource = authRemoteDataSource,
+            addressSearchResolver = addressSearchResolver,
         )
 
     fun provideReportRepository(

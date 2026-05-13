@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.location.AddressSearchCandidate
+import com.ssafy.e102.eumgil.core.location.AddressSearchResolver
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
@@ -28,6 +30,60 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SearchRepositoryTest {
+    @Test
+    fun `search falls back to geocoded address candidates when road address search returns empty`() =
+        runBlocking {
+            val query = SearchQuery(keyword = "부산진구 시민공원로 73", limit = 2)
+            val repository =
+                DefaultSearchRepository(
+                    remoteDataSource =
+                        SearchRemoteDataSource(
+                            getRequestExecutor = { _, _, _ ->
+                                HttpJsonResponse(
+                                    statusCode = 200,
+                                    body =
+                                        """
+                                        {
+                                          "status": "S2000",
+                                          "data": {
+                                            "places": [],
+                                            "nextCursor": null,
+                                            "size": 0,
+                                            "totalElements": 0,
+                                            "hasNext": false
+                                          },
+                                          "message": "ok"
+                                        }
+                                        """.trimIndent(),
+                                )
+                            },
+                            postRequestExecutor = { _, _, _ -> error("voice analyze should not run from search()") },
+                        ),
+                    localDataSource = SearchLocalDataSource(),
+                    mockDataSource = SearchMockDataSource(),
+                    sourcePolicy = SearchTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                    addressSearchResolver =
+                        FakeAddressSearchResolver(
+                            listOf(
+                                AddressSearchCandidate(
+                                    title = "시민공원로 73",
+                                    address = "부산광역시 부산진구 시민공원로 73",
+                                    latitude = 35.1686,
+                                    longitude = 129.0576,
+                                ),
+                            ),
+                        ),
+                )
+
+            val results = repository.search(query)
+            val result = results.single()
+
+            assertEquals("시민공원로 73", result.title)
+            assertEquals("부산광역시 부산진구 시민공원로 73", result.subtitle)
+            assertEquals("ANDROID_GEOCODER", result.provider)
+            assertEquals(false, result.matched)
+        }
+
     @Test
     fun `search returns remote provider results and caches them for the same query`() =
         runBlocking {
@@ -546,4 +602,10 @@ private class SearchTestRepositorySourcePolicy(
     private val plan: RepositoryReadPlan,
 ) : RepositorySourcePolicy {
     override suspend fun readPlan(domain: RepositoryDomain): RepositoryReadPlan = plan
+}
+
+private class FakeAddressSearchResolver(
+    private val candidates: List<AddressSearchCandidate>,
+) : AddressSearchResolver {
+    override suspend fun resolve(query: String, limit: Int): List<AddressSearchCandidate> = candidates.take(limit)
 }

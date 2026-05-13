@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
+import com.ssafy.e102.eumgil.core.location.AndroidAddressSearchResolver
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
@@ -294,6 +295,7 @@ class AppContainer(
             sourcePolicy = repositorySourcePolicy,
             authSessionRepository = authSessionRepository,
             authRemoteDataSource = authRemoteDataSource,
+            addressSearchResolver = AndroidAddressSearchResolver(context = appContext),
         )
     }
 

@@ -156,6 +156,32 @@ internal object MapBrowseStateFactory {
         return normalizeSelection(selection = nextSelection, browseData = browseData)
     }
 
+    fun selectSingleCategory(
+        selection: MapFilterSelectionState,
+        browseData: FacilityBrowseData,
+        category: FacilityCategory,
+    ): MapFilterSelectionState {
+        val availableCategories = browseData.availableCategories.toSet()
+        if (category !in availableCategories) return normalizeSelection(selection = selection, browseData = browseData)
+
+        val isAlreadyOnlySelected =
+            !selection.isShowingAllCategories &&
+                selection.selectedFacilityCategories == setOf(category)
+
+        val nextSelection =
+            if (isAlreadyOnlySelected) {
+                resetSelection()
+            } else {
+                MapFilterSelectionState(
+                    isShowingAllCategories = false,
+                    selectedFacilityCategories = setOf(category),
+                    selectedBrailleBlockTypes = emptySet(),
+                )
+            }
+
+        return normalizeSelection(selection = nextSelection, browseData = browseData)
+    }
+
     fun resetSelection(): MapFilterSelectionState = MapFilterSelectionState()
 
     private fun showAllSelection(): MapFilterSelectionState =
@@ -163,7 +189,7 @@ internal object MapBrowseStateFactory {
             isShowingAllCategories = true,
         )
 
-    private fun normalizeSelection(
+    fun normalizeSelection(
         selection: MapFilterSelectionState,
         browseData: FacilityBrowseData,
     ): MapFilterSelectionState {

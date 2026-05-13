@@ -37,6 +37,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
@@ -135,6 +136,13 @@ fun MapScreen(
                             onAction(MapUiAction.ShortcutFilterClicked(key))
                         },
                     )
+
+                    if (uiState.isSearchHereVisible) {
+                        MapSearchHereButton(
+                            onClick = { onAction(MapUiAction.SearchHereClicked) },
+                            modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
+                        )
+                    }
                 }
             },
             controlOverlay = {
@@ -275,6 +283,39 @@ private data class MapRecentDestinationBottomSheetUiState(
             isVisible = isVisible,
             items = items,
         )
+}
+
+@Composable
+private fun MapSearchHereButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val label = stringResource(id = R.string.map_search_here_action)
+    Surface(
+        modifier =
+            modifier
+                .semantics {
+                    role = Role.Button
+                    contentDescription = label
+                }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                ),
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = EumSpacing.medium, vertical = EumSpacing.xSmall),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
 }
 
 @Composable
@@ -766,10 +807,14 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                     mapTapDetailMetaLabel(
                         detail = mapTapDetail,
                         locationStatus = uiState.locationStatus,
-                    ),
+                ),
                 title = mapTapDetail.name,
                 address = mapTapDetailAddressLabel(mapTapDetail),
-                accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
+                accessibilityTags =
+                    mapTapDetailAccessibilityLabels(
+                        detail = mapTapDetail,
+                        selectedFilterCategories = uiState.markerFilterState.selection.selectedFacilityCategories,
+                    ),
                 isBookmarked = sheetState.isBookmarked,
                 isBookmarkUpdating = sheetState.isBookmarkUpdating,
                 isBookmarkEnabled = true,
@@ -849,10 +894,14 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                 mapTapDetailMetaLabel(
                     detail = mapTapDetail,
                     locationStatus = uiState.locationStatus,
-                ),
+            ),
             title = mapTapDetail.name,
             address = mapTapDetailAddressLabel(mapTapDetail),
-            accessibilityTags = mapTapDetailAccessibilityLabels(mapTapDetail),
+            accessibilityTags =
+                mapTapDetailAccessibilityLabels(
+                    detail = mapTapDetail,
+                    selectedFilterCategories = uiState.markerFilterState.selection.selectedFacilityCategories,
+                ),
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
             isBookmarkEnabled = true,
@@ -901,10 +950,14 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                 facilityDetailMetaLabel(
                     detail = detail,
                     locationStatus = uiState.locationStatus,
-                ),
+            ),
             title = detail.name,
             address = facilityDetailAddressLabel(detail),
-            accessibilityTags = facilityDetailAccessibilityLabels(detail),
+            accessibilityTags =
+                facilityDetailAccessibilityLabels(
+                    detail = detail,
+                    selectedFilterCategories = uiState.markerFilterState.selection.selectedFacilityCategories,
+                ),
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
             isBookmarkEnabled = true,
@@ -1131,11 +1184,26 @@ private fun mapTapDetailAddressLabel(detail: MapTappedPlaceDetail): String =
         .takeIf { address -> address.isNotBlank() }
         ?: stringResource(id = R.string.map_facility_detail_address_fallback)
 
-private fun mapTapDetailAccessibilityLabels(detail: MapTappedPlaceDetail): List<String> =
-    detail.accessibilityTags
+private fun mapTapDetailAccessibilityLabels(
+    detail: MapTappedPlaceDetail,
+    selectedFilterCategories: Set<FacilityCategory>,
+): List<String> {
+    val selectedRawKeys = selectedFilterCategories.mapNotNull(::selectedFilterAccessibilityRawKey)
+    val normalizedSelectedRawKeys = selectedRawKeys.map(String::lowercase).toSet()
+    val orderedRawKeys =
+        detail.accessibilityTags
+            .distinctBy { rawKey -> rawKey.trim().lowercase() }
+            .sortedWith(
+                compareBy<String> { rawKey ->
+                    if (rawKey.trim().lowercase() in normalizedSelectedRawKeys) 0 else 1
+                },
+            )
+
+    return orderedRawKeys
         .mapNotNull(::recentDestinationTagLabel)
         .distinct()
         .take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
+}
 
 private fun MapTappedPlaceDetail.hasValidCoordinate(): Boolean =
     latitude.isFinite() &&
@@ -1221,19 +1289,45 @@ private fun facilityDetailAddressLabel(detail: FacilityDetailSeed): String =
         ?: stringResource(id = R.string.map_facility_detail_address_fallback)
 
 @Composable
-private fun facilityDetailAccessibilityLabels(detail: FacilityDetailSeed): List<String> =
-    buildList {
+private fun facilityDetailAccessibilityLabels(
+    detail: FacilityDetailSeed,
+    selectedFilterCategories: Set<FacilityCategory>,
+): List<String> {
+    val prioritizedTags =
+        selectedFilterCategories
+            .mapNotNull(::selectedFilterAccessibilityTag)
+            .filter { tag -> tag in detail.accessibilityTags }
+
+    // TODO: Keep the active filter tag visible while this sheet shows only three accessibility tags.
+    return buildList {
         detail.brailleBlockType?.let { brailleBlockType ->
             add(brailleBlockTypeLabel(brailleBlockType))
         }
         addAll(
-            detail.accessibilityTags
-                .sortedBy(::accessibilityTagDisplayPriority)
+            (prioritizedTags + detail.accessibilityTags.sortedBy(::accessibilityTagDisplayPriority))
+                .distinct()
                 .map { tag ->
-                accessibilityTagLabel(tag)
+                    accessibilityTagLabel(tag)
                 },
         )
     }.distinct().take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
+}
+
+private fun selectedFilterAccessibilityTag(category: FacilityCategory): AccessibilityTag? =
+    when (category) {
+        FacilityCategory.TOILET -> AccessibilityTag.ACCESSIBLE_TOILET
+        FacilityCategory.ELEVATOR -> AccessibilityTag.ELEVATOR
+        FacilityCategory.CHARGING_STATION -> AccessibilityTag.CHARGING_STATION
+        else -> null
+    }
+
+private fun selectedFilterAccessibilityRawKey(category: FacilityCategory): String? =
+    when (category) {
+        FacilityCategory.TOILET -> "accessible-toilet"
+        FacilityCategory.ELEVATOR -> "elevator"
+        FacilityCategory.CHARGING_STATION -> "charging-station"
+        else -> null
+    }
 
 @Composable
 private fun accessibilityTagLabel(tag: AccessibilityTag): String =

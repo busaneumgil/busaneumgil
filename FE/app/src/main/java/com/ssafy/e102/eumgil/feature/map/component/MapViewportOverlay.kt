@@ -111,6 +111,7 @@ internal fun createMapMarkerViewportOverlayState(
                             kind = MapViewportPointKind.CURRENT_LOCATION,
                             label = currentLocationLabel,
                             contentDescription = currentLocationLabel,
+                            includeInProjection = false,
                         ),
                     )
                 }
@@ -123,6 +124,7 @@ internal fun createMapMarkerViewportOverlayState(
                             categoryType = marker.categoryType,
                             contentDescription = marker.name,
                             isSelected = marker.markerId == selectedMarkerId,
+                            includeInProjection = false,
                             clickTargetId = marker.markerId,
                         )
                     },

@@ -180,6 +180,7 @@
     <string name="map_filter_summary_empty_result">선택한 접근성 시설 마커가 없습니다.</string>
     <string name="map_filter_summary_empty_data">표시할 접근성 시설 데이터가 없습니다.</string>
     <string name="map_filter_summary_error">주변 접근성 시설 정보를 불러오지 못했어요. 잠시 후 다시 확인해 주세요.</string>
+    <string name="map_search_here_action">현 지도에서 재검색</string>
     <string name="map_filter_chip_all">전체 시설</string>
     <string name="map_filter_category_restaurant">접근 가능 음식점</string>
     <string name="map_filter_category_tourist_attraction">무장애 관광지</string>

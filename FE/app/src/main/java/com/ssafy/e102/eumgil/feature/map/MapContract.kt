@@ -25,6 +25,7 @@ data class MapUiState(
     val markerOverlayState: MapMarkerOverlayState = MapMarkerOverlayState(),
     val markerFilterState: MapMarkerFilterUiState = MapMarkerFilterUiState(),
     val shortcutFilterState: MapShortcutFilterRowState = MapShortcutFilterRowState(),
+    val isSearchHereVisible: Boolean = false,
     val recentDestinations: List<RecentDestination> = emptyList(),
     val facilityDetailSheetState: MapFacilityDetailSheetState = MapFacilityDetailSheetState(),
 )
@@ -64,6 +65,8 @@ enum class MapTapClickType {
 
 sealed interface MapUiAction {
     data object SearchEntryClicked : MapUiAction
+
+    data object SearchHereClicked : MapUiAction
 
     data object LocationActionClicked : MapUiAction
 

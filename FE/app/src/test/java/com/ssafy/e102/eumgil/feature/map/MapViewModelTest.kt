@@ -1797,7 +1797,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `shortcut filter chips allow multi select without clearing earlier selections`() =
+    fun `shortcut filter chips keep only one selected shortcut category`() =
         runTest {
             val viewModel =
                 MapViewModel(
@@ -1820,15 +1820,14 @@ class MapViewModelTest {
             assertTrue(visibleMarkers.isNotEmpty())
             assertTrue(
                 visibleMarkers.all { marker ->
-                    marker.categoryType.category == FacilityCategory.CHARGING_STATION ||
-                        marker.categoryType.category == FacilityCategory.TOILET
+                    marker.categoryType.category == FacilityCategory.TOILET
                 },
             )
             assertEquals(
-                setOf(FacilityCategory.CHARGING_STATION, FacilityCategory.TOILET),
+                setOf(FacilityCategory.TOILET),
                 viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
             )
-            assertTrue(
+            assertFalse(
                 viewModel.uiState.value.shortcutFilterState.chips
                     .first { chip -> chip.key == MapShortcutFilterKey.CHARGING_STATION }
                     .isSelected,
@@ -1841,7 +1840,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `shortcut filter keeps explicit multi select when all nearby shortcut categories are selected`() =
+    fun `shortcut filter replaces the previous selected category even when all nearby categories are available`() =
         runTest {
             val placesRepository =
                 FakePlacesRepository(
@@ -1884,10 +1883,10 @@ class MapViewModelTest {
 
             assertFalse(viewModel.uiState.value.markerFilterState.selection.isShowingAllCategories)
             assertEquals(
-                setOf(FacilityCategory.TOILET, FacilityCategory.ELEVATOR),
+                setOf(FacilityCategory.ELEVATOR),
                 viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
             )
-            assertTrue(
+            assertFalse(
                 viewModel.uiState.value.shortcutFilterState.chips
                     .first { chip -> chip.key == MapShortcutFilterKey.TOILET }
                     .isSelected,
@@ -1896,6 +1895,79 @@ class MapViewModelTest {
                 viewModel.uiState.value.shortcutFilterState.chips
                     .first { chip -> chip.key == MapShortcutFilterKey.ELEVATOR }
                     .isSelected,
+            )
+        }
+
+    @Test
+    fun `moving the live map shows search here and reloads around the current viewport`() =
+        runTest {
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "toilet-1",
+                                name = "Accessible Toilet",
+                                address = "1 Toilet-ro, Busan",
+                                latitude = 35.1796,
+                                longitude = 129.0756,
+                                category = PlaceCategory.TOILET,
+                            ),
+                            PlaceSummary(
+                                placeId = "elevator-1",
+                                name = "Accessible Elevator",
+                                address = "1 Elevator-ro, Busan",
+                                latitude = 35.1797,
+                                longitude = 129.0757,
+                                category = PlaceCategory.ELEVATOR,
+                            ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.TOILET))
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.ELEVATOR))
+            val movedCenter = MapCoordinate(latitude = 35.18, longitude = 129.08)
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = movedCenter,
+                    zoomLevel = 15,
+                    isUserGesture = true,
+                ),
+            )
+
+            assertTrue(viewModel.uiState.value.isSearchHereVisible)
+
+            viewModel.onAction(MapUiAction.SearchHereClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isSearchHereVisible)
+            assertEquals(movedCenter.latitude, placesRepository.queries.last().latitude ?: Double.NaN, 0.0)
+            assertEquals(movedCenter.longitude, placesRepository.queries.last().longitude ?: Double.NaN, 0.0)
+            assertEquals(
+                setOf(FacilityCategory.ELEVATOR),
+                viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
+            )
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.ELEVATOR }
+                    .isSelected,
+            )
+            assertFalse(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.TOILET }
+                .isSelected,
             )
         }
 
@@ -2187,6 +2259,49 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `stale fallback places response does not replace current location browse results`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.0893, longitude = 128.8534)
+            val locationManager = FakeCurrentLocationManager(initialLocation = null)
+            val placesRepository = DelayedFallbackPlacesRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                        ),
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            viewModel.onRouteStarted()
+            runCurrent()
+
+            assertTrue(placesRepository.fallbackRequested.isCompleted)
+
+            locationManager.updateLocation(currentLocation)
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.ELEVATOR))
+
+            assertEquals(
+                "Current-location browse result should be visible before fallback resolves.",
+                listOf("current-elevator"),
+                viewModel.uiState.value.markerOverlayState.visibleMarkers.map { marker -> marker.markerId },
+            )
+
+            placesRepository.completeFallback()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("current-elevator"),
+                viewModel.uiState.value.markerOverlayState.visibleMarkers.map { marker -> marker.markerId },
+            )
+        }
+
+    @Test
     fun `marker tap keeps preview detail when live detail returns not found`() =
         runTest {
             val placesRepository =
@@ -2443,6 +2558,51 @@ private class FakeSearchRepository(
     fun allowPendingSave() {
         saveGate?.complete(Unit)
     }
+}
+
+private class DelayedFallbackPlacesRepository : PlacesRepository {
+    val fallbackRequested = CompletableDeferred<Unit>()
+    private val fallbackGate = CompletableDeferred<Unit>()
+
+    override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+        return if (query.isFallbackBusanQuery()) {
+            fallbackRequested.complete(Unit)
+            fallbackGate.await()
+            listOf(
+                PlaceSummary(
+                    placeId = "fallback-elevator",
+                    name = "부산시청 엘리베이터",
+                    address = "부산광역시 연제구 중앙대로 1001",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.ELEVATOR,
+                ),
+            )
+        } else {
+            listOf(
+                PlaceSummary(
+                    placeId = "current-elevator",
+                    name = "현재 위치 엘리베이터",
+                    address = "현재 위치 주변",
+                    latitude = query.latitude ?: 0.0,
+                    longitude = query.longitude ?: 0.0,
+                    category = PlaceCategory.ELEVATOR,
+                ),
+            )
+        }
+    }
+
+    override suspend fun getPlaceDetail(placeId: String): PlaceDetail? = null
+
+    override suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? = null
+
+    fun completeFallback() {
+        fallbackGate.complete(Unit)
+    }
+
+    private fun PlaceQuery.isFallbackBusanQuery(): Boolean =
+        latitude == MapDefaults.BUSAN_CENTER.latitude &&
+            longitude == MapDefaults.BUSAN_CENTER.longitude
 }
 
 private class FakePlacesRepository(

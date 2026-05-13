@@ -97,6 +97,7 @@ class MapViewModel(
     private var locationLookupTimeoutJob: Job? = null
     private var isRecenterButtonActive = false
     private var lastPlacesBrowseAnchorSource: PlacesBrowseAnchorSource? = null
+    private var placesBrowseRequestSequence: Long = 0L
     private var lastMarkerOverlayLogSnapshot: String? = null
 
     init {
@@ -213,6 +214,7 @@ class MapViewModel(
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
             is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
+            MapUiAction.SearchHereClicked -> handleSearchHereClicked()
             MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch)
         }
     }
@@ -271,6 +273,8 @@ class MapViewModel(
     private fun loadLivePlaceBrowseState(
         anchorSource: PlacesBrowseAnchorSource,
         force: Boolean = false,
+        anchor: MapCoordinate = currentPlacesBrowseAnchor(),
+        preserveSelection: Boolean = false,
     ) {
         val placesRepository = placesRepository ?: return
         if (!force && lastPlacesBrowseAnchorSource == anchorSource && facilityBrowseData != null) {
@@ -281,10 +285,11 @@ class MapViewModel(
             return
         }
 
-        val anchor = currentPlacesBrowseAnchor()
+        val requestId = ++placesBrowseRequestSequence
+
         safeLogInfo(
             MAP_VIEW_MODEL_LOG_TAG,
-            "Requesting places browse source=${anchorSource.name} force=$force lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
+            "Requesting places browse requestId=$requestId source=${anchorSource.name} force=$force lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
         )
         viewModelScope.launch {
             runCatching {
@@ -296,6 +301,13 @@ class MapViewModel(
                     ),
                 )
             }.onSuccess { places ->
+                if (requestId != placesBrowseRequestSequence) {
+                    safeLogInfo(
+                        MAP_VIEW_MODEL_LOG_TAG,
+                        "Ignoring stale places browse response requestId=$requestId latestRequestId=$placesBrowseRequestSequence source=${anchorSource.name}",
+                    )
+                    return@onSuccess
+                }
                 val browseData = MapPlaceBrowseDataMapper.toBrowseData(places)
                 facilityBrowseData = browseData
                 lastPlacesBrowseAnchorSource = anchorSource
@@ -309,9 +321,29 @@ class MapViewModel(
                         "Places browse returned no data source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
                     )
                 }
-                markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+                markerFilterSelectionState =
+                    if (preserveSelection) {
+                        MapBrowseStateFactory.normalizeSelection(
+                            selection = markerFilterSelectionState,
+                            browseData = browseData,
+                        )
+                    } else {
+                        MapBrowseStateFactory.resetSelection()
+                    }
                 renderMarkerBrowseState()
+                mutableUiState.update { state ->
+                    state.copy(
+                        isSearchHereVisible = false,
+                    )
+                }
             }.onFailure {
+                if (requestId != placesBrowseRequestSequence) {
+                    safeLogInfo(
+                        MAP_VIEW_MODEL_LOG_TAG,
+                        "Ignoring stale places browse failure requestId=$requestId latestRequestId=$placesBrowseRequestSequence source=${anchorSource.name}",
+                    )
+                    return@onFailure
+                }
                 safeLogError(
                     MAP_VIEW_MODEL_LOG_TAG,
                     "Places browse failed source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
@@ -328,6 +360,7 @@ class MapViewModel(
                         markerOverlayState = MapBrowseStateFactory.createErrorMarkerOverlayState(),
                         markerFilterState = MapBrowseStateFactory.createErrorFilterUiState(),
                         shortcutFilterState = createShortcutFilterState(),
+                        isSearchHereVisible = false,
                     )
                 }
             }
@@ -513,6 +546,21 @@ class MapViewModel(
         renderMarkerBrowseState()
     }
 
+    private fun handleSearchHereClicked() {
+        if (placesRepository == null) return
+
+        val anchor = mutableUiState.value.cameraTarget.center
+        mutableUiState.update { state ->
+            state.copy(isSearchHereVisible = false)
+        }
+        loadLivePlaceBrowseState(
+            anchorSource = PlacesBrowseAnchorSource.VIEWPORT,
+            force = true,
+            anchor = anchor,
+            preserveSelection = true,
+        )
+    }
+
     private fun handleShortcutFilterClicked(key: MapShortcutFilterKey) {
         val browseData = facilityBrowseData ?: return
 
@@ -522,7 +570,7 @@ class MapViewModel(
             return
         }
         markerFilterSelectionState =
-            MapBrowseStateFactory.toggleCategory(
+            MapBrowseStateFactory.selectSingleCategory(
                 selection = markerFilterSelectionState,
                 browseData = browseData,
                 category = category,
@@ -864,6 +912,12 @@ class MapViewModel(
                             zoomLevel = zoomLevel,
                         ),
                     isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
+                    isSearchHereVisible =
+                        when {
+                            isUserGesture && placesRepository != null -> true
+                            !isUserGesture -> false
+                            else -> state.isSearchHereVisible
+                        },
                 )
             }
         }
@@ -964,6 +1018,7 @@ class MapViewModel(
                         requestId = nextRequestId,
                         zoomLevel = nextZoomLevel,
                     ),
+                isSearchHereVisible = false,
             )
         }
     }
@@ -1003,6 +1058,7 @@ class MapViewModel(
                         zoomLevel = nextZoomLevel,
                     ),
                 selectedDestination = destination,
+                isSearchHereVisible = false,
             )
         }
     }
@@ -1037,6 +1093,7 @@ class MapViewModel(
                         requestId = nextRequestId,
                         zoomLevel = nextZoomLevel,
                     ),
+                isSearchHereVisible = false,
             )
         }
     }
@@ -1099,6 +1156,7 @@ class MapViewModel(
                             requestId = state.cameraTarget.requestId + 1L,
                             zoomLevel = MapCameraSource.DEFAULT_BUSAN.defaultZoomLevel(),
                         ),
+                    isSearchHereVisible = false,
                 )
             }
         }
@@ -1472,6 +1530,7 @@ class MapViewModel(
     private enum class PlacesBrowseAnchorSource {
         FALLBACK,
         CURRENT_LOCATION,
+        VIEWPORT,
     }
 
     companion object {

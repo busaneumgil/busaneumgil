@@ -48,6 +48,8 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("job_name: blackbox-dev-http", prometheus_content)
         self.assertIn('targets: ["http://graphhopper:8990/healthcheck"]', prometheus_content)
         self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper/healthcheck"]', prometheus_content)
+        self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper-blue/healthcheck"]', prometheus_content)
+        self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper-green/healthcheck"]', prometheus_content)
 
     def test_prod_dashboard_explicitly_marks_dependency_health_cards(self):
         dashboard_content = PROD_DASHBOARD.read_text(encoding="utf-8")

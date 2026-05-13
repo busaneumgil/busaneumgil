@@ -104,7 +104,7 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
 - 현재 제약:
   - `dev` overview는 `dev` 전용으로 고정하고, `prod`는 별도 dashboard로 분리한다.
   - `prod`의 `DB 연결 상태`, `Redis 연결 상태`는 RDS/ElastiCache 자체 상태가 아니라 backend dependency health를 의미한다.
-  - `prod`의 `GraphHopper 상태` 카드는 `graphhopper`, `graphhopper-blue`, `graphhopper-green` probe 결과를 받아 blue/green 확장을 허용한다.
+  - `prod`의 `GraphHopper 상태` 카드는 Redis active slot 기준의 `graphhopper` probe와 슬롯별 원시 `graphhopper-blue`, `graphhopper-green` probe 결과를 함께 본다.
   - 대시보드 로그 패널은 기본적으로 `warning 이상`과 `exception/timeout/failed` 같은 장애 단서를 우선 보여준다.
   - `prod log`는 S2 promtail 배치 후 같은 Grafana에서 즉시 조회 가능하다.
   - `prod`의 상세 JVM/Hikari 지표는 별도 private scrape를 열기 전까지 카드로 노출하지 않는다.

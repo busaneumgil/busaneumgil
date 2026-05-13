@@ -278,7 +278,7 @@ resource "aws_instance" "s2" {
       server_name ${local.api_domain};
 
       location = /graphhopper/healthcheck {
-        proxy_pass http://127.0.0.1:18990/healthcheck;
+        proxy_pass http://127.0.0.1:8080/health/graphhopper;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

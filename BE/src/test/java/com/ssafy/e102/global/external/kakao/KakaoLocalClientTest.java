@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -105,5 +106,43 @@ class KakaoLocalClientTest {
 
 		assertThat(result.displayAddress()).isEqualTo("부산 부산진구 범전동 200");
 		assertThat(result.roadAddress()).isNull();
+	}
+
+	@Test
+	@DisplayName("카카오 카테고리 검색 API를 category_group_code와 좌표로 호출한다")
+	void searchCategoryCallsKakaoCategorySearch() {
+		server.expect(requestTo("https://dapi.kakao.com/v2/local/search/category.json"
+			+ "?category_group_code=SW8&x=128.984611&y=35.162166&page=1&size=5&radius=300"))
+			.andExpect(method(HttpMethod.GET))
+			.andExpect(header(HttpHeaders.AUTHORIZATION, "KakaoAK test-rest-api-key"))
+			.andRespond(withSuccess("""
+				{
+				  "meta": {
+				    "pageable_count": 1,
+				    "is_end": true
+				  },
+				  "documents": [
+				    {
+				      "id": "21160880",
+				      "place_name": "사상역 부산2호선",
+				      "road_address_name": "부산 사상구 사상로 지하 203",
+				      "address_name": "부산 사상구 괘법동 529-1",
+				      "category_name": "교통,수송 > 지하철,전철 > 부산2호선",
+				      "x": "128.984611",
+				      "y": "35.162166",
+				      "distance": "17"
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		KakaoPlaceSearchResult result = client.searchCategory("SW8", 35.162166, 128.984611, 300, 1, 5);
+
+		assertThat(result.totalElements()).isEqualTo(1);
+		assertThat(result.isEnd()).isTrue();
+		assertThat(result.documents())
+			.extracting(KakaoPlaceDocument::placeName)
+			.isEqualTo(List.of("사상역 부산2호선"));
+		server.verify();
 	}
 }

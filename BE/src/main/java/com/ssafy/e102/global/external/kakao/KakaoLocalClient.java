@@ -22,6 +22,7 @@ public class KakaoLocalClient {
 
 	private static final String KAKAO_AK_PREFIX = "KakaoAK ";
 	private static final String KEYWORD_SEARCH_PATH = "/v2/local/search/keyword.json";
+	private static final String CATEGORY_SEARCH_PATH = "/v2/local/search/category.json";
 	private static final String COORD_TO_ADDRESS_PATH = "/v2/local/geo/coord2address.json";
 	private static final String WGS84 = "WGS84";
 
@@ -50,6 +51,54 @@ public class KakaoLocalClient {
 		}
 		if (request.radius() != null && request.lat() != null && request.lng() != null) {
 			uriBuilder.queryParam("radius", request.radius());
+		}
+
+		HttpHeaders headers = new HttpHeaders();
+		headers.set(HttpHeaders.AUTHORIZATION, KAKAO_AK_PREFIX + properties.apiKey());
+		KakaoKeywordSearchResponse response = restTemplate.exchange(
+			uriBuilder.build()
+				.encode()
+				.toUri(),
+			HttpMethod.GET,
+			new HttpEntity<>(headers),
+			KakaoKeywordSearchResponse.class)
+			.getBody();
+		if (response == null || response.meta() == null || response.documents() == null) {
+			throw new RestClientException("카카오 로컬 API 응답 본문이 비어 있습니다.");
+		}
+		return new KakaoPlaceSearchResult(
+			response.documents()
+				.stream()
+				.map(KakaoKeywordSearchDocument::toDomain)
+				.toList(),
+			response.meta()
+				.pageableCount(),
+			response.meta()
+				.isEnd());
+	}
+
+	public KakaoPlaceSearchResult searchCategory(
+		String categoryGroupCode,
+		Double lat,
+		Double lng,
+		Integer radius,
+		int page,
+		int size) {
+		if (!StringUtils.hasText(properties.apiKey())) {
+			throw new RestClientException("카카오 로컬 REST API 키가 비어 있습니다.");
+		}
+		if (!StringUtils.hasText(categoryGroupCode) || lat == null || lng == null) {
+			throw new IllegalArgumentException("카카오 카테고리 검색 요청값이 올바르지 않습니다.");
+		}
+
+		UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.baseUrl() + CATEGORY_SEARCH_PATH)
+			.queryParam("category_group_code", categoryGroupCode)
+			.queryParam("x", lng)
+			.queryParam("y", lat)
+			.queryParam("page", page)
+			.queryParam("size", size);
+		if (radius != null) {
+			uriBuilder.queryParam("radius", radius);
 		}
 
 		HttpHeaders headers = new HttpHeaders();

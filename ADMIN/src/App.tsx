@@ -531,6 +531,7 @@ function AdminApp() {
             areas={areasQuery.data ?? []}
             loading={adminUsersQuery.isLoading || areaAssignmentsQuery.isLoading}
             error={adminUsersQuery.error || areaAssignmentsQuery.error}
+            userRoleError={updateUserRoleMutation.error}
             userRolePending={updateUserRoleMutation.isPending}
             assignmentPending={upsertAssignmentMutation.isPending || updateAssignmentStatusMutation.isPending}
             onUpdateUserRole={(userId, role) => updateUserRoleMutation.mutate({ userId, role })}
@@ -712,7 +713,7 @@ function AdminApp() {
                 </div>
               </section>
               <section className="panel-section">
-                <h3>편의시설</h3>
+                <h3>요약 및 상세</h3>
                 <div className="metric-grid">
                   <Metric label="visible" value={facilityQuery.data?.summary?.visibleFacilityCount ?? "-"} />
                   <Metric label="전체" value={facilityQuery.data?.summary?.facilityCount ?? "-"} />
@@ -767,6 +768,7 @@ function UserManagementPage({
   areas,
   loading,
   error,
+  userRoleError,
   userRolePending,
   assignmentPending,
   onUpdateUserRole,
@@ -779,23 +781,24 @@ function UserManagementPage({
   areas: { gu: string; dong: string }[];
   loading: boolean;
   error?: Error | null;
+  userRoleError?: Error | null;
   userRolePending: boolean;
   assignmentPending: boolean;
   onUpdateUserRole: (userId: string, role: UserRole) => void;
   onUpsertAssignment: (request: { gu: string; dong: string; assignmentType: AssignmentType; assigneeUserId: string | null; status: WorkStatus }) => void;
   onUpdateAssignmentStatus: (assignmentId: number, status: WorkStatus) => void;
 }) {
-  const sortedUsers = [...users].sort((left, right) => {
+  const adminUsers = users.filter((user) => user.role === "ADMIN").sort((left, right) => {
     if (left.userId === currentAdmin.userId) return -1;
     if (right.userId === currentAdmin.userId) return 1;
     return left.userId.localeCompare(right.userId);
   });
-  const adminUsers = sortedUsers.filter((user) => user.role === "ADMIN");
   const assignmentByArea = new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}:${assignment.assignmentType}`, assignment]));
   const normalizedAreas = areas.length
     ? areas
     : [...new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}`, { gu: assignment.gu, dong: assignment.dong }])).values()];
   const guOptions = [...new Set(normalizedAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
+  const [promoteUserId, setPromoteUserId] = useState("");
   const [selectedGuFilter, setSelectedGuFilter] = useState("");
   const guOptionsKey = guOptions.join("|");
   useEffect(() => {
@@ -814,27 +817,48 @@ function UserManagementPage({
   return (
     <div className="user-management-layout">
       <section className="panel-section">
-        <h3>관리자 권한</h3>
+        <h3>관리자 계정</h3>
+        <form
+          className="admin-promote-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const userId = promoteUserId.trim();
+            if (!userId) return;
+            onUpdateUserRole(userId, "ADMIN");
+            setPromoteUserId("");
+          }}
+        >
+          <label>
+            userId로 관리자 추가
+            <input
+              value={promoteUserId}
+              placeholder="UUID"
+              onChange={(event) => setPromoteUserId(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={userRolePending || !promoteUserId.trim()}>
+            ADMIN 승격
+          </button>
+        </form>
         {loading && <p className="muted">사용자 정보를 불러오는 중입니다.</p>}
         {error && <p className="error-box">{error.message}</p>}
+        {userRoleError && <p className="error-box">{userRoleError.message}</p>}
         <div className="admin-table-scroll">
           <table className="admin-table">
             <thead>
               <tr>
                 <th>사용자</th>
-                <th>소셜</th>
                 <th>권한</th>
                 <th>변경</th>
               </tr>
             </thead>
             <tbody>
-              {sortedUsers.map((user) => (
+              {adminUsers.map((user) => (
                 <tr key={user.userId}>
                   <td>
                     <strong>{adminUserLabel(user)}</strong>
                     <span>{user.userId}</span>
                   </td>
-                  <td>{user.socialProvider} / {user.socialProviderUserId}</td>
                   <td>{user.role}</td>
                   <td>
                     <select
@@ -848,9 +872,9 @@ function UserManagementPage({
                   </td>
                 </tr>
               ))}
-              {!users.length && (
+              {!adminUsers.length && (
                 <tr>
-                  <td colSpan={4}>사용자가 없습니다.</td>
+                  <td colSpan={3}>관리자가 없습니다.</td>
                 </tr>
               )}
             </tbody>
@@ -1042,60 +1066,56 @@ function AuditLogsPage({
 }) {
   return (
     <section className="audit-log-page">
-      <div className="panel-toolbar">
-        <div>
-          <h3>변경 로그</h3>
-          <p className="muted">관리자 화면에서 성공적으로 반영된 변경 작업만 기록됩니다.</p>
+      <div className="audit-log-controls">
+        <div className="audit-log-filters">
+          <label>
+            작업 종류
+            <select value={action} onChange={(event) => onActionChange(event.target.value)}>
+              <option value="">전체</option>
+              {auditLogActions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            구
+            <select value={gu} onChange={(event) => onGuChange(event.target.value)}>
+              <option value="">전체</option>
+              {guOptions.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            동
+            <select value={dong} onChange={(event) => onDongChange(event.target.value)}>
+              <option value="">전체</option>
+              {dongOptions.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            작업자
+            <select value={actorUserId} onChange={(event) => onActorUserIdChange(event.target.value)}>
+              <option value="">전체</option>
+              {users.map((user) => (
+                <option key={user.userId} value={user.userId}>
+                  {adminUserLabel(user)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <button type="button" onClick={onRefresh} disabled={loading}>
           새로고침
         </button>
-      </div>
-      <div className="audit-log-filters">
-        <label>
-          작업 종류
-          <select value={action} onChange={(event) => onActionChange(event.target.value)}>
-            <option value="">전체</option>
-            {auditLogActions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          구
-          <select value={gu} onChange={(event) => onGuChange(event.target.value)}>
-            <option value="">전체</option>
-            {guOptions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          동
-          <select value={dong} onChange={(event) => onDongChange(event.target.value)}>
-            <option value="">전체</option>
-            {dongOptions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          작업자
-          <select value={actorUserId} onChange={(event) => onActorUserIdChange(event.target.value)}>
-            <option value="">전체</option>
-            {users.map((user) => (
-              <option key={user.userId} value={user.userId}>
-                {adminUserLabel(user)}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       {loading && <p className="muted">변경 로그를 불러오는 중입니다.</p>}
       {error && <p className="error-box">{error.message}</p>}

@@ -32,9 +32,21 @@ class MapTopSearchBarConfigurationTest {
             "Map top search bar should use the base surface color without transparency so the map does not bleed through.",
             source.contains("color = MaterialTheme.colorScheme.surface,"),
         )
+        assertTrue(
+            "Map top search bar should match the quick filter chip rounding token.",
+            source.contains("RoundedCornerShape(EumRadius.scaleS)"),
+        )
         assertFalse(
             "Map top search bar should not use a translucent surface over the moving map.",
             source.contains("surface.copy(alpha = 0.98f)"),
+        )
+        assertFalse(
+            "Map top search bar should not apply tonal elevation because it makes the white surface look slightly tinted against the other map controls.",
+            source.contains("tonalElevation ="),
+        )
+        assertTrue(
+            "Map top search bar should match the shared map control elevation tier.",
+            source.contains("shadowElevation = 6.dp"),
         )
     }
 }

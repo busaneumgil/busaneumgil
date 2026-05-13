@@ -99,4 +99,44 @@ class MyPageScreenTest {
             source.contains("iconRes = R.drawable.ic_mypage_report_history"),
         )
     }
+
+    @Test
+    fun `my page main menu exposes duribal call button before the regular menu rows`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "My page should surface the duribal call CTA at the top of the main menu section.",
+            source.contains("DuribalCallButton(onClick = onDuribalCallClick)"),
+        )
+        assertTrue(
+            "The duribal CTA should use the provided dedicated icon resource.",
+            source.contains("R.drawable.ic_mypage_duribal_call"),
+        )
+    }
+
+    @Test
+    fun `my page screen renders duribal call confirmation dialog with yes and no actions`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "MyPageScreen should render the duribal confirmation dialog when the route marks it visible.",
+            source.contains("if (isDuribalConfirmDialogVisible)"),
+        )
+        assertTrue(
+            "The duribal confirmation dialog should use the dedicated alert dialog composable.",
+            source.contains("private fun DuribalCallConfirmDialog"),
+        )
+        assertTrue(
+            "The dialog should expose a positive confirmation action.",
+            source.contains("my_page_duribal_call_dialog_confirm"),
+        )
+        assertTrue(
+            "The dialog should expose a negative dismiss action.",
+            source.contains("my_page_duribal_call_dialog_dismiss"),
+        )
+    }
 }

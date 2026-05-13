@@ -34,7 +34,7 @@ class RecentDestinationBottomSheetShellPolicyTest {
     fun `recent destination row uses a larger bare icon without a tinted background chip`() {
         assertTrue(
             "Recent destination rows should enlarge the category icon to the large icon size.",
-            source.contains(".size(28.dp)"),
+            source.contains(".size(36.dp)"),
         )
         assertFalse(
             "Recent destination icons should no longer sit on a tinted background surface.",

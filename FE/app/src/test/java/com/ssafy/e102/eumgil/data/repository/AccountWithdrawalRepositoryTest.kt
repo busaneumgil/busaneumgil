@@ -4,7 +4,9 @@ import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
+import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
+import com.ssafy.e102.eumgil.data.local.entity.FavoriteRouteEntity
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
@@ -207,19 +209,35 @@ class AccountWithdrawalRepositoryTest {
         }
 
     @Test
-    fun `default local data cleaner clears bookmarks and onboarding state`() =
+    fun `default local data cleaner clears only current account cache and onboarding state`() =
         runTest {
+            val authSessionRepository =
+                RecordingWithdrawalAuthSessionRepository(
+                    authGateState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "access-token", userId = "user-a"),
+                            isProfileCompleted = true,
+                        ),
+                )
             val bookmarkDao = RecordingBookmarkDao()
+            val favoriteRouteDao = RecordingFavoriteRouteDao()
             val initSettingsRepository = RecordingInitSettingsRepository()
+            val accountScopedLocalCacheCleaner =
+                DefaultAccountScopedLocalCacheCleaner(
+                    authSessionRepository = authSessionRepository,
+                    bookmarkDao = bookmarkDao,
+                    favoriteRouteDao = favoriteRouteDao,
+                )
             val cleaner =
                 DefaultAccountWithdrawalLocalDataCleaner(
-                    bookmarkDao = bookmarkDao,
+                    accountScopedLocalCacheCleaner = accountScopedLocalCacheCleaner,
                     initSettingsRepository = initSettingsRepository,
                 )
 
             cleaner.clearAfterWithdrawal()
 
-            assertTrue(bookmarkDao.clearBookmarksCalled)
+            assertEquals(listOf("user::user-a"), bookmarkDao.clearedScopes)
+            assertEquals(listOf("user::user-a"), favoriteRouteDao.clearedScopes)
             assertTrue(initSettingsRepository.clearInitSettingsCalled)
         }
 }
@@ -297,29 +315,74 @@ private class RecordingAccountWithdrawalLocalDataCleaner : AccountWithdrawalLoca
 }
 
 private class RecordingBookmarkDao : BookmarkDao {
-    var clearBookmarksCalled: Boolean = false
-        private set
+    val clearedScopes = mutableListOf<String>()
 
-    override fun observeBookmarks(): Flow<List<BookmarkEntity>> = emptyFlow()
+    override fun observeBookmarks(accountScopeKey: String): Flow<List<BookmarkEntity>> = emptyFlow()
 
-    override fun observeBookmark(placeId: String): Flow<BookmarkEntity?> = emptyFlow()
+    override fun observeBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ): Flow<BookmarkEntity?> = emptyFlow()
 
-    override suspend fun getBookmark(placeId: String): BookmarkEntity? = null
+    override suspend fun getBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ): BookmarkEntity? = null
 
-    override suspend fun getBookmarkByTargetId(bookmarkTargetId: String): BookmarkEntity? = null
+    override suspend fun getBookmarkByTargetId(
+        accountScopeKey: String,
+        bookmarkTargetId: String,
+    ): BookmarkEntity? = null
 
-    override suspend fun getBookmarkCount(): Int = 0
+    override suspend fun getBookmarkCount(accountScopeKey: String): Int = 0
 
     override suspend fun upsertBookmark(bookmark: BookmarkEntity) = Unit
 
     override suspend fun upsertBookmarks(bookmarks: List<BookmarkEntity>) = Unit
 
-    override suspend fun deleteBookmark(placeId: String) = Unit
+    override suspend fun deleteBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ) = Unit
 
-    override suspend fun deleteBookmarkByTargetId(bookmarkTargetId: String) = Unit
+    override suspend fun deleteBookmarkByTargetId(
+        accountScopeKey: String,
+        bookmarkTargetId: String,
+    ) = Unit
 
-    override suspend fun clearBookmarks() {
-        clearBookmarksCalled = true
+    override suspend fun clearBookmarks(accountScopeKey: String) {
+        clearedScopes += accountScopeKey
+    }
+}
+
+private class RecordingFavoriteRouteDao : FavoriteRouteDao {
+    val clearedScopes = mutableListOf<String>()
+
+    override fun observeFavoriteRoutes(accountScopeKey: String): Flow<List<FavoriteRouteEntity>> = emptyFlow()
+
+    override fun observeFavoriteRoute(
+        accountScopeKey: String,
+        favoriteRouteId: Long,
+    ): Flow<FavoriteRouteEntity?> = emptyFlow()
+
+    override suspend fun getFavoriteRoute(
+        accountScopeKey: String,
+        favoriteRouteId: Long,
+    ): FavoriteRouteEntity? = null
+
+    override suspend fun getFavoriteRoutes(accountScopeKey: String): List<FavoriteRouteEntity> = emptyList()
+
+    override suspend fun upsertFavoriteRoute(favoriteRoute: FavoriteRouteEntity) = Unit
+
+    override suspend fun upsertFavoriteRoutes(favoriteRoutes: List<FavoriteRouteEntity>) = Unit
+
+    override suspend fun deleteFavoriteRoute(
+        accountScopeKey: String,
+        favoriteRouteId: Long,
+    ) = Unit
+
+    override suspend fun clearFavoriteRoutes(accountScopeKey: String) {
+        clearedScopes += accountScopeKey
     }
 }
 

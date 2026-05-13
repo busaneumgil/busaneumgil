@@ -1,8 +1,5 @@
 package com.ssafy.e102.eumgil.feature.savedroute
 
-import android.content.Context
-import android.content.ContextWrapper
-import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import kotlinx.coroutines.flow.collect
@@ -26,19 +24,19 @@ fun SavedRouteRoute(
         remember(context.applicationContext) {
             (context.applicationContext as BusanEumgilApp).appContainer
         }
-    val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
         remember(appContainer) {
             SavedRouteViewModel.provideFactory(
+                authSessionRepository = appContainer.authSessionRepository,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeBookmarkRepository = appContainer.routeBookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 searchRepository = appContainer.searchRepository,
             )
         }
+    val owner = checkNotNull(LocalViewModelStoreOwner.current) { "SavedRouteRoute requires a ViewModelStoreOwner." }
     val viewModel =
-        remember(activity, viewModelFactory) {
-            val owner = checkNotNull(activity) { "SavedRouteRoute requires a ComponentActivity host." }
+        remember(owner, viewModelFactory) {
             ViewModelProvider(owner, viewModelFactory)[SavedRouteViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -60,10 +58,3 @@ fun SavedRouteRoute(
         modifier = modifier,
     )
 }
-
-private tailrec fun Context.findComponentActivity(): ComponentActivity? =
-    when (this) {
-        is ComponentActivity -> this
-        is ContextWrapper -> baseContext.findComponentActivity()
-        else -> null
-    }

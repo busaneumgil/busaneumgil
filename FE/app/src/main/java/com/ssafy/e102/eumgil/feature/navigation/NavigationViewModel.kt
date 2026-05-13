@@ -125,7 +125,7 @@ class NavigationViewModel(
     fun onAction(action: NavigationUiAction) {
         when (action) {
             NavigationUiAction.NavigationEntered -> requestInitialBriefingIfNeeded()
-            NavigationUiAction.BackClicked -> finishNavigation(NavigationUiEvent.NavigateBack)
+            NavigationUiAction.BackClicked -> requestExitNavigationConfirmation()
             NavigationUiAction.RouteDetailClicked -> {
                 uiState.value.selectedRouteOption?.let { routeOption ->
                     if (uiState.value.canOpenRouteDetail) {
@@ -133,12 +133,7 @@ class NavigationViewModel(
                     }
                 }
             }
-            NavigationUiAction.ExitNavigationClicked -> {
-                if (uiState.value.isExitEnabled) {
-                    isExitConfirmDialogVisible = true
-                    publishNavigationState()
-                }
-            }
+            NavigationUiAction.ExitNavigationClicked -> requestExitNavigationConfirmation()
             NavigationUiAction.ExitNavigationDismissed -> {
                 if (isExitConfirmDialogVisible) {
                     isExitConfirmDialogVisible = false
@@ -366,6 +361,12 @@ class NavigationViewModel(
         if (initialBriefingRequested) return
         initialBriefingRequested = true
         requestBriefing()
+    }
+
+    private fun requestExitNavigationConfirmation() {
+        if (!uiState.value.isExitEnabled) return
+        isExitConfirmDialogVisible = true
+        publishNavigationState()
     }
 
     private fun onVoiceGuidanceToggled(enabled: Boolean) {
@@ -1200,7 +1201,7 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
                     instruction = segment.guidanceMessage,
                     distanceLabel = segment.distanceMeters.toNavigationDistanceLabel(),
                     riskLabel = segment.riskLevel.toRiskLabel(),
-                    guidanceAction = segment.toNavigationGuidanceAction(),
+                    guidanceAction = selectedRoute.toNavigationGuidanceAction(segment),
                     isActive = index == activeSegmentIndex,
                     isFocused = index == focusedSegmentIndex,
                     isCompleted = index < activeSegmentIndex,
@@ -1213,7 +1214,7 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     focusedSegmentIndex: Int,
 ): NavigationFocusedSegmentCardUiState? {
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
-    val heroDetail = focusedSegment.toNavigationHeroDetail()
+    val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
 
     return NavigationFocusedSegmentCardUiState(
         sequenceLabel = "${focusedSegment.sequence} / ${selectedRoute.segments.size.coerceAtLeast(1)}",
@@ -1235,12 +1236,19 @@ private fun RouteWaypoint.toNavigationMapPointUiState(fallbackLabel: String): Na
 
 private fun RouteCandidate.resolveSegmentStartCoordinate(segmentIndex: Int): GeoCoordinate? {
     val segment = segments.getOrNull(segmentIndex) ?: return null
-
-    segment.polyline.points.firstOrNull()?.let { return it }
     val sourceLeg = segment.resolveSourceLeg(legs = legs)
-    if (segment.isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)) {
-        sourceLeg?.polyline?.points?.firstOrNull()?.let { return it }
-    }
+
+    segment.polyline
+        .takeIf(RoutePolyline::isRenderable)
+        ?.points
+        ?.firstOrNull()
+        ?.let { return it }
+    segment.anchorCoordinate?.let { return it }
+    segment.resolveSourceLegStartCoordinate(
+        segmentIndex = segmentIndex,
+        segments = segments,
+        sourceLeg = sourceLeg,
+    )?.let { return it }
 
     val fallbackPolyline = navigationPolylinePoints()
     if (fallbackPolyline.isNotEmpty()) {
@@ -1253,10 +1261,19 @@ private fun RouteCandidate.resolveSegmentStartCoordinate(segmentIndex: Int): Geo
 
 private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): GeoCoordinate? {
     val segment = segments.getOrNull(segmentIndex) ?: return null
-
-    segment.polyline.points.toNavigationFocusCoordinate()?.let { return it }
     val sourceLeg = segment.resolveSourceLeg(legs = legs)
-    sourceLeg?.toNavigationFocusCoordinate()?.let { return it }
+
+    segment.polyline
+        .takeIf(RoutePolyline::isRenderable)
+        ?.points
+        ?.toNavigationFocusCoordinate()
+        ?.let { return it }
+    segment.anchorCoordinate?.let { return it }
+    segment.resolveSourceLegFocusCoordinate(
+        segmentIndex = segmentIndex,
+        segments = segments,
+        sourceLeg = sourceLeg,
+    )?.let { return it }
 
     val fallbackPolyline = navigationPolylinePoints()
     if (fallbackPolyline.isEmpty()) return null
@@ -1283,6 +1300,38 @@ private fun RouteSegment.isFirstSegmentOfSourceLeg(
 ): Boolean {
     val sourceLegSequence = sourceLegSequence ?: return false
     return segments.indexOfFirst { candidateSegment -> candidateSegment.sourceLegSequence == sourceLegSequence } == segmentIndex
+}
+
+private fun RouteSegment.resolveSourceLegStartCoordinate(
+    segmentIndex: Int,
+    segments: List<RouteSegment>,
+    sourceLeg: RouteLeg?,
+): GeoCoordinate? {
+    val resolvedSourceLeg = sourceLeg ?: return null
+    return if (
+        resolvedSourceLeg.type != RouteLegType.WALK ||
+        isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)
+    ) {
+        resolvedSourceLeg.polyline.points.firstOrNull()
+    } else {
+        null
+    }
+}
+
+private fun RouteSegment.resolveSourceLegFocusCoordinate(
+    segmentIndex: Int,
+    segments: List<RouteSegment>,
+    sourceLeg: RouteLeg?,
+): GeoCoordinate? {
+    val resolvedSourceLeg = sourceLeg ?: return null
+    return if (
+        resolvedSourceLeg.type != RouteLegType.WALK ||
+        isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)
+    ) {
+        resolvedSourceLeg.toNavigationFocusCoordinate()
+    } else {
+        null
+    }
 }
 
 private fun RouteLeg.toNavigationFocusCoordinate(): GeoCoordinate? =
@@ -1432,7 +1481,7 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
                 segment.guidanceMessage.isNotBlank()
             }
             ?: selectedRoute.segments.firstOrNull()
-    val heroDetail = primarySegment?.toNavigationHeroDetail()
+    val heroDetail = primarySegment?.let(selectedRoute::toNavigationHeroDetail)
 
     return NavigationStepCardUiState(
         sectionLabel = "다음 안내",
@@ -1484,7 +1533,9 @@ private fun RouteNavigationRequest.toEmptyStepCardUiState(): NavigationStepCardU
         instruction = "현재 안내 메시지를 준비하지 못했습니다.",
         supportingText =
             "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 거리와 예상 시간 요약만 먼저 표시합니다.",
-        guidanceAction = selectedRoute.segments.firstOrNull()?.toNavigationGuidanceAction() ?: NavigationGuidanceAction.STRAIGHT,
+        guidanceAction =
+            selectedRoute.segments.firstOrNull()?.let(selectedRoute::toNavigationGuidanceAction)
+                ?: NavigationGuidanceAction.STRAIGHT,
         metrics =
             listOf(
                 NavigationStepMetricUiState(

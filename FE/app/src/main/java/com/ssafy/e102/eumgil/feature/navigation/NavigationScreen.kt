@@ -217,6 +217,8 @@ internal fun navigationHeroLayoutPolicy(screenHeight: Dp): NavigationHeroLayoutP
         showBottomDivider = false,
     )
 
+private val NavigationHeroTransitDirectionIconSize = 56.dp
+
 internal fun navigationHeroContent(uiState: NavigationUiState): NavigationHeroContentUiState {
     val focusedSegmentCard = uiState.focusedSegmentCard
 
@@ -313,9 +315,16 @@ private fun NavigationHeroDirectionIcon(
         painter = painterResource(id = guidanceAction.iconRes()),
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(iconSize),
+        modifier = Modifier.size(guidanceAction.heroIconSize(defaultSize = iconSize)),
     )
 }
+
+private fun NavigationGuidanceAction.heroIconSize(defaultSize: Dp): Dp =
+    if (this == NavigationGuidanceAction.BUS || this == NavigationGuidanceAction.SUBWAY) {
+        NavigationHeroTransitDirectionIconSize
+    } else {
+        defaultSize
+    }
 
 @Composable
 private fun NavigationVoiceControl(

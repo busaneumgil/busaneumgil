@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSegment
@@ -46,6 +47,8 @@ enum class NavigationScreenState {
 enum class NavigationGuidanceAction(
     val label: String,
 ) {
+    BUS("버스 탑승"),
+    SUBWAY("지하철 탑승"),
     STRAIGHT("직진"),
     TURN_LEFT("좌회전"),
     TURN_RIGHT("우회전"),
@@ -256,8 +259,13 @@ enum class NavigationTtsStatus {
 internal fun RouteSegment.toNavigationGuidanceAction(): NavigationGuidanceAction =
     toRouteDetailStepKind().toNavigationGuidanceAction()
 
+internal fun RouteCandidate.toNavigationGuidanceAction(segment: RouteSegment): NavigationGuidanceAction =
+    toRouteDetailStepKind(segment).toNavigationGuidanceAction()
+
 internal fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidanceAction =
     when {
+        this == RouteDetailStepKind.BUS -> NavigationGuidanceAction.BUS
+        this == RouteDetailStepKind.SUBWAY -> NavigationGuidanceAction.SUBWAY
         this == RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK
         this == RouteDetailStepKind.TURN_LEFT -> NavigationGuidanceAction.TURN_LEFT
         this == RouteDetailStepKind.TURN_RIGHT -> NavigationGuidanceAction.TURN_RIGHT

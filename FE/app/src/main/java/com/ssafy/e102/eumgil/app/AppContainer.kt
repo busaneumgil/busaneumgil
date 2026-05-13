@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.model.resolveAccountScopeKey
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
@@ -91,7 +92,12 @@ class AppContainer(
     private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
     private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        SearchLocalDataSource(dataStore = searchDataStore)
+        SearchLocalDataSource(
+            dataStore = searchDataStore,
+            currentUserScopeProvider = {
+                authSessionRepository.getAuthGateState().authSession?.resolveAccountScopeKey()
+            },
+        )
     }
 
     private val httpJsonClient by lazy(LazyThreadSafetyMode.NONE) {
@@ -209,6 +215,8 @@ class AppContainer(
         RepositoryModule.provideAuthLogoutRepository(
             authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
+            bookmarkDao = localDatabase.bookmarkDao(),
+            favoriteRouteDao = localDatabase.favoriteRouteDao(),
         )
     }
 
@@ -224,6 +232,7 @@ class AppContainer(
     val bookmarkRepository: BookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideBookmarkRepository(
             bookmarkDao = localDatabase.bookmarkDao(),
+            authSessionRepository = authSessionRepository,
             bookmarksRemoteDataSource =
                 if (AppEnvironment.isMockMode) null else bookmarksRemoteDataSource,
             accessTokenProvider = {
@@ -235,6 +244,7 @@ class AppContainer(
     val routeBookmarkRepository: RouteBookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideRouteBookmarkRepository(
             favoriteRouteDao = localDatabase.favoriteRouteDao(),
+            authSessionRepository = authSessionRepository,
             favoriteRoutesRemoteDataSource =
                 if (AppEnvironment.isMockMode) null else favoriteRoutesRemoteDataSource,
             accessTokenProvider = {

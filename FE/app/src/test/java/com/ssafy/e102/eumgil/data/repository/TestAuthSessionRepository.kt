@@ -3,23 +3,24 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 internal class TestAuthSessionRepository(
     initialState: AuthGateState,
 ) : AuthSessionRepository {
-    private var authGateState: AuthGateState = initialState
+    private val authGateState = MutableStateFlow(initialState)
 
-    override fun observeAuthGateState(): Flow<AuthGateState> = flowOf(authGateState)
+    override fun observeAuthGateState(): Flow<AuthGateState> = authGateState.asStateFlow()
 
-    override suspend fun getAuthGateState(): AuthGateState = authGateState
+    override suspend fun getAuthGateState(): AuthGateState = authGateState.value
 
     override suspend fun saveAuthSession(
         authSession: AuthSession,
         isProfileCompleted: Boolean,
     ) {
-        authGateState =
-            authGateState.copy(
+        authGateState.value =
+            authGateState.value.copy(
                 authSession = authSession,
                 isProfileCompleted = isProfileCompleted,
                 signupToken = null,
@@ -27,8 +28,8 @@ internal class TestAuthSessionRepository(
     }
 
     override suspend fun saveSignupToken(signupToken: String) {
-        authGateState =
-            authGateState.copy(
+        authGateState.value =
+            authGateState.value.copy(
                 authSession = null,
                 isProfileCompleted = false,
                 signupToken = signupToken,
@@ -36,14 +37,26 @@ internal class TestAuthSessionRepository(
     }
 
     override suspend fun clearSignupToken() {
-        authGateState = authGateState.copy(signupToken = null)
+        authGateState.value = authGateState.value.copy(signupToken = null)
     }
 
     override suspend fun markProfileCompleted() {
-        authGateState = authGateState.copy(isProfileCompleted = true)
+        authGateState.value = authGateState.value.copy(isProfileCompleted = true)
     }
 
     override suspend fun clearAuthSession() {
-        authGateState = authGateState.copy(authSession = null, isProfileCompleted = false)
+        authGateState.value = authGateState.value.copy(authSession = null, isProfileCompleted = false)
+    }
+
+    suspend fun updateAuthSession(
+        authSession: AuthSession?,
+        isProfileCompleted: Boolean = authGateState.value.isProfileCompleted,
+    ) {
+        authGateState.value =
+            authGateState.value.copy(
+                authSession = authSession,
+                isProfileCompleted = isProfileCompleted,
+                signupToken = null,
+            )
     }
 }

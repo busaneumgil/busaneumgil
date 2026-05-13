@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
@@ -13,7 +15,12 @@ import com.ssafy.e102.eumgil.data.remote.dto.CreateBookmarkResponseDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -107,6 +114,69 @@ class BookmarkRepositoryTest {
         }
 
     @Test
+    fun `observeBookmarks switches to the new account scope when auth session changes`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "token-a", userId = "user-a"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val fakeDao =
+                FakeBookmarkDao(
+                    bookmarks =
+                        listOf(
+                            testBookmarkEntity(placeId = "place-a", accountScopeKey = "user::user-a"),
+                            testBookmarkEntity(placeId = "place-b", accountScopeKey = "user::user-b"),
+                        ),
+                )
+            val repository =
+                DefaultBookmarkRepository(
+                    bookmarkDao = fakeDao,
+                    authSessionRepository = authSessionRepository,
+                )
+
+            val emissions = mutableListOf<List<BookmarkData>>()
+            val collection = async { repository.observeBookmarks().take(2).toList(emissions) }
+            yield()
+
+            authSessionRepository.updateAuthSession(
+                authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
+                isProfileCompleted = true,
+            )
+            collection.await()
+
+            assertEquals(listOf("place-a"), emissions[0].map(BookmarkData::placeId))
+            assertEquals(listOf("place-b"), emissions[1].map(BookmarkData::placeId))
+        }
+
+    @Test
+    fun `observeBookmarks emits empty list when auth session is missing`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState = AuthGateState(authSession = null, isProfileCompleted = false),
+                )
+            val repository =
+                DefaultBookmarkRepository(
+                    bookmarkDao =
+                        FakeBookmarkDao(
+                            bookmarks =
+                                listOf(
+                                    testBookmarkEntity(placeId = "place-a", accountScopeKey = "user::user-a"),
+                                ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                )
+
+            val bookmarks = repository.observeBookmarks().first()
+
+            assertTrue(bookmarks.isEmpty())
+        }
+
+    @Test
     fun `observeBookmarks skips server fetch when access token is null`() =
         runBlocking {
             val cachedBookmark = testBookmarkEntity(placeId = "cached-bookmark")
@@ -154,7 +224,10 @@ class BookmarkRepositoryTest {
             assertEquals("42", savedBookmark.placeId)
             assertEquals("tgt_0123456789abcdef", savedBookmark.bookmarkTargetId)
             assertEquals("INTERNAL_PLACE", savedBookmark.targetType)
-            assertEquals("tgt_0123456789abcdef", fakeDao.getBookmark("42")?.bookmarkTargetId)
+            assertEquals(
+                "tgt_0123456789abcdef",
+                fakeDao.getBookmark(TEST_ACCOUNT_SCOPE_KEY, "42")?.bookmarkTargetId,
+            )
         }
 
     @Test
@@ -230,7 +303,10 @@ class BookmarkRepositoryTest {
             assertEquals("provider:kakao:poi-123", savedBookmark.placeId)
             assertEquals("tgt_fedcba9876543210", savedBookmark.bookmarkTargetId)
             assertEquals("EXTERNAL_POI", savedBookmark.targetType)
-            assertEquals("tgt_fedcba9876543210", fakeDao.getBookmark("provider:kakao:poi-123")?.bookmarkTargetId)
+            assertEquals(
+                "tgt_fedcba9876543210",
+                fakeDao.getBookmark(TEST_ACCOUNT_SCOPE_KEY, "provider:kakao:poi-123")?.bookmarkTargetId,
+            )
         }
 
     @Test
@@ -257,7 +333,7 @@ class BookmarkRepositoryTest {
             )
 
             assertTrue(fakeDataSource.createdRequests.isEmpty())
-            assertEquals(1, fakeDao.getBookmarkCount())
+            assertEquals(1, fakeDao.bookmarkCount())
         }
 
     @Test
@@ -284,7 +360,7 @@ class BookmarkRepositoryTest {
             )
 
             assertTrue(fakeDataSource.createdRequests.isEmpty())
-            assertEquals(1, fakeDao.getBookmarkCount())
+            assertEquals(1, fakeDao.bookmarkCount())
         }
 
     @Test
@@ -304,7 +380,7 @@ class BookmarkRepositoryTest {
 
             assertEquals(listOf("tgt_0123456789abcdef"), fakeDataSource.deletedTargetIds)
             assertTrue(fakeDataSource.deletedPlaceIds.isEmpty())
-            assertEquals(0, fakeDao.getBookmarkCount())
+            assertEquals(0, fakeDao.bookmarkCount())
         }
 
     @Test
@@ -323,7 +399,7 @@ class BookmarkRepositoryTest {
             repository.deleteBookmark("42")
 
             assertEquals(listOf(42L), fakeDataSource.deletedPlaceIds)
-            assertEquals(0, fakeDao.getBookmarkCount())
+            assertEquals(0, fakeDao.bookmarkCount())
         }
 
     @Test
@@ -342,7 +418,7 @@ class BookmarkRepositoryTest {
             val result = runCatching { repository.deleteBookmark("42") }
 
             assertTrue(result.isFailure)
-            assertEquals(1, fakeDao.getBookmarkCount())
+            assertEquals(1, fakeDao.bookmarkCount())
         }
 }
 
@@ -351,18 +427,37 @@ private class FakeBookmarkDao(
 ) : BookmarkDao {
     private val mutableBookmarks = MutableStateFlow(bookmarks)
 
-    override fun observeBookmarks(): Flow<List<BookmarkEntity>> = mutableBookmarks
+    override fun observeBookmarks(accountScopeKey: String): Flow<List<BookmarkEntity>> =
+        mutableBookmarks.map { bookmarks -> bookmarks.filterByScope(accountScopeKey) }
 
-    override fun observeBookmark(placeId: String): Flow<BookmarkEntity?> =
-        MutableStateFlow(mutableBookmarks.value.firstOrNull { bookmark -> bookmark.placeId == placeId })
+    override fun observeBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ): Flow<BookmarkEntity?> =
+        mutableBookmarks.map { bookmarks ->
+            bookmarks.firstOrNull { bookmark ->
+                bookmark.accountScopeKey == accountScopeKey && bookmark.placeId == placeId
+            }
+        }
 
-    override suspend fun getBookmark(placeId: String): BookmarkEntity? =
-        mutableBookmarks.value.firstOrNull { bookmark -> bookmark.placeId == placeId }
+    override suspend fun getBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ): BookmarkEntity? =
+        mutableBookmarks.value.firstOrNull { bookmark ->
+            bookmark.accountScopeKey == accountScopeKey && bookmark.placeId == placeId
+        }
 
-    override suspend fun getBookmarkByTargetId(bookmarkTargetId: String): BookmarkEntity? =
-        mutableBookmarks.value.firstOrNull { bookmark -> bookmark.bookmarkTargetId == bookmarkTargetId }
+    override suspend fun getBookmarkByTargetId(
+        accountScopeKey: String,
+        bookmarkTargetId: String,
+    ): BookmarkEntity? =
+        mutableBookmarks.value.firstOrNull { bookmark ->
+            bookmark.accountScopeKey == accountScopeKey && bookmark.bookmarkTargetId == bookmarkTargetId
+        }
 
-    override suspend fun getBookmarkCount(): Int = mutableBookmarks.value.size
+    override suspend fun getBookmarkCount(accountScopeKey: String): Int =
+        mutableBookmarks.value.count { bookmark -> bookmark.accountScopeKey == accountScopeKey }
 
     override suspend fun upsertBookmark(bookmark: BookmarkEntity) {
         mutableBookmarks.value = mutableBookmarks.value.upsert(bookmark)
@@ -372,18 +467,36 @@ private class FakeBookmarkDao(
         bookmarks.forEach { bookmark -> upsertBookmark(bookmark) }
     }
 
-    override suspend fun deleteBookmark(placeId: String) {
-        mutableBookmarks.value = mutableBookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
-    }
-
-    override suspend fun deleteBookmarkByTargetId(bookmarkTargetId: String) {
+    override suspend fun deleteBookmark(
+        accountScopeKey: String,
+        placeId: String,
+    ) {
         mutableBookmarks.value =
-            mutableBookmarks.value.filterNot { bookmark -> bookmark.bookmarkTargetId == bookmarkTargetId }
+            mutableBookmarks.value.filterNot { bookmark ->
+                bookmark.accountScopeKey == accountScopeKey && bookmark.placeId == placeId
+            }
     }
 
-    override suspend fun clearBookmarks() {
-        mutableBookmarks.value = emptyList()
+    override suspend fun deleteBookmarkByTargetId(
+        accountScopeKey: String,
+        bookmarkTargetId: String,
+    ) {
+        mutableBookmarks.value =
+            mutableBookmarks.value.filterNot { bookmark ->
+                bookmark.accountScopeKey == accountScopeKey && bookmark.bookmarkTargetId == bookmarkTargetId
+            }
     }
+
+    override suspend fun clearBookmarks(accountScopeKey: String) {
+        mutableBookmarks.value =
+            mutableBookmarks.value.filterNot { bookmark -> bookmark.accountScopeKey == accountScopeKey }
+    }
+
+    fun bookmarkCount(accountScopeKey: String = TEST_ACCOUNT_SCOPE_KEY): Int =
+        mutableBookmarks.value.count { bookmark -> bookmark.accountScopeKey == accountScopeKey }
+
+    private fun List<BookmarkEntity>.filterByScope(accountScopeKey: String): List<BookmarkEntity> =
+        filter { bookmark -> bookmark.accountScopeKey == accountScopeKey }
 }
 
 private class FakeBookmarksRemoteDataSource(
@@ -451,13 +564,17 @@ private class FakeBookmarksRemoteDataSource(
 }
 
 private fun List<BookmarkEntity>.upsert(bookmark: BookmarkEntity): List<BookmarkEntity> =
-    filterNot { existing -> existing.placeId == bookmark.placeId } + bookmark
+    filterNot { existing ->
+        existing.accountScopeKey == bookmark.accountScopeKey && existing.placeId == bookmark.placeId
+    } + bookmark
 
 private fun testBookmarkEntity(
     placeId: String,
     bookmarkTargetId: String? = null,
+    accountScopeKey: String = TEST_ACCOUNT_SCOPE_KEY,
 ): BookmarkEntity =
     BookmarkEntity(
+        accountScopeKey = accountScopeKey,
         placeId = placeId,
         serverBookmarkId = 1L,
         bookmarkTargetId = bookmarkTargetId,
@@ -486,3 +603,5 @@ private fun BookmarkEntity.toBookmarkData(): BookmarkData =
         providerPlaceId = providerPlaceId,
         providerCategory = providerCategory,
     )
+
+private const val TEST_ACCOUNT_SCOPE_KEY: String = "test-account"

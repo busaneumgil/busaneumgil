@@ -47,7 +47,7 @@ public class AdminController {
 		return ApiResponse.success(adminService.getMe(principal.userId()));
 	}
 
-	@Operation(summary = "관리자 사용자 목록 조회", description = "가입 완료 사용자와 관리자 권한 상태를 조회한다.")
+	@Operation(summary = "관리자 사용자 목록 조회", description = "ADMIN 권한 사용자 목록만 조회한다.")
 	@GetMapping("/users")
 	public ApiResponse<AdminUserListResponse> getUsers() {
 		return ApiResponse.success(adminService.getUsers());

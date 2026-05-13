@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -245,7 +246,7 @@ private fun RecentDestinationRow(
             modifier =
                 Modifier
                     .padding(top = 2.dp)
-                    .size(28.dp),
+                    .size(36.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
 
@@ -372,6 +373,7 @@ private fun RecentDestinationTagChip(
     label: String,
     isOverflow: Boolean,
 ) {
+    val iconRes = recentDestinationTagIconRes(label = label, isOverflow = isOverflow)
     val containerColor =
         if (isOverflow) {
             MaterialTheme.colorScheme.surfaceVariant
@@ -399,11 +401,75 @@ private fun RecentDestinationTagChip(
                     },
             ),
     ) {
-        Text(
-            text = label,
+        Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = contentColor,
-        )
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            iconRes?.let { resId ->
+                Icon(
+                    painter = painterResource(id = resId),
+                    contentDescription = null,
+                    modifier = Modifier.size(recentDestinationTagIconSizeDp(resId).dp),
+                    tint = contentColor,
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+            )
+        }
     }
 }
+
+@Composable
+@DrawableRes
+private fun recentDestinationTagIconRes(
+    label: String,
+    isOverflow: Boolean,
+): Int? {
+    if (isOverflow) return null
+
+    val normalizedLabel = label.trim()
+    val bareGuidanceLabel = stringResource(id = R.string.place_accessibility_label_guidance_facility).substringBeforeLast(' ')
+    return when (normalizedLabel) {
+        stringResource(id = R.string.place_accessibility_label_accessible_toilet),
+        stringResource(id = R.string.map_facility_detail_tag_accessible_toilet),
+        -> R.drawable.ic_accessibility_tag_accessible_toilet
+
+        stringResource(id = R.string.place_accessibility_label_elevator),
+        stringResource(id = R.string.map_facility_detail_tag_elevator),
+        -> R.drawable.ic_accessibility_tag_elevator
+
+        stringResource(id = R.string.place_accessibility_label_accessible_parking),
+        stringResource(id = R.string.map_facility_detail_tag_accessible_parking),
+        -> R.drawable.ic_accessibility_tag_accessible_parking
+
+        stringResource(id = R.string.place_accessibility_label_step_free),
+        stringResource(id = R.string.map_facility_detail_tag_step_free_entrance),
+        -> R.drawable.ic_accessibility_tag_step_free
+
+        stringResource(id = R.string.map_facility_detail_tag_charging_station),
+        -> R.drawable.ic_accessibility_tag_charging_station
+
+        bareGuidanceLabel,
+        stringResource(id = R.string.place_accessibility_label_guidance_facility),
+        stringResource(id = R.string.map_facility_detail_tag_guidance_facility),
+        -> R.drawable.ic_accessibility_tag_guidance_facility
+
+        stringResource(id = R.string.place_accessibility_label_accessible_room),
+        stringResource(id = R.string.map_facility_detail_tag_accessible_room),
+        -> R.drawable.ic_accessibility_tag_accessible_room
+
+        else -> null
+    }
+}
+
+private fun recentDestinationTagIconSizeDp(
+    @DrawableRes iconRes: Int,
+): Int =
+    when (iconRes) {
+        R.drawable.ic_accessibility_tag_accessible_toilet -> 14
+        else -> 12
+    }

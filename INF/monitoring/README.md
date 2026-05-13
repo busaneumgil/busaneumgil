@@ -13,7 +13,7 @@
 - `S1`
   - `Grafana/Prometheus/Loki/Promtail/node-exporter/cadvisor` 운영도구 stack을 유지한다.
   - `redis-exporter`를 함께 띄워 `dev redis` 상태와 메모리 사용량을 본다.
-  - `blackbox-exporter`를 함께 띄워 `prod` 공개 health endpoint를 점검한다.
+  - `blackbox-exporter`를 함께 띄워 `dev/prod` 공개 health endpoint를 점검한다.
   - `dev backend`는 내부 관리 포트 `18080`에서 `/actuator/health`, `/actuator/prometheus`를 노출하고, S1 Prometheus는 `s14p31e102-dev_default` 네트워크를 통해 `backend:18080`을 직접 scrape 한다.
 - `S2`
   - `prod backend`도 동일한 actuator endpoint를 내부 관리 포트 `18080`에서 운영 관측용으로 노출한다.
@@ -51,6 +51,15 @@ docker compose --env-file ./.env up -d
 ./scripts/apply-sonarqube-oauth.sh
 ```
 
+운영 기준으로는 Jenkins `e102-monitoring-deploy` 잡에서 `scripts/deploy/s1-monitoring-sync.sh`를 실행해 아래를 함께 맞춘다.
+
+- `INF/monitoring/s1/**` -> `/home/ubuntu/e102/ops`
+- `INF/jenkins/s1/nginx.conf` -> `/home/ubuntu/e102/jenkins/nginx.conf`
+- monitoring stack 재적용
+- 필요 시 `e102-jenkins-proxy` 재시작
+
+`s14p31e102-dev_default` 네트워크가 아직 없다면, sync 스크립트가 bootstrap network를 먼저 만들고 monitoring stack을 올린다. 이 bootstrap network는 dev compose가 같은 이름으로 다시 합류할 수 있도록 compose label을 같이 붙인다.
+
 운영도구 env 값은 노션의 운영 env 기준을 확인한 뒤 S1 `/home/ubuntu/e102/ops/.env`로 배포한다.
 
 Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_운영도구_secret_관리_기준.md`를 따른다.
@@ -68,7 +77,8 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
   - `cadvisor`
   - `redis-exporter`
   - `s1-dev-backend`
-- `blackbox-prod-http`
+  - `blackbox-dev-http`
+  - `blackbox-prod-http`
 - 현재 단계에서 Grafana는 `dev backend`, `dev redis`, `S1 host/container`, `prod 공개 health`, `S2 prod log`를 2차 조회 용도로 사용한다.
 - Grafana datasource:
   - `Prometheus`: `dev metric`
@@ -94,6 +104,7 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
 - 현재 제약:
   - `dev` overview는 `dev` 전용으로 고정하고, `prod`는 별도 dashboard로 분리한다.
   - `prod`의 `DB 연결 상태`, `Redis 연결 상태`는 RDS/ElastiCache 자체 상태가 아니라 backend dependency health를 의미한다.
+  - `prod`의 `GraphHopper 상태` 카드는 `graphhopper`, `graphhopper-blue`, `graphhopper-green` probe 결과를 받아 blue/green 확장을 허용한다.
   - 대시보드 로그 패널은 기본적으로 `warning 이상`과 `exception/timeout/failed` 같은 장애 단서를 우선 보여준다.
   - `prod log`는 S2 promtail 배치 후 같은 Grafana에서 즉시 조회 가능하다.
   - `prod`의 상세 JVM/Hikari 지표는 별도 private scrape를 열기 전까지 카드로 노출하지 않는다.

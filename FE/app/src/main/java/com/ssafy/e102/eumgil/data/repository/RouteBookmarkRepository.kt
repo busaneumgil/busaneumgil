@@ -11,7 +11,9 @@ import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSour
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRouteListItemDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
@@ -28,33 +30,41 @@ interface RouteBookmarkRepository {
 
 class DefaultRouteBookmarkRepository(
     private val favoriteRouteDao: FavoriteRouteDao,
+    private val authSessionRepository: AuthSessionRepository? = null,
     private val favoriteRoutesRemoteDataSource: FavoriteRoutesRemoteDataSource? = null,
     private val accessTokenProvider: suspend () -> String? = { null },
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : RouteBookmarkRepository {
     override fun observeRouteBookmarks(): Flow<List<RouteBookmark>> =
-        favoriteRouteDao
-            .observeFavoriteRoutes()
-            .onStart { refreshFromServerIfPossible() }
-            .map { entities -> entities.map(FavoriteRouteEntity::toRouteBookmark) }
+        observeAccountScope().flatMapLatest { accountScopeKey ->
+            if (accountScopeKey == null) {
+                flowOf(emptyList())
+            } else {
+                favoriteRouteDao
+                    .observeFavoriteRoutes(accountScopeKey)
+                    .onStart { refreshFromServerIfPossible(accountScopeKey) }
+                    .map { entities -> entities.map(FavoriteRouteEntity::toRouteBookmark) }
+            }
+        }
 
     override suspend fun isBookmarked(draft: RouteBookmarkDraft): Boolean {
-        val cached = favoriteRouteDao.observeFavoriteRoutes().first()
+        val accountScopeKey = getCurrentAccountScopeKey() ?: return false
+        val cached = favoriteRouteDao.getFavoriteRoutes(accountScopeKey)
         return cached.any { entity -> entity.matchesSignature(draft) }
     }
 
     override suspend fun saveRouteBookmark(request: RouteBookmarkSaveRequest): RouteBookmark {
+        val accountScopeKey = getCurrentAccountScopeKey() ?: return request.toUncachedRouteBookmark(clock())
         val now = clock()
-
         val serverFavRouteId =
             runCatching { trySaveOnServer(request) }.getOrNull()
-
-        val resolvedBookmarkId =
-            serverFavRouteId?.toString() ?: request.fallbackBookmarkId()
+        val resolvedFavoriteRouteId = serverFavRouteId ?: request.localCacheFavoriteRouteId()
+        val existingEntity = favoriteRouteDao.getFavoriteRoute(accountScopeKey, resolvedFavoriteRouteId)
 
         val cachedEntity =
             FavoriteRouteEntity(
-                favoriteRouteId = serverFavRouteId ?: 0L,
+                accountScopeKey = accountScopeKey,
+                favoriteRouteId = resolvedFavoriteRouteId,
                 routeName = request.routeName.trim().ifBlank { request.fallbackRouteName() },
                 originName = request.startLabel,
                 originLatitude = request.startPoint.latitude,
@@ -66,13 +76,13 @@ class DefaultRouteBookmarkRepository(
                 routeOption = request.routeOption.name,
                 summaryDistanceMeters = request.distanceMeters,
                 summaryDurationSeconds = request.durationMinutes?.let { it * 60 },
-                createdAt = now,
+                createdAt = existingEntity?.createdAt ?: now,
                 updatedAt = now,
             )
         favoriteRouteDao.upsertFavoriteRoute(cachedEntity)
 
         return RouteBookmark(
-            bookmarkId = resolvedBookmarkId,
+            bookmarkId = cachedEntity.favoriteRouteId.toString(),
             routeName = cachedEntity.routeName,
             startLabel = cachedEntity.originName,
             endLabel = cachedEntity.destinationName,
@@ -93,17 +103,15 @@ class DefaultRouteBookmarkRepository(
     }
 
     override suspend fun deleteRouteBookmark(bookmarkId: String) {
-        runCatching { tryDeleteOnServer(bookmarkId) }
-
-        val numericId = bookmarkId.toLongOrNull()
-        if (numericId != null) {
-            favoriteRouteDao.deleteFavoriteRoute(numericId)
-        }
+        val accountScopeKey = getCurrentAccountScopeKey() ?: return
+        val favoriteRouteId = bookmarkId.toLongOrNull() ?: return
+        runCatching { tryDeleteOnServer(favoriteRouteId) }
+        favoriteRouteDao.deleteFavoriteRoute(accountScopeKey, favoriteRouteId)
     }
 
     private suspend fun trySaveOnServer(request: RouteBookmarkSaveRequest): Long? {
         val datasource = favoriteRoutesRemoteDataSource ?: return null
-        val token = accessTokenProvider() ?: return null
+        val token = resolveAccessToken() ?: return null
         val routeId = request.routeId?.trim()?.takeIf(String::isNotEmpty) ?: return null
 
         val response =
@@ -116,18 +124,18 @@ class DefaultRouteBookmarkRepository(
         return response.favRouteId
     }
 
-    private suspend fun tryDeleteOnServer(bookmarkId: String) {
+    private suspend fun tryDeleteOnServer(favoriteRouteId: Long) {
         val datasource = favoriteRoutesRemoteDataSource ?: return
-        val token = accessTokenProvider() ?: return
-        val numericId = bookmarkId.toLongOrNull() ?: return
+        val token = resolveAccessToken() ?: return
+        if (favoriteRouteId <= 0L) return
 
-        datasource.deleteFavoriteRoute(accessToken = token, favRouteId = numericId)
+        datasource.deleteFavoriteRoute(accessToken = token, favRouteId = favoriteRouteId)
     }
 
-    private suspend fun refreshFromServerIfPossible() {
+    private suspend fun refreshFromServerIfPossible(accountScopeKey: String) {
         runCatching {
             val datasource = favoriteRoutesRemoteDataSource ?: return@runCatching
-            val token = accessTokenProvider() ?: return@runCatching
+            val token = resolveAccessToken() ?: return@runCatching
 
             val page =
                 datasource.getFavoriteRoutes(
@@ -139,15 +147,15 @@ class DefaultRouteBookmarkRepository(
             val now = clock()
             val cachedById =
                 favoriteRouteDao
-                    .observeFavoriteRoutes()
-                    .first()
+                    .getFavoriteRoutes(accountScopeKey)
                     .associateBy(FavoriteRouteEntity::favoriteRouteId)
 
-            favoriteRouteDao.clearFavoriteRoutes()
+            favoriteRouteDao.clearFavoriteRoutes(accountScopeKey)
             favoriteRouteDao.upsertFavoriteRoutes(
                 page.content.map { item ->
                     val cached = cachedById[item.favRouteId]
                     item.toFavoriteRouteEntity(
+                        accountScopeKey = accountScopeKey,
                         createdAt = cached?.createdAt ?: now,
                         updatedAt = now,
                         cachedDistanceMeters = cached?.summaryDistanceMeters,
@@ -158,9 +166,19 @@ class DefaultRouteBookmarkRepository(
         }
     }
 
+    private fun observeAccountScope(): Flow<String?> =
+        authSessionRepository?.observeAccountScopeKey() ?: flowOf(DEFAULT_TEST_ACCOUNT_SCOPE_KEY)
+
+    private suspend fun getCurrentAccountScopeKey(): String? =
+        authSessionRepository?.getAccountScopeKey() ?: DEFAULT_TEST_ACCOUNT_SCOPE_KEY
+
+    private suspend fun resolveAccessToken(): String? =
+        authSessionRepository?.getCurrentAuthSession()?.accessToken ?: accessTokenProvider()
+
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 50
         private const val WALK_TRANSPORT_MODE = "WALK"
+        private const val DEFAULT_TEST_ACCOUNT_SCOPE_KEY = "test-account"
     }
 }
 
@@ -226,8 +244,6 @@ private fun RouteBookmarkSaveRequest.bookmarkId(): String =
         ?.let { "route-bookmark:$it" }
         ?: "route-bookmark:${startPoint.latitude},${startPoint.longitude}|${endPoint.latitude},${endPoint.longitude}|${routeOption.name}"
 
-private fun RouteBookmarkSaveRequest.fallbackBookmarkId(): String = bookmarkId()
-
 private fun RouteBookmarkSaveRequest.fallbackRouteName(): String = "$startLabel-$endLabel"
 
 private fun FavoriteRouteEntity.matchesSignature(draft: RouteBookmarkDraft): Boolean =
@@ -239,7 +255,7 @@ private fun FavoriteRouteEntity.matchesSignature(draft: RouteBookmarkDraft): Boo
 
 private fun FavoriteRouteEntity.toRouteBookmark(): RouteBookmark =
     RouteBookmark(
-        bookmarkId = if (favoriteRouteId > 0) favoriteRouteId.toString() else "route-bookmark-cache:$favoriteRouteId",
+        bookmarkId = favoriteRouteId.toString(),
         routeName = routeName,
         startLabel = originName,
         endLabel = destinationName,
@@ -255,12 +271,14 @@ private fun FavoriteRouteEntity.toRouteBookmark(): RouteBookmark =
     )
 
 private fun FavoriteRouteListItemDto.toFavoriteRouteEntity(
+    accountScopeKey: String,
     createdAt: Long,
     updatedAt: Long,
     cachedDistanceMeters: Int? = null,
     cachedDurationSeconds: Int? = null,
 ): FavoriteRouteEntity =
     FavoriteRouteEntity(
+        accountScopeKey = accountScopeKey,
         favoriteRouteId = favRouteId,
         routeName = routeName,
         originName = startLabel,
@@ -281,3 +299,32 @@ private fun String?.toRouteOptionOrDefault(): RouteOption =
     this?.let { value ->
         RouteOption.values().firstOrNull { it.name == value }
     } ?: RouteOption.SAFE
+
+private fun RouteBookmarkSaveRequest.localCacheFavoriteRouteId(): Long {
+    val signature = bookmarkId()
+    val hash =
+        signature.fold(1_125_899_906_842_597L) { accumulator, character ->
+            (accumulator * 31L) + character.code.toLong()
+        }
+    return when {
+        hash == 0L -> -1L
+        hash > 0L -> -hash
+        hash == Long.MIN_VALUE -> Long.MIN_VALUE + 1L
+        else -> hash
+    }
+}
+
+private fun RouteBookmarkSaveRequest.toUncachedRouteBookmark(now: Long): RouteBookmark =
+    RouteBookmark(
+        bookmarkId = localCacheFavoriteRouteId().toString(),
+        routeName = routeName.trim().ifBlank { fallbackRouteName() },
+        startLabel = startLabel,
+        endLabel = endLabel,
+        startPoint = startPoint,
+        endPoint = endPoint,
+        routeOption = routeOption,
+        distanceMeters = distanceMeters,
+        durationMinutes = durationMinutes,
+        createdAt = now,
+        updatedAt = now,
+    )

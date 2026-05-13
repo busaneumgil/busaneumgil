@@ -9,6 +9,7 @@ interface RouteGeometryParser {
 
 data class RouteGeometryParseResult(
     val polyline: RoutePolyline = RoutePolyline(),
+    val anchorCoordinate: GeoCoordinate? = null,
     val status: RouteGeometryParseStatus,
     val parsedPointCount: Int = 0,
 )
@@ -43,9 +44,6 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
         if (geometryType.isBlank()) {
             return RouteGeometryParseResult(status = RouteGeometryParseStatus.MALFORMED_GEOMETRY)
         }
-        if (!geometryType.equals(LINESTRING_TYPE, ignoreCase = true)) {
-            return RouteGeometryParseResult(status = RouteGeometryParseStatus.UNSUPPORTED_GEOMETRY)
-        }
 
         val coordinatePayload =
             normalizedGeometry
@@ -58,14 +56,52 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
 
         val coordinates = parseCoordinates(coordinatePayload)
             ?: return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
-        if (coordinates.size < MINIMUM_RENDERABLE_POINT_COUNT) {
-            return RouteGeometryParseResult(status = RouteGeometryParseStatus.INSUFFICIENT_POINTS)
+
+        return when {
+            geometryType.equals(LINESTRING_TYPE, ignoreCase = true) ->
+                coordinates.toLinestringParseResult()
+
+            geometryType.equals(POINT_TYPE, ignoreCase = true) ->
+                coordinates.toPointParseResult()
+
+            else -> RouteGeometryParseResult(status = RouteGeometryParseStatus.UNSUPPORTED_GEOMETRY)
+        }
+    }
+
+    private fun List<GeoCoordinate>.toLinestringParseResult(): RouteGeometryParseResult {
+        val polyline = RoutePolyline(points = this)
+        if (size < MINIMUM_RENDERABLE_POINT_COUNT) {
+            return RouteGeometryParseResult(
+                polyline = polyline,
+                anchorCoordinate = firstOrNull(),
+                status = RouteGeometryParseStatus.INSUFFICIENT_POINTS,
+                parsedPointCount = size,
+            )
         }
 
         return RouteGeometryParseResult(
-            polyline = RoutePolyline(points = coordinates),
+            polyline = polyline,
+            anchorCoordinate = first(),
             status = RouteGeometryParseStatus.SUCCESS,
-            parsedPointCount = coordinates.size,
+            parsedPointCount = size,
+        )
+    }
+
+    private fun List<GeoCoordinate>.toPointParseResult(): RouteGeometryParseResult {
+        if (size != 1) {
+            return RouteGeometryParseResult(
+                polyline = RoutePolyline(points = this),
+                anchorCoordinate = firstOrNull(),
+                status = RouteGeometryParseStatus.INVALID_COORDINATE,
+                parsedPointCount = size,
+            )
+        }
+
+        return RouteGeometryParseResult(
+            polyline = RoutePolyline(points = this),
+            anchorCoordinate = single(),
+            status = RouteGeometryParseStatus.SUCCESS,
+            parsedPointCount = 1,
         )
     }
 
@@ -132,6 +168,7 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
 
     companion object {
         private const val LINESTRING_TYPE: String = "LINESTRING"
+        private const val POINT_TYPE: String = "POINT"
         private const val MINIMUM_RENDERABLE_POINT_COUNT: Int = 2
         private const val MIN_LATITUDE: Double = -90.0
         private const val MAX_LATITUDE: Double = 90.0

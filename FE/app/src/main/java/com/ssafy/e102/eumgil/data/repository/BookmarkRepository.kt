@@ -9,6 +9,8 @@ import com.ssafy.e102.eumgil.data.remote.dto.BookmarkPointDto
 import com.ssafy.e102.eumgil.data.remote.dto.CreateBookmarkRequestDto
 import com.ssafy.e102.eumgil.data.remote.dto.CreateBookmarkResponseDto
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import java.util.Locale
@@ -41,46 +43,59 @@ data class BookmarkData(
 
 class DefaultBookmarkRepository(
     private val bookmarkDao: BookmarkDao,
+    private val authSessionRepository: AuthSessionRepository? = null,
     private val bookmarksRemoteDataSource: BookmarksRemoteDataSource? = null,
     private val accessTokenProvider: suspend () -> String? = { null },
     private val initialBookmarks: List<BookmarkData> = emptyList(),
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : BookmarkRepository {
-    private var hasSeededInitialBookmarks = false
+    private val seededAccountScopes = mutableSetOf<String>()
 
     override fun observeBookmarks(): Flow<List<BookmarkData>> =
-        bookmarkDao
-            .observeBookmarks()
-            .onStart {
-                seedInitialBookmarksIfNeeded()
-                refreshFromServerIfPossible()
+        observeAccountScope().flatMapLatest { accountScopeKey ->
+            if (accountScopeKey == null) {
+                flowOf(emptyList())
+            } else {
+                bookmarkDao
+                    .observeBookmarks(accountScopeKey)
+                    .onStart {
+                        seedInitialBookmarksIfNeeded(accountScopeKey)
+                        refreshFromServerIfPossible(accountScopeKey)
+                    }.map { bookmarks ->
+                        bookmarks.map(BookmarkEntity::toBookmarkData)
+                    }
             }
-            .map { bookmarks ->
-                bookmarks.map(BookmarkEntity::toBookmarkData)
-            }
+        }
 
-    override suspend fun isBookmarked(placeId: String): Boolean = bookmarkDao.getBookmark(placeId) != null
+    override suspend fun isBookmarked(placeId: String): Boolean {
+        val accountScopeKey = getCurrentAccountScopeKey() ?: return false
+        return bookmarkDao.getBookmark(accountScopeKey, placeId) != null
+    }
 
     override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData {
+        val accountScopeKey = getCurrentAccountScopeKey() ?: return bookmark
         val serverResponse = trySaveOnServer(bookmark)
         val resolvedBookmark = bookmark.withServerResponse(serverResponse)
-        cacheBookmark(resolvedBookmark)
+        cacheBookmark(accountScopeKey, resolvedBookmark)
         return resolvedBookmark
     }
 
     override suspend fun deleteBookmark(placeId: String) {
-        val cachedBookmark = bookmarkDao.getBookmark(placeId) ?: bookmarkDao.getBookmarkByTargetId(placeId)
+        val accountScopeKey = getCurrentAccountScopeKey() ?: return
+        val cachedBookmark =
+            bookmarkDao.getBookmark(accountScopeKey, placeId)
+                ?: bookmarkDao.getBookmarkByTargetId(accountScopeKey, placeId)
         tryDeleteOnServer(placeId = placeId, cachedBookmark = cachedBookmark)
         if (cachedBookmark?.bookmarkTargetId == placeId) {
-            bookmarkDao.deleteBookmarkByTargetId(placeId)
+            bookmarkDao.deleteBookmarkByTargetId(accountScopeKey, placeId)
         } else {
-            bookmarkDao.deleteBookmark(placeId)
+            bookmarkDao.deleteBookmark(accountScopeKey, placeId)
         }
     }
 
     private suspend fun trySaveOnServer(bookmark: BookmarkData): CreateBookmarkResponseDto? {
         val datasource = bookmarksRemoteDataSource ?: return null
-        val token = accessTokenProvider() ?: return null
+        val token = resolveAccessToken() ?: return null
         val request = bookmark.toCreateBookmarkRequestDto() ?: return null
 
         return datasource.createBookmark(accessToken = token, request = request)
@@ -91,7 +106,7 @@ class DefaultBookmarkRepository(
         cachedBookmark: BookmarkEntity?,
     ) {
         val datasource = bookmarksRemoteDataSource ?: return
-        val token = accessTokenProvider() ?: return
+        val token = resolveAccessToken() ?: return
         val bookmarkTargetId = cachedBookmark?.bookmarkTargetId?.takeIf { it.isNotBlank() }
         if (bookmarkTargetId != null) {
             datasource.deleteBookmarkByTargetId(accessToken = token, bookmarkTargetId = bookmarkTargetId)
@@ -103,13 +118,17 @@ class DefaultBookmarkRepository(
         datasource.deleteBookmark(accessToken = token, placeId = numericPlaceId)
     }
 
-    private suspend fun cacheBookmark(bookmark: BookmarkData) {
+    private suspend fun cacheBookmark(
+        accountScopeKey: String,
+        bookmark: BookmarkData,
+    ) {
         val now = clock()
-        val existingBookmark = bookmarkDao.getBookmark(bookmark.placeId)
+        val existingBookmark = bookmarkDao.getBookmark(accountScopeKey, bookmark.placeId)
 
         bookmarkDao.upsertBookmark(
             BookmarkEntity(
                 bookmarkId = existingBookmark?.bookmarkId ?: 0L,
+                accountScopeKey = accountScopeKey,
                 placeId = bookmark.placeId,
                 serverBookmarkId = bookmark.bookmarkId,
                 bookmarkTargetId = bookmark.bookmarkTargetId,
@@ -129,17 +148,23 @@ class DefaultBookmarkRepository(
         )
     }
 
-    private suspend fun refreshFromServerIfPossible() {
+    private suspend fun refreshFromServerIfPossible(accountScopeKey: String) {
         runCatching {
             val datasource = bookmarksRemoteDataSource ?: return@runCatching
-            val token = accessTokenProvider() ?: return@runCatching
+            val token = resolveAccessToken() ?: return@runCatching
 
             val serverBookmarks = fetchAllBookmarksFromServer(datasource = datasource, token = token)
 
             val now = clock()
-            bookmarkDao.clearBookmarks()
+            bookmarkDao.clearBookmarks(accountScopeKey)
             bookmarkDao.upsertBookmarks(
-                serverBookmarks.map { item -> item.toBookmarkEntity(createdAt = now, updatedAt = now) },
+                serverBookmarks.map { item ->
+                    item.toBookmarkEntity(
+                        accountScopeKey = accountScopeKey,
+                        createdAt = now,
+                        updatedAt = now,
+                    )
+                },
             )
         }
     }
@@ -165,22 +190,36 @@ class DefaultBookmarkRepository(
         return bookmarks
     }
 
-    private suspend fun seedInitialBookmarksIfNeeded() {
-        if (hasSeededInitialBookmarks || initialBookmarks.isEmpty()) return
+    private suspend fun seedInitialBookmarksIfNeeded(accountScopeKey: String) {
+        if (accountScopeKey in seededAccountScopes || initialBookmarks.isEmpty()) return
 
-        hasSeededInitialBookmarks = true
-        if (bookmarkDao.getBookmarkCount() > 0) return
+        seededAccountScopes += accountScopeKey
+        if (bookmarkDao.getBookmarkCount(accountScopeKey) > 0) return
 
         val now = clock()
         bookmarkDao.upsertBookmarks(
             initialBookmarks.map { bookmark ->
-                bookmark.toBookmarkEntity(createdAt = now, updatedAt = now)
+                bookmark.toBookmarkEntity(
+                    accountScopeKey = accountScopeKey,
+                    createdAt = now,
+                    updatedAt = now,
+                )
             },
         )
     }
 
+    private fun observeAccountScope(): Flow<String?> =
+        authSessionRepository?.observeAccountScopeKey() ?: flowOf(DEFAULT_TEST_ACCOUNT_SCOPE_KEY)
+
+    private suspend fun getCurrentAccountScopeKey(): String? =
+        authSessionRepository?.getAccountScopeKey() ?: DEFAULT_TEST_ACCOUNT_SCOPE_KEY
+
+    private suspend fun resolveAccessToken(): String? =
+        authSessionRepository?.getCurrentAuthSession()?.accessToken ?: accessTokenProvider()
+
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 50
+        private const val DEFAULT_TEST_ACCOUNT_SCOPE_KEY = "test-account"
     }
 }
 
@@ -212,10 +251,12 @@ fun FacilityDetailSeed.toBookmarkData(): BookmarkData =
     )
 
 private fun BookmarkData.toBookmarkEntity(
+    accountScopeKey: String,
     createdAt: Long,
     updatedAt: Long,
 ): BookmarkEntity =
     BookmarkEntity(
+        accountScopeKey = accountScopeKey,
         placeId = placeId,
         serverBookmarkId = bookmarkId,
         bookmarkTargetId = bookmarkTargetId,
@@ -234,10 +275,12 @@ private fun BookmarkData.toBookmarkEntity(
     )
 
 private fun BookmarkListItemDto.toBookmarkEntity(
+    accountScopeKey: String,
     createdAt: Long,
     updatedAt: Long,
 ): BookmarkEntity =
     BookmarkEntity(
+        accountScopeKey = accountScopeKey,
         placeId = localCachePlaceId(),
         serverBookmarkId = bookmarkId,
         bookmarkTargetId = bookmarkTargetId,

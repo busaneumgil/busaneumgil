@@ -111,18 +111,54 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
-    fun `blank map taps bind to terrain click listener so selected pin can be dropped`() {
+    fun `background single taps are ignored before entering the map detail dispatch chain`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
         assertTrue(
-            "Blank-area taps should use Kakao's terrain click callback so the dropped pin action is triggered on empty map space.",
-            source.contains("setOnTerrainClickListener"),
+            "Terrain taps on the bare map should be ignored at the viewport layer so blank road/background presses do not open the place detail flow.",
+            source.contains(
+                """
+                setOnTerrainClickListener { _, position, _ ->
+                        ignoreBackgroundSingleTap(
+                            source = "terrain",
+                            position = position,
+                        )
+                    }
+                """.trimIndent(),
+            ),
         )
         assertTrue(
-            "Blank-area taps should also listen to the generic map click callback so non-terrain surfaces can still drop a pin.",
-            source.contains("setOnMapClickListener"),
+            "Generic map clicks with no POI payload should also stop at the viewport layer instead of flowing into MapTapped detail lookup.",
+            source.contains(
+                """
+                } else if (poi == null) {
+                            ignoreBackgroundSingleTap(
+                                source = "map",
+                                position = position,
+                            )
+                        }
+                """.trimIndent(),
+            ),
+        )
+        assertFalse(
+            "Terrain taps should no longer dispatch ADDRESS map taps from the viewport.",
+            source.contains(
+                """
+                dispatchMapTap(
+                            source = "terrain",
+                """.trimIndent(),
+            ),
+        )
+        assertFalse(
+            "Null-POI map clicks should no longer dispatch ADDRESS map taps from the viewport.",
+            source.contains(
+                """
+                } else if (poi == null) {
+                            dispatchMapTap(
+                """.trimIndent(),
+            ),
         )
     }
 
@@ -204,8 +240,21 @@ class KakaoMapViewportConfigurationTest {
         )
         assertTrue(
             "The POI callback should still fall back to providerPlaceId when Kakao does not expose a name in that callback.",
-            source.contains("providerPlaceId = poiId") &&
-                source.contains("nameHint = null"),
+            source.contains(
+                """
+                readyMap.setOnPoiClickListener { _, position, layerId, poiId ->
+                        if (layerId == KAKAO_MARKER_LAYER_ID && poiId.isNotBlank()) {
+                """.trimIndent(),
+            ) &&
+                source.contains(
+                    """
+                    dispatchExternalPoiTap(
+                                position = position,
+                                providerPlaceId = poiId,
+                                nameHint = null,
+                            )
+                    """.trimIndent(),
+                ),
         )
     }
 }

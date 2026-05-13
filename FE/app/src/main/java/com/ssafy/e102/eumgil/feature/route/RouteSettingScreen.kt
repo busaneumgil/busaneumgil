@@ -29,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -75,6 +76,7 @@ import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredT
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
@@ -86,6 +88,15 @@ import java.util.Locale
 fun RouteSettingScreen(
     uiState: RouteSettingUiState,
     onAction: (RouteSettingUiAction) -> Unit,
+    isDuribalConfirmDialogVisible: Boolean = false,
+    onDuribalCallClick: () -> Unit = {},
+    onDuribalConfirmDismiss: () -> Unit = {},
+    onDuribalConfirm: () -> Unit = {},
+    pendingLowFloorReservation: LowFloorBusReservation? = null,
+    isLowFloorReservationRequesting: Boolean = false,
+    onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
+    onLowFloorReservationDismiss: () -> Unit = {},
+    onLowFloorReservationConfirm: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val supportingMessage =
@@ -162,6 +173,8 @@ fun RouteSettingScreen(
             )
             RouteSettingRouteSheet(
                 uiState = uiState,
+                onLowFloorReservationClick = onLowFloorReservationClick,
+                onDuribalCallClick = onDuribalCallClick,
                 onOptionClick = { routeOption ->
                     onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
                 },
@@ -171,6 +184,21 @@ fun RouteSettingScreen(
             )
         }
     }
+
+    if (isDuribalConfirmDialogVisible) {
+        RouteDuribalCallConfirmDialog(
+            onDismiss = onDuribalConfirmDismiss,
+            onConfirm = onDuribalConfirm,
+        )
+    }
+    pendingLowFloorReservation?.let { reservation ->
+        LowFloorReservationConfirmDialog(
+            reservation = reservation,
+            isRequesting = isLowFloorReservationRequesting,
+            onDismiss = onLowFloorReservationDismiss,
+            onConfirm = onLowFloorReservationConfirm,
+        )
+    }
 }
 
 @Composable
@@ -178,6 +206,11 @@ fun RouteDetailScreen(
     uiState: RouteSettingUiState,
     onBackClick: () -> Unit,
     onStartClick: () -> Unit,
+    pendingLowFloorReservation: LowFloorBusReservation? = null,
+    isLowFloorReservationRequesting: Boolean = false,
+    onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
+    onLowFloorReservationDismiss: () -> Unit = {},
+    onLowFloorReservationConfirm: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val selectedRoute = uiState.selectedRoute
@@ -248,6 +281,10 @@ fun RouteDetailScreen(
 
                 else -> {
                     RouteDetailSummaryCard(selectedRoute = selectedRoute)
+                    LowFloorReservationSection(
+                        reservations = selectedRoute.lowFloorReservations,
+                        onReservationClick = onLowFloorReservationClick,
+                    )
                     RouteDetailStepsSection(
                         origin = uiState.origin,
                         steps = selectedRoute.detailSteps,
@@ -257,6 +294,200 @@ fun RouteDetailScreen(
             }
         }
     }
+    pendingLowFloorReservation?.let { reservation ->
+        LowFloorReservationConfirmDialog(
+            reservation = reservation,
+            isRequesting = isLowFloorReservationRequesting,
+            onDismiss = onLowFloorReservationDismiss,
+            onConfirm = onLowFloorReservationConfirm,
+        )
+    }
+}
+
+@Composable
+private fun LowFloorReservationSection(
+    reservations: List<LowFloorBusReservation>,
+    onReservationClick: (LowFloorBusReservation) -> Unit,
+) {
+    if (reservations.isEmpty()) {
+        return
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(RouteStandardCardCornerRadius),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Text(
+                text = stringResource(id = R.string.route_setting_low_floor_reservation_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            reservations.take(MAX_LOW_FLOOR_RESERVATION_COUNT).forEach { reservation ->
+                LowFloorReservationRow(
+                    reservation = reservation,
+                    onReservationClick = onReservationClick,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LowFloorReservationRow(
+    reservation: LowFloorBusReservation,
+    onReservationClick: (LowFloorBusReservation) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.route_setting_low_floor_reservation_summary,
+                        reservation.routeNo,
+                        reservation.vehicleNo,
+                    ),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.route_setting_low_floor_reservation_meta,
+                        reservation.stopName,
+                        reservation.remainingMinute,
+                        reservation.remainingStopCount ?: 1,
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Button(
+            onClick = { onReservationClick(reservation) },
+            shape = RoundedCornerShape(EumRadius.small),
+            modifier = Modifier.height(RouteInlineButtonHeight),
+        ) {
+            Text(text = stringResource(id = R.string.route_setting_low_floor_reservation_action))
+        }
+    }
+}
+
+@Composable
+private fun LowFloorReservationConfirmDialog(
+    reservation: LowFloorBusReservation,
+    isRequesting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!isRequesting) {
+                onDismiss()
+            }
+        },
+        title = {
+            Text(
+                text = stringResource(id = R.string.route_setting_low_floor_reservation_dialog_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.route_setting_low_floor_reservation_dialog_message,
+                        reservation.stopName,
+                        reservation.routeNo,
+                        reservation.vehicleNo,
+                        reservation.remainingMinute,
+                        reservation.remainingStopCount ?: 1,
+                    ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isRequesting,
+                shape = RoundedCornerShape(EumRadius.scaleM),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id =
+                                if (isRequesting) {
+                                    R.string.route_setting_low_floor_reservation_dialog_loading
+                                } else {
+                                    R.string.route_setting_low_floor_reservation_dialog_confirm
+                                },
+                        ),
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isRequesting,
+            ) {
+                Text(text = stringResource(id = R.string.route_setting_low_floor_reservation_dialog_dismiss))
+            }
+        },
+    )
+}
+
+@Composable
+private fun RouteDuribalCallConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(id = R.string.my_page_duribal_call_dialog_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(id = R.string.my_page_duribal_call_dialog_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                shape = RoundedCornerShape(EumRadius.scaleM),
+            ) {
+                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_dismiss))
+            }
+        },
+    )
 }
 
 @Composable
@@ -1623,6 +1854,8 @@ private fun RouteMapControls(
 @Composable
 private fun RouteSettingRouteSheet(
     uiState: RouteSettingUiState,
+    onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
+    onDuribalCallClick: () -> Unit,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
@@ -1648,6 +1881,8 @@ private fun RouteSettingRouteSheet(
         ) {
             RouteOptionSection(
                 uiState = uiState,
+                onLowFloorReservationClick = onLowFloorReservationClick,
+                onDuribalCallClick = onDuribalCallClick,
                 onOptionClick = onOptionClick,
                 onOptionDetailClick = onOptionDetailClick,
             )
@@ -1658,6 +1893,8 @@ private fun RouteSettingRouteSheet(
 @Composable
 private fun RouteOptionSection(
     uiState: RouteSettingUiState,
+    onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
+    onDuribalCallClick: () -> Unit,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
@@ -1677,6 +1914,18 @@ private fun RouteOptionSection(
                 RouteStateCard(
                     title = stringResource(id = R.string.route_setting_summary_error_title),
                     description = uiState.loadErrorMessage,
+                    actionLabel =
+                        if (uiState.showsDuribalCallAction) {
+                            stringResource(id = R.string.route_setting_duribal_call_action)
+                        } else {
+                            null
+                        },
+                    onActionClick =
+                        if (uiState.showsDuribalCallAction) {
+                            onDuribalCallClick
+                        } else {
+                            null
+                        },
                     containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.32f),
                     borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.24f),
                 )
@@ -1688,12 +1937,20 @@ private fun RouteOptionSection(
                 )
 
             else ->
-                uiState.optionCards.take(MAX_VISIBLE_OPTION_CARD_COUNT).forEach { optionCard ->
-                    RouteCompactOptionCard(
-                        card = optionCard,
-                        onClick = { onOptionClick(optionCard.routeOption) },
-                        onDetailClick = { onOptionDetailClick(optionCard.routeOption) },
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(RouteOptionCardGap)) {
+                    uiState.optionCards.take(MAX_VISIBLE_OPTION_CARD_COUNT).forEach { optionCard ->
+                        RouteCompactOptionCard(
+                            card = optionCard,
+                            onClick = { onOptionClick(optionCard.routeOption) },
+                            onDetailClick = { onOptionDetailClick(optionCard.routeOption) },
+                        )
+                    }
+                    uiState.selectedRoute?.let { selectedRoute ->
+                        LowFloorReservationSection(
+                            reservations = selectedRoute.lowFloorReservations,
+                            onReservationClick = onLowFloorReservationClick,
+                        )
+                    }
                 }
         }
     }
@@ -2553,6 +2810,7 @@ private const val METERS_PER_KILOMETER = 1_000
 private const val MAX_VISIBLE_OPTION_CARD_COUNT = 3
 private const val MAX_VISIBLE_ROUTE_CHIP_COUNT = 2
 private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 1
+private const val MAX_LOW_FLOOR_RESERVATION_COUNT = 2
 private const val CURRENT_LOCATION_WAYPOINT_NAME = "현재 위치"
 private const val DEFAULT_PREVIEW_CENTER_LATITUDE = 35.1796
 private const val DEFAULT_PREVIEW_CENTER_LONGITUDE = 129.0756
@@ -2602,6 +2860,7 @@ private val RouteOptionCardGap = 6.dp
 private val RouteOptionCardVerticalPadding = 8.dp
 private val RouteOptionDetailButtonTouchTargetSize = 48.dp
 private val RouteOptionDetailButtonIconSize = 24.dp
+private val RouteInlineButtonHeight = 44.dp
 private val RouteSettingBottomBarButtonHeight = 56.dp
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035

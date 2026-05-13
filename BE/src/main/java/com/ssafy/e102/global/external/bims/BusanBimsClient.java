@@ -59,12 +59,15 @@ public class BusanBimsClient {
 		}
 		List<Element> items = requestItems("busStopArrByBstopidLineid", stopId, resolvedLineId);
 		Element item = items.isEmpty() ? null : items.get(0);
+		ArrivalSlot arrivalSlot = arrivalSlot(item);
 		return new BusanBimsArrival(
 			stopId,
 			resolvedLineId,
 			text(item, "lineno", routeNo),
-			remainingMinute(item),
-			lowFloor(item));
+			arrivalSlot.remainingMinute(),
+			arrivalSlot.lowFloor(),
+			arrivalSlot.vehicleNo(),
+			arrivalSlot.remainingStopCount());
 	}
 
 	private String findLineId(String stopId, String routeNo) {
@@ -159,23 +162,28 @@ public class BusanBimsClient {
 		}
 	}
 
-	private Integer remainingMinute(Element item) {
-		return Arrays.asList(integer(item, "min1"), integer(item, "min2"))
+	private ArrivalSlot arrivalSlot(Element item) {
+		List<ArrivalSlot> slots = Arrays.asList(arrivalSlot(item, 1), arrivalSlot(item, 2))
 			.stream()
-			.filter(value -> value != null && value >= 0)
-			.min(Comparator.naturalOrder())
-			.orElse(null);
+			.filter(ArrivalSlot::hasArrival)
+			.toList();
+		if (slots.isEmpty()) {
+			return ArrivalSlot.empty();
+		}
+		return slots.stream()
+			.filter(slot -> Boolean.TRUE.equals(slot.lowFloor()))
+			.min(Comparator.comparing(ArrivalSlot::remainingMinuteOrMax))
+			.orElseGet(() -> slots.stream()
+				.min(Comparator.comparing(ArrivalSlot::remainingMinuteOrMax))
+				.orElse(ArrivalSlot.empty()));
 	}
 
-	private Boolean lowFloor(Element item) {
-		List<Boolean> values = Arrays.asList(booleanValue(item, "lowplate1"), booleanValue(item, "lowplate2"))
-			.stream()
-			.filter(value -> value != null)
-			.toList();
-		if (values.isEmpty()) {
-			return null;
-		}
-		return values.contains(Boolean.TRUE);
+	private ArrivalSlot arrivalSlot(Element item, int index) {
+		return new ArrivalSlot(
+			integer(item, "min" + index),
+			booleanValue(item, "lowplate" + index),
+			firstText(item, List.of("carno" + index, "carNo" + index, "car" + index), null),
+			integer(item, "station" + index));
 	}
 
 	private Integer integer(Element item, String tagName) {
@@ -212,6 +220,35 @@ public class BusanBimsClient {
 		}
 		String value = nodes.item(0).getTextContent();
 		return StringUtils.hasText(value) ? value.trim() : defaultValue;
+	}
+
+	private String firstText(Element item, List<String> tagNames, String defaultValue) {
+		for (String tagName : tagNames) {
+			String value = text(item, tagName, null);
+			if (StringUtils.hasText(value)) {
+				return value;
+			}
+		}
+		return defaultValue;
+	}
+
+	private record ArrivalSlot(
+		Integer remainingMinute,
+		Boolean lowFloor,
+		String vehicleNo,
+		Integer remainingStopCount) {
+
+		static ArrivalSlot empty() {
+			return new ArrivalSlot(null, null, null, null);
+		}
+
+		boolean hasArrival() {
+			return remainingMinute != null || lowFloor != null || StringUtils.hasText(vehicleNo);
+		}
+
+		int remainingMinuteOrMax() {
+			return remainingMinute == null ? Integer.MAX_VALUE : remainingMinute;
+		}
 	}
 
 	private RouteException externalFailure(String operation, HttpStatusCodeException exception) {

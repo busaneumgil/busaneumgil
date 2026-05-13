@@ -42,8 +42,13 @@ ensure_dev_stack_network() {
 }
 
 proxy_restart_required="false"
+promtail_restart_required="false"
 
 mkdir -p "$OPS_DIR" "$JENKINS_DIR"
+
+if [ ! -f "$OPS_DIR/promtail/config.yml" ] || ! cmp -s "$ROOT_DIR/INF/monitoring/s1/promtail/config.yml" "$OPS_DIR/promtail/config.yml"; then
+  promtail_restart_required="true"
+fi
 
 sync_tree "$ROOT_DIR/INF/monitoring/s1/grafana" "$OPS_DIR/grafana"
 sync_tree "$ROOT_DIR/INF/monitoring/s1/prometheus" "$OPS_DIR/prometheus"
@@ -65,6 +70,10 @@ ensure_dev_stack_network
 
 if [ "$proxy_restart_required" = "true" ]; then
   docker restart e102-jenkins-proxy >/dev/null
+fi
+
+if [ "$promtail_restart_required" = "true" ]; then
+  docker restart e102-promtail >/dev/null
 fi
 
 echo "S1 monitoring sync complete."

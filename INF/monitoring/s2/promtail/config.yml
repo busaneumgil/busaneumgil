@@ -16,7 +16,11 @@ scrape_configs:
     pipeline_stages:
       - docker: {}
       - regex:
-          expression: '(?i)^(?:.*?[[:space:]])?(?:(?:level|lvl|severity)=)?(?P<level>debug|info|warn|warning|error|fatal|critical)(?:[[:space:]]|$)'
+          expression: '(?i)(?:^|[[:space:]])(?:level|lvl|severity)=(?P<level>trace|debug|info|warn|warning|error|fatal|critical)(?:[[:space:]]|$)'
+      - regex:
+          expression: '^(?P<level>[DIEWF])\d{4}[[:space:]]'
+      - regex:
+          expression: '^(?:\d{4}-\d{2}-\d{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?P<level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:]]|$)'
       - labels:
           level:
     relabel_configs:

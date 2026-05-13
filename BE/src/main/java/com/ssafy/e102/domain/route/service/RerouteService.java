@@ -436,6 +436,8 @@ public class RerouteService {
 			shiftedEvents.add(new RouteGuidanceEventResponse(
 				shiftedEvents.size() + 1,
 				event.type(),
+				event.direction(),
+				event.features(),
 				scale(shiftedDistance),
 				Math.max(0, event.durationFromLegStartSecond() - durationOffset),
 				event.geometry()));
@@ -475,6 +477,8 @@ public class RerouteService {
 				.map(event -> new RouteGuidanceEventResponse(
 					event.sequence(),
 					event.type(),
+					event.direction(),
+					event.features(),
 					event.distanceFromLegStartMeter(),
 					event.durationFromLegStartSecond(),
 					distanceOffset.add(event.distanceFromLegStartMeter()).setScale(2, RoundingMode.HALF_UP),

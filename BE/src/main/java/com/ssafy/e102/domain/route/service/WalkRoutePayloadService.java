@@ -16,7 +16,9 @@ import org.locationtech.jts.geom.Coordinate;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceDirection;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceFeature;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.type.RouteBadge;
@@ -39,6 +41,9 @@ public class WalkRoutePayloadService {
 
 	private static final String WALK_LEG_INSTRUCTION = "목적지까지 도보로 이동하세요.";
 	private static final BigDecimal TURN_ZIGZAG_SUPPRESSION_METER = BigDecimal.valueOf(5);
+	private static final BigDecimal DIRECTION_MERGE_TOLERANCE_METER = BigDecimal.valueOf(3);
+	private static final BigDecimal CROSSWALK_TURN_SUPPRESSION_RADIUS_METER = BigDecimal.valueOf(10);
+	private static final BigDecimal STRAIGHT_GUIDANCE_MIN_DISTANCE_METER = BigDecimal.valueOf(30);
 	private static final List<RouteBadge> BADGE_PRIORITY = List.of(
 		RouteBadge.STAIR,
 		RouteBadge.NARROW_SIDEWALK,
@@ -187,29 +192,39 @@ public class WalkRoutePayloadService {
 		if (startEventType != null) {
 			candidates.add(new GuidanceEventCandidate(
 				startEventType,
+				null,
+				List.of(),
 				0,
 				BigDecimal.ZERO.setScale(2),
 				0,
 				-1));
 		}
-		candidates.addAll(turnEventCandidates(path, totalDistanceMeter, routeLength));
 		candidates.addAll(accessibilityEventCandidates(path, profile, totalDistanceMeter, routeLength));
 		if (destinationEventType != null && coordinates.size() > 1) {
 			int destinationIndex = coordinates.size() - 1;
 			candidates.add(new GuidanceEventCandidate(
 				destinationEventType,
+				null,
+				List.of(),
 				destinationIndex,
 				scaledDistanceBetween(coordinates, 0, destinationIndex, totalDistanceMeter, routeLength),
 				0,
 				2));
 		}
+		List<GuidanceEventCandidate> directionCandidates = suppressTurnsNearCrosswalk(
+			directionEventCandidates(path, totalDistanceMeter, routeLength),
+			path,
+			totalDistanceMeter,
+			routeLength);
+		candidates = mergeDirectionCandidates(candidates, directionCandidates);
+		candidates = appendContinueStraightAfterCrosswalk(candidates, path, totalDistanceMeter, routeLength);
 
 		List<GuidanceEventCandidate> sorted = candidates.stream()
 			.sorted(Comparator
 				.comparing(GuidanceEventCandidate::distanceFromLegStartMeter)
 				.thenComparingInt(GuidanceEventCandidate::kindOrder)
 				.thenComparingInt(GuidanceEventCandidate::priority)
-				.thenComparing(candidate -> candidate.type().name()))
+				.thenComparing(candidate -> candidate.type() == null ? "" : candidate.type().name()))
 			.toList();
 
 		List<RouteGuidanceEventResponse> events = new ArrayList<>();
@@ -218,6 +233,8 @@ public class WalkRoutePayloadService {
 			events.add(new RouteGuidanceEventResponse(
 				index + 1,
 				candidate.type(),
+				candidate.direction(),
+				candidate.features(),
 				candidate.distanceFromLegStartMeter(),
 				durationFromLegStartSecond(candidate.distanceFromLegStartMeter(), totalDistanceMeter,
 					totalDurationSecond),
@@ -226,7 +243,7 @@ public class WalkRoutePayloadService {
 		return events;
 	}
 
-	private List<GuidanceEventCandidate> turnEventCandidates(
+	private List<GuidanceEventCandidate> directionEventCandidates(
 		GraphHopperRoutePath path,
 		BigDecimal totalDistanceMeter,
 		BigDecimal routeLength) {
@@ -236,7 +253,9 @@ public class WalkRoutePayloadService {
 			Optional<RouteTurnDirection> direction = turnDirection(path, index);
 			if (direction.isPresent()) {
 				events.add(new GuidanceEventCandidate(
-					turnEventType(direction.get()),
+					null,
+					guidanceDirection(direction.get()),
+					List.of(),
 					index,
 					scaledDistanceBetween(coordinates, 0, index, totalDistanceMeter, routeLength),
 					0,
@@ -244,6 +263,133 @@ public class WalkRoutePayloadService {
 			}
 		}
 		return suppressShortTurnZigzags(events);
+	}
+
+	private List<GuidanceEventCandidate> suppressTurnsNearCrosswalk(
+		List<GuidanceEventCandidate> directionCandidates,
+		GraphHopperRoutePath path,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		List<BigDecimal> crosswalkBoundaryDistances = crosswalkDetails(path).stream()
+			.flatMap(detail -> List.of(detail.fromIndex(), Math.min(detail.toIndex(), path.coordinates().size() - 1))
+				.stream())
+			.distinct()
+			.map(index -> scaledDistanceBetween(path.coordinates(), 0, index, totalDistanceMeter, routeLength))
+			.toList();
+		if (crosswalkBoundaryDistances.isEmpty()) {
+			return directionCandidates;
+		}
+		return directionCandidates.stream()
+			.filter(directionCandidate -> crosswalkBoundaryDistances.stream()
+				.noneMatch(crosswalkDistance -> crosswalkDistance
+					.subtract(directionCandidate.distanceFromLegStartMeter())
+					.abs()
+					.compareTo(CROSSWALK_TURN_SUPPRESSION_RADIUS_METER) <= 0))
+			.toList();
+	}
+
+	private List<GuidanceEventCandidate> mergeDirectionCandidates(
+		List<GuidanceEventCandidate> eventCandidates,
+		List<GuidanceEventCandidate> directionCandidates) {
+		List<GuidanceEventCandidate> merged = new ArrayList<>(eventCandidates);
+		for (GuidanceEventCandidate directionCandidate : directionCandidates) {
+			Optional<Integer> nearestIndex = nearestMergeTargetIndex(merged, directionCandidate);
+			if (nearestIndex.isPresent()) {
+				int index = nearestIndex.get();
+				GuidanceEventCandidate target = merged.get(index);
+				if (target.direction() == null) {
+					merged.set(index, target.withDirection(directionCandidate.direction()));
+				}
+			} else {
+				merged.add(directionCandidate);
+			}
+		}
+		return merged;
+	}
+
+	private Optional<Integer> nearestMergeTargetIndex(
+		List<GuidanceEventCandidate> eventCandidates,
+		GuidanceEventCandidate directionCandidate) {
+		Integer bestIndex = null;
+		BigDecimal bestDistance = null;
+		for (int index = 0; index < eventCandidates.size(); index++) {
+			GuidanceEventCandidate candidate = eventCandidates.get(index);
+			if (candidate.type() == null) {
+				continue;
+			}
+			BigDecimal distance = candidate.distanceFromLegStartMeter()
+				.subtract(directionCandidate.distanceFromLegStartMeter())
+				.abs();
+			if (distance.compareTo(DIRECTION_MERGE_TOLERANCE_METER) > 0) {
+				continue;
+			}
+			if (bestDistance == null || distance.compareTo(bestDistance) < 0) {
+				bestDistance = distance;
+				bestIndex = index;
+			}
+		}
+		return Optional.ofNullable(bestIndex);
+	}
+
+	private List<GuidanceEventCandidate> appendContinueStraightAfterCrosswalk(
+		List<GuidanceEventCandidate> candidates,
+		GraphHopperRoutePath path,
+		BigDecimal totalDistanceMeter,
+		BigDecimal routeLength) {
+		List<GraphHopperCoordinate> coordinates = path.coordinates();
+		if (coordinates.size() < 2) {
+			return candidates;
+		}
+		List<GuidanceEventCandidate> merged = new ArrayList<>(candidates);
+		List<GraphHopperPathDetail> crosswalkDetails = crosswalkDetails(path);
+		for (GraphHopperPathDetail crosswalkDetail : crosswalkDetails) {
+			int straightStartIndex = Math.min(crosswalkDetail.toIndex(), coordinates.size() - 1);
+			if (straightStartIndex <= crosswalkDetail.fromIndex()) {
+				continue;
+			}
+			boolean continuousCrosswalk = crosswalkDetails.stream()
+				.anyMatch(detail -> detail.fromIndex() == straightStartIndex);
+			if (continuousCrosswalk) {
+				continue;
+			}
+			BigDecimal straightStartDistance = scaledDistanceBetween(
+				coordinates,
+				0,
+				straightStartIndex,
+				totalDistanceMeter,
+				routeLength);
+			BigDecimal nextDistance = nextMeaningfulEventDistance(merged, straightStartDistance, totalDistanceMeter);
+			if (nextDistance.subtract(straightStartDistance)
+				.compareTo(STRAIGHT_GUIDANCE_MIN_DISTANCE_METER) < 0) {
+				continue;
+			}
+			boolean alreadyExists = merged.stream()
+				.anyMatch(candidate -> candidate.type() == RouteGuidanceEventType.STRAIGHT
+					&& candidate.distanceFromLegStartMeter().compareTo(straightStartDistance) == 0);
+			if (!alreadyExists) {
+				merged.add(new GuidanceEventCandidate(
+					RouteGuidanceEventType.STRAIGHT,
+					RouteGuidanceDirection.STRAIGHT,
+					List.of(),
+					straightStartIndex,
+					straightStartDistance,
+					9,
+					1));
+			}
+		}
+		return merged;
+	}
+
+	private BigDecimal nextMeaningfulEventDistance(
+		List<GuidanceEventCandidate> candidates,
+		BigDecimal currentDistance,
+		BigDecimal routeDistance) {
+		return candidates.stream()
+			.filter(candidate -> candidate.type() != RouteGuidanceEventType.STRAIGHT)
+			.map(GuidanceEventCandidate::distanceFromLegStartMeter)
+			.filter(distance -> distance.compareTo(currentDistance) > 0)
+			.min(BigDecimal::compareTo)
+			.orElse(routeDistance);
 	}
 
 	private List<GuidanceEventCandidate> suppressShortTurnZigzags(List<GuidanceEventCandidate> events) {
@@ -273,14 +419,14 @@ public class WalkRoutePayloadService {
 	}
 
 	private boolean isTurn(GuidanceEventCandidate candidate) {
-		return candidate.type() == RouteGuidanceEventType.TURN_LEFT
-			|| candidate.type() == RouteGuidanceEventType.TURN_RIGHT;
+		return candidate.direction() == RouteGuidanceDirection.TURN_LEFT
+			|| candidate.direction() == RouteGuidanceDirection.TURN_RIGHT;
 	}
 
-	private RouteGuidanceEventType turnEventType(RouteTurnDirection direction) {
+	private RouteGuidanceDirection guidanceDirection(RouteTurnDirection direction) {
 		return switch (direction) {
-			case LEFT -> RouteGuidanceEventType.TURN_LEFT;
-			case RIGHT -> RouteGuidanceEventType.TURN_RIGHT;
+			case LEFT -> RouteGuidanceDirection.TURN_LEFT;
+			case RIGHT -> RouteGuidanceDirection.TURN_RIGHT;
 		};
 	}
 
@@ -308,19 +454,30 @@ public class WalkRoutePayloadService {
 		GraphHopperRoutePath path,
 		BigDecimal totalDistanceMeter,
 		BigDecimal routeLength) {
+		return crosswalkDetails(path)
+			.stream()
+			.flatMap(
+				detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
+					.map(distanceMeter -> new GuidanceEventCandidate(
+						RouteGuidanceEventType.CROSSWALK,
+						null,
+						crosswalkFeatures(path, detail),
+						detail.fromIndex(),
+						distanceMeter,
+						8,
+						1))
+					.stream())
+			.toList();
+	}
+
+	private List<GraphHopperPathDetail> crosswalkDetails(GraphHopperRoutePath path) {
 		return path.details()
 			.getOrDefault("segment_type", List.of())
 			.stream()
 			.filter(detail -> "CROSS_WALK".equals(detail.value()))
-			.flatMap(
-				detail -> eventDistanceMeter(path.coordinates(), detail.fromIndex(), totalDistanceMeter, routeLength)
-					.map(distanceMeter -> new GuidanceEventCandidate(
-						crosswalkEventType(path, detail),
-						detail.fromIndex(),
-						distanceMeter,
-						crosswalkPriority(path, detail),
-						1))
-					.stream())
+			.sorted(Comparator
+				.comparingInt(GraphHopperPathDetail::fromIndex)
+				.thenComparingInt(GraphHopperPathDetail::toIndex))
 			.toList();
 	}
 
@@ -376,9 +533,10 @@ public class WalkRoutePayloadService {
 		return type == RouteGuidanceEventType.MIDDLE_SLOPE ? 4 : 5;
 	}
 
-	private RouteGuidanceEventType crosswalkEventType(
+	private List<RouteGuidanceFeature> crosswalkFeatures(
 		GraphHopperRoutePath path,
 		GraphHopperPathDetail crosswalkDetail) {
+		List<RouteGuidanceFeature> features = new ArrayList<>();
 		boolean hasSignal = hasOverlappingDetailValue(
 			path,
 			"signal_state",
@@ -393,24 +551,13 @@ public class WalkRoutePayloadService {
 			crosswalkDetail,
 			crosswalkDetail.fromIndex(),
 			crosswalkDetail.toIndex());
-		if (hasSignal && hasAudioSignal) {
-			return RouteGuidanceEventType.CROSSWALK_AUDIO;
-		}
 		if (hasSignal) {
-			return RouteGuidanceEventType.CROSSWALK_SIGNAL;
+			features.add(RouteGuidanceFeature.SIGNAL);
 		}
-		return RouteGuidanceEventType.CROSSWALK;
-	}
-
-	private int crosswalkPriority(
-		GraphHopperRoutePath path,
-		GraphHopperPathDetail crosswalkDetail) {
-		return switch (crosswalkEventType(path, crosswalkDetail)) {
-			case CROSSWALK_AUDIO -> 6;
-			case CROSSWALK_SIGNAL -> 7;
-			case CROSSWALK -> 8;
-			default -> throw new IllegalStateException("unexpected crosswalk event type");
-		};
+		if (hasAudioSignal) {
+			features.add(RouteGuidanceFeature.AUDIO_SIGNAL);
+		}
+		return List.copyOf(features);
 	}
 
 	private List<GuidanceEventCandidate> alertEventCandidates(
@@ -465,6 +612,8 @@ public class WalkRoutePayloadService {
 		return eventDistanceMeter(coordinates, fromIndex, totalDistanceMeter, routeLength)
 			.map(distanceMeter -> new GuidanceEventCandidate(
 				type,
+				null,
+				List.of(),
 				fromIndex,
 				distanceMeter,
 				priority,
@@ -689,10 +838,23 @@ public class WalkRoutePayloadService {
 
 	private record GuidanceEventCandidate(
 		RouteGuidanceEventType type,
+		RouteGuidanceDirection direction,
+		List<RouteGuidanceFeature> features,
 		int coordinateIndex,
 		BigDecimal distanceFromLegStartMeter,
 		int priority,
 		int kindOrder) {
+
+		private GuidanceEventCandidate withDirection(RouteGuidanceDirection direction) {
+			return new GuidanceEventCandidate(
+				type,
+				direction,
+				features,
+				coordinateIndex,
+				distanceFromLegStartMeter,
+				priority,
+				kindOrder);
+		}
 	}
 
 	private record SlopeThreshold(

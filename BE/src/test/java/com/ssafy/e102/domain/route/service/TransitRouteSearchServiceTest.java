@@ -476,8 +476,8 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
-	@DisplayName("BIMS enrichment 대상은 shortlist 최대 5개로 제한한다")
-	void limitsBimsEnrichmentToFiveShortlistedCandidates() {
+	@DisplayName("ODsay loadLane은 raw path 전체가 아니라 1차 shortlist 최대 5개에만 호출한다")
+	void limitsLoadLaneToOdsayShortlist() {
 		when(odsayClient.searchPubTransPath(START, END))
 			.thenReturn(new OdsayTransitSearchResult(List.of(
 				busPathWithBusDuration("map-fast-1", "100", 5, 900, 1),
@@ -496,8 +496,32 @@ class TransitRouteSearchServiceTest {
 
 		service.search(UUID.randomUUID(), request());
 
-		verify(busanBimsClient, times(5)).findArrival(any(), any(), any());
-		assertThat(bimsTaskExecutor.executionCount()).isEqualTo(5);
+		verify(odsayClient, times(5)).loadLane(any());
+		verify(odsayClient, times(0)).loadLane("map-walk-3");
+	}
+
+	@Test
+	@DisplayName("BIMS enrichment 대상은 BIMS 없는 정적 최종 3개 후보로 제한한다")
+	void limitsBimsEnrichmentToStaticFinalCandidates() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(
+				busPathWithBusDuration("map-recommended", "100", 5, 700, 2),
+				busPathWithBusDuration("map-min-transfer", "101", 10, 800, 1),
+				busPathWithBusDuration("map-min-walk", "102", 15, 100, 2),
+				busPathWithBusDuration("map-extra-1", "103", 20, 900, 2),
+				busPathWithBusDuration("map-extra-2", "104", 21, 950, 2))));
+		when(odsayClient.loadLane(any()))
+			.thenReturn(List.of(new OdsayLaneGeometry(
+				TransportMode.BUS,
+				"LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival(any(), any(), any()))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		service.search(UUID.randomUUID(), request());
+
+		verify(busanBimsClient, times(3)).findArrival(any(), any(), any());
+		assertThat(bimsTaskExecutor.executionCount()).isEqualTo(3);
 	}
 
 	@Test
@@ -520,8 +544,8 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
-	@DisplayName("shortlist 이후 BIMS 저상버스 결과를 RECOMMENDED 우선순위에 적용한다")
-	void appliesLowFloorPriorityAfterBimsEnrichment() {
+	@DisplayName("BIMS 저상버스 결과는 BIMS 전 정적 최종 후보 밖 경로를 승격하지 않는다")
+	void doesNotPromoteCandidateOutsideStaticFinalSelectionByLowFloorBims() {
 		when(odsayClient.searchPubTransPath(START, END))
 			.thenReturn(new OdsayTransitSearchResult(List.of(
 				busPathWithBusDuration("map-fast-normal", "100", 5, 100, 1),
@@ -543,9 +567,11 @@ class TransitRouteSearchServiceTest {
 			.filteredOn(leg -> leg.type() == TransportMode.BUS)
 			.first()
 			.satisfies(leg -> {
-				assertThat(leg.routeNo()).isEqualTo("200");
-				assertThat(leg.laneOptions().get(0).isLowFloor()).isTrue();
+				assertThat(leg.routeNo()).isEqualTo("100");
+				assertThat(leg.laneOptions().get(0).isLowFloor()).isFalse();
 			});
+		verify(busanBimsClient, times(1)).findArrival("BS1", "BL1", "100");
+		verify(busanBimsClient, times(0)).findArrival("BS1", "BL1", "200");
 	}
 
 	private WalkRouteSearchRequest request() {

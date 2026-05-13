@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
@@ -106,12 +107,14 @@ class SearchViewModel(
             detailType =
                 if (result.isVerifiedPlace) {
                     MapPlaceDetailType.INTERNAL_PLACE
+                } else if (result.isAddressSearchFallback()) {
+                    MapPlaceDetailType.EXTERNAL_ADDRESS
                 } else {
                     MapPlaceDetailType.EXTERNAL_POI
                 },
             bookmarkTargetId = result.serverPlaceId,
             provider = result.bookmarkProvider(),
-            providerPlaceId = result.providerPlaceId,
+            providerPlaceId = result.bookmarkProviderPlaceId(),
         )
         persistRecentDestination(result = result, destination = destination)
         emitUiEvent(SearchUiEvent.NavigateToMapPreview)
@@ -193,7 +196,7 @@ class SearchViewModel(
                             category = destination.category?.name,
                             serverPlaceId = result.serverPlaceId?.toLongOrNull(),
                             provider = result.bookmarkProvider(),
-                            providerPlaceId = result.providerPlaceId,
+                            providerPlaceId = result.bookmarkProviderPlaceId(),
                             providerCategory = destination.category?.name,
                         ),
                     )
@@ -232,7 +235,7 @@ class SearchViewModel(
                         category = destination.category?.name,
                         serverPlaceId = result.serverPlaceId?.toLongOrNull(),
                         provider = result.bookmarkProvider(),
-                        providerPlaceId = result.providerPlaceId,
+                        providerPlaceId = result.bookmarkProviderPlaceId(),
                         providerCategory = destination.category?.name,
                     ),
                 )
@@ -683,5 +686,15 @@ private fun SearchResultUiState.hasResultQuery(query: String): Boolean =
     }
 
 private fun SearchResult.bookmarkProvider(): String? =
-    provider?.takeIf { it.isNotBlank() }
-        ?: "KAKAO".takeIf { !providerPlaceId.isNullOrBlank() }
+    when {
+        isAddressSearchFallback() -> "KAKAO"
+        !provider.isNullOrBlank() -> provider
+        !providerPlaceId.isNullOrBlank() -> "KAKAO"
+        else -> null
+    }
+
+private fun SearchResult.bookmarkProviderPlaceId(): String? =
+    providerPlaceId?.takeIf { !isAddressSearchFallback() && it.isNotBlank() }
+
+private fun SearchResult.isAddressSearchFallback(): Boolean =
+    provider?.equals(ANDROID_GEOCODER_PROVIDER, ignoreCase = true) == true

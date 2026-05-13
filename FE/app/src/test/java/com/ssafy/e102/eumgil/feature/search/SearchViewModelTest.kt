@@ -614,7 +614,7 @@ class SearchViewModelTest {
             val preview = destinationPreviewRepository.pendingPreview.value
             assertEquals(result.toPlaceDestination(), preview?.destination)
             assertEquals(MapPlaceDetailType.EXTERNAL_ADDRESS, preview?.detailType)
-            assertEquals(ANDROID_GEOCODER_PROVIDER, preview?.provider)
+            assertEquals("KAKAO", preview?.provider)
             assertEquals(null, preview?.providerPlaceId)
             assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }
@@ -859,6 +859,51 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `address fallback bookmark toggle saves supported external address snapshot`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = "35.179700,129.075000",
+                    title = "123 Jungang-daero, Busan",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    placeName = "123 Jungang-daero, Busan",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = null,
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+        }
+
+    @Test
     fun `bookmark toggle saves unbookmarked search result`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository()
@@ -936,6 +981,53 @@ class SearchViewModelTest {
                     category = null,
                     provider = "KAKAO",
                     providerPlaceId = "987654321",
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+            assertEquals(SearchUiEvent.NavigateToLowVisionBookmark, uiEvent.await())
+        }
+
+    @Test
+    fun `address fallback low vision bookmark save stores supported external address snapshot`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = "35.179700,129.075000",
+                    title = "123 Jungang-daero, Busan",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    placeName = "123 Jungang-daero, Busan",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = null,
                     providerCategory = null,
                 ),
                 bookmarkRepository.bookmarks.value.single(),

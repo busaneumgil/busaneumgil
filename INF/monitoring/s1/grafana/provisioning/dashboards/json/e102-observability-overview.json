@@ -146,7 +146,7 @@
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [5m])) or vector(0)",
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\", level=~\"warn|warning|error|fatal|critical\"}[5m])) or vector(0)",
           "queryType": "instant",
           "refId": "A"
         }
@@ -262,7 +262,7 @@
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [1h])) or vector(0)",
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\", level=~\"warn|warning|error|fatal|critical\"}[1h])) or vector(0)",
           "queryType": "instant",
           "refId": "A"
         }
@@ -1292,7 +1292,7 @@
       },
       "targets": [
         {
-          "expr": "{environment=\"dev\", runtime_stack=\"s1-dev\", compose_service=~\"$log_service\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\"",
+          "expr": "{environment=\"dev\", runtime_stack=\"s1-dev\", compose_service=~\"$log_service\", level=~\"warn|warning|error|fatal|critical\"}",
           "queryType": "range",
           "refId": "A"
         }

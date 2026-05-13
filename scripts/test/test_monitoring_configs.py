@@ -13,6 +13,8 @@ import unittest
 ROOT_DIR = Path(__file__).resolve().parents[2]
 MONITORING_COMPOSE = ROOT_DIR / "INF" / "monitoring" / "s1" / "docker-compose.yml"
 PROMETHEUS_CONFIG = ROOT_DIR / "INF" / "monitoring" / "s1" / "prometheus" / "prometheus.yml"
+S1_PROMTAIL_CONFIG = ROOT_DIR / "INF" / "monitoring" / "s1" / "promtail" / "config.yml"
+S2_PROMTAIL_CONFIG = ROOT_DIR / "INF" / "monitoring" / "s2" / "promtail" / "config.yml"
 MONITORING_README = ROOT_DIR / "INF" / "monitoring" / "README.md"
 PROD_DASHBOARD = ROOT_DIR / "INF" / "monitoring" / "s1" / "grafana" / "provisioning" / "dashboards" / "json" / "e102-prod-observability.json"
 DEV_DASHBOARD = ROOT_DIR / "INF" / "monitoring" / "s1" / "grafana" / "provisioning" / "dashboards" / "json" / "e102-observability-overview.json"
@@ -49,6 +51,19 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn('targets: ["http://graphhopper:8990/healthcheck"]', prometheus_content)
         self.assertIn('targets: ["https://api.busaneumgil.com/graphhopper/healthcheck"]', prometheus_content)
 
+    def test_promtail_separates_dev_and_ops_runtime_labels(self):
+        dev_promtail = S1_PROMTAIL_CONFIG.read_text(encoding="utf-8")
+        prod_promtail = S2_PROMTAIL_CONFIG.read_text(encoding="utf-8")
+
+        self.assertIn("job_name: docker-dev", dev_promtail)
+        self.assertIn("job_name: docker-ops", dev_promtail)
+        self.assertIn('regex: "s14p31e102-dev"', dev_promtail)
+        self.assertIn('regex: "e102-ops"', dev_promtail)
+        self.assertIn("replacement: ops", dev_promtail)
+        self.assertIn("replacement: s1-ops", dev_promtail)
+        self.assertIn("replacement: prod", prod_promtail)
+        self.assertIn("replacement: s2-prod", prod_promtail)
+
     def test_prod_dashboard_explicitly_marks_dependency_health_cards(self):
         dashboard_content = PROD_DASHBOARD.read_text(encoding="utf-8")
 
@@ -66,6 +81,17 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn('target_name=~\\"graphhopper|graphhopper-blue|graphhopper-green\\"', prod_dashboard)
         self.assertIn("MinIO 상태", dev_dashboard)
         self.assertIn("GraphHopper 상태", dev_dashboard)
+
+    def test_warning_error_queries_use_level_labels_instead_of_free_text_matching(self):
+        prod_dashboard = PROD_DASHBOARD.read_text(encoding="utf-8")
+        dev_dashboard = DEV_DASHBOARD.read_text(encoding="utf-8")
+
+        self.assertIn('level=~\\"warn|warning|error|fatal|critical\\"', prod_dashboard)
+        self.assertIn('level=~\\"warn|warning|error|fatal|critical\\"', dev_dashboard)
+        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [5m]', prod_dashboard)
+        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [1h]', prod_dashboard)
+        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [5m]', dev_dashboard)
+        self.assertNotIn('|~ \\"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\\" [1h]', dev_dashboard)
 
     def test_proxy_uses_dynamic_service_resolution_for_grafana_and_loki(self):
         proxy_content = JENKINS_PROXY.read_text(encoding="utf-8")

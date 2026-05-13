@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
@@ -23,7 +24,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
-import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelEditingTargetTest {
@@ -73,44 +73,20 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
-    fun `search result click stores selected origin when editing target is origin`() =
+    fun `search result click previews selected origin candidate when editing target is origin`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
                     setEditingTarget(RouteEditingTarget.ORIGIN)
                 }
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val result = testSearchResult()
             val viewModel =
                 SearchViewModel(
                     searchRepository = EditingTargetFakeSearchRepository(),
                     bookmarkRepository = EditingTargetFakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
-                )
-
-            advanceUntilIdle()
-            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
-
-            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
-            advanceUntilIdle()
-
-            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedOrigin.value)
-            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
-            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
-        }
-
-    @Test
-    fun `search result click keeps updating selected destination when editing target is destination`() =
-        runTest {
-            val destinationSelectionRepository =
-                InMemoryDestinationSelectionRepository().apply {
-                    setEditingTarget(RouteEditingTarget.DESTINATION)
-                }
-            val result = testSearchResult()
-            val viewModel =
-                SearchViewModel(
-                    searchRepository = EditingTargetFakeSearchRepository(),
-                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
-                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                 )
 
             advanceUntilIdle()
@@ -120,17 +96,50 @@ class SearchViewModelEditingTargetTest {
             advanceUntilIdle()
 
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
-            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
-            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(result.toPlaceDestination(), destinationPreviewRepository.pendingPreview.value?.destination)
+            assertEquals(RouteEditingTarget.ORIGIN, destinationPreviewRepository.pendingPreview.value?.editingTarget)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }
 
     @Test
-    fun `provider only search result can update origin when coordinates are valid`() =
+    fun `search result click previews selected destination candidate when editing target is destination`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    setEditingTarget(RouteEditingTarget.DESTINATION)
+                }
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val result = testSearchResult()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(result.toPlaceDestination(), destinationPreviewRepository.pendingPreview.value?.destination)
+            assertEquals(RouteEditingTarget.DESTINATION, destinationPreviewRepository.pendingPreview.value?.editingTarget)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
+        }
+
+    @Test
+    fun `provider only search result can preview origin when coordinates are valid`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
                     setEditingTarget(RouteEditingTarget.ORIGIN)
                 }
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val result =
                 SearchResult(
                     placeId = "provider:kakao:987654321",
@@ -147,21 +156,20 @@ class SearchViewModelEditingTargetTest {
                     searchRepository = EditingTargetFakeSearchRepository(),
                     bookmarkRepository = EditingTargetFakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
-                )
+                    destinationPreviewRepository = destinationPreviewRepository,
+            )
 
             advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
             advanceUntilIdle()
 
-            assertEquals("provider:kakao:987654321", destinationSelectionRepository.selectedOrigin.value?.placeId)
+            assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
             assertEquals(null, destinationSelectionRepository.selectedDestination.value)
-            assertEquals(
-                SearchUiEvent.NavigateToRouteSetting,
-                withTimeoutOrNull(100) {
-                    viewModel.uiEvent.first()
-                },
-            )
+            assertEquals("provider:kakao:987654321", destinationPreviewRepository.pendingPreview.value?.destination?.placeId)
+            assertEquals(RouteEditingTarget.ORIGIN, destinationPreviewRepository.pendingPreview.value?.editingTarget)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }
 }
 

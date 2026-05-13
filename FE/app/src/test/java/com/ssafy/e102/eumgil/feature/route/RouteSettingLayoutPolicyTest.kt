@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.feature.route
+﻿package com.ssafy.e102.eumgil.feature.route
 
 import androidx.compose.ui.geometry.Size
 import java.io.File
@@ -45,7 +45,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route setting screen uses shared bottom bar instead of inline sheet cta`() {
+    fun `route setting screen keeps shared bottom bar and removes card inline cta`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -56,7 +56,7 @@ class RouteSettingLayoutPolicyTest {
         val sheetSection =
             source
                 .substringAfter("private fun RouteSettingRouteSheet(")
-                .substringBefore("@Composable\nprivate fun RouteWalkOptionSection")
+                .substringBefore("@Composable\nprivate fun RouteOptionSection")
 
         assertTrue(
             "Route selection should attach the start CTA with Scaffold.bottomBar to match route detail.",
@@ -70,6 +70,63 @@ class RouteSettingLayoutPolicyTest {
             "The route sheet should no longer render the inline CTA content inside the sheet.",
             sheetSection.contains("RouteSettingCtaContent("),
         )
+        assertFalse(
+            "Transit result cards should not render an inline start button; start remains in the shared bottom bar.",
+            source.contains("RouteInlineStartActionButton(onClick = onStartClick)"),
+        )
+    }
+
+    @Test
+    fun `route setting transit result list implements UIUX plan skeleton`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val optionSection =
+            source
+                .substringAfter("private fun RouteOptionSection(")
+                .substringBefore("@OptIn(ExperimentalLayoutApi::class)")
+
+        assertFalse("Transit results should not render filter and sort controls in the sheet.", optionSection.contains("RouteTransitResultControls("))
+        assertTrue("Transit results should render the segment ratio bar.", source.contains("RouteTransitSegmentRatioBar("))
+        assertTrue("Transit results should render bus or subway option labels.", source.contains("RouteTransitOptionSummary("))
+        assertTrue("Initial route loading should use the centered spinner state.", source.contains("RouteSearchLoadingState()"))
+        assertFalse("Transit cards should not show inline start on selected routes.", source.contains("card.travelMode == RouteTravelMode.TRANSIT && card.isSelected"))
+        assertFalse("Transit cards should not keep the left radio selection indicator.", optionSection.contains("RouteOptionSelectionIndicator("))
+        assertTrue("Visible route options should stay capped at three.", source.contains("take(MAX_VISIBLE_OPTION_CARD_COUNT)"))
+        assertTrue("The max visible route option count should remain three.", source.contains("private const val MAX_VISIBLE_OPTION_CARD_COUNT = 3"))
+    }
+
+    @Test
+    fun `route setting implements blue route search header and walk map preview carousel`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("if (isDuribalConfirmDialogVisible)")
+        val headerSection =
+            source
+                .substringAfter("private fun RouteSearchHeaderKakao(")
+                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
+        val mapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+
+        assertTrue("Route setting top bar should use the blue route search header.", screenSection.contains("RouteSearchHeaderKakao("))
+        assertFalse("The route search header should no longer expose disabled car or bike slots.", headerSection.contains("enabled = false"))
+        assertTrue("The route search header should expose transit mode with text.", headerSection.contains("\"대중교통\""))
+        assertTrue("The route search header should expose walk mode with text.", headerSection.contains("\"도보\""))
+        assertTrue("The selected route mode should render with a white pill background.", source.contains("color = if (selected) Color.White else Color.Transparent"))
+        assertTrue("The header should include a close action.", headerSection.contains("R.drawable.ic_action_close"))
+        assertTrue("The header should include origin and destination waypoint rows.", headerSection.contains("RouteSearchHeaderWaypointLine("))
+        assertTrue("The header should include a waypoint swap control.", headerSection.contains("onSwapClick"))
+        assertTrue("The header should include the more menu affordance.", headerSection.contains("R.drawable.ic_action_more"))
+        assertTrue("Walk mode should render a map-anchored preview carousel instead of the transit bottom sheet.", mapStageSection.contains("RouteWalkPreviewCarousel("))
+        assertTrue("Walk preview cards should expose the route detail CTA.", source.contains("text = \"경로 상세\""))
+        assertTrue("Walk preview should show estimated kcal beside distance.", source.contains("estimatedWalkCaloriesLabel("))
+        assertTrue("Transit mode should keep the bottom sheet from the previous slice.", screenSection.contains("uiState.selectedTravelMode == RouteTravelMode.TRANSIT"))
     }
 
     @Test
@@ -159,12 +216,12 @@ class RouteSettingLayoutPolicyTest {
             source.contains("shape = RoundedCornerShape(RouteButtonCornerRadius)"),
         )
         assertTrue(
-            "Route map floating controls should use the floating control radius token.",
-            source.contains("shape = RoundedCornerShape(RouteFloatingControlCornerRadius)"),
+            "Route map should delegate floating control shape to the shared map floating controls component.",
+            source.contains("EumMapFloatingControls("),
         )
         assertTrue(
-            "Route map floating controls should keep the documented floating control elevation.",
-            source.contains("shadowElevation = RouteFloatingControlElevation"),
+            "Route map floating controls should keep the documented floating control elevation token available to the shared component.",
+            source.contains("RouteFloatingControlElevation = 6.dp"),
         )
         assertTrue(
             "The sticky bottom CTA bar should remain flat and avoid a separating shadow seam.",
@@ -275,7 +332,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route detail screen adds title divider and uses attached guide rows`() {
+    fun `route detail screen uses map backed bottom sheet and attached guide rows`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -289,8 +346,20 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nprivate fun RouteDetailOriginHeader")
 
         assertTrue(
-            "Detail screen should add a divider directly under the title area.",
-            detailScreenSection.contains("HorizontalDivider("),
+            "Detail screen should keep the map visible behind the detail bottom sheet.",
+            detailScreenSection.contains("RouteMapBackdrop("),
+        )
+        assertTrue(
+            "Detail screen should render route details through a map-backed bottom sheet.",
+            detailScreenSection.contains("RouteDetailMapBottomSheet("),
+        )
+        assertTrue(
+            "Detail bottom sheet should expose a segment ratio/timeline bar.",
+            source.contains("private fun RouteDetailTimelineBar("),
+        )
+        assertTrue(
+            "Transit detail sheet should reserve arrival info and refresh affordances.",
+            source.contains("private fun RouteDetailTransitActionRow("),
         )
         assertFalse(
             "Guide rows should start from the departure row instead of dropping the first step.",

@@ -104,8 +104,62 @@ class MapFacilityDetailSheetConfigurationTest {
             source.contains("HorizontalDivider"),
         )
         assertTrue(
-            "Detail sheet shell should skip the body column entirely when there is no accessibility content.",
-            source.contains("if (state.hasDetailContent)"),
+            "Detail sheet shell should skip the body column when there is no accessibility content or the sheet is collapsed.",
+            source.contains("if (state.hasDetailContent && !isCollapsed)"),
+        )
+    }
+
+    @Test
+    fun `facility detail bottom sheet separates collapse from explicit close`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+
+        assertTrue(
+            "The drag handle should expose a collapse and expand label instead of a close label.",
+            source.contains("map_facility_detail_sheet_toggle"),
+        )
+        assertTrue(
+            "The explicit close affordance should be the only header control wired to onDismiss.",
+            source.contains("map_facility_detail_close"),
+        )
+        assertTrue(
+            "Dragging down should collapse the place sheet instead of dismissing and clearing selection state.",
+            source.contains("isCollapsed =") &&
+                source.contains("sheetOffsetPx >= collapseThresholdPx") &&
+                !source.contains("sheetOffsetPx >= dismissThresholdPx"),
+        )
+        assertTrue(
+            "Collapsed state should keep the fixed action area visible while hiding the detailed body content.",
+            source.contains("if (state.hasDetailContent && !isCollapsed)"),
+        )
+    }
+
+    @Test
+    fun `facility detail collapsed sheet keeps minimum height and bottom action order`() {
+        val shellSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val actionContentSection =
+            screenSource
+                .substringAfter("actionContent = {")
+                .substringBefore("facilityDetailSheetUiState.bookmarkErrorMessage")
+
+        assertTrue(
+            "Collapsed place sheet should keep enough height for title, summary, and fixed route actions.",
+            shellSource.contains("FacilityDetailCollapsedMinHeight") &&
+                shellSource.contains("heightIn(min = FacilityDetailCollapsedMinHeight"),
+        )
+        assertTrue(
+            "Collapsed title should be one line while expanded title can use two lines.",
+            shellSource.contains("maxLines = if (isCollapsed) 1 else 2"),
+        )
+        assertTrue(
+            "Bottom actions should put secondary icons before the origin and destination CTA buttons.",
+            actionContentSection.indexOf("FacilityDetailBookmarkActionButton(") <
+                actionContentSection.indexOf("map_facility_detail_set_origin_action") &&
+                actionContentSection.indexOf("map_facility_detail_set_origin_action") <
+                actionContentSection.indexOf("map_facility_detail_set_destination_action"),
         )
     }
 
@@ -189,7 +243,8 @@ class MapFacilityDetailSheetConfigurationTest {
         )
         assertTrue(
             "Dedicated accommodation place drawable should exist for detail and recent destination surfaces.",
-            File("src/main/res/drawable/ic_place_accommodation.png").exists(),
+            File("src/main/res/drawable/ic_place_accommodation.png").exists() ||
+                File("src/main/res/drawable/ic_place_accommodation.xml").exists(),
         )
     }
 
@@ -208,7 +263,8 @@ class MapFacilityDetailSheetConfigurationTest {
         )
         assertTrue(
             "Dedicated healthcare place drawable should exist for detail and recent destination surfaces.",
-            File("src/main/res/drawable/ic_place_healthcare.png").exists(),
+            File("src/main/res/drawable/ic_place_healthcare.png").exists() ||
+                File("src/main/res/drawable/ic_place_healthcare.xml").exists(),
         )
     }
 

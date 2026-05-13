@@ -722,9 +722,10 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only search result click stores destination but does not enrich recent destination`() =
+    fun `provider only search result click requests preview but does not enrich recent destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val searchRepository = FakeSearchRepository()
             val placesRepository = FakePlacesRepository()
             val viewModel =
@@ -732,6 +733,7 @@ class SearchViewModelTest {
                     searchRepository = searchRepository,
                     bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                     placesRepository = placesRepository,
                 )
             val result =
@@ -753,8 +755,9 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
             advanceUntilIdle()
 
-            assertEquals("provider:kakao:987654321", destinationSelectionRepository.selectedDestination.value?.placeId)
-            assertEquals("Provider Only Cafe", destinationSelectionRepository.selectedDestination.value?.name)
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals("provider:kakao:987654321", destinationPreviewRepository.pendingPreview.value?.destination?.placeId)
+            assertEquals("Provider Only Cafe", destinationPreviewRepository.pendingPreview.value?.destination?.name)
             assertTrue(placesRepository.detailRequests.isEmpty())
             assertTrue(searchRepository.savedRecentDestinations.isEmpty())
         }

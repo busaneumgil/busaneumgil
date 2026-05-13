@@ -88,9 +88,7 @@ class SearchViewModel(
     }
 
     private fun selectSearchResult(result: SearchResult) {
-        if (!handoffSearchResult(result)) return
-
-        emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
+        previewSearchResult(result)
     }
 
     private fun previewSearchResult(result: SearchResult) {

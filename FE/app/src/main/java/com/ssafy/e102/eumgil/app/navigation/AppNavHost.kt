@@ -95,7 +95,13 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
     val currentTopLevelRoute = currentRoute.toCurrentTopLevelRoute()
-    val showTopLevelBar = currentTopLevelRoute != null
+    val isMapFacilityDetailVisible by
+        currentBackStackEntry
+            ?.savedStateHandle
+            ?.getStateFlow(MAP_FACILITY_DETAIL_VISIBLE_KEY, false)
+            ?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(false) }
+    val showTopLevelBar = currentTopLevelRoute != null && !isMapFacilityDetailVisible
 
     val selectedPrimaryUserType = initSettings.selectedPrimaryUserType
 
@@ -196,6 +202,7 @@ internal fun shouldNavigateToTopLevelMapForHomeEntry(
         currentRoute.toCurrentTopLevelRoute() != null
 
 private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
+internal const val MAP_FACILITY_DETAIL_VISIBLE_KEY: String = "mapFacilityDetailVisible"
 
 @Composable
 private fun MobilityKwsEffect(

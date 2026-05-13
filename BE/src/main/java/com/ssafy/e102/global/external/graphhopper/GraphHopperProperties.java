@@ -20,7 +20,10 @@ public record GraphHopperProperties(
 	String blueUrlKey,
 	String greenUrlKey,
 	String blueUrl,
-	String greenUrl) {
+	String greenUrl,
+	String healthUrl,
+	String blueHealthUrl,
+	String greenHealthUrl) {
 
 	public GraphHopperProperties {
 		Assert.hasText(baseUrl, "GraphHopper 기본 URL은 필수입니다.");
@@ -33,6 +36,19 @@ public record GraphHopperProperties(
 		greenUrlKey = defaultIfBlank(greenUrlKey, "graphhopper:green:url");
 		blueUrl = defaultIfBlank(blueUrl, "http://graphhopper-blue:8989");
 		greenUrl = defaultIfBlank(greenUrl, "http://graphhopper-green:8989");
+		healthUrl = defaultIfBlank(healthUrl, "http://localhost:8990/healthcheck");
+		blueHealthUrl = defaultIfBlank(blueHealthUrl, "http://graphhopper-blue:8990/healthcheck");
+		greenHealthUrl = defaultIfBlank(greenHealthUrl, "http://graphhopper-green:8990/healthcheck");
+	}
+
+	public String healthUrlForSlot(String slot) {
+		if ("blue".equals(slot)) {
+			return blueHealthUrl;
+		}
+		if ("green".equals(slot)) {
+			return greenHealthUrl;
+		}
+		return healthUrl;
 	}
 
 	private static Duration defaultIfNull(Duration value, Duration defaultValue) {

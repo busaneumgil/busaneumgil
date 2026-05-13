@@ -168,6 +168,9 @@ services:
       GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BLUE_URL:-http://graphhopper-blue:8989}
       GRAPHHOPPER_BLUE_URL: ${GRAPHHOPPER_BLUE_URL:-http://graphhopper-blue:8989}
       GRAPHHOPPER_GREEN_URL: ${GRAPHHOPPER_GREEN_URL:-http://graphhopper-green:8989}
+      GRAPHHOPPER_HEALTH_URL: ${GRAPHHOPPER_HEALTH_URL:-http://graphhopper-blue:8990/healthcheck}
+      GRAPHHOPPER_BLUE_HEALTH_URL: ${GRAPHHOPPER_BLUE_HEALTH_URL:-http://graphhopper-blue:8990/healthcheck}
+      GRAPHHOPPER_GREEN_HEALTH_URL: ${GRAPHHOPPER_GREEN_HEALTH_URL:-http://graphhopper-green:8990/healthcheck}
       GRAPHHOPPER_ACTIVE_SLOT_KEY: ${GRAPHHOPPER_ACTIVE_SLOT_KEY:-graphhopper:active-slot}
       GRAPHHOPPER_PREVIOUS_SLOT_KEY: ${GRAPHHOPPER_PREVIOUS_SLOT_KEY:-graphhopper:previous-slot}
       GRAPHHOPPER_BLUE_URL_KEY: ${GRAPHHOPPER_BLUE_URL_KEY:-graphhopper:blue:url}

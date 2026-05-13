@@ -19,6 +19,7 @@ public class GraphHopperActiveHealthChecker {
 
 	private final RestTemplate restTemplate;
 	private final GraphHopperEndpointProvider endpointProvider;
+	private final GraphHopperProperties properties;
 
 	public GraphHopperActiveHealthChecker(
 		RestTemplateBuilder builder,
@@ -27,19 +28,22 @@ public class GraphHopperActiveHealthChecker {
 		this(builder
 			.connectTimeout(properties.connectTimeout())
 			.readTimeout(properties.readTimeout())
-			.build(), endpointProvider);
+			.build(), endpointProvider, properties);
 	}
 
-	GraphHopperActiveHealthChecker(RestTemplate restTemplate, GraphHopperEndpointProvider endpointProvider) {
+	GraphHopperActiveHealthChecker(
+		RestTemplate restTemplate,
+		GraphHopperEndpointProvider endpointProvider,
+		GraphHopperProperties properties) {
 		this.restTemplate = restTemplate;
 		this.endpointProvider = endpointProvider;
+		this.properties = properties;
 	}
 
 	public GraphHopperHealthStatus check() {
 		GraphHopperEndpointSelection endpoint = endpointProvider.selectEndpoint();
 		try {
-			ResponseEntity<String> response = restTemplate.getForEntity(healthcheckUri(endpoint.activeBaseUrl()),
-				String.class);
+			ResponseEntity<String> response = restTemplate.getForEntity(healthcheckUri(endpoint), String.class);
 			String status = response.getStatusCode().is2xxSuccessful() ? UP : DOWN;
 			return GraphHopperHealthStatus.of(status, endpoint);
 		} catch (RestClientException exception) {
@@ -47,9 +51,8 @@ public class GraphHopperActiveHealthChecker {
 		}
 	}
 
-	private URI healthcheckUri(String baseUrl) {
-		String normalized = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-		return URI.create(normalized + "/healthcheck");
+	private URI healthcheckUri(GraphHopperEndpointSelection endpoint) {
+		return URI.create(properties.healthUrlForSlot(endpoint.activeSlot()));
 	}
 
 	public record GraphHopperHealthStatus(

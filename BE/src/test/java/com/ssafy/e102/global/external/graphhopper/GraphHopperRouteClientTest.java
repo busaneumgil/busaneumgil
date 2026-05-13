@@ -365,6 +365,9 @@ class GraphHopperRouteClientTest {
 			null,
 			null,
 			null,
+			null,
+			null,
+			null,
 			null);
 	}
 

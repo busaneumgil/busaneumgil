@@ -179,6 +179,9 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("graphhopper-prod-candidate-data:/graphhopper/data", content)
         self.assertIn("GRAPHHOPPER_CANDIDATE_ADMIN_PORT:-18994", content)
         self.assertIn("GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BLUE_URL:-http://graphhopper-blue:8989}", content)
+        self.assertIn("GRAPHHOPPER_HEALTH_URL: ${GRAPHHOPPER_HEALTH_URL:-http://graphhopper-blue:8990/healthcheck}", content)
+        self.assertIn("GRAPHHOPPER_BLUE_HEALTH_URL: ${GRAPHHOPPER_BLUE_HEALTH_URL:-http://graphhopper-blue:8990/healthcheck}", content)
+        self.assertIn("GRAPHHOPPER_GREEN_HEALTH_URL: ${GRAPHHOPPER_GREEN_HEALTH_URL:-http://graphhopper-green:8990/healthcheck}", content)
         self.assertIn("GRAPHHOPPER_ACTIVE_SLOT_KEY", content)
         self.assertIn('wget -qO- http://127.0.0.1/health >/dev/null', content)
 

@@ -58,7 +58,10 @@ class RedisGraphHopperEndpointProviderTest {
 			"blue-url",
 			"green-url",
 			"http://blue-default:8989",
-			"http://green-default:8989");
+			"http://green-default:8989",
+			"http://fallback-default:8990/healthcheck",
+			"http://blue-default:8990/healthcheck",
+			"http://green-default:8990/healthcheck");
 	}
 
 	@SuppressWarnings("unchecked")

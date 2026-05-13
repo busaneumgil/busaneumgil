@@ -5,6 +5,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.time.Duration;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -24,8 +26,9 @@ class GraphHopperActiveHealthCheckerTest {
 				"http://graphhopper-green.test",
 				"http://graphhopper-blue.test",
 				"green",
-				"blue"));
-		server.expect(requestTo("http://graphhopper-green.test/healthcheck"))
+				"blue"),
+			properties());
+		server.expect(requestTo("http://graphhopper-green.test:8990/healthcheck"))
 			.andRespond(withSuccess("OK", MediaType.TEXT_PLAIN));
 
 		GraphHopperActiveHealthChecker.GraphHopperHealthStatus status = checker.check();
@@ -47,8 +50,9 @@ class GraphHopperActiveHealthCheckerTest {
 				"http://graphhopper-blue.test",
 				null,
 				"blue",
-				null));
-		server.expect(requestTo("http://graphhopper-blue.test/healthcheck"))
+				null),
+			properties());
+		server.expect(requestTo("http://graphhopper-blue.test:8990/healthcheck"))
 			.andRespond(withServerError());
 
 		GraphHopperActiveHealthChecker.GraphHopperHealthStatus status = checker.check();
@@ -56,5 +60,21 @@ class GraphHopperActiveHealthCheckerTest {
 		assertThat(status.status()).isEqualTo("DOWN");
 		assertThat(status.activeSlot()).isEqualTo("blue");
 		server.verify();
+	}
+
+	private GraphHopperProperties properties() {
+		return new GraphHopperProperties(
+			"http://fallback.test:8989",
+			Duration.ofSeconds(5),
+			Duration.ofSeconds(5),
+			null,
+			null,
+			null,
+			null,
+			"http://graphhopper-blue.test:8989",
+			"http://graphhopper-green.test:8989",
+			"http://fallback.test:8990/healthcheck",
+			"http://graphhopper-blue.test:8990/healthcheck",
+			"http://graphhopper-green.test:8990/healthcheck");
 	}
 }

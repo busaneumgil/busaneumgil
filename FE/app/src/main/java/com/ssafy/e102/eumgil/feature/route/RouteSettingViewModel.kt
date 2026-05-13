@@ -97,9 +97,9 @@ class RouteSettingViewModel(
         }
     }
 
-    fun startLocationUpdates() {
+    fun startLocationUpdates(requestLocationPermissionIfNeeded: Boolean = true) {
         hasStartedActiveLocationUpdates = true
-        syncLocationAccess(requestPermissionIfNeeded = true)
+        syncLocationAccess(requestPermissionIfNeeded = requestLocationPermissionIfNeeded)
     }
 
     fun stopLocationUpdates() {

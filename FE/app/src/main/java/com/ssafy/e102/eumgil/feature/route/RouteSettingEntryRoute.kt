@@ -35,6 +35,7 @@ fun RouteSettingEntryRoute(
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     autoStartNavigation: Boolean = false,
     initialRouteOption: RouteOption? = null,
+    requestLocationPermissionIfNeeded: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -70,8 +71,8 @@ fun RouteSettingEntryRoute(
         }
     }
 
-    DisposableEffect(viewModel) {
-        viewModel.startLocationUpdates()
+    DisposableEffect(viewModel, requestLocationPermissionIfNeeded) {
+        viewModel.startLocationUpdates(requestLocationPermissionIfNeeded = requestLocationPermissionIfNeeded)
         onDispose {
             viewModel.stopLocationUpdates()
         }

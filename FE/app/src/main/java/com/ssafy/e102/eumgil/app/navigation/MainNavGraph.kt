@@ -16,10 +16,13 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
+import com.ssafy.e102.eumgil.core.location.locationPermissions
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
 import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
@@ -59,7 +62,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute())
+                navController.navigateToRouteSettingPermissionGate()
             },
             onNavigateToSearch = {
                 navController.navigate(SearchRoute.Entry.createRoute())
@@ -77,9 +80,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
             onNavigateToRouteSetting = { routeOption ->
-                navController.navigate(
-                    RouteSettingRoute.Setting.createRoute(initialRouteOption = routeOption),
-                )
+                navController.navigateToRouteSettingPermissionGate(initialRouteOption = routeOption)
             },
         )
     }
@@ -137,7 +138,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                navController.navigateToRouteSettingPermissionGate {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -201,7 +202,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                navController.navigateToRouteSettingPermissionGate {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -275,6 +276,66 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     }
 
     composable(
+        route = RouteSettingRoute.PermissionGate.route,
+        arguments =
+            listOf(
+                navArgument(RouteSettingRoute.PermissionGate.ARG_AUTO_START_NAVIGATION) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+                navArgument(RouteSettingRoute.PermissionGate.ARG_INITIAL_ROUTE_OPTION) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
+        val context = LocalContext.current
+        val appContainer =
+            remember(context.applicationContext) {
+                (context.applicationContext as BusanEumgilApp).appContainer
+            }
+        val locationPermissionManager = remember(appContainer) { appContainer.locationPermissionManager }
+        val autoStartNavigation =
+            backStackEntry.arguments?.getBoolean(RouteSettingRoute.PermissionGate.ARG_AUTO_START_NAVIGATION) ?: false
+        val initialRouteOption =
+            backStackEntry.arguments
+                ?.getString(RouteSettingRoute.PermissionGate.ARG_INITIAL_ROUTE_OPTION)
+                ?.let(RouteOption::fromValue)
+        val permissionLauncher =
+            rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestMultiplePermissions(),
+            ) {
+                locationPermissionManager.refreshPermissionState()
+                navController.navigateToRouteSettingFromPermissionGate(
+                    gateDestinationId = backStackEntry.destination.id,
+                    autoStartNavigation = autoStartNavigation,
+                    initialRouteOption = initialRouteOption,
+                )
+            }
+
+        LaunchedEffect(
+            locationPermissionManager,
+            autoStartNavigation,
+            initialRouteOption,
+        ) {
+            locationPermissionManager.refreshPermissionState()
+            when (locationPermissionManager.permissionState.value) {
+                is LocationPermissionState.Granted,
+                is LocationPermissionState.Unavailable,
+                    ->
+                    navController.navigateToRouteSettingFromPermissionGate(
+                        gateDestinationId = backStackEntry.destination.id,
+                        autoStartNavigation = autoStartNavigation,
+                        initialRouteOption = initialRouteOption,
+                    )
+
+                LocationPermissionState.Denied -> permissionLauncher.launch(locationPermissions)
+            }
+        }
+    }
+
+    composable(
         route = RouteSettingRoute.Setting.route,
         arguments =
             listOf(
@@ -287,6 +348,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(RouteSettingRoute.Setting.ARG_LOCATION_PERMISSION_PRECHECKED) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
             ),
     ) { backStackEntry ->
         val autoStartNavigation =
@@ -295,11 +360,16 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments
                 ?.getString(RouteSettingRoute.Setting.ARG_INITIAL_ROUTE_OPTION)
                 ?.let(RouteOption::fromValue)
+        val locationPermissionPrechecked =
+            backStackEntry.arguments
+                ?.getBoolean(RouteSettingRoute.Setting.ARG_LOCATION_PERMISSION_PRECHECKED)
+                ?: false
         val navigationViewModel = rememberNavigationGuidanceViewModel()
 
         RouteSettingEntryRoute(
             autoStartNavigation = autoStartNavigation,
             initialRouteOption = initialRouteOption,
+            requestLocationPermissionIfNeeded = !locationPermissionPrechecked,
             onNavigateBack = {
                 navController.popBackStack()
             },
@@ -558,6 +628,39 @@ fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
 internal fun NavController.navigateToTopLevelMapForHomeEntry() {
     navigateToTopLevel(TopLevelDestination.Map)
     getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestMapHomeReentryReset()
+}
+
+private fun NavController.navigateToRouteSettingPermissionGate(
+    autoStartNavigation: Boolean = false,
+    initialRouteOption: RouteOption? = null,
+    builder: NavOptionsBuilder.() -> Unit = {},
+) {
+    navigate(
+        RouteSettingRoute.PermissionGate.createRoute(
+            autoStartNavigation = autoStartNavigation,
+            initialRouteOption = initialRouteOption,
+        ),
+        builder,
+    )
+}
+
+private fun NavController.navigateToRouteSettingFromPermissionGate(
+    gateDestinationId: Int,
+    autoStartNavigation: Boolean,
+    initialRouteOption: RouteOption?,
+) {
+    navigate(
+        RouteSettingRoute.Setting.createRoute(
+            autoStartNavigation = autoStartNavigation,
+            initialRouteOption = initialRouteOption,
+            locationPermissionPrechecked = true,
+        ),
+    ) {
+        launchSingleTop = true
+        popUpTo(gateDestinationId) {
+            inclusive = true
+        }
+    }
 }
 
 internal fun NavHostController.navigateToArrivalHome(selectedPrimaryUserType: String?) {

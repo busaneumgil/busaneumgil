@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import android.util.Log
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -153,6 +155,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             navController = navController,
             startDestination = startDestination.route,
             modifier = modifier.padding(innerPadding),
+            enterTransition = { appEnterTransition() },
+            exitTransition = { appExitTransition() },
+            popEnterTransition = { appEnterTransition() },
+            popExitTransition = { appExitTransition() },
         ) {
             authNavGraph(
                 navController = navController,
@@ -194,6 +200,12 @@ internal fun shouldNavigateToTopLevelMapForHomeEntry(
         currentRoute != TopLevelRoute.Map.route &&
         currentRoute != TopLevelRoute.SavedRoute.route &&
         currentRoute.toCurrentTopLevelRoute() != null
+
+internal fun shouldUseInstantAppDestinationTransitions(): Boolean = true
+
+private fun appEnterTransition(): EnterTransition = EnterTransition.None
+
+private fun appExitTransition(): ExitTransition = ExitTransition.None
 
 private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
 

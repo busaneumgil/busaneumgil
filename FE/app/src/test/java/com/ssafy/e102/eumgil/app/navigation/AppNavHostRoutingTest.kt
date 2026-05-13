@@ -121,4 +121,9 @@ class AppNavHostRoutingTest {
         assertNull(LowVisionRoute.Home.route.toCurrentTopLevelRoute())
         assertNull(LowVisionRoute.Search.route.toCurrentTopLevelRoute())
     }
+
+    @Test
+    fun `app route changes use instant destination transitions`() {
+        assertEquals(true, shouldUseInstantAppDestinationTransitions())
+    }
 }

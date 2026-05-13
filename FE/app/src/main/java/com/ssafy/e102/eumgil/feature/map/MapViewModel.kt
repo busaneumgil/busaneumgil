@@ -1336,15 +1336,9 @@ class MapViewModel(
                         errorMessage = null,
                     )
                 renderSelectedFacilityState()
-                emitUiEvent(
-                    MapUiEvent.ShowSnackbar(
-                        if (nextBookmarked) {
-                            BOOKMARK_SAVE_SUCCESS_MESSAGE
-                        } else {
-                            BOOKMARK_DELETE_SUCCESS_MESSAGE
-                        },
-                    ),
-                )
+                if (!nextBookmarked) {
+                    emitUiEvent(MapUiEvent.ShowSnackbar(BOOKMARK_DELETE_SUCCESS_MESSAGE))
+                }
             }
             .onFailure {
                 if (selectedFacilityDetail?.facilityId != detail.facilityId) return@onFailure
@@ -1398,15 +1392,9 @@ class MapViewModel(
                         errorMessage = null,
                     )
                 renderSelectedFacilityState()
-                emitUiEvent(
-                    MapUiEvent.ShowSnackbar(
-                        if (nextBookmarked) {
-                            BOOKMARK_SAVE_SUCCESS_MESSAGE
-                        } else {
-                            BOOKMARK_DELETE_SUCCESS_MESSAGE
-                        },
-                    ),
-                )
+                if (!nextBookmarked) {
+                    emitUiEvent(MapUiEvent.ShowSnackbar(BOOKMARK_DELETE_SUCCESS_MESSAGE))
+                }
             }.onFailure {
                 if (selectedMapTapDetail?.matchesBookmarkTarget(detail) != true) return@onFailure
                 selectedMapTapDetail = selectedMapTapDetail?.copy(isBookmarked = currentBookmarkState.isBookmarked)
@@ -1499,7 +1487,6 @@ class MapViewModel(
         private const val MAP_BROWSE_RADIUS_METERS = 1_000
         private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 3
         private const val BOOKMARK_LOAD_ERROR_MESSAGE = "북마크 상태를 확인하지 못했습니다."
-        private const val BOOKMARK_SAVE_SUCCESS_MESSAGE = "북마크에 저장했습니다."
         private const val BOOKMARK_DELETE_SUCCESS_MESSAGE = "북마크를 해제했습니다."
         private const val BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크 저장에 실패했습니다. 다시 시도해 주세요."
         private const val SHORTCUT_FILTER_UNAVAILABLE_MESSAGE = "근처에 해당 장소가 없어요"

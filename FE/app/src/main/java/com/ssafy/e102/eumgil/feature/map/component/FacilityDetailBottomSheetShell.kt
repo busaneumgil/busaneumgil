@@ -66,6 +66,7 @@ data class FacilityDetailBottomSheetShellState(
     val metaLabel: String = "",
     val title: String = "",
     val address: String = "",
+    val hasDetailContent: Boolean = false,
 )
 
 @Composable
@@ -234,15 +235,17 @@ fun FacilityDetailBottomSheetShell(
                         }
                     }
 
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f, fill = false)
-                                .verticalScroll(detailScrollState),
-                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                        content = detailContent,
-                    )
+                    if (state.hasDetailContent) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f, fill = false)
+                                    .verticalScroll(detailScrollState),
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                            content = detailContent,
+                        )
+                    }
 
                     Column(
                         modifier =

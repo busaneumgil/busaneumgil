@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
+import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
@@ -33,11 +34,18 @@ fun provideAccountWithdrawalRepository(
     authSessionRepository: AuthSessionRepository,
     initSettingsRepository: InitSettingsRepository,
     bookmarkDao: BookmarkDao,
+    favoriteRouteDao: FavoriteRouteDao,
     isMockMode: Boolean,
 ): AccountWithdrawalRepository {
+    val accountScopedLocalCacheCleaner =
+        DefaultAccountScopedLocalCacheCleaner(
+            authSessionRepository = authSessionRepository,
+            bookmarkDao = bookmarkDao,
+            favoriteRouteDao = favoriteRouteDao,
+        )
     val localDataCleaner =
         DefaultAccountWithdrawalLocalDataCleaner(
-            bookmarkDao = bookmarkDao,
+            accountScopedLocalCacheCleaner = accountScopedLocalCacheCleaner,
             initSettingsRepository = initSettingsRepository,
         )
 
@@ -57,11 +65,11 @@ fun provideAccountWithdrawalRepository(
 }
 
 class DefaultAccountWithdrawalLocalDataCleaner(
-    private val bookmarkDao: BookmarkDao,
+    private val accountScopedLocalCacheCleaner: AccountScopedLocalCacheCleaner,
     private val initSettingsRepository: InitSettingsRepository,
 ) : AccountWithdrawalLocalDataCleaner {
     override suspend fun clearAfterWithdrawal() {
-        bookmarkDao.clearBookmarks()
+        accountScopedLocalCacheCleaner.clearCurrentAccountCache()
         initSettingsRepository.clearInitSettings()
     }
 }

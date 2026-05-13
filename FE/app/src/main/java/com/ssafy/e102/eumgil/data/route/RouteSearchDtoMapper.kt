@@ -214,6 +214,7 @@ private fun RouteDto.toDomainLegs(
                                 instruction = segment.guidanceMessage,
                                 distanceMeters = segment.distanceMeters,
                                 polyline = segment.polyline,
+                                anchorCoordinate = segment.anchorCoordinate,
                                 badges = segment.safetyFlags.toSyntheticBadges(),
                             )
                         },
@@ -229,6 +230,7 @@ private fun RouteLegDto.toDomain(
     fallbackSequence: Int,
     geometryParser: RouteGeometryParser,
 ): RouteLeg {
+    val geometryParseResult = geometryParser.parse(geometry)
     val resolvedSteps =
         when {
             steps.isNotEmpty() ->
@@ -244,7 +246,7 @@ private fun RouteLegDto.toDomain(
 
             else -> emptyList()
         }.sortedBy(RouteStep::sequence)
-    val parsedPolyline = geometryParser.parse(geometry).polyline
+    val parsedPolyline = geometryParseResult.polyline
 
     return RouteLeg(
         sequence = normalizedSequence(fallbackSequence),
@@ -257,7 +259,7 @@ private fun RouteLegDto.toDomain(
             estimatedTimeMinute?.takeIf { value -> value >= 0 }
                 ?: durationSecond.toEstimatedMinutesOrNull(),
         polyline =
-            if (parsedPolyline.isRenderable) {
+            if (parsedPolyline.points.isNotEmpty()) {
                 parsedPolyline
             } else {
                 resolvedSteps.toStepPreviewPolyline()
@@ -275,8 +277,10 @@ private fun RouteLegDto.toDomain(
 private fun RouteStepDto.toDomain(
     fallbackSequence: Int,
     geometryParser: RouteGeometryParser,
-): RouteStep =
-    RouteStep(
+): RouteStep {
+    val geometryParseResult = geometryParser.parse(geometry)
+
+    return RouteStep(
         sequence =
             sequence
                 ?.takeIf { value -> value > 0 }
@@ -284,7 +288,8 @@ private fun RouteStepDto.toDomain(
         instruction = normalizedInstruction(instruction),
         distanceMeters = distanceMeter.toRoundedMeters() ?: 0,
         durationSeconds = durationSecond?.takeIf { value -> value >= 0 },
-        polyline = geometryParser.parse(geometry).polyline,
+        polyline = geometryParseResult.polyline,
+        anchorCoordinate = geometryParseResult.anchorCoordinate,
         badges = RouteBadge.fromCodes(badges),
         alerts =
             alerts.mapNotNull(RouteAlertDto::toDomainOrNull).ifEmpty {
@@ -293,6 +298,7 @@ private fun RouteStepDto.toDomain(
         slopePercent = slopePercent,
         widthState = widthState?.trim()?.takeIf(String::isNotEmpty),
     )
+}
 
 private fun RouteTransitLaneOptionDto.toDomain(): RouteTransitLaneOption =
     RouteTransitLaneOption(
@@ -331,6 +337,7 @@ private fun RouteGuidanceEventDto.toDomain(
     geometryParser: RouteGeometryParser,
 ): RouteStep {
     val eventType = RouteGuidanceEventType.fromValue(type)
+    val geometryParseResult = geometryParser.parse(geometry)
 
     return RouteStep(
         sequence =
@@ -339,7 +346,8 @@ private fun RouteGuidanceEventDto.toDomain(
                 ?: fallbackSequence,
         instruction = eventType?.instruction ?: normalizedInstruction(type),
         distanceMeters = distanceMeters,
-        polyline = geometryParser.parse(geometry).polyline,
+        polyline = geometryParseResult.polyline,
+        anchorCoordinate = geometryParseResult.anchorCoordinate,
         badges = eventType?.badges.orEmpty(),
         alerts = listOfNotNull(eventType?.toAlert(distanceMeters = distanceMeters)),
         slopePercent = null,
@@ -406,6 +414,7 @@ private fun RouteStep.toCompatibilitySegment(
     RouteSegment(
         sequence = sequence,
         polyline = polyline,
+        anchorCoordinate = anchorCoordinate,
         distanceMeters = distanceMeters,
         safetyFlags = buildSafetyFlags(badges = badges, alerts = alerts, guidanceMessage = instruction),
         riskLevel = resolveRiskLevel(badges = badges, alerts = alerts, guidanceMessage = instruction),
@@ -442,6 +451,7 @@ private fun RouteSegmentDto.toLegacyDomain(
     return RouteSegment(
         sequence = normalizedSequence(fallbackSequence),
         polyline = geometryParseResult.polyline,
+        anchorCoordinate = geometryParseResult.anchorCoordinate,
         distanceMeters = distanceMeter?.takeIf { distance -> distance >= 0 } ?: 0,
         safetyFlags =
             RouteSegmentSafetyFlags(

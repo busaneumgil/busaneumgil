@@ -21,10 +21,14 @@
   --color-info: #0ea5e9;
   --color-disabled: #cbd5e1;
   --color-gray-900: #111827;
+  --color-gray-800: #1f2937;
   --color-gray-700: #374151;
+  --color-gray-600: #4b5563;
   --color-gray-500: #6b7280;
   --color-gray-300: #d1d5db;
+  --color-gray-200: #e5e7eb;
   --color-gray-100: #f3f4f6;
+  --color-gray-50: #f8fafc;
   --color-white: #ffffff;
 
   --spacing-1: 4px;
@@ -40,7 +44,9 @@
   --radius-pill: 999px;
 
   --shadow-map-overlay: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --border: var(--color-gray-300);
+  --shadow-panel: 0 1px 2px rgb(15 23 42 / 0.06), 0 10px 24px rgb(15 23 42 / 0.04);
+  --shadow-focus: 0 0 0 3px rgb(37 99 235 / 0.14);
+  --border: var(--color-gray-200);
   --muted: var(--color-gray-500);
   --panel: var(--color-white);
   --primary: var(--color-primary-600);
@@ -57,13 +63,14 @@
 body {
   margin: 0;
   min-width: 1120px;
-  background: var(--color-gray-100);
+  background: var(--color-gray-50);
   font-size: 14px;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -72,18 +79,31 @@ button {
   background: var(--color-white);
   color: var(--color-gray-900);
   border-radius: var(--radius-m);
-  padding: 7px 10px;
+  min-height: 36px;
+  padding: 7px 12px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
-    color 120ms ease;
+    color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 
 button:hover {
   border-color: var(--color-primary-400);
+  background: var(--color-gray-50);
   color: var(--color-primary-600);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: var(--shadow-focus);
 }
 
 button:disabled {
@@ -91,12 +111,24 @@ button:disabled {
   opacity: 0.45;
 }
 
+input,
 select {
   min-width: 108px;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  padding: 7px 9px;
+  min-height: 36px;
+  padding: 7px 10px;
   background: var(--color-white);
+  color: var(--color-gray-900);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-gray-300);
 }
 
 .app-shell {
@@ -379,7 +411,7 @@ select {
   justify-content: space-between;
   align-items: flex-start;
   gap: 14px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--color-white);
 }
@@ -391,9 +423,10 @@ select {
 
 .topbar h1 {
   margin: 0;
-  font-size: 18px;
-  line-height: 25px;
-  font-weight: 700;
+  font-size: 19px;
+  line-height: 26px;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .topbar p {
@@ -709,8 +742,9 @@ select {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
-  background: var(--color-white);
+  background: rgb(255 255 255 / 0.94);
   box-shadow: var(--shadow-map-overlay);
+  backdrop-filter: blur(8px);
   overflow-x: auto;
 }
 
@@ -960,20 +994,27 @@ select {
   position: relative;
   z-index: 25;
   border-left: 1px solid var(--border);
-  background: var(--color-white);
+  background: var(--color-gray-50);
   padding: 14px;
   overflow: auto;
 }
 
 .panel-section {
-  border-bottom: 1px solid var(--border);
-  padding: 0 0 14px;
-  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--color-white);
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-panel);
 }
 
 .panel-section h2,
 .panel-section h3 {
-  margin: 8px 0 6px;
+  margin: 0 0 8px;
+  color: var(--color-gray-900);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 800;
 }
 
 .panel-section p,
@@ -990,8 +1031,8 @@ select {
 .metric {
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  padding: 8px;
-  background: var(--color-white);
+  padding: 10px;
+  background: var(--color-gray-50);
 }
 
 .metric span {
@@ -1137,7 +1178,7 @@ select {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   padding: 8px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--color-white);
   color: var(--color-gray-800);
@@ -1196,6 +1237,27 @@ select {
   background: var(--color-white);
   padding: 14px;
   margin: 0;
+  box-shadow: var(--shadow-panel);
+}
+
+.admin-promote-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.admin-promote-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-promote-form input {
+  min-width: 0;
 }
 
 .assignment-filter-row {
@@ -1216,6 +1278,7 @@ select {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
+  background: var(--color-white);
 }
 
 .admin-table th,
@@ -1410,6 +1473,7 @@ select {
   background: var(--color-white);
   padding: 12px;
   overflow: auto;
+  box-shadow: var(--shadow-panel);
 }
 
 .panel-toolbar {
@@ -1539,6 +1603,18 @@ select {
   overflow: auto;
 }
 
+.audit-log-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.audit-log-controls > button {
+  white-space: nowrap;
+}
+
 .audit-log-list {
   display: grid;
   gap: 10px;
@@ -1548,7 +1624,6 @@ select {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 10px;
-  margin-bottom: 12px;
 }
 
 .audit-log-filters label {
@@ -1665,7 +1740,7 @@ table {
 
 th,
 td {
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   text-align: left;
 }
@@ -1673,7 +1748,8 @@ td {
 th {
   color: var(--muted);
   font-size: 13px;
-  background: var(--color-gray-100);
+  background: var(--color-gray-50);
+  font-weight: 800;
 }
 
 tbody tr {
@@ -1682,7 +1758,7 @@ tbody tr {
 
 tbody tr:hover,
 tbody tr.selected {
-  background: var(--color-primary-200);
+  background: rgb(219 234 254 / 0.62);
 }
 
 .status-badge {
@@ -1731,6 +1807,7 @@ tbody tr.selected {
   border-radius: var(--radius-m);
   background: var(--color-white);
   padding: 14px;
+  box-shadow: var(--shadow-panel);
 }
 
 .dashboard-card span {

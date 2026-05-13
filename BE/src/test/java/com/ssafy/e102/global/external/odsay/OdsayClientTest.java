@@ -88,7 +88,7 @@ class OdsayClientTest {
 	void searchEncodesApiKeyQueryParam() {
 		setUpClient("abc+def/ghi");
 		server.expect(request -> assertThat(request.getURI().getRawQuery())
-				.contains("apiKey=abc%2Bdef%2Fghi"))
+			.contains("apiKey=abc%2Bdef%2Fghi"))
 			.andRespond(withSuccess("""
 				{
 				  "error": [
@@ -114,7 +114,7 @@ class OdsayClientTest {
 	void loadLaneEncodesApiKeyQueryParam() {
 		setUpClient("abc+def/ghi");
 		server.expect(request -> assertThat(request.getURI().getRawQuery())
-				.contains("apiKey=abc%2Bdef%2Fghi"))
+			.contains("apiKey=abc%2Bdef%2Fghi"))
 			.andRespond(withSuccess("""
 				{
 				  "error": [

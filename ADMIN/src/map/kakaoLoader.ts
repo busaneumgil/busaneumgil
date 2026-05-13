@@ -42,6 +42,35 @@ export interface KakaoRoadviewClient {
   getNearestPanoId: (position: unknown, radius: number, callback: (panoId: number | string | null) => void) => void;
 }
 
+export function attachKakaoWheelZoom(
+  container: HTMLElement,
+  getMap: () => KakaoMap | null,
+  onLevelChange?: (level: number) => void,
+) {
+  const handleWheel = (event: WheelEvent) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest(".map-toolbar, .map-status")) {
+      return;
+    }
+
+    const map = getMap();
+    if (!map) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const currentLevel = map.getLevel?.() ?? 6;
+    const nextLevel = Math.max(1, Math.min(14, currentLevel + (event.deltaY > 0 ? 1 : -1)));
+    if (nextLevel === currentLevel) return;
+
+    map.setLevel(nextLevel);
+    onLevelChange?.(nextLevel);
+  };
+
+  container.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+  return () => container.removeEventListener("wheel", handleWheel, { capture: true });
+}
+
 let loadingPromise: Promise<void> | null = null;
 
 export function loadKakaoMap(): Promise<void> {

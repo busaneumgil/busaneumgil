@@ -6,6 +6,9 @@ import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteLeg
+import com.ssafy.e102.eumgil.core.model.RouteLegRole
+import com.ssafy.e102.eumgil.core.model.RouteLegType
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
@@ -16,11 +19,12 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
-import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
-import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RecentSearch
+import com.ssafy.e102.eumgil.core.model.RouteTransitStop
+import com.ssafy.e102.eumgil.core.model.RouteTransportMode
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.local.datasource.RouteLocalDataSource
@@ -994,6 +998,44 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `transit detail steps distinguish bus and subway segments`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val detailSteps = viewModel.uiState.value.selectedRoute?.detailSteps.orEmpty()
+
+            assertEquals(
+                listOf(
+                    RouteDetailStepKind.START,
+                    RouteDetailStepKind.STRAIGHT,
+                    RouteDetailStepKind.BUS,
+                    RouteDetailStepKind.SUBWAY,
+                    RouteDetailStepKind.STRAIGHT,
+                    RouteDetailStepKind.ARRIVAL,
+                ),
+                detailSteps.map(RouteDetailStepUiState::kind),
+            )
+            assertEquals("버스 탑승", detailSteps[2].title)
+            assertEquals("시청 정류장에서 1001번 버스를 타고 이동하세요.", detailSteps[2].description)
+            assertEquals("지하철 탑승", detailSteps[3].title)
+            assertEquals("시청역에서 2호선 지하철을 타고 이동하세요.", detailSteps[3].description)
+        }
+
+    @Test
     fun `manual transit selection exposes remote success debug info`() =
         runTest {
             val destinationSelectionRepository =
@@ -1589,6 +1631,17 @@ private fun buildRouteCandidate(
     estimatedTimeMinutes: Int,
     riskLevel: RouteRiskLevel,
 ): RouteCandidate {
+    if (transportMode == RouteTransportMode.PUBLIC_TRANSIT) {
+        return buildTransitRouteCandidate(
+            routeOption = routeOption,
+            title = title,
+            routeId = routeId,
+            distanceMeters = distanceMeters,
+            estimatedTimeMinutes = estimatedTimeMinutes,
+            riskLevel = riskLevel,
+        )
+    }
+
     val previewPoints =
         listOf(
             GeoCoordinate(35.1796, 129.0756),
@@ -1627,6 +1680,129 @@ private fun buildRouteCandidate(
                     polyline = RoutePolyline(points = previewPoints.drop(1)),
                     distanceMeters = distanceMeters - (distanceMeters / 2),
                     guidanceMessage = "Continue to the destination.",
+                ),
+            ),
+    )
+}
+
+private fun buildTransitRouteCandidate(
+    routeOption: RouteOption,
+    title: String,
+    routeId: String,
+    distanceMeters: Int,
+    estimatedTimeMinutes: Int,
+    riskLevel: RouteRiskLevel,
+): RouteCandidate {
+    val previewPoints =
+        listOf(
+            GeoCoordinate(35.1796, 129.0756),
+            GeoCoordinate(35.1788, 129.0738),
+            GeoCoordinate(35.1776, 129.0708),
+            GeoCoordinate(35.1748, 129.0658),
+            GeoCoordinate(35.1726, 129.0614),
+        )
+    val busBoardingStop =
+        RouteTransitStop(
+            name = "시청 정류장",
+            coordinate = previewPoints[1],
+        )
+    val busAlightingStop =
+        RouteTransitStop(
+            name = "서면 정류장",
+            coordinate = previewPoints[2],
+        )
+    val subwayBoardingStop =
+        RouteTransitStop(
+            name = "시청역",
+            coordinate = previewPoints[2],
+        )
+    val subwayAlightingStop =
+        RouteTransitStop(
+            name = "전포역",
+            coordinate = previewPoints[3],
+        )
+
+    return RouteCandidate(
+        routeId = routeId,
+        serverRouteId = routeId,
+        transportMode = RouteTransportMode.PUBLIC_TRANSIT,
+        routeOption = routeOption,
+        title = title,
+        summary =
+            RouteSummary(
+                distanceMeters = distanceMeters,
+                estimatedTimeMinutes = estimatedTimeMinutes,
+                riskLevel = riskLevel,
+            ),
+        preview =
+            RoutePreviewModel(
+                polyline = RoutePolyline(points = previewPoints),
+                segmentCount = 4,
+                renderableSegmentCount = 4,
+                fallbackSegmentCount = 0,
+            ),
+        legs =
+            listOf(
+                RouteLeg(
+                    sequence = 1,
+                    type = RouteLegType.WALK,
+                    role = RouteLegRole.WALK_TO_TRANSIT,
+                    polyline = RoutePolyline(points = previewPoints.take(2)),
+                ),
+                RouteLeg(
+                    sequence = 2,
+                    type = RouteLegType.BUS,
+                    role = RouteLegRole.TRANSIT,
+                    routeNo = "1001",
+                    boardingStop = busBoardingStop,
+                    alightingStop = busAlightingStop,
+                    polyline = RoutePolyline(points = previewPoints.slice(1..2)),
+                ),
+                RouteLeg(
+                    sequence = 3,
+                    type = RouteLegType.SUBWAY,
+                    role = RouteLegRole.TRANSIT,
+                    routeNo = "2호선",
+                    boardingStop = subwayBoardingStop,
+                    alightingStop = subwayAlightingStop,
+                    polyline = RoutePolyline(points = previewPoints.slice(2..3)),
+                ),
+                RouteLeg(
+                    sequence = 4,
+                    type = RouteLegType.WALK,
+                    role = RouteLegRole.WALK_TO_DESTINATION,
+                    polyline = RoutePolyline(points = previewPoints.drop(3)),
+                ),
+            ),
+        segments =
+            listOf(
+                RouteSegment(
+                    sequence = 1,
+                    polyline = RoutePolyline(points = previewPoints.take(2)),
+                    distanceMeters = 180,
+                    guidanceMessage = "정류장 방향으로 직진하세요.",
+                    sourceLegSequence = 1,
+                ),
+                RouteSegment(
+                    sequence = 2,
+                    polyline = RoutePolyline(points = previewPoints.slice(1..2)),
+                    distanceMeters = 1_400,
+                    guidanceMessage = "Next transit segment",
+                    sourceLegSequence = 2,
+                ),
+                RouteSegment(
+                    sequence = 3,
+                    polyline = RoutePolyline(points = previewPoints.slice(2..3)),
+                    distanceMeters = 2_200,
+                    guidanceMessage = "Next transit segment",
+                    sourceLegSequence = 3,
+                ),
+                RouteSegment(
+                    sequence = 4,
+                    polyline = RoutePolyline(points = previewPoints.drop(3)),
+                    distanceMeters = 120,
+                    guidanceMessage = "목적지 방향으로 직진하세요.",
+                    sourceLegSequence = 4,
                 ),
             ),
     )

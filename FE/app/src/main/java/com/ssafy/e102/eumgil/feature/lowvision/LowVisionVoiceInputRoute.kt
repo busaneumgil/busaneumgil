@@ -84,9 +84,7 @@ fun LowVisionVoiceInputRoute(
     }
 
     LowVisionVoiceInputScreen(
-        uiState = uiState,
         onCancelRecording = viewModel::cancelRecording,
-        onTabSelected = onTabSelected,
         modifier = modifier,
     )
 }

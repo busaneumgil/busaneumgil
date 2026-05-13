@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceDirection;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceFeature;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
@@ -51,7 +53,9 @@ class RouteDtoJsonTest {
 					"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
 					List.of(new RouteGuidanceEventResponse(
 						1,
-						RouteGuidanceEventType.CROSSWALK_AUDIO,
+						RouteGuidanceEventType.CROSSWALK,
+						null,
+						List.of(RouteGuidanceFeature.SIGNAL, RouteGuidanceFeature.AUDIO_SIGNAL),
 						BigDecimal.valueOf(12),
 						35,
 						"POINT(128.9360 35.1200)")))))));
@@ -80,12 +84,51 @@ class RouteDtoJsonTest {
 		assertThat(leg.has("steps")).isFalse();
 		JsonNode guidanceEvent = leg.get("guidanceEvents").get(0);
 		assertThat(guidanceEvent.get("sequence").asInt()).isEqualTo(1);
-		assertThat(guidanceEvent.get("type").asText()).isEqualTo("CROSSWALK_AUDIO");
+		assertThat(guidanceEvent.get("type").asText()).isEqualTo("CROSSWALK");
+		assertThat(guidanceEvent.get("features").get(0).asText()).isEqualTo("SIGNAL");
+		assertThat(guidanceEvent.get("features").get(1).asText()).isEqualTo("AUDIO_SIGNAL");
+		assertThat(guidanceEvent.has("direction")).isFalse();
 		assertThat(guidanceEvent.get("distanceFromLegStartMeter").decimalValue()).isEqualByComparingTo("12");
 		assertThat(guidanceEvent.get("durationFromLegStartSecond").asInt()).isEqualTo(35);
 		assertThat(guidanceEvent.get("distanceFromRouteStartMeter").decimalValue()).isEqualByComparingTo("12");
 		assertThat(guidanceEvent.get("durationFromRouteStartSecond").asInt()).isEqualTo(35);
 		assertThat(guidanceEvent.get("geometry").asText()).isEqualTo("POINT(128.9360 35.1200)");
+	}
+
+	@Test
+	@DisplayName("guidance event direction은 type과 별도 필드로 직렬화한다")
+	void routeGuidanceDirectionSerializesSeparatelyFromType() throws Exception {
+		RouteGuidanceEventResponse response = new RouteGuidanceEventResponse(
+			1,
+			RouteGuidanceEventType.CROSSWALK,
+			RouteGuidanceDirection.TURN_RIGHT,
+			List.of(RouteGuidanceFeature.SIGNAL),
+			BigDecimal.valueOf(159),
+			120,
+			"POINT(128.872855 35.082394)");
+
+		JsonNode guidanceEvent = objectMapper.readTree(objectMapper.writeValueAsString(response));
+
+		assertThat(guidanceEvent.get("type").asText()).isEqualTo("CROSSWALK");
+		assertThat(guidanceEvent.get("direction").asText()).isEqualTo("TURN_RIGHT");
+		assertThat(guidanceEvent.get("features").get(0).asText()).isEqualTo("SIGNAL");
+	}
+
+	@Test
+	@DisplayName("direction-only guidance event는 type 없이 직렬화한다")
+	void directionOnlyGuidanceEventOmitsType() throws Exception {
+		RouteGuidanceEventResponse response = new RouteGuidanceEventResponse(
+			1,
+			null,
+			RouteGuidanceDirection.TURN_RIGHT,
+			BigDecimal.valueOf(159),
+			120,
+			"POINT(128.872855 35.082394)");
+
+		JsonNode guidanceEvent = objectMapper.readTree(objectMapper.writeValueAsString(response));
+
+		assertThat(guidanceEvent.has("type")).isFalse();
+		assertThat(guidanceEvent.get("direction").asText()).isEqualTo("TURN_RIGHT");
 	}
 
 	@Test
@@ -119,11 +162,8 @@ class RouteDtoJsonTest {
 		assertThat(RouteGuidanceEventType.values())
 			.extracting(Enum::name)
 			.contains(
-				"TURN_LEFT",
-				"TURN_RIGHT",
 				"CROSSWALK",
-				"CROSSWALK_SIGNAL",
-				"CROSSWALK_AUDIO",
+				"STRAIGHT",
 				"STAIR",
 				"NARROW_SIDEWALK",
 				"UNPAVED",
@@ -133,6 +173,7 @@ class RouteDtoJsonTest {
 				"SUBWAY_ELEVATOR",
 				"ARRIVING_POINT",
 				"DESTINATION")
-			.doesNotContain("NONE", "CURB", "ELEVATOR", "ALIGHTING_POINT");
+			.doesNotContain("NONE", "CURB", "ELEVATOR", "ALIGHTING_POINT", "CROSSWALK_SIGNAL",
+				"CROSSWALK_AUDIO");
 	}
 }

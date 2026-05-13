@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { FacilityFeature, FacilityPayload } from "../types";
-import { loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
+import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
 import { facilityCategoryColor, facilityCategoryLabel } from "./facilityStyle";
 import { roadviewUnavailableMessage } from "./roadviewMode";
 import type { RoadviewDockState } from "./SegmentMap";
@@ -32,6 +32,7 @@ export function FacilityMap({
 }: FacilityMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
+  const detachWheelZoomRef = useRef<(() => void) | null>(null);
   const roadviewRef = useRef<KakaoRoadview | null>(null);
   const roadviewClientRef = useRef<KakaoRoadviewClient | null>(null);
   const roadviewMarkerRef = useRef<KakaoOverlay | null>(null);
@@ -61,6 +62,8 @@ export function FacilityMap({
           center,
           level: 6,
         });
+        detachWheelZoomRef.current?.();
+        detachWheelZoomRef.current = attachKakaoWheelZoom(containerRef.current, () => mapRef.current);
         roadviewClientRef.current = window.kakao.maps.RoadviewClient ? new window.kakao.maps.RoadviewClient() : null;
         window.kakao.maps.event.addListener(mapRef.current, "click", (event: unknown) => {
           if (!locationPickEnabledRef.current) return;
@@ -73,6 +76,8 @@ export function FacilityMap({
 
     return () => {
       disposed = true;
+      detachWheelZoomRef.current?.();
+      detachWheelZoomRef.current = null;
     };
   }, []);
 

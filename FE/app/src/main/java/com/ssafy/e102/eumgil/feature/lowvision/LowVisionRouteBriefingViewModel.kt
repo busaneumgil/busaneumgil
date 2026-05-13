@@ -161,7 +161,11 @@ private fun NavigationBriefingItem.toUiState(): LowVisionRouteBriefingStepUiStat
                 NavigationGuidanceAction.TURN_RIGHT,
                     -> LowVisionRouteBriefingStepIcon.TURN
 
-                NavigationGuidanceAction.CROSSWALK -> LowVisionRouteBriefingStepIcon.TRANSIT
+                NavigationGuidanceAction.BUS,
+                NavigationGuidanceAction.SUBWAY,
+                NavigationGuidanceAction.CROSSWALK,
+                    -> LowVisionRouteBriefingStepIcon.TRANSIT
+
                 NavigationGuidanceAction.STRAIGHT -> LowVisionRouteBriefingStepIcon.STRAIGHT
             },
     )

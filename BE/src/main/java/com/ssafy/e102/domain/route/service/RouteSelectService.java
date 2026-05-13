@@ -64,7 +64,8 @@ public class RouteSelectService {
 		} catch (DataIntegrityViolationException exception) {
 			if (isActiveRouteUniqueViolation(exception)
 				&& routeSessionCommandService.hasActiveSession(userId, route.routeId())) {
-				return RouteSelectResponse.of(routeSessionCommandService.getActiveSession(userId, route.routeId()), route);
+				return RouteSelectResponse.of(routeSessionCommandService.getActiveSession(userId, route.routeId()),
+					route);
 			}
 			throw exception;
 		}

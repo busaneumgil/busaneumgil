@@ -32,8 +32,10 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentRailItemUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentSyncUiState
 import com.ssafy.e102.eumgil.feature.navigation.iconRes
@@ -227,13 +229,20 @@ private fun NavigationSegmentRailItem(
                 tint = tone.iconTint,
                 modifier =
                     Modifier
-                        .size(34.dp)
+                        .size(item.guidanceAction.railIconSize())
                         .alpha(tone.iconAlpha),
             )
         }
         HorizontalDivider(color = dividerColor)
     }
 }
+
+private fun NavigationGuidanceAction.railIconSize(): Dp =
+    if (this == NavigationGuidanceAction.BUS || this == NavigationGuidanceAction.SUBWAY) {
+        NavigationSegmentRailTransitIconSize
+    } else {
+        NavigationSegmentRailIconSize
+    }
 
 @Composable
 private fun NavigationSegmentRailReturnAction(
@@ -421,6 +430,9 @@ private fun navigationDisabledRailTone(): NavigationSegmentRailTone =
 
 private val NavigationSegmentRailItemUiState.isSelected: Boolean
     get() = isFocused || isActive
+
+private val NavigationSegmentRailIconSize = 34.dp
+private val NavigationSegmentRailTransitIconSize = 30.dp
 
 private val NavigationSegmentRailItemUiState.stateLabel: String
     get() =

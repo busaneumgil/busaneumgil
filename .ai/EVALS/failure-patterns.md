@@ -1,5 +1,11 @@
 # Failure Patterns
 
+## 2026-05-10 Route API QA - dev deployment drift
+
+- Pattern: Official dev API smoke can fail even when current branch logic works locally if S1 dev backend is not running the branch under test.
+- Signal: Entire endpoint family returns `404 C4040` while local current-branch process exposes the endpoint and returns domain statuses.
+- Prevention: Before 32-case API QA, call one authenticated endpoint from the branch-specific feature surface and record backend version/deployed branch if available.
+
 ## Purpose
 
 Capture repeatable ways AI-assisted delivery can fail so planning, review, QA, and release skills can counter them.

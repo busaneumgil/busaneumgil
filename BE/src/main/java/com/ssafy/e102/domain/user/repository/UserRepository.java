@@ -17,6 +17,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 		return findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
 	}
 
+	List<User> findAllByRoleOrderByCreatedAtDesc(UserRole role);
+
 	Optional<User> findBySocialProviderAndSocialProviderUserId(
 		SocialProvider socialProvider,
 		String socialProviderUserId);

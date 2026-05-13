@@ -319,6 +319,66 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route detail departure and arrival reuse labeled rail pins with detail icon sizing`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val leadingIconSection =
+            source
+                .substringAfter("private fun RouteDetailStepLeadingIcon(")
+                .substringBefore("@Composable\nprivate fun RouteScreenTopBar")
+
+        assertTrue(
+            "Route detail start should reuse the in-use labeled origin pin asset.",
+            source.contains("RouteDetailStepKind.START -> R.drawable.ic_navigation_rail_origin_pin"),
+        )
+        assertTrue(
+            "Route detail arrival should reuse the in-use labeled destination pin asset.",
+            source.contains("RouteDetailStepKind.ARRIVAL -> R.drawable.ic_navigation_rail_destination_pin"),
+        )
+        assertTrue(
+            "Transit detail rows should reuse the shared bus icon from the route map surface.",
+            source.contains("RouteDetailStepKind.BUS -> R.drawable.ic_place_bus"),
+        )
+        assertTrue(
+            "Transit detail rows should map subway boarding to the dedicated subway asset.",
+            source.contains("RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway"),
+        )
+        assertTrue(
+            "Route detail leading icons should branch explicitly for the labeled rail pin treatment.",
+            leadingIconSection.contains("if (usesLabeledWaypointPinIcon)"),
+        )
+        assertTrue(
+            "Labeled rail pins in route detail should keep the shared 22x24 aspect ratio while matching the other detail icon height.",
+            leadingIconSection.contains("modifier = Modifier.size(width = RouteDetailWaypointPinWidth, height = RouteDetailWaypointPinHeight)"),
+        )
+        assertTrue(
+            "Route detail leading glyph icons should route through a dedicated size helper so transit icons can be slightly reduced.",
+            leadingIconSection.contains("modifier = Modifier.size(kind.leadingIconSize())"),
+        )
+        assertTrue(
+            "Route detail should preserve a dedicated helper for labeled start/destination pin steps.",
+            source.contains("private fun RouteDetailStepKind.usesLabeledWaypointPinIcon(): Boolean ="),
+        )
+        assertTrue(
+            "Route detail should keep a dedicated helper for smaller transit icon sizing.",
+            source.contains("private fun RouteDetailStepKind.leadingIconSize(): Dp ="),
+        )
+        assertTrue(
+            "Route detail should document the reduced transit icon size token.",
+            source.contains("private val RouteDetailTransitLeadingIconSize = 20.dp"),
+        )
+        assertTrue(
+            "Route detail should document the waypoint pin width token.",
+            source.contains("private val RouteDetailWaypointPinWidth = 22.dp"),
+        )
+        assertTrue(
+            "Route detail should document the waypoint pin height token.",
+            source.contains("private val RouteDetailWaypointPinHeight = 24.dp"),
+        )
+    }
+
+    @Test
     fun `route setting suppresses ripple only on taps that open other route screens`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")

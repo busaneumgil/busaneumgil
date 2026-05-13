@@ -494,17 +494,17 @@ private class KakaoMapViewportController {
                                 position = position,
                             )
                         } else if (poiId.isNotBlank()) {
-                            Log.d(
-                                KAKAO_MAP_LOG_TAG,
-                                "Skipping external POI tap without nameHint providerPlaceId=$poiId",
+                            dispatchExternalPoiTap(
+                                position = position,
+                                providerPlaceId = poiId,
+                                nameHint = null,
                             )
                         }
                     }
                     readyMap.setOnTerrainClickListener { _, position, _ ->
-                        dispatchMapTap(
+                        ignoreBackgroundSingleTap(
                             source = "terrain",
                             position = position,
-                            clickType = MapTapClickType.ADDRESS,
                         )
                     }
                     readyMap.setOnMapClickListener { _, position, _, poi ->
@@ -520,7 +520,10 @@ private class KakaoMapViewportController {
                                 nameHint = poi.name,
                             )
                         } else if (poi == null) {
-                            dispatchMapTap(source = "map", position = position, clickType = MapTapClickType.ADDRESS)
+                            ignoreBackgroundSingleTap(
+                                source = "map",
+                                position = position,
+                            )
                         }
                     }
                     readyMap.setOnCameraMoveStartListener { _, _ ->
@@ -945,6 +948,16 @@ private class KakaoMapViewportController {
                 providerPlaceId = providerPlaceId,
                 nameHint = nameHint?.takeIf { it.isNotBlank() },
             ),
+        )
+    }
+
+    private fun ignoreBackgroundSingleTap(
+        source: String,
+        position: LatLng,
+    ) {
+        Log.d(
+            KAKAO_MAP_LOG_TAG,
+            "Ignoring background single tap source=$source lat=${position.latitude.toLogCoordinate()} lng=${position.longitude.toLogCoordinate()}",
         )
     }
 

@@ -209,6 +209,7 @@ data class RouteStep(
     val distanceMeters: Int = 0,
     val durationSeconds: Int? = null,
     val polyline: RoutePolyline = RoutePolyline(),
+    val anchorCoordinate: GeoCoordinate? = null,
     val badges: List<RouteBadge> = emptyList(),
     val alerts: List<RouteAlert> = emptyList(),
     val slopePercent: Double? = null,
@@ -251,6 +252,7 @@ data class RouteSegmentSafetyFlags(
 data class RouteSegment(
     val sequence: Int,
     val polyline: RoutePolyline = RoutePolyline(),
+    val anchorCoordinate: GeoCoordinate? = null,
     val distanceMeters: Int = 0,
     val safetyFlags: RouteSegmentSafetyFlags = RouteSegmentSafetyFlags(),
     val riskLevel: RouteRiskLevel = RouteRiskLevel.MEDIUM,

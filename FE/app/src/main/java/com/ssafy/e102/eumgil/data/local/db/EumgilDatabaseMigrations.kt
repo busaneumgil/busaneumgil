@@ -64,5 +64,86 @@ object EumgilDatabaseMigrations {
             }
         }
 
-    val all: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    val MIGRATION_5_6: Migration =
+        object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DROP TABLE IF EXISTS bookmark")
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS bookmark (
+                        bookmarkId INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        accountScopeKey TEXT NOT NULL,
+                        placeId TEXT NOT NULL,
+                        serverBookmarkId INTEGER,
+                        bookmarkTargetId TEXT,
+                        targetType TEXT,
+                        serverPlaceId INTEGER,
+                        provider TEXT,
+                        providerPlaceId TEXT,
+                        providerCategory TEXT,
+                        placeName TEXT NOT NULL,
+                        address TEXT,
+                        latitude REAL NOT NULL,
+                        longitude REAL NOT NULL,
+                        category TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_bookmark_accountScopeKey_placeId
+                    ON bookmark(accountScopeKey, placeId)
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_bookmark_accountScopeKey_bookmarkTargetId
+                    ON bookmark(accountScopeKey, bookmarkTargetId)
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS index_bookmark_accountScopeKey_updatedAt
+                    ON bookmark(accountScopeKey, updatedAt)
+                    """.trimIndent(),
+                )
+
+                database.execSQL("DROP TABLE IF EXISTS favoriteRoute")
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS favoriteRoute (
+                        accountScopeKey TEXT NOT NULL,
+                        favoriteRouteId INTEGER NOT NULL,
+                        routeName TEXT NOT NULL,
+                        originName TEXT NOT NULL,
+                        originPlaceId TEXT,
+                        originLatitude REAL NOT NULL,
+                        originLongitude REAL NOT NULL,
+                        destinationName TEXT NOT NULL,
+                        destinationPlaceId TEXT,
+                        destinationLatitude REAL NOT NULL,
+                        destinationLongitude REAL NOT NULL,
+                        transportMode TEXT,
+                        routeOption TEXT,
+                        summaryDistanceMeters INTEGER,
+                        summaryDurationSeconds INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        PRIMARY KEY(accountScopeKey, favoriteRouteId)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS index_favoriteRoute_accountScopeKey_updatedAt
+                    ON favoriteRoute(accountScopeKey, updatedAt)
+                    """.trimIndent(),
+                )
+            }
+        }
+
+    val all: Array<Migration> =
+        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }

@@ -8,12 +8,14 @@ import com.ssafy.e102.eumgil.core.model.RouteBookmark
 import com.ssafy.e102.eumgil.core.model.hasValidCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.observeAccountScopeKey
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class SavedRouteViewModel(
+    private val authSessionRepository: AuthSessionRepository? = null,
     private val bookmarkRepository: BookmarkRepository,
     private val routeBookmarkRepository: RouteBookmarkRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
@@ -44,8 +47,12 @@ class SavedRouteViewModel(
     private var observeRoutesJob: Job? = null
 
     init {
-        observePlaceBookmarks()
-        observeRouteBookmarks()
+        if (authSessionRepository == null) {
+            observePlaceBookmarks()
+            observeRouteBookmarks()
+        } else {
+            observeAccountScope()
+        }
     }
 
     fun onAction(action: SavedRouteUiAction) {
@@ -181,6 +188,22 @@ class SavedRouteViewModel(
         when (uiState.value.selectedTab) {
             SavedBookmarkTab.PLACE -> observePlaceBookmarks()
             SavedBookmarkTab.ROUTE -> observeRouteBookmarks()
+        }
+    }
+
+    private fun observeAccountScope() {
+        viewModelScope.launch {
+            authSessionRepository
+                ?.observeAccountScopeKey()
+                ?.collectLatest {
+                    latestPlaces = emptyList()
+                    latestRoutes = emptyList()
+                    mutableUiState.update { state ->
+                        SavedRouteUiState(selectedTab = state.selectedTab)
+                    }
+                    observePlaceBookmarks()
+                    observeRouteBookmarks()
+                }
         }
     }
 
@@ -408,6 +431,7 @@ class SavedRouteViewModel(
         private const val INVALID_ROUTE_COORDINATE_MESSAGE = "저장한 경로의 좌표가 올바르지 않습니다."
 
         fun provideFactory(
+            authSessionRepository: AuthSessionRepository? = null,
             bookmarkRepository: BookmarkRepository,
             routeBookmarkRepository: RouteBookmarkRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
@@ -418,6 +442,7 @@ class SavedRouteViewModel(
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     if (modelClass.isAssignableFrom(SavedRouteViewModel::class.java)) {
                         return SavedRouteViewModel(
+                            authSessionRepository = authSessionRepository,
                             bookmarkRepository = bookmarkRepository,
                             routeBookmarkRepository = routeBookmarkRepository,
                             destinationSelectionRepository = destinationSelectionRepository,

@@ -14,6 +14,7 @@ import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
@@ -1467,7 +1468,7 @@ class RouteSettingViewModel(
                 segments
                     .sortedBy(RouteSegment::sequence)
                     .mapIndexed { index, segment ->
-                        segment.toDetailStepUiState(displayIndex = index + 2)
+                        toDetailStepUiState(segment = segment, displayIndex = index + 2)
                     }
         } else {
             steps +=
@@ -1784,23 +1785,36 @@ private fun List<RouteSegment>.hasUsableDetailSteps(): Boolean =
             segment.safetyFlags != RouteSegmentSafetyFlags()
     }
 
-private fun RouteSegment.toDetailStepUiState(displayIndex: Int): RouteDetailStepUiState =
-    toRouteDetailStepKind().let { kind ->
+private fun RouteCandidate.toDetailStepUiState(
+    segment: RouteSegment,
+    displayIndex: Int,
+): RouteDetailStepUiState {
+    val kind = toRouteDetailStepKind(segment)
+    val sourceLeg = segment.resolveSourceLeg(legs = legs)
+    return segment.toDetailStepUiState(displayIndex = displayIndex, kind = kind, sourceLeg = sourceLeg)
+}
+
+private fun RouteSegment.toDetailStepUiState(
+    displayIndex: Int,
+    kind: RouteDetailStepKind,
+    sourceLeg: RouteLeg? = null,
+): RouteDetailStepUiState =
         RouteDetailStepUiState(
             indexLabel = displayIndex.toStepIndexLabel(),
             title = detailStepTitle(kind = kind),
-            description = detailStepDescription(kind = kind),
+            description = detailStepDescription(kind = kind, sourceLeg = sourceLeg),
             metaLabel = detailStepMetaLabel(kind = kind),
             badgeLabel = detailStepBadgeLabel(kind = kind),
             badgeTone = detailStepBadgeTone(kind = kind),
             kind = kind,
             tone = detailStepTone(kind = kind),
         )
-}
 
 private fun RouteSegment.detailStepTitle(kind: RouteDetailStepKind): String =
     when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_TITLE
+        RouteDetailStepKind.BUS -> DETAIL_STEP_BUS_TITLE
+        RouteDetailStepKind.SUBWAY -> DETAIL_STEP_SUBWAY_TITLE
         RouteDetailStepKind.STRAIGHT -> DETAIL_STEP_WALK_TITLE
         RouteDetailStepKind.TURN_LEFT -> "좌회전"
         RouteDetailStepKind.TURN_RIGHT -> "우회전"
@@ -1814,16 +1828,35 @@ private fun RouteSegment.detailStepTitle(kind: RouteDetailStepKind): String =
         RouteDetailStepKind.FALLBACK -> DETAIL_STEP_FALLBACK_TITLE
     }
 
-private fun RouteSegment.detailStepDescription(kind: RouteDetailStepKind): String {
+private fun RouteSegment.detailStepDescription(
+    kind: RouteDetailStepKind,
+    sourceLeg: RouteLeg? = null,
+): String {
     val distanceLabel = distanceMeters.toDistanceLabel()
     val guidanceFallback = guidanceMessage.takeIf { message -> message.hasVisibleHangul() }
 
-	if (guidanceFallback != null && guidanceFallback != DEFAULT_GUIDANCE_MESSAGE && kind != RouteDetailStepKind.CROSSWALK) {
-		return guidanceFallback
-	}
+    if (guidanceFallback != null && guidanceFallback != DEFAULT_GUIDANCE_MESSAGE && kind != RouteDetailStepKind.CROSSWALK) {
+        return guidanceFallback
+    }
 
     return when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_DESCRIPTION
+        RouteDetailStepKind.BUS ->
+            sourceLeg.toTransitStepDescription(
+                defaultDescription = "버스를 타고 이동하세요.",
+                boardingDescription = { stopName -> "${stopName}에서 버스를 타고 이동하세요." },
+                routeDescription = { routeNo -> "${routeNo}번 버스를 타고 이동하세요." },
+                boardingRouteDescription = { stopName, routeNo -> "${stopName}에서 ${routeNo}번 버스를 타고 이동하세요." },
+            )
+
+        RouteDetailStepKind.SUBWAY ->
+            sourceLeg.toTransitStepDescription(
+                defaultDescription = "지하철을 타고 이동하세요.",
+                boardingDescription = { stopName -> "${stopName}에서 지하철을 타고 이동하세요." },
+                routeDescription = { routeNo -> "${routeNo} 지하철을 타고 이동하세요." },
+                boardingRouteDescription = { stopName, routeNo -> "${stopName}에서 ${routeNo} 지하철을 타고 이동하세요." },
+            )
+
         RouteDetailStepKind.STRAIGHT ->
             if (distanceMeters > 0) {
                 "$distanceLabel 정도 직진으로 이동하세요."
@@ -1867,6 +1900,23 @@ private fun RouteSegment.detailStepDescription(kind: RouteDetailStepKind): Strin
     }
 }
 
+private fun RouteLeg?.toTransitStepDescription(
+    defaultDescription: String,
+    boardingDescription: (String) -> String,
+    routeDescription: (String) -> String,
+    boardingRouteDescription: (String, String) -> String,
+): String {
+    val boardingStopName = this?.boardingStop?.name?.takeIf(String::isNotBlank)
+    val routeNo = this?.routeNo?.takeIf(String::isNotBlank)
+
+    return when {
+        boardingStopName != null && routeNo != null -> boardingRouteDescription(boardingStopName, routeNo)
+        routeNo != null -> routeDescription(routeNo)
+        boardingStopName != null -> boardingDescription(boardingStopName)
+        else -> defaultDescription
+    }
+}
+
 private fun RouteSegment.detailStepMetaLabel(kind: RouteDetailStepKind): String? =
     when (kind) {
         RouteDetailStepKind.START,
@@ -1885,6 +1935,8 @@ private fun RouteSegment.detailStepMetaLabel(kind: RouteDetailStepKind): String?
 private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String? =
     when (kind) {
         RouteDetailStepKind.START,
+        RouteDetailStepKind.BUS,
+        RouteDetailStepKind.SUBWAY,
         RouteDetailStepKind.STRAIGHT,
         RouteDetailStepKind.TURN_LEFT,
         RouteDetailStepKind.TURN_RIGHT,
@@ -1909,6 +1961,8 @@ private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String
 private fun RouteSegment.detailStepBadgeTone(kind: RouteDetailStepKind): RouteDetailTone? =
     when (kind) {
         RouteDetailStepKind.START,
+        RouteDetailStepKind.BUS,
+        RouteDetailStepKind.SUBWAY,
         RouteDetailStepKind.STRAIGHT,
         RouteDetailStepKind.TURN_LEFT,
         RouteDetailStepKind.TURN_RIGHT,
@@ -1936,6 +1990,8 @@ private fun RouteSegment.detailStepBadgeTone(kind: RouteDetailStepKind): RouteDe
 private fun RouteSegment.detailStepTone(kind: RouteDetailStepKind): RouteDetailTone =
     when (kind) {
         RouteDetailStepKind.START,
+        RouteDetailStepKind.BUS,
+        RouteDetailStepKind.SUBWAY,
         RouteDetailStepKind.ELEVATOR,
         RouteDetailStepKind.TACTILE_GUIDE,
         RouteDetailStepKind.ARRIVAL,
@@ -2262,6 +2318,8 @@ private const val DETAIL_STEP_START_DESCRIPTION = "현재 위치에서 선택한
 private const val DETAIL_STEP_FALLBACK_TITLE = "세부 경로 확인 중"
 private const val DETAIL_STEP_ARRIVAL_TITLE = "도착"
 private const val DETAIL_STEP_ARRIVAL_SUFFIX = "에 도착합니다."
+private const val DETAIL_STEP_BUS_TITLE = "버스 탑승"
+private const val DETAIL_STEP_SUBWAY_TITLE = "지하철 탑승"
 private const val DETAIL_STEP_WALK_TITLE = "직진 이동"
 private const val DETAIL_STEP_TACTILE_GUIDE_TITLE = "점자블록 따라 이동"
 private const val DETAIL_STEP_CROSSWALK_TITLE = "횡단보도 건너기"

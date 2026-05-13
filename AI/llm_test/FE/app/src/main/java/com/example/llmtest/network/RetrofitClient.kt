@@ -13,7 +13,7 @@ object RetrofitClient {
 
     // 에뮬레이터: 10.0.2.2
     // 실제 기기: 192.168.30.162 (사용자가 설정한 PC IP)
-    const val BASE_URL = "http://10.0.2.2:5000"
+    const val BASE_URL = "http://172.30.1.52:5000"
 
     private val loggingInterceptor = HttpLoggingInterceptor { message ->
         Log.d(TAG, message)

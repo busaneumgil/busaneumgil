@@ -21,7 +21,7 @@ interface VoiceApiService {
 }
 
 object VoiceApiClient {
-    private const val BASE_URL = "http://10.0.2.2:5000"
+    private const val BASE_URL = "http://172.30.1.52:5000"
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)

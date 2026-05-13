@@ -24,14 +24,14 @@
   "panels": [
     {
       "gridPos": {
-        "h": 7,
-        "w": 12,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 8,
+        "h": 5
       },
       "id": 1,
       "options": {
-        "content": "### 이 화면에서 먼저 볼 것\n1. **백엔드 스크레이프 상태 / Redis 익스포터 상태**가 정상인지 먼저 확인합니다.\n2. **5xx 비율 / p95 지연 / Hikari pending**이 튀는지 보고 앱 병목을 좁힙니다.\n3. **Redis / 재시작 / 컨테이너 메모리**로 인프라성 문제를 함께 확인합니다.\n4. 마지막에는 아래 **경고/오류 로그**에서 원인을 찾고, 더 자세한 흐름이 필요하면 Explore에서 전체 로그를 확인합니다.\n\n- 이 대시보드는 `dev` 전용입니다.\n- 대시보드 로그는 기본적으로 `warning 이상`과 `exception/timeout/failed` 같은 장애 단서를 우선 보여줍니다.\n- 앱 로그는 `backend / ai / graphhopper / admin` 중심으로 먼저 봅니다.",
+        "content": "### 이 화면에서 먼저 볼 것\n1. **최근 5분/1시간 경고·오류 로그 건수**가 튀는지 먼저 확인합니다.\n2. 바로 아래 **API / DB / Redis / AI / GraphHopper / MinIO 상태**로 dev 서비스 건강도를 빠르게 봅니다.\n3. 이후 **5xx 비율 / p95 지연 / Hikari 활성·대기 연결**로 병목 구간을 좁힙니다.\n4. 마지막에는 아래 **경고/오류 로그**에서 원인을 찾고, 더 자세한 흐름은 Explore에서 확인합니다.\n\n- 이 대시보드는 `dev` 전용입니다.\n- 로그 건수 카드는 중립/위험 신호를 빠르게 보는 요약 패널입니다.\n- 상태 카드는 backend health와 각 서비스 health endpoint 기준으로 표시됩니다.",
         "mode": "markdown"
       },
       "pluginVersion": "11.3.1",
@@ -40,44 +40,97 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "gray",
+            "mode": "fixed"
+          },
+          "noValue": "0",
+          "unit": "short",
+          "displayName": "최근 5분 전체 로그 건수"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"}[5m])) or vector(0)",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 전체 로그 건수",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": 0
               },
               {
-                "color": "green",
+                "color": "red",
                 "value": 1
               }
             ]
           },
-          "unit": "none"
+          "unit": "short",
+          "displayName": "최근 5분 경고/오류 로그 건수"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 4,
         "x": 12,
-        "y": 0
+        "y": 0,
+        "w": 4,
+        "h": 5
       },
-      "id": 2,
+      "id": 19,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -87,20 +140,134 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "editorMode": "code",
-          "expr": "max(up{job=\"s1-dev-backend\", environment=~\"$environment\"})",
-          "legendFormat": "backend",
-          "range": true,
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [5m])) or vector(0)",
+          "queryType": "instant",
           "refId": "A"
         }
       ],
-      "title": "백엔드 스크레이프 상태",
+      "title": "최근 5분 경고/오류 로그 건수",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "gray",
+            "mode": "fixed"
+          },
+          "noValue": "0",
+          "unit": "short",
+          "displayName": "최근 1시간 전체 로그 건수"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "id": 20,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"}[1h])) or vector(0)",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 1시간 전체 로그 건수",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short",
+          "displayName": "최근 1시간 경고/오류 로그 건수"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "id": 21,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({environment=\"dev\", runtime_stack=\"s1-dev\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [1h])) or vector(0)",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 1시간 경고/오류 로그 건수",
       "type": "stat"
     },
     {
@@ -113,7 +280,20 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -127,22 +307,22 @@
               }
             ]
           },
-          "unit": "none"
+          "displayName": "API 상태"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "x": 0,
+        "y": 5,
         "w": 4,
-        "x": 16,
-        "y": 0
+        "h": 4
       },
-      "id": 3,
+      "id": 22,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -152,20 +332,20 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "11.3.1",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "max(redis_up{environment=~\"$environment\"})",
-          "legendFormat": "redis",
+          "expr": "max(probe_success{job=\"blackbox-dev-http\", target_name=\"api\"}) or vector(0)",
+          "legendFormat": "API 상태",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Redis 익스포터 상태",
+      "title": "API 상태",
       "type": "stat"
     },
     {
@@ -176,24 +356,51 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "unit": "short"
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "DB 연결 상태"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "x": 4,
+        "y": 5,
         "w": 4,
-        "x": 20,
-        "y": 0
+        "h": 4
       },
-      "id": 4,
+      "id": 23,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
+        "colorMode": "background",
+        "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -203,20 +410,332 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "11.3.1",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(changes(container_start_time_seconds{container_label_com_docker_compose_service=~\"$service\"}[24h]))",
-          "legendFormat": "restarts",
+          "expr": "max(probe_success{job=\"blackbox-dev-http\", target_name=\"db\"}) or vector(0)",
+          "legendFormat": "DB 연결 상태",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "최근 24시간 재시작 횟수",
+      "title": "DB 연결 상태",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "Redis 연결 상태"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 24,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-dev-http\", target_name=\"redis\"}) or vector(0)",
+          "legendFormat": "Redis 연결 상태",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Redis 연결 상태",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "AI 상태"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 25,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-dev-http\", target_name=\"ai\"}) or vector(0)",
+          "legendFormat": "AI 상태",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "AI 상태",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "GraphHopper 상태"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 26,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-dev-http\", target_name=\"graphhopper\"}) or vector(0)",
+          "legendFormat": "GraphHopper 상태",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GraphHopper 상태",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "MinIO 상태"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 27,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-dev-http\", target_name=\"minio\"}) or vector(0)",
+          "legendFormat": "MinIO 상태",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "MinIO 상태",
       "type": "stat"
     },
     {
@@ -237,7 +756,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 7
+        "y": 9
       },
       "id": 5,
       "options": {
@@ -280,7 +799,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 7
+        "y": 9
       },
       "id": 6,
       "options": {
@@ -323,7 +842,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 7
+        "y": 9
       },
       "id": 7,
       "options": {
@@ -366,7 +885,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 15
+        "y": 17
       },
       "id": 8,
       "options": {
@@ -409,7 +928,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 15
+        "y": 17
       },
       "id": 9,
       "options": {
@@ -452,7 +971,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 15
+        "y": 17
       },
       "id": 10,
       "options": {
@@ -502,7 +1021,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 23
+        "y": 25
       },
       "id": 11,
       "options": {
@@ -545,7 +1064,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 23
+        "y": 25
       },
       "id": 12,
       "options": {
@@ -588,7 +1107,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 23
+        "y": 25
       },
       "id": 13,
       "options": {
@@ -631,7 +1150,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 31
+        "y": 33
       },
       "id": 14,
       "options": {
@@ -674,7 +1193,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 31
+        "y": 33
       },
       "id": 15,
       "options": {
@@ -717,7 +1236,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 31
+        "y": 33
       },
       "id": 16,
       "options": {
@@ -758,7 +1277,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 41
       },
       "id": 17,
       "options": {
@@ -945,6 +1464,6 @@
   "timezone": "browser",
   "title": "E102 운영 관측 개요 - Dev",
   "uid": "e102-observability-overview",
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }

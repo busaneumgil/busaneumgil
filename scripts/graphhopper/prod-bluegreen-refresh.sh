@@ -24,6 +24,7 @@ BOOTSTRAP_SLOT="${GRAPHHOPPER_BOOTSTRAP_SLOT:-blue}"
 DRAIN_SECONDS="${GRAPHHOPPER_OLD_SLOT_DRAIN_SECONDS:-60}"
 SMOKE_TIMEOUT_SECONDS="${GRAPHHOPPER_PROFILE_SMOKE_TIMEOUT_SECONDS:-10}"
 BACKEND_SMOKE_URL="${GRAPHHOPPER_BACKEND_SMOKE_URL:-}"
+BACKEND_SMOKE_REQUIRED="${GRAPHHOPPER_BACKEND_SMOKE_REQUIRED:-true}"
 REPORT_FILE="$REPORT_DIR/$BUILD_ID.json"
 
 status="RUNNING"
@@ -34,6 +35,8 @@ switched="false"
 error_message=""
 warning_message=""
 publish_fallback_armed="false"
+publish_target_validated="false"
+target_cache_snapshot_available="false"
 original_previous_slot=""
 
 json_escape() {
@@ -71,6 +74,7 @@ redis_cli() {
   port="$(env_value REDIS_PORT)"
   ssl="$(env_value REDIS_SSL)"
   port="${port:-6379}"
+  ssl="${ssl:-true}"
   if [ -z "$host" ]; then
     echo "REDIS_HOST must be set in $ENV_FILE" >&2
     return 1
@@ -300,6 +304,52 @@ publish_candidate_cache_to_slot() {
     '
 }
 
+snapshot_target_slot_cache() {
+  local slot="$1"
+  local target_graph_location
+  target_graph_location="$(slot_graph_location "$slot")"
+  echo "snapshotting current $slot slot cache before publish"
+  DB_URL="$PROD_DB_URL" \
+  "${PROD_COMPOSE[@]}" --profile graphhopper-build run --rm --no-deps --entrypoint sh \
+    -e DB_URL="$PROD_DB_URL" \
+    -e TARGET_GRAPH_LOCATION="$target_graph_location" \
+    graphhopper-build \
+    -ceu '
+      previous_graph_location="/graphhopper/previous-cache"
+      test -d "$TARGET_GRAPH_LOCATION"
+      test -n "$(find "$TARGET_GRAPH_LOCATION" -mindepth 1 -maxdepth 1 2>/dev/null)"
+      mkdir -p "$previous_graph_location"
+      find "$previous_graph_location" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+      cp -a "$TARGET_GRAPH_LOCATION"/. "$previous_graph_location"/
+    '
+}
+
+restore_target_slot_cache() {
+  local slot="$1"
+  if [ "$target_cache_snapshot_available" != "true" ]; then
+    return 1
+  fi
+  local target_graph_location
+  target_graph_location="$(slot_graph_location "$slot")"
+  echo "restoring previous $slot slot cache after failed publish" >&2
+  "${PROD_COMPOSE[@]}" --profile graphhopper stop "graphhopper-$slot" >/dev/null 2>&1 || true
+  DB_URL="$PROD_DB_URL" \
+  "${PROD_COMPOSE[@]}" --profile graphhopper-build run --rm --no-deps --entrypoint sh \
+    -e DB_URL="$PROD_DB_URL" \
+    -e TARGET_GRAPH_LOCATION="$target_graph_location" \
+    graphhopper-build \
+    -ceu '
+      previous_graph_location="/graphhopper/previous-cache"
+      test -d "$previous_graph_location"
+      test -n "$(find "$previous_graph_location" -mindepth 1 -maxdepth 1 2>/dev/null)"
+      mkdir -p "$TARGET_GRAPH_LOCATION"
+      find "$TARGET_GRAPH_LOCATION" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+      cp -a "$previous_graph_location"/. "$TARGET_GRAPH_LOCATION"/
+    '
+  "${PROD_COMPOSE[@]}" --profile graphhopper up -d --build "graphhopper-$slot"
+  wait_for_candidate_slot_health "$slot"
+}
+
 verify_active_slot_after_switch() {
   local redis_active
   redis_active="$(redis_get "$ACTIVE_SLOT_KEY")"
@@ -336,12 +386,36 @@ rollback_switch() {
   fi
 }
 
+default_backend_smoke_url() {
+  local server_port
+  server_port="$(env_value SERVER_PORT)"
+  server_port="${server_port:-8080}"
+  echo "http://127.0.0.1:$server_port/health/graphhopper"
+}
+
 on_error() {
   local line="$1"
   set +e
   error_message="GraphHopper blue/green refresh failed at line $line"
-  restore_publish_fallback || warning_message="$warning_message; failed to restore temporary publish fallback"
-  cleanup_temp_candidate_runtime
+  local keep_temp_candidate_fallback="false"
+  if [ "$publish_fallback_armed" = "true" ] && [ "$publish_target_validated" != "true" ]; then
+    if restore_target_slot_cache "$candidate_slot"; then
+      if ! restore_publish_fallback; then
+        keep_temp_candidate_fallback="true"
+        warning_message="$warning_message; failed to restore temporary publish fallback"
+        echo "keeping temporary candidate GraphHopper runtime alive because Redis fallback restore failed" >&2
+      fi
+    else
+      keep_temp_candidate_fallback="true"
+      warning_message="$warning_message; temporary candidate fallback left armed because target slot restore failed"
+      echo "keeping temporary candidate GraphHopper runtime alive as previous fallback" >&2
+    fi
+  else
+    restore_publish_fallback || warning_message="$warning_message; failed to restore temporary publish fallback"
+  fi
+  if [ "$keep_temp_candidate_fallback" != "true" ]; then
+    cleanup_temp_candidate_runtime
+  fi
   status="FAILED"
   if [ "$switched" = "true" ]; then
     if rollback_switch; then
@@ -429,6 +503,13 @@ run_profile_smoke "$CANDIDATE_URL" "temp-candidate"
 
 arm_publish_fallback
 
+if snapshot_target_slot_cache "$candidate_slot"; then
+  target_cache_snapshot_available="true"
+else
+  warning_message="$warning_message; target slot snapshot unavailable before publish"
+  echo "target slot snapshot unavailable before publish; temporary candidate fallback will remain if publish fails" >&2
+fi
+
 echo "stopping target slot runtime graphhopper-$candidate_slot for final cache publish"
 "${PROD_COMPOSE[@]}" --profile graphhopper stop "graphhopper-$candidate_slot" >/dev/null 2>&1 || true
 publish_candidate_cache_to_slot "$candidate_slot"
@@ -437,6 +518,7 @@ echo "starting target slot runtime graphhopper-$candidate_slot"
 "${PROD_COMPOSE[@]}" --profile graphhopper up -d --build "graphhopper-$candidate_slot"
 wait_for_candidate_slot_health "$candidate_slot"
 run_profile_smoke "http://graphhopper-$candidate_slot:8989" "$candidate_slot"
+publish_target_validated="true"
 
 echo "switching active GraphHopper slot to $candidate_slot"
 if [ -n "$active_slot" ]; then
@@ -457,11 +539,15 @@ switched="true"
 publish_fallback_armed="false"
 verify_active_slot_after_switch
 
-if [ -n "$BACKEND_SMOKE_URL" ]; then
+if [ -z "$BACKEND_SMOKE_URL" ] && [ "$BACKEND_SMOKE_REQUIRED" = "true" ]; then
+  BACKEND_SMOKE_URL="$(default_backend_smoke_url)"
+  echo "GRAPHHOPPER_BACKEND_SMOKE_URL is not set. Using default backend post-switch smoke: $BACKEND_SMOKE_URL"
+fi
+if [ -z "$BACKEND_SMOKE_URL" ]; then
+  echo "GRAPHHOPPER_BACKEND_SMOKE_URL is not set. Skipping backend post-switch smoke."
+else
   echo "running backend post-switch smoke: $BACKEND_SMOKE_URL"
   curl -fsS "$BACKEND_SMOKE_URL" >/dev/null
-else
-  echo "GRAPHHOPPER_BACKEND_SMOKE_URL is not set. Skipping backend post-switch smoke."
 fi
 
 if [ -n "$active_slot" ]; then

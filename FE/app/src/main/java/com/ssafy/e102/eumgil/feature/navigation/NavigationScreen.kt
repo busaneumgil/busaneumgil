@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -564,7 +565,7 @@ private fun NavigationBottomBar(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(60.dp),
+                            .heightIn(min = 60.dp),
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_control_stop),
@@ -572,11 +573,16 @@ private fun NavigationBottomBar(
                         tint = MaterialTheme.colorScheme.onError,
                         modifier = Modifier.size(18.dp),
                     )
+                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
                     Text(
                         text = uiState.exitCta.label,
                         style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = EumSpacing.xSmall),
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    Spacer(modifier = Modifier.width(18.dp + EumSpacing.xSmall))
                 }
             }
         }
@@ -610,12 +616,20 @@ private fun NavigationExitConfirmDialog(
                 onClick = onConfirm,
                 shape = RoundedCornerShape(EumRadius.scaleM),
             ) {
-                Text(text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm))
+                Text(
+                    text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = stringResource(id = R.string.navigation_exit_confirm_dialog_cancel))
+                Text(
+                    text = stringResource(id = R.string.navigation_exit_confirm_dialog_cancel),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
             }
         },
     )

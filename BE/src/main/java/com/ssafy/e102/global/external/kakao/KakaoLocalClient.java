@@ -91,7 +91,8 @@ public class KakaoLocalClient {
 			throw new IllegalArgumentException("카카오 카테고리 검색 요청값이 올바르지 않습니다.");
 		}
 
-		UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.baseUrl() + CATEGORY_SEARCH_PATH)
+		UriComponentsBuilder uriBuilder = UriComponentsBuilder
+			.fromUriString(properties.baseUrl() + CATEGORY_SEARCH_PATH)
 			.queryParam("category_group_code", categoryGroupCode)
 			.queryParam("x", lng)
 			.queryParam("y", lat)

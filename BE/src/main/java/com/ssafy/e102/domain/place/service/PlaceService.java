@@ -121,8 +121,7 @@ public class PlaceService {
 				kakaoResult.totalElements(),
 				hasNext);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.warn("장소 검색 외부 API 호출 실패. keyword={}, kakaoPage={}, size={}",
-				normalizedKeyword,
+			log.warn("장소 검색 외부 API 호출 실패. kakaoPage={}, size={}",
 				kakaoPage,
 				parsedSize,
 				exception);
@@ -140,7 +139,7 @@ public class PlaceService {
 				.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_ADDRESS_NOT_FOUND));
 			return PlaceReverseGeocodeResponse.from(addressDocument);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.warn("좌표 주소 변환 외부 API 호출 실패. lat={}, lng={}", parsedLat, parsedLng, exception);
+			log.warn("좌표 주소 변환 외부 API 호출 실패.", exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_REVERSE_GEOCODE_EXTERNAL_API_FAILED, exception);
 		}
 	}
@@ -321,7 +320,9 @@ public class PlaceService {
 				.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_CLICK_DETAIL_NOT_FOUND));
 			return toExternalPoiDetailResponse(userId, request, selected);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.warn("지도 클릭 상세 POI 외부 API 호출 실패. request={}", request, exception);
+			log.warn("지도 클릭 상세 POI 외부 API 호출 실패. providerPlaceId={}",
+				request.providerPlaceId(),
+				exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED, exception);
 		}
 	}
@@ -361,10 +362,10 @@ public class PlaceService {
 			if (!isRecoverableExternalPoiDetailFailure(exception)) {
 				throw exception;
 			}
-			log.info("지도 클릭 POI keyword 상세 조회 실패로 fallback을 시작합니다. errorCode={}, request={}",
+			log.debug("지도 클릭 POI keyword 상세 조회 실패로 fallback을 시작합니다. errorCode={}, providerPlaceId={}",
 				exception.getErrorCode()
 					.getStatus(),
-				request);
+				request.providerPlaceId());
 			return resolveExternalPoiFallback(userId, request);
 		}
 	}
@@ -381,9 +382,8 @@ public class PlaceService {
 			return buildingDetail.get();
 		}
 
-		log.info("지도 클릭 POI fallback 최종 단계로 주소 상세를 반환합니다. request={}, address={}",
-			request,
-			addressDocument.displayAddress());
+		log.debug("지도 클릭 POI fallback 최종 단계로 주소 상세를 반환합니다. fallbackType={}",
+			"ADDRESS");
 		return toExternalAddressDetailResponse(userId, request, addressDocument);
 	}
 
@@ -394,9 +394,8 @@ public class PlaceService {
 	}
 
 	private PlaceClickDetailResponse getExternalBusStopDetail(UUID userId, PlaceClickDetailRequest request) {
-		log.info("지도 클릭 POI를 버스정류장으로 식별해 정류장 POI로 반환합니다. providerPlaceId={}, nameHint={}",
-			request.providerPlaceId(),
-			request.nameHint());
+		log.debug("지도 클릭 POI를 버스정류장으로 식별해 정류장 POI로 반환합니다. providerPlaceId={}",
+			request.providerPlaceId());
 		String displayName = StringUtils.hasText(request.nameHint())
 			? request.nameHint()
 				.trim()
@@ -432,10 +431,8 @@ public class PlaceService {
 		if (!isSubwayPoi(request)) {
 			return Optional.empty();
 		}
-		log.info("지도 클릭 POI fallback으로 지하철 카테고리 검색을 시도합니다. nameHint={}, lat={}, lng={}",
-			request.nameHint(),
-			request.lat(),
-			request.lng());
+		log.debug("지도 클릭 POI fallback으로 지하철 카테고리 검색을 시도합니다. fallbackType={}",
+			"SUBWAY_CATEGORY");
 		try {
 			KakaoPlaceSearchResult result = kakaoLocalClient.searchCategory(
 				SUBWAY_CATEGORY_GROUP_CODE,
@@ -446,19 +443,22 @@ public class PlaceService {
 				DEFAULT_PLACE_DETAIL_SIZE);
 			Optional<KakaoPlaceDocument> selected = selectSubwayCandidate(request, result.documents());
 			if (selected.isEmpty()) {
-				log.info("지도 클릭 POI 지하철 카테고리 fallback 후보가 없습니다. nameHint={}, resultCount={}",
-					request.nameHint(),
+				log.debug("지도 클릭 POI 지하철 카테고리 fallback 후보가 없습니다. fallbackType={}, resultCount={}",
+					"SUBWAY_CATEGORY",
 					result.documents()
 						.size());
 				return Optional.empty();
 			}
 			KakaoPlaceDocument candidate = selected.get();
-			log.info("지도 클릭 POI 지하철 카테고리 fallback 후보를 선택했습니다. providerPlaceId={}, placeName={}",
-				candidate.id(),
-				candidate.placeName());
+			log.debug("지도 클릭 POI 지하철 카테고리 fallback 후보를 선택했습니다. fallbackType={}, providerPlaceId={}",
+				"SUBWAY_CATEGORY",
+				candidate.id());
 			return Optional.of(toExternalPoiDetailResponse(userId, request, candidate));
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.info("지도 클릭 지하철 POI 카테고리 fallback 검색 실패. request={}", request, exception);
+			log.debug("지도 클릭 지하철 POI 카테고리 fallback 검색 실패. fallbackType={}, providerPlaceId={}",
+				"SUBWAY_CATEGORY",
+				request.providerPlaceId(),
+				exception);
 			return Optional.empty();
 		}
 	}
@@ -492,7 +492,8 @@ public class PlaceService {
 				.min(Comparator.comparing(KakaoPlaceDocument::distanceMeter, Comparator.nullsLast(Integer::compareTo)))
 				.or(() -> candidates.stream()
 					.filter(candidate -> normalizeComparableText(candidate.placeName()).contains(normalizedStationName))
-					.min(Comparator.comparing(KakaoPlaceDocument::distanceMeter, Comparator.nullsLast(Integer::compareTo))));
+					.min(Comparator.comparing(KakaoPlaceDocument::distanceMeter,
+						Comparator.nullsLast(Integer::compareTo))));
 		}
 		return candidates.stream()
 			.min(Comparator.comparing(KakaoPlaceDocument::distanceMeter, Comparator.nullsLast(Integer::compareTo)));
@@ -502,15 +503,14 @@ public class PlaceService {
 		UUID userId,
 		PlaceClickDetailRequest request,
 		KakaoAddressDocument addressDocument) {
-		if (!StringUtils.hasText(addressDocument.buildingName()) || !StringUtils.hasText(addressDocument.roadAddress())) {
-			log.info("지도 클릭 POI 건물명 fallback을 생략합니다. buildingName={}, roadAddress={}",
-				addressDocument.buildingName(),
-				addressDocument.roadAddress());
+		if (!StringUtils.hasText(addressDocument.buildingName())
+			|| !StringUtils.hasText(addressDocument.roadAddress())) {
+			log.debug("지도 클릭 POI 건물명 fallback을 생략합니다. fallbackType={}",
+				"BUILDING_NAME");
 			return Optional.empty();
 		}
-		log.info("지도 클릭 POI fallback으로 건물명 검색을 시도합니다. buildingName={}, roadAddress={}",
-			addressDocument.buildingName(),
-			addressDocument.roadAddress());
+		log.debug("지도 클릭 POI fallback으로 건물명 검색을 시도합니다. fallbackType={}",
+			"BUILDING_NAME");
 		try {
 			KakaoPlaceSearchResult result = kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
 				addressDocument.buildingName()
@@ -522,21 +522,21 @@ public class PlaceService {
 				DEFAULT_PLACE_DETAIL_SIZE));
 			Optional<KakaoPlaceDocument> selected = selectBuildingNameCandidate(addressDocument, result.documents());
 			if (selected.isEmpty()) {
-				log.info("지도 클릭 POI 건물명 fallback 후보가 없습니다. buildingName={}, resultCount={}",
-					addressDocument.buildingName(),
+				log.debug("지도 클릭 POI 건물명 fallback 후보가 없습니다. fallbackType={}, resultCount={}",
+					"BUILDING_NAME",
 					result.documents()
 						.size());
 				return Optional.empty();
 			}
 			KakaoPlaceDocument candidate = selected.get();
-			log.info("지도 클릭 POI 건물명 fallback 후보를 선택했습니다. providerPlaceId={}, placeName={}",
-				candidate.id(),
-				candidate.placeName());
+			log.debug("지도 클릭 POI 건물명 fallback 후보를 선택했습니다. fallbackType={}, providerPlaceId={}",
+				"BUILDING_NAME",
+				candidate.id());
 			return Optional.of(toExternalPoiDetailResponse(userId, request, candidate));
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.info("지도 클릭 POI 건물명 fallback 검색 실패. buildingName={}, request={}",
-				addressDocument.buildingName(),
-				request,
+			log.debug("지도 클릭 POI 건물명 fallback 검색 실패. fallbackType={}, providerPlaceId={}",
+				"BUILDING_NAME",
+				request.providerPlaceId(),
 				exception);
 			return Optional.empty();
 		}
@@ -559,7 +559,8 @@ public class PlaceService {
 			.filter(candidate -> normalizedBuildingName.equals(normalizeComparableText(candidate.placeName())))
 			.findFirst()
 			.or(() -> sameRoadAddressCandidates.stream()
-				.min(Comparator.comparing(KakaoPlaceDocument::distanceMeter, Comparator.nullsLast(Integer::compareTo))));
+				.min(
+					Comparator.comparing(KakaoPlaceDocument::distanceMeter, Comparator.nullsLast(Integer::compareTo))));
 	}
 
 	private Optional<KakaoPlaceDocument> selectPoiCandidate(
@@ -596,7 +597,7 @@ public class PlaceService {
 			return kakaoLocalClient.reverseGeocode(request.lat(), request.lng())
 				.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_ADDRESS_NOT_FOUND));
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.warn("지도 클릭 상세 주소 외부 API 호출 실패. request={}", request, exception);
+			log.warn("지도 클릭 상세 주소 외부 API 호출 실패.", exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_REVERSE_GEOCODE_EXTERNAL_API_FAILED, exception);
 		}
 	}
@@ -606,7 +607,9 @@ public class PlaceService {
 			return kakaoLocalClient.reverseGeocode(request.lat(), request.lng())
 				.orElse(null);
 		} catch (RestClientException | IllegalArgumentException exception) {
-			log.info("지도 클릭 POI 주소 보강 외부 API 호출 실패. request={}", request, exception);
+			log.debug("지도 클릭 POI 주소 보강 외부 API 호출 실패. providerPlaceId={}",
+				request.providerPlaceId(),
+				exception);
 			return null;
 		}
 	}

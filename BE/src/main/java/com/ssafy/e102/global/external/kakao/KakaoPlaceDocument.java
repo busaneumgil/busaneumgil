@@ -7,6 +7,7 @@ public record KakaoPlaceDocument(
 	String placeName,
 	String address,
 	String providerCategory,
+	String phone,
 	Integer distanceMeter,
 	GeoPointResponse point) {
 }

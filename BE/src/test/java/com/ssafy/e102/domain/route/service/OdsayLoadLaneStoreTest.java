@@ -1,14 +1,15 @@
 package com.ssafy.e102.domain.route.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.transaction.UnexpectedRollbackException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -107,36 +109,45 @@ class OdsayLoadLaneStoreTest {
 
 	@Test
 	@DisplayName("신규 loadLane geometry는 ERD JSON 계약으로 저장한다")
-	void savesNewLaneGeometries() {
-		when(odsayLoadLaneRepository.findByMapObj("map-1")).thenReturn(Optional.empty());
+	void savesNewLaneGeometries() throws Exception {
 		List<OdsayLaneGeometry> laneGeometries = List.of(
 			new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.0 35.0, 129.1 35.1)"));
 
 		store.saveIfAbsentOrRepairMalformed("map-1", laneGeometries);
 
-		ArgumentCaptor<OdsayLoadLane> captor = ArgumentCaptor.forClass(OdsayLoadLane.class);
-		verify(odsayLoadLaneRepository).save(captor.capture());
-		assertThat(captor.getValue().getMapObj()).isEqualTo("map-1");
-		assertThat(captor.getValue().getLaneGeometries().get(0).get("order").asInt()).isZero();
-		assertThat(captor.getValue().getLaneGeometries().get(0).get("transportMode").asText()).isEqualTo("BUS");
-		assertThat(captor.getValue().getLaneGeometries().get(0).get("geometry").asText())
+		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+		verify(odsayLoadLaneRepository).upsertLaneGeometries(eq("map-1"), captor.capture());
+		JsonNode laneGeometriesJson = objectMapper.readTree(captor.getValue());
+		assertThat(laneGeometriesJson.get(0).get("order").asInt()).isZero();
+		assertThat(laneGeometriesJson.get(0).get("transportMode").asText()).isEqualTo("BUS");
+		assertThat(laneGeometriesJson.get(0).get("geometry").asText())
 			.isEqualTo("LINESTRING(129.0 35.0, 129.1 35.1)");
 	}
 
 	@Test
 	@DisplayName("기존 malformed row는 재조회 성공 결과로 복구 저장한다")
 	void repairsExistingMalformedRow() throws Exception {
-		OdsayLoadLane row = OdsayLoadLane.create("map-1", json("""
-			{"unexpected": true}
-			"""));
-		when(odsayLoadLaneRepository.findByMapObj("map-1")).thenReturn(Optional.of(row));
-
 		store.saveIfAbsentOrRepairMalformed("map-1", List.of(
 			new OdsayLaneGeometry(TransportMode.SUBWAY, "LINESTRING(129.0 35.0, 129.1 35.1)")));
 
-		verify(odsayLoadLaneRepository, never()).save(any());
-		assertThat(row.getLaneGeometries().isArray()).isTrue();
-		assertThat(row.getLaneGeometries().get(0).get("transportMode").asText()).isEqualTo("SUBWAY");
+		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+		verify(odsayLoadLaneRepository).upsertLaneGeometries(eq("map-1"), captor.capture());
+		JsonNode laneGeometriesJson = objectMapper.readTree(captor.getValue());
+		assertThat(laneGeometriesJson.isArray()).isTrue();
+		assertThat(laneGeometriesJson.get(0).get("transportMode").asText()).isEqualTo("SUBWAY");
+	}
+
+	@Test
+	@DisplayName("동일 mapObj cold miss insert race는 검색 흐름으로 전파하지 않는다")
+	void suppressesConcurrentColdMissInsertRace() {
+		List<OdsayLaneGeometry> laneGeometries = List.of(
+			new OdsayLaneGeometry(TransportMode.BUS, "LINESTRING(129.0 35.0, 129.1 35.1)"));
+		doThrow(new UnexpectedRollbackException("upsert race"))
+			.when(odsayLoadLaneRepository)
+			.upsertLaneGeometries(eq("map-1"), any());
+
+		assertThatCode(() -> store.saveIfAbsentOrRepairMalformed("map-1", laneGeometries))
+			.doesNotThrowAnyException();
 	}
 
 	private JsonNode json(String value) throws Exception {

@@ -13,8 +13,9 @@ import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -56,23 +57,14 @@ public class OdsayLoadLaneStore {
 		return laneGeometryByMapObj;
 	}
 
-	@Transactional
 	public void saveIfAbsentOrRepairMalformed(String mapObj, List<OdsayLaneGeometry> laneGeometries) {
 		if (!StringUtils.hasText(mapObj) || laneGeometries == null || laneGeometries.isEmpty()) {
 			return;
 		}
-		JsonNode laneGeometriesJson = toJson(laneGeometries);
-		odsayLoadLaneRepository.findByMapObj(mapObj)
-			.ifPresentOrElse(
-				row -> row.replaceLaneGeometries(laneGeometriesJson),
-				() -> saveNew(mapObj, laneGeometriesJson));
-	}
-
-	private void saveNew(String mapObj, JsonNode laneGeometriesJson) {
 		try {
-			odsayLoadLaneRepository.save(OdsayLoadLane.create(mapObj, laneGeometriesJson));
-		} catch (DataIntegrityViolationException exception) {
-			log.debug("odsay loadLane cache insert raced mapObj={}", mapObj, exception);
+			odsayLoadLaneRepository.upsertLaneGeometries(mapObj, toJson(laneGeometries).toString());
+		} catch (DataAccessException | TransactionException exception) {
+			log.warn("odsay loadLane cache write skipped mapObj={} message={}", mapObj, exception.getMessage());
 		}
 	}
 

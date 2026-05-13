@@ -25,6 +25,7 @@ import com.ssafy.e102.global.exception.CommonErrorCode;
 public class AdminRoadNetworkEditService {
 
 	private static final double SNAP_DISTANCE_METER = 1.0;
+	private static final double CROSS_WALK_PROJECTION_DISTANCE_METER = 1.5;
 	private static final int SRID = 4326;
 
 	private final JdbcTemplate jdbcTemplate;
@@ -80,9 +81,13 @@ public class AdminRoadNetworkEditService {
 				continue;
 			}
 			LineInput lineInput = requireLineInput(edit);
+			SegmentType segmentType = segmentTypeOrDefault(edit.segmentType());
+			if (segmentType == SegmentType.CROSS_WALK) {
+				lineInput = projectCrossWalkLineInput(lineInput);
+			}
 			addSegmentInputs.add(new AddSegmentInput(
 				addSegmentInputs.size() + 1,
-				segmentTypeOrDefault(edit.segmentType()),
+				segmentType,
 				lineInput));
 		}
 		addSegments(addSegmentInputs, counters, addedEdgeIds, createdNodeIds, snappedNodeIds,
@@ -721,6 +726,73 @@ public class AdminRoadNetworkEditService {
 		return segmentType == null ? SegmentType.SIDE_LINE : segmentType;
 	}
 
+	private LineInput projectCrossWalkLineInput(LineInput lineInput) {
+		CoordinateInput first = projectCrossWalkEndpoint(lineInput.first());
+		CoordinateInput last = projectCrossWalkEndpoint(lineInput.last());
+		if (first.equals(lineInput.first()) && last.equals(lineInput.last())) {
+			return lineInput;
+		}
+		return lineInput.withEndpoints(first, last);
+	}
+
+	private CoordinateInput projectCrossWalkEndpoint(CoordinateInput coordinate) {
+		if (hasNearbyRoadNode(coordinate)) {
+			return coordinate;
+		}
+		List<CoordinateInput> projected = namedParameterJdbcTemplate.query(
+			"""
+				with input_point as (
+					select ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) as geom
+				),
+				candidates as (
+					select
+						ST_ClosestPoint(rs.geom, input_point.geom) as projected_geom,
+						ST_Distance(rs.geom::geography, input_point.geom::geography) as distance_meter
+					from road_segments rs
+					cross join input_point
+					where rs.segment_type in ('SIDE_LINE', 'SIDE_WALK')
+						and ST_DWithin(
+							rs.geom::geography,
+							input_point.geom::geography,
+							:thresholdMeter
+						)
+					order by distance_meter, rs.edge_id
+					limit 1
+				)
+				select ST_X(projected_geom) as lng, ST_Y(projected_geom) as lat
+				from candidates
+				""",
+			new MapSqlParameterSource()
+				.addValue("lng", coordinate.lng())
+				.addValue("lat", coordinate.lat())
+				.addValue("thresholdMeter", CROSS_WALK_PROJECTION_DISTANCE_METER),
+			(resultSet, rowNumber) -> new CoordinateInput(
+				resultSet.getDouble("lng"),
+				resultSet.getDouble("lat")));
+		return projected.isEmpty() ? coordinate : projected.get(0);
+	}
+
+	private boolean hasNearbyRoadNode(CoordinateInput coordinate) {
+		Boolean exists = namedParameterJdbcTemplate.queryForObject(
+			"""
+				select exists (
+					select 1
+					from road_nodes rn
+					where ST_DWithin(
+						rn."point"::geography,
+						ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+						:thresholdMeter
+					)
+				)
+				""",
+			new MapSqlParameterSource()
+				.addValue("lng", coordinate.lng())
+				.addValue("lat", coordinate.lat())
+				.addValue("thresholdMeter", SNAP_DISTANCE_METER),
+			Boolean.class);
+		return Boolean.TRUE.equals(exists);
+	}
+
 	private List<Long> queryLongs(String sql) {
 		return jdbcTemplate.queryForList(sql, Long.class)
 			.stream()
@@ -759,6 +831,13 @@ public class AdminRoadNetworkEditService {
 				.map(coordinate -> coordinate.lng() + " " + coordinate.lat())
 				.reduce((left, right) -> left + ", " + right)
 				.orElseThrow() + ")";
+		}
+
+		LineInput withEndpoints(CoordinateInput first, CoordinateInput last) {
+			List<CoordinateInput> nextCoordinates = new ArrayList<>(coordinates);
+			nextCoordinates.set(0, first);
+			nextCoordinates.set(nextCoordinates.size() - 1, last);
+			return new LineInput(List.copyOf(nextCoordinates));
 		}
 	}
 

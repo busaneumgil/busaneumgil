@@ -55,6 +55,7 @@ fun NavigationRoute(
             currentLocationManager = currentLocationManager,
             bookmarkRepository = bookmarkRepository,
             routeRepository = routeRepository,
+            isLowVisionMode = useLowVisionUi,
         )
     }
     val viewModel =
@@ -88,12 +89,14 @@ fun NavigationRoute(
 
     LaunchedEffect(
         viewModel,
+        useLowVisionUi,
         onNavigateBack,
         onNavigateToRouteDetail,
         onNavigateToMap,
         onNavigateToSavedRoute,
         onNavigateToArrival,
     ) {
+        viewModel.setLowVisionMode(useLowVisionUi)
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {

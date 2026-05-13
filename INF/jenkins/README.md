@@ -199,10 +199,13 @@ Redis key 계약:
 - active slot이 이미 내려가 있으면 refresh 전에 해당 slot을 먼저 start/restart한다.
 - active self-heal이 실패해도 previous slot이 정상이면 previous로 failover한 뒤 candidate rebuild를 진행한다.
 - candidate import나 smoke가 실패하면 Redis active slot은 바꾸지 않는다.
+- publish 전 target slot cache를 snapshot하고, target slot 검증 전 publish 단계가 실패하면 snapshot restore 후 Redis previous fallback을 원복한다.
+- target restore 또는 Redis 원복이 실패할 때만 임시 candidate runtime을 previous fallback으로 남겨 active slot 장애 시 fallback을 유지한다.
 - rollback Redis write 후에는 active slot을 다시 읽어 rollback 성공 여부를 검증한다.
-- 전환 후 backend smoke가 설정되어 있고 실패하면 active slot을 previous로 되돌린다.
+- 전환 후 backend smoke는 기본적으로 `/health/graphhopper`를 호출해 Redis active slot 기준 GraphHopper 연결을 확인하고, 실패하면 active slot을 previous로 되돌린다.
 - Mattermost 실패 알림은 Jenkins failure post action이 발송한다.
 - Mattermost 성공 알림에도 refresh warning이 있으면 함께 노출한다.
+- 공개 `/graphhopper/healthcheck`는 Redis active slot 기준 backend `/health/graphhopper`를 보고, 슬롯별 raw health는 `/graphhopper-blue/healthcheck`, `/graphhopper-green/healthcheck`로 확인한다.
 
 ## `e102-monitoring-deploy`
 

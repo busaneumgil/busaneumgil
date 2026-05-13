@@ -85,7 +85,7 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
   - `Loki`: `dev/prod log`
 - Grafana provisioning은 `INF/monitoring/s1/grafana/provisioning/dashboards` 기준으로 자동 반영한다.
 - Promtail은 `environment`, `runtime_stack`, `compose_service`, `service_name`, `container` 라벨을 붙여 Loki 조회 기준을 통일한다.
-- 가능한 경우 `level=...` 패턴을 추출해 Grafana 로그 색상과 오류 필터링에 활용한다.
+- 가능한 경우 명시적인 `level=...`/`lvl=...`/`severity=...`, 대문자 로그 레벨, klog `E0513`/`W0513` 같은 접두어만 `level` 라벨로 추출해 Grafana 로그 색상과 오류 필터링에 활용한다.
 - S1 promtail은 `s14p31e102-dev`와 `e102-ops`를 서로 다른 scrape job으로 분리해, Loki/Promtail/Grafana 자기 로그가 dev 서비스 로그에 섞이지 않도록 유지한다.
 
 ## Grafana 대시보드 기준
@@ -106,8 +106,8 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
   - `dev` overview는 `dev` 전용으로 고정하고, `prod`는 별도 dashboard로 분리한다.
   - `prod`의 `DB 연결 상태`, `Redis 연결 상태`는 RDS/ElastiCache 자체 상태가 아니라 backend dependency health를 의미한다.
   - `prod`의 `GraphHopper 상태` 카드는 Redis active slot 기준의 `graphhopper` probe와 슬롯별 원시 `graphhopper-blue`, `graphhopper-green` probe 결과를 함께 본다.
-  - 상단 `경고/오류` 집계 카드와 그래프는 raw 문자열 검색이 아니라 `level=warn|warning|error|fatal|critical` 라벨 기준으로 집계한다.
-  - 상세 로그 패널도 기본값은 같은 `level` 기준을 사용한다. `exception/timeout/failed` 같은 단어 탐색은 Grafana Explore에서 2차 조사로 수행한다.
+  - 상단 `경고/오류` 집계 카드와 그래프는 아무 위치의 raw 문자열 키워드 검색이 아니라 `level=error`, `ERROR ...`, `E0513 ...`처럼 실제 severity 위치만 보는 필터로 집계한다.
+  - 상세 로그 패널도 기본값은 같은 severity 위치 기준을 사용한다. `exception/timeout/failed` 같은 단어 탐색은 Grafana Explore에서 2차 조사로 수행한다.
   - `prod log`는 S2 promtail 배치 후 같은 Grafana에서 즉시 조회 가능하다.
   - `prod`의 상세 JVM/Hikari 지표는 별도 private scrape를 열기 전까지 카드로 노출하지 않는다.
 

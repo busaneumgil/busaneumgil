@@ -25,8 +25,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import com.ssafy.e102.domain.route.dto.request.WalkRouteSearchRequest;
+import com.ssafy.e102.domain.route.dto.response.LowFloorBusReservationResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
@@ -1251,7 +1253,8 @@ public class TransitRouteSearchService {
 				arrival.remainingMinute(),
 				durationSecond,
 				estimatedMinute(durationSecond),
-				arrival.isLowFloor());
+				arrival.isLowFloor(),
+				lowFloorReservation(odsayLeg, lane.busNo(), arrival));
 		} catch (RouteException exception) {
 			log.warn(
 				"transit lane failed provider={} operation={} routeIndex={} legIndex={} stopId={} lineId={} routeNo={} status={} message={}",
@@ -1266,6 +1269,45 @@ public class TransitRouteSearchService {
 				exception.getMessage());
 			throw exception;
 		}
+	}
+
+	private LowFloorBusReservationResponse lowFloorReservation(
+		OdsayTransitLeg leg,
+		String routeNo,
+		BusanBimsArrival arrival) {
+		if (!Boolean.TRUE.equals(arrival.isLowFloor()) || arrival.remainingMinute() == null) {
+			return null;
+		}
+		String stopName = boardingStopName(leg);
+		String arsNo = boardingArsNo(leg);
+		if (!StringUtils.hasText(stopName)
+			|| !StringUtils.hasText(arsNo)
+			|| !StringUtils.hasText(routeNo)
+			|| !StringUtils.hasText(arrival.vehicleNo())) {
+			return null;
+		}
+		return new LowFloorBusReservationResponse(
+			stopName,
+			arsNo,
+			routeNo,
+			arrival.vehicleNo(),
+			arrival.remainingMinute(),
+			arrival.remainingStopCount(),
+			null);
+	}
+
+	private String boardingStopName(OdsayTransitLeg leg) {
+		if (!leg.passStops().isEmpty() && StringUtils.hasText(leg.passStops().get(0).stationName())) {
+			return leg.passStops().get(0).stationName();
+		}
+		return leg.startName();
+	}
+
+	private String boardingArsNo(OdsayTransitLeg leg) {
+		if (!leg.passStops().isEmpty() && StringUtils.hasText(leg.passStops().get(0).arsId())) {
+			return leg.passStops().get(0).arsId();
+		}
+		return leg.startArsId();
 	}
 
 	private String provider(OdsayTransitLeg odsayLeg) {

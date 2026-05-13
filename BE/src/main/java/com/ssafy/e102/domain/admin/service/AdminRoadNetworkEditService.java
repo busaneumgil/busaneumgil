@@ -421,7 +421,7 @@ public class AdminRoadNetworkEditService {
 					on ST_DWithin(
 						rn."point"::geography,
 						ST_SetSRID(ST_MakePoint(p.lng, p.lat), 4326)::geography,
-						""" + SNAP_DISTANCE_METER + """
+						%s
 					)
 				order by p.edit_seq,
 					p.endpoint,
@@ -430,7 +430,7 @@ public class AdminRoadNetworkEditService {
 						ST_SetSRID(ST_MakePoint(p.lng, p.lat), 4326)::geography
 					),
 					rn.vertex_id
-				""");
+				""".formatted(SNAP_DISTANCE_METER));
 		jdbcTemplate.execute(
 			"""
 				create temp table admin_edit_created_points on commit drop as
@@ -511,7 +511,7 @@ public class AdminRoadNetworkEditService {
 						and ST_DWithin(
 							rs.geom::geography,
 							cp.point_geom::geography,
-							""" + CROSS_WALK_PROJECTION_DISTANCE_METER + """
+							%s
 						)
 					order by cp.edit_seq, cp.endpoint, distance_meter, rs.edge_id
 				),
@@ -520,10 +520,8 @@ public class AdminRoadNetworkEditService {
 					from nearest_segments ns
 					join road_segments rs
 						on rs.edge_id = ns.edge_id
-					where ST_Length(ST_LineSubstring(rs.geom, 0, ns.split_fraction)::geography) > """
-				+ CROSS_WALK_PROJECTION_DISTANCE_METER + """
-					and ST_Length(ST_LineSubstring(rs.geom, ns.split_fraction, 1)::geography) > """
-				+ CROSS_WALK_PROJECTION_DISTANCE_METER + """
+					where ST_Length(ST_LineSubstring(rs.geom, 0, ns.split_fraction)::geography) > %s
+						and ST_Length(ST_LineSubstring(rs.geom, ns.split_fraction, 1)::geography) > %s
 					)
 					select distinct on (edge_id, round(split_fraction::numeric, 6))
 						edge_id,
@@ -532,7 +530,10 @@ public class AdminRoadNetworkEditService {
 						split_fraction
 					from filtered
 					order by edge_id, round(split_fraction::numeric, 6), distance_meter, vertex_id
-					""");
+					""".formatted(
+				CROSS_WALK_PROJECTION_DISTANCE_METER,
+				CROSS_WALK_PROJECTION_DISTANCE_METER,
+				CROSS_WALK_PROJECTION_DISTANCE_METER));
 		Long splitPointCount = jdbcTemplate.queryForObject(
 			"select count(*) from admin_edit_crosswalk_split_points",
 			Long.class);
@@ -973,7 +974,8 @@ public class AdminRoadNetworkEditService {
 		}
 		Double lng = coordinate.get(0);
 		Double lat = coordinate.get(1);
-		if (lng == null || lat == null || lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+		if (lng == null || lat == null || !Double.isFinite(lng) || !Double.isFinite(lat)
+			|| lng < -180 || lng > 180 || lat < -90 || lat > 90) {
 			throw invalidRequest("좌표 범위가 올바르지 않습니다.");
 		}
 		return new CoordinateInput(lng, lat);

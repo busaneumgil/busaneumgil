@@ -545,7 +545,7 @@ private fun MapMarkerChip(
                 color = palette.content,
                 style =
                     MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Bold,
                         fontSize = if (isBrailleBlock) 9.sp else 10.sp,
                     ),
                 textAlign = TextAlign.Center,

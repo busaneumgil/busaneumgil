@@ -90,6 +90,7 @@ fun LowVisionVoiceInputScreen(
                     text = recordingLabel,
                     color = LowVisionScreenDefaults.brandYellow,
                     fontSize = 44.sp,
+                    lineHeight = 52.sp,
                     fontWeight = FontWeight.Black,
                 )
             }

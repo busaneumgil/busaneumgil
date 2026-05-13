@@ -228,7 +228,6 @@ private fun ReportHistoryCard(
                 Text(
                     text = report.title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -278,7 +277,6 @@ private fun ReportHistoryDetailCard(detail: MyPageReportHistoryDetailUiModel) {
             Text(
                 text = detail.title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -377,7 +375,6 @@ private fun ReportHistoryStateCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -408,7 +405,6 @@ private fun ReportHistoryStateCard(
                                 text = primaryActionLabel,
                                 modifier = Modifier.padding(vertical = EumSpacing.xSmall),
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                     } else {
@@ -432,7 +428,6 @@ private fun ReportHistoryStateCard(
                                 text = primaryActionLabel,
                                 modifier = Modifier.padding(vertical = EumSpacing.xSmall),
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                     }
@@ -451,7 +446,6 @@ private fun ReportHistoryStateCard(
                                     text = secondaryActionLabel,
                                     modifier = Modifier.padding(vertical = EumSpacing.xSmall),
                                     style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
                                 )
                             }
                         } else {
@@ -467,7 +461,6 @@ private fun ReportHistoryStateCard(
                                     text = secondaryActionLabel,
                                     modifier = Modifier.padding(vertical = EumSpacing.xSmall),
                                     style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
                                 )
                             }
                         }

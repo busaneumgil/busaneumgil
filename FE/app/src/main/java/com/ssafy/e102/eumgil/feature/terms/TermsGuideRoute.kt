@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.ssafy.e102.eumgil.feature.lowvision.LowVisionFontTheme
 
 /**
  * Route wrapper for [TermsGuideScreen].
@@ -40,17 +41,19 @@ fun TermsGuideRoute(
     val currentStep = TermsGuideStep.fromRouteValue(stepRouteValue) ?: initialStep
     val uiState = TermsGuideUiState(step = currentStep)
 
-    TermsGuideScreen(
-        uiState = uiState,
-        onAdvance = {
-            val next = currentStep.next()
-            if (next == null) {
-                onCompleted()
-            } else {
-                stepRouteValue = next.routeValue
-            }
-        },
-        onMoreDetails = { onRequestDetails(currentStep) },
-        modifier = modifier,
-    )
+    LowVisionFontTheme {
+        TermsGuideScreen(
+            uiState = uiState,
+            onAdvance = {
+                val next = currentStep.next()
+                if (next == null) {
+                    onCompleted()
+                } else {
+                    stepRouteValue = next.routeValue
+                }
+            },
+            onMoreDetails = { onRequestDetails(currentStep) },
+            modifier = modifier,
+        )
+    }
 }

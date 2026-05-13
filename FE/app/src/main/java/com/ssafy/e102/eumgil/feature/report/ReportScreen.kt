@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.report
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +32,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -68,6 +70,8 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun ReportScreen(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
+    snackbarHostState: SnackbarHostState,
+    scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -85,9 +89,11 @@ fun ReportScreen(
                 onAction = onAction,
             )
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { innerPadding ->
         // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
         // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
+        // scrollState는 ReportRoute에서 hoist하여 ScrollToFirstError 이벤트로 외부 제어 가능.
         val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
         Column(
             modifier =
@@ -98,7 +104,7 @@ fun ReportScreen(
                         if (isFlexStep) {
                             Modifier
                         } else {
-                            Modifier.verticalScroll(rememberScrollState())
+                            Modifier.verticalScroll(scrollState)
                         },
                     )
                     .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),

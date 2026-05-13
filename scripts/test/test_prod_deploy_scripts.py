@@ -21,13 +21,18 @@ PROD_COMPOSE = ROOT_DIR / "docker-compose.prod.yml"
 LOCAL_COMPOSE = ROOT_DIR / "docker-compose.local.yml"
 JENKINSFILE = ROOT_DIR / "INF" / "jenkins" / "pipelines" / "e102-prod-deploy.Jenkinsfile"
 DEV_JENKINSFILE = ROOT_DIR / "INF" / "jenkins" / "pipelines" / "e102-dev-deploy.Jenkinsfile"
+REFRESH_JENKINSFILE = ROOT_DIR / "INF" / "jenkins" / "pipelines" / "e102-graphhopper-refresh.Jenkinsfile"
+MONITORING_JENKINSFILE = ROOT_DIR / "INF" / "jenkins" / "pipelines" / "e102-monitoring-deploy.Jenkinsfile"
 DEV_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "02-dev-deploy-job.groovy"
 PROD_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "03-prod-deploy-job.groovy"
+REFRESH_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "04-graphhopper-refresh-job.groovy"
+MONITORING_JOB_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "05-monitoring-deploy-job.groovy"
 PROD_CREDENTIAL_BOOTSTRAP = ROOT_DIR / "INF" / "jenkins" / "s1" / "init.groovy.d" / "prod-deploy-credentials.groovy"
 JENKINS_README = ROOT_DIR / "INF" / "jenkins" / "README.md"
 PROD_DEPLOY = ROOT_DIR / "scripts" / "deploy" / "prod-deploy.sh"
 PROD_ROLLBACK = ROOT_DIR / "scripts" / "deploy" / "prod-rollback.sh"
 PROD_SMOKE = ROOT_DIR / "scripts" / "deploy" / "prod-smoke.sh"
+REFRESH_SCRIPT = ROOT_DIR / "scripts" / "graphhopper" / "prod-bluegreen-refresh.sh"
 PROD_ADMIN_INGRESS = ROOT_DIR / "scripts" / "deploy" / "prod-admin-ingress.sh"
 PROD_UP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up.sh"
 PROD_UP_GRAPHHOPPER = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up-graphhopper.sh"
@@ -85,6 +90,7 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("ARG ADMIN_BACKEND_API_URL=https://api.busaneumgil.com", content)
         self.assertIn('VITE_BACKEND_API_URL="$ADMIN_BACKEND_API_URL"', content)
         self.assertIn("COPY --from=build /app/dist /usr/share/nginx/html", content)
+        self.assertIn("HEALTHCHECK --interval=10s --timeout=3s --retries=10 CMD wget -qO- http://127.0.0.1/health >/dev/null", content)
         self.assertIn("try_files $uri $uri/ /index.html", nginx_content)
 
     def test_admin_dockerignore_excludes_local_artifacts_and_env(self):
@@ -114,9 +120,11 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_prod_deploy_runs_smoke_via_bash(self):
         content = PROD_DEPLOY.read_text(encoding="utf-8")
 
+        self.assertIn('DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-true}"', content)
         self.assertIn("build backend ai admin", content)
         self.assertIn("up -d backend ai admin", content)
         self.assertIn('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"', content)
+        self.assertIn('bash "$ROOT_DIR/scripts/graphhopper/prod-bluegreen-refresh.sh"', content)
         self.assertIn('require_env_value JWT_SECRET', content)
         self.assertIn('require_env_value VITE_BACKEND_API_URL', content)
         self.assertLess(content.index("build backend ai admin"), content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'))
@@ -125,6 +133,7 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_prod_rollback_runs_smoke_via_bash(self):
         content = PROD_ROLLBACK.read_text(encoding="utf-8")
 
+        self.assertIn('DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-true}"', content)
         self.assertIn('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"', content)
         self.assertIn('require_env_value JWT_SECRET', content)
         self.assertIn('docker image inspect "$admin_image"', content)
@@ -137,6 +146,7 @@ class ProdDeployScriptsTest(unittest.TestCase):
     def test_prod_smoke_retries_backend_and_ai_checks(self):
         content = PROD_SMOKE.read_text(encoding="utf-8")
 
+        self.assertIn('DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-true}"', content)
         self.assertIn('SMOKE_RETRIES="${SMOKE_RETRIES:-24}"', content)
         self.assertIn('SMOKE_DELAY_SECONDS="${SMOKE_DELAY_SECONDS:-5}"', content)
         self.assertIn('"providers"[[:space:]]*:', content)
@@ -150,6 +160,34 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('if [ "$SMOKE_ADMIN" = "true" ]; then', content)
         self.assertIn('http://127.0.0.1:${ADMIN_PORT}/health', content)
         self.assertIn('http://127.0.0.1:${ADMIN_PORT}/', content)
+        self.assertIn('wait_for_any_url "GraphHopper"', content)
+        self.assertIn('GRAPHHOPPER_BLUE_ADMIN_PORT="${GRAPHHOPPER_BLUE_ADMIN_PORT:-18990}"', content)
+        self.assertIn('GRAPHHOPPER_GREEN_ADMIN_PORT="${GRAPHHOPPER_GREEN_ADMIN_PORT:-18992}"', content)
+
+    def test_prod_compose_declares_graphhopper_blue_green_slots(self):
+        content = PROD_COMPOSE.read_text(encoding="utf-8")
+
+        self.assertIn("graphhopper-blue:", content)
+        self.assertIn("graphhopper-green:", content)
+        self.assertIn("graphhopper-prod-blue-data:/graphhopper/data", content)
+        self.assertIn("graphhopper-prod-green-data:/graphhopper/data", content)
+        self.assertIn("GRAPHHOPPER_BASE_URL: ${GRAPHHOPPER_BLUE_URL:-http://graphhopper-blue:8989}", content)
+        self.assertIn("GRAPHHOPPER_ACTIVE_SLOT_KEY", content)
+        self.assertIn('wget -qO- http://127.0.0.1/health >/dev/null', content)
+
+    def test_graphhopper_refresh_script_switches_only_after_candidate_smoke(self):
+        content = REFRESH_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('flock -n 9', content)
+        self.assertIn('candidate_slot="$(other_slot "$active_slot")"', content)
+        self.assertIn('ensure_slot_runtime "$active_slot"', content)
+        self.assertIn('Failing over active slot to previous', content)
+        self.assertIn('stop "graphhopper-$candidate_slot"', content)
+        self.assertIn('smoke-graphhopper-profiles.py', content)
+        self.assertLess(content.index('smoke-graphhopper-profiles.py'), content.index('echo "switching active GraphHopper slot'))
+        self.assertIn('rollback_switch', content)
+        self.assertIn('GRAPHHOPPER_OLD_SLOT_DRAIN_SECONDS', content)
+        self.assertIn('"warningMessage"', content)
 
     def test_prod_up_runs_prod_smoke_after_start(self):
         content = PROD_UP.read_text(encoding="utf-8")
@@ -183,6 +221,12 @@ class ProdDeployScriptsTest(unittest.TestCase):
 
         self.assertIn('docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=160 backend ai admin || true', content)
 
+    def test_jenkins_readme_documents_graphhopper_default_and_monitoring_job(self):
+        content = JENKINS_README.read_text(encoding="utf-8")
+
+        self.assertIn("| `DEPLOY_GRAPHHOPPER` | `true` |", content)
+        self.assertIn("## `e102-monitoring-deploy`", content)
+
     def test_prod_admin_ingress_configures_admin_domain(self):
         content = PROD_ADMIN_INGRESS.read_text(encoding="utf-8")
 
@@ -215,15 +259,31 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('"intent"[[:space:]]*:[[:space:]]*"unknown"', content)
         self.assertLess(content.index("up -d --build postgres redis minio minio-init ai"), content.index('AI_HEALTH_STATUS='))
 
+    def test_dev_jenkinsfile_self_heals_graphhopper_runtime(self):
+        content = DEV_JENKINSFILE.read_text(encoding="utf-8")
+
+        self.assertIn("wait_graphhopper_health()", content)
+        self.assertIn("rebuild_graphhopper_cache()", content)
+        self.assertIn("GraphHopper healthcheck failed after start. Rebuilding cache and recreating runtime once.", content)
+        self.assertIn("compose up -d --force-recreate graphhopper", content)
+
     def test_dev_job_bootstrap_loads_pipeline_from_scm_instead_of_inline_script(self):
         content = DEV_JOB_BOOTSTRAP.read_text(encoding="utf-8")
 
         self.assertIn("CpsScmFlowDefinition", content)
-        self.assertIn("GitSCM", content)
-        self.assertIn("INF/jenkins/pipelines/e102-dev-deploy.Jenkinsfile", content)
-        self.assertIn("*/develop", content)
-        self.assertIn("gitlab-pat", content)
-        self.assertNotIn("CpsFlowDefinition", content)
+
+    def test_monitoring_job_bootstrap_loads_pipeline_from_scm(self):
+        pipeline_content = MONITORING_JENKINSFILE.read_text(encoding="utf-8")
+        bootstrap_content = MONITORING_JOB_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn("bash scripts/deploy/s1-monitoring-sync.sh", pipeline_content)
+        self.assertIn("e102-monitoring-deploy", bootstrap_content)
+        self.assertIn("CpsScmFlowDefinition", bootstrap_content)
+        self.assertIn("GitSCM", bootstrap_content)
+        self.assertIn("INF/jenkins/pipelines/e102-monitoring-deploy.Jenkinsfile", bootstrap_content)
+        self.assertIn("*/master", bootstrap_content)
+        self.assertIn("gitlab-pat", bootstrap_content)
+        self.assertNotIn("CpsFlowDefinition", bootstrap_content)
 
     def test_prod_job_bootstrap_loads_pipeline_from_scm_instead_of_inline_script(self):
         content = PROD_JOB_BOOTSTRAP.read_text(encoding="utf-8")
@@ -234,6 +294,18 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("*/master", content)
         self.assertIn("gitlab-pat", content)
         self.assertNotIn("CpsFlowDefinition", content)
+
+    def test_graphhopper_refresh_job_runs_every_three_hours_from_scm(self):
+        pipeline_content = REFRESH_JENKINSFILE.read_text(encoding="utf-8")
+        seed_content = REFRESH_JOB_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn("cron('H H/3 * * *')", pipeline_content)
+        self.assertIn("disableConcurrentBuilds()", pipeline_content)
+        self.assertIn("prod-bluegreen-refresh.sh", pipeline_content)
+        self.assertIn("GraphHopper 자동 갱신이 실패했습니다.", pipeline_content)
+        self.assertIn("CpsScmFlowDefinition", seed_content)
+        self.assertIn("INF/jenkins/pipelines/e102-graphhopper-refresh.Jenkinsfile", seed_content)
+        self.assertIn("*/master", seed_content)
 
     def test_prod_credential_bootstrap_keeps_only_non_env_credentials(self):
         content = PROD_CREDENTIAL_BOOTSTRAP.read_text(encoding="utf-8")

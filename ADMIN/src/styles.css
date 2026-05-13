@@ -785,6 +785,26 @@ textarea::placeholder {
   opacity: 0.45;
 }
 
+.draft-count-badge,
+.toolbar-hint {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 6px 10px;
+  background: var(--color-gray-50);
+  color: var(--color-gray-700);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.toolbar-hint {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .route-point-marker {
   display: grid;
   place-items: center;

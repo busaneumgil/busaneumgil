@@ -146,7 +146,7 @@
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [5m])) or vector(0)",
+          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", level=~\"warn|warning|error|fatal|critical\"}[5m])) or vector(0)",
           "queryType": "instant",
           "refId": "A"
         }
@@ -262,7 +262,7 @@
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [1h])) or vector(0)",
+          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", level=~\"warn|warning|error|fatal|critical\"}[1h])) or vector(0)",
           "queryType": "instant",
           "refId": "A"
         }
@@ -348,7 +348,7 @@
       "id": 13,
       "targets": [
         {
-          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [5m]))",
+          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\", level=~\"warn|warning|error|fatal|critical\"}[5m]))",
           "queryType": "range",
           "refId": "A",
           "legendFormat": "{{compose_service}}"
@@ -434,7 +434,7 @@
       "id": 15,
       "targets": [
         {
-          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\" [1h]))",
+          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\", level=~\"warn|warning|error|fatal|critical\"}[1h]))",
           "queryType": "range",
           "refId": "A",
           "legendFormat": "{{compose_service}}"
@@ -900,7 +900,7 @@
       },
       "targets": [
         {
-          "expr": "{environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\"",
+          "expr": "{environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\", level=~\"warn|warning|error|fatal|critical\"}",
           "queryType": "range",
           "refId": "A"
         }

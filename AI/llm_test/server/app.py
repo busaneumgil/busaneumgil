@@ -181,6 +181,30 @@ def voice_analyze():
     history = body.get("history", [])
     system_prompt = get_system_prompt(internal_mode)
 
+    # LOW_VISION 히스토리 길이 제한: history >= 3이고 마지막 항목이 assistant면 조기 반환
+    if (
+        mode == "LOW_VISION"
+        and len(history) >= 3
+        and isinstance(history[-1], dict)
+        and history[-1].get("role") == "assistant"
+    ):
+        logger.info(
+            "event=voice_analyze_history_limit request_id=%s history_len=%s model=%s mode=LOW_VISION",
+            get_request_id(),
+            len(history),
+            model_key,
+        )
+        return jsonify({
+            "success": True,
+            "intent": "UNKNOWN",
+            "placeName": None,
+            "confirmed": False,
+            "confirmationMessage": "다시 말씀해 주세요",
+            "model": model_key,
+            "mode": "LOW_VISION",
+            "latency_ms": 0,
+        })
+
     if mode == "LOW_VISION" and history:
         messages = history + [{"role": "user", "content": text}]
     else:

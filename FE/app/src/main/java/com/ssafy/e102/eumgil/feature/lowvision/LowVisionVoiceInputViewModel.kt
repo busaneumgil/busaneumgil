@@ -260,7 +260,14 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                     // confirmed 값 무관 — 의도 파악 실패 → 히스토리 초기화 후 재녹음
                     Log.d(TAG, "=== 의도 미인식 → 히스토리 초기화 후 재녹음 ===")
                     conversationHistory.clear()
-                    _uiState.value = _uiState.value.copy(confirmationMessage = null)
+                    if (!result.confirmationMessage.isNullOrBlank()) {
+                        _uiState.value = _uiState.value.copy(
+                            confirmationMessage = result.confirmationMessage,
+                            ttsNonce = _uiState.value.ttsNonce + 1,
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(confirmationMessage = null)
+                    }
                     startRecording()
                 }
 

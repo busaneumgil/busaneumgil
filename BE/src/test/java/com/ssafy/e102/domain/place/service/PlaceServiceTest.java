@@ -78,6 +78,7 @@ class PlaceServiceTest {
 			"부산시민공원",
 			"부산광역시 부산진구 시민공원로 73",
 			"여행 > 관광,명소 > 공원",
+			"051-123-4567",
 			350,
 			new GeoPointResponse(35.1686, 129.0576));
 		Place matchedPlace = place(
@@ -251,6 +252,7 @@ class PlaceServiceTest {
 			"부산시민공원",
 			"부산광역시 부산진구 시민공원로 73",
 			"여행 > 관광,명소 > 공원",
+			"051-123-4567",
 			12,
 			new GeoPointResponse(35.1686, 129.0576));
 		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
@@ -271,6 +273,7 @@ class PlaceServiceTest {
 		assertThat(response.provider()).isEqualTo("KAKAO");
 		assertThat(response.providerPlaceId()).isEqualTo("123456789");
 		assertThat(response.providerCategory()).isEqualTo("여행 > 관광,명소 > 공원");
+		assertThat(response.phone()).isEqualTo("051-123-4567");
 		assertThat(response.category()).isNull();
 		assertThat(response.address()).isEqualTo("부산광역시 부산진구 시민공원로 73");
 		assertThat(response.isBookmarked()).isFalse();
@@ -377,6 +380,7 @@ class PlaceServiceTest {
 			"다대포현대아파트",
 			"부산 사하구 다대로 473",
 			"부동산 > 주거시설 > 아파트",
+			"051-987-6543",
 			117,
 			new GeoPointResponse(35.061110251800585, 128.97811023326653));
 		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
@@ -395,6 +399,7 @@ class PlaceServiceTest {
 		assertThat(response.providerPlaceId()).isEqualTo("11201822");
 		assertThat(response.name()).isEqualTo("다대포현대아파트");
 		assertThat(response.providerCategory()).isEqualTo("부동산 > 주거시설 > 아파트");
+		assertThat(response.phone()).isEqualTo("051-987-6543");
 	}
 
 	@Test
@@ -487,6 +492,7 @@ class PlaceServiceTest {
 			"사상역 부산2호선",
 			"부산광역시 사상구 사상로 지하 203",
 			"교통,수송 > 지하철,전철 > 부산2호선",
+			"051-678-6191",
 			17,
 			new GeoPointResponse(35.162166, 128.984611));
 		when(kakaoLocalClient.searchCategory("SW8", 35.162166, 128.984611, 300, 1, 5))
@@ -499,6 +505,7 @@ class PlaceServiceTest {
 		assertThat(response.providerPlaceId()).isEqualTo("21160880");
 		assertThat(response.name()).isEqualTo("사상역 부산2호선");
 		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 지하철,전철 > 부산2호선");
+		assertThat(response.phone()).isEqualTo("051-678-6191");
 	}
 
 	@Test

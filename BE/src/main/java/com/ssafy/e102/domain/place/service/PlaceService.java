@@ -298,6 +298,7 @@ public class PlaceService {
 			place.getName(),
 			place.getCategory(),
 			null,
+			null,
 			place.getAddress(),
 			geoPointConverter.toResponse(place.getPoint()),
 			place.getAccessibilityFeatures().stream()
@@ -345,6 +346,7 @@ public class PlaceService {
 			selected.placeName(),
 			null,
 			selected.providerCategory(),
+			selected.phone(),
 			selected.address(),
 			selected.point(),
 			List.of(),
@@ -418,6 +420,7 @@ public class PlaceService {
 			displayName,
 			null,
 			BUS_STOP_PROVIDER_CATEGORY,
+			null,
 			addressDocument == null ? null : addressDocument.displayAddress(),
 			geoPointConverter
 				.toResponse(geoPointConverter.toPoint(new GeoPointRequest(request.lat(), request.lng()))),
@@ -635,6 +638,7 @@ public class PlaceService {
 			provider,
 			null,
 			displayName,
+			null,
 			null,
 			null,
 			displayAddress,

@@ -128,6 +128,7 @@ class KakaoLocalClientTest {
 				      "road_address_name": "부산 사상구 사상로 지하 203",
 				      "address_name": "부산 사상구 괘법동 529-1",
 				      "category_name": "교통,수송 > 지하철,전철 > 부산2호선",
+				      "phone": "051-678-6191",
 				      "x": "128.984611",
 				      "y": "35.162166",
 				      "distance": "17"
@@ -143,6 +144,7 @@ class KakaoLocalClientTest {
 		assertThat(result.documents())
 			.extracting(KakaoPlaceDocument::placeName)
 			.isEqualTo(List.of("사상역 부산2호선"));
+		assertThat(result.documents().get(0).phone()).isEqualTo("051-678-6191");
 		server.verify();
 	}
 }

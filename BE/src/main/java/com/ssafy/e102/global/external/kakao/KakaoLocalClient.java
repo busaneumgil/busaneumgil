@@ -179,6 +179,7 @@ public class KakaoLocalClient {
 		String addressName,
 		@JsonProperty("category_name")
 		String categoryName,
+		String phone,
 		String x,
 		String y,
 		String distance) {
@@ -189,6 +190,7 @@ public class KakaoLocalClient {
 				placeName,
 				address(),
 				categoryName,
+				phone,
 				distanceMeter(),
 				new GeoPointResponse(Double.parseDouble(y), Double.parseDouble(x)));
 		}

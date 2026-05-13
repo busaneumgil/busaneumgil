@@ -34,6 +34,7 @@ redis_cli() {
   port="$(env_value REDIS_PORT)"
   ssl="$(env_value REDIS_SSL)"
   port="${port:-6379}"
+  ssl="${ssl:-true}"
   if [ -z "$host" ]; then
     echo "REDIS_HOST must be set in $ENV_FILE for active GraphHopper smoke" >&2
     return 1

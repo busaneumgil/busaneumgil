@@ -140,7 +140,7 @@ pipeline {
           sshUserPrivateKey(credentialsId: 'e102-s2-ssh-key', keyFileVariable: 'S2_KEY', usernameVariable: 'S2_USER')
         ]) {
           sh """
-            ssh -i "\$S2_KEY" -o StrictHostKeyChecking=accept-new "\$S2_USER@\$S2_HOST" "cd '$REMOTE_DIR' && GRAPHHOPPER_REFRESH_BUILD_ID='jenkins-${env.BUILD_NUMBER}-${env.DEPLOY_COMMIT}' bash scripts/graphhopper/prod-bluegreen-refresh.sh"
+            ssh -i "\$S2_KEY" -o StrictHostKeyChecking=accept-new "\$S2_USER@\$S2_HOST" "cd '$REMOTE_DIR' && GRAPHHOPPER_BACKEND_SMOKE_REQUIRED='true' GRAPHHOPPER_REFRESH_BUILD_ID='jenkins-${env.BUILD_NUMBER}-${env.DEPLOY_COMMIT}' bash scripts/graphhopper/prod-bluegreen-refresh.sh"
           """
         }
       }

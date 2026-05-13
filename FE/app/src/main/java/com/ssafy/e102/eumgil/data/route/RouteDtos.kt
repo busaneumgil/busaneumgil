@@ -71,6 +71,16 @@ data class RouteTransitLaneOptionDto(
     val durationSecond: Int? = null,
     val estimatedTimeMinute: Int? = null,
     val isLowFloor: Boolean? = null,
+    val lowFloorReservation: LowFloorBusReservationDto? = null,
+)
+
+data class LowFloorBusReservationDto(
+    val stopName: String? = null,
+    val arsNo: String? = null,
+    val routeNo: String? = null,
+    val vehicleNo: String? = null,
+    val remainingMinute: Int? = null,
+    val remainingStopCount: Int? = null,
 )
 
 data class RouteStepDto(

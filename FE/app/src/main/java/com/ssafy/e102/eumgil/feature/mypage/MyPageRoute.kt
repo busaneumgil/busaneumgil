@@ -2,8 +2,6 @@ package com.ssafy.e102.eumgil.feature.mypage
 
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
@@ -21,9 +19,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.external.createDuribalDialIntent as createDuribalDialIntentCore
 import kotlinx.coroutines.launch
-
-private const val DURIBAL_PHONE_NUMBER = "1555-1114"
 
 @Composable
 fun MyPageRoute(
@@ -91,16 +88,14 @@ fun MyPageRoute(
         onDuribalConfirmDismiss = { isDuribalConfirmDialogVisible = false },
         onDuribalConfirm = {
             isDuribalConfirmDialogVisible = false
-            context.startActivity(createDuribalDialIntent())
+            context.startActivity(createDuribalDialIntentCore())
         },
         snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
 }
 
-internal fun createDuribalDialIntent(): Intent =
-    Intent(Intent.ACTION_DIAL, Uri.parse("tel:${DURIBAL_PHONE_NUMBER.filter(Char::isDigit)}"))
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+internal fun createDuribalDialIntent() = createDuribalDialIntentCore()
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     when (this) {

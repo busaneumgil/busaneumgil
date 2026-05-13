@@ -1533,6 +1533,123 @@ select {
   padding: 10px;
 }
 
+.audit-log-page {
+  min-height: calc(100vh - 60px);
+  padding: 14px;
+  overflow: auto;
+}
+
+.audit-log-list {
+  display: grid;
+  gap: 10px;
+}
+
+.audit-log-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.audit-log-filters label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.audit-log-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--color-white);
+  padding: 12px;
+}
+
+.audit-log-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.audit-log-card time {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.audit-log-card p {
+  margin: 8px 0 10px;
+  color: var(--color-gray-700);
+}
+
+.audit-log-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.audit-log-meta div {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--color-gray-100);
+  padding: 7px;
+}
+
+.audit-log-meta dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.audit-log-meta dd {
+  margin: 3px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-log-json {
+  margin-top: 10px;
+}
+
+.audit-log-json summary {
+  cursor: pointer;
+  color: var(--color-primary-600);
+  font-weight: 800;
+}
+
+.audit-log-json div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.audit-log-json pre {
+  max-height: 260px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--color-gray-900);
+  color: var(--color-white);
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.audit-log-more-button {
+  display: block;
+  min-width: 160px;
+  margin: 12px auto 0;
+}
+
 .table-card {
   margin: 16px;
   border: 1px solid var(--border);

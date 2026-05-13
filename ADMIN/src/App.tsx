@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import {
   createAdminRoadNetworkEditJob,
   fetchAdminAreaAssignments,
+  fetchAdminAuditLogs,
   fetchAdminAreas,
   fetchAdminFacilityPayload,
   fetchAdminPlaceDetail,
@@ -31,6 +32,7 @@ import { RouteTuningPage } from "./route/RouteTuningPage";
 import { useAdminStore } from "./store/adminStore";
 import type {
   AccessibilityFeatureType,
+  AdminAuditLog,
   AdminMeResponse,
   AdminPage,
   AdminPlaceDetailResponse,
@@ -68,6 +70,13 @@ const accessibilityFeatureTypes: AccessibilityFeatureType[] = [
   "guidanceFacility",
 ];
 
+const auditLogActions = [
+  { value: "ROAD_NETWORK_EDIT_APPLY", label: "보행 네트워크 반영" },
+  { value: "ROAD_SEGMENT_ATTRIBUTES_UPDATE", label: "segment 속성 변경" },
+  { value: "PLACE_BASIC_UPDATE", label: "편의시설 기본 정보 변경" },
+  { value: "PLACE_ACCESSIBILITY_FEATURES_REPLACE", label: "편의시설 접근성 변경" },
+];
+
 const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   network: {
     label: "보행 네트워크",
@@ -88,6 +97,10 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   users: {
     label: "사용자 관리",
     description: "관리자 권한과 구·동 담당자, 작업 상태를 관리합니다.",
+  },
+  logs: {
+    label: "변경 로그",
+    description: "관리자 화면에서 수행한 변경 작업을 최신순으로 확인합니다.",
   },
 };
 
@@ -117,6 +130,10 @@ function AdminApp() {
   const [adminPrincipal, setAdminPrincipal] = useState<AdminMeResponse | null>(null);
   const [activeRoadEditJobId, setActiveRoadEditJobId] = useState<number | null>(null);
   const [lastRoadEditJob, setLastRoadEditJob] = useState<RoadNetworkEditJobResponse | null>(null);
+  const [auditLogAction, setAuditLogAction] = useState("");
+  const [auditLogGu, setAuditLogGu] = useState("");
+  const [auditLogDong, setAuditLogDong] = useState("");
+  const [auditLogActorUserId, setAuditLogActorUserId] = useState("");
   const completedRoadEditJobIdRef = useRef<number | null>(null);
   const submittedRoadEditAssignmentIdRef = useRef<string | null>(null);
   const {
@@ -164,14 +181,14 @@ function AdminApp() {
   const areasQuery = useQuery({
     queryKey: ["admin-areas", accessToken],
     queryFn: () => fetchAdminAreas(accessToken),
-    enabled: (showsAreaSelector || page === "users") && isAdminAuthenticated,
+    enabled: (showsAreaSelector || page === "users" || page === "logs") && isAdminAuthenticated,
     retry: false,
   });
 
   const adminUsersQuery = useQuery({
     queryKey: ["admin-users", accessToken],
     queryFn: () => fetchAdminUsers(accessToken),
-    enabled: page === "users" && isAdminAuthenticated,
+    enabled: (page === "users" || page === "logs") && isAdminAuthenticated,
     retry: false,
   });
 
@@ -189,6 +206,24 @@ function AdminApp() {
     retry: false,
     refetchInterval: 30_000,
   });
+
+  const auditLogsQuery = useInfiniteQuery({
+    queryKey: ["admin-audit-logs", accessToken, auditLogAction, auditLogGu, auditLogDong, auditLogActorUserId],
+    queryFn: ({ pageParam }) => fetchAdminAuditLogs({
+      action: auditLogAction,
+      gu: auditLogGu,
+      dong: auditLogDong,
+      actorUserId: auditLogActorUserId,
+      cursor: pageParam,
+      size: 50,
+      accessToken,
+    }),
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.nextCursor : undefined),
+    enabled: page === "logs" && isAdminAuthenticated,
+    retry: false,
+  });
+  const auditLogs = auditLogsQuery.data?.pages.flatMap((logPage) => logPage.logs) ?? [];
 
   const payloadQuery = useQuery({
     queryKey: ["admin-road-network", selectedGu, selectedDong, accessToken],
@@ -313,6 +348,19 @@ function AdminApp() {
     const areas = areasQuery.data ?? [];
     return areas.filter((area) => area.gu === selectedGu);
   }, [areasQuery.data, selectedGu]);
+
+  const auditLogGuOptions = useMemo(() => {
+    return Array.from(new Set((areasQuery.data ?? []).map((area) => area.gu))).sort();
+  }, [areasQuery.data]);
+
+  const auditLogDongOptions = useMemo(() => {
+    const areas = areasQuery.data ?? [];
+    return areas
+      .filter((area) => !auditLogGu || area.gu === auditLogGu)
+      .map((area) => area.dong)
+      .filter((dong, index, dongs) => dongs.indexOf(dong) === index)
+      .sort();
+  }, [areasQuery.data, auditLogGu]);
 
   const selectedAssignment = useMemo(() => {
     return (areaAssignmentsQuery.data ?? []).find((assignment) =>
@@ -488,6 +536,32 @@ function AdminApp() {
             onUpdateUserRole={(userId, role) => updateUserRoleMutation.mutate({ userId, role })}
             onUpsertAssignment={(request) => upsertAssignmentMutation.mutate(request)}
             onUpdateAssignmentStatus={(assignmentId, status) => updateAssignmentStatusMutation.mutate({ assignmentId, status })}
+          />
+        )}
+
+        {page === "logs" && (
+          <AuditLogsPage
+            logs={auditLogs}
+            action={auditLogAction}
+            gu={auditLogGu}
+            dong={auditLogDong}
+            actorUserId={auditLogActorUserId}
+            guOptions={auditLogGuOptions}
+            dongOptions={auditLogDongOptions}
+            users={adminUsersQuery.data ?? []}
+            loading={auditLogsQuery.isLoading}
+            loadingMore={auditLogsQuery.isFetchingNextPage}
+            hasNext={Boolean(auditLogsQuery.hasNextPage)}
+            error={auditLogsQuery.error}
+            onActionChange={setAuditLogAction}
+            onGuChange={(gu) => {
+              setAuditLogGu(gu);
+              setAuditLogDong("");
+            }}
+            onDongChange={setAuditLogDong}
+            onActorUserIdChange={setAuditLogActorUserId}
+            onRefresh={() => void auditLogsQuery.refetch()}
+            onLoadMore={() => void auditLogsQuery.fetchNextPage()}
           />
         )}
 
@@ -927,6 +1001,153 @@ function AssignmentTable({
   );
 }
 
+function AuditLogsPage({
+  logs,
+  action,
+  gu,
+  dong,
+  actorUserId,
+  guOptions,
+  dongOptions,
+  users,
+  loading,
+  loadingMore,
+  hasNext,
+  error,
+  onActionChange,
+  onGuChange,
+  onDongChange,
+  onActorUserIdChange,
+  onRefresh,
+  onLoadMore,
+}: {
+  logs: AdminAuditLog[];
+  action: string;
+  gu: string;
+  dong: string;
+  actorUserId: string;
+  guOptions: string[];
+  dongOptions: string[];
+  users: AdminUserResponse[];
+  loading: boolean;
+  loadingMore: boolean;
+  hasNext: boolean;
+  error?: Error | null;
+  onActionChange: (action: string) => void;
+  onGuChange: (gu: string) => void;
+  onDongChange: (dong: string) => void;
+  onActorUserIdChange: (userId: string) => void;
+  onRefresh: () => void;
+  onLoadMore: () => void;
+}) {
+  return (
+    <section className="audit-log-page">
+      <div className="panel-toolbar">
+        <div>
+          <h3>변경 로그</h3>
+          <p className="muted">관리자 화면에서 성공적으로 반영된 변경 작업만 기록됩니다.</p>
+        </div>
+        <button type="button" onClick={onRefresh} disabled={loading}>
+          새로고침
+        </button>
+      </div>
+      <div className="audit-log-filters">
+        <label>
+          작업 종류
+          <select value={action} onChange={(event) => onActionChange(event.target.value)}>
+            <option value="">전체</option>
+            {auditLogActions.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          구
+          <select value={gu} onChange={(event) => onGuChange(event.target.value)}>
+            <option value="">전체</option>
+            {guOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          동
+          <select value={dong} onChange={(event) => onDongChange(event.target.value)}>
+            <option value="">전체</option>
+            {dongOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          작업자
+          <select value={actorUserId} onChange={(event) => onActorUserIdChange(event.target.value)}>
+            <option value="">전체</option>
+            {users.map((user) => (
+              <option key={user.userId} value={user.userId}>
+                {adminUserLabel(user)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {loading && <p className="muted">변경 로그를 불러오는 중입니다.</p>}
+      {error && <p className="error-box">{error.message}</p>}
+      <div className="audit-log-list">
+        {logs.map((log) => (
+          <article key={log.logId} className="audit-log-card">
+            <header>
+              <strong>{adminAuditActionLabel(log.action)}</strong>
+              <time>{formatDateTime(log.createdAt)}</time>
+            </header>
+            <p>{log.summary}</p>
+            <dl className="audit-log-meta">
+              <div>
+                <dt>작업자</dt>
+                <dd title={log.actorUserId}>{shortId(log.actorUserId)}</dd>
+              </div>
+              <div>
+                <dt>대상</dt>
+                <dd>{log.targetType}{log.targetId ? ` #${log.targetId}` : ""}</dd>
+              </div>
+              <div>
+                <dt>구/동</dt>
+                <dd>{log.gu && log.dong ? `${log.gu} ${log.dong}` : "-"}</dd>
+              </div>
+            </dl>
+            {Boolean(log.beforeJson || log.afterJson) && (
+              <details className="audit-log-json">
+                <summary>변경 전/후 보기</summary>
+                <div>
+                  <pre>{formatJson(log.beforeJson)}</pre>
+                  <pre>{formatJson(log.afterJson)}</pre>
+                </div>
+              </details>
+            )}
+          </article>
+        ))}
+        {!loading && !logs.length && <p className="muted">표시할 변경 로그가 없습니다.</p>}
+      </div>
+      {hasNext && (
+        <button
+          className="audit-log-more-button"
+          type="button"
+          onClick={onLoadMore}
+          disabled={loadingMore}
+        >
+          {loadingMore ? "불러오는 중..." : "더 보기"}
+        </button>
+      )}
+    </section>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="metric">
@@ -957,6 +1178,28 @@ function shortId(userId: string) {
 
 function adminUserLabel(user: AdminUserResponse) {
   return shortId(user.userId);
+}
+
+function adminAuditActionLabel(action: string) {
+  switch (action) {
+    case "ROAD_NETWORK_EDIT_APPLY":
+      return "보행 네트워크 반영";
+    case "ROAD_SEGMENT_ATTRIBUTES_UPDATE":
+      return "segment 속성 변경";
+    case "PLACE_BASIC_UPDATE":
+      return "편의시설 기본 정보 변경";
+    case "PLACE_ACCESSIBILITY_FEATURES_REPLACE":
+      return "편의시설 접근성 변경";
+    default:
+      return action;
+  }
+}
+
+function formatJson(value: unknown) {
+  if (value == null) {
+    return "-";
+  }
+  return JSON.stringify(value, null, 2);
 }
 
 function formatDateTime(value: string) {

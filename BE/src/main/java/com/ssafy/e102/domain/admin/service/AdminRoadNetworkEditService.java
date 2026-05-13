@@ -30,11 +30,16 @@ public class AdminRoadNetworkEditService {
 	private final JdbcTemplate jdbcTemplate;
 	private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 	private final AdminService adminService;
+	private final AdminAuditLogService adminAuditLogService;
 
-	public AdminRoadNetworkEditService(JdbcTemplate jdbcTemplate, AdminService adminService) {
+	public AdminRoadNetworkEditService(
+		JdbcTemplate jdbcTemplate,
+		AdminService adminService,
+		AdminAuditLogService adminAuditLogService) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.namedParameterJdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
 		this.adminService = adminService;
+		this.adminAuditLogService = adminAuditLogService;
 	}
 
 	@Transactional
@@ -84,7 +89,7 @@ public class AdminRoadNetworkEditService {
 			orphanCleanupCandidateNodeIds);
 
 		int removedOrphanNodes = removeOrphanNodes(orphanCleanupCandidateNodeIds);
-		return new AdminRoadNetworkEditApplyResponse(
+		AdminRoadNetworkEditApplyResponse response = new AdminRoadNetworkEditApplyResponse(
 			addedEdgeIds.size(),
 			deletedEdgeIds.size(),
 			counters.createdNodes,
@@ -96,6 +101,17 @@ public class AdminRoadNetworkEditService {
 			deletedEdgeIds,
 			createdNodeIds,
 			snappedNodeIds);
+		adminAuditLogService.record(
+			userId,
+			"ROAD_NETWORK_EDIT_APPLY",
+			"ROAD_NETWORK",
+			request.gu() + "/" + request.dong(),
+			request.gu(),
+			request.dong(),
+			"보행 네트워크 편집 반영 add=" + response.addedSegments() + ", delete=" + response.deletedSegments(),
+			request,
+			response);
+		return response;
 	}
 
 	public void validateEditableRequest(UUID userId, AdminRoadNetworkEditApplyRequest request) {

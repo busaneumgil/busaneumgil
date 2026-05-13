@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,15 +25,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusState
@@ -49,12 +56,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportScreen(
     uiState: ReportUiState,
@@ -77,24 +86,30 @@ fun ReportScreen(
             )
         },
     ) { innerPadding ->
+        // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
+        // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
+        val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
+                    .then(
+                        if (isFlexStep) {
+                            Modifier
+                        } else {
+                            Modifier.verticalScroll(rememberScrollState())
+                        },
+                    )
                     .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            if (uiState.currentStep == ReportStep.TypeSelection && uiState.hasExistingDraft) {
-                ReportDraftBanner(onAction = onAction)
-            }
-
             when (uiState.currentStep) {
                 ReportStep.TypeSelection ->
                     ReportTypeStep(
                         input = uiState.reportType,
                         onAction = onAction,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                     )
                 ReportStep.LocationConfirm ->
                     ReportLocationStep(
@@ -109,6 +124,21 @@ fun ReportScreen(
                 ReportStep.Complete ->
                     ReportCompleteStep(uiState = uiState, onAction = onAction)
             }
+        }
+    }
+
+    // 임시저장 draft 안내 — ModalBottomSheet 형태.
+    // Scaffold 바깥에 두는 이유: 시트가 화면 전체에 걸쳐 scrim·sheet 컨텐츠를 그리도록 하기 위함.
+    val canShowDraftSheet =
+        uiState.currentStep == ReportStep.TypeSelection && uiState.hasExistingDraft
+    var draftSheetVisible by remember(canShowDraftSheet) { mutableStateOf(canShowDraftSheet) }
+    if (draftSheetVisible) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { draftSheetVisible = false },
+            sheetState = sheetState,
+        ) {
+            ReportDraftBanner(onAction = onAction)
         }
     }
 }
@@ -255,37 +285,36 @@ private fun NoRippleReportPrimaryActionButton(
 
 @Composable
 private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(EumRadius.medium),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+    // ModalBottomSheet의 컨텐츠. 시트 자체가 surface·radius·elevation·드래그 핸들을 제공하므로
+    // 여기서는 내부 padding과 텍스트·버튼 배치만 담당한다.
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = EumSpacing.medium)
+                .padding(top = EumSpacing.small, bottom = EumSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        Text(
+            text = "임시저장된 제보가 있습니다",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = "임시저장된 제보가 있습니다",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            Button(
+                onClick = { onAction(ReportUiAction.DraftResumeClicked) },
+                modifier = Modifier.weight(1f),
             ) {
-                Button(
-                    onClick = { onAction(ReportUiAction.DraftResumeClicked) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "불러오기")
-                }
-                OutlinedButton(
-                    onClick = { onAction(ReportUiAction.DraftDiscardClicked) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "삭제")
-                }
+                Text(text = "계속하기")
+            }
+            OutlinedButton(
+                onClick = { onAction(ReportUiAction.DraftDiscardClicked) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(text = "취소")
             }
         }
     }
@@ -295,11 +324,13 @@ private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
 private fun ReportTypeStep(
     input: ReportTypeInput,
     onAction: (ReportUiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val helperText = reportTypeErrorText(input.error) ?: "해당하는 유형을 선택해주세요."
     val isError = input.error != null
 
     Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         Text(
@@ -319,16 +350,43 @@ private fun ReportTypeStep(
                 },
         )
         Spacer(modifier = Modifier.height(EumSpacing.xSmall))
-        ReportType.values().toList().chunked(2).forEach { rowItems ->
+        ReportTypeGrid(
+            onTypeSelected = { type -> onAction(ReportUiAction.ReportTypeSelected(type)) },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun ReportTypeGrid(
+    onTypeSelected: (ReportType) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 호출부에서 weight(1f)로 남은 수직 공간을 받아오면, 3개 row를 동일 weight로 분할하여
+    // 그리드 전체가 화면 하단까지 채워지도록 한다. 부모가 verticalScroll이면 weight가
+    // 동작하지 않으므로 호출부에서 스크롤을 끄고 호출해야 한다.
+    val rows = ReportType.values().toList().chunked(2)
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        rows.forEach { rowItems ->
             Row(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
                 rowItems.forEach { type ->
                     ReportTypeCard(
                         type = type,
                         selected = false,
-                        onClick = { onAction(ReportUiAction.ReportTypeSelected(type)) },
-                        modifier = Modifier.weight(1f),
+                        onClick = { onTypeSelected(type) },
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                     )
                 }
                 if (rowItems.size < 2) {
@@ -363,7 +421,6 @@ private fun ReportTypeCard(
     Surface(
         modifier =
             modifier
-                .heightIn(min = 132.dp)
                 .clickable(onClick = onClick)
                 .semantics {
                     this.selected = selected
@@ -372,19 +429,20 @@ private fun ReportTypeCard(
         shape = RoundedCornerShape(EumRadius.large),
         color = backgroundColor,
         border = BorderStroke(1.dp, borderColor),
+        shadowElevation = 1.dp,
     ) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(EumSpacing.small),
+                    .padding(EumSpacing.medium),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall, Alignment.CenterVertically),
         ) {
             Icon(
                 painter = painterResource(id = type.iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(64.dp),
                 tint = Color.Unspecified,
             )
             Text(
@@ -393,12 +451,16 @@ private fun ReportTypeCard(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = type.description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

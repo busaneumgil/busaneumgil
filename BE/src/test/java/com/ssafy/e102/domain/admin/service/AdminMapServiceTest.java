@@ -70,6 +70,9 @@ class AdminMapServiceTest {
 	@Mock
 	private AdminService adminService;
 
+	@Mock
+	private AdminAuditLogService adminAuditLogService;
+
 	private AdminMapService adminMapService;
 	private GeometryFactory geometryFactory;
 	private GeoPointConverter geoPointConverter;
@@ -85,7 +88,8 @@ class AdminMapServiceTest {
 			placeRepository,
 			placeAccessibilityFeatureRepository,
 			geoPointConverter,
-			adminService);
+			adminService,
+			adminAuditLogService);
 		geometryFactory = new GeometryFactory();
 		adminUserId = UUID.randomUUID();
 	}
@@ -214,6 +218,7 @@ class AdminMapServiceTest {
 	void updatePlaceAccessibilityFeatures() throws Exception {
 		Place place = place();
 		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
 		when(placeAccessibilityFeatureRepository.saveAll(any()))
 			.thenAnswer(invocation -> invocation.getArgument(0));
@@ -240,6 +245,7 @@ class AdminMapServiceTest {
 	void updatePlaceAccessibilityFeaturesDuplicateType() throws Exception {
 		Place place = place();
 		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
 
 		assertThatThrownBy(() -> adminMapService.updatePlaceAccessibilityFeatures(

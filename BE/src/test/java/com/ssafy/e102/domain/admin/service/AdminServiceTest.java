@@ -27,11 +27,14 @@ class AdminServiceTest {
 	@Mock
 	private AdminAreaAssignmentRepository adminAreaAssignmentRepository;
 
+	@Mock
+	private AdminAuditLogService adminAuditLogService;
+
 	@Test
 	@DisplayName("관리자 principal은 관리자 permission을 조회할 수 있다")
 	void getAdminMe() {
 		AdminService adminService = new AdminService(userRepository, adminAreaRepository,
-			adminAreaAssignmentRepository);
+			adminAreaAssignmentRepository, adminAuditLogService);
 		UUID userId = UUID.randomUUID();
 
 		AdminMeResponse response = adminService.getMe(userId);
@@ -44,8 +47,10 @@ class AdminServiceTest {
 			"ADMIN_USER_WRITE",
 			"ADMIN_AREA_ASSIGNMENT_READ",
 			"ADMIN_AREA_ASSIGNMENT_WRITE",
+			"ADMIN_AUDIT_LOG_READ",
 			"ADMIN_PLACE_READ",
 			"ADMIN_PLACE_WRITE",
+			"ADMIN_ROUTE_TUNING_READ",
 			"HAZARD_REPORT_READ",
 			"HAZARD_REPORT_REVIEW");
 	}

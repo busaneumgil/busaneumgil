@@ -70,6 +70,7 @@ public class AdminMapService {
 	private final PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
 	private final GeoPointConverter geoPointConverter;
 	private final AdminService adminService;
+	private final AdminAuditLogService adminAuditLogService;
 
 	public AdminMapService(
 		AdminAreaRepository adminAreaRepository,
@@ -78,7 +79,8 @@ public class AdminMapService {
 		PlaceRepository placeRepository,
 		PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository,
 		GeoPointConverter geoPointConverter,
-		AdminService adminService) {
+		AdminService adminService,
+		AdminAuditLogService adminAuditLogService) {
 		this.adminAreaRepository = adminAreaRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.segmentFeatureRepository = segmentFeatureRepository;
@@ -86,6 +88,7 @@ public class AdminMapService {
 		this.placeAccessibilityFeatureRepository = placeAccessibilityFeatureRepository;
 		this.geoPointConverter = geoPointConverter;
 		this.adminService = adminService;
+		this.adminAuditLogService = adminAuditLogService;
 	}
 
 	public AdminAreaListResponse getAreas() {
@@ -199,6 +202,7 @@ public class AdminMapService {
 		}
 		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
 			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment를 찾을 수 없습니다."));
+		AdminRoadSegmentPropertiesResponse before = toRoadSegmentProperties(roadSegment);
 		roadSegment.updateAttributes(
 			request.walkAccess(),
 			request.brailleBlockState(),
@@ -207,7 +211,18 @@ public class AdminMapService {
 			request.surfaceState(),
 			request.stairsState(),
 			request.signalState());
-		return toRoadSegmentProperties(roadSegment);
+		AdminRoadSegmentPropertiesResponse after = toRoadSegmentProperties(roadSegment);
+		adminAuditLogService.record(
+			userId,
+			"ROAD_SEGMENT_ATTRIBUTES_UPDATE",
+			"ROAD_SEGMENT",
+			String.valueOf(edgeId),
+			gu,
+			dong,
+			"보행 segment 속성 변경 edgeId=" + edgeId,
+			before,
+			after);
+		return after;
 	}
 
 	@Transactional
@@ -219,6 +234,7 @@ public class AdminMapService {
 		AdminPlaceUpdateRequest request) {
 		validateEditablePlace(userId, placeId, gu, dong);
 		Place place = getPlaceWithAccessibilityFeatures(placeId);
+		AdminPlaceDetailResponse before = AdminPlaceDetailResponse.of(place, geoPointConverter);
 		validateProviderPlaceIdOwner(placeId, normalizeNullableText(request.providerPlaceId()));
 		place.updateBasicInfo(
 			request.name(),
@@ -226,7 +242,18 @@ public class AdminMapService {
 			request.address(),
 			request.point() == null ? null : geoPointConverter.toPoint(request.point()),
 			request.providerPlaceId());
-		return AdminPlaceDetailResponse.of(place, geoPointConverter);
+		AdminPlaceDetailResponse after = AdminPlaceDetailResponse.of(place, geoPointConverter);
+		adminAuditLogService.record(
+			userId,
+			"PLACE_BASIC_UPDATE",
+			"PLACE",
+			String.valueOf(placeId),
+			gu,
+			dong,
+			"편의시설 기본 정보 변경 placeId=" + placeId,
+			before,
+			after);
+		return after;
 	}
 
 	@Transactional
@@ -237,6 +264,8 @@ public class AdminMapService {
 		String dong,
 		AdminPlaceAccessibilityFeaturesUpdateRequest request) {
 		validateEditablePlace(userId, placeId, gu, dong);
+		Place beforePlace = getPlaceWithAccessibilityFeatures(placeId);
+		AdminPlaceDetailResponse before = AdminPlaceDetailResponse.of(beforePlace, geoPointConverter);
 		Place place = requirePlace(placeId);
 		validateUniqueFeatureTypes(request.features());
 		placeAccessibilityFeatureRepository.deleteAllByPlace_PlaceId(placeId);
@@ -249,7 +278,18 @@ public class AdminMapService {
 					feature.featureType(),
 					feature.isAvailable()))
 				.toList());
-		return AdminPlaceDetailResponse.of(place, savedFeatures, geoPointConverter);
+		AdminPlaceDetailResponse after = AdminPlaceDetailResponse.of(place, savedFeatures, geoPointConverter);
+		adminAuditLogService.record(
+			userId,
+			"PLACE_ACCESSIBILITY_FEATURES_REPLACE",
+			"PLACE",
+			String.valueOf(placeId),
+			gu,
+			dong,
+			"편의시설 접근성 속성 교체 placeId=" + placeId,
+			before,
+			after);
+		return after;
 	}
 
 	private boolean hasArea(String gu, String dong) {

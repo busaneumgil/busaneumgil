@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.search
 
+import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.RecentDestination
@@ -573,6 +575,47 @@ class SearchViewModelTest {
             val preview = destinationPreviewRepository.pendingPreview.value
             assertEquals(result.toPlaceDestination(), preview?.destination)
             assertEquals(listOf<String>(), preview?.accessibilityTagKeys)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
+        }
+
+    @Test
+    fun `address fallback preview click keeps external address preview metadata`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "external-address:35.1797,129.0750",
+                    title = "Busan City Hall Road Address",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            val preview = destinationPreviewRepository.pendingPreview.value
+            assertEquals(result.toPlaceDestination(), preview?.destination)
+            assertEquals(MapPlaceDetailType.EXTERNAL_ADDRESS, preview?.detailType)
+            assertEquals(ANDROID_GEOCODER_PROVIDER, preview?.provider)
+            assertEquals(null, preview?.providerPlaceId)
             assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }
 

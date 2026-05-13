@@ -86,7 +86,7 @@ internal data class SearchCopyUiState(
     @StringRes val queryPlaceholderRes: Int,
     @StringRes val voiceInputTitleRes: Int,
     @StringRes val voiceInputHeadlineRes: Int,
-    @StringRes val voiceInputDescriptionRes: Int,
+    @StringRes val voiceInputDescriptionRes: Int?,
     @StringRes val voiceInputExamplePhraseRes: Int,
     @StringRes val initialTitleRes: Int,
     @StringRes val initialDescriptionRes: Int,
@@ -124,7 +124,7 @@ internal fun resolveSearchCopyUiState(editingTarget: RouteEditingTarget): Search
                 queryPlaceholderRes = R.string.search_screen_query_placeholder,
                 voiceInputTitleRes = R.string.search_voice_input_title,
                 voiceInputHeadlineRes = R.string.search_voice_input_headline,
-                voiceInputDescriptionRes = R.string.search_voice_input_description,
+                voiceInputDescriptionRes = null,
                 voiceInputExamplePhraseRes = R.string.search_voice_input_example_phrase,
                 initialTitleRes = R.string.search_screen_initial_title,
                 initialDescriptionRes = R.string.search_screen_initial_description,
@@ -178,7 +178,6 @@ internal fun resolveSearchVoiceInputStatusContent(
         voiceInputState.status == SearchVoiceInputStatus.Listening ->
             SearchVoiceInputStatusContent(
                 titleRes = R.string.search_voice_input_status_listening_title,
-                descriptionRes = R.string.search_voice_input_status_listening_description,
             )
 
         voiceInputState.guidance == SearchVoiceInputGuidance.RetryRequired ->
@@ -521,12 +520,14 @@ private fun SearchVoiceInputContent(
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Text(
-            text = stringResource(id = copy.voiceInputDescriptionRes),
-            modifier = Modifier.padding(top = EumSpacing.xSmall),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (copy.voiceInputDescriptionRes != null) {
+            Text(
+                text = stringResource(id = copy.voiceInputDescriptionRes),
+                modifier = Modifier.padding(top = EumSpacing.xSmall),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         if (showTranscriptPreview) {
             SearchStateCard(

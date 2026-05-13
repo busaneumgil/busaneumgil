@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.savedroute
 
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
@@ -25,6 +27,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -526,6 +529,61 @@ class SavedRouteViewModelTest {
                 viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
             )
         }
+
+    @Test
+    fun `low vision place bookmark list reorders by nearest current location when location becomes available`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository =
+                FakeBookmarkRepository(
+                    bookmarks =
+                        listOf(
+                            testPlaceBookmark(
+                                latitude = 35.1151,
+                                longitude = 129.0415,
+                            ).copy(
+                                placeId = "far-place",
+                                placeName = "Far Place",
+                            ),
+                            testPlaceBookmark(
+                                latitude = 35.1798,
+                                longitude = 129.0750,
+                            ).copy(
+                                placeId = "near-place",
+                                placeName = "Near Place",
+                            ),
+                        ),
+                )
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = locationManager,
+                    initialLowVisionMode = true,
+                )
+
+            advanceUntilIdle()
+            assertEquals(
+                listOf("far-place", "near-place"),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("near-place", "far-place"),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+        }
 }
 
 private class FakeBookmarkRepository(
@@ -554,6 +612,22 @@ private class FakeBookmarkRepository(
     override suspend fun deleteBookmark(placeId: String) {
         if (failDelete || placeId in failingPlaceIds) error("bookmark delete failed")
         bookmarks.value = bookmarks.value.filterNot { bookmark -> bookmark.placeId == placeId }
+    }
+}
+
+private class FakeCurrentLocationManager : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)
+
+    override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
+
+    override fun refreshLatestLocation() = Unit
+
+    override fun startLocationUpdates() = Unit
+
+    override fun stopLocationUpdates() = Unit
+
+    fun emitLocation(snapshot: LocationSnapshot?) {
+        mutableLatestLocation.value = snapshot
     }
 }
 

@@ -438,10 +438,75 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `far off route updates use current location to destination metrics instead of projected tail`() =
+    fun `low vision far off route uses fresh walk search metrics when destination is walkable`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
-            val viewModel = createViewModel(locationManager = locationManager)
+            val routeRepository =
+                FakeRouteRepository(
+                    freshWalkSearchData =
+                        lowVisionRemainingSearchData(
+                            routeId = "actual-walk-route",
+                            routeOption = RouteOption.SAFE,
+                            distanceMeters = 710,
+                            estimatedTimeMinutes = 13,
+                            durationSeconds = 780,
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                    initialLowVisionMode = true,
+                )
+
+            viewModel.bindNavigationRequest(testFarOffRouteNavigationRequest())
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = NEAR_OFF_ROUTE_POINT.latitude,
+                    longitude = NEAR_OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("710m", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("13\uBD84", viewModel.uiState.value.remainingEtaLabel)
+            assertEquals(1, routeRepository.freshWalkQueries.size)
+            assertTrue(routeRepository.freshTransitQueries.isEmpty())
+        }
+
+    @Test
+    fun `low vision far off route uses fresh transit search metrics when destination is beyond walking range`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository =
+                FakeRouteRepository(
+                    freshWalkSearchData =
+                        lowVisionRemainingSearchData(
+                            routeId = "actual-walk-route",
+                            routeOption = RouteOption.SAFE,
+                            distanceMeters = 1_200,
+                            estimatedTimeMinutes = 21,
+                            durationSeconds = 1_260,
+                        ),
+                    freshTransitSearchData =
+                        lowVisionRemainingSearchData(
+                            routeId = "actual-transit-route",
+                            routeOption = RouteOption.RECOMMENDED,
+                            distanceMeters = 3_600,
+                            estimatedTimeMinutes = 34,
+                            durationSeconds = 2_040,
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                    initialLowVisionMode = true,
+                )
 
             viewModel.bindNavigationRequest(testFarOffRouteNavigationRequest())
             advanceUntilIdle()
@@ -456,8 +521,43 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals("1.1km", viewModel.uiState.value.remainingDistanceLabel)
-            assertTrue(viewModel.uiState.value.remainingEtaLabel.contains("12"))
+            assertEquals("3.6km", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("34\uBD84", viewModel.uiState.value.remainingEtaLabel)
+            assertEquals(1, routeRepository.freshWalkQueries.size)
+            assertEquals(1, routeRepository.freshTransitQueries.size)
+        }
+
+    @Test
+    fun `low vision far off route shows dashes when fresh remaining route search is unavailable`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository =
+                FakeRouteRepository(
+                    failFreshWalkSearch = true,
+                    failFreshTransitSearch = true,
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                    initialLowVisionMode = true,
+                )
+
+            viewModel.bindNavigationRequest(testFarOffRouteNavigationRequest())
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = FAR_OFF_ROUTE_POINT.latitude,
+                    longitude = FAR_OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("-", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("-", viewModel.uiState.value.remainingEtaLabel)
         }
 }
 
@@ -465,11 +565,13 @@ private fun createViewModel(
     locationManager: FakeCurrentLocationManager = FakeCurrentLocationManager(),
     bookmarkRepository: BookmarkRepository = FakeBookmarkRepository(),
     routeRepository: RouteRepository = FakeRouteRepository(),
+    initialLowVisionMode: Boolean = false,
 ): NavigationViewModel =
     NavigationViewModel(
         currentLocationManager = locationManager,
         bookmarkRepository = bookmarkRepository,
         routeRepository = routeRepository,
+        initialLowVisionMode = initialLowVisionMode,
     )
 
 private class FakeCurrentLocationManager : CurrentLocationManager {
@@ -528,16 +630,34 @@ private class FakeRouteRepository(
         ),
     private val rerouteRoute: RouteCandidate? = null,
     private val endSessionId: String = "ended-session",
+    private val freshWalkSearchData: RouteSearchData? = null,
+    private val freshTransitSearchData: RouteSearchData? = null,
+    private val failFreshWalkSearch: Boolean = false,
+    private val failFreshTransitSearch: Boolean = false,
 ) : RouteRepository {
     val transitRefreshCalls = mutableListOf<Pair<String, Int>>()
     val rerouteCalls = mutableListOf<Pair<String, GeoCoordinate>>()
     val endRouteCalls = mutableListOf<String>()
+    val freshWalkQueries = mutableListOf<RouteSearchQuery>()
+    val freshTransitQueries = mutableListOf<RouteSearchQuery>()
 
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
         RouteSearchData(query, RouteSearchResult(query.origin, query.destination), RouteSearchSource.serverApi())
 
     override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
         RouteSearchData(query, RouteSearchResult(query.origin, query.destination), RouteSearchSource.serverApi())
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        freshWalkQueries += query
+        if (failFreshWalkSearch) error("fresh walk search failed")
+        return freshWalkSearchData?.copy(query = query) ?: getRouteSearchData(query)
+    }
+
+    override suspend fun getFreshTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        freshTransitQueries += query
+        if (failFreshTransitSearch) error("fresh transit search failed")
+        return freshTransitSearchData?.copy(query = query) ?: getTransitRouteSearchData(query)
+    }
 
     override suspend fun selectRoute(
         routeId: String,
@@ -1154,6 +1274,60 @@ private fun testFarOffRouteNavigationRequest(): RouteNavigationRequest =
             ),
     )
 
+private fun lowVisionRemainingSearchData(
+    routeId: String,
+    routeOption: RouteOption,
+    distanceMeters: Int,
+    estimatedTimeMinutes: Int,
+    durationSeconds: Int,
+): RouteSearchData =
+    RouteSearchData(
+        query =
+            RouteSearchQuery(
+                origin =
+                    RouteWaypoint(
+                        name = "Current",
+                        coordinate = FAR_OFF_ROUTE_POINT,
+                    ),
+                destination =
+                    RouteWaypoint(
+                        name = "Destination",
+                        coordinate = FAR_ROUTE_END_POINT,
+                    ),
+                requestedOptions = listOf(routeOption),
+            ),
+        result =
+            RouteSearchResult(
+                origin =
+                    RouteWaypoint(
+                        name = "Current",
+                        coordinate = FAR_OFF_ROUTE_POINT,
+                    ),
+                destination =
+                    RouteWaypoint(
+                        name = "Destination",
+                        coordinate = FAR_ROUTE_END_POINT,
+                    ),
+                routes =
+                    listOf(
+                        RouteCandidate(
+                            serverRouteId = routeId,
+                            routeOption = routeOption,
+                            title = "Actual Remaining Route",
+                            summary =
+                                RouteSummary(
+                                    distanceMeters = distanceMeters,
+                                    estimatedTimeMinutes = estimatedTimeMinutes,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    durationSeconds = durationSeconds,
+                                ),
+                            preview = RoutePreviewModel(),
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Low vision remaining route test"),
+    )
+
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
@@ -1169,6 +1343,7 @@ private val SPARSE_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1800, longitude
 private val FAR_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0000)
 private val FAR_ROUTE_MID_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0100)
 private val FAR_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1000, longitude = 129.0200)
+private val NEAR_OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1060, longitude = 129.0200)
 private val FAR_OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1100, longitude = 129.0200)
 
 private val TRANSIT_START_POINT = GeoCoordinate(latitude = 35.1700, longitude = 129.0600)

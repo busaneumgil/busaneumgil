@@ -266,6 +266,7 @@ class AppContainer(
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
+            authSessionRepository = authSessionRepository,
         )
     }
 

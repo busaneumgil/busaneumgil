@@ -107,6 +107,7 @@ public class TransitRouteSearchService {
 	private final BusanBimsClient busanBimsClient;
 	private final Executor bimsTaskExecutor;
 	private final OdsayClient odsayClient;
+	private final OdsayLoadLaneStore odsayLoadLaneStore;
 	private final RouteSearchCacheService routeSearchCacheService;
 
 	public TransitRouteSearchService(
@@ -121,6 +122,7 @@ public class TransitRouteSearchService {
 		@Qualifier(BusanBimsClientConfig.BIMS_TASK_EXECUTOR)
 		Executor bimsTaskExecutor,
 		OdsayClient odsayClient,
+		OdsayLoadLaneStore odsayLoadLaneStore,
 		RouteSearchCacheService routeSearchCacheService) {
 		this.userProfileQueryService = userProfileQueryService;
 		this.subwayStationElevatorRepository = subwayStationElevatorRepository;
@@ -132,6 +134,7 @@ public class TransitRouteSearchService {
 		this.busanBimsClient = busanBimsClient;
 		this.bimsTaskExecutor = bimsTaskExecutor;
 		this.odsayClient = odsayClient;
+		this.odsayLoadLaneStore = odsayLoadLaneStore;
 		this.routeSearchCacheService = routeSearchCacheService;
 	}
 
@@ -145,13 +148,15 @@ public class TransitRouteSearchService {
 		OdsayTransitSearchResult searchResult = odsayClient.searchPubTransPath(startPoint, endPoint);
 		String searchId = "rs_transit_" + UUID.randomUUID();
 		List<OdsayPathCandidate> odsayShortlist = selectOdsayShortlist(searchResult.paths());
+		Map<String, List<OdsayLaneGeometry>> laneGeometryByMapObj = new LinkedHashMap<>(
+			odsayLoadLaneStore.findValidByMapObjIn(mapObjs(odsayShortlist)));
 		List<TransitRouteBaseCandidate> baseCandidates = new ArrayList<>();
 		RouteException firstExternalFailure = null;
 		for (OdsayPathCandidate pathCandidate : odsayShortlist) {
 			OdsayTransitPath path = pathCandidate.path();
 			int routeIndex = pathCandidate.routeIndex();
 			try {
-				List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(path.mapObj());
+				List<OdsayLaneGeometry> laneGeometries = laneGeometries(path.mapObj(), laneGeometryByMapObj);
 				toCandidate(searchId, routeIndex, startPoint, endPoint, path, laneGeometries, profile, false)
 					.map(candidate -> new TransitRouteBaseCandidate(routeIndex, path, candidate))
 					.ifPresent(baseCandidates::add);
@@ -193,6 +198,29 @@ public class TransitRouteSearchService {
 		routeSearchCacheService.saveTransitMetadata(searchId,
 			selectedCandidates.stream().map(TransitRouteCandidate::snapshot).toList());
 		return response;
+	}
+
+	private List<String> mapObjs(List<OdsayPathCandidate> odsayShortlist) {
+		return odsayShortlist.stream()
+			.map(candidate -> candidate.path().mapObj())
+			.filter(mapObj -> mapObj != null && !mapObj.isBlank())
+			.distinct()
+			.toList();
+	}
+
+	private List<OdsayLaneGeometry> laneGeometries(
+		String mapObj,
+		Map<String, List<OdsayLaneGeometry>> laneGeometryByMapObj) {
+		List<OdsayLaneGeometry> cachedLaneGeometries = laneGeometryByMapObj.get(mapObj);
+		if (cachedLaneGeometries != null) {
+			return cachedLaneGeometries;
+		}
+		List<OdsayLaneGeometry> laneGeometries = odsayClient.loadLane(mapObj);
+		if (!laneGeometries.isEmpty() && mapObj != null && !mapObj.isBlank()) {
+			laneGeometryByMapObj.put(mapObj, laneGeometries);
+			odsayLoadLaneStore.saveIfAbsentOrRepairMalformed(mapObj, laneGeometries);
+		}
+		return laneGeometries;
 	}
 
 	private List<OdsayPathCandidate> selectOdsayShortlist(List<OdsayTransitPath> paths) {

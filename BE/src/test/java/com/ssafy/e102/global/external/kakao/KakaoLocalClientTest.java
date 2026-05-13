@@ -49,6 +49,7 @@ class KakaoLocalClientTest {
 				    {
 				      "road_address": {
 				        "address_name": "부산 부산진구 시민공원로 73",
+				        "building_name": "부산시민공원",
 				        "region_1depth_name": "부산",
 				        "region_2depth_name": "부산진구",
 				        "region_3depth_name": "범전동"
@@ -69,6 +70,7 @@ class KakaoLocalClientTest {
 		assertThat(result).contains(new KakaoAddressDocument(
 			"부산 부산진구 범전동 200",
 			"부산 부산진구 시민공원로 73",
+			"부산시민공원",
 			"부산",
 			"부산진구",
 			"범전동"));

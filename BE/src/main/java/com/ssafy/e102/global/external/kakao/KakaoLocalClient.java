@@ -178,6 +178,7 @@ public class KakaoLocalClient {
 			return new KakaoAddressDocument(
 				addressName(),
 				roadAddressName(),
+				buildingName(),
 				region1DepthName(),
 				region2DepthName(),
 				region3DepthName());
@@ -195,6 +196,13 @@ public class KakaoLocalClient {
 				return null;
 			}
 			return roadAddress.addressName();
+		}
+
+		private String buildingName() {
+			if (roadAddress == null) {
+				return null;
+			}
+			return roadAddress.buildingName();
 		}
 
 		private String region1DepthName() {
@@ -233,6 +241,8 @@ public class KakaoLocalClient {
 	private record KakaoRoadAddress(
 		@JsonProperty("address_name")
 		String addressName,
+		@JsonProperty("building_name")
+		String buildingName,
 		@JsonProperty("region_1depth_name")
 		String region1DepthName,
 		@JsonProperty("region_2depth_name")

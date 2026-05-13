@@ -312,30 +312,37 @@ public class PlaceService {
 				DEFAULT_PLACE_DETAIL_SIZE));
 			KakaoPlaceDocument selected = selectPoiCandidate(request, result.documents())
 				.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_CLICK_DETAIL_NOT_FOUND));
-			String provider = normalizeProvider(request.provider(), selected.id());
-			String bookmarkTargetId = BookmarkTargetIdFactory.fromExternalPoi(
-				provider,
-				selected.id(),
-				selected.placeName(),
-				selected.point().lat(),
-				selected.point().lng());
-			return new PlaceClickDetailResponse(
-				bookmarkTargetId,
-				PlaceDetailType.EXTERNAL_POI,
-				null,
-				provider,
-				selected.id(),
-				selected.placeName(),
-				null,
-				selected.providerCategory(),
-				selected.address(),
-				selected.point(),
-				List.of(),
-				bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId));
+			return toExternalPoiDetailResponse(userId, request, selected);
 		} catch (RestClientException | IllegalArgumentException exception) {
 			log.warn("지도 클릭 상세 POI 외부 API 호출 실패. request={}", request, exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED, exception);
 		}
+	}
+
+	private PlaceClickDetailResponse toExternalPoiDetailResponse(
+		UUID userId,
+		PlaceClickDetailRequest request,
+		KakaoPlaceDocument selected) {
+		String provider = normalizeProvider(request.provider(), selected.id());
+		String bookmarkTargetId = BookmarkTargetIdFactory.fromExternalPoi(
+			provider,
+			selected.id(),
+			selected.placeName(),
+			selected.point().lat(),
+			selected.point().lng());
+		return new PlaceClickDetailResponse(
+			bookmarkTargetId,
+			PlaceDetailType.EXTERNAL_POI,
+			null,
+			provider,
+			selected.id(),
+			selected.placeName(),
+			null,
+			selected.providerCategory(),
+			selected.address(),
+			selected.point(),
+			List.of(),
+			bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId));
 	}
 
 	private PlaceClickDetailResponse getExternalPoiDetailOrAddressFallback(UUID userId,
@@ -350,7 +357,9 @@ public class PlaceService {
 				exception.getErrorCode()
 					.getStatus(),
 				request);
-			return getExternalAddressDetail(userId, request);
+			KakaoAddressDocument addressDocument = getAddressDocument(request);
+			return getBuildingNamePoiDetail(userId, request, addressDocument)
+				.orElseGet(() -> toExternalAddressDetailResponse(userId, request, addressDocument));
 		}
 	}
 
@@ -358,6 +367,53 @@ public class PlaceService {
 		return exception.getErrorCode() == PlaceErrorCode.INVALID_PLACE_REQUEST
 			|| exception.getErrorCode() == PlaceErrorCode.PLACE_CLICK_DETAIL_NOT_FOUND
 			|| exception.getErrorCode() == PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED;
+	}
+
+	private Optional<PlaceClickDetailResponse> getBuildingNamePoiDetail(
+		UUID userId,
+		PlaceClickDetailRequest request,
+		KakaoAddressDocument addressDocument) {
+		if (!StringUtils.hasText(addressDocument.buildingName()) || !StringUtils.hasText(addressDocument.roadAddress())) {
+			return Optional.empty();
+		}
+		try {
+			KakaoPlaceSearchResult result = kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+				addressDocument.buildingName()
+					.trim(),
+				request.lat(),
+				request.lng(),
+				DEFAULT_PLACE_DETAIL_RADIUS_METER,
+				DEFAULT_KAKAO_SEARCH_PAGE,
+				DEFAULT_PLACE_DETAIL_SIZE));
+			return selectBuildingNameCandidate(addressDocument, result.documents())
+				.map(candidate -> toExternalPoiDetailResponse(userId, request, candidate));
+		} catch (RestClientException | IllegalArgumentException exception) {
+			log.info("지도 클릭 POI 건물명 fallback 검색 실패. buildingName={}, request={}",
+				addressDocument.buildingName(),
+				request,
+				exception);
+			return Optional.empty();
+		}
+	}
+
+	private Optional<KakaoPlaceDocument> selectBuildingNameCandidate(
+		KakaoAddressDocument addressDocument,
+		List<KakaoPlaceDocument> candidates) {
+		if (candidates == null || candidates.isEmpty()) {
+			return Optional.empty();
+		}
+		List<KakaoPlaceDocument> sameRoadAddressCandidates = candidates.stream()
+			.filter(candidate -> isSameAddress(addressDocument.roadAddress(), candidate.address()))
+			.toList();
+		if (sameRoadAddressCandidates.isEmpty()) {
+			return Optional.empty();
+		}
+		String normalizedBuildingName = normalizeComparableText(addressDocument.buildingName());
+		return sameRoadAddressCandidates.stream()
+			.filter(candidate -> normalizedBuildingName.equals(normalizeComparableText(candidate.placeName())))
+			.findFirst()
+			.or(() -> sameRoadAddressCandidates.stream()
+				.min(Comparator.comparing(KakaoPlaceDocument::distanceMeter, Comparator.nullsLast(Integer::compareTo))));
 	}
 
 	private Optional<KakaoPlaceDocument> selectPoiCandidate(
@@ -386,35 +442,45 @@ public class PlaceService {
 	}
 
 	private PlaceClickDetailResponse getExternalAddressDetail(UUID userId, PlaceClickDetailRequest request) {
+		return toExternalAddressDetailResponse(userId, request, getAddressDocument(request));
+	}
+
+	private KakaoAddressDocument getAddressDocument(PlaceClickDetailRequest request) {
 		try {
-			KakaoAddressDocument addressDocument = kakaoLocalClient.reverseGeocode(request.lat(), request.lng())
+			return kakaoLocalClient.reverseGeocode(request.lat(), request.lng())
 				.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_ADDRESS_NOT_FOUND));
-			String displayAddress = addressDocument.displayAddress();
-			String provider = normalizeProvider(request.provider(), null);
-			String bookmarkTargetId = BookmarkTargetIdFactory.fromExternalAddress(
-				provider,
-				displayAddress,
-				request.lat(),
-				request.lng(),
-				displayAddress);
-			return new PlaceClickDetailResponse(
-				bookmarkTargetId,
-				PlaceDetailType.EXTERNAL_ADDRESS,
-				null,
-				provider,
-				null,
-				displayAddress,
-				null,
-				null,
-				displayAddress,
-				geoPointConverter
-					.toResponse(geoPointConverter.toPoint(new GeoPointRequest(request.lat(), request.lng()))),
-				List.of(),
-				bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId));
 		} catch (RestClientException | IllegalArgumentException exception) {
 			log.warn("지도 클릭 상세 주소 외부 API 호출 실패. request={}", request, exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_REVERSE_GEOCODE_EXTERNAL_API_FAILED, exception);
 		}
+	}
+
+	private PlaceClickDetailResponse toExternalAddressDetailResponse(
+		UUID userId,
+		PlaceClickDetailRequest request,
+		KakaoAddressDocument addressDocument) {
+		String displayAddress = addressDocument.displayAddress();
+		String provider = normalizeProvider(request.provider(), null);
+		String bookmarkTargetId = BookmarkTargetIdFactory.fromExternalAddress(
+			provider,
+			displayAddress,
+			request.lat(),
+			request.lng(),
+			displayAddress);
+		return new PlaceClickDetailResponse(
+			bookmarkTargetId,
+			PlaceDetailType.EXTERNAL_ADDRESS,
+			null,
+			provider,
+			null,
+			displayAddress,
+			null,
+			null,
+			displayAddress,
+			geoPointConverter
+				.toResponse(geoPointConverter.toPoint(new GeoPointRequest(request.lat(), request.lng()))),
+			List.of(),
+			bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId));
 	}
 
 	private boolean isPlaceBookmarked(UUID userId, Long placeId, String bookmarkTargetId) {
@@ -439,6 +505,19 @@ public class PlaceService {
 			return "";
 		}
 		return value.trim().replaceAll("\\s+", " ");
+	}
+
+	private boolean isSameAddress(String first, String second) {
+		return StringUtils.hasText(first)
+			&& StringUtils.hasText(second)
+			&& normalizeAddress(first).equals(normalizeAddress(second));
+	}
+
+	private String normalizeAddress(String value) {
+		return value.trim()
+			.replace("특별시", "")
+			.replace("광역시", "")
+			.replaceAll("\\s+", "");
 	}
 
 	private void validateSearchCoordinateCondition(Double lat, Double lng, Integer radius) {

@@ -38,6 +38,7 @@ data class MapPlaceDetailDto(
     val address: String?,
     val point: PlacePointDto,
     val accessibilityFeatures: List<PlaceAccessibilityFeatureDto>,
+    val transitArrivals: List<PlaceTransitArrivalDto>,
     val isBookmarked: Boolean,
     val description: String?,
 )
@@ -50,4 +51,13 @@ data class PlacePointDto(
 data class PlaceAccessibilityFeatureDto(
     val featureType: String,
     val isAvailable: Boolean,
+)
+
+data class PlaceTransitArrivalDto(
+    val transitType: String,
+    val routeName: String,
+    val direction: String?,
+    val remainingMinute: Int?,
+    val isLowFloor: Boolean?,
+    val source: String?,
 )

@@ -57,6 +57,7 @@ import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.PlaceTransitArrival
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
@@ -191,8 +192,9 @@ fun MapScreen(
                     onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
                     modifier = Modifier.fillMaxSize(),
                     detailContent = {
-                        FacilityDetailAccessibilityTagSection(
-                            tags = facilityDetailSheetUiState.accessibilityTags,
+                        FacilityDetailExtraSection(
+                            transitArrivals = facilityDetailSheetUiState.transitArrivals,
+                            accessibilityTags = facilityDetailSheetUiState.accessibilityTags,
                         )
                     },
                     actionContent = {
@@ -305,6 +307,7 @@ private data class MapFacilityDetailSheetUiState(
     val title: String,
     val address: String,
     val accessibilityTags: List<String>,
+    val transitArrivals: List<PlaceTransitArrival>,
     val isBookmarked: Boolean,
     val isBookmarkUpdating: Boolean,
     val isBookmarkEnabled: Boolean,
@@ -318,7 +321,7 @@ private data class MapFacilityDetailSheetUiState(
             metaLabel = metaLabel,
             title = title,
             address = address,
-            hasDetailContent = accessibilityTags.isNotEmpty(),
+            hasDetailContent = accessibilityTags.isNotEmpty() || transitArrivals.isNotEmpty(),
         )
 }
 
@@ -698,6 +701,124 @@ private fun FacilityDetailBookmarkActionButton(
 }
 
 @Composable
+private fun FacilityDetailExtraSection(
+    transitArrivals: List<PlaceTransitArrival>,
+    accessibilityTags: List<String>,
+    modifier: Modifier = Modifier,
+) {
+    if (transitArrivals.isEmpty() && accessibilityTags.isEmpty()) return
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        FacilityDetailTransitArrivalSection(arrivals = transitArrivals)
+        FacilityDetailAccessibilityTagSection(tags = accessibilityTags)
+    }
+}
+
+@Composable
+private fun FacilityDetailTransitArrivalSection(
+    arrivals: List<PlaceTransitArrival>,
+    modifier: Modifier = Modifier,
+) {
+    if (arrivals.isEmpty()) return
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+    ) {
+        Text(
+            text = stringResource(id = R.string.map_facility_detail_transit_arrival_section_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+        )
+        arrivals.take(MAX_FACILITY_DETAIL_TRANSIT_ARRIVALS).forEach { arrival ->
+            FacilityDetailTransitArrivalCard(arrival = arrival)
+        }
+    }
+}
+
+@Composable
+private fun FacilityDetailTransitArrivalCard(
+    arrival: PlaceTransitArrival,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = EumSpacing.small),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(id = transitArrivalIconRes(arrival.transitType)),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = transitArrivalTitle(arrival),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                arrival.direction?.takeIf { direction -> direction.isNotBlank() }?.let { direction ->
+                    Text(
+                        text = direction,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Text(
+                text = transitArrivalTimeLabel(arrival),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@DrawableRes
+private fun transitArrivalIconRes(transitType: String): Int =
+    when (transitType.trim().uppercase()) {
+        "BUS" -> R.drawable.ic_place_bus
+        "SUBWAY" -> R.drawable.ic_place_subway
+        else -> R.drawable.ic_route_time
+    }
+
+@Composable
+private fun transitArrivalTitle(arrival: PlaceTransitArrival): String {
+    val routeName = arrival.routeName.takeIf { routeName -> routeName.isNotBlank() }
+        ?: stringResource(id = R.string.map_facility_detail_transit_arrival_route_unknown)
+    return if (arrival.isLowFloor == true) {
+        stringResource(id = R.string.map_facility_detail_transit_arrival_low_floor_route, routeName)
+    } else {
+        routeName
+    }
+}
+
+@Composable
+private fun transitArrivalTimeLabel(arrival: PlaceTransitArrival): String =
+    arrival.remainingMinute?.let { minute ->
+        stringResource(id = R.string.map_facility_detail_transit_arrival_minutes, minute)
+    } ?: stringResource(id = R.string.map_facility_detail_transit_arrival_time_unknown)
+
+@Composable
 private fun FacilityDetailAccessibilityTagSection(
     tags: List<String>,
     modifier: Modifier = Modifier,
@@ -1001,6 +1122,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                         detail = mapTapDetail,
                         selectedFilterCategories = uiState.markerFilterState.selection.selectedFacilityCategories,
                     ),
+                transitArrivals = mapTapDetail.transitArrivals,
                 isBookmarked = sheetState.isBookmarked,
                 isBookmarkUpdating = sheetState.isBookmarkUpdating,
                 isBookmarkEnabled = true,
@@ -1021,6 +1143,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                         ?.let { coordinate -> coordinateText(coordinate) }
                         .orEmpty(),
                 accessibilityTags = emptyList(),
+                transitArrivals = emptyList(),
                 isBookmarked = false,
                 isBookmarkUpdating = true,
                 isBookmarkEnabled = false,
@@ -1039,6 +1162,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                         ?.let { coordinate -> coordinateText(coordinate) }
                         .orEmpty(),
                 accessibilityTags = emptyList(),
+                transitArrivals = emptyList(),
                 isBookmarked = false,
                 isBookmarkUpdating = false,
                 isBookmarkEnabled = false,
@@ -1065,6 +1189,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             title = "",
             address = "",
             accessibilityTags = emptyList(),
+            transitArrivals = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = false,
             isBookmarkEnabled = false,
@@ -1088,6 +1213,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                     detail = mapTapDetail,
                     selectedFilterCategories = uiState.markerFilterState.selection.selectedFacilityCategories,
                 ),
+            transitArrivals = mapTapDetail.transitArrivals,
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
             isBookmarkEnabled = true,
@@ -1105,6 +1231,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                     ?.let { coordinate -> coordinateText(coordinate) }
                     .orEmpty(),
             accessibilityTags = emptyList(),
+            transitArrivals = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = true,
             isBookmarkEnabled = false,
@@ -1122,6 +1249,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                     ?.let { coordinate -> coordinateText(coordinate) }
                     .orEmpty(),
             accessibilityTags = emptyList(),
+            transitArrivals = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = false,
             isBookmarkEnabled = false,
@@ -1144,6 +1272,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                     detail = detail,
                     selectedFilterCategories = uiState.markerFilterState.selection.selectedFacilityCategories,
                 ),
+            transitArrivals = emptyList(),
             isBookmarked = uiState.facilityDetailSheetState.isBookmarked,
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
             isBookmarkEnabled = true,
@@ -1697,6 +1826,7 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0
 private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3
+private const val MAX_FACILITY_DETAIL_TRANSIT_ARRIVALS = 3
 private val RouteSelectionOriginChipColor = Color(0xFFEAF8EF)
 private val RouteSelectionOriginTextColor = Color(0xFF166534)
 private val RouteSelectionDestinationChipColor = Color(0xFFFFEEF0)

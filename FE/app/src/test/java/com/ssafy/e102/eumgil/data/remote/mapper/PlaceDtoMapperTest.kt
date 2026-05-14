@@ -8,6 +8,7 @@ import com.ssafy.e102.eumgil.data.remote.dto.PlaceAccessibilityFeatureDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlacePointDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceSummaryDto
+import com.ssafy.e102.eumgil.data.remote.dto.PlaceTransitArrivalDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlacesBrowseDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -125,6 +126,17 @@ class PlaceDtoMapperTest {
                                 isAvailable = false,
                             ),
                         ),
+                    transitArrivals =
+                        listOf(
+                            PlaceTransitArrivalDto(
+                                transitType = "BUS",
+                                routeName = "100",
+                                direction = null,
+                                remainingMinute = 6,
+                                isLowFloor = true,
+                                source = "REALTIME",
+                            ),
+                        ),
                     isBookmarked = false,
                     description = "External Kakao POI",
                 ),
@@ -138,8 +150,11 @@ class PlaceDtoMapperTest {
         assertEquals("Cafe", detail.providerCategory)
         assertNull(detail.category)
         assertEquals("Kakao Cafe", detail.name)
-        assertEquals(PlaceFeatureType.ACCESSIBLE_ENTRANCE, detail.features.single().featureType)
+        assertEquals(PlaceFeatureType.ACCESSIBLE_ENTRANCE, detail.features.first().featureType)
         assertEquals(listOf("step-free-entrance"), detail.accessibilityTags)
+        assertEquals("100", detail.transitArrivals.single().routeName)
+        assertEquals(6, detail.transitArrivals.single().remainingMinute)
+        assertEquals(true, detail.transitArrivals.single().isLowFloor)
         assertEquals("External Kakao POI", detail.description)
     }
 }

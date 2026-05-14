@@ -2,7 +2,6 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
-import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RoutePolyline
@@ -39,7 +38,7 @@ internal suspend fun RouteRepository.buildLowVisionNavigationPlan(
     destinationSelectionRepository: DestinationSelectionRepository,
     origin: RouteWaypoint = LOW_VISION_DEFAULT_ORIGIN,
 ): LowVisionNavigationPlan? {
-    val destination = destinationSelectionRepository.selectedDestination.value.toLowVisionRouteWaypoint()
+    val destination = destinationSelectionRepository.selectedDestination.value?.toRouteWaypointOrNull() ?: return null
     val walkQuery =
         RouteSearchQuery(
             origin = origin,
@@ -388,30 +387,23 @@ private fun GeoCoordinate.interpolateTo(
 private fun RouteWaypoint.isLowVisionDefaultOrigin(): Boolean =
     coordinate == LOW_VISION_DEFAULT_ORIGIN.coordinate
 
-private fun PlaceDestination?.toLowVisionRouteWaypoint(): RouteWaypoint =
-    this?.toRouteWaypointOrNull() ?: LOW_VISION_DEFAULT_DESTINATION
-
-internal fun LocationSnapshot?.toLowVisionRouteOriginWaypoint(): RouteWaypoint =
+internal fun LocationSnapshot?.toLowVisionRouteOriginWaypointOrNull(): RouteWaypoint? =
     this?.let { snapshot ->
         RouteWaypoint(
             name = "\uD604\uC7AC \uC704\uCE58",
             address = "\uD604\uC7AC \uC704\uCE58",
             coordinate = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude),
         )
-    } ?: LOW_VISION_DEFAULT_ORIGIN
+    }
+
+internal fun LocationSnapshot?.toLowVisionRouteOriginWaypoint(): RouteWaypoint =
+    toLowVisionRouteOriginWaypointOrNull() ?: LOW_VISION_DEFAULT_ORIGIN
 
 private val LOW_VISION_DEFAULT_ORIGIN =
     RouteWaypoint(
         name = "현재 위치",
         address = "기본 출발지",
         coordinate = GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
-    )
-
-private val LOW_VISION_DEFAULT_DESTINATION =
-    RouteWaypoint(
-        name = "부산역",
-        address = "부산 동구 중앙대로 206",
-        coordinate = GeoCoordinate(latitude = 35.1151, longitude = 129.0414),
     )
 
 private const val LOW_VISION_TRANSIT_THRESHOLD_METERS = 750

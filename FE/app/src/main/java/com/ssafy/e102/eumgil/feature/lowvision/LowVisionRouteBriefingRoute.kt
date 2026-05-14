@@ -62,12 +62,17 @@ fun LowVisionRouteBriefingRoute(
     LaunchedEffect(viewModel, selectedDestination) {
         appContainer.currentLocationManager.startLocationUpdates()
         appContainer.currentLocationManager.refreshLatestLocation()
-        val origin =
+        val originSnapshot =
             awaitLowVisionOriginSnapshot(
                 currentLocationManager = appContainer.currentLocationManager,
                 immediateSnapshot = appContainer.currentLocationManager.latestLocation.value,
-            ).toLowVisionRouteOriginWaypoint()
-        viewModel.loadBriefing(origin = origin)
+            )
+        val origin = originSnapshot.toLowVisionRouteOriginWaypointOrNull()
+        if (origin == null) {
+            viewModel.showLocationRequired()
+        } else {
+            viewModel.loadBriefing(origin = origin)
+        }
     }
 
     LaunchedEffect(uiState.steps) {

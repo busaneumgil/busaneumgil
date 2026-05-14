@@ -133,6 +133,17 @@ class LowVisionRouteBriefingViewModel(
         }
     }
 
+    fun showLocationRequired() {
+        mutableUiState.update { state ->
+            state.copy(
+                isLoading = false,
+                steps = emptyList(),
+                errorMessage =
+                    "\uD604\uC7AC \uC704\uCE58\uB97C \uD655\uC778\uD55C \uB4A4 \uACBD\uB85C \uBE0C\uB9AC\uD551\uC744 \uBD88\uB7EC\uC62C\uAC8C\uC694.",
+            )
+        }
+    }
+
     companion object {
         fun provideFactory(
             routeRepository: RouteRepository,

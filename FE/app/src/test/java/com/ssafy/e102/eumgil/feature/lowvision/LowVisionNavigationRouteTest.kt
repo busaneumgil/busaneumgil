@@ -293,6 +293,31 @@ class LowVisionNavigationRouteTest {
         }
 
     @Test
+    fun `low vision navigation request does not build a route when destination is missing`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val currentOrigin =
+                RouteWaypoint(
+                    name = "Current location",
+                    address = "Current address",
+                    coordinate = com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+                        latitude = 35.163,
+                        longitude = 129.163,
+                    ),
+                )
+            val routeRepository = OriginTrackingRouteRepository()
+
+            val request =
+                routeRepository.buildLowVisionNavigationRequest(
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    origin = currentOrigin,
+                )
+
+            assertNull(request)
+            assertNull(routeRepository.lastWalkQuery)
+        }
+
+    @Test
     fun `low vision navigation falls back to default origin when current origin route search fails`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -332,6 +357,15 @@ class LowVisionNavigationRouteTest {
     fun `low vision navigation request preserves coroutine cancellation`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "real-place-id",
+                    name = "Real Place",
+                    address = "Busan",
+                    latitude = 35.2,
+                    longitude = 129.2,
+                ),
+            )
 
             try {
                 CancellationRouteRepository()

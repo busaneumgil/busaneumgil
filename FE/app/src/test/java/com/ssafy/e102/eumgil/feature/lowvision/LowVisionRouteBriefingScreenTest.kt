@@ -52,6 +52,16 @@ class LowVisionRouteBriefingScreenTest {
     }
 
     @Test
+    fun `briefing screen shows route loading errors instead of an empty step list`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionRouteBriefingScreen.kt")
+                .readText()
+
+        assertTrue(source.contains("uiState.errorMessage?.let"))
+        assertTrue(source.contains("BriefingStatusMessage"))
+    }
+
+    @Test
     fun `briefing route configures tts at normal speech speed`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionRouteBriefingRoute.kt")
@@ -69,6 +79,17 @@ class LowVisionRouteBriefingScreenTest {
         assertTrue(source.contains("currentLocationManager.startLocationUpdates()"))
         assertTrue(source.contains("currentLocationManager.refreshLatestLocation()"))
         assertTrue(source.contains("awaitLowVisionOriginSnapshot("))
+    }
+
+    @Test
+    fun `briefing route does not replace a missing current location with the default origin`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionRouteBriefingRoute.kt")
+                .readText()
+
+        assertTrue(source.contains("toLowVisionRouteOriginWaypointOrNull()"))
+        assertTrue(source.contains("showLocationRequired()"))
+        assertFalse(source.contains(").toLowVisionRouteOriginWaypoint()"))
     }
 
     @Test

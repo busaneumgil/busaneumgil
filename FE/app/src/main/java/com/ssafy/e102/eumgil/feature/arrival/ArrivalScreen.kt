@@ -203,7 +203,7 @@ private fun ArrivalCompletionActions(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .heightIn(min = 56.dp),
             shape = RoundedCornerShape(EumRadius.medium),
         ) {
             Icon(
@@ -215,14 +215,18 @@ private fun ArrivalCompletionActions(
             Text(
                 text = stringResource(id = R.string.arrival_action_go_home),
                 style = MaterialTheme.typography.labelLarge,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            Spacer(modifier = Modifier.width(24.dp))
         }
         OutlinedButton(
             onClick = onExploreNewRouteClicked,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .heightIn(min = 56.dp),
             shape = RoundedCornerShape(EumRadius.medium),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         ) {
@@ -236,7 +240,11 @@ private fun ArrivalCompletionActions(
                 text = stringResource(id = R.string.arrival_action_explore_new_route),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            Spacer(modifier = Modifier.width(24.dp))
         }
     }
 }
@@ -548,7 +556,7 @@ private fun ArrivalEvaluationBottomSheet(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp),
+                                    .heightIn(min = 48.dp),
                             shape = RoundedCornerShape(EumRadius.medium),
                             colors =
                                 ButtonDefaults.outlinedButtonColors(
@@ -599,6 +607,7 @@ private fun ArrivalEvaluationBottomSheet(
                                         style = MaterialTheme.typography.labelLarge,
                                         color = routeSaveAccentColor,
                                         textAlign = TextAlign.Center,
+                                        maxLines = 2,
                                     )
                                 }
                                 Spacer(modifier = Modifier.weight(1f))
@@ -611,12 +620,14 @@ private fun ArrivalEvaluationBottomSheet(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp),
+                                    .heightIn(min = 48.dp),
                             shape = RoundedCornerShape(EumRadius.medium),
                         ) {
                             Text(
                                 text = stringResource(id = R.string.arrival_evaluation_submit),
-                                style = MaterialTheme.typography.labelLarge,
+                                style = MaterialTheme.typography.labelMedium,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
                             )
                         }
                     }

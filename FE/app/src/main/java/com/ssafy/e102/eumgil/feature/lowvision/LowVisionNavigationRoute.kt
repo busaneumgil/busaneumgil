@@ -16,6 +16,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
 import com.ssafy.e102.eumgil.feature.navigation.NavigationTtsStatus
@@ -24,7 +26,10 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationUiEvent
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun LowVisionNavigationRoute(
@@ -46,6 +51,7 @@ fun LowVisionNavigationRoute(
                 currentLocationManager = appContainer.currentLocationManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeRepository = appContainer.routeRepository,
+                isLowVisionMode = true,
             )
         }
     val viewModel =
@@ -56,6 +62,8 @@ fun LowVisionNavigationRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedDestination by
         appContainer.destinationSelectionRepository.selectedDestination.collectAsStateWithLifecycle()
+    val currentLocationSnapshot by
+        appContainer.currentLocationManager.latestLocation.collectAsStateWithLifecycle()
     var loadErrorMessage by remember { mutableStateOf<String?>(null) }
     val textToSpeechController =
         remember(appContext) {
@@ -100,8 +108,14 @@ fun LowVisionNavigationRoute(
 
     LaunchedEffect(selectedDestination) {
         loadErrorMessage = null
+        viewModel.setLowVisionMode(enabled = true)
+        appContainer.currentLocationManager.startLocationUpdates()
         appContainer.currentLocationManager.refreshLatestLocation()
-        val origin = appContainer.currentLocationManager.latestLocation.value.toLowVisionRouteOriginWaypoint()
+        val origin =
+            awaitLowVisionOriginSnapshot(
+                currentLocationManager = appContainer.currentLocationManager,
+                immediateSnapshot = currentLocationSnapshot,
+            ).toLowVisionRouteOriginWaypoint()
         val request =
             appContainer.routeRepository
                 .buildLowVisionNavigationRequest(
@@ -118,6 +132,8 @@ fun LowVisionNavigationRoute(
 
     DisposableEffect(textToSpeechController) {
         onDispose {
+            viewModel.setLowVisionMode(enabled = false)
+            appContainer.currentLocationManager.stopLocationUpdates()
             textToSpeechController.stop()
             textToSpeechController.shutdown()
         }
@@ -151,3 +167,13 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
         is ContextWrapper -> baseContext.findComponentActivity()
         else -> null
     }
+
+private suspend fun awaitLowVisionOriginSnapshot(
+    currentLocationManager: CurrentLocationManager,
+    immediateSnapshot: LocationSnapshot?,
+): LocationSnapshot? {
+    if (immediateSnapshot != null) return immediateSnapshot
+    return withTimeoutOrNull(1_500L) {
+        currentLocationManager.latestLocation.filterNotNull().first()
+    } ?: currentLocationManager.latestLocation.value
+}

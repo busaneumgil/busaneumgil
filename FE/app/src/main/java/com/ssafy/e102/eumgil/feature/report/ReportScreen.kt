@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,8 +33,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -42,6 +41,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusState
@@ -70,7 +73,6 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun ReportScreen(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
-    snackbarHostState: SnackbarHostState,
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
@@ -93,7 +95,6 @@ fun ReportScreen(
                 onAction = onAction,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { innerPadding ->
         // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
         // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
@@ -497,14 +498,27 @@ private fun ReportLocationStep(
         Column(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
+            val resolvingCurrent = input.isResolvingCurrentLocation
             OutlinedButton(
                 onClick = { onAction(ReportUiAction.CurrentLocationResetClicked) },
+                enabled = !resolvingCurrent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = "현재 위치로 설정")
+                if (resolvingCurrent) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+                    Text(text = "위치 확인 중...")
+                } else {
+                    Text(text = "현재 위치로 설정")
+                }
             }
             OutlinedButton(
                 onClick = { onAction(ReportUiAction.LocationPickerClicked) },
+                enabled = !resolvingCurrent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(text = "지도에서 위치 선택")
@@ -1023,6 +1037,7 @@ private fun ReportPhotoThumb(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     Box(
         modifier =
             modifier
@@ -1037,17 +1052,23 @@ private fun ReportPhotoThumb(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         ) {
-            Box(
+            // Coil SubcomposeAsyncImage로 실제 사진 썸네일 렌더링. 로딩 중·실패 시에는
+            // fallback Composable(회색 박스 + 라벨)로 graceful degradation.
+            // mock URI(`content://mock/...`)이거나 권한 없는 URI는 자연스럽게 error 상태 처리.
+            // (`AsyncImage`는 painter-only fallback만 받으므로 Composable 슬롯을 위해
+            // `SubcomposeAsyncImage` 사용.)
+            SubcomposeAsyncImage(
+                model =
+                    ImageRequest.Builder(context)
+                        .data(photo.localUri)
+                        .crossfade(true)
+                        .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "사진",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                loading = { ReportPhotoThumbFallback(label = "사진") },
+                error = { ReportPhotoThumbFallback(label = "불러오기 실패") },
+            )
         }
         Surface(
             modifier =
@@ -1075,6 +1096,25 @@ private fun ReportPhotoThumb(
                 )
             }
         }
+    }
+}
+
+/**
+ * SubcomposeAsyncImage가 로딩 중이거나 실패했을 때 표시되는 fallback. 기존 텍스트 라벨 패턴
+ * 그대로 유지하여 사용자 입장에서 카드 영역이 비어 보이지 않게 한다.
+ */
+@Composable
+private fun ReportPhotoThumbFallback(label: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

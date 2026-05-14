@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -33,6 +34,8 @@ fun LowVisionBookmarkRoute(
                 routeBookmarkRepository = appContainer.routeBookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 searchRepository = appContainer.searchRepository,
+                currentLocationManager = appContainer.currentLocationManager,
+                isLowVisionMode = true,
             )
         }
     val owner =
@@ -44,6 +47,16 @@ fun LowVisionBookmarkRoute(
             ViewModelProvider(owner, viewModelFactory)[SavedRouteViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) {
+        viewModel.setLowVisionMode(enabled = true)
+    }
+
+    DisposableEffect(viewModel) {
+        onDispose {
+            viewModel.setLowVisionMode(enabled = false)
+        }
+    }
 
     LaunchedEffect(viewModel, onNavigateToRouteSetting) {
         viewModel.uiEvent.collect { event ->

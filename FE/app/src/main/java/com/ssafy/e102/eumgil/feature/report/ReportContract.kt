@@ -207,6 +207,13 @@ sealed interface ReportUiAction {
 
     data object CurrentLocationResetClicked : ReportUiAction
 
+    /**
+     * 권한 다이얼로그 dismiss 후 Activity ON_RESUME에서 dispatch된다.
+     * Route가 lifecycle observer를 통해 한 번씩 보내며, ViewModel은 pending 중인 현재 위치
+     * 요청이 있으면 새 권한 state로 흐름을 재개·종료한다.
+     */
+    data object RefreshLocationPermission : ReportUiAction
+
     data object LocationPickerClicked : ReportUiAction
 
     data class LocationSelected(
@@ -276,10 +283,6 @@ sealed interface ReportUiEvent {
     data object ScrollToFirstError : ReportUiEvent
 
     data class AnnounceForAccessibility(
-        val message: String,
-    ) : ReportUiEvent
-
-    data class ShowSnackbar(
         val message: String,
     ) : ReportUiEvent
 

@@ -381,7 +381,7 @@ class MapViewModelTest {
                 editingTarget = RouteEditingTarget.DESTINATION,
             )
             advanceUntilIdle()
-            viewModel.onAction(MapUiAction.FacilitySetDestinationClicked)
+            viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION))
             advanceUntilIdle()
 
             val event =
@@ -424,11 +424,54 @@ class MapViewModelTest {
                 editingTarget = RouteEditingTarget.ORIGIN,
             )
             advanceUntilIdle()
-            viewModel.onAction(MapUiAction.FacilitySetDestinationClicked)
+            viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.ORIGIN))
             advanceUntilIdle()
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertNull(destinationSelectionRepository.selectedDestination.value)
+        }
+
+    @Test
+    fun `search preview destination CTA preserves existing origin`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val origin =
+                PlaceDestination(
+                    placeId = "origin-keep",
+                    name = "Existing Origin",
+                    address = "1 Origin-ro, Busan",
+                    latitude = 35.1200,
+                    longitude = 129.0400,
+                    category = PlaceCategory.OTHER,
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "destination-new",
+                    name = "New Destination",
+                    address = "2 Destination-ro, Busan",
+                    latitude = 35.1400,
+                    longitude = 129.0600,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                )
+            destinationSelectionRepository.updateSelectedOrigin(origin)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION))
+            advanceUntilIdle()
+
+            assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
         }
 
     @Test

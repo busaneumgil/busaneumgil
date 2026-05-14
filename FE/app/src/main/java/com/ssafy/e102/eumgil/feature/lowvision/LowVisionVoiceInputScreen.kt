@@ -25,8 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 
-internal fun lowVisionVoiceInputBottomNavBackgroundColor(): Color = Color.White
-
 /**
  * 시각지원 모드 음성 입력(녹음 진행) 화면.
  *

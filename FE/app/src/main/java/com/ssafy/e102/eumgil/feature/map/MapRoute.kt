@@ -31,6 +31,7 @@ fun MapRoute(
     onNavigateToSearch: () -> Unit = {},
     shouldResetForHomeEntry: Boolean = false,
     onHomeReentryResetConsumed: () -> Unit = {},
+    onFacilityDetailVisibilityChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -117,6 +118,16 @@ fun MapRoute(
     BackHandler(enabled = uiState.facilityDetailSheetState.isVisible.not()) {
         if (activity?.moveTaskToBack(true) == false) {
             activity.finish()
+        }
+    }
+
+    LaunchedEffect(uiState.facilityDetailSheetState.isVisible, onFacilityDetailVisibilityChanged) {
+        onFacilityDetailVisibilityChanged(uiState.facilityDetailSheetState.isVisible)
+    }
+
+    DisposableEffect(onFacilityDetailVisibilityChanged) {
+        onDispose {
+            onFacilityDetailVisibilityChanged(false)
         }
     }
 

@@ -3,6 +3,9 @@ package com.ssafy.e102.eumgil.feature.savedroute
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
 import com.ssafy.e102.eumgil.core.model.hasValidCoordinate
@@ -27,6 +30,11 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class SavedRouteViewModel(
     private val authSessionRepository: AuthSessionRepository? = null,
@@ -34,6 +42,8 @@ class SavedRouteViewModel(
     private val routeBookmarkRepository: RouteBookmarkRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
     private val searchRepository: SearchRepository? = null,
+    private val currentLocationManager: CurrentLocationManager? = null,
+    initialLowVisionMode: Boolean = false,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SavedRouteUiState())
     val uiState: StateFlow<SavedRouteUiState> = mutableUiState.asStateFlow()
@@ -42,16 +52,41 @@ class SavedRouteViewModel(
     val uiEvent: SharedFlow<SavedRouteUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var latestPlaces: List<SavedPlaceUiModel> = emptyList()
+    private var latestPlaceBookmarks: List<BookmarkData> = emptyList()
     private var latestRoutes: List<SavedRouteBookmarkUiModel> = emptyList()
+    private var latestLocationCoordinate: GeoCoordinate? = null
+    private var isLowVisionMode: Boolean = initialLowVisionMode
+    private var lastPublishedLowVisionPlaceLocationCoordinate: GeoCoordinate? = null
+    private var lastPublishedLowVisionPlaceIds: List<String> = emptyList()
     private var observePlacesJob: Job? = null
     private var observeRoutesJob: Job? = null
 
     init {
+        observeCurrentLocation()
         if (authSessionRepository == null) {
             observePlaceBookmarks()
             observeRouteBookmarks()
         } else {
             observeAccountScope()
+        }
+    }
+
+    fun setLowVisionMode(enabled: Boolean) {
+        if (isLowVisionMode == enabled) return
+        isLowVisionMode = enabled
+        if (enabled) {
+            currentLocationManager?.startLocationUpdates()
+            currentLocationManager?.refreshLatestLocation()
+        } else {
+            currentLocationManager?.stopLocationUpdates()
+            lastPublishedLowVisionPlaceLocationCoordinate = null
+            lastPublishedLowVisionPlaceIds = emptyList()
+        }
+        if (
+            latestPlaceBookmarks.isNotEmpty() ||
+            mutableUiState.value.placeContent.screenState != SavedBookmarkContentState.LOADING
+        ) {
+            publishPlaceBookmarks(clearErrorMessage = false)
         }
     }
 
@@ -218,6 +253,10 @@ class SavedRouteViewModel(
                     ),
             )
         }
+        if (isLowVisionMode) {
+            currentLocationManager?.startLocationUpdates()
+            currentLocationManager?.refreshLatestLocation()
+        }
         observePlacesJob =
             viewModelScope.launch {
                 bookmarkRepository.observeBookmarks()
@@ -239,22 +278,8 @@ class SavedRouteViewModel(
                         }
                     }
                     .collectLatest { bookmarks ->
-                        latestPlaces = bookmarks.map(BookmarkData::toSavedPlaceUiModel)
-                        mutableUiState.update { state ->
-                            state.copy(
-                                placeContent =
-                                    state.placeContent.copy(
-                                        screenState =
-                                            if (latestPlaces.isEmpty()) {
-                                                SavedBookmarkContentState.EMPTY
-                                            } else {
-                                                SavedBookmarkContentState.CONTENT
-                                            },
-                                        places = latestPlaces,
-                                        errorMessage = null,
-                                    ),
-                            )
-                        }
+                        latestPlaceBookmarks = bookmarks
+                        publishPlaceBookmarks(clearErrorMessage = true)
                     }
             }
     }
@@ -418,6 +443,66 @@ class SavedRouteViewModel(
         }
     }
 
+    private fun observeCurrentLocation() {
+        val manager = currentLocationManager ?: return
+        viewModelScope.launch {
+            manager.latestLocation.collectLatest { snapshot ->
+                val nextLocationCoordinate = snapshot?.toGeoCoordinate()
+                latestLocationCoordinate = nextLocationCoordinate
+                if (
+                    isLowVisionMode &&
+                    latestPlaceBookmarks.isNotEmpty() &&
+                    shouldRefreshLowVisionPlaceBookmarks(nextLocationCoordinate)
+                ) {
+                    publishPlaceBookmarks(clearErrorMessage = false)
+                }
+            }
+        }
+    }
+
+    private fun publishPlaceBookmarks(clearErrorMessage: Boolean) {
+        latestPlaces =
+            latestPlaceBookmarks.toSavedPlaceUiModels(
+                currentLocation = latestLocationCoordinate.takeIf { isLowVisionMode },
+            )
+        if (isLowVisionMode) {
+            lastPublishedLowVisionPlaceLocationCoordinate = latestLocationCoordinate
+            lastPublishedLowVisionPlaceIds = latestPlaces.map(SavedPlaceUiModel::placeId)
+        }
+        mutableUiState.update { state ->
+            val shouldClearErrorMessage =
+                clearErrorMessage &&
+                    !state.isEditMode &&
+                    !state.isApplyingEditChanges
+            state.copy(
+                placeContent =
+                    state.placeContent.copy(
+                        screenState =
+                            if (latestPlaces.isEmpty()) {
+                                SavedBookmarkContentState.EMPTY
+                            } else {
+                                SavedBookmarkContentState.CONTENT
+                            },
+                        places = latestPlaces,
+                        errorMessage = if (shouldClearErrorMessage) null else state.placeContent.errorMessage,
+                    ),
+            )
+        }
+    }
+
+    private fun shouldRefreshLowVisionPlaceBookmarks(nextLocationCoordinate: GeoCoordinate?): Boolean {
+        val currentCoordinate = nextLocationCoordinate ?: return false
+        val nextPlaceIds =
+            latestPlaceBookmarks.toSavedPlaceUiModels(
+                currentLocation = currentCoordinate,
+            ).map(SavedPlaceUiModel::placeId)
+        if (nextPlaceIds != lastPublishedLowVisionPlaceIds) {
+            val lastPublishedCoordinate = lastPublishedLowVisionPlaceLocationCoordinate ?: return true
+            return haversineDistanceMeters(lastPublishedCoordinate, currentCoordinate) >= LOW_VISION_PLACE_REORDER_MIN_DISTANCE_METERS
+        }
+        return false
+    }
+
     companion object {
         private const val BOOKMARK_REMOVE_SUCCESS_MESSAGE = "선택한 북마크를 삭제했습니다."
         private const val BOOKMARK_REMOVE_FAILURE_MESSAGE = "일부 북마크를 삭제하지 못했습니다. 다시 시도해 주세요."
@@ -436,6 +521,8 @@ class SavedRouteViewModel(
             routeBookmarkRepository: RouteBookmarkRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
             searchRepository: SearchRepository? = null,
+            currentLocationManager: CurrentLocationManager? = null,
+            isLowVisionMode: Boolean = false,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -447,6 +534,8 @@ class SavedRouteViewModel(
                             routeBookmarkRepository = routeBookmarkRepository,
                             destinationSelectionRepository = destinationSelectionRepository,
                             searchRepository = searchRepository,
+                            currentLocationManager = currentLocationManager,
+                            initialLowVisionMode = isLowVisionMode,
                         ) as T
                     }
 
@@ -455,6 +544,8 @@ class SavedRouteViewModel(
             }
     }
 }
+
+private const val LOW_VISION_PLACE_REORDER_MIN_DISTANCE_METERS = 20.0
 
 private fun BookmarkData.toSavedPlaceUiModel(): SavedPlaceUiModel =
     SavedPlaceUiModel(
@@ -522,9 +613,59 @@ private fun String?.toPlaceCategoryOrNull(): PlaceCategory? =
         runCatching { PlaceCategory.valueOf(value) }.getOrNull()
     }
 
+private fun List<BookmarkData>.toSavedPlaceUiModels(currentLocation: GeoCoordinate?): List<SavedPlaceUiModel> {
+    if (currentLocation == null) {
+        return map(BookmarkData::toSavedPlaceUiModel)
+    }
+
+    return mapIndexed { index, bookmark ->
+        SavedPlaceSortCandidate(
+            index = index,
+            bookmark = bookmark,
+            distanceMeters = haversineDistanceMeters(currentLocation, bookmark.toGeoCoordinate()),
+        )
+    }.sortedWith(
+        compareBy<SavedPlaceSortCandidate> { candidate -> candidate.distanceMeters }
+            .thenBy { candidate -> candidate.index },
+    ).map { candidate -> candidate.bookmark.toSavedPlaceUiModel() }
+}
+
 private fun Set<String>.toggled(value: String): Set<String> =
     if (value in this) {
         this - value
     } else {
         this + value
     }
+
+private data class SavedPlaceSortCandidate(
+    val index: Int,
+    val bookmark: BookmarkData,
+    val distanceMeters: Double,
+)
+
+private fun LocationSnapshot.toGeoCoordinate(): GeoCoordinate =
+    GeoCoordinate(
+        latitude = latitude,
+        longitude = longitude,
+    )
+
+private fun BookmarkData.toGeoCoordinate(): GeoCoordinate =
+    GeoCoordinate(
+        latitude = latitude,
+        longitude = longitude,
+    )
+
+private fun haversineDistanceMeters(
+    start: GeoCoordinate,
+    end: GeoCoordinate,
+): Double {
+    val earthRadiusMeters = 6_371_000.0
+    val dLat = Math.toRadians(end.latitude - start.latitude)
+    val dLng = Math.toRadians(end.longitude - start.longitude)
+    val startLatitudeRadians = Math.toRadians(start.latitude)
+    val endLatitudeRadians = Math.toRadians(end.latitude)
+    val haversine =
+        sin(dLat / 2).pow(2) +
+            cos(startLatitudeRadians) * cos(endLatitudeRadians) * sin(dLng / 2).pow(2)
+    return 2 * earthRadiusMeters * atan2(sqrt(haversine), sqrt(1 - haversine))
+}

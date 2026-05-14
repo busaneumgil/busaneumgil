@@ -3,7 +3,7 @@ package com.ssafy.e102.eumgil.feature.arrival
 import com.ssafy.e102.eumgil.R
 
 data class ArrivalUiState(
-    val isEvaluationSheetVisible: Boolean = true,
+    val isEvaluationSheetVisible: Boolean = false,
     val selectedRating: Int = 0,
     val selectedRatingLabel: ArrivalEvaluationLabel = ArrivalEvaluationLabel.Idle,
     val hasRatingSession: Boolean = false,

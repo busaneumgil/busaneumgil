@@ -34,9 +34,11 @@ class ArrivalViewModel(
     val uiEvent: SharedFlow<ArrivalUiEvent> = mutableUiEvent.asSharedFlow()
 
     init {
+        val hasRatingSession = !currentRatingSessionId.isNullOrBlank()
         mutableUiState.update { state ->
             state.copy(
-                hasRatingSession = !currentRatingSessionId.isNullOrBlank(),
+                isEvaluationSheetVisible = hasRatingSession && currentRouteBookmarkDraft == null,
+                hasRatingSession = hasRatingSession,
                 routeSaveDraft = currentRouteBookmarkDraft?.toUiState(),
                 isRouteSaveUpdating = currentRouteBookmarkDraft != null,
             )
@@ -67,6 +69,7 @@ class ArrivalViewModel(
             }.onSuccess { (isSaved, bookmarkId) ->
                 mutableUiState.update { state ->
                     state.copy(
+                        isEvaluationSheetVisible = state.hasRatingSession && !isSaved,
                         isRouteSaveSelected = isSaved,
                         routeSaveBookmarkId = bookmarkId,
                         isRouteSaveUpdating = false,
@@ -75,7 +78,10 @@ class ArrivalViewModel(
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 mutableUiState.update { state ->
-                    state.copy(isRouteSaveUpdating = false)
+                    state.copy(
+                        isEvaluationSheetVisible = state.hasRatingSession,
+                        isRouteSaveUpdating = false,
+                    )
                 }
             }
         }

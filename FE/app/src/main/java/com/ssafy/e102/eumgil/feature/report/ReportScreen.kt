@@ -33,8 +33,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -75,7 +73,6 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun ReportScreen(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
-    snackbarHostState: SnackbarHostState,
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
@@ -98,7 +95,6 @@ fun ReportScreen(
                 onAction = onAction,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { innerPadding ->
         // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
         // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.

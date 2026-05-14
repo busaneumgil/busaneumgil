@@ -6,10 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
-import com.ssafy.e102.eumgil.core.location.LocationPermissionUnavailableReason
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
+import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
@@ -70,7 +70,7 @@ class ReportViewModel(
             is ReportUiAction.LocationSelected -> selectLocation(action.location, action.source)
             is ReportUiAction.AddressTextChanged -> updateAddressText(action.address)
             ReportUiAction.LocationBlurred -> touchLocation()
-            ReportUiAction.PhotoAddClicked -> addPhotoShell()
+            ReportUiAction.PhotoAddClicked -> handlePhotoAddClicked()
             is ReportUiAction.PhotoSelected -> selectPhoto(action.photo)
             is ReportUiAction.PhotoRemovedAt -> removePhotoAt(action.index)
             ReportUiAction.PhotoBlurred -> touchPhoto()
@@ -182,7 +182,6 @@ class ReportViewModel(
                         )
                     }
                     if (isCurrentSnapshot) {
-                        emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장했습니다."))
                         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보 draft를 임시저장했습니다."))
                     }
                 }.onFailure {
@@ -194,7 +193,6 @@ class ReportViewModel(
                                 ),
                         )
                     }
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장에 실패했습니다."))
                 }
         }
     }
@@ -216,7 +214,6 @@ class ReportViewModel(
                 .onSuccess {
                     latestDraft = null
                     resetForm()
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장을 삭제했습니다."))
                 }.onFailure {
                     mutableUiState.update { state ->
                         state.copy(
@@ -226,7 +223,6 @@ class ReportViewModel(
                                 ),
                         )
                     }
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장 삭제에 실패했습니다."))
                 }
         }
     }
@@ -289,7 +285,6 @@ class ReportViewModel(
                     latestDraft = null
                     resetForm()
                     applyReportType(type)
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장을 삭제했습니다."))
                 }.onFailure {
                     mutableUiState.update { state ->
                         state.copy(
@@ -299,7 +294,6 @@ class ReportViewModel(
                                 ),
                         )
                     }
-                    emitUiEvent(ReportUiEvent.ShowSnackbar("임시저장 삭제에 실패했습니다."))
                 }
         }
     }
@@ -336,7 +330,7 @@ class ReportViewModel(
         setResolvingCurrentLocation(true, clearError = true)
 
         locationPermissionManager.refreshPermissionState()
-        when (val state = locationPermissionManager.permissionState.value) {
+        when (locationPermissionManager.permissionState.value) {
             is LocationPermissionState.Granted -> startCurrentLocationFetch()
             LocationPermissionState.Denied -> {
                 pendingCurrentLocationRequest = true
@@ -344,7 +338,7 @@ class ReportViewModel(
                 emitUiEvent(ReportUiEvent.RequestLocationPermission)
             }
             is LocationPermissionState.Unavailable -> {
-                finishCurrentLocationWithUnavailable(state.reason)
+                finishCurrentLocationWithUnavailable()
             }
         }
     }
@@ -354,7 +348,7 @@ class ReportViewModel(
         if (!pendingCurrentLocationRequest) return
 
         locationPermissionManager.refreshPermissionState()
-        when (val state = locationPermissionManager.permissionState.value) {
+        when (locationPermissionManager.permissionState.value) {
             is LocationPermissionState.Granted -> {
                 pendingCurrentLocationRequest = false
                 cancelPermissionPendingTimeout()
@@ -365,16 +359,11 @@ class ReportViewModel(
                 pendingCurrentLocationRequest = false
                 cancelPermissionPendingTimeout()
                 finishCurrentLocationWithError(ReportLocationError.PermissionDenied)
-                emitUiEvent(
-                    ReportUiEvent.ShowSnackbar(
-                        "위치 권한이 필요합니다. 권한 허용 후 다시 시도해주세요.",
-                    ),
-                )
             }
             is LocationPermissionState.Unavailable -> {
                 pendingCurrentLocationRequest = false
                 cancelPermissionPendingTimeout()
-                finishCurrentLocationWithUnavailable(state.reason)
+                finishCurrentLocationWithUnavailable()
             }
         }
     }
@@ -388,11 +377,6 @@ class ReportViewModel(
                     applyFetchedLocation(snapshot)
                 } else {
                     finishCurrentLocationWithError(ReportLocationError.CurrentLocationUnavailable)
-                    emitUiEvent(
-                        ReportUiEvent.ShowSnackbar(
-                            "현재 위치를 가져올 수 없습니다. 실외에서 다시 시도하거나 지도에서 선택해주세요.",
-                        ),
-                    )
                 }
             }
     }
@@ -444,16 +428,8 @@ class ReportViewModel(
         }
     }
 
-    private fun finishCurrentLocationWithUnavailable(reason: LocationPermissionUnavailableReason) {
-        val message =
-            when (reason) {
-                LocationPermissionUnavailableReason.LOCATION_SERVICES_DISABLED ->
-                    "위치 서비스가 꺼져있습니다. 설정에서 위치를 켜주세요."
-                LocationPermissionUnavailableReason.NO_LOCATION_FEATURE ->
-                    "이 기기는 위치 기능을 지원하지 않습니다. 지도에서 위치를 선택해주세요."
-            }
+    private fun finishCurrentLocationWithUnavailable() {
         finishCurrentLocationWithError(ReportLocationError.CurrentLocationUnavailable)
-        emitUiEvent(ReportUiEvent.ShowSnackbar(message))
     }
 
     private fun setResolvingCurrentLocation(
@@ -479,11 +455,6 @@ class ReportViewModel(
                 if (pendingCurrentLocationRequest) {
                     pendingCurrentLocationRequest = false
                     finishCurrentLocationWithError(ReportLocationError.PermissionDenied)
-                    emitUiEvent(
-                        ReportUiEvent.ShowSnackbar(
-                            "위치 권한 응답이 없습니다. 다시 시도해주세요.",
-                        ),
-                    )
                 }
             }
     }
@@ -544,15 +515,19 @@ class ReportViewModel(
         }
     }
 
-    private fun addPhotoShell() {
-        val nextIndex = mutableUiState.value.photo.values.size
-        selectPhoto(
-            ReportPhoto(
-                localUri = "content://mock/report-photo-$nextIndex.jpg",
-                mimeType = "image/jpeg",
-                sizeBytes = 1_024_000,
-            ),
-        )
+    /**
+     * "+" 사진 추가 버튼 클릭 처리.
+     *
+     * Task 3.2 (S14P31E102-682)부터는 mock URI를 생성하지 않고 Route에 picker 열기 요청을 emit한다.
+     * Route가 시스템 Photo Picker를 띄우고, 사용자 선택 결과는 `PhotoSelected` 액션으로 다시 들어온다.
+     * 첨부 cap 초과 시에는 picker 호출 자체를 건너뛴다.
+     */
+    private fun handlePhotoAddClicked() {
+        val currentCount = mutableUiState.value.photo.values.size
+        if (currentCount >= ReportFormLimits.PHOTO_MAX_COUNT) {
+            return
+        }
+        emitUiEvent(ReportUiEvent.OpenPhotoPicker)
     }
 
     private fun selectPhoto(photo: ReportPhoto) {
@@ -677,7 +652,6 @@ class ReportViewModel(
                 outboxState =
                     ReportOutboxState.Failed(reason = ReportFailureReason.LocalSaveFailed),
             )
-        emitUiEvent(ReportUiEvent.ShowSnackbar("제보 저장에 실패했습니다. 다시 시도해 주세요."))
     }
 
     private suspend fun handleServerSubmitSuccess(
@@ -702,7 +676,6 @@ class ReportViewModel(
                 submitState = ReportSubmitState.Success(reportId = serverReportId),
                 submittedAtMillis = System.currentTimeMillis(),
             )
-        emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 등록했습니다."))
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 서버에 등록되었습니다."))
         emitUiEvent(
             ReportUiEvent.NavigateToReportComplete(
@@ -733,7 +706,6 @@ class ReportViewModel(
                 submitState = ReportSubmitState.Success(reportId = null),
                 submittedAtMillis = System.currentTimeMillis(),
             )
-        emitUiEvent(ReportUiEvent.ShowSnackbar("제보를 outbox에 저장했습니다."))
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
         emitUiEvent(
             ReportUiEvent.NavigateToReportComplete(
@@ -755,7 +727,6 @@ class ReportViewModel(
                 outboxState = ReportOutboxState.Saved(outboxId = outboxId),
                 submitState = ReportSubmitState.Failed(reason = mappedReason),
             )
-        emitUiEvent(ReportUiEvent.ShowSnackbar(mappedReason.toSubmitFailureMessage()))
     }
 
     private suspend fun deleteDraftIfPresent(draftId: String?): Boolean {
@@ -863,7 +834,6 @@ private fun ReportUiState.toDraftSnapshot(): ReportDraftSnapshot =
 private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDraftData {
     val now = System.currentTimeMillis()
     val locationValue = location.value
-    val firstPhoto = photo.firstOrNull
     val draftId = draftId ?: existingDraft?.draftId.orEmpty()
 
     return ReportDraftData(
@@ -874,13 +844,26 @@ private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDr
         latitude = locationValue?.latitude,
         longitude = locationValue?.longitude,
         locationSource = location.source.name,
-        photoUri = firstPhoto?.localUri,
-        photoMimeType = firstPhoto?.mimeType,
-        photoSizeBytes = firstPhoto?.sizeBytes,
+        // Task 3.2 (S14P31E102-682)부터 첨부 사진 전체(최대 5장)를 draft에 영속화.
+        photos = photo.values.map { it.toDraftPhotoData() },
         createdAtMillis = existingDraft?.createdAtMillis ?: 0L,
         updatedAtMillis = now,
     )
 }
+
+private fun ReportPhoto.toDraftPhotoData(): ReportDraftPhotoData =
+    ReportDraftPhotoData(
+        localUri = localUri,
+        mimeType = mimeType,
+        sizeBytes = sizeBytes,
+    )
+
+private fun ReportDraftPhotoData.toReportPhoto(): ReportPhoto =
+    ReportPhoto(
+        localUri = localUri,
+        mimeType = mimeType,
+        sizeBytes = sizeBytes,
+    )
 
 private fun ReportUiState.toOutboxData(): ReportOutboxData {
     val now = System.currentTimeMillis()
@@ -916,16 +899,9 @@ private fun ReportDraftData.toUiState(): ReportUiState {
             null
         }
     val locationSource = locationSource.toReportLocationSource()
-    val photos =
-        photoUri?.takeIf(String::isNotBlank)?.let { uri ->
-            listOf(
-                ReportPhoto(
-                    localUri = uri,
-                    mimeType = photoMimeType,
-                    sizeBytes = photoSizeBytes,
-                ),
-            )
-        } ?: emptyList()
+    // Task 3.2 (S14P31E102-682)부터 photos 리스트(최대 5장)를 그대로 복원. v6 이전에 저장된
+    // 단일 사진 draft는 Repository.toData()에서 1-item list로 fallback 변환되어 전달됨.
+    val photos = this.photos.map { it.toReportPhoto() }
 
     val resumedStep =
         when {
@@ -1033,6 +1009,9 @@ private fun ReportLocationInput.validated(touched: Boolean = isTouched): ReportL
     )
 
 private fun ReportPhotoInput.withAdded(photo: ReportPhoto): ReportPhotoInput {
+    // 같은 사진(localUri 기준)을 두 번 첨부하면 무시한다.
+    // Photo Picker가 같은 사진에 대해 동일 content URI를 돌려주므로 문자열 비교로 충분.
+    if (values.any { it.localUri == photo.localUri }) return this
     val nextValues =
         if (values.size >= ReportFormLimits.PHOTO_MAX_COUNT) {
             values
@@ -1142,12 +1121,3 @@ private fun ReportSubmitFailureReason.toFailureReason(): ReportFailureReason =
         ReportSubmitFailureReason.Unknown -> ReportFailureReason.ServerSubmitFailed
     }
 
-private fun ReportFailureReason.toSubmitFailureMessage(): String =
-    when (this) {
-        ReportFailureReason.Unauthorized -> "로그인이 만료되었습니다. 다시 로그인 후 시도해 주세요."
-        ReportFailureReason.InvalidInput -> "입력값을 확인해 주세요."
-        ReportFailureReason.NetworkUnavailable -> "네트워크 연결을 확인하고 다시 시도해 주세요."
-        ReportFailureReason.ServerSubmitFailed -> "제보 등록에 실패했습니다. 잠시 후 다시 시도해 주세요."
-        ReportFailureReason.LocalSaveFailed -> "제보 저장에 실패했습니다. 다시 시도해 주세요."
-        else -> "제보 등록에 실패했습니다. 다시 시도해 주세요."
-    }

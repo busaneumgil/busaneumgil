@@ -3,17 +3,26 @@ package com.ssafy.e102.eumgil.data.repository
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RoutePolyline
+import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
+import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.core.model.RouteSummary
 import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.entity.FavoriteRouteEntity
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.CreateFavoriteRouteResponseDto
+import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRouteDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRouteListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRoutePageDto
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRoutePointDto
+import com.ssafy.e102.eumgil.data.route.RouteDto
+import com.ssafy.e102.eumgil.data.route.RouteSegmentDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -314,6 +323,111 @@ class RouteBookmarkRepositoryTest {
         }
 
     @Test
+    fun `saveRouteBookmark remains observable when auth session is missing`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState = AuthGateState(authSession = null, isProfileCompleted = false),
+                )
+            val fakeDao = FakeFavoriteRouteDao()
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    authSessionRepository = authSessionRepository,
+                    favoriteRoutesRemoteDataSource = null,
+                    accessTokenProvider = { null },
+                )
+
+            repository.saveRouteBookmark(testSaveRequest(routeId = null))
+
+            val bookmarks = repository.observeRouteBookmarks().first()
+
+            assertEquals(1, bookmarks.size)
+            assertEquals(testSaveRequest(routeId = null).routeName, bookmarks.single().routeName)
+        }
+
+    @Test
+    fun `getRouteBookmarkDetail fetches server snapshot and maps it to domain route`() =
+        runBlocking {
+            val fakeDao = FakeFavoriteRouteDao()
+            val fakeDataSource =
+                FakeFavoriteRoutesRemoteDataSource(
+                    detail =
+                        FavoriteRouteDetailDto(
+                            favRouteId = 7L,
+                            routeName = "상세 경로",
+                            startLabel = "부산시청",
+                            endLabel = "광안리해변",
+                            startPoint = FavoriteRoutePointDto(lat = 35.1798, lng = 129.0750),
+                            endPoint = FavoriteRoutePointDto(lat = 35.1532, lng = 129.1186),
+                            transportMode = "WALK",
+                            routeOption = "SHORTEST",
+                            route =
+                                RouteDto(
+                                    routeId = "bookmark-detail-route-1",
+                                    transportMode = "WALK",
+                                    routeOption = "SHORTEST",
+                                    title = "Stored Route",
+                                    distanceMeter = 7600.0,
+                                    estimatedTimeMinute = 21,
+                                    geometry =
+                                        "LINESTRING(129.0750 35.1798, 129.0960 35.1665, 129.1186 35.1532)",
+                                    segments =
+                                        listOf(
+                                            RouteSegmentDto(
+                                                sequence = 1,
+                                                geometry =
+                                                    "LINESTRING(129.0750 35.1798, 129.0960 35.1665, 129.1186 35.1532)",
+                                                distanceMeter = 7600,
+                                                guidanceMessage = "직진",
+                                            ),
+                                        ),
+                                ),
+                        ),
+                )
+
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    favoriteRoutesRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val detail = repository.getRouteBookmarkDetail("7")
+
+            assertEquals(1, fakeDataSource.getFavoriteRouteDetailCallCount)
+            assertEquals("bookmark-detail-route-1", detail?.route?.serverRouteId)
+            assertEquals(RouteOption.SHORTEST, detail?.route?.routeOption)
+            assertEquals(3, detail?.route?.geometry?.points?.size)
+        }
+
+    @Test
+    fun `getRouteBookmarkDetail falls back to local snapshot for local only bookmark`() =
+        runBlocking {
+            val fakeDao = FakeFavoriteRouteDao()
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    favoriteRoutesRemoteDataSource = null,
+                    accessTokenProvider = { null },
+                )
+
+            val saved =
+                repository.saveRouteBookmark(
+                    testSaveRequest(
+                        routeId = null,
+                        routeSnapshot = testRouteCandidateSnapshot(),
+                    ),
+                )
+
+            val detail = repository.getRouteBookmarkDetail(saved.bookmarkId)
+
+            assertEquals("local-snapshot-route-1", detail?.route?.serverRouteId)
+            assertEquals(RouteOption.SAFE, detail?.route?.routeOption)
+            assertEquals(3, detail?.route?.geometry?.points?.size)
+        }
+
+    @Test
     fun `deleteRouteBookmark calls server and removes cache when bookmarkId is numeric`() =
         runBlocking {
             val cachedEntity = testFavoriteRouteEntity(favoriteRouteId = 7L, routeName = "to-delete")
@@ -419,7 +533,10 @@ class RouteBookmarkRepositoryTest {
 private fun testSaveRequest(): RouteBookmarkSaveRequest =
     testSaveRequest(routeId = "walk_rt_safe_001")
 
-private fun testSaveRequest(routeId: String?): RouteBookmarkSaveRequest =
+private fun testSaveRequest(
+    routeId: String?,
+    routeSnapshot: RouteCandidate? = null,
+): RouteBookmarkSaveRequest =
     RouteBookmarkSaveRequest(
         routeId = routeId,
         routeName = "집에서 병원",
@@ -428,6 +545,62 @@ private fun testSaveRequest(routeId: String?): RouteBookmarkSaveRequest =
         startPoint = GeoCoordinate(latitude = 35.1686, longitude = 129.0576),
         endPoint = GeoCoordinate(latitude = 35.1152, longitude = 129.0422),
         routeOption = RouteOption.SAFE,
+        routeSnapshot = routeSnapshot,
+    )
+
+private fun testRouteCandidateSnapshot(): RouteCandidate =
+    RouteCandidate(
+        routeId = "local-snapshot-route-1",
+        serverRouteId = "local-snapshot-route-1",
+        routeOption = RouteOption.SAFE,
+        title = "Local Snapshot Route",
+        summary =
+            RouteSummary(
+                distanceMeters = 3_250,
+                estimatedTimeMinutes = 14,
+                riskLevel = RouteRiskLevel.LOW,
+            ),
+        geometry =
+            RoutePolyline(
+                points =
+                    listOf(
+                        GeoCoordinate(latitude = 35.1686, longitude = 129.0576),
+                        GeoCoordinate(latitude = 35.1420, longitude = 129.0499),
+                        GeoCoordinate(latitude = 35.1152, longitude = 129.0422),
+                    ),
+            ),
+        preview =
+            RoutePreviewModel(
+                polyline =
+                    RoutePolyline(
+                        points =
+                            listOf(
+                                GeoCoordinate(latitude = 35.1686, longitude = 129.0576),
+                                GeoCoordinate(latitude = 35.1420, longitude = 129.0499),
+                                GeoCoordinate(latitude = 35.1152, longitude = 129.0422),
+                            ),
+                    ),
+                segmentCount = 1,
+                renderableSegmentCount = 1,
+            ),
+        segments =
+            listOf(
+                RouteSegment(
+                    sequence = 1,
+                    polyline =
+                        RoutePolyline(
+                            points =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.1686, longitude = 129.0576),
+                                    GeoCoordinate(latitude = 35.1420, longitude = 129.0499),
+                                    GeoCoordinate(latitude = 35.1152, longitude = 129.0422),
+                                ),
+                        ),
+                    distanceMeters = 3_250,
+                    riskLevel = RouteRiskLevel.LOW,
+                    guidanceMessage = "Continue on the suggested route.",
+                ),
+            ),
     )
 
 private fun testFavoriteRouteEntity(
@@ -514,11 +687,14 @@ private fun List<FavoriteRouteEntity>.upsert(entity: FavoriteRouteEntity): List<
 private class FakeFavoriteRoutesRemoteDataSource(
     private val serverContent: List<FavoriteRouteListItemDto> = emptyList(),
     private val createdId: Long = 1L,
+    private val detail: FavoriteRouteDetailDto? = null,
     private val throwOnGet: Boolean = false,
     private val throwOnDelete: Boolean = false,
 ) : FavoriteRoutesRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "http://test.invalid")) {
     val deletedFavRouteIds = mutableListOf<Long>()
     var getFavoriteRoutesCallCount: Int = 0
+        private set
+    var getFavoriteRouteDetailCallCount: Int = 0
         private set
     var createCallCount: Int = 0
         private set
@@ -539,6 +715,14 @@ private class FakeFavoriteRoutesRemoteDataSource(
             nextCursor = null,
             hasNext = false,
         )
+    }
+
+    override suspend fun getFavoriteRouteDetail(
+        accessToken: String,
+        favRouteId: Long,
+    ): FavoriteRouteDetailDto {
+        getFavoriteRouteDetailCallCount++
+        return requireNotNull(detail) { "detail must be set for this test" }
     }
 
     override suspend fun createFavoriteRoute(

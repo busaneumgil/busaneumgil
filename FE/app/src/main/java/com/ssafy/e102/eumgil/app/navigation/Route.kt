@@ -282,11 +282,21 @@ sealed interface RouteSettingRoute : AppRoute {
 
     data object Detail : RouteSettingRoute {
         const val ARG_ROUTE_OPTION: String = "routeOption"
+        const val ARG_FROM_NAVIGATION: String = "fromNavigation"
 
-        override val route: String = "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}"
+        override val route: String =
+            "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}?$ARG_FROM_NAVIGATION={$ARG_FROM_NAVIGATION}"
 
-        fun createRoute(routeOption: RouteOption): String =
-            "$ROUTE_SETTING_BASE_ROUTE/detail/${routeOption.name.navArgEncode()}"
+        fun createRoute(
+            routeOption: RouteOption,
+            fromNavigation: Boolean = false,
+        ): String =
+            buildString {
+                append("$ROUTE_SETTING_BASE_ROUTE/detail/${routeOption.name.navArgEncode()}")
+                if (fromNavigation) {
+                    append("?$ARG_FROM_NAVIGATION=true")
+                }
+            }
     }
 }
 

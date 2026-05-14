@@ -19,6 +19,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.app.navigation.rememberNavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.core.external.createDuribalDialIntent
 import com.ssafy.e102.eumgil.core.external.requestLowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
@@ -138,19 +139,33 @@ fun RouteSettingEntryRoute(
 @Composable
 fun RouteDetailEntryRoute(
     routeOption: RouteOption,
+    hydrateFromNavigation: Boolean = false,
     onNavigateBack: () -> Unit,
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val viewModel = rememberRouteSettingViewModel()
+    val navigationViewModel = if (hydrateFromNavigation) rememberNavigationGuidanceViewModel() else null
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel, routeOption) {
-        viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+    LaunchedEffect(viewModel, navigationViewModel, routeOption, hydrateFromNavigation) {
+        val detailRequest =
+            if (hydrateFromNavigation) {
+                navigationViewModel
+                    ?.currentRouteDetailRequest()
+                    ?.takeIf { request -> request.selectedRoute.routeOption == routeOption }
+            } else {
+                null
+            }
+        if (detailRequest != null) {
+            viewModel.bindRouteDetailRequest(detailRequest)
+        } else {
+            viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+        }
     }
 
     LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {

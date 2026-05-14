@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
-import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkDetail
+import com.ssafy.e102.eumgil.core.model.RouteSearchSource
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.core.model.hasValidCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
@@ -19,6 +21,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.observeAccountScopeKey
+import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -115,6 +118,7 @@ class SavedRouteViewModel(
                 )
             is SavedRouteUiAction.PlaceDeleteClicked -> togglePlaceRemoval(action.placeId)
             is SavedRouteUiAction.PlaceRemoveClicked -> removePlaceBookmark(action.placeId)
+            is SavedRouteUiAction.RouteClicked -> openRouteBookmarkDetail(action.bookmarkId)
             is SavedRouteUiAction.RouteGuideClicked -> handoffRouteBookmark(action.bookmarkId)
             is SavedRouteUiAction.RouteDeleteClicked -> toggleRouteRemoval(action.bookmarkId)
             is SavedRouteUiAction.RouteRemoveClicked -> removeRouteBookmark(action.bookmarkId)
@@ -406,6 +410,39 @@ class SavedRouteViewModel(
     private fun handoffRouteBookmark(bookmarkId: String) {
         val routeBookmark =
             latestRoutes.firstOrNull { savedRouteBookmark -> savedRouteBookmark.bookmarkId == bookmarkId } ?: return
+        viewModelScope.launch {
+            val directNavigationRequest = fetchRouteBookmarkNavigationRequest(bookmarkId)
+
+            if (directNavigationRequest != null) {
+                mutableUiEvent.emit(SavedRouteUiEvent.NavigateToNavigation(directNavigationRequest))
+                return@launch
+            }
+
+            fallbackRouteBookmarkHandoff(routeBookmark)
+        }
+    }
+
+    private fun openRouteBookmarkDetail(bookmarkId: String) {
+        val routeBookmark =
+            latestRoutes.firstOrNull { savedRouteBookmark -> savedRouteBookmark.bookmarkId == bookmarkId } ?: return
+        viewModelScope.launch {
+            val detailRequest = fetchRouteBookmarkNavigationRequest(bookmarkId)
+
+            if (detailRequest != null) {
+                mutableUiEvent.emit(SavedRouteUiEvent.NavigateToRouteDetail(detailRequest))
+                return@launch
+            }
+
+            fallbackRouteBookmarkHandoff(routeBookmark)
+        }
+    }
+
+    private suspend fun fetchRouteBookmarkNavigationRequest(bookmarkId: String): RouteNavigationRequest? =
+        runCatching {
+            routeBookmarkRepository.getRouteBookmarkDetail(bookmarkId)?.toRouteNavigationRequestOrNull()
+        }.getOrNull()
+
+    private suspend fun fallbackRouteBookmarkHandoff(routeBookmark: SavedRouteBookmarkUiModel) {
         val origin = routeBookmark.toOriginPlaceDestination()
         val destination = routeBookmark.toDestinationPlaceDestination()
         if (!origin.hasValidCoordinate() || !destination.hasValidCoordinate()) {
@@ -417,13 +454,13 @@ class SavedRouteViewModel(
                         ),
                 )
             }
-            emitUiEvent(SavedRouteUiEvent.ShowSnackbar(INVALID_ROUTE_COORDINATE_MESSAGE))
+            mutableUiEvent.emit(SavedRouteUiEvent.ShowSnackbar(INVALID_ROUTE_COORDINATE_MESSAGE))
             return
         }
 
         destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
         destinationSelectionRepository.swapSelections(origin = origin, destination = destination)
-        emitUiEvent(
+        mutableUiEvent.emit(
             SavedRouteUiEvent.NavigateToRouteSetting(
                 initialRouteOption = routeBookmark.routeOption,
             ),
@@ -433,13 +470,6 @@ class SavedRouteViewModel(
     private fun emitUiEvent(event: SavedRouteUiEvent) {
         viewModelScope.launch {
             mutableUiEvent.emit(event)
-        }
-    }
-
-    private suspend fun persistRecentDestination(destination: PlaceDestination) {
-        val repository = searchRepository ?: return
-        runCatching {
-            repository.saveRecentDestination(destination.toRecentDestination())
         }
     }
 
@@ -582,16 +612,6 @@ private fun SavedPlaceUiModel.toPlaceDestination(): PlaceDestination =
         category = category.toPlaceCategoryOrNull(),
     )
 
-private fun PlaceDestination.toRecentDestination(): RecentDestination =
-    RecentDestination(
-        placeId = placeId,
-        name = name,
-        address = address,
-        latitude = latitude,
-        longitude = longitude,
-        category = category,
-    )
-
 private fun SavedRouteBookmarkUiModel.toOriginPlaceDestination(): PlaceDestination =
     PlaceDestination(
         placeId = "route-bookmark-origin:$bookmarkId",
@@ -607,6 +627,32 @@ private fun SavedRouteBookmarkUiModel.toDestinationPlaceDestination(): PlaceDest
         latitude = endPoint.latitude,
         longitude = endPoint.longitude,
     )
+
+private fun RouteBookmarkDetail.toRouteNavigationRequestOrNull(): RouteNavigationRequest? {
+    val selectedRoute = route ?: return null
+    if (!startPoint.isValidRouteCoordinate() || !endPoint.isValidRouteCoordinate()) return null
+
+    return RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = startLabel,
+                coordinate = startPoint,
+            ),
+        destination =
+            RouteWaypoint(
+                name = endLabel,
+                coordinate = endPoint,
+            ),
+        selectedRoute = selectedRoute,
+        source = RouteSearchSource.serverApi(label = routeName.ifBlank { "저장된 경로" }),
+    )
+}
+
+private fun GeoCoordinate.isValidRouteCoordinate(): Boolean =
+    latitude.isFinite() &&
+        longitude.isFinite() &&
+        latitude in -90.0..90.0 &&
+        longitude in -180.0..180.0
 
 private fun String?.toPlaceCategoryOrNull(): PlaceCategory? =
     this?.let { value ->

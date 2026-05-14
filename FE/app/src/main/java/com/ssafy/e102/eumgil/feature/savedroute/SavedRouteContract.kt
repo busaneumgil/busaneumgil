@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.savedroute
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 
 data class SavedRouteUiState(
     val selectedTab: SavedBookmarkTab = SavedBookmarkTab.PLACE,
@@ -99,6 +100,10 @@ sealed interface SavedRouteUiAction {
         val bookmarkId: String,
     ) : SavedRouteUiAction
 
+    data class RouteClicked(
+        val bookmarkId: String,
+    ) : SavedRouteUiAction
+
     data class RouteDeleteClicked(
         val bookmarkId: String,
     ) : SavedRouteUiAction
@@ -110,6 +115,14 @@ sealed interface SavedRouteUiAction {
 
 sealed interface SavedRouteUiEvent {
     data object NavigateToMap : SavedRouteUiEvent
+
+    data class NavigateToNavigation(
+        val request: RouteNavigationRequest,
+    ) : SavedRouteUiEvent
+
+    data class NavigateToRouteDetail(
+        val request: RouteNavigationRequest,
+    ) : SavedRouteUiEvent
 
     data class NavigateToRouteSetting(
         val initialRouteOption: RouteOption? = null,

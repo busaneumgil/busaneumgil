@@ -1,4 +1,4 @@
-﻿package com.ssafy.e102.eumgil.feature.savedroute
+package com.ssafy.e102.eumgil.feature.savedroute
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -422,7 +422,14 @@ private fun SavedRouteBookmarkContent(
                         isEditMode = isEditMode,
                         isPendingRemoval = routeBookmark.bookmarkId in pendingRemovalIds,
                         isActionEnabled = isActionEnabled,
-
+                        onRouteClick =
+                            if (isEditMode || !isActionEnabled) {
+                                null
+                            } else {
+                                {
+                                    onAction(SavedRouteUiAction.RouteClicked(bookmarkId = routeBookmark.bookmarkId))
+                                }
+                            },
                         onPrimaryActionClick = {
                             onAction(
                                 if (isEditMode) {
@@ -563,7 +570,7 @@ private fun NoRippleSavedRouteNavigationButton(
     contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
-
+    val interactionSource = remember { MutableInteractionSource() }
     val containerColor =
         when {
             !enabled && isOutlined -> MaterialTheme.colorScheme.surface
@@ -640,7 +647,7 @@ private fun SavedPlaceListItem(
     onPlaceClick: (() -> Unit)?,
     onPrimaryActionClick: () -> Unit,
 ) {
-
+    val interactionSource = remember { MutableInteractionSource() }
     val accessibilityDescription =
         stringResource(
             id = R.string.saved_route_place_a11y_description,
@@ -744,10 +751,10 @@ private fun SavedRouteBookmarkListItem(
     isEditMode: Boolean,
     isPendingRemoval: Boolean,
     isActionEnabled: Boolean,
-
+    onRouteClick: (() -> Unit)?,
     onPrimaryActionClick: () -> Unit,
 ) {
-
+    val interactionSource = remember { MutableInteractionSource() }
     val accessibilityDescription =
         stringResource(
             id = R.string.saved_route_route_a11y_description,
@@ -786,6 +793,18 @@ private fun SavedRouteBookmarkListItem(
                 modifier =
                     Modifier
                         .weight(1f)
+                        .then(
+                            if (onRouteClick != null) {
+                                Modifier.clickable(
+                                    interactionSource = interactionSource,
+                                    indication = null,
+                                    role = Role.Button,
+                                    onClick = onRouteClick,
+                                )
+                            } else {
+                                Modifier
+                            },
+                        )
                         .semantics {
                             contentDescription = accessibilityDescription
                         },
@@ -1052,4 +1071,3 @@ private const val SavedBookmarkWaypointValueMaxLines = 1
 private val SavedBookmarkPlaceNameLineHeight = 20.sp
 private val SavedBookmarkWaypointValueLineHeight = 18.sp
 private val SavedBookmarkCategoryIconSize = 20.dp
-

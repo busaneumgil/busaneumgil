@@ -625,7 +625,7 @@ private fun ArrivalEvaluationBottomSheet(
                         ) {
                             Text(
                                 text = stringResource(id = R.string.arrival_evaluation_submit),
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelLarge,
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
                             )

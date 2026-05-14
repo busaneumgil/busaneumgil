@@ -136,7 +136,14 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 navController = navController,
                 backStackEntry = backStackEntry,
             )
+            val navigationViewModel = rememberNavigationGuidanceViewModel()
             LowVisionBookmarkRoute(
+                onNavigateToNavigation = { request ->
+                    navigationViewModel.bindNavigationRequest(request)
+                    navController.navigate(LowVisionRoute.Guidance.route) {
+                        launchSingleTop = true
+                    }
+                },
                 onNavigateToRouteSetting = {
                     navController.navigate(LowVisionRoute.Guidance.route)
                 },

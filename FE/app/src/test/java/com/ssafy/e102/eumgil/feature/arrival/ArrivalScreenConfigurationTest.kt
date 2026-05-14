@@ -173,6 +173,19 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
+    fun `arrival evaluation action buttons keep the same label typography`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival evaluation submit CTA should use the same labelLarge typography as the route save CTA so the two actions read as a matched button group.",
+            source.contains(
+                "text = stringResource(id = R.string.arrival_evaluation_submit),\n                                style = MaterialTheme.typography.labelLarge,",
+            ),
+        )
+    }
+
+    @Test
     fun `arrival completion flow removes snackbar feedback entirely`() {
         val screenSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()

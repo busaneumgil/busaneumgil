@@ -78,9 +78,23 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     }
 
     composable(route = TopLevelRoute.SavedRoute.route) {
+        val navigationViewModel = rememberNavigationGuidanceViewModel()
         SavedRouteRoute(
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
+            },
+            onNavigateToNavigation = { request ->
+                navigationViewModel.bindNavigationRequest(request)
+                navController.navigate(NavigationRoute.Guidance.route)
+            },
+            onNavigateToRouteDetail = { request ->
+                navigationViewModel.bindNavigationRequest(request)
+                navController.navigate(
+                    RouteSettingRoute.Detail.createRoute(
+                        routeOption = request.selectedRoute.routeOption,
+                        fromNavigation = true,
+                    ),
+                )
             },
             onNavigateToRouteSetting = { routeOption ->
                 navController.navigateToRouteSettingPermissionGate(initialRouteOption = routeOption)
@@ -404,6 +418,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navArgument(RouteSettingRoute.Detail.ARG_ROUTE_OPTION) {
                     type = NavType.StringType
                 },
+                navArgument(RouteSettingRoute.Detail.ARG_FROM_NAVIGATION) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
             ),
     ) { backStackEntry ->
         val routeOption =
@@ -411,17 +429,20 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 ?.getString(RouteSettingRoute.Detail.ARG_ROUTE_OPTION)
                 ?.toRouteOptionOrDefault()
                 ?: RouteOption.SAFE
+        val fromNavigation =
+            backStackEntry.arguments?.getBoolean(RouteSettingRoute.Detail.ARG_FROM_NAVIGATION) ?: false
         val navigationViewModel = rememberNavigationGuidanceViewModel()
 
         RouteDetailEntryRoute(
             routeOption = routeOption,
+            hydrateFromNavigation = fromNavigation,
             onNavigateBack = {
                 navController.popBackStack()
             },
             onStartNavigation = { request ->
                 navigationViewModel.bindNavigationRequest(request)
                 navController.navigate(NavigationRoute.Guidance.route) {
-                    popUpTo(RouteSettingRoute.Detail.createRoute(routeOption)) {
+                    popUpTo(RouteSettingRoute.Detail.createRoute(routeOption, fromNavigation = fromNavigation)) {
                         inclusive = true
                     }
                 }
@@ -551,7 +572,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.popBackStack()
             },
             onNavigateToRouteDetail = { routeOption ->
-                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
+                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption, fromNavigation = true))
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
@@ -722,7 +743,7 @@ private fun String?.toRouteEditingTargetOrDefault(): RouteEditingTarget =
         ?: RouteEditingTarget.DESTINATION
 
 @androidx.compose.runtime.Composable
-private fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {
+internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {
     val context = LocalContext.current
     val activity = remember(context) { context.findComponentActivity() }
     val currentLocationManager = remember(context) {

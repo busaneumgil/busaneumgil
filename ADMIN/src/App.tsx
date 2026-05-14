@@ -340,8 +340,6 @@ function AdminApp() {
     setSelectedSegment(null);
     setActiveRoadEditJobId(null);
     queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
-    queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
-    queryClient.invalidateQueries({ queryKey: ["admin-area-assignments"] });
   }, [activeRoadEditJob, clearDraftForAssignment]);
 
   const filteredDongs = useMemo(() => {

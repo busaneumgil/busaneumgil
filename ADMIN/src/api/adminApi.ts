@@ -96,8 +96,12 @@ async function requestAdminJson<T>(path: string, accessToken: string, init?: Req
   if (!normalizedToken) {
     throw new Error("Access Token을 입력하세요.");
   }
+  let requestToken = normalizedToken;
+  if (shouldRefreshAdminAccessToken(normalizedToken)) {
+    requestToken = await reissueAdminAccessToken();
+  }
   try {
-    return await requestAdminJsonWithToken<T>(path, normalizedToken, init);
+    return await requestAdminJsonWithToken<T>(path, requestToken, init);
   } catch (error) {
     if (!(error instanceof ApiRequestError) || error.status !== 401) {
       throw error;
@@ -113,6 +117,24 @@ async function requestAdminJson<T>(path: string, accessToken: string, init?: Req
 function isRetryableAdminRequest(init?: RequestInit) {
   const method = (init?.method || "GET").toUpperCase();
   return method === "GET" || method === "HEAD";
+}
+
+function shouldRefreshAdminAccessToken(accessToken: string) {
+  const expiresAt = parseJwtExpiresAt(accessToken);
+  return expiresAt !== null && expiresAt <= Date.now() + 30_000;
+}
+
+function parseJwtExpiresAt(accessToken: string) {
+  const payload = accessToken.split(".")[1];
+  if (!payload || typeof window === "undefined") return null;
+  try {
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedBase64 = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const decoded = JSON.parse(window.atob(paddedBase64)) as { exp?: unknown };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
 }
 
 async function requestAdminJsonWithToken<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {

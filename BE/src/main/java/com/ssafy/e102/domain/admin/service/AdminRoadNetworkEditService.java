@@ -26,6 +26,7 @@ public class AdminRoadNetworkEditService {
 
 	private static final double SNAP_DISTANCE_METER = 1.0;
 	private static final double CROSS_WALK_PROJECTION_DISTANCE_METER = 1.5;
+	private static final double SOURCE_FEATURE_BBOX_EXPAND_DEGREE = 0.0005;
 	private static final int SRID = 4326;
 
 	private final JdbcTemplate jdbcTemplate;
@@ -707,6 +708,7 @@ public class AdminRoadNetworkEditService {
 					from admin_edit_split_segments ss
 					join source_features sf
 						on sf.feature_type in ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
+						and sf.geom && ST_Expand(ss.geom, %s)
 						and ST_DWithin(
 							ST_Transform(sf.geom, 5179),
 							ST_Transform(ss.geom, 5179),
@@ -739,7 +741,7 @@ public class AdminRoadNetworkEditService {
 					state,
 					value_number
 				from deduped
-				""");
+				""".formatted(SOURCE_FEATURE_BBOX_EXPAND_DEGREE));
 	}
 
 	private void insertBulkRoadSegments() {
@@ -821,6 +823,7 @@ public class AdminRoadNetworkEditService {
 					from admin_edit_new_segments ns
 					join source_features sf
 						on sf.feature_type in ('CROSSWALK', 'AUDIO_SIGNAL', 'BRAILLE_BLOCK', 'STAIRS')
+						and sf.geom && ST_Expand(ns.geom, %s)
 						and ST_DWithin(
 							ST_Transform(sf.geom, 5179),
 							ST_Transform(ns.geom, 5179),
@@ -853,7 +856,7 @@ public class AdminRoadNetworkEditService {
 					state,
 					value_number
 				from deduped
-				""");
+				""".formatted(SOURCE_FEATURE_BBOX_EXPAND_DEGREE));
 	}
 
 	private int updateSegmentAttributesForNewSegments() {
@@ -867,7 +870,8 @@ public class AdminRoadNetworkEditService {
 						sf.value_number
 					from admin_edit_new_segments ns
 					join source_features sf
-						on ST_DWithin(
+						on sf.geom && ST_Expand(ns.geom, %s)
+						and ST_DWithin(
 							ST_Transform(sf.geom, 5179),
 							ST_Transform(ns.geom, 5179),
 							source_match_threshold_meter(sf.source_file)
@@ -934,7 +938,7 @@ public class AdminRoadNetworkEditService {
 				from updates
 				where rs.edge_id = updates.edge_id
 					and updates.match_count > 0
-				""");
+				""".formatted(SOURCE_FEATURE_BBOX_EXPAND_DEGREE));
 	}
 
 	private int removeOrphanNodes(Set<Long> candidateNodeIds) {

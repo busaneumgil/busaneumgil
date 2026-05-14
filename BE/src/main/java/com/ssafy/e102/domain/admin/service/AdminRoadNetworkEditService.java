@@ -508,7 +508,7 @@ public class AdminRoadNetworkEditService {
 						ST_Distance(rs.geom::geography, cp.point_geom::geography) as distance_meter
 					from crosswalk_created_points cp
 					join road_segments rs
-						on rs.segment_type in ('SIDE_LINE', 'SIDE_WALK')
+						on rs.segment_type = 'SIDE_LINE'
 						and ST_DWithin(
 							rs.geom::geography,
 							cp.point_geom::geography,
@@ -1020,7 +1020,7 @@ public class AdminRoadNetworkEditService {
 						ST_Distance(rs.geom::geography, input_point.geom::geography) as distance_meter
 					from road_segments rs
 					cross join input_point
-					where rs.segment_type in ('SIDE_LINE', 'SIDE_WALK')
+					where rs.segment_type = 'SIDE_LINE'
 						and ST_DWithin(
 							rs.geom::geography,
 							input_point.geom::geography,

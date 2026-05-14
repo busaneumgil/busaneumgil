@@ -429,7 +429,7 @@ export function SegmentMap({
       return true;
     }
     const segmentType = feature.properties.segmentType;
-    if (segmentType === "CROSS_WALK" || segmentType === "SIDE_WALK") {
+    if (segmentType === "CROSS_WALK") {
       return roadSegmentLayers.crossWalk;
     }
     if (segmentType === "TRANSITION_CONNECTOR") {
@@ -725,7 +725,7 @@ export function SegmentMap({
     const candidates = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)
       .filter((feature) => {
         const segmentType = feature.properties.segmentType;
-        return segmentType === "SIDE_LINE" || segmentType === "SIDE_WALK";
+        return segmentType === "SIDE_LINE";
       });
     const nearest = nearestPointOnSegments(coord, candidates);
     if (!nearest || nearest.distanceM > 1.5) {
@@ -775,7 +775,7 @@ export function SegmentMap({
           />
           <LegendItem
             color="#2563eb"
-            label="CROSS_WALK / SIDE_WALK"
+            label="CROSS_WALK"
             active={roadSegmentLayers.crossWalk}
             onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, crossWalk: !layers.crossWalk }))}
           />
@@ -1029,7 +1029,7 @@ function createPolyline(
   if (!window.kakao?.maps) return null;
 
   const path = coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng));
-  const isCrossWalk = segmentType === "CROSS_WALK" || segmentType === "SIDE_WALK";
+  const isCrossWalk = segmentType === "CROSS_WALK";
   const strokeColor = isCrossWalk ? "#2563eb" : segmentType === "TRANSITION_CONNECTOR" ? "#64748b" : "#c9342f";
   const strokeWeight = isCrossWalk ? 5 : 4;
   const opacity = options.opacity ?? (segmentType === "TRANSITION_CONNECTOR" ? 0.45 : 0.88);

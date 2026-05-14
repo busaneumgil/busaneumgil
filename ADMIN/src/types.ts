@@ -77,7 +77,7 @@ export interface SegmentFeature {
     edgeId: number | string;
     fromNodeId?: number | string;
     toNodeId?: number | string;
-    segmentType?: EditableSegmentType | "SIDE_WALK" | "TRANSITION_CONNECTOR" | string;
+    segmentType?: EditableSegmentType | "TRANSITION_CONNECTOR" | string;
     lengthMeter?: number | string;
     walkAccess?: string | null;
     brailleBlockState?: string | null;

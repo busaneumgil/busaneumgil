@@ -44,7 +44,7 @@ private fun recenterButtonStyle(
 
         MapRecenterButtonState.LOADING ->
             EumMapFloatingActionButtonState(
-                iconRes = R.drawable.ic_status_hourglass,
+                iconRes = R.drawable.ic_map_current_location_loading,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 contentDescription = stringResource(id = R.string.map_location_action_loading),
                 enabled = false,
@@ -52,7 +52,7 @@ private fun recenterButtonStyle(
 
         MapRecenterButtonState.RETRY ->
             EumMapFloatingActionButtonState(
-                iconRes = R.drawable.ic_status_refresh,
+                iconRes = R.drawable.ic_map_current_location_retry,
                 tint = MaterialTheme.colorScheme.onSurface,
                 contentDescription = stringResource(id = R.string.map_location_action_retry),
                 enabled = true,

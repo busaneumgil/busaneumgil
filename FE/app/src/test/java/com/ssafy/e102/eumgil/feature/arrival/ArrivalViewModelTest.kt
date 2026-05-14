@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.arrival
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkDetail
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -21,6 +22,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -35,6 +38,17 @@ class ArrivalViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun `home click emits map navigation event`() =
+        runTest {
+            val viewModel = createViewModel()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+
+            viewModel.onAction(ArrivalUiAction.HomeClicked)
+
+            assertEquals(listOf(ArrivalUiEvent.NavigateToMap), eventsDeferred.await())
+        }
+
+    @Test
     fun `rating session enables evaluation submit after selection`() {
         val viewModel = createViewModel()
 
@@ -47,6 +61,29 @@ class ArrivalViewModelTest {
         assertEquals(ArrivalEvaluationLabel.Satisfied, viewModel.uiState.value.selectedRatingLabel)
         assertTrue(viewModel.uiState.value.isEvaluationSubmitEnabled)
     }
+
+    @Test
+    fun `bookmarked route hides evaluation sheet after initial sync`() =
+        runTest {
+            val bookmarkedRoute = testRouteBookmark(testRouteBookmarkDraft())
+            val routeBookmarkRepository = FakeRouteBookmarkRepository(savedBookmarks = listOf(bookmarkedRoute))
+
+            val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isRouteSaveSelected)
+            assertFalse(viewModel.uiState.value.isEvaluationSheetVisible)
+        }
+
+    @Test
+    fun `unbookmarked route shows evaluation sheet after initial sync`() =
+        runTest {
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isRouteSaveSelected)
+            assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
+        }
 
     @Test
     fun `submit evaluation calls rating api and hides sheet on success`() =
@@ -87,7 +124,7 @@ class ArrivalViewModelTest {
         }
 
     @Test
-    fun `save route click stores route bookmark immediately without dialog confirmation`() =
+    fun `save route click stores route bookmark immediately and keeps sheet open`() =
         runTest {
             val routeBookmarkRepository = FakeRouteBookmarkRepository()
             val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
@@ -99,9 +136,32 @@ class ArrivalViewModelTest {
 
             assertEquals(testRouteBookmarkDraft().defaultRouteName, routeBookmarkRepository.savedBookmarks.value.single().routeName)
             assertTrue(viewModel.uiState.value.isRouteSaveSelected)
+            assertEquals("route-bookmark:test", viewModel.uiState.value.routeSaveBookmarkId)
+            assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
+            assertTrue(viewModel.uiState.value.isRouteSaveEnabled)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
             assertTrue(eventDeferred.isActive)
             eventDeferred.cancel()
+        }
+
+    @Test
+    fun `save route click toggles saved route off on second tap`() =
+        runTest {
+            val routeBookmarkRepository = FakeRouteBookmarkRepository()
+            val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+            advanceUntilIdle()
+            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+            advanceUntilIdle()
+
+            assertTrue(routeBookmarkRepository.deletedBookmarkIds.contains("route-bookmark:test"))
+            assertTrue(routeBookmarkRepository.savedBookmarks.value.isEmpty())
+            assertFalse(viewModel.uiState.value.isRouteSaveSelected)
+            assertEquals(null, viewModel.uiState.value.routeSaveBookmarkId)
+            assertTrue(viewModel.uiState.value.isRouteSaveEnabled)
+            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
         }
 }
 
@@ -124,6 +184,7 @@ private class FakeRouteBookmarkRepository(
 ) : RouteBookmarkRepository {
     val savedBookmarks = MutableStateFlow(savedBookmarks)
     val savedRequests = mutableListOf<RouteBookmarkSaveRequest>()
+    val deletedBookmarkIds = mutableListOf<String>()
 
     override fun observeRouteBookmarks(): Flow<List<RouteBookmark>> = savedBookmarks
 
@@ -134,6 +195,8 @@ private class FakeRouteBookmarkRepository(
                 bookmark.routeOption == draft.routeOption
         }
 
+    override suspend fun getRouteBookmarkDetail(bookmarkId: String): RouteBookmarkDetail? = null
+
     override suspend fun saveRouteBookmark(request: RouteBookmarkSaveRequest): RouteBookmark {
         saveFailure?.let { throw it }
         savedRequests.add(request)
@@ -142,7 +205,10 @@ private class FakeRouteBookmarkRepository(
         return savedBookmark
     }
 
-    override suspend fun deleteRouteBookmark(bookmarkId: String) = Unit
+    override suspend fun deleteRouteBookmark(bookmarkId: String) {
+        deletedBookmarkIds += bookmarkId
+        savedBookmarks.value = savedBookmarks.value.filterNot { bookmark -> bookmark.bookmarkId == bookmarkId }
+    }
 }
 
 private class FakeArrivalRouteRepository(
@@ -193,6 +259,23 @@ private fun testRouteBookmarkDraft(): RouteBookmarkDraft =
         routeOption = RouteOption.SAFE,
         distanceMeters = 11_200,
         durationMinutes = 28,
+    )
+
+private fun testRouteBookmark(
+    draft: RouteBookmarkDraft,
+): RouteBookmark =
+    RouteBookmark(
+        bookmarkId = "route-bookmark:${draft.routeId}",
+        routeName = draft.defaultRouteName,
+        startLabel = draft.startLabel,
+        endLabel = draft.endLabel,
+        startPoint = draft.startPoint,
+        endPoint = draft.endPoint,
+        routeOption = draft.routeOption,
+        distanceMeters = draft.distanceMeters,
+        durationMinutes = draft.durationMinutes,
+        createdAt = 1L,
+        updatedAt = 1L,
     )
 
 private fun testRouteBookmark(

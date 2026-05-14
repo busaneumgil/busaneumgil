@@ -115,6 +115,16 @@ fun RouteRerouteResponseDto.toRouteCandidate(geometryParser: RouteGeometryParser
         fallbackIndex = 1,
     )
 
+fun RouteDto.toRouteCandidate(
+    geometryParser: RouteGeometryParser,
+    defaultOption: RouteOption = normalizedDeclaredOption(defaultOption = defaultRouteOption()),
+): RouteCandidate =
+    toDomain(
+        defaultOption = defaultOption,
+        geometryParser = geometryParser,
+        fallbackIndex = 1,
+    )
+
 private fun RouteDto.toDomain(
     defaultOption: RouteOption,
     geometryParser: RouteGeometryParser,
@@ -492,7 +502,7 @@ private fun GeoCoordinate.toPointDto(): RoutePointDto =
         lng = longitude,
     )
 
-private fun JSONObject.toRouteDto(): RouteDto =
+fun JSONObject.toRouteDto(): RouteDto =
     RouteDto(
         routeId = optNullableString("routeId"),
         transportMode = optNullableString("transportMode"),

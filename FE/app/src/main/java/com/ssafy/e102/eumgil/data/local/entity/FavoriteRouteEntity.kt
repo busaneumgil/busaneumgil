@@ -24,6 +24,7 @@ data class FavoriteRouteEntity(
     val routeOption: String? = null,
     val summaryDistanceMeters: Int? = null,
     val summaryDurationSeconds: Int? = null,
+    val routeSnapshotJson: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
 )

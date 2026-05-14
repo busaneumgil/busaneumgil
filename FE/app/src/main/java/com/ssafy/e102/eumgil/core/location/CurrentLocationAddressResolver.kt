@@ -37,18 +37,45 @@ class AndroidCurrentLocationAddressResolver(
 }
 
 private fun Address.toLowVisionAddressLabel(): String? =
-    getAddressLine(0)
-        ?.trim()
-        ?.removePrefix("\uB300\uD55C\uBBFC\uAD6D ")
-        ?.takeIf(String::isNotEmpty)
-        ?: listOfNotNull(
+    lowVisionCurrentLocationAddressLabel(
+        addressLine = getAddressLine(0),
+        adminArea = adminArea,
+        locality = locality,
+        subLocality = subLocality,
+        thoroughfare = thoroughfare,
+        subThoroughfare = subThoroughfare,
+        premises = premises,
+        featureName = featureName,
+    )
+
+internal fun lowVisionCurrentLocationAddressLabel(
+    addressLine: String?,
+    adminArea: String?,
+    locality: String?,
+    subLocality: String?,
+    thoroughfare: String?,
+    subThoroughfare: String?,
+    premises: String?,
+    featureName: String?,
+): String? {
+    val roadAddress =
+        listOfNotNull(
             adminArea,
             locality,
             subLocality,
             thoroughfare,
-            featureName,
+            subThoroughfare,
+            premises,
         ).map(String::trim)
             .filter(String::isNotEmpty)
             .distinct()
             .joinToString(" ")
             .takeIf(String::isNotEmpty)
+
+    return roadAddress
+        ?: addressLine
+            ?.trim()
+            ?.removePrefix("\uB300\uD55C\uBBFC\uAD6D ")
+            ?.takeIf(String::isNotEmpty)
+        ?: featureName?.trim()?.takeIf(String::isNotEmpty)
+}

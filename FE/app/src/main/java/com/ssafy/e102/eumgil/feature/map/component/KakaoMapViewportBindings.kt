@@ -10,6 +10,10 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import java.util.Locale
 import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 internal const val KAKAO_MAP_PROVIDER_NAME = "Kakao Map"
 
@@ -119,6 +123,8 @@ internal enum class KakaoProjectedMarkerKind {
 
 internal enum class KakaoOverlayMarkerKind {
     ROUTE_SEGMENT_JUNCTION,
+    TRANSIT_STOP,
+    TRANSIT_TRANSFER,
     ROUTE_DIRECTION_ARROW,
 }
 
@@ -146,6 +152,9 @@ internal data class KakaoOverlayMarkerRenderState(
     val fillColorArgb: Int,
     val strokeColorArgb: Int,
     val rotationDegrees: Float = 0f,
+    val label: String? = null,
+    val secondaryLabel: String? = null,
+    val secondaryFillColorArgb: Int? = null,
 )
 
 internal data class KakaoProjectedMarkerOverlay(
@@ -391,38 +400,44 @@ internal fun createKakaoOverlayMarkerRenderStates(
     polylines: List<MapViewportPolylineOverlay> = emptyList(),
 ): List<KakaoOverlayMarkerRenderState> =
     overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState) +
-        polylines.flatMap(::createKakaoRouteDirectionArrowRenderStates)
+        polylines
+            .filter(MapViewportPolylineOverlay::showDirectionArrows)
+            .flatMap(::createKakaoRouteDirectionArrowRenderStates)
 
 private fun createKakaoRouteDirectionArrowRenderStates(
     polyline: MapViewportPolylineOverlay,
 ): List<KakaoOverlayMarkerRenderState> =
     polyline.points
         .zipWithNext()
-        .mapIndexedNotNull { index, (start, end) ->
+        .flatMapIndexed { index, (start, end) ->
             val deltaLatitude = end.latitude - start.latitude
             val deltaLongitude = end.longitude - start.longitude
-            val approximateLength = kotlin.math.abs(deltaLatitude) + kotlin.math.abs(deltaLongitude)
-            if (approximateLength < KAKAO_ROUTE_DIRECTION_ARROW_MIN_DELTA) return@mapIndexedNotNull null
+            val segmentLengthMeters = start.distanceMetersTo(end)
+            if (segmentLengthMeters < KAKAO_ROUTE_DIRECTION_ARROW_INTERVAL_METERS) return@flatMapIndexed emptyList()
+            val arrowCount = max(1, (segmentLengthMeters / KAKAO_ROUTE_DIRECTION_ARROW_INTERVAL_METERS).roundToInt())
 
-            KakaoOverlayMarkerRenderState(
-                markerId = "arrow-${polyline.overlayId}-$index",
-                coordinate =
-                    MapCoordinate(
-                        latitude = start.latitude + (deltaLatitude * 0.5),
-                        longitude = start.longitude + (deltaLongitude * 0.5),
-                    ),
-                kind = KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW,
-                anchorPointX = 0.5f,
-                anchorPointY = 0.5f,
-                sizeDp = 14,
-                zIndex = 4.4f,
-                fillColorArgb = 0xFFFFFFFF.toInt(),
-                strokeColorArgb = 0x00FFFFFF,
-                rotationDegrees =
-                    Math
-                        .toDegrees(atan2(-deltaLatitude, deltaLongitude))
-                        .toFloat(),
-            )
+            (1..arrowCount).map { arrowIndex ->
+                val fraction = arrowIndex.toDouble() / (arrowCount + 1)
+                KakaoOverlayMarkerRenderState(
+                    markerId = "arrow-${polyline.overlayId}-$index-$arrowIndex",
+                    coordinate =
+                        MapCoordinate(
+                            latitude = start.latitude + (deltaLatitude * fraction),
+                            longitude = start.longitude + (deltaLongitude * fraction),
+                        ),
+                    kind = KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW,
+                    anchorPointX = 0.5f,
+                    anchorPointY = 0.5f,
+                    sizeDp = 14,
+                    zIndex = 4.4f,
+                    fillColorArgb = 0xFFFFFFFF.toInt(),
+                    strokeColorArgb = 0x00FFFFFF,
+                    rotationDegrees =
+                        Math
+                            .toDegrees(atan2(-deltaLatitude, deltaLongitude))
+                            .toFloat(),
+                )
+            }
         }
 
 internal fun createKakaoRouteLineRenderStates(
@@ -774,7 +789,11 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
                     null
                 }
 
-            MapViewportPointKind.SEGMENT_JUNCTION -> null
+            MapViewportPointKind.SEGMENT_JUNCTION,
+            MapViewportPointKind.TRANSIT_BUS_STOP,
+            MapViewportPointKind.TRANSIT_SUBWAY_STATION,
+            MapViewportPointKind.TRANSIT_TRANSFER,
+                -> null
 
             MapViewportPointKind.FACILITY,
             MapViewportPointKind.CAMERA_FOCUS,
@@ -797,55 +816,157 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
 }
 
 private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMarkerRenderState? {
-    if (kind != MapViewportPointKind.SEGMENT_JUNCTION) return null
-    val palette = (tone ?: MapViewportOverlayTone.PRIMARY).toSegmentMarkerPalette()
-    return KakaoOverlayMarkerRenderState(
-        markerId = "overlay-$overlayId",
-        coordinate = coordinate,
-        kind = KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION,
-        anchorPointX = 0.5f,
-        anchorPointY = 0.5f,
-        sizeDp = 16,
-        zIndex = 3.6f,
-        fillColorArgb = palette.fillColorArgb,
-        strokeColorArgb = palette.strokeColorArgb,
-    )
+    return when (kind) {
+        MapViewportPointKind.SEGMENT_JUNCTION ->
+            KakaoOverlayMarkerRenderState(
+                markerId = "overlay-$overlayId",
+                coordinate = coordinate,
+                kind = KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 18,
+                zIndex = 3.6f,
+                fillColorArgb = 0xFFFFFFFF.toInt(),
+                strokeColorArgb = 0xFF8C8C8E.toInt(),
+            )
+
+        MapViewportPointKind.TRANSIT_BUS_STOP ->
+            KakaoOverlayMarkerRenderState(
+                markerId = "overlay-$overlayId",
+                coordinate = coordinate,
+                kind = KakaoOverlayMarkerKind.TRANSIT_STOP,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 30,
+                zIndex = 3.8f,
+                fillColorArgb = 0xFF304583.toInt(),
+                strokeColorArgb = 0xFFFFFFFF.toInt(),
+                label = "BUS",
+            )
+
+        MapViewportPointKind.TRANSIT_SUBWAY_STATION -> {
+            val routeLabel = transitMarker?.from?.label ?: label
+            KakaoOverlayMarkerRenderState(
+                markerId = "overlay-$overlayId",
+                coordinate = coordinate,
+                kind = KakaoOverlayMarkerKind.TRANSIT_STOP,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 30,
+                zIndex = 3.8f,
+                fillColorArgb = routeLabel.toKakaoSubwayLineColor(),
+                strokeColorArgb = 0xFFFFFFFF.toInt(),
+                label = routeLabel.toKakaoSubwayLineShortLabel(),
+            )
+        }
+
+        MapViewportPointKind.TRANSIT_TRANSFER -> {
+            val marker = transitMarker ?: return null
+            val from = marker.from
+            val to = marker.to ?: return null
+            KakaoOverlayMarkerRenderState(
+                markerId = "overlay-$overlayId",
+                coordinate = coordinate,
+                kind = KakaoOverlayMarkerKind.TRANSIT_TRANSFER,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 64,
+                zIndex = 4.1f,
+                fillColorArgb = from.toKakaoTransitColor(),
+                strokeColorArgb = 0xFFFFFFFF.toInt(),
+                label = from.toKakaoTransitShortLabel(),
+                secondaryLabel = to.toKakaoTransitShortLabel(),
+                secondaryFillColorArgb = to.toKakaoTransitColor(),
+            )
+        }
+
+        else -> null
+    }
 }
 
-private const val KAKAO_ROUTE_DIRECTION_ARROW_MIN_DELTA = 0.00018
+private fun MapViewportTransitMarkerLeg.toKakaoTransitColor(): Int =
+    when (kind) {
+        MapViewportTransitMarkerKind.BUS -> 0xFF304583.toInt()
+        MapViewportTransitMarkerKind.SUBWAY -> label.toKakaoSubwayLineColor()
+    }
+
+private fun MapViewportTransitMarkerLeg.toKakaoTransitShortLabel(): String =
+    when (kind) {
+        MapViewportTransitMarkerKind.BUS -> "BUS"
+        MapViewportTransitMarkerKind.SUBWAY -> label.toKakaoSubwayLineShortLabel()
+    }
+
+private fun String?.toKakaoSubwayLineColor(): Int =
+    when {
+        this == null -> 0xFF304583.toInt()
+        contains("부산김해", ignoreCase = true) ||
+            contains("김해", ignoreCase = true) ||
+            contains("BGL", ignoreCase = true) -> 0xFF8200FF.toInt()
+        contains("1") -> 0xFFFF7F00.toInt()
+        contains("2") -> 0xFF3ED93B.toInt()
+        contains("3") -> 0xFFE8AB56.toInt()
+        contains("4") -> 0xFF32B1FF.toInt()
+        else -> 0xFF304583.toInt()
+    }
+
+private fun String?.toKakaoSubwayLineShortLabel(): String =
+    when {
+        this == null -> "?"
+        contains("부산김해", ignoreCase = true) ||
+            contains("김해", ignoreCase = true) ||
+            contains("BGL", ignoreCase = true) -> "김"
+        contains("1") -> "1"
+        contains("2") -> "2"
+        contains("3") -> "3"
+        contains("4") -> "4"
+        else -> take(2)
+    }
+
+private fun MapCoordinate.distanceMetersTo(other: MapCoordinate): Double {
+    val latitudeMeters = (other.latitude - latitude) * KAKAO_METERS_PER_LATITUDE_DEGREE
+    val averageLatitudeRadians = Math.toRadians((latitude + other.latitude) / 2.0)
+    val longitudeMeters =
+        (other.longitude - longitude) *
+            KAKAO_METERS_PER_LATITUDE_DEGREE *
+            cos(averageLatitudeRadians)
+    return sqrt(latitudeMeters * latitudeMeters + longitudeMeters * longitudeMeters)
+}
+
+private const val KAKAO_ROUTE_DIRECTION_ARROW_INTERVAL_METERS = 20.0
+private const val KAKAO_METERS_PER_LATITUDE_DEGREE = 111_320.0
 
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()
     return when (style) {
         MapViewportPolylineStyle.ROUTE_PREVIEW ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 5f,
+                lineWidth = 18f,
                 lineColor = palette.lineColor,
-                strokeWidth = 6.5f,
+                strokeWidth = 0f,
                 strokeColor = palette.casingColor,
             )
 
         MapViewportPolylineStyle.ROUTE_BASELINE ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 3.5f,
+                lineWidth = 18f,
                 lineColor = palette.lineColor,
-                strokeWidth = 5f,
+                strokeWidth = 0f,
                 strokeColor = palette.casingColor,
             )
 
         MapViewportPolylineStyle.ACTIVE_SEGMENT ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 4f,
+                lineWidth = 18f,
                 lineColor = palette.lineColor,
-                strokeWidth = 5.5f,
+                strokeWidth = 0f,
                 strokeColor = palette.casingColor,
             )
 
         MapViewportPolylineStyle.FOCUSED_SEGMENT ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 4.5f,
+                lineWidth = 18f,
                 lineColor = palette.lineColor,
-                strokeWidth = 6f,
+                strokeWidth = 0f,
                 strokeColor = palette.casingColor,
             )
     }
@@ -855,8 +976,8 @@ private fun MapViewportOverlayTone.toKakaoRouteLinePalette(): KakaoRouteLinePale
     when (this) {
         MapViewportOverlayTone.PRIMARY ->
             KakaoRouteLinePalette(
-                lineColor = 0xFF2A7BFF.toInt(),
-                casingColor = 0xFF0F4FC6.toInt(),
+                lineColor = 0xFF006BE0.toInt(),
+                casingColor = 0xFF006BE0.toInt(),
             )
 
         MapViewportOverlayTone.SECONDARY ->
@@ -867,20 +988,20 @@ private fun MapViewportOverlayTone.toKakaoRouteLinePalette(): KakaoRouteLinePale
 
         MapViewportOverlayTone.TERTIARY ->
             KakaoRouteLinePalette(
-                lineColor = 0xFFE7832F.toInt(),
-                casingColor = 0xFFB85B16.toInt(),
+                lineColor = 0xFFF9AB4D.toInt(),
+                casingColor = 0xFFF9AB4D.toInt(),
             )
 
         MapViewportOverlayTone.NEUTRAL ->
             KakaoRouteLinePalette(
-                lineColor = 0xFF9CA3AF.toInt(),
-                casingColor = 0xFF6B7280.toInt(),
+                lineColor = 0xFFD9D9D9.toInt(),
+                casingColor = 0xFFD9D9D9.toInt(),
             )
 
         MapViewportOverlayTone.NAVY ->
             KakaoRouteLinePalette(
-                lineColor = 0xFF28427F.toInt(),
-                casingColor = 0xFF172554.toInt(),
+                lineColor = 0xFF4A5D93.toInt(),
+                casingColor = 0xFF4A5D93.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->
@@ -898,14 +1019,14 @@ internal fun facilityMarkerGlyphResId(category: FacilityCategory): Int =
         FacilityCategory.ELEVATOR -> R.drawable.ic_lowvision_category_elevator
         FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
         FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_cafe
-        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
+        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
         FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
         FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
         FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
         FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
-        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
 

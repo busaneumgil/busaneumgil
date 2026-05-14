@@ -21,7 +21,10 @@ data class ReportDraftEntity(
     val draftId: String,
     val reportCategory: String? = null,
     val description: String = "",
+    // v8 — 두 컬럼 분리: address는 좌표 → RGC 자동 결과(도로명 등 객관 정보),
+    // addressDetail은 사용자가 직접 적은 "건물명·주변 장소" 같은 현장 맥락 보충.
     val address: String? = null,
+    val addressDetail: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val locationSource: String? = null,

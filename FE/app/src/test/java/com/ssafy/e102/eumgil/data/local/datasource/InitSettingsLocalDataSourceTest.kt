@@ -25,17 +25,18 @@ class InitSettingsLocalDataSourceTest {
         runTest {
             val dataSource = createDataSource()
 
-            dataSource.savePrimaryUserType(PrimaryUserType.MOBILITY_IMPAIRED.routeValue)
-            dataSource.saveMobilitySubtype(MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
-            dataSource.saveLowVisionFollowUpCompleted(isCompleted = true)
+            dataSource.savePrimaryUserType(DEFAULT_SCOPE, PrimaryUserType.MOBILITY_IMPAIRED.routeValue)
+            dataSource.saveMobilitySubtype(DEFAULT_SCOPE, MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
+            dataSource.saveLowVisionFollowUpCompleted(DEFAULT_SCOPE, isCompleted = true)
             dataSource.saveLocationTermsAgreement(
+                scopeKey = DEFAULT_SCOPE,
                 isLocationTermsAgreed = true,
                 isPrivacyPolicyAgreed = true,
             )
 
-            dataSource.savePrimaryUserType(PrimaryUserType.LOW_VISION.routeValue)
+            dataSource.savePrimaryUserType(DEFAULT_SCOPE, PrimaryUserType.LOW_VISION.routeValue)
 
-            val settings = dataSource.getInitSettings()
+            val settings = dataSource.getInitSettings(DEFAULT_SCOPE)
             assertEquals(PrimaryUserType.LOW_VISION.routeValue, settings.selectedPrimaryUserType)
             assertNull(settings.selectedMobilitySubtype)
             assertFalse(settings.isLowVisionFollowUpCompleted)
@@ -48,39 +49,71 @@ class InitSettingsLocalDataSourceTest {
         runTest {
             val dataSource = createDataSource()
 
-            dataSource.savePrimaryUserType(PrimaryUserType.LOW_VISION.routeValue)
-            dataSource.saveMobilitySubtype(MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
-            dataSource.saveLowVisionFollowUpCompleted(isCompleted = true)
+            dataSource.savePrimaryUserType(DEFAULT_SCOPE, PrimaryUserType.LOW_VISION.routeValue)
+            dataSource.saveMobilitySubtype(DEFAULT_SCOPE, MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
+            dataSource.saveLowVisionFollowUpCompleted(DEFAULT_SCOPE, isCompleted = true)
 
-            dataSource.savePrimaryUserType(PrimaryUserType.LOW_VISION.routeValue)
+            dataSource.savePrimaryUserType(DEFAULT_SCOPE, PrimaryUserType.LOW_VISION.routeValue)
 
-            val settings = dataSource.getInitSettings()
+            val settings = dataSource.getInitSettings(DEFAULT_SCOPE)
             assertEquals(PrimaryUserType.LOW_VISION.routeValue, settings.selectedPrimaryUserType)
             assertNull(settings.selectedMobilitySubtype)
             assertTrue(settings.isLowVisionFollowUpCompleted)
         }
 
     @Test
-    fun `clearing init settings removes onboarding progress and agreement flags`() =
+    fun `scoped settings stay isolated between accounts`() =
         runTest {
             val dataSource = createDataSource()
 
-            dataSource.savePrimaryUserType(PrimaryUserType.MOBILITY_IMPAIRED.routeValue)
-            dataSource.saveMobilitySubtype(MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
-            dataSource.saveLowVisionFollowUpCompleted(isCompleted = true)
+            dataSource.savePrimaryUserType(FIRST_SCOPE, PrimaryUserType.MOBILITY_IMPAIRED.routeValue)
+            dataSource.saveMobilitySubtype(FIRST_SCOPE, MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
             dataSource.saveLocationTermsAgreement(
+                scopeKey = FIRST_SCOPE,
                 isLocationTermsAgreed = true,
-                isPrivacyPolicyAgreed = true,
+                isPrivacyPolicyAgreed = false,
             )
 
-            dataSource.clearInitSettings()
+            dataSource.savePrimaryUserType(SECOND_SCOPE, PrimaryUserType.LOW_VISION.routeValue)
+            dataSource.saveLowVisionFollowUpCompleted(SECOND_SCOPE, isCompleted = true)
 
-            val settings = dataSource.getInitSettings()
-            assertNull(settings.selectedPrimaryUserType)
-            assertNull(settings.selectedMobilitySubtype)
-            assertFalse(settings.isLowVisionFollowUpCompleted)
-            assertFalse(settings.isLocationTermsAgreed)
-            assertFalse(settings.isPrivacyPolicyAgreed)
+            val firstSettings = dataSource.getInitSettings(FIRST_SCOPE)
+            val secondSettings = dataSource.getInitSettings(SECOND_SCOPE)
+
+            assertEquals(PrimaryUserType.MOBILITY_IMPAIRED.routeValue, firstSettings.selectedPrimaryUserType)
+            assertEquals(MobilitySubtype.MANUAL_WHEELCHAIR.routeValue, firstSettings.selectedMobilitySubtype)
+            assertTrue(firstSettings.isLocationTermsAgreed)
+            assertFalse(firstSettings.isPrivacyPolicyAgreed)
+
+            assertEquals(PrimaryUserType.LOW_VISION.routeValue, secondSettings.selectedPrimaryUserType)
+            assertNull(secondSettings.selectedMobilitySubtype)
+            assertTrue(secondSettings.isLowVisionFollowUpCompleted)
+            assertFalse(secondSettings.isLocationTermsAgreed)
+        }
+
+    @Test
+    fun `clearing one scope does not remove another scope onboarding progress`() =
+        runTest {
+            val dataSource = createDataSource()
+
+            dataSource.savePrimaryUserType(FIRST_SCOPE, PrimaryUserType.MOBILITY_IMPAIRED.routeValue)
+            dataSource.saveMobilitySubtype(FIRST_SCOPE, MobilitySubtype.MANUAL_WHEELCHAIR.routeValue)
+            dataSource.savePrimaryUserType(SECOND_SCOPE, PrimaryUserType.LOW_VISION.routeValue)
+            dataSource.saveLowVisionFollowUpCompleted(SECOND_SCOPE, isCompleted = true)
+
+            dataSource.clearInitSettings(FIRST_SCOPE)
+
+            val clearedSettings = dataSource.getInitSettings(FIRST_SCOPE)
+            val preservedSettings = dataSource.getInitSettings(SECOND_SCOPE)
+
+            assertNull(clearedSettings.selectedPrimaryUserType)
+            assertNull(clearedSettings.selectedMobilitySubtype)
+            assertFalse(clearedSettings.isLowVisionFollowUpCompleted)
+            assertFalse(clearedSettings.isLocationTermsAgreed)
+            assertFalse(clearedSettings.isPrivacyPolicyAgreed)
+
+            assertEquals(PrimaryUserType.LOW_VISION.routeValue, preservedSettings.selectedPrimaryUserType)
+            assertTrue(preservedSettings.isLowVisionFollowUpCompleted)
         }
 
     private fun TestScope.createDataSource(): InitSettingsLocalDataSource {
@@ -92,5 +125,11 @@ class InitSettingsLocalDataSourceTest {
             )
 
         return InitSettingsLocalDataSource(dataStore)
+    }
+
+    private companion object {
+        private const val DEFAULT_SCOPE = "user::default"
+        private const val FIRST_SCOPE = "user::first"
+        private const val SECOND_SCOPE = "user::second"
     }
 }

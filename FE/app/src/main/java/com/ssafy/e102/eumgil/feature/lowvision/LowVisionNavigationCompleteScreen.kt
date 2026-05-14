@@ -42,10 +42,13 @@ internal object LowVisionNavigationCompleteLayoutDefaults {
     val verticalPadding = 44.dp
     val cardGap = 28.dp
     val cardCornerRadius = 26.dp
+    val cardContentPadding = 20.dp
+    val saveCardIconTextGap = 28.dp
+    val doneCardIconTextGap = 24.dp
     val saveIconSize = 132.dp
-    val completeIconSize = 168.dp
-    val titleFontSize = 64.sp
-    val titleLineHeight = 72.sp
+    val completeIconSize = 148.dp
+    val titleFontSize = 52.sp
+    val titleLineHeight = 58.sp
 }
 
 internal data class LowVisionNavigationCompleteCard(
@@ -132,7 +135,7 @@ private fun LowVisionCompleteSaveCard(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
+                    .padding(LowVisionNavigationCompleteLayoutDefaults.cardContentPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -151,7 +154,7 @@ private fun LowVisionCompleteSaveCard(
                     modifier = Modifier.size(92.dp),
                 )
             }
-            Spacer(modifier = Modifier.height(44.dp))
+            Spacer(modifier = Modifier.height(LowVisionNavigationCompleteLayoutDefaults.saveCardIconTextGap))
             Text(
                 text = card.label,
                 color = CompleteBlack,
@@ -160,7 +163,8 @@ private fun LowVisionCompleteSaveCard(
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.sp,
-                maxLines = 1,
+                maxLines = 2,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -193,14 +197,14 @@ private fun LowVisionCompleteDoneCard(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
+                    .padding(LowVisionNavigationCompleteLayoutDefaults.cardContentPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             Surface(
                 shape = CircleShape,
                 color = Color.Transparent,
-                border = androidx.compose.foundation.BorderStroke(8.dp, CompleteYellow),
+                border = androidx.compose.foundation.BorderStroke(6.dp, CompleteYellow),
             ) {
                 Icon(
                     painter = painterResource(id = card.iconRes),
@@ -209,10 +213,10 @@ private fun LowVisionCompleteDoneCard(
                     modifier =
                         Modifier
                             .size(LowVisionNavigationCompleteLayoutDefaults.completeIconSize)
-                            .padding(28.dp),
+                            .padding(24.dp),
                 )
             }
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(LowVisionNavigationCompleteLayoutDefaults.doneCardIconTextGap))
             Text(
                 text = card.label,
                 color = CompleteYellow,
@@ -221,7 +225,8 @@ private fun LowVisionCompleteDoneCard(
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.sp,
-                maxLines = 1,
+                maxLines = 2,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }

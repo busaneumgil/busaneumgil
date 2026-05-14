@@ -16,7 +16,9 @@ data class ReportOutboxEntity(
     val outboxId: String,
     val reportCategory: String,
     val description: String = "",
+    // v8 — 두 컬럼 분리: address는 좌표 → RGC 자동 결과, addressDetail은 사용자 직접 보충 메모.
     val address: String? = null,
+    val addressDetail: String? = null,
     val latitude: Double,
     val longitude: Double,
     val photoUri: String? = null,

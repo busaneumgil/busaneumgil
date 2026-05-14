@@ -139,7 +139,7 @@ class RouteSettingViewModelTest {
             assertEquals(null, uiState.routePreviewMap.fallbackMessage)
             assertTrue(uiState.routePreviewMap.isDisplayable)
             assertTrue(uiState.cta.isEnabled)
-            assertEquals("길 안내 시작", uiState.cta.label)
+            assertEquals("안내 시작", uiState.cta.label)
             assertEquals("선택한 경로로 길 안내를 시작할 수 있습니다.", uiState.cta.supportingText)
             assertTrue(uiState.isStartEnabled)
             assertEquals(
@@ -1217,7 +1217,120 @@ class RouteSettingViewModelTest {
             )
             assertTrue(uiEvent.await() is RouteSettingUiEvent.StartNavigationRequested)
         }
+
+    @Test
+    fun `binding a route detail request hydrates detail state and reuses the same navigation request on start`() =
+        runTest {
+            val request = testDetailRouteNavigationRequest()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = failIfCalledRouteRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+
+            viewModel.bindRouteDetailRequest(request)
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+            assertFalse(uiState.isLoading)
+            assertEquals(RouteOption.SHORTEST, uiState.selectedOption)
+            assertEquals(RouteOption.SHORTEST, uiState.selectedRoute?.routeOption)
+            assertEquals("Stored detail route", uiState.selectedRoute?.title)
+            assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertEquals(request.selectedRoute.preview.polyline.points, uiState.routePreviewMap.polyline)
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is RouteSettingUiEvent.StartNavigationRequested)
+            val startedRequest = (event as RouteSettingUiEvent.StartNavigationRequested).request
+            assertEquals(request.selectedRoute.serverRouteId, startedRequest.selectedRoute.serverRouteId)
+            assertEquals(request.selectionHandoff?.sessionId, startedRequest.selectionHandoff?.sessionId)
+        }
 }
+
+private fun testDetailRouteNavigationRequest(): RouteNavigationRequest =
+    RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = "Detail Origin",
+                coordinate = GeoCoordinate(35.1796, 129.0756),
+            ),
+        destination =
+            RouteWaypoint(
+                name = "Detail Destination",
+                coordinate = GeoCoordinate(35.1808, 129.0822),
+            ),
+        selectedRoute =
+            RouteCandidate(
+                serverRouteId = "detail-route-1",
+                routeOption = RouteOption.SHORTEST,
+                title = "Stored detail route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 540,
+                        estimatedTimeMinutes = 11,
+                        riskLevel = RouteRiskLevel.MEDIUM,
+                        durationSeconds = 660,
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        GeoCoordinate(35.1796, 129.0756),
+                                        GeoCoordinate(35.1802, 129.0790),
+                                        GeoCoordinate(35.1808, 129.0822),
+                                    ),
+                            ),
+                        segmentCount = 2,
+                        renderableSegmentCount = 2,
+                    ),
+                segments =
+                    listOf(
+                        RouteSegment(
+                            sequence = 1,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            GeoCoordinate(35.1796, 129.0756),
+                                            GeoCoordinate(35.1802, 129.0790),
+                                        ),
+                                ),
+                            distanceMeters = 260,
+                            guidanceMessage = "Walk straight",
+                        ),
+                        RouteSegment(
+                            sequence = 2,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            GeoCoordinate(35.1802, 129.0790),
+                                            GeoCoordinate(35.1808, 129.0822),
+                                        ),
+                                ),
+                            distanceMeters = 280,
+                            guidanceMessage = "Arrive at destination",
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Saved route detail"),
+        selectionHandoff =
+            RouteNavigationSelectionHandoff(
+                searchId = "detail-search-1",
+                routeId = "detail-route-1",
+                sessionId = "detail-session-1",
+                initialRemainingDistanceMeters = 540,
+                initialRemainingDurationSeconds = 660,
+            ),
+    )
 
 private fun testRouteRepository(): RouteRepository {
     val delegate =

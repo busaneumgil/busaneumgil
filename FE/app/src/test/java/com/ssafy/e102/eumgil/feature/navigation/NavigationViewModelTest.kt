@@ -39,6 +39,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -128,7 +129,65 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("transit-route-1" to 2), routeRepository.transitRefreshCalls)
-            assertTrue(viewModel.uiState.value.stepCard.supportingText.contains("6 min"))
+            assertTrue(viewModel.uiState.value.stepCard.supportingText.contains("실시간 기준 100번 버스 6분 후 도착 예정"))
+        }
+
+    @Test
+    fun `walk to subway leg presents scheduled subway arrival near elevator`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository =
+                FakeRouteRepository(
+                    transitRefreshData =
+                        RouteTransitRefreshData(
+                            type = "SUBWAY",
+                            arrivalStatus = "SCHEDULE_BASED",
+                            transits =
+                                listOf(
+                                    RouteTransitArrivalData(
+                                        routeNo = "부산 1호선",
+                                        remainingMinute = 4,
+                                        isLowFloor = null,
+                                    ),
+                                ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                )
+
+            viewModel.bindNavigationRequest(testTransitNavigationRequest(transitType = RouteLegType.SUBWAY))
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = TRANSIT_BOARDING_POINT.latitude,
+                    longitude = TRANSIT_BOARDING_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(listOf("transit-route-1" to 2), routeRepository.transitRefreshCalls)
+            assertTrue(viewModel.uiState.value.stepCard.supportingText.contains("시간표 기준 부산 1호선 4분 후 도착 예정"))
+        }
+
+    @Test
+    fun `current route detail request exposes the active navigation request`() =
+        runTest {
+            val viewModel = createViewModel()
+            val request = testWalkNavigationRequest()
+
+            viewModel.bindNavigationRequest(request)
+            advanceUntilIdle()
+
+            val detailRequest = viewModel.currentRouteDetailRequest()
+
+            assertEquals(request.selectedRoute.serverRouteId, detailRequest?.selectedRoute?.serverRouteId)
+            assertEquals(request.destination.coordinate, detailRequest?.destination?.coordinate)
         }
 
     @Test
@@ -435,6 +494,37 @@ class NavigationViewModelTest {
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
                 eventsDeferred.await(),
             )
+        }
+
+    @Test
+    fun `low vision mode plays route change alert before the next segment boundary`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    initialLowVisionMode = true,
+                )
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_PRE_TURN_POINT.latitude,
+                    longitude = WALK_PRE_TURN_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(NavigationUiEvent.PlayRouteChangeAlert, eventDeferred.await())
         }
 
     @Test
@@ -826,7 +916,9 @@ private fun reroutedWalkRoute(): RouteCandidate =
             title = "Rerouted Route",
         )
 
-private fun testTransitNavigationRequest(): RouteNavigationRequest =
+private fun testTransitNavigationRequest(
+    transitType: RouteLegType = RouteLegType.BUS,
+): RouteNavigationRequest =
     RouteNavigationRequest(
         origin =
             RouteWaypoint(
@@ -875,14 +967,14 @@ private fun testTransitNavigationRequest(): RouteNavigationRequest =
                         ),
                         RouteLeg(
                             sequence = 2,
-                            type = RouteLegType.BUS,
+                            type = transitType,
                             role = RouteLegRole.TRANSIT,
                             distanceMeters = 400,
                             durationSeconds = 900,
-                            routeNo = "100",
+                            routeNo = if (transitType == RouteLegType.SUBWAY) "부산 1호선" else "100",
                             boardingStop =
                                 RouteTransitStop(
-                                    name = "Bus Stop",
+                                    name = if (transitType == RouteLegType.SUBWAY) "서면역 엘리베이터" else "Bus Stop",
                                     coordinate = TRANSIT_BOARDING_POINT,
                                 ),
                         ),
@@ -900,7 +992,12 @@ private fun testTransitNavigationRequest(): RouteNavigationRequest =
                             sequence = 2,
                             polyline = RoutePolyline(points = listOf(TRANSIT_BOARDING_POINT, TRANSIT_END_POINT)),
                             distanceMeters = 400,
-                            guidanceMessage = "100번 버스 탑승",
+                            guidanceMessage =
+                                if (transitType == RouteLegType.SUBWAY) {
+                                    "부산 1호선 지하철 탑승"
+                                } else {
+                                    "100번 버스 탑승"
+                                },
                             sourceLegSequence = 2,
                         ),
                     ),
@@ -1391,6 +1488,7 @@ private fun lowVisionRemainingSearchData(
     )
 
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+private val WALK_PRE_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.077905)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1815, longitude = 129.0756)

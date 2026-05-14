@@ -313,8 +313,11 @@ class TransitRouteSearchServiceTest {
 		assertThat(response.routes().get(0).legs())
 			.filteredOn(leg -> leg.type() == TransportMode.BUS)
 			.first()
-			.extracting(leg -> leg.laneOptions().get(0).remainingMinute(), leg -> leg.laneOptions().get(0).isLowFloor())
-			.containsExactly(null, null);
+			.extracting(
+				leg -> leg.isLowFloor(),
+				leg -> leg.laneOptions().get(0).remainingMinute(),
+				leg -> leg.laneOptions().get(0).isLowFloor())
+			.containsExactly(null, null, null);
 	}
 
 	@Test
@@ -331,6 +334,11 @@ class TransitRouteSearchServiceTest {
 		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
 
 		assertThat(response.routes().get(0).warnings()).isEmpty();
+		assertThat(response.routes().get(0).legs())
+			.filteredOn(leg -> leg.type() == TransportMode.BUS)
+			.first()
+			.extracting(leg -> leg.isLowFloor())
+			.isEqualTo(true);
 	}
 
 	@Test
@@ -405,6 +413,8 @@ class TransitRouteSearchServiceTest {
 				assertThat(leg.arrivingStop().name()).isEqualTo("부산역");
 				assertThat(leg.arrivingStop().lat()).isEqualByComparingTo("35.115");
 				assertThat(leg.arrivingStop().lng()).isEqualByComparingTo("129.041");
+				assertThat(leg.remainingMinute()).isPositive();
+				assertThat(leg.headsign()).isEqualTo("노포행");
 			});
 
 		assertThat(response.routes().get(0).legs().get(0).guidanceEvents())
@@ -434,6 +444,44 @@ class TransitRouteSearchServiceTest {
 				assertThat(nextDeparture)
 					.containsEntry("departureTimeText", "08:02")
 					.containsEntry("endStationName", "노포");
+			});
+	}
+
+	@Test
+	@DisplayName("SUBWAY 시간표가 없으면 remainingMinute와 headsign 없이 검색 응답을 반환한다")
+	void omitsSubwayArrivalFieldsWhenTimetableUnavailable() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(subwayPath("map-subway"))));
+		when(odsayClient.loadLane("map-subway"))
+			.thenReturn(List.of(new OdsayLaneGeometry(TransportMode.SUBWAY, "LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(subwayStationElevatorRepository.findByOdsayStationId("S1"))
+			.thenReturn(List.of(elevator("S1", "서면", "부산 1호선", 35.1590, 129.0590)));
+		when(subwayStationElevatorRepository.findByOdsayStationId("S2"))
+			.thenReturn(List.of(elevator("S2", "부산역", "부산 1호선", 35.1150, 129.0410)));
+		when(subwayTimetableRepository.findNextDepartures(
+			eq("S1"),
+			any(SubwayServiceDayType.class),
+			eq(1),
+			anyInt(),
+			any(Pageable.class)))
+			.thenReturn(List.of());
+		when(subwayTimetableRepository.findFirstDepartures(
+			eq("S1"),
+			any(SubwayServiceDayType.class),
+			eq(1),
+			any(Pageable.class)))
+			.thenReturn(List.of());
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		assertThat(response.routes().get(0).legs())
+			.filteredOn(leg -> leg.type() == TransportMode.SUBWAY)
+			.first()
+			.satisfies(leg -> {
+				assertThat(leg.remainingMinute()).isNull();
+				assertThat(leg.headsign()).isNull();
 			});
 	}
 

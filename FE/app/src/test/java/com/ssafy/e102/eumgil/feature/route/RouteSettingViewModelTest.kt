@@ -139,7 +139,7 @@ class RouteSettingViewModelTest {
             assertEquals(null, uiState.routePreviewMap.fallbackMessage)
             assertTrue(uiState.routePreviewMap.isDisplayable)
             assertTrue(uiState.cta.isEnabled)
-            assertEquals("길 안내 시작", uiState.cta.label)
+            assertEquals("안내 시작", uiState.cta.label)
             assertEquals("선택한 경로로 길 안내를 시작할 수 있습니다.", uiState.cta.supportingText)
             assertTrue(uiState.isStartEnabled)
             assertEquals(

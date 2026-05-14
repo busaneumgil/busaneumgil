@@ -79,11 +79,11 @@ internal fun MapViewportOverlayBackdrop(
         val markerAreaHeight = (maxHeight - (verticalPadding * 2)).coerceAtLeast(0.dp)
         val palette =
             ViewportOverlayPalette(
-                primary = MaterialTheme.colorScheme.primary,
+                primary = Color(0xFF006BE0),
                 secondary = MaterialTheme.colorScheme.secondary,
-                tertiary = MaterialTheme.colorScheme.tertiary,
-                neutral = Color(0xFF9CA3AF),
-                navy = Color(0xFF28427F),
+                tertiary = Color(0xFFF9AB4D),
+                neutral = Color(0xFFD9D9D9),
+                navy = Color(0xFF304583),
                 error = MaterialTheme.colorScheme.error,
                 outline = MaterialTheme.colorScheme.outline,
             )
@@ -177,7 +177,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = casingColor.copy(alpha = 0.9f),
                 style =
                     Stroke(
-                        width = 6.5.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -187,7 +187,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = toneColor,
                 style =
                     Stroke(
-                        width = 3.5.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -200,7 +200,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = casingColor.copy(alpha = 0.82f),
                 style =
                     Stroke(
-                        width = 5.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -210,7 +210,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = toneColor.copy(alpha = 0.9f),
                 style =
                     Stroke(
-                        width = 2.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -223,7 +223,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = casingColor.copy(alpha = 0.88f),
                 style =
                     Stroke(
-                        width = 5.5.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -233,7 +233,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = toneColor,
                 style =
                     Stroke(
-                        width = 3.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -246,7 +246,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = casingColor.copy(alpha = 0.92f),
                 style =
                     Stroke(
-                        width = 6.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -256,18 +256,20 @@ private fun DrawScope.drawViewportPolyline(
                 color = toneColor,
                 style =
                     Stroke(
-                        width = 3.5.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
             )
         }
     }
-    drawViewportPolylineDirectionArrows(
-        overlay = overlay,
-        bounds = bounds,
-        canvasSize = canvasSize,
-    )
+    if (overlay.showDirectionArrows) {
+        drawViewportPolylineDirectionArrows(
+            overlay = overlay,
+            bounds = bounds,
+            canvasSize = canvasSize,
+        )
+    }
 }
 
 private fun DrawScope.drawViewportPolylineDirectionArrows(
@@ -359,7 +361,11 @@ private fun DrawScope.drawViewportPointHalo(
                 center = projectedPoint,
             )
 
-        MapViewportPointKind.SEGMENT_JUNCTION -> Unit
+        MapViewportPointKind.SEGMENT_JUNCTION,
+        MapViewportPointKind.TRANSIT_BUS_STOP,
+        MapViewportPointKind.TRANSIT_SUBWAY_STATION,
+        MapViewportPointKind.TRANSIT_TRANSFER,
+            -> Unit
 
         MapViewportPointKind.FOCUS_HALO ->
             drawCircle(
@@ -548,11 +554,7 @@ private fun ViewportPointMarker(
         tonalElevation = if (point.isSelected) 4.dp else 0.dp,
         shadowElevation = if (point.isSelected) 10.dp else 6.dp,
         border =
-            if (point.kind == MapViewportPointKind.SEGMENT_JUNCTION) {
-                null
-            } else {
-                BorderStroke(if (point.isSelected) 2.dp else 1.dp, spec.borderColor)
-            },
+            BorderStroke(if (point.isSelected) 2.dp else 1.dp, spec.borderColor),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (point.kind == MapViewportPointKind.CAMERA_FOCUS) {
@@ -560,13 +562,6 @@ private fun ViewportPointMarker(
                     modifier = Modifier.size(6.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f),
-                ) {}
-            } else if (point.kind == MapViewportPointKind.SEGMENT_JUNCTION) {
-                Surface(
-                    modifier = Modifier.size((spec.size.value * 0.58f).dp),
-                    shape = CircleShape,
-                    color = spec.contentColor,
-                    border = BorderStroke(1.dp, spec.borderColor),
                 ) {}
             } else {
                 Text(
@@ -611,6 +606,38 @@ private fun MapViewportOverlayTone.toCasingColor(palette: ViewportOverlayPalette
         MapViewportOverlayTone.ERROR -> palette.error.copy(red = 0.62f, green = 0.16f, blue = 0.16f)
     }
 
+private fun MapViewportTransitMarkerLeg.toFallbackTransitShortLabel(): String =
+    when (kind) {
+        MapViewportTransitMarkerKind.BUS -> "BUS"
+        MapViewportTransitMarkerKind.SUBWAY -> label.toFallbackSubwayLineShortLabel()
+    }
+
+private fun String?.toFallbackSubwayLineColor(): Color =
+    when {
+        this == null -> Color(0xFF304583)
+        contains("부산김해", ignoreCase = true) ||
+            contains("김해", ignoreCase = true) ||
+            contains("BGL", ignoreCase = true) -> Color(0xFF8200FF)
+        contains("1") -> Color(0xFFFF7F00)
+        contains("2") -> Color(0xFF3ED93B)
+        contains("3") -> Color(0xFFE8AB56)
+        contains("4") -> Color(0xFF32B1FF)
+        else -> Color(0xFF304583)
+    }
+
+private fun String?.toFallbackSubwayLineShortLabel(): String =
+    when {
+        this == null -> "?"
+        contains("부산김해", ignoreCase = true) ||
+            contains("김해", ignoreCase = true) ||
+            contains("BGL", ignoreCase = true) -> "김"
+        contains("1") -> "1"
+        contains("2") -> "2"
+        contains("3") -> "3"
+        contains("4") -> "4"
+        else -> take(2)
+    }
+
 @Composable
 private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMarkerSpec? =
     when (kind) {
@@ -618,7 +645,7 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
         MapViewportPointKind.ORIGIN ->
             ViewportPointMarkerSpec(
                 label = label ?: "O",
-                containerColor = MaterialTheme.colorScheme.secondary,
+                containerColor = Color(0xFF006BE0),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
@@ -628,7 +655,7 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
         MapViewportPointKind.DESTINATION ->
             ViewportPointMarkerSpec(
                 label = label ?: "D",
-                containerColor = MaterialTheme.colorScheme.error,
+                containerColor = Color(0xFFF14337),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
@@ -646,16 +673,49 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
             )
 
         MapViewportPointKind.SEGMENT_JUNCTION ->
-            (tone ?: MapViewportOverlayTone.PRIMARY).toSegmentMarkerPalette().let { palette ->
-                ViewportPointMarkerSpec(
-                    label = null,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = Color(palette.fillColorArgb),
-                    borderColor = Color(palette.strokeColorArgb),
-                    size = 16.dp,
-                    fontSize = 1.sp,
-                )
-            }
+            ViewportPointMarkerSpec(
+                label = null,
+                containerColor = Color.White,
+                contentColor = Color.Transparent,
+                borderColor = Color(0xFF8C8C8E),
+                size = 18.dp,
+                fontSize = 1.sp,
+            )
+
+        MapViewportPointKind.TRANSIT_BUS_STOP ->
+            ViewportPointMarkerSpec(
+                label = "BUS",
+                containerColor = Color(0xFF304583),
+                contentColor = Color.White,
+                borderColor = Color.White,
+                size = 30.dp,
+                fontSize = 8.sp,
+            )
+
+        MapViewportPointKind.TRANSIT_SUBWAY_STATION -> {
+            val routeLabel = transitMarker?.from?.label ?: label
+            ViewportPointMarkerSpec(
+                label = routeLabel.toFallbackSubwayLineShortLabel(),
+                containerColor = routeLabel.toFallbackSubwayLineColor(),
+                contentColor = Color.White,
+                borderColor = Color.White,
+                size = 30.dp,
+                fontSize = 11.sp,
+            )
+        }
+
+        MapViewportPointKind.TRANSIT_TRANSFER -> {
+            val from = transitMarker?.from
+            val to = transitMarker?.to
+            ViewportPointMarkerSpec(
+                label = listOfNotNull(from?.toFallbackTransitShortLabel(), to?.toFallbackTransitShortLabel()).joinToString("›"),
+                containerColor = Color.White,
+                contentColor = Color(0xFF111827),
+                borderColor = Color(0xFFE5E7EB),
+                size = 46.dp,
+                fontSize = 9.sp,
+            )
+        }
 
         MapViewportPointKind.CAMERA_FOCUS ->
             ViewportPointMarkerSpec(
@@ -833,7 +893,7 @@ private fun MapMarkerCategoryType.toFacilityLabel(): String =
     }
 
 private const val RouteDirectionArrowInsetDp = 28
-private const val RouteDirectionArrowIntervalDp = 58
+private const val RouteDirectionArrowIntervalDp = 20
 private const val RouteDirectionArrowMinSegmentDp = 44
 private const val RouteDirectionArrowLengthDp = 10
 private const val RouteDirectionArrowHalfWidthDp = 5

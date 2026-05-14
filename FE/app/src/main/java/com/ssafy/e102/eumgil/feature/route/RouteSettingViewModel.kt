@@ -94,6 +94,7 @@ class RouteSettingViewModel(
     fun onAction(action: RouteSettingUiAction) {
         when (action) {
             RouteSettingUiAction.BackClicked -> emitUiEvent(RouteSettingUiEvent.NavigateBack)
+            RouteSettingUiAction.CloseClicked -> closeRouteFlow()
             is RouteSettingUiAction.WaypointClicked -> openWaypointSearch(action.editingTarget)
             is RouteSettingUiAction.TravelModeSelected -> selectTravelMode(action.mode)
             is RouteSettingUiAction.RouteOptionSelected -> selectRouteOption(action.routeOption)
@@ -765,6 +766,22 @@ class RouteSettingViewModel(
     private fun openRouteDetail(routeOption: RouteOption) {
         selectRouteOption(routeOption)
         emitUiEvent(RouteSettingUiEvent.NavigateToRouteDetail(routeOption))
+    }
+
+    private fun closeRouteFlow() {
+        cancelStagedTransitEnhancement()
+        destinationSelectionRepository.clearSelectedOriginSilently()
+        destinationSelectionRepository.clearSelectedDestination()
+        latestSearchDataByMode = emptyMap()
+        selectedOptionByMode = defaultSelectedOptionsByMode()
+        isStartNavigationInFlight = false
+        isRouteReloadInFlight = false
+        pendingRouteReloadRequest = null
+        lastCompletedRouteReloadSignature = null
+        lastSuccessfulAutoOrigin = null
+        activeRouteLoadId += 1L
+        mutableUiState.value = RouteSettingUiState()
+        emitUiEvent(RouteSettingUiEvent.NavigateToMap)
     }
 
     private fun startNavigation() {
@@ -1452,6 +1469,7 @@ class RouteSettingViewModel(
                     kind = leg.type.toSegmentKind(),
                     label = "${minutes}분",
                     weight = minutes.toFloat().coerceAtLeast(1f),
+                    routeLabel = leg.routeNo?.takeIf(String::isNotBlank),
                 )
             }
 
@@ -2103,7 +2121,50 @@ private fun RouteSegment.toDetailStepUiState(
             kind = kind,
             tone = detailStepTone(kind = kind),
             coordinate = anchorCoordinate ?: polyline.points.firstOrNull(),
+            transitLabel = sourceLeg?.routeNo?.takeIf(String::isNotBlank),
+            transitStartName = sourceLeg?.boardingStop?.name?.takeIf(String::isNotBlank),
+            transitEndName = sourceLeg?.alightingStop?.name?.takeIf(String::isNotBlank),
+            transitDurationLabel = sourceLeg?.toTransitDurationLabel(),
+            transitOptionLabels = sourceLeg?.toDetailTransitOptionLabels().orEmpty(),
         )
+
+private fun RouteLeg.toTransitDurationLabel(): String? =
+    estimatedTimeMinutes?.takeIf { minute -> minute > 0 }?.let { minute -> "${minute}분" }
+        ?: durationSeconds?.takeIf { seconds -> seconds > 0 }?.let { seconds -> "${((seconds + 59) / 60).coerceAtLeast(1)}분" }
+
+private fun RouteLeg.toDetailTransitOptionLabels(): List<RouteTransitOptionLabelUiState> {
+    if (type != RouteLegType.BUS && type != RouteLegType.SUBWAY) return emptyList()
+    val routeNumbers =
+        buildList {
+            routeNo?.takeIf(String::isNotBlank)?.let(::add)
+            addAll(laneOptions.mapNotNull { option -> option.routeNo?.takeIf(String::isNotBlank) })
+        }.distinct().ifEmpty {
+            routeNo?.takeIf(String::isNotBlank)?.let(::listOf).orEmpty()
+        }
+    val arrivalByRouteNo =
+        laneOptions
+            .mapNotNull { option ->
+                val optionRouteNo = option.routeNo?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                val arrivalLabel =
+                    option.remainingMinute?.let { minute -> "${minute}분" }
+                        ?: option.estimatedTimeMinutes?.let { minute -> "${minute}분" }
+                optionRouteNo to arrivalLabel
+            }.toMap()
+
+    return routeNumbers
+        .map { routeNo ->
+            RouteTransitOptionLabelUiState(
+                typeLabel =
+                    when (type) {
+                        RouteLegType.SUBWAY -> "지하철"
+                        else -> if (isLowFloor == true || laneOptions.any { option -> option.routeNo == routeNo && option.isLowFloor == true }) "저상" else "일반"
+                    },
+                routeNo = routeNo,
+                arrivalLabel = arrivalByRouteNo[routeNo],
+            )
+        }
+        .take(MAX_TRANSIT_OPTION_LABEL_COUNT)
+}
 
 private fun RouteSegment.detailStepTitle(kind: RouteDetailStepKind): String =
     when (kind) {
@@ -2543,7 +2604,7 @@ private const val EMPTY_DESTINATION_LABEL = "도착지를 선택해 주세요"
 private const val EMPTY_DESTINATION_SUPPORTING_TEXT = "검색 또는 지도에서 도착지를 설정할 수 있어요."
 private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "전체 경로를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
 private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동합니다."
-private const val CTA_LABEL_START = "길 안내 시작"
+private const val CTA_LABEL_START = "안내 시작"
 private const val CTA_SUPPORTING_READY = "선택한 경로로 길 안내를 시작할 수 있습니다."
 private const val CTA_SUPPORTING_ACKNOWLEDGED = "길 안내를 시작하는 중입니다."
 private const val CTA_SUPPORTING_WAITING_HANDOFF = "검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다."

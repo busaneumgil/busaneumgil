@@ -13,6 +13,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentTravelKind
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
+import kotlin.math.roundToLong
 
 @Immutable
 internal data class MapViewportOverlayState(
@@ -40,6 +41,7 @@ internal data class MapViewportPointOverlay(
     val isSelected: Boolean = false,
     val includeInProjection: Boolean = true,
     val clickTargetId: String? = null,
+    val transitMarker: MapViewportTransitMarker? = null,
 )
 
 internal enum class MapViewportPointKind {
@@ -48,8 +50,28 @@ internal enum class MapViewportPointKind {
     DESTINATION,
     CURRENT_LOCATION,
     SEGMENT_JUNCTION,
+    TRANSIT_BUS_STOP,
+    TRANSIT_SUBWAY_STATION,
+    TRANSIT_TRANSFER,
     CAMERA_FOCUS,
     FOCUS_HALO,
+}
+
+@Immutable
+internal data class MapViewportTransitMarker(
+    val from: MapViewportTransitMarkerLeg,
+    val to: MapViewportTransitMarkerLeg? = null,
+)
+
+@Immutable
+internal data class MapViewportTransitMarkerLeg(
+    val kind: MapViewportTransitMarkerKind,
+    val label: String? = null,
+)
+
+internal enum class MapViewportTransitMarkerKind {
+    BUS,
+    SUBWAY,
 }
 
 @Immutable
@@ -59,6 +81,7 @@ internal data class MapViewportPolylineOverlay(
     val style: MapViewportPolylineStyle,
     val tone: MapViewportOverlayTone,
     val includeInProjection: Boolean = true,
+    val showDirectionArrows: Boolean = true,
 ) {
     val isRenderable: Boolean
         get() = points.size >= 2
@@ -138,21 +161,42 @@ internal fun createRoutePreviewViewportOverlayState(
     previewMap: RoutePreviewMapUiState,
     routeTone: MapViewportOverlayTone = previewMap.routeOption.toViewportOverlayTone(),
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
-): MapViewportOverlayState =
-    MapViewportOverlayState(
+    focusSelectedGuidanceMarker: Boolean = false,
+    showDetailedRouteOverlay: Boolean = true,
+): MapViewportOverlayState {
+    val visibleGuidanceMarkers =
+        guidanceMarkers
+            .let { markers ->
+                if (showDetailedRouteOverlay) {
+                    markers
+                } else {
+                    markers.filter(MapViewportPointOverlay::isSelected)
+                }
+            }
+            .deduplicateRouteGuidanceMarkers()
+
+    return MapViewportOverlayState(
         points =
             buildList {
                 previewMap.originCoordinate?.toOverlayPoint(
                     overlayId = "route-origin",
                     kind = MapViewportPointKind.ORIGIN,
                     label = "O",
-                )?.let(::add)
+                )?.copy(includeInProjection = !focusSelectedGuidanceMarker)?.let(::add)
                 previewMap.destinationCoordinate?.toOverlayPoint(
                     overlayId = "route-destination",
                     kind = MapViewportPointKind.DESTINATION,
                     label = "D",
-                )?.let(::add)
-                addAll(guidanceMarkers)
+                )?.copy(includeInProjection = !focusSelectedGuidanceMarker)?.let(::add)
+                addAll(
+                    visibleGuidanceMarkers.map { marker ->
+                        if (focusSelectedGuidanceMarker) {
+                            marker.copy(includeInProjection = marker.isSelected)
+                        } else {
+                            marker
+                        }
+                    },
+                )
             },
         polylines =
             listOf(
@@ -161,9 +205,39 @@ internal fun createRoutePreviewViewportOverlayState(
                     points = previewMap.polyline.map(GeoCoordinate::toMapCoordinate),
                     style = MapViewportPolylineStyle.ROUTE_PREVIEW,
                     tone = routeTone,
+                    includeInProjection = !focusSelectedGuidanceMarker,
+                    showDirectionArrows = showDetailedRouteOverlay,
                 ),
             ).filter(MapViewportPolylineOverlay::isRenderable),
     )
+}
+
+private fun List<MapViewportPointOverlay>.deduplicateRouteGuidanceMarkers(): List<MapViewportPointOverlay> =
+    groupBy { marker -> marker.coordinate.deduplicationKey() }
+        .values
+        .mapNotNull { markers ->
+            markers.maxWithOrNull(
+                compareBy<MapViewportPointOverlay> { marker -> marker.routeGuidanceMarkerPriority() }
+                    .thenBy { marker -> marker.overlayId },
+            )
+        }
+
+private fun MapCoordinate.deduplicationKey(): Pair<Long, Long> =
+    Pair(
+        (latitude * COORDINATE_DEDUPLICATION_SCALE).roundToLong(),
+        (longitude * COORDINATE_DEDUPLICATION_SCALE).roundToLong(),
+    )
+
+private fun MapViewportPointOverlay.routeGuidanceMarkerPriority(): Int =
+    when {
+        isSelected && transitMarker != null -> 60
+        isSelected -> 50
+        transitMarker != null -> 40
+        kind == MapViewportPointKind.TRANSIT_BUS_STOP || kind == MapViewportPointKind.TRANSIT_SUBWAY_STATION -> 35
+        kind == MapViewportPointKind.TRANSIT_TRANSFER -> 30
+        kind == MapViewportPointKind.SEGMENT_JUNCTION -> 10
+        else -> 20
+    }
 
 internal fun createNavigationViewportOverlayState(
     mapOverlay: NavigationMapOverlayUiState,
@@ -315,6 +389,7 @@ private fun List<NavigationMapSegmentUiState>.toSegmentMarkerOverlays(
 ): List<MapViewportPointOverlay> =
     mapIndexedNotNull { index, segment ->
         if (index == 0) return@mapIndexedNotNull null
+        if (segment.travelKind == NavigationSegmentTravelKind.TRANSIT) return@mapIndexedNotNull null
         val coordinate = segment.segmentStartCoordinate ?: segment.polyline.firstOrNull() ?: return@mapIndexedNotNull null
         MapViewportPointOverlay(
             overlayId = "navigation-junction-$index",
@@ -436,8 +511,8 @@ internal fun MapViewportOverlayTone.toSegmentMarkerPalette(): MapViewportSegment
     when (this) {
         MapViewportOverlayTone.PRIMARY ->
             MapViewportSegmentMarkerPalette(
-                fillColorArgb = 0xFF2A7BFF.toInt(),
-                strokeColorArgb = 0xFF0F4FC6.toInt(),
+                fillColorArgb = 0xFF006BE0.toInt(),
+                strokeColorArgb = 0xFF0054B0.toInt(),
             )
 
         MapViewportOverlayTone.SECONDARY ->
@@ -448,20 +523,20 @@ internal fun MapViewportOverlayTone.toSegmentMarkerPalette(): MapViewportSegment
 
         MapViewportOverlayTone.TERTIARY ->
             MapViewportSegmentMarkerPalette(
-                fillColorArgb = 0xFFE7832F.toInt(),
-                strokeColorArgb = 0xFFB85B16.toInt(),
+                fillColorArgb = 0xFFF9AB4D.toInt(),
+                strokeColorArgb = 0xFFD8841F.toInt(),
             )
 
         MapViewportOverlayTone.NEUTRAL ->
             MapViewportSegmentMarkerPalette(
-                fillColorArgb = 0xFF9CA3AF.toInt(),
-                strokeColorArgb = 0xFF6B7280.toInt(),
+                fillColorArgb = 0xFFD9D9D9.toInt(),
+                strokeColorArgb = 0xFF8C8C8E.toInt(),
             )
 
         MapViewportOverlayTone.NAVY ->
             MapViewportSegmentMarkerPalette(
-                fillColorArgb = 0xFF28427F.toInt(),
-                strokeColorArgb = 0xFF172554.toInt(),
+                fillColorArgb = 0xFF304583.toInt(),
+                strokeColorArgb = 0xFF1E2C5A.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->
@@ -475,6 +550,7 @@ internal const val DEFAULT_VIEWPORT_CENTER_LATITUDE = 35.1796
 internal const val DEFAULT_VIEWPORT_CENTER_LONGITUDE = 129.0756
 internal const val MIN_VIEWPORT_LATITUDE_SPAN = 0.0035
 internal const val MIN_VIEWPORT_LONGITUDE_SPAN = 0.0045
+private const val COORDINATE_DEDUPLICATION_SCALE = 1_000_000.0
 
 private var lastSegmentJunctionOverlayDebugSummary: String? = null
 

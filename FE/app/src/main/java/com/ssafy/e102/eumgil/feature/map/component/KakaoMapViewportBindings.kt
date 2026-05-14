@@ -1019,14 +1019,14 @@ internal fun facilityMarkerGlyphResId(category: FacilityCategory): Int =
         FacilityCategory.ELEVATOR -> R.drawable.ic_lowvision_category_elevator
         FacilityCategory.CHARGING_STATION -> R.drawable.ic_place_charging
         FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_cafe
-        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_nav_facility
+        FacilityCategory.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
         FacilityCategory.ACCOMMODATION -> R.drawable.ic_place_accommodation
         FacilityCategory.HEALTHCARE -> R.drawable.ic_place_healthcare
         FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
         FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
-        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_nav_facility
+        FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
 

@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import androidx.lifecycle.SavedStateHandle
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -34,6 +35,25 @@ class MainNavGraphTopLevelNavigationPolicyTest {
 
         assertTrue(savedStateHandle.consumeMapHomeReentryReset())
         assertFalse(savedStateHandle.consumeMapHomeReentryReset())
+    }
+
+    @Test
+    fun `map home reentry helper pops the existing map entry before fallback navigate`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
+                .readText()
+
+        assertTrue(
+            "Home reentry should first try to pop back to the existing map entry so alias routes like search return to the actual map screen immediately.",
+            source.contains("popBackStack(") &&
+                source.contains("route = TopLevelRoute.Map.route") &&
+                source.contains("inclusive = false"),
+        )
+        assertTrue(
+            "Home reentry should still fall back to top-level map navigation when no existing map entry is available.",
+            source.contains("if (!didPopToMap) {") &&
+                source.contains("navigateToTopLevel(TopLevelDestination.Map)"),
+        )
     }
 
     @Test

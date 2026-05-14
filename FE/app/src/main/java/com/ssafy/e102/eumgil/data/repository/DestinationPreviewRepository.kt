@@ -32,6 +32,8 @@ interface DestinationPreviewRepository {
     )
 
     fun consumePreview(requestId: Long)
+
+    fun clearPreview()
 }
 
 class InMemoryDestinationPreviewRepository : DestinationPreviewRepository {
@@ -68,6 +70,10 @@ class InMemoryDestinationPreviewRepository : DestinationPreviewRepository {
             pendingPreview?.takeUnless { it.requestId == requestId }
         }
     }
+
+    override fun clearPreview() {
+        mutablePendingPreview.value = null
+    }
 }
 
 object NoOpDestinationPreviewRepository : DestinationPreviewRepository {
@@ -84,4 +90,6 @@ object NoOpDestinationPreviewRepository : DestinationPreviewRepository {
     ) = Unit
 
     override fun consumePreview(requestId: Long) = Unit
+
+    override fun clearPreview() = Unit
 }

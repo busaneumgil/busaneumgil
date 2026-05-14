@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,6 +50,8 @@ import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListAmber
 import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListBg
 import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListOnAmber
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.feature.savedroute.savedPlaceCategoryIconRes
+import com.ssafy.e102.eumgil.feature.savedroute.savedPlaceCategoryLabel
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 import com.ssafy.e102.eumgil.feature.savedroute.SavedPlaceUiModel
 import com.ssafy.e102.eumgil.feature.savedroute.SavedBookmarkContentState
@@ -74,10 +77,16 @@ internal object LowVisionBookmarkLayoutDefaults {
     val titleLineHeight = LowVisionSearchLayoutDefaults.titleLineHeight
     val addressFontSize = LowVisionSearchLayoutDefaults.addressFontSize
     val addressLineHeight = LowVisionSearchLayoutDefaults.addressLineHeight
+    val infoSectionMinHeight = LowVisionSearchLayoutDefaults.infoSectionMinHeight
+    val sectionDividerThickness = LowVisionSearchLayoutDefaults.sectionDividerThickness
+    val sectionDividerWidthFraction = LowVisionSearchLayoutDefaults.sectionDividerWidthFraction
+    val sectionDividerTopPadding = LowVisionSearchLayoutDefaults.sectionDividerTopPadding
+    val actionSectionTopPadding = LowVisionSearchLayoutDefaults.actionSectionTopPadding
     val actionIconSize = LowVisionSearchLayoutDefaults.actionIconSize
     val actionIconTextGap = LowVisionSearchLayoutDefaults.actionIconTextGap
     val actionLabelFontSize = LowVisionSearchLayoutDefaults.actionLabelFontSize
     val actionLabelLineHeight = LowVisionSearchLayoutDefaults.actionLabelLineHeight
+    val categoryIconSize = 32.dp
     val roomyPhoneBreakpoint = LowVisionSearchLayoutDefaults.roomyPhoneBreakpoint
     const val compactTextMaxLines = LowVisionSearchLayoutDefaults.compactTextMaxLines
     const val roomyTextMaxLines = LowVisionSearchLayoutDefaults.roomyTextMaxLines
@@ -238,17 +247,19 @@ private fun LowVisionBookmarkPlaceCard(
     val view = LocalView.current
     val addressText = lowVisionBriefAddress(place.address)
     val placeInfoContentDescription =
-        lowVisionPlaceInfoA11yLabel(
-            name = place.name,
-            address = place.address,
-        )
+        "${savedPlaceCategoryLabel(place.category)}. " +
+            lowVisionPlaceInfoA11yLabel(
+                name = place.name,
+                address = place.address,
+            )
     val placeInfoSpeechText =
-        lowVisionPlaceInfoSpeechText(
-            name = place.name,
-            address = place.address,
-            latitude = place.latitude,
-            longitude = place.longitude,
-        )
+        "${savedPlaceCategoryLabel(place.category)}. " +
+            lowVisionPlaceInfoSpeechText(
+                name = place.name,
+                address = place.address,
+                latitude = place.latitude,
+                longitude = place.longitude,
+            )
     val briefingContentDescription = "${place.name}. 탭하면 경로 브리핑으로 이동합니다."
 
     Column(
@@ -272,67 +283,92 @@ private fun LowVisionBookmarkPlaceCard(
                 ),
         verticalArrangement = Arrangement.spacedBy(LowVisionBookmarkLayoutDefaults.cardContentGap),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(LowVisionBookmarkLayoutDefaults.cardHeaderGap),
-            verticalAlignment = Alignment.Top,
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = LowVisionBookmarkLayoutDefaults.infoSectionMinHeight),
+            verticalArrangement = Arrangement.Top,
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(LowVisionBookmarkLayoutDefaults.indexBadgeSize)
-                        .background(
-                            color = PlaceListAmber,
-                            shape = RoundedCornerShape(8.dp),
-                        ),
-                contentAlignment = Alignment.Center,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(LowVisionBookmarkLayoutDefaults.cardHeaderGap),
+                verticalAlignment = Alignment.Top,
             ) {
-                Text(
-                    text = index.toString(),
-                    fontSize = LowVisionBookmarkLayoutDefaults.indexFontSize,
-                    fontWeight = FontWeight.Black,
-                    color = PlaceListOnAmber,
-                    lineHeight = LowVisionBookmarkLayoutDefaults.indexLineHeight,
-                    letterSpacing = 0.sp,
-                )
-            }
+                Box(
+                    modifier =
+                        Modifier
+                            .size(LowVisionBookmarkLayoutDefaults.indexBadgeSize)
+                            .background(
+                                color = PlaceListAmber,
+                                shape = RoundedCornerShape(8.dp),
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = index.toString(),
+                        fontSize = LowVisionBookmarkLayoutDefaults.indexFontSize,
+                        fontWeight = FontWeight.Black,
+                        color = PlaceListOnAmber,
+                        lineHeight = LowVisionBookmarkLayoutDefaults.indexLineHeight,
+                        letterSpacing = 0.sp,
+                    )
+                }
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .clickable(
-                            role = Role.Button,
-                            onClick = {
-                                view.announceForAccessibility(placeInfoSpeechText)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .clickable(
+                                role = Role.Button,
+                                onClick = {
+                                    view.announceForAccessibility(placeInfoSpeechText)
+                                },
+                            )
+                            .semantics {
+                                contentDescription = placeInfoContentDescription
                             },
+                ) {
+                    Icon(
+                        painter = painterResource(id = savedPlaceCategoryIconRes(place.category)),
+                        contentDescription = null,
+                        tint = PlaceListAmber,
+                        modifier = Modifier.size(LowVisionBookmarkLayoutDefaults.categoryIconSize),
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = place.name,
+                            color = Color.White,
+                            fontSize = LowVisionBookmarkLayoutDefaults.titleFontSize,
+                            fontWeight = FontWeight.Black,
+                            lineHeight = LowVisionBookmarkLayoutDefaults.titleLineHeight,
+                            letterSpacing = 0.sp,
+                            maxLines = titleMaxLines,
                         )
-                        .semantics {
-                            contentDescription = placeInfoContentDescription
-                        },
-            ) {
-                Text(
-                    text = place.name,
-                    color = Color.White,
-                    fontSize = LowVisionBookmarkLayoutDefaults.titleFontSize,
-                    fontWeight = FontWeight.Black,
-                    lineHeight = LowVisionBookmarkLayoutDefaults.titleLineHeight,
-                    letterSpacing = 0.sp,
-                    maxLines = titleMaxLines,
-                )
-                Text(
-                    text = addressText,
-                    color = Color.White,
-                    fontSize = LowVisionBookmarkLayoutDefaults.addressFontSize,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = LowVisionBookmarkLayoutDefaults.addressLineHeight,
-                    letterSpacing = 0.sp,
-                    maxLines = addressMaxLines,
-                )
+                        Text(
+                            text = addressText,
+                            color = Color.White,
+                            fontSize = LowVisionBookmarkLayoutDefaults.addressFontSize,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = LowVisionBookmarkLayoutDefaults.addressLineHeight,
+                            letterSpacing = 0.sp,
+                            maxLines = addressMaxLines,
+                        )
+                    }
+                }
             }
         }
 
+        LowVisionBookmarkCardSectionDivider()
+
         Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = LowVisionBookmarkLayoutDefaults.actionSectionTopPadding),
             verticalArrangement = Arrangement.spacedBy(LowVisionBookmarkLayoutDefaults.actionButtonGap),
         ) {
             LowVisionPlaceCardDefaults.actionOrder.forEach { action ->
@@ -352,6 +388,21 @@ private fun LowVisionBookmarkPlaceCard(
             }
         }
     }
+}
+
+@Composable
+private fun LowVisionBookmarkCardSectionDivider() {
+    Box(
+        modifier =
+            Modifier
+                .padding(top = LowVisionBookmarkLayoutDefaults.sectionDividerTopPadding)
+                .fillMaxWidth(LowVisionBookmarkLayoutDefaults.sectionDividerWidthFraction)
+                .height(LowVisionBookmarkLayoutDefaults.sectionDividerThickness)
+                .background(
+                    color = PlaceListAmber,
+                    shape = RoundedCornerShape(999.dp),
+                ),
+    )
 }
 
 @Composable

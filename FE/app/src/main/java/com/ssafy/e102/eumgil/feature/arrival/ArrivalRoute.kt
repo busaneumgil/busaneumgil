@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.arrival
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +39,10 @@ fun ArrivalRoute(
         }
     val viewModel: ArrivalViewModel = viewModel(factory = viewModelFactory)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    BackHandler {
+        viewModel.onAction(ArrivalUiAction.HomeClicked)
+    }
 
     LaunchedEffect(viewModel, onNavigateToMap, onNavigateToSearch) {
         viewModel.uiEvent.collect { event ->

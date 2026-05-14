@@ -22,6 +22,7 @@ import com.ssafy.e102.eumgil.core.model.RoutePolyline
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
+import com.ssafy.e102.eumgil.core.model.RouteSearchResult
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteSummary
@@ -76,6 +77,7 @@ class RouteSettingViewModel(
     private var stagedTransitEnhancementJob: Job? = null
     private var activeRouteLoadId: Long = 0L
     private var lastObservedSelectionState = destinationSelectionRepository.selectionState.value
+    private var detailNavigationRequest: RouteNavigationRequest? = null
 
     init {
         currentLocationManager.refreshLatestLocation()
@@ -102,9 +104,9 @@ class RouteSettingViewModel(
         }
     }
 
-    fun startLocationUpdates() {
+    fun startLocationUpdates(requestLocationPermissionIfNeeded: Boolean = true) {
         hasStartedActiveLocationUpdates = true
-        syncLocationAccess(requestPermissionIfNeeded = true)
+        syncLocationAccess(requestPermissionIfNeeded = requestLocationPermissionIfNeeded)
     }
 
     fun stopLocationUpdates() {
@@ -132,6 +134,35 @@ class RouteSettingViewModel(
                 )
             }
         }
+    }
+
+    fun bindRouteDetailRequest(request: RouteNavigationRequest) {
+        cancelStagedTransitEnhancement()
+        detailNavigationRequest = request
+        val selectedTravelMode = request.selectedRoute.routeOption.toTravelMode()
+        val searchData = request.toRouteSearchData()
+        latestSearchDataByMode = mapOf(selectedTravelMode to searchData)
+        selectedOptionByMode = defaultSelectedOptionsByMode() + (selectedTravelMode to request.selectedRoute.routeOption)
+        mutableUiState.value =
+            buildUiState(
+                searchData = searchData,
+                originResolution =
+                    RouteOriginResolution(
+                        routeOrigin = request.origin,
+                        originUiState = originLocationUiState(request.origin),
+                        originState = RouteOriginState.MANUAL_SELECTION,
+                        originStatus = null,
+                    ),
+                destinationResolution =
+                    RouteDestinationResolution(
+                        routeDestination = request.destination,
+                        destinationUiState = destinationLocationUiState(request.destination),
+                        handoffState = RouteDestinationHandoffState.DIRECT,
+                    ),
+                selectedTravelMode = selectedTravelMode,
+                requestedOption = request.selectedRoute.routeOption,
+                ctaAcknowledged = false,
+            )
     }
 
     private fun observeSelectionRequests() {
@@ -285,6 +316,7 @@ class RouteSettingViewModel(
     }
 
     private suspend fun performRouteReload(request: RouteReloadRequest) {
+        detailNavigationRequest = null
         val loadId = beginRouteLoad()
         val selectedOrigin = destinationSelectionRepository.selectedOrigin.value
         val selectedDestination = destinationSelectionRepository.selectedDestination.value
@@ -755,6 +787,22 @@ class RouteSettingViewModel(
     private fun startNavigation() {
         cancelStagedTransitEnhancement()
         if (mutableUiState.value.ctaAcknowledged || isStartNavigationInFlight) {
+            return
+        }
+        detailNavigationRequest?.let { request ->
+            mutableUiState.update { state ->
+                state.copy(
+                    loadErrorMessage = null,
+                    cta =
+                        buildCtaUiState(
+                            selectedRoute = state.selectedRoute,
+                            ctaAcknowledged = true,
+                            destinationHandoffState = RouteDestinationHandoffState.DIRECT,
+                        ),
+                    ctaAcknowledged = true,
+                )
+            }
+            emitUiEvent(RouteSettingUiEvent.StartNavigationRequested(request))
             return
         }
         if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
@@ -2741,6 +2789,24 @@ private fun RouteReloadRequest?.mergeWith(next: RouteReloadRequest): RouteReload
                 force = force || next.force,
             )
     }
+
+private fun RouteNavigationRequest.toRouteSearchData(): RouteSearchData =
+    RouteSearchData(
+        query =
+            RouteSearchQuery(
+                origin = origin,
+                destination = destination,
+                requestedOptions = listOf(selectedRoute.routeOption),
+            ),
+        result =
+            RouteSearchResult(
+                origin = origin,
+                destination = destination,
+                searchId = selectionHandoff?.searchId,
+                routes = listOf(selectedRoute),
+            ),
+        source = source,
+    )
 
 private object NoOpCurrentLocationManager : CurrentLocationManager {
     private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)

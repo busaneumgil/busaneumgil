@@ -19,11 +19,16 @@ private const val BUSAN_BIMS_QUERY_CHARSET = "EUC-KR"
 private val busanZoneId: ZoneId = ZoneId.of("Asia/Seoul")
 private val lowFloorBusTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HHmmss")
 
-fun createDuribalDialIntent(): Intent =
-    Intent(Intent.ACTION_DIAL, Uri.parse(duribalDialUriString()))
+fun createDialIntent(phoneNumber: String): Intent =
+    Intent(Intent.ACTION_DIAL, Uri.parse(dialUriString(phoneNumber)))
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-fun duribalDialUriString(): String = "tel:${DURIBAL_PHONE_NUMBER.filter(Char::isDigit)}"
+fun dialUriString(phoneNumber: String): String = "tel:${phoneNumber.filter(Char::isDigit)}"
+
+fun createDuribalDialIntent(): Intent =
+    createDialIntent(DURIBAL_PHONE_NUMBER)
+
+fun duribalDialUriString(): String = dialUriString(DURIBAL_PHONE_NUMBER)
 
 suspend fun requestLowFloorBusReservation(reservation: LowFloorBusReservation): Boolean =
     withContext(Dispatchers.IO) {

@@ -7,16 +7,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -32,13 +31,16 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
+import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationScreenState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiState
+import com.ssafy.e102.eumgil.feature.navigation.iconRes
 
 private val LowVisionNavigationBackground = Color(0xFF0D0D0F)
 private val LowVisionNavigationPanel = Color(0xFF202123)
@@ -47,29 +49,61 @@ private val LowVisionNavigationCoral = Color(0xFFFF8B78)
 private val LowVisionNavigationInactive = Color(0xFFE7E7E7)
 private val LowVisionNavigationDivider = Color(0xFF36363A)
 
+private const val LOW_VISION_NAVIGATION_DISTANCE_LABEL = "\uB0A8\uC740 \uAC70\uB9AC"
+private const val LOW_VISION_NAVIGATION_TIME_LABEL = "\uB0A8\uC740 \uC2DC\uAC04"
+private const val LOW_VISION_NAVIGATION_DISTANCE_PENDING = "\uB0A8\uC740 \uAC70\uB9AC \uD655\uC778 \uC911"
+private const val LOW_VISION_NAVIGATION_TIME_PENDING = "\uB0A8\uC740 \uC2DC\uAC04 \uD655\uC778 \uC911"
+private const val LOW_VISION_NAVIGATION_SEGMENT_PREFIX = "\uC774\uBC88 \uAD6C\uAC04"
+private const val LOW_VISION_NAVIGATION_SEGMENT_PENDING_SHORT = "\uD655\uC778 \uC911"
+private const val LOW_VISION_NAVIGATION_APPROXIMATE_SUFFIX = "\uC815\uB3C4"
+private const val LOW_VISION_NAVIGATION_PREPARING_ACTION_TALKBACK = "\uC548\uB0B4\uB97C \uC900\uBE44\uD558\uACE0 \uC788\uC5B4\uC694"
+private const val LOW_VISION_NAVIGATION_MINUTE_UNIT = "\uBD84"
+
 internal object LowVisionNavigationLayoutDefaults {
     val contentTopPadding = 56.dp
     val contentBottomPadding = 18.dp
-    val contentGap = 24.dp
-    val metricHeaderHeight = 168.dp
-    val metricLabelFontSize = 28.sp
-    val metricLabelLineHeight = 34.sp
-    val metricNumberFontSize = 76.sp
-    val metricNumberLineHeight = 84.sp
-    val metricUnitFontSize = 34.sp
-    val metricUnitLineHeight = 40.sp
-    val currentLocationIconSize = 74.dp
-    val currentLocationIconTextGap = 10.dp
-    val currentLocationVerticalPadding = 12.dp
-    val currentLocationLabelFontSize = 44.sp
-    val currentLocationLabelLineHeight = 50.sp
+    val contentGap = 18.dp
+    val liveGuidanceMinHeight = 388.dp
+    val liveGuidanceVerticalPadding = 30.dp
+    val liveGuidanceIconSize = 108.dp
+    val liveGuidanceTransitIconSize = 88.dp
+    val liveGuidanceIconTextGap = 22.dp
+    val liveGuidanceEyebrowFontSize = 26.sp
+    val liveGuidanceEyebrowLineHeight = 32.sp
+    val liveGuidanceMetricFontSize = 40.sp
+    val liveGuidanceMetricLineHeight = 46.sp
+    val liveGuidanceSegmentDistanceFontSize = 72.sp
+    val liveGuidanceSegmentDistanceLineHeight = 80.sp
+    val liveGuidanceActionFontSize = 62.sp
+    val liveGuidanceActionLineHeight = 70.sp
+    val liveGuidanceDetailFontSize = 30.sp
+    val liveGuidanceDetailLineHeight = 38.sp
+    val metricStripHeight = 136.dp
+    val metricLabelFontSize = 24.sp
+    val metricLabelLineHeight = 30.sp
+    val metricNumberFontSize = 44.sp
+    val metricNumberLineHeight = 50.sp
+    val metricUnitFontSize = 24.sp
+    val metricUnitLineHeight = 30.sp
+    val statusCardVerticalPadding = 18.dp
+    val statusCardHeaderFontSize = 26.sp
+    val statusCardHeaderLineHeight = 32.sp
+    val statusCardTitleFontSize = 40.sp
+    val statusCardTitleLineHeight = 48.sp
+    val statusCardBodyFontSize = 26.sp
+    val statusCardBodyLineHeight = 34.sp
     val exitCardVerticalPadding = 22.dp
     val exitIconContainerSize = 92.dp
     val exitIconSize = 48.dp
-    val exitIconTextGap = 16.dp
-    val exitLabelFontSize = 48.sp
-    val exitLabelLineHeight = 54.sp
+    val exitIconTextGap = 14.dp
+    val exitLabelFontSize = 36.sp
+    val exitLabelLineHeight = 42.sp
 }
+
+internal data class LowVisionNavigationActionCard(
+    val label: String,
+    @DrawableRes val iconRes: Int,
+)
 
 internal data class LowVisionNavigationMetricSection(
     val label: String,
@@ -78,23 +112,34 @@ internal data class LowVisionNavigationMetricSection(
     fun talkBackText(value: String): String = "$label $value"
 }
 
-internal data class LowVisionNavigationActionCard(
-    val label: String,
+internal data class LowVisionNavigationLiveGuidanceDisplay(
+    val eyebrow: String,
+    val remainingDistanceText: String,
+    val remainingTimeText: String,
+    val segmentDistanceText: String,
+    val actionText: String,
+    val detailText: String,
+    val talkBackText: String,
     @DrawableRes val iconRes: Int,
+    val guidanceAction: NavigationGuidanceAction,
+)
+
+internal data class LowVisionNavigationStatusDisplay(
+    val header: String,
+    val metricSummary: String,
+    val title: String,
+    val body: String,
+    val talkBackText: String,
 )
 
 internal fun lowVisionNavigationMetricSections(): List<LowVisionNavigationMetricSection> =
     listOf(
-        LowVisionNavigationMetricSection(label = "\uB0A8\uC740 \uAC70\uB9AC", metricIndex = 0),
-        LowVisionNavigationMetricSection(label = "\uB0A8\uC740 \uC2DC\uAC04", metricIndex = 1),
+        LowVisionNavigationMetricSection(label = "남은 거리", metricIndex = 0),
+        LowVisionNavigationMetricSection(label = "남은 시간", metricIndex = 1),
     )
 
 internal fun lowVisionNavigationActionCards(): List<LowVisionNavigationActionCard> =
     listOf(
-        LowVisionNavigationActionCard(
-            label = "\uD604\uC7AC \uC704\uCE58",
-            iconRes = R.drawable.ic_voice_location_pin,
-        ),
         LowVisionNavigationActionCard(
             label = "\uC548\uB0B4 \uC644\uB8CC",
             iconRes = R.drawable.ic_action_close,
@@ -133,6 +178,121 @@ internal fun lowVisionNavigationDisplayMetric(
     }
 }
 
+internal fun lowVisionNavigationLiveGuidanceDisplay(uiState: NavigationUiState): LowVisionNavigationLiveGuidanceDisplay {
+    if (uiState.screenState == NavigationScreenState.Loading) {
+        return LowVisionNavigationLiveGuidanceDisplay(
+            eyebrow = LOW_VISION_NAVIGATION_PREPARING_EYEBROW,
+            actionText = LOW_VISION_NAVIGATION_PREPARING_ACTION,
+            remainingDistanceText = LOW_VISION_NAVIGATION_DISTANCE_PENDING,
+            remainingTimeText = LOW_VISION_NAVIGATION_TIME_PENDING,
+            segmentDistanceText = LOW_VISION_NAVIGATION_SEGMENT_PENDING_SHORT,
+            detailText = LOW_VISION_NAVIGATION_PREPARING_DETAIL,
+            talkBackText = "$LOW_VISION_NAVIGATION_SEGMENT_PREFIX $LOW_VISION_NAVIGATION_SEGMENT_PENDING_SHORT $LOW_VISION_NAVIGATION_PREPARING_ACTION_TALKBACK.",
+            iconRes = NavigationGuidanceAction.STRAIGHT.iconRes(),
+            guidanceAction = NavigationGuidanceAction.STRAIGHT,
+        )
+    }
+
+    val actionText =
+        uiState.stepCard.instruction.trim().ifBlank {
+            uiState.stepCard.heroTitle.trim().ifBlank { LOW_VISION_NAVIGATION_PREPARING_ACTION }
+        }
+    val detailText =
+        listOf(
+            uiState.stepCard.heroDescription.trim(),
+            uiState.stepCard.supportingText.trim(),
+        ).firstOrNull { candidate ->
+            candidate.isNotBlank() && candidate != actionText
+        } ?: LOW_VISION_NAVIGATION_PREPARING_DETAIL
+    val eyebrow =
+        when (uiState.screenState) {
+            NavigationScreenState.Loading -> LOW_VISION_NAVIGATION_PREPARING_EYEBROW
+            NavigationScreenState.Ready,
+            NavigationScreenState.Empty,
+                -> LOW_VISION_NAVIGATION_LIVE_EYEBROW
+        }
+    val remainingDistanceText =
+        lowVisionNavigationMetricPhrase(
+            label = LOW_VISION_NAVIGATION_DISTANCE_LABEL,
+            rawValue = uiState.remainingDistanceLabel,
+            fallback = LOW_VISION_NAVIGATION_DISTANCE_PENDING,
+            metricIndex = 0,
+        )
+    val remainingTimeText =
+        lowVisionNavigationMetricPhrase(
+            label = LOW_VISION_NAVIGATION_TIME_LABEL,
+            rawValue = uiState.remainingEtaLabel,
+            fallback = LOW_VISION_NAVIGATION_TIME_PENDING,
+            metricIndex = 1,
+        )
+    val segmentDistanceText =
+        lowVisionNavigationSegmentDistancePhrase(uiState.stepCard.distanceLabel, actionText)
+    val talkBackText =
+        "$LOW_VISION_NAVIGATION_SEGMENT_PREFIX $segmentDistanceText $LOW_VISION_NAVIGATION_APPROXIMATE_SUFFIX " +
+            "${uiState.stepCard.guidanceAction.toLowVisionNavigationActionPhrase()}."
+
+    return LowVisionNavigationLiveGuidanceDisplay(
+        eyebrow = eyebrow,
+        remainingDistanceText = remainingDistanceText,
+        remainingTimeText = remainingTimeText,
+        segmentDistanceText = segmentDistanceText,
+        actionText = actionText,
+        detailText = detailText,
+        talkBackText = talkBackText,
+        iconRes = uiState.stepCard.guidanceAction.iconRes(),
+        guidanceAction = uiState.stepCard.guidanceAction,
+    )
+}
+
+internal fun lowVisionNavigationStatusDisplay(uiState: NavigationUiState): LowVisionNavigationStatusDisplay {
+    val title =
+        uiState.stepCard.heroTitle.trim().ifBlank {
+            if (uiState.screenState == NavigationScreenState.Loading) {
+                LOW_VISION_NAVIGATION_PREPARING_STATUS_TITLE
+            } else {
+                LOW_VISION_NAVIGATION_STATUS_HEADER
+            }
+        }
+    val bodyCandidates =
+        buildList {
+            val supportingText = uiState.stepCard.supportingText.trim()
+            if (supportingText.isNotBlank() && supportingText != title) add(supportingText)
+            val progressLabel = uiState.progressLabel.trim()
+            if (progressLabel.isNotBlank() && progressLabel != "-") add("$LOW_VISION_NAVIGATION_PROGRESS_PREFIX $progressLabel")
+        }
+    val body =
+        bodyCandidates.firstOrNull()
+            ?: if (uiState.screenState == NavigationScreenState.Loading) {
+                LOW_VISION_NAVIGATION_PREPARING_STATUS_BODY
+            } else {
+                LOW_VISION_NAVIGATION_STATUS_BODY
+            }
+    val metricSummary =
+        listOf(
+            lowVisionNavigationMetricPhrase(
+                label = LOW_VISION_NAVIGATION_DISTANCE_LABEL,
+                rawValue = uiState.remainingDistanceLabel,
+                fallback = "$LOW_VISION_NAVIGATION_DISTANCE_LABEL -",
+                metricIndex = 0,
+                preserveDash = true,
+            ),
+            lowVisionNavigationMetricPhrase(
+                label = LOW_VISION_NAVIGATION_TIME_LABEL,
+                rawValue = uiState.remainingEtaLabel,
+                fallback = "$LOW_VISION_NAVIGATION_TIME_LABEL -",
+                metricIndex = 1,
+                preserveDash = true,
+            ),
+        ).joinToString(separator = " \u00B7 ")
+    return LowVisionNavigationStatusDisplay(
+        header = LOW_VISION_NAVIGATION_STATUS_HEADER,
+        metricSummary = metricSummary,
+        title = title,
+        body = body,
+        talkBackText = listOf(LOW_VISION_NAVIGATION_STATUS_HEADER, metricSummary, title, body).joinToString(separator = " "),
+    )
+}
+
 private data class LowVisionMetricValueParts(
     val number: String,
     val unit: String,
@@ -154,11 +314,61 @@ private fun String.asDistanceLabel(): String {
 }
 
 private fun String.asMinuteLabel(): String {
-    if (endsWith("\uBD84")) return this
+    if (endsWith("분")) return this
 
     val minutes = metricNumberRegex.find(this)?.value?.toDoubleOrNull() ?: return this
-    return "${minutes.toInt()}\uBD84"
+    return "${minutes.toInt()}분"
 }
+
+private fun lowVisionNavigationMetricPhrase(
+    label: String,
+    rawValue: String,
+    fallback: String,
+    metricIndex: Int,
+    preserveDash: Boolean = false,
+): String {
+    val value = rawValue.trim()
+    if (value.isBlank() || value == "-") {
+        return if (preserveDash) "$label -" else fallback
+    }
+
+    val displayValue =
+        lowVisionNavigationDisplayMetric(
+            LowVisionNavigationMetricSection(label = label, metricIndex = metricIndex),
+            value,
+        )
+    if (displayValue == "-" || (!displayValue.containsKnownMetricUnit() && metricNumberRegex.find(displayValue) == null)) {
+        return fallback
+    }
+    return "$label $displayValue"
+}
+
+private fun lowVisionNavigationSegmentDistancePhrase(
+    rawDistanceLabel: String,
+    actionText: String,
+): String {
+    val distance =
+        rawDistanceLabel.trim().takeIf { value ->
+            value.isNotBlank() && value != "-" && (value.containsKnownMetricUnit() || metricNumberRegex.find(value) != null)
+        } ?: Regex("""\d+(?:\.\d+)?\s*(?:km|m)""", RegexOption.IGNORE_CASE)
+            .find(actionText)
+            ?.value
+            ?.replace(" ", "")
+    return distance ?: LOW_VISION_NAVIGATION_SEGMENT_PENDING_SHORT
+}
+
+private fun String.containsKnownMetricUnit(): Boolean =
+    contains("km", ignoreCase = true) || contains("m", ignoreCase = true) || contains(LOW_VISION_NAVIGATION_MINUTE_UNIT)
+
+private fun NavigationGuidanceAction.toLowVisionNavigationActionPhrase(): String =
+    when (this) {
+        NavigationGuidanceAction.BUS -> "\uBC84\uC2A4\uB97C \uC774\uC6A9\uD558\uC138\uC694"
+        NavigationGuidanceAction.SUBWAY -> "\uC9C0\uD558\uCCA0\uC744 \uC774\uC6A9\uD558\uC138\uC694"
+        NavigationGuidanceAction.STRAIGHT -> "\uC9C1\uC9C4\uD558\uC138\uC694"
+        NavigationGuidanceAction.TURN_LEFT -> "\uC88C\uD68C\uC804\uD558\uC138\uC694"
+        NavigationGuidanceAction.TURN_RIGHT -> "\uC6B0\uD68C\uC804\uD558\uC138\uC694"
+        NavigationGuidanceAction.CROSSWALK -> "\uD6A1\uB2E8\uBCF4\uB3C4\uB97C \uAC74\uB108\uC138\uC694"
+    }
 
 private fun Double.toKilometerText(): String {
     val tenths = kotlin.math.round(this * 10).toInt()
@@ -176,7 +386,7 @@ private fun lowVisionNavigationMetricValueParts(value: String): LowVisionMetricV
         when {
             value.endsWith("km", ignoreCase = true) -> "km"
             value.endsWith("m", ignoreCase = true) -> "m"
-            value.endsWith("\uBD84") -> "\uBD84"
+            value.endsWith("분") -> "분"
             else -> ""
         }
 
@@ -194,7 +404,6 @@ fun LowVisionNavigationScreen(
     modifier: Modifier = Modifier,
     onTabSelected: (LowVisionBottomTab) -> Unit = {},
     loadErrorMessage: String? = null,
-    currentLocationAddress: String? = null,
 ) {
     Column(
         modifier =
@@ -223,21 +432,17 @@ fun LowVisionNavigationScreen(
                             .weight(1f),
                 )
             } else {
-                LowVisionNavigationMetricHeader(
-                    uiState = uiState,
+                LowVisionNavigationLiveGuidanceCard(
+                    display = lowVisionNavigationLiveGuidanceDisplay(uiState),
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(LowVisionNavigationLayoutDefaults.metricHeaderHeight),
+                            .heightIn(min = LowVisionNavigationLayoutDefaults.liveGuidanceMinHeight)
+                            .weight(1.75f),
                 )
 
-                LowVisionCurrentLocationCard(
-                    card = lowVisionNavigationActionCards().first(),
-                    display =
-                        lowVisionCurrentLocationDisplay(
-                            coordinate = uiState.mapOverlay.currentLocation?.coordinate,
-                            address = currentLocationAddress,
-                        ),
+                LowVisionNavigationMetricStrip(
+                    uiState = uiState,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -245,13 +450,13 @@ fun LowVisionNavigationScreen(
                 )
 
                 LowVisionExitNavigationCard(
-                    card = lowVisionNavigationActionCards()[1],
+                    card = lowVisionNavigationActionCards().first(),
                     enabled = uiState.isExitEnabled,
                     onClick = { onAction(lowVisionNavigationExitAction()) },
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .weight(1.55f),
+                            .weight(1f),
                 )
             }
         }
@@ -298,33 +503,42 @@ private fun LowVisionNavigationLoadError(
 }
 
 @Composable
-private fun LowVisionNavigationMetricHeader(
+private fun LowVisionNavigationMetricStrip(
     uiState: NavigationUiState,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Surface(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
+        shape = RoundedCornerShape(18.dp),
+        color = LowVisionNavigationPanel,
     ) {
-        lowVisionNavigationMetricSections().forEachIndexed { index, section ->
-            val rawValue = uiState.stepCard.metrics.getOrNull(section.metricIndex)?.value.orEmpty()
-            val value = lowVisionNavigationDisplayMetric(section, rawValue)
-            LowVisionNavigationMetricItem(
-                section = section,
-                value = value,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-            )
-            if (index == 0) {
-                Box(
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            lowVisionNavigationMetricSections().forEachIndexed { index, section ->
+                val rawValue = uiState.stepCard.metrics.getOrNull(section.metricIndex)?.value.orEmpty()
+                val value = lowVisionNavigationDisplayMetric(section, rawValue)
+                LowVisionNavigationMetricItem(
+                    section = section,
+                    value = value,
                     modifier =
                         Modifier
-                            .width(1.dp)
-                            .height(132.dp)
-                            .background(LowVisionNavigationDivider),
+                            .weight(1f)
+                            .fillMaxHeight(),
                 )
+                if (index == 0) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .width(1.dp)
+                                .height(92.dp)
+                                .background(LowVisionNavigationDivider),
+                    )
+                }
             }
         }
     }
@@ -342,7 +556,7 @@ private fun LowVisionNavigationMetricItem(
                 .clearAndSetSemantics {
                     contentDescription = section.talkBackText(value)
                 }
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -358,7 +572,7 @@ private fun LowVisionNavigationMetricItem(
         )
         LowVisionNavigationMetricValue(
             value = value,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }
@@ -395,16 +609,15 @@ private fun LowVisionNavigationMetricValue(
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
-                modifier = Modifier.padding(start = 3.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 3.dp, bottom = 5.dp),
             )
         }
     }
 }
 
 @Composable
-private fun LowVisionCurrentLocationCard(
-    card: LowVisionNavigationActionCard,
-    display: LowVisionCurrentLocationDisplay,
+private fun LowVisionNavigationLiveGuidanceCard(
+    display: LowVisionNavigationLiveGuidanceDisplay,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -421,36 +634,117 @@ private fun LowVisionCurrentLocationCard(
                     }
                     .padding(
                         horizontal = 24.dp,
-                        vertical = LowVisionNavigationLayoutDefaults.currentLocationVerticalPadding,
+                        vertical = LowVisionNavigationLayoutDefaults.liveGuidanceVerticalPadding,
                     ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                painter = painterResource(id = card.iconRes),
+                painter = painterResource(id = display.iconRes),
                 contentDescription = null,
                 tint = Color.Black,
-                modifier = Modifier.size(LowVisionNavigationLayoutDefaults.currentLocationIconSize),
+                modifier =
+                    Modifier
+                        .size(
+                            lowVisionGuidanceIconSize(display.guidanceAction),
+                        ),
             )
-            Spacer(modifier = Modifier.height(LowVisionNavigationLayoutDefaults.currentLocationIconTextGap))
             Text(
-                text = display.title,
+                text = display.segmentDistanceText,
                 color = Color.Black,
-                fontSize = LowVisionNavigationLayoutDefaults.currentLocationLabelFontSize,
-                lineHeight = LowVisionNavigationLayoutDefaults.currentLocationLabelLineHeight,
+                fontSize = LowVisionNavigationLayoutDefaults.liveGuidanceSegmentDistanceFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.liveGuidanceSegmentDistanceLineHeight,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
+                modifier = Modifier.padding(top = LowVisionNavigationLayoutDefaults.liveGuidanceIconTextGap),
             )
             Text(
-                text = display.supportingText,
+                text = display.actionText,
                 color = Color.Black,
-                fontSize = 24.sp,
-                lineHeight = 30.sp,
+                fontSize = LowVisionNavigationLayoutDefaults.liveGuidanceActionFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.liveGuidanceActionLineHeight,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                text = display.detailText,
+                color = Color.Black.copy(alpha = 0.82f),
+                fontSize = LowVisionNavigationLayoutDefaults.liveGuidanceDetailFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.liveGuidanceDetailLineHeight,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LowVisionNavigationStatusCard(
+    display: LowVisionNavigationStatusDisplay,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = LowVisionNavigationPanel,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .clearAndSetSemantics {
+                        contentDescription = display.talkBackText
+                    }
+                    .padding(
+                        horizontal = 24.dp,
+                        vertical = LowVisionNavigationLayoutDefaults.statusCardVerticalPadding,
+                    ),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = display.header,
+                color = LowVisionNavigationYellow,
+                fontSize = LowVisionNavigationLayoutDefaults.statusCardHeaderFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.statusCardHeaderLineHeight,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 0.sp,
+            )
+            Text(
+                text = display.metricSummary,
+                color = Color.White,
+                fontSize = LowVisionNavigationLayoutDefaults.statusCardBodyFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.statusCardBodyLineHeight,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.sp,
+                maxLines = 2,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                text = display.title,
+                color = Color.White,
+                fontSize = LowVisionNavigationLayoutDefaults.statusCardTitleFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.statusCardTitleLineHeight,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.sp,
+                maxLines = 2,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+            Text(
+                text = display.body,
+                color = LowVisionNavigationInactive,
+                fontSize = LowVisionNavigationLayoutDefaults.statusCardBodyFontSize,
+                lineHeight = LowVisionNavigationLayoutDefaults.statusCardBodyLineHeight,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.sp,
+                modifier = Modifier.padding(top = 10.dp),
             )
         }
     }
@@ -475,9 +769,9 @@ private fun LowVisionExitNavigationCard(
                 )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        color = LowVisionNavigationPanel,
+        color = LowVisionNavigationYellow,
     ) {
-        Column(
+        Box(
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -485,29 +779,11 @@ private fun LowVisionExitNavigationCard(
                         horizontal = 24.dp,
                         vertical = LowVisionNavigationLayoutDefaults.exitCardVerticalPadding,
                     ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            contentAlignment = Alignment.Center,
         ) {
-            Surface(
-                shape = CircleShape,
-                color = LowVisionNavigationCoral.copy(alpha = contentAlpha),
-            ) {
-                Box(
-                    modifier = Modifier.size(LowVisionNavigationLayoutDefaults.exitIconContainerSize),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(id = card.iconRes),
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(LowVisionNavigationLayoutDefaults.exitIconSize),
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(LowVisionNavigationLayoutDefaults.exitIconTextGap))
             Text(
                 text = card.label,
-                color = LowVisionNavigationInactive.copy(alpha = contentAlpha),
+                color = Color.Black.copy(alpha = contentAlpha),
                 fontSize = LowVisionNavigationLayoutDefaults.exitLabelFontSize,
                 lineHeight = LowVisionNavigationLayoutDefaults.exitLabelLineHeight,
                 fontWeight = FontWeight.Black,
@@ -518,3 +794,20 @@ private fun LowVisionExitNavigationCard(
         }
     }
 }
+
+private fun lowVisionGuidanceIconSize(guidanceAction: NavigationGuidanceAction): Dp =
+    if (guidanceAction == NavigationGuidanceAction.BUS || guidanceAction == NavigationGuidanceAction.SUBWAY) {
+        LowVisionNavigationLayoutDefaults.liveGuidanceTransitIconSize
+    } else {
+        LowVisionNavigationLayoutDefaults.liveGuidanceIconSize
+    }
+
+private const val LOW_VISION_NAVIGATION_LIVE_EYEBROW = "지금 해야 할 행동"
+private const val LOW_VISION_NAVIGATION_PREPARING_EYEBROW = "안내 준비 중"
+private const val LOW_VISION_NAVIGATION_PREPARING_ACTION = "길 안내를 준비하고 있어요"
+private const val LOW_VISION_NAVIGATION_PREPARING_DETAIL = "현재 위치와 경로 안내를 확인하는 중입니다."
+private const val LOW_VISION_NAVIGATION_STATUS_HEADER = "이동 상태"
+private const val LOW_VISION_NAVIGATION_PREPARING_STATUS_TITLE = "안내 시작 전이에요"
+private const val LOW_VISION_NAVIGATION_PREPARING_STATUS_BODY = "경로가 준비되면 지금 해야 할 행동을 바로 알려드릴게요."
+private const val LOW_VISION_NAVIGATION_STATUS_BODY = "안전한 경로를 따라 이동 중입니다."
+private const val LOW_VISION_NAVIGATION_PROGRESS_PREFIX = "진행 단계"

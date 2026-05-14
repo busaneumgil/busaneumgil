@@ -67,6 +67,44 @@ class LowVisionNavigationRouteTest {
         }
 
     @Test
+    fun `low vision fallback route measures distance from selected destination coordinates`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "provider:kakao:unknown-place",
+                    name = "Unknown Provider Place",
+                    address = "Outside internal list",
+                    latitude = 35.006,
+                    longitude = 129.0,
+                ),
+            )
+            val origin =
+                RouteWaypoint(
+                    name = "Current location",
+                    address = "Current location",
+                    coordinate =
+                        com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+                            latitude = 35.0,
+                            longitude = 129.0,
+                        ),
+                )
+
+            val request =
+                ThrowingRouteRepository()
+                    .buildLowVisionNavigationRequest(
+                        destinationSelectionRepository = destinationSelectionRepository,
+                        origin = origin,
+                    )
+
+            assertEquals(35.006, request?.destination?.coordinate?.latitude ?: 0.0, 0.0)
+            assertEquals(129.0, request?.destination?.coordinate?.longitude ?: 0.0, 0.0)
+            val distanceMeters = request?.selectedRoute?.summary?.distanceMeters ?: 0
+            assertTrue("Fallback distance should come from origin and destination coordinates.", distanceMeters in 650..700)
+            assertTrue(request?.selectedRoute?.summary?.estimatedTimeMinutes ?: 0 > 0)
+        }
+
+    @Test
     fun `low vision navigation request fetches a fresh route search before selecting`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -155,7 +193,7 @@ class LowVisionNavigationRouteTest {
         }
 
     @Test
-    fun `low vision navigation repairs incomplete route metrics and steps`() =
+    fun `low vision navigation repairs incomplete route metrics without synthesizing route segments`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             destinationSelectionRepository.updateSelectedDestination(
@@ -175,14 +213,14 @@ class LowVisionNavigationRouteTest {
             assertTrue(request?.selectedRoute?.summary?.distanceMeters ?: 0 > 0)
             assertTrue(request?.selectedRoute?.summary?.estimatedTimeMinutes ?: 0 > 0)
             assertTrue(request?.selectedRoute?.summary?.durationSeconds ?: 0 > 0)
-            assertTrue(request?.selectedRoute?.segments?.isNotEmpty() == true)
+            assertTrue(request?.selectedRoute?.segments?.isEmpty() == true)
             assertTrue(request?.selectedRoute?.previewPolyline?.isRenderable == true)
             assertTrue(request?.selectionHandoff?.initialRemainingDistanceMeters ?: 0 > 0)
             assertTrue(request?.selectionHandoff?.initialRemainingDurationSeconds ?: 0 > 0)
         }
 
     @Test
-    fun `low vision navigation creates distinct briefing messages for repaired route steps`() =
+    fun `low vision navigation keeps missing route segment elements empty`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             destinationSelectionRepository.updateSelectedDestination(
@@ -197,15 +235,7 @@ class LowVisionNavigationRouteTest {
             val routeRepository = IncompleteFreshRouteRepository()
 
             val request = routeRepository.buildLowVisionNavigationRequest(destinationSelectionRepository)
-            val instructions =
-                request
-                    ?.selectedRoute
-                    ?.segments
-                    .orEmpty()
-                    .map(RouteSegment::toCompactBriefingInstruction)
-
-            assertTrue(instructions.size >= 2)
-            assertEquals(instructions.size, instructions.distinct().size)
+            assertTrue(request?.selectedRoute?.segments?.isEmpty() == true)
         }
 
     @Test
@@ -263,6 +293,31 @@ class LowVisionNavigationRouteTest {
         }
 
     @Test
+    fun `low vision navigation request does not build a route when destination is missing`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val currentOrigin =
+                RouteWaypoint(
+                    name = "Current location",
+                    address = "Current address",
+                    coordinate = com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+                        latitude = 35.163,
+                        longitude = 129.163,
+                    ),
+                )
+            val routeRepository = OriginTrackingRouteRepository()
+
+            val request =
+                routeRepository.buildLowVisionNavigationRequest(
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    origin = currentOrigin,
+                )
+
+            assertNull(request)
+            assertNull(routeRepository.lastWalkQuery)
+        }
+
+    @Test
     fun `low vision navigation falls back to default origin when current origin route search fails`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -302,6 +357,15 @@ class LowVisionNavigationRouteTest {
     fun `low vision navigation request preserves coroutine cancellation`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "real-place-id",
+                    name = "Real Place",
+                    address = "Busan",
+                    latitude = 35.2,
+                    longitude = 129.2,
+                ),
+            )
 
             try {
                 CancellationRouteRepository()

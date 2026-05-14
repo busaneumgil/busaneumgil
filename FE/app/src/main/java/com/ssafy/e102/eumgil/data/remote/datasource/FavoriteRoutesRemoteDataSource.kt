@@ -3,9 +3,11 @@ package com.ssafy.e102.eumgil.data.remote.datasource
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.dto.CreateFavoriteRouteResponseDto
+import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRouteDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRouteListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRoutePageDto
 import com.ssafy.e102.eumgil.data.remote.dto.FavoriteRoutePointDto
+import com.ssafy.e102.eumgil.data.route.toRouteDto
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -68,6 +70,22 @@ open class FavoriteRoutesRemoteDataSource(
         val dataJson = response.requireDataJson(responseJson)
 
         return dataJson.toFavoriteRoutePageDto()
+    }
+
+    open suspend fun getFavoriteRouteDetail(
+        accessToken: String,
+        favRouteId: Long,
+    ): FavoriteRouteDetailDto {
+        val response =
+            getRequestExecutor(
+                "/favorite-routes/$favRouteId",
+                emptyMap(),
+                bearerHeader(accessToken),
+            )
+        val responseJson = response.body.toJsonObjectOrNull()
+        val dataJson = response.requireDataJson(responseJson)
+
+        return dataJson.toFavoriteRouteDetailDto()
     }
 
     open suspend fun createFavoriteRoute(
@@ -187,6 +205,43 @@ open class FavoriteRoutesRemoteDataSource(
                 ),
             transportMode = optString("transportMode").takeIf { it.isNotBlank() },
             routeOption = optString("routeOption"),
+        )
+    }
+
+    private fun JSONObject.toFavoriteRouteDetailDto(): FavoriteRouteDetailDto {
+        val startPointJson =
+            optJSONObject("startPoint")
+                ?: throw FavoriteRoutesApiException(
+                    httpStatusCode = 0,
+                    status = "",
+                    message = DEFAULT_FAVORITE_ROUTES_API_ERROR_MESSAGE,
+                )
+        val endPointJson =
+            optJSONObject("endPoint")
+                ?: throw FavoriteRoutesApiException(
+                    httpStatusCode = 0,
+                    status = "",
+                    message = DEFAULT_FAVORITE_ROUTES_API_ERROR_MESSAGE,
+                )
+
+        return FavoriteRouteDetailDto(
+            favRouteId = optLong("favRouteId"),
+            routeName = optString("routeName"),
+            startLabel = optString("startLabel"),
+            endLabel = optString("endLabel"),
+            startPoint =
+                FavoriteRoutePointDto(
+                    lat = startPointJson.optDouble("lat"),
+                    lng = startPointJson.optDouble("lng"),
+                ),
+            endPoint =
+                FavoriteRoutePointDto(
+                    lat = endPointJson.optDouble("lat"),
+                    lng = endPointJson.optDouble("lng"),
+                ),
+            transportMode = optString("transportMode").takeIf { it.isNotBlank() },
+            routeOption = optString("routeOption"),
+            route = optJSONObject("route")?.toRouteDto(),
         )
     }
 

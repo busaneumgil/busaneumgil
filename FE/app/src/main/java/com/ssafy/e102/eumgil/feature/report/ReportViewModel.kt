@@ -3,8 +3,11 @@ package com.ssafy.e102.eumgil.feature.report
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.NoOpCurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
@@ -15,6 +18,7 @@ import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -32,6 +36,7 @@ class ReportViewModel(
     private val reportRepository: ReportRepository,
     private val currentLocationManager: CurrentLocationManager,
     private val locationPermissionManager: LocationPermissionManager,
+    private val addressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = mutableUiState.asStateFlow()
@@ -66,9 +71,6 @@ class ReportViewModel(
             ReportUiAction.ReportTypeBlurred -> touchReportType()
             ReportUiAction.CurrentLocationResetClicked -> requestCurrentLocation()
             ReportUiAction.RefreshLocationPermission -> handleRefreshLocationPermission()
-            // LocationPickerClicked: REPORT-02에 inline 카카오맵이 임베드되어 사용자가
-            // 직접 지도를 드래그·줌으로 위치를 선택하므로 별도 picker 액션 불필요. no-op.
-            ReportUiAction.LocationPickerClicked -> Unit
             is ReportUiAction.LocationSelected -> selectLocation(action.location, action.source)
             is ReportUiAction.AddressTextChanged -> updateAddressText(action.address)
             ReportUiAction.LocationBlurred -> touchLocation()
@@ -479,6 +481,51 @@ class ReportViewModel(
                 submitState = ReportSubmitState.Idle,
             )
         }
+        // Task 2.3 — 좌표만 들어온 경우 자동 reverse geocoding. 외부에서 address까지 채워 들어온
+        // 경우(예: 향후 검색 결과 선택)는 그대로 존중.
+        if (location.address.isNullOrBlank()) {
+            triggerReverseGeocode(location)
+        }
+    }
+
+    // ─── Reverse geocoding (Task 2.3) ─────────────────────────────────────
+    // 지도 드래그·핀치 등으로 onCameraMoveEnd가 연달아 fire될 때 매번 API를 때리지 않도록
+    // 짧은 debounce를 두고, 새 위치가 들어오면 이전 job을 cancel한다.
+    private var reverseGeocodeJob: Job? = null
+
+    private fun triggerReverseGeocode(location: ReportLocation) {
+        reverseGeocodeJob?.cancel()
+        reverseGeocodeJob =
+            viewModelScope.launch {
+                delay(REVERSE_GEOCODE_DEBOUNCE_MS)
+                val resolved =
+                    runCatching {
+                        addressResolver.resolveAddress(
+                            GeoCoordinate(
+                                latitude = location.latitude,
+                                longitude = location.longitude,
+                            ),
+                        )
+                    }.getOrNull()?.takeIf { it.isNotBlank() } ?: return@launch
+
+                mutableUiState.update { state ->
+                    val currentLocation = state.location.value ?: return@update state
+                    // 결과 도착 사이에 사용자가 새 좌표를 선택한 경우 stale 결과는 무시한다.
+                    if (currentLocation.latitude != location.latitude ||
+                        currentLocation.longitude != location.longitude
+                    ) {
+                        return@update state
+                    }
+                    // location.address만 갱신해 "선택된 위치" 카드에 표시한다.
+                    // addressText(OutlinedTextField)는 사용자 직접 입력 전용이라 건드리지 않는다.
+                    state.copy(
+                        location =
+                            state.location.copy(
+                                value = currentLocation.copy(address = resolved),
+                            ),
+                    )
+                }
+            }
     }
 
     private fun updateAddressText(address: String) {
@@ -763,11 +810,15 @@ class ReportViewModel(
         // 권한 다이얼로그가 응답 없이 머무르는 비정상 케이스 fallback. ON_RESUME이 들어오지
         // 않는 환경에서도 일정 시간 후 흐름을 종료한다.
         private const val PERMISSION_PENDING_TIMEOUT_MS = 20_000L
+        // 지도 드래그·핀치 후 onCameraMoveEnd가 짧은 간격으로 여러 번 fire될 때 API 과호출을
+        // 방지하기 위한 debounce. 사용자가 카메라를 멈춘 직후의 좌표만 lookup하도록 한다.
+        private const val REVERSE_GEOCODE_DEBOUNCE_MS = 300L
 
         fun provideFactory(
             reportRepository: ReportRepository,
             currentLocationManager: CurrentLocationManager,
             locationPermissionManager: LocationPermissionManager,
+            addressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -777,6 +828,7 @@ class ReportViewModel(
                             reportRepository = reportRepository,
                             currentLocationManager = currentLocationManager,
                             locationPermissionManager = locationPermissionManager,
+                            addressResolver = addressResolver,
                         ) as T
                     }
 
@@ -828,7 +880,10 @@ private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDr
         draftId = draftId,
         reportCategory = reportType.value?.apiValue,
         description = description.trimmedValue,
-        address = locationValue?.address ?: location.addressText.trim().ifEmpty { null },
+        // 옵션 4: address는 좌표 → RGC 자동 결과만, addressDetail은 사용자 직접 입력 메모만.
+        // 두 필드를 분리해 저장하므로 복원 시점에 자동/사용자 영역이 그대로 살아난다.
+        address = locationValue?.address,
+        addressDetail = location.addressText.trim().ifEmpty { null },
         latitude = locationValue?.latitude,
         longitude = locationValue?.longitude,
         locationSource = location.source.name,
@@ -863,7 +918,9 @@ private fun ReportUiState.toOutboxData(): ReportOutboxData {
         outboxId = "",
         reportCategory = reportTypeValue.apiValue,
         description = description.trimmedValue,
-        address = locationValue.address ?: location.addressText.trim().ifEmpty { null },
+        // 옵션 4와 동일하게 두 필드 분리. 서버 submit DTO에는 둘 다 안 가고 로컬 outbox에만 보존.
+        address = locationValue.address,
+        addressDetail = location.addressText.trim().ifEmpty { null },
         latitude = locationValue.latitude,
         longitude = locationValue.longitude,
         photoUri = firstPhoto?.localUri,
@@ -911,10 +968,18 @@ private fun ReportDraftData.toUiState(): ReportUiState {
         location =
             ReportLocationInput(
                 value = location,
-                addressText = address.orEmpty(),
+                // 옵션 4: 사용자 입력 메모는 addressDetail에서 복원. 자동 RGC 결과(address)는
+                // location.value.address에 이미 들어가 있어 카드의 자동 도로명 라인에 노출된다.
+                // 기존 v8 이전 draft는 addressDetail이 null이라 사용자 영역은 빈 칸으로 복원됨.
+                addressText = addressDetail.orEmpty(),
                 source = locationSource,
-                isDirty = location != null || !address.isNullOrBlank(),
-                error = if (location == null) null else validateLocation(location, address.orEmpty()),
+                isDirty = location != null || !addressDetail.isNullOrBlank(),
+                error =
+                    if (location == null) {
+                        null
+                    } else {
+                        validateLocation(location, addressDetail.orEmpty())
+                    },
             ),
         photo =
             ReportPhotoInput(
@@ -958,12 +1023,14 @@ private fun ReportLocationInput.withValue(
 ): ReportLocationInput =
     copy(
         value = location,
-        addressText = location.address.orEmpty(),
+        // addressText는 사용자가 OutlinedTextField에 직접 입력하는 "추가 메모"용 필드라
+        // location.address(자동 RGC 결과)로 덮어쓰지 않고 이전 값을 그대로 보존한다.
+        // ReportLocationBottomCard는 이미 location.address 우선 표시이므로 자동 주소는 그쪽으로 노출됨.
         source = source,
         isTouched = true,
         isDirty = true,
         isResolvingCurrentLocation = false,
-        error = validateLocation(location, location.address.orEmpty()),
+        error = validateLocation(location, addressText),
     )
 
 private fun ReportLocationInput.withAddress(

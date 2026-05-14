@@ -16,10 +16,13 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
+import com.ssafy.e102.eumgil.core.location.locationPermissions
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
 import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
@@ -51,6 +54,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 .getStateFlow(MAP_HOME_REENTRY_RESET_KEY, false)
                 .collectAsStateWithLifecycle()
         MapRoute(
+            viewModelStoreOwner = backStackEntry,
             onNavigateToSavedRoutes = {
                 navController.navigateToTopLevel(TopLevelDestination.SavedRoute)
             },
@@ -58,7 +62,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute())
+                navController.navigateToRouteSettingPermissionGate()
             },
             onNavigateToSearch = { editingTarget ->
                 navController.navigate(SearchRoute.Entry.createRoute(editingTarget))
@@ -74,14 +78,26 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     }
 
     composable(route = TopLevelRoute.SavedRoute.route) {
+        val navigationViewModel = rememberNavigationGuidanceViewModel()
         SavedRouteRoute(
             onNavigateToMap = {
                 navController.navigateToTopLevel(TopLevelDestination.Map)
             },
-            onNavigateToRouteSetting = { routeOption ->
+            onNavigateToNavigation = { request ->
+                navigationViewModel.bindNavigationRequest(request)
+                navController.navigate(NavigationRoute.Guidance.route)
+            },
+            onNavigateToRouteDetail = { request ->
+                navigationViewModel.bindNavigationRequest(request)
                 navController.navigate(
-                    RouteSettingRoute.Setting.createRoute(initialRouteOption = routeOption),
+                    RouteSettingRoute.Detail.createRoute(
+                        routeOption = request.selectedRoute.routeOption,
+                        fromNavigation = true,
+                    ),
                 )
+            },
+            onNavigateToRouteSetting = { routeOption ->
+                navController.navigateToRouteSettingPermissionGate(initialRouteOption = routeOption)
             },
         )
     }
@@ -139,7 +155,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                navController.navigateToRouteSettingPermissionGate {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -203,7 +219,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToRouteSetting = {
-                navController.navigate(RouteSettingRoute.Setting.createRoute()) {
+                navController.navigateToRouteSettingPermissionGate {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -277,6 +293,66 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
     }
 
     composable(
+        route = RouteSettingRoute.PermissionGate.route,
+        arguments =
+            listOf(
+                navArgument(RouteSettingRoute.PermissionGate.ARG_AUTO_START_NAVIGATION) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+                navArgument(RouteSettingRoute.PermissionGate.ARG_INITIAL_ROUTE_OPTION) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
+        val context = LocalContext.current
+        val appContainer =
+            remember(context.applicationContext) {
+                (context.applicationContext as BusanEumgilApp).appContainer
+            }
+        val locationPermissionManager = remember(appContainer) { appContainer.locationPermissionManager }
+        val autoStartNavigation =
+            backStackEntry.arguments?.getBoolean(RouteSettingRoute.PermissionGate.ARG_AUTO_START_NAVIGATION) ?: false
+        val initialRouteOption =
+            backStackEntry.arguments
+                ?.getString(RouteSettingRoute.PermissionGate.ARG_INITIAL_ROUTE_OPTION)
+                ?.let(RouteOption::fromValue)
+        val permissionLauncher =
+            rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestMultiplePermissions(),
+            ) {
+                locationPermissionManager.refreshPermissionState()
+                navController.navigateToRouteSettingFromPermissionGate(
+                    gateDestinationId = backStackEntry.destination.id,
+                    autoStartNavigation = autoStartNavigation,
+                    initialRouteOption = initialRouteOption,
+                )
+            }
+
+        LaunchedEffect(
+            locationPermissionManager,
+            autoStartNavigation,
+            initialRouteOption,
+        ) {
+            locationPermissionManager.refreshPermissionState()
+            when (locationPermissionManager.permissionState.value) {
+                is LocationPermissionState.Granted,
+                is LocationPermissionState.Unavailable,
+                    ->
+                    navController.navigateToRouteSettingFromPermissionGate(
+                        gateDestinationId = backStackEntry.destination.id,
+                        autoStartNavigation = autoStartNavigation,
+                        initialRouteOption = initialRouteOption,
+                    )
+
+                LocationPermissionState.Denied -> permissionLauncher.launch(locationPermissions)
+            }
+        }
+    }
+
+    composable(
         route = RouteSettingRoute.Setting.route,
         arguments =
             listOf(
@@ -289,6 +365,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(RouteSettingRoute.Setting.ARG_LOCATION_PERMISSION_PRECHECKED) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
             ),
     ) { backStackEntry ->
         val autoStartNavigation =
@@ -297,11 +377,16 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             backStackEntry.arguments
                 ?.getString(RouteSettingRoute.Setting.ARG_INITIAL_ROUTE_OPTION)
                 ?.let(RouteOption::fromValue)
+        val locationPermissionPrechecked =
+            backStackEntry.arguments
+                ?.getBoolean(RouteSettingRoute.Setting.ARG_LOCATION_PERMISSION_PRECHECKED)
+                ?: false
         val navigationViewModel = rememberNavigationGuidanceViewModel()
 
         RouteSettingEntryRoute(
             autoStartNavigation = autoStartNavigation,
             initialRouteOption = initialRouteOption,
+            requestLocationPermissionIfNeeded = !locationPermissionPrechecked,
             onNavigateBack = {
                 navController.popBackStack()
             },
@@ -336,6 +421,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navArgument(RouteSettingRoute.Detail.ARG_ROUTE_OPTION) {
                     type = NavType.StringType
                 },
+                navArgument(RouteSettingRoute.Detail.ARG_FROM_NAVIGATION) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
             ),
     ) { backStackEntry ->
         val routeOption =
@@ -343,10 +432,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 ?.getString(RouteSettingRoute.Detail.ARG_ROUTE_OPTION)
                 ?.toRouteOptionOrDefault()
                 ?: RouteOption.SAFE
+        val fromNavigation =
+            backStackEntry.arguments?.getBoolean(RouteSettingRoute.Detail.ARG_FROM_NAVIGATION) ?: false
         val navigationViewModel = rememberNavigationGuidanceViewModel()
 
         RouteDetailEntryRoute(
             routeOption = routeOption,
+            hydrateFromNavigation = fromNavigation,
             onNavigateBack = {
                 navController.popBackStack()
             },
@@ -356,7 +448,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onStartNavigation = { request ->
                 navigationViewModel.bindNavigationRequest(request)
                 navController.navigate(NavigationRoute.Guidance.route) {
-                    popUpTo(RouteSettingRoute.Detail.createRoute(routeOption)) {
+                    popUpTo(RouteSettingRoute.Detail.createRoute(routeOption, fromNavigation = fromNavigation)) {
                         inclusive = true
                     }
                 }
@@ -486,7 +578,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.popBackStack()
             },
             onNavigateToRouteDetail = { routeOption ->
-                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption))
+                navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption, fromNavigation = true))
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
@@ -564,8 +656,48 @@ fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
 }
 
 internal fun NavController.navigateToTopLevelMapForHomeEntry() {
-    navigateToTopLevel(TopLevelDestination.Map)
+    val didPopToMap =
+        popBackStack(
+            route = TopLevelRoute.Map.route,
+            inclusive = false,
+        )
+    if (!didPopToMap) {
+        navigateToTopLevel(TopLevelDestination.Map)
+    }
     getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestMapHomeReentryReset()
+}
+
+private fun NavController.navigateToRouteSettingPermissionGate(
+    autoStartNavigation: Boolean = false,
+    initialRouteOption: RouteOption? = null,
+    builder: NavOptionsBuilder.() -> Unit = {},
+) {
+    navigate(
+        RouteSettingRoute.PermissionGate.createRoute(
+            autoStartNavigation = autoStartNavigation,
+            initialRouteOption = initialRouteOption,
+        ),
+        builder,
+    )
+}
+
+private fun NavController.navigateToRouteSettingFromPermissionGate(
+    gateDestinationId: Int,
+    autoStartNavigation: Boolean,
+    initialRouteOption: RouteOption?,
+) {
+    navigate(
+        RouteSettingRoute.Setting.createRoute(
+            autoStartNavigation = autoStartNavigation,
+            initialRouteOption = initialRouteOption,
+            locationPermissionPrechecked = true,
+        ),
+    ) {
+        launchSingleTop = true
+        popUpTo(gateDestinationId) {
+            inclusive = true
+        }
+    }
 }
 
 internal fun NavHostController.navigateToArrivalHome(selectedPrimaryUserType: String?) {
@@ -617,7 +749,7 @@ private fun String?.toRouteEditingTargetOrDefault(): RouteEditingTarget =
         ?: RouteEditingTarget.DESTINATION
 
 @androidx.compose.runtime.Composable
-private fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {
+internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {
     val context = LocalContext.current
     val activity = remember(context) { context.findComponentActivity() }
     val currentLocationManager = remember(context) {

@@ -29,7 +29,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.location.CompositeCurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.location.KakaoLocalCurrentLocationAddressResolver
 import kotlinx.coroutines.flow.collect
 
 private const val REPORT_PHOTO_PICKER_LOG_TAG = "ReportPhotoPicker"
@@ -42,17 +46,29 @@ fun ReportRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
     val appContainer =
-        remember(context.applicationContext) {
-            (context.applicationContext as BusanEumgilApp).appContainer
+        remember(appContext) {
+            (appContext as BusanEumgilApp).appContainer
         }
     val activity = remember(context) { context.findComponentActivity() }
+    // Reverse geocoder — primary는 정밀도가 높은 카카오 로컬 REST API, fallback은 Android
+    // Geocoder. NATIVE App Key가 REST API에 권한이 없거나 네트워크 실패 시에도 적어도
+    // Geocoder 결과로 카드 주소가 채워지도록 안전망을 둔다.
+    val addressResolver =
+        remember(appContext) {
+            CompositeCurrentLocationAddressResolver(
+                primary = KakaoLocalCurrentLocationAddressResolver(BuildConfig.KAKAO_NATIVE_APP_KEY),
+                fallback = AndroidCurrentLocationAddressResolver(appContext),
+            )
+        }
     val viewModelFactory =
-        remember(appContainer) {
+        remember(appContainer, addressResolver) {
             ReportViewModel.provideFactory(
                 reportRepository = appContainer.reportRepository,
                 currentLocationManager = appContainer.currentLocationManager,
                 locationPermissionManager = appContainer.locationPermissionManager,
+                addressResolver = addressResolver,
             )
         }
     val viewModel =
@@ -136,9 +152,7 @@ fun ReportRoute(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                 }
-                ReportUiEvent.OpenLocationPicker,
                 is ReportUiEvent.NavigateToReportComplete -> Unit
-                // OpenLocationPicker: Story 2.2 (KakaoMap 임베드) 범위
                 // NavigateToReportComplete: 현재 화면 내 step 전환과 중복이라 무시 (후속 정리 대상)
             }
         }

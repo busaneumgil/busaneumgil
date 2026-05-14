@@ -235,6 +235,8 @@ sealed interface NavigationUiEvent {
         val text: String,
     ) : NavigationUiEvent
 
+    data object PlayRouteChangeAlert : NavigationUiEvent
+
     data object StopBriefing : NavigationUiEvent
 
     data class SetVoiceGuidanceEnabled(

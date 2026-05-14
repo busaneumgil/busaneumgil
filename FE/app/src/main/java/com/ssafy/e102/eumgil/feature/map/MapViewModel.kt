@@ -17,9 +17,11 @@ import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
 import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
+import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
@@ -31,6 +33,7 @@ import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.observeAccountScopeKey
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MIN_ZOOM_LEVEL
@@ -39,6 +42,8 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
@@ -67,6 +72,7 @@ class MapViewModel(
     private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val facilitySeedRepository: FacilitySeedRepository,
     private val bookmarkRepository: BookmarkRepository,
+    private val authSessionRepository: AuthSessionRepository? = null,
     private val searchRepository: SearchRepository = NoOpSearchRepository,
     private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
@@ -120,6 +126,7 @@ class MapViewModel(
         observeSelectedDestination()
         observeSelectionRequests()
         observeDestinationPreviewRequests()
+        observeAccountScope()
         observePermissionState()
         observeLocationUpdates()
         loadMarkerBrowseState()
@@ -204,6 +211,7 @@ class MapViewModel(
         when (action) {
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
+            MapUiAction.FacilityPhoneClicked -> handleFacilityPhoneClicked()
             MapUiAction.FacilitySetDestinationClicked ->
                 handleFacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION)
             is MapUiAction.FacilitySetRouteEndpointClicked ->
@@ -725,6 +733,48 @@ class MapViewModel(
         }
     }
 
+    private fun observeAccountScope() {
+        val authSessionRepository = authSessionRepository ?: return
+
+        viewModelScope.launch {
+            var isInitialEmission = true
+            authSessionRepository.observeAccountScopeKey().collectLatest {
+                if (isInitialEmission) {
+                    isInitialEmission = false
+                    return@collectLatest
+                }
+
+                handleAccountScopeChanged()
+            }
+        }
+    }
+
+    private fun handleAccountScopeChanged() {
+        selectedDestination = null
+        facilityBrowseData = null
+        markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+        recentDestinations = emptyList()
+        lastPlacesBrowseAnchorSource = null
+        lastMarkerOverlayLogSnapshot = null
+        isRecenterButtonActive = false
+
+        clearSelectedFacilitySelection()
+        mutableUiState.update { state ->
+            state.copy(
+                selectedDestination = null,
+                recentDestinations = emptyList(),
+                markerOverlayState = MapMarkerOverlayState(),
+                markerFilterState = MapMarkerFilterUiState(),
+                shortcutFilterState = createShortcutFilterState(browseData = null),
+            )
+        }
+        renderSelectedFacilityState()
+        applyFallbackCameraTarget()
+        loadMarkerBrowseState()
+        refreshRecentDestinations()
+        renderUiState()
+    }
+
     private fun observeSelectionRequests() {
         viewModelScope.launch {
             destinationSelectionRepository.selectionRequests.collectLatest { request ->
@@ -782,6 +832,7 @@ class MapViewModel(
             )
 
         mapTapDetailRequestId += 1L
+        val requestId = mapTapDetailRequestId
         mapTapDetailLookupJob?.cancel()
         mapTapDetailLookupJob = null
         selectedMapPinCoordinate = coordinate
@@ -804,6 +855,42 @@ class MapViewModel(
         )
         renderSelectedFacilityState()
         renderUiState()
+        hydrateDestinationPreviewDetail(
+            previewRequest = previewRequest,
+            requestId = requestId,
+        )
+    }
+
+    private fun hydrateDestinationPreviewDetail(
+        previewRequest: DestinationPreviewRequest,
+        requestId: Long,
+    ) {
+        if (previewRequest.detailType != MapPlaceDetailType.INTERNAL_PLACE) return
+
+        val placeId = previewRequest.destination.placeId.takeIf(String::isNotBlank) ?: return
+        val placesRepository = placesRepository ?: return
+
+        viewModelScope.launch {
+            runCatching { placesRepository.getPlaceDetail(placeId) }
+                .onSuccess { placeDetail ->
+                    if (requestId != mapTapDetailRequestId) return@onSuccess
+                    if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onSuccess
+                    if (placeDetail == null) return@onSuccess
+
+                    selectedMapTapDetail =
+                        selectedMapTapDetail?.mergeInternalPreviewDetail(placeDetail)
+                    selectedFacilityBookmarkState =
+                        selectedFacilityBookmarkState.copy(
+                            facilityId = selectedMapTapDetail?.bookmarkCacheKey(),
+                            isBookmarked = placeDetail.isBookmarked,
+                        )
+                    renderSelectedFacilityState()
+                }
+                .onFailure {
+                    if (requestId != mapTapDetailRequestId) return@onFailure
+                    if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onFailure
+                }
+        }
     }
 
     private fun observeLocationUpdates() {
@@ -960,7 +1047,8 @@ class MapViewModel(
         }
         if (ignoredStaleProgrammaticCallback) return
 
-        if (isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {
+        // Automatic camera sync can report the preview pin as offscreen before the viewport stabilizes.
+        if (isUserGesture && isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {
             renderSelectedFacilityState()
             renderUiState()
         }
@@ -1409,6 +1497,14 @@ class MapViewModel(
         }
     }
 
+    private fun handleFacilityPhoneClicked() {
+        val phoneNumber =
+            selectedMapTapDetail?.phoneNumber?.takeIf(String::isNotBlank)
+                ?: selectedFacilityDetail?.phoneNumber?.takeIf(String::isNotBlank)
+                ?: return
+        emitUiEvent(MapUiEvent.OpenDialer(phoneNumber))
+    }
+
     private fun toggleFacilityBookmark(detail: FacilityDetailSeed) {
         val currentBookmarkState = selectedFacilityBookmarkState
         if (currentBookmarkState.isUpdating) return
@@ -1604,6 +1700,7 @@ class MapViewModel(
             destinationPreviewRepository: DestinationPreviewRepository,
             facilitySeedRepository: FacilitySeedRepository,
             bookmarkRepository: BookmarkRepository,
+            authSessionRepository: AuthSessionRepository? = null,
             searchRepository: SearchRepository,
             placesRepository: PlacesRepository? = null,
         ): ViewModelProvider.Factory =
@@ -1618,6 +1715,7 @@ class MapViewModel(
                             destinationPreviewRepository = destinationPreviewRepository,
                             facilitySeedRepository = facilitySeedRepository,
                             bookmarkRepository = bookmarkRepository,
+                            authSessionRepository = authSessionRepository,
                             searchRepository = searchRepository,
                             placesRepository = placesRepository,
                         ) as T
@@ -1704,6 +1802,22 @@ private fun DestinationPreviewRequest.toMapTappedPlaceDetail(): MapTappedPlaceDe
         latitude = destination.latitude,
         longitude = destination.longitude,
         accessibilityTags = accessibilityTagKeys,
+    )
+
+private fun MapTappedPlaceDetail.mergeInternalPreviewDetail(detail: PlaceDetail): MapTappedPlaceDetail =
+    copy(
+        bookmarkTargetId = bookmarkTargetId.ifBlank { detail.placeId },
+        placeId = detail.placeId,
+        name = detail.name,
+        category = detail.category,
+        address = detail.address,
+        features = detail.features,
+        isBookmarked = detail.isBookmarked,
+        accessibilityTags =
+            detail.accessibilityTags.takeIf { detailAccessibilityTags -> detailAccessibilityTags.isNotEmpty() }
+                ?: accessibilityTags,
+        phoneNumber = detail.phoneNumber ?: phoneNumber,
+        description = detail.description ?: description,
     )
 
 private fun MapTappedPlaceDetail.toBookmarkData(): BookmarkData {

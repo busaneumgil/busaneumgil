@@ -14,9 +14,18 @@ val Context.initSettingsDataStore: DataStore<Preferences> by preferencesDataStor
 )
 
 object InitSettingsPreferences {
-    val selectedPrimaryUserType = stringPreferencesKey("selected_primary_user_type")
-    val selectedMobilitySubtype = stringPreferencesKey("selected_mobility_subtype")
-    val isLowVisionFollowUpCompleted = booleanPreferencesKey("low_vision_follow_up_completed")
-    val isLocationTermsAgreed = booleanPreferencesKey("location_terms_agreed")
-    val isPrivacyPolicyAgreed = booleanPreferencesKey("privacy_policy_agreed")
+    fun selectedPrimaryUserType(scopeKey: String) =
+        stringPreferencesKey("${scopeKey}:selected_primary_user_type")
+
+    fun selectedMobilitySubtype(scopeKey: String) =
+        stringPreferencesKey("${scopeKey}:selected_mobility_subtype")
+
+    fun isLowVisionFollowUpCompleted(scopeKey: String) =
+        booleanPreferencesKey("${scopeKey}:low_vision_follow_up_completed")
+
+    fun isLocationTermsAgreed(scopeKey: String) =
+        booleanPreferencesKey("${scopeKey}:location_terms_agreed")
+
+    fun isPrivacyPolicyAgreed(scopeKey: String) =
+        booleanPreferencesKey("${scopeKey}:privacy_policy_agreed")
 }

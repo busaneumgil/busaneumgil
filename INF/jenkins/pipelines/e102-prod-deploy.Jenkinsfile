@@ -55,6 +55,32 @@ void sendMattermost(def script, String message) {
   """
 }
 
+String resolveTextOrFileCredential(def script, String value, String name) {
+  if (!value?.trim()) {
+    script.error "${name} is blank."
+  }
+
+  String resolved = ''
+  script.withEnv(["CREDENTIAL_VALUE=${value}"]) {
+    resolved = script.sh(
+      script: '''
+        set +x
+        if [ -f "$CREDENTIAL_VALUE" ]; then
+          tr -d '\\r\\n' < "$CREDENTIAL_VALUE"
+        else
+          printf '%s' "$CREDENTIAL_VALUE"
+        fi
+      ''',
+      returnStdout: true
+    ).trim()
+  }
+
+  if (!resolved) {
+    script.error "${name} resolved to blank."
+  }
+  return resolved
+}
+
 pipeline {
   agent any
 
@@ -73,6 +99,7 @@ pipeline {
     REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
     REMOTE_DIR = '/home/ubuntu/e102/prod'
     S2_HOST = credentials('e102-s2-host')
+    RUNTIME_STATE_DIR = '/opt/e102-server/runtime-state'
   }
 
   stages {
@@ -84,6 +111,15 @@ pipeline {
         git branch: params.DEPLOY_BRANCH, credentialsId: 'gitlab-pat', url: env.REPO_URL
         script {
           env.DEPLOY_COMMIT = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+        }
+      }
+    }
+
+    stage('Resolve S2 Host Credential') {
+      steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+          env.S2_HOST = resolveTextOrFileCredential(this, env.S2_HOST, 'e102-s2-host')
         }
       }
     }
@@ -171,6 +207,55 @@ pipeline {
               ssh -i "\$S2_KEY" -o StrictHostKeyChecking=accept-new "\$S2_USER@\$S2_HOST" "cd '$REMOTE_DIR' && ${remoteCmd}"
             """
           }
+        }
+      }
+    }
+
+    stage('Write Release Manifest') {
+      steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
+        withCredentials([
+          sshUserPrivateKey(credentialsId: 'e102-s2-ssh-key', keyFileVariable: 'S2_KEY', usernameVariable: 'S2_USER')
+        ]) {
+          script {
+            env.PROD_DEPLOYED_COMMIT = sh(
+              script: """
+                ssh -i "\$S2_KEY" -o StrictHostKeyChecking=accept-new "\$S2_USER@\$S2_HOST" \
+                  "cat '${env.REMOTE_DIR}/.deploy-state/current-app-image'"
+              """,
+              returnStdout: true,
+            ).trim()
+            env.PROD_HAS_GRAPHHOPPER = sh(
+              script: """
+                ssh -i "\$S2_KEY" -o StrictHostKeyChecking=accept-new "\$S2_USER@\$S2_HOST" \
+                  "if [ -f '${env.REMOTE_DIR}/.deploy-state/current-graphhopper-image' ]; then echo true; else echo false; fi"
+              """,
+              returnStdout: true,
+            ).trim()
+          }
+        }
+        script {
+          String services = env.PROD_HAS_GRAPHHOPPER == 'true'
+            ? 'backend ai admin graphhopper-blue graphhopper-green'
+            : 'backend ai admin'
+          sh """
+            mkdir -p "$RUNTIME_STATE_DIR"
+            python3 scripts/deploy/write-release-manifest.py \
+              --output "$RUNTIME_STATE_DIR/prod-release.json" \
+              --environment prod \
+              --branch "${params.DEPLOY_BRANCH}" \
+              --commit "${env.PROD_DEPLOYED_COMMIT}" \
+              --build-number "$BUILD_NUMBER" \
+              --build-url "$BUILD_URL" \
+              --services ${services} \
+              --metadata source=jenkins \
+              --metadata pipeline=e102-prod-deploy \
+              --metadata rollback=${params.ROLLBACK.toString()} \
+              --metadata deploy_graphhopper=${params.DEPLOY_GRAPHHOPPER.toString()} \
+              --metadata build_graphhopper=${params.BUILD_GRAPHHOPPER.toString()}
+          """
         }
       }
     }

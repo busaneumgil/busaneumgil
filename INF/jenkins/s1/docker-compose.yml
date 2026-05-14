@@ -27,8 +27,10 @@ services:
       - /home/ubuntu/e102/prod-secrets:/var/jenkins_home/prod-secrets:ro
       - /home/ubuntu/e102/docker-compose.s1.override.yml:/opt/e102-server/docker-compose.s1.override.yml:ro
       - /home/ubuntu/e102/.jenkins-webhook-secret:/opt/e102-server/jenkins-webhook-secret:ro
+      - /home/ubuntu/e102/runtime-state:/opt/e102-server/runtime-state
     networks:
       - jenkins
+      - ops-stack
 
   jenkins-proxy:
     image: nginx:1.27-alpine

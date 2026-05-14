@@ -84,6 +84,7 @@ class NavigationViewModel(
     private var lowVisionActualMetricsFailedKey: LowVisionActualMetricsKey? = null
     private var lowVisionActualMetricsLastAttemptCoordinate: GeoCoordinate? = null
     private var lowVisionActualMetricsLastAttemptRecordedAtMillis: Long? = null
+    private var lastLowVisionRouteChangeAlertSegmentIndex: Int? = null
     init {
         collectLocationUpdates()
     }
@@ -100,6 +101,7 @@ class NavigationViewModel(
             lowVisionActualMetricsFailedKey = null
             lowVisionActualMetricsLastAttemptCoordinate = null
             lowVisionActualMetricsLastAttemptRecordedAtMillis = null
+            lastLowVisionRouteChangeAlertSegmentIndex = null
         }
         publishNavigationState()
     }
@@ -159,6 +161,7 @@ class NavigationViewModel(
         lowVisionActualMetricsFailedKey = null
         lowVisionActualMetricsLastAttemptCoordinate = null
         lowVisionActualMetricsLastAttemptRecordedAtMillis = null
+        lastLowVisionRouteChangeAlertSegmentIndex = null
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
         initialBriefingRequested = false
@@ -277,6 +280,7 @@ class NavigationViewModel(
                 latestEstimatedMinutes = remainingMetrics.estimatedMinutes
                 latestRemainingMetricsSource = remainingMetrics.source
             }
+            maybeAnnounceLowVisionRouteChange(currentSession.route, progress)
             syncActiveSegment(progress.activeSegmentIndex)
             latestTransitPresentation = currentSession.resolveTransitPresentation(progress.activeLegIndex)
             maybeRefreshTransit(currentSession, progress, snapshot)
@@ -586,6 +590,24 @@ class NavigationViewModel(
         }
     }
 
+    private fun maybeAnnounceLowVisionRouteChange(
+        route: RouteCandidate,
+        progress: NavigationProgressSnapshot,
+    ) {
+        if (!isLowVisionMode) return
+        val nextSegmentIndex = progress.activeSegmentIndex + 1
+        if (nextSegmentIndex !in route.segments.indices) return
+        if (lastLowVisionRouteChangeAlertSegmentIndex == nextSegmentIndex) return
+        val tts = uiState.value.tts
+        if (!tts.isEnabled || !tts.canSpeak || tts.status != NavigationTtsStatus.Ready) return
+
+        val distanceToBoundaryMeters = route.distanceToNextSegmentBoundaryMeters(progress) ?: return
+        if (distanceToBoundaryMeters !in 0..LOW_VISION_ROUTE_CHANGE_ALERT_DISTANCE_METERS) return
+
+        lastLowVisionRouteChangeAlertSegmentIndex = nextSegmentIndex
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(LOW_VISION_ROUTE_CHANGE_ALERT_TEXT))
+    }
+
     private fun emitUiEvent(event: NavigationUiEvent) {
         viewModelScope.launch {
             mutableUiEvent.emit(event)
@@ -786,6 +808,7 @@ class NavigationViewModel(
                     focusedSegmentIndex = reroutedSegmentIndex
                     isInspectingSegments = false
                     hasPendingActiveChange = false
+                    lastLowVisionRouteChangeAlertSegmentIndex = null
                 }
                 publishNavigationState()
             }
@@ -1441,6 +1464,8 @@ private const val LOW_VISION_FALLBACK_WALKING_SPEED_METERS_PER_SECOND = 1.0
 private const val LOW_VISION_WALKABLE_DISTANCE_THRESHOLD_METERS = 750
 private const val MIN_NAVIGATION_DURATION_SECONDS = 60
 private const val LOW_VISION_ACTUAL_METRICS_BUCKET_SCALE = 10_000.0
+private const val LOW_VISION_ROUTE_CHANGE_ALERT_DISTANCE_METERS = 50
+private const val LOW_VISION_ROUTE_CHANGE_ALERT_TEXT = "경로 변경"
 private const val PENDING_ACTIVE_SEGMENT_LABEL = "Current segment updated"
 
 internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {
@@ -1684,6 +1709,31 @@ private fun RouteCandidate.segmentWeights(): List<Double> =
             ?: candidateSegment.distanceMeters.toDouble().takeIf { distanceMeters -> distanceMeters > 0 }
             ?: 1.0
     }
+
+private fun RouteCandidate.distanceToNextSegmentBoundaryMeters(progress: NavigationProgressSnapshot): Int? {
+    if (progress.activeSegmentIndex >= segments.lastIndex) return null
+    val sanitizedWeights =
+        segmentWeights().map { weight ->
+            if (weight > 0.0) {
+                weight
+            } else {
+                1.0
+            }
+        }
+    if (sanitizedWeights.isEmpty()) return null
+
+    val totalWeight = sanitizedWeights.sum().takeIf { weight -> weight > 0.0 } ?: return null
+    val boundaryRatio =
+        sanitizedWeights
+            .take(progress.activeSegmentIndex + 1)
+            .sum()
+            .div(totalWeight)
+            .coerceIn(0.0, 1.0)
+    val boundaryDistanceMeters = totalDistanceMeters() * boundaryRatio
+    return (boundaryDistanceMeters - progress.distanceAlongRouteMeters)
+        .roundToInt()
+        .coerceAtLeast(0)
+}
 
 private fun RouteSegment.resolveSourceLeg(legs: List<RouteLeg>): RouteLeg? =
     sourceLegSequence?.let { sourceLegSequence ->

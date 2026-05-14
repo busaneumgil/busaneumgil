@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.toRouteWaypointOrNull
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.ROUTE_BRIEFING_TTS_SPEECH_RATE
 
@@ -45,6 +46,8 @@ fun LowVisionRouteBriefingRoute(
             ViewModelProvider(owner, viewModelFactory)[LowVisionRouteBriefingViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedOrigin by
+        appContainer.destinationSelectionRepository.selectedOrigin.collectAsStateWithLifecycle()
     val selectedDestination by
         appContainer.destinationSelectionRepository.selectedDestination.collectAsStateWithLifecycle()
     val ttsController =
@@ -67,12 +70,11 @@ fun LowVisionRouteBriefingRoute(
                 currentLocationManager = appContainer.currentLocationManager,
                 immediateSnapshot = appContainer.currentLocationManager.latestLocation.value,
             )
-        val origin = originSnapshot.toLowVisionRouteOriginWaypointOrNull()
-        if (origin == null) {
-            viewModel.showLocationRequired()
-        } else {
-            viewModel.loadBriefing(origin = origin)
-        }
+        val origin =
+            originSnapshot.toLowVisionRouteOriginWaypointOrNull()
+                ?: selectedOrigin?.toRouteWaypointOrNull()
+                ?: originSnapshot.toLowVisionRouteOriginWaypoint()
+        viewModel.loadBriefing(origin = origin)
     }
 
     LaunchedEffect(uiState.steps) {

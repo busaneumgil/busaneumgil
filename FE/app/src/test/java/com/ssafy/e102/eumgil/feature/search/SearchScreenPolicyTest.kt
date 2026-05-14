@@ -65,4 +65,38 @@ class SearchScreenPolicyTest {
             loadingStateSection.contains("SearchStateCard("),
         )
     }
+
+    @Test
+    fun `empty result state renders as text block without card chrome`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val searchResultsContentSection =
+            source
+                .substringAfter("private fun SearchResultsContent(")
+                .substringBefore("@Composable\nprivate fun SearchInputField")
+        val emptyStateSection =
+            searchResultsContentSection
+                .substringAfter("is SearchResultUiState.Empty ->")
+                .substringBefore("is SearchResultUiState.Error ->")
+        val emptyMessageSection =
+            source
+                .substringAfter("private fun SearchEmptyResultMessage(")
+                .substringBefore("@Composable\nprivate fun SearchStateCard")
+
+        assertTrue(
+            "Empty search results should use a plain message block.",
+            emptyStateSection.contains("SearchEmptyResultMessage("),
+        )
+        assertFalse(
+            "Empty search results should not render inside SearchStateCard card chrome.",
+            emptyStateSection.contains("SearchStateCard("),
+        )
+        assertFalse(
+            "The plain empty-result message should not add card border or shadow.",
+            emptyMessageSection.contains("Surface(") ||
+                emptyMessageSection.contains("BorderStroke(") ||
+                emptyMessageSection.contains("shadowElevation"),
+        )
+    }
 }

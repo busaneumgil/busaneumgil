@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.feature.savedroute
+﻿package com.ssafy.e102.eumgil.feature.savedroute
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -7,10 +7,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,12 +52,14 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.util.Locale
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RouteOption
-import java.util.Locale
 
 @Composable
 fun SavedRouteScreen(
@@ -418,6 +422,7 @@ private fun SavedRouteBookmarkContent(
                         isEditMode = isEditMode,
                         isPendingRemoval = routeBookmark.bookmarkId in pendingRemovalIds,
                         isActionEnabled = isActionEnabled,
+
                         onPrimaryActionClick = {
                             onAction(
                                 if (isEditMode) {
@@ -558,7 +563,7 @@ private fun NoRippleSavedRouteNavigationButton(
     contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+
     val containerColor =
         when {
             !enabled && isOutlined -> MaterialTheme.colorScheme.surface
@@ -635,7 +640,7 @@ private fun SavedPlaceListItem(
     onPlaceClick: (() -> Unit)?,
     onPrimaryActionClick: () -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+
     val accessibilityDescription =
         stringResource(
             id = R.string.saved_route_place_a11y_description,
@@ -688,23 +693,40 @@ private fun SavedPlaceListItem(
                         .semantics {
                             contentDescription = accessibilityDescription
                         },
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                horizontalAlignment = Alignment.Start,
             ) {
-                Text(
-                    text = savedPlaceCategoryLabel(category = place.category),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = place.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = place.address ?: stringResource(id = R.string.saved_route_address_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Icon(
+                        painter = painterResource(id = savedPlaceCategoryIconRes(place.category)),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(SavedBookmarkCategoryIconSize),
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    ) {
+                        Text(
+                            text = savedPlaceCategoryLabel(category = place.category),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = place.name,
+                            style = MaterialTheme.typography.titleMedium.copy(lineHeight = SavedBookmarkPlaceNameLineHeight),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = SavedBookmarkPrimaryTextMaxLines,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = place.address ?: stringResource(id = R.string.saved_route_address_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
             SavedBookmarkPrimaryActionButton(
                 isEditMode = isEditMode,
@@ -722,8 +744,10 @@ private fun SavedRouteBookmarkListItem(
     isEditMode: Boolean,
     isPendingRemoval: Boolean,
     isActionEnabled: Boolean,
+
     onPrimaryActionClick: () -> Unit,
 ) {
+
     val accessibilityDescription =
         stringResource(
             id = R.string.saved_route_route_a11y_description,
@@ -758,7 +782,6 @@ private fun SavedRouteBookmarkListItem(
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SavedRoutePathDecoration()
             Column(
                 modifier =
                     Modifier
@@ -768,27 +791,30 @@ private fun SavedRouteBookmarkListItem(
                         },
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
             ) {
-                Text(
-                    text = routeBookmark.routeName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text =
-                        stringResource(
-                            id = R.string.saved_route_route_summary,
-                            routeBookmark.startLabel,
-                            routeBookmark.endLabel,
-                        ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                savedRouteMetaLabel(routeBookmark)?.let { label ->
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Row(
+                    modifier = Modifier.height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                ) {
+                    SavedRoutePathDecoration(
+                        modifier =
+                            Modifier
+                                .fillMaxHeight()
+                                .padding(vertical = 2.dp),
                     )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    ) {
+                        SavedRouteWaypointInfoRow(
+                            label = stringResource(id = R.string.route_setting_origin_label),
+                            value = routeBookmark.startLabel,
+                            accentColor = MaterialTheme.colorScheme.primary,
+                        )
+                        SavedRouteWaypointInfoRow(
+                            label = stringResource(id = R.string.route_setting_destination_label),
+                            value = routeBookmark.endLabel,
+                            accentColor = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
@@ -884,9 +910,11 @@ private fun SavedBookmarkPrimaryActionButton(
 }
 
 @Composable
-private fun SavedRoutePathDecoration() {
+private fun SavedRoutePathDecoration(
+    modifier: Modifier = Modifier,
+) {
     Column(
-        modifier = Modifier.padding(top = 6.dp),
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -900,7 +928,7 @@ private fun SavedRoutePathDecoration() {
             modifier =
                 Modifier
                     .width(2.dp)
-                    .height(24.dp)
+                    .weight(1f)
                     .background(MaterialTheme.colorScheme.outlineVariant),
         )
         Box(
@@ -929,22 +957,28 @@ private fun SavedRouteTagChip(label: String) {
 }
 
 @Composable
-private fun savedPlaceCategoryLabel(category: String?): String =
-    when (category) {
-        "FOOD_CAFE" -> "식당·카페"
-        "TOURIST_SPOT" -> "무장애 관광지"
-        "ACCOMMODATION" -> "숙박"
-        "HEALTHCARE" -> "병원"
-        "WELFARE" -> "복지관"
-        "PUBLIC_OFFICE" -> "관공서"
-        "RESTAURANT" -> stringResource(id = R.string.map_filter_category_restaurant)
-        "TOURIST_ATTRACTION" -> stringResource(id = R.string.map_filter_category_tourist_attraction)
-        "TOILET" -> stringResource(id = R.string.map_filter_category_toilet)
-        "ELEVATOR" -> stringResource(id = R.string.map_filter_category_elevator)
-        "CHARGING_STATION" -> stringResource(id = R.string.map_filter_category_charging_station)
-        "BRAILLE_BLOCK" -> stringResource(id = R.string.map_filter_category_braille_block)
-        else -> stringResource(id = R.string.map_filter_category_other)
+private fun SavedRouteWaypointInfoRow(
+    label: String,
+    value: String,
+    accentColor: androidx.compose.ui.graphics.Color,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = accentColor,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = SavedBookmarkWaypointValueLineHeight),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = SavedBookmarkWaypointValueMaxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
+}
 
 @Composable
 private fun routeOptionLabel(routeOption: RouteOption): String =
@@ -1012,3 +1046,10 @@ private fun Int.toSavedRouteDistanceLabel(): String =
     }
 
 private fun Int.toSavedRouteDurationLabel(): String = "${this}분"
+
+private const val SavedBookmarkPrimaryTextMaxLines = 2
+private const val SavedBookmarkWaypointValueMaxLines = 1
+private val SavedBookmarkPlaceNameLineHeight = 20.sp
+private val SavedBookmarkWaypointValueLineHeight = 18.sp
+private val SavedBookmarkCategoryIconSize = 20.dp
+

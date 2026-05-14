@@ -49,6 +49,8 @@ import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListAmber
 import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListBg
 import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListOnAmber
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.feature.savedroute.savedPlaceCategoryIconRes
+import com.ssafy.e102.eumgil.feature.savedroute.savedPlaceCategoryLabel
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
 import com.ssafy.e102.eumgil.feature.savedroute.SavedPlaceUiModel
 import com.ssafy.e102.eumgil.feature.savedroute.SavedBookmarkContentState
@@ -78,6 +80,7 @@ internal object LowVisionBookmarkLayoutDefaults {
     val actionIconTextGap = LowVisionSearchLayoutDefaults.actionIconTextGap
     val actionLabelFontSize = LowVisionSearchLayoutDefaults.actionLabelFontSize
     val actionLabelLineHeight = LowVisionSearchLayoutDefaults.actionLabelLineHeight
+    val categoryIconSize = 32.dp
     val roomyPhoneBreakpoint = LowVisionSearchLayoutDefaults.roomyPhoneBreakpoint
     const val compactTextMaxLines = LowVisionSearchLayoutDefaults.compactTextMaxLines
     const val roomyTextMaxLines = LowVisionSearchLayoutDefaults.roomyTextMaxLines
@@ -238,17 +241,19 @@ private fun LowVisionBookmarkPlaceCard(
     val view = LocalView.current
     val addressText = lowVisionBriefAddress(place.address)
     val placeInfoContentDescription =
-        lowVisionPlaceInfoA11yLabel(
-            name = place.name,
-            address = place.address,
-        )
+        "${savedPlaceCategoryLabel(place.category)}. " +
+            lowVisionPlaceInfoA11yLabel(
+                name = place.name,
+                address = place.address,
+            )
     val placeInfoSpeechText =
-        lowVisionPlaceInfoSpeechText(
-            name = place.name,
-            address = place.address,
-            latitude = place.latitude,
-            longitude = place.longitude,
-        )
+        "${savedPlaceCategoryLabel(place.category)}. " +
+            lowVisionPlaceInfoSpeechText(
+                name = place.name,
+                address = place.address,
+                latitude = place.latitude,
+                longitude = place.longitude,
+            )
     val briefingContentDescription = "${place.name}. 탭하면 경로 브리핑으로 이동합니다."
 
     Column(
@@ -296,8 +301,9 @@ private fun LowVisionBookmarkPlaceCard(
                 )
             }
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
                 modifier =
                     Modifier
                         .weight(1f)
@@ -311,24 +317,34 @@ private fun LowVisionBookmarkPlaceCard(
                             contentDescription = placeInfoContentDescription
                         },
             ) {
-                Text(
-                    text = place.name,
-                    color = Color.White,
-                    fontSize = LowVisionBookmarkLayoutDefaults.titleFontSize,
-                    fontWeight = FontWeight.Black,
-                    lineHeight = LowVisionBookmarkLayoutDefaults.titleLineHeight,
-                    letterSpacing = 0.sp,
-                    maxLines = titleMaxLines,
+                Icon(
+                    painter = painterResource(id = savedPlaceCategoryIconRes(place.category)),
+                    contentDescription = null,
+                    tint = PlaceListAmber,
+                    modifier = Modifier.size(LowVisionBookmarkLayoutDefaults.categoryIconSize),
                 )
-                Text(
-                    text = addressText,
-                    color = Color.White,
-                    fontSize = LowVisionBookmarkLayoutDefaults.addressFontSize,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = LowVisionBookmarkLayoutDefaults.addressLineHeight,
-                    letterSpacing = 0.sp,
-                    maxLines = addressMaxLines,
-                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = place.name,
+                        color = Color.White,
+                        fontSize = LowVisionBookmarkLayoutDefaults.titleFontSize,
+                        fontWeight = FontWeight.Black,
+                        lineHeight = LowVisionBookmarkLayoutDefaults.titleLineHeight,
+                        letterSpacing = 0.sp,
+                        maxLines = titleMaxLines,
+                    )
+                    Text(
+                        text = addressText,
+                        color = Color.White,
+                        fontSize = LowVisionBookmarkLayoutDefaults.addressFontSize,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = LowVisionBookmarkLayoutDefaults.addressLineHeight,
+                        letterSpacing = 0.sp,
+                        maxLines = addressMaxLines,
+                    )
+                }
             }
         }
 

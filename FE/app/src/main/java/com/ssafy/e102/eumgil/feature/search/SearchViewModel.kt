@@ -765,7 +765,7 @@ private fun LocationSnapshot?.toSearchLocationOriginOrNull(): SearchLocationOrig
 private fun List<SearchResult>.withDistanceFrom(origin: SearchLocationOrigin?): List<SearchResult> {
     if (origin == null) return this
 
-    return mapIndexed { index, result ->
+    return map { result ->
         val resolvedDistanceMeters =
             result.distanceMeters?.takeIf { distanceMeters -> distanceMeters >= 0 }
                 ?: distanceMetersBetween(
@@ -774,11 +774,8 @@ private fun List<SearchResult>.withDistanceFrom(origin: SearchLocationOrigin?): 
                     endLatitude = result.latitude,
                     endLongitude = result.longitude,
                 )
-        index to result.copy(distanceMeters = resolvedDistanceMeters)
-    }.sortedWith(
-        compareBy<Pair<Int, SearchResult>> { (_, result) -> result.distanceMeters ?: Int.MAX_VALUE }
-            .thenBy { (index, _) -> index },
-    ).map { (_, result) -> result }
+        result.copy(distanceMeters = resolvedDistanceMeters)
+    }
 }
 
 private fun distanceMetersBetween(

@@ -29,6 +29,7 @@ import com.ssafy.e102.domain.place.dto.response.PlaceClickDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceSearchItemResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
@@ -95,7 +96,8 @@ class PlaceServiceTest {
 			129.0576,
 			1000,
 			1,
-			10)))
+			10,
+			"distance")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(kakaoPlace), 1, true));
 		when(placeRepository.findAllByProviderPlaceIdIn(List.of("123456789")))
 			.thenReturn(List.of(matchedPlace));
@@ -116,6 +118,171 @@ class PlaceServiceTest {
 		assertThat(response.places().get(0).matched()).isTrue();
 		assertThat(response.places().get(0).category()).isEqualTo(PlaceCategory.TOURIST_SPOT);
 		assertThat(response.places().get(0).accessibilityFeatures()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("좌표 기반 장소 검색은 부산 결과만 남기고 정확한 장소명 매칭을 거리보다 우선한다")
+	void searchPlacesFiltersBusanAndRanksExactNameBeforeDistance() {
+		KakaoPlaceDocument mobileStore = new KakaoPlaceDocument(
+			"mobile",
+			"삼성스토어 부산삼성전기모바일",
+			"부산 강서구 녹산산업중로 333",
+			"서비스",
+			"",
+			3877,
+			new GeoPointResponse(35.1001, 128.9001));
+		KakaoPlaceDocument exactPlace = new KakaoPlaceDocument(
+			"exact",
+			"삼성전기 부산사업장",
+			"부산 강서구 녹산산업중로 333",
+			"회사",
+			"",
+			4072,
+			new GeoPointResponse(35.1002, 128.9002));
+		KakaoPlaceDocument gate = new KakaoPlaceDocument(
+			"gate",
+			"삼성전기 부산사업장 후문",
+			"부산 강서구 송정동 1600",
+			"회사",
+			"",
+			4056,
+			new GeoPointResponse(35.1003, 128.9003));
+		KakaoPlaceDocument outOfBusan = new KakaoPlaceDocument(
+			"suwon",
+			"삼성전기 본사",
+			"경기 수원시 영통구 매영로 150",
+			"회사",
+			"",
+			291841,
+			new GeoPointResponse(37.2520, 127.0550));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기 부산사업장",
+			35.1,
+			128.9,
+			null,
+			1,
+			15,
+			"distance")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(mobileStore, gate, exactPlace, outOfBusan), 4, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("exact", "gate", "mobile")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기 부산사업장",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly(
+				"삼성전기 부산사업장",
+				"삼성전기 부산사업장 후문",
+				"삼성스토어 부산삼성전기모바일");
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::address)
+			.allMatch(address -> address.startsWith("부산"));
+	}
+
+	@Test
+	@DisplayName("짧은 일반 검색어는 카카오 거리 정렬 순서를 유지한다")
+	void searchPlacesKeepsDistanceOrderForShortGenericKeyword() {
+		KakaoPlaceDocument nearStore = new KakaoPlaceDocument(
+			"near",
+			"삼성스토어 부산삼성전기모바일",
+			"부산 강서구 녹산산업중로 333",
+			"서비스",
+			"",
+			3877,
+			new GeoPointResponse(35.1001, 128.9001));
+		KakaoPlaceDocument exactButFarther = new KakaoPlaceDocument(
+			"exact",
+			"삼성전기",
+			"부산 사하구 하신중앙로 40",
+			"전기",
+			"",
+			6285,
+			new GeoPointResponse(35.1002, 128.9002));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기",
+			35.1,
+			128.9,
+			null,
+			1,
+			15,
+			"distance")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(nearStore, exactButFarther), 2, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("near", "exact")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly("삼성스토어 부산삼성전기모바일", "삼성전기");
+	}
+
+	@Test
+	@DisplayName("좌표 기반 검색은 현재 페이지에 부산 결과가 없으면 다음 카카오 페이지에서 부산 결과를 보강한다")
+	void searchPlacesBackfillsBusanResultsFromNextKakaoPage() {
+		KakaoPlaceDocument outOfBusan = new KakaoPlaceDocument(
+			"suwon",
+			"삼성전기 본사",
+			"경기 수원시 영통구 매영로 150",
+			"회사",
+			"",
+			291841,
+			new GeoPointResponse(37.2520, 127.0550));
+		KakaoPlaceDocument busanPlace = new KakaoPlaceDocument(
+			"busan",
+			"삼성전기 부산사업장",
+			"부산 강서구 녹산산업중로 333",
+			"회사",
+			"",
+			4072,
+			new GeoPointResponse(35.1002, 128.9002));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기 부산사업장",
+			35.1,
+			128.9,
+			null,
+			1,
+			15,
+			"distance")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(outOfBusan), 45, false));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기 부산사업장",
+			35.1,
+			128.9,
+			null,
+			2,
+			15,
+			"distance")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(busanPlace), 45, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("busan")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기 부산사업장",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly("삼성전기 부산사업장");
+		assertThat(response.hasNext()).isFalse();
+		assertThat(response.nextCursor()).isNull();
 	}
 
 	@Test

@@ -140,7 +140,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `search submit with fresh current location passes origin sorts by distance and attaches distance`() =
+    fun `search submit with fresh current location passes origin preserves server order and attaches distance`() =
         runTest {
             val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0000)
             val farResult =
@@ -183,8 +183,8 @@ class SearchViewModelTest {
             val resultState = viewModel.uiState.value.resultState
             assertTrue(resultState is SearchResultUiState.Success)
             val results = (resultState as SearchResultUiState.Success).results
-            assertEquals(listOf("near-place", "far-place"), results.map(SearchResult::placeId))
-            assertTrue(checkNotNull(results[0].distanceMeters) < checkNotNull(results[1].distanceMeters))
+            assertEquals(listOf("far-place", "near-place"), results.map(SearchResult::placeId))
+            assertTrue(checkNotNull(results[0].distanceMeters) > checkNotNull(results[1].distanceMeters))
         }
 
     @Test
@@ -240,7 +240,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `load next page keeps current location origin and re-sorts merged results by distance`() =
+    fun `load next page keeps current location origin and preserves merged server order`() =
         runTest {
             val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0000)
             val farResult =
@@ -296,7 +296,7 @@ class SearchViewModelTest {
             val resultState = viewModel.uiState.value.resultState
             assertTrue(resultState is SearchResultUiState.Success)
             assertEquals(
-                listOf("near-place", "far-place"),
+                listOf("far-place", "near-place"),
                 (resultState as SearchResultUiState.Success).results.map(SearchResult::placeId),
             )
         }

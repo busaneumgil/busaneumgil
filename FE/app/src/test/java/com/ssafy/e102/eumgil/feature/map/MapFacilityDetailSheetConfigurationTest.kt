@@ -107,6 +107,11 @@ class MapFacilityDetailSheetConfigurationTest {
             "Detail sheet shell should skip the body column when there is no accessibility content or the sheet is collapsed.",
             source.contains("if (state.hasDetailContent && !isCollapsed)"),
         )
+        assertTrue(
+            "Detail sheet body should reserve a bounded scroll area so long place details can scroll above fixed actions.",
+            source.contains(".weight(1f, fill = true)") &&
+                source.contains(".verticalScroll(detailScrollState)"),
+        )
     }
 
     @Test

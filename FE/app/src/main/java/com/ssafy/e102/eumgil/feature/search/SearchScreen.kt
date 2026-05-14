@@ -62,6 +62,7 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -429,6 +430,14 @@ private fun SearchResultsContent(
                 onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
                 onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
                 onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+            )
+        }
+        item(key = "search-sort") {
+            SearchSortControl(
+                selectedSortOption = uiState.sortOption,
+                onSortOptionSelected = { sortOption ->
+                    onAction(SearchUiAction.SortOptionSelected(sortOption = sortOption))
+                },
             )
         }
 
@@ -824,6 +833,92 @@ private fun SearchResultSection(
                     containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
                     borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
                 )
+        }
+    }
+}
+
+@Composable
+private fun SearchSortControl(
+    selectedSortOption: SearchSortOption,
+    onSortOptionSelected: (SearchSortOption) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.scaleM),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(EumSpacing.xSmall),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            SearchSortOptionButton(
+                label = stringResource(id = R.string.search_screen_sort_relevance),
+                selected = selectedSortOption == SearchSortOption.RELEVANCE,
+                onClick = { onSortOptionSelected(SearchSortOption.RELEVANCE) },
+                modifier = Modifier.weight(1f),
+            )
+            SearchSortOptionButton(
+                label = stringResource(id = R.string.search_screen_sort_distance),
+                selected = selectedSortOption == SearchSortOption.DISTANCE,
+                onClick = { onSortOptionSelected(SearchSortOption.DISTANCE) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchSortOptionButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val containerColor =
+        if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            Color.Transparent
+        }
+    val contentColor =
+        if (selected) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    Surface(
+        modifier =
+            modifier
+                .heightIn(min = 44.dp)
+                .clickable(
+                    role = Role.RadioButton,
+                    onClick = onClick,
+                )
+                .semantics {
+                    stateDescription =
+                        if (selected) {
+                            label + " 선택됨"
+                        } else {
+                            label + " 선택 안 됨"
+                        }
+                },
+        shape = RoundedCornerShape(EumRadius.scaleS),
+        color = containerColor,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.xxSmall),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = contentColor,
+            )
         }
     }
 }

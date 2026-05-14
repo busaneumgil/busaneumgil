@@ -162,6 +162,10 @@ data class RouteDetailStepUiState(
     val tone: RouteDetailTone = RouteDetailTone.NEUTRAL,
     val coordinate: GeoCoordinate? = null,
     val transitLabel: String? = null,
+    val transitStartName: String? = null,
+    val transitEndName: String? = null,
+    val transitDurationLabel: String? = null,
+    val transitOptionLabels: List<RouteTransitOptionLabelUiState> = emptyList(),
 )
 
 data class RouteSettingCtaUiState(

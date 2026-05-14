@@ -412,16 +412,15 @@ class MapViewportOverlayBindingsTest {
             )
 
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
-        assertEquals(2, junctionPoints.size)
+        assertEquals(1, junctionPoints.size)
         assertEquals(
             listOf(
                 MapCoordinate(latitude = 35.175, longitude = 129.058),
-                MapCoordinate(latitude = 35.181, longitude = 129.068),
             ),
             junctionPoints.map { it.coordinate },
         )
         assertEquals(
-            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
+            listOf(MapViewportOverlayTone.NEUTRAL),
             junctionPoints.map { it.tone },
         )
         assertTrue(junctionPoints.none { it.includeInProjection })
@@ -486,12 +485,11 @@ class MapViewportOverlayBindingsTest {
         assertEquals(
             listOf(
                 MapCoordinate(latitude = 35.176, longitude = 129.060),
-                MapCoordinate(latitude = 35.181, longitude = 129.068),
             ),
             junctionPoints.map { it.coordinate },
         )
         assertEquals(
-            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
+            listOf(MapViewportOverlayTone.NEUTRAL),
             junctionPoints.map { it.tone },
         )
     }
@@ -636,15 +634,11 @@ class MapViewportOverlayBindingsTest {
 
         assertEquals(
             listOf(
-                MapViewportPointKind.SEGMENT_JUNCTION,
                 MapViewportPointKind.FOCUS_HALO,
             ),
             projectionPoints.map { it.kind },
         )
-        assertEquals(
-            MapCoordinate(latitude = 35.176, longitude = 129.060),
-            projectionPoints.first().coordinate,
-        )
+        assertEquals(MapCoordinate(latitude = 35.176, longitude = 129.060), projectionPoints.first().coordinate)
     }
 
     @Test
@@ -727,7 +721,7 @@ class MapViewportOverlayBindingsTest {
         val summary = createSegmentJunctionOverlayDebugSummary(mapOverlay, overlayState)
 
         assertTrue(summary.contains("focusMode=FOCUSED"))
-        assertTrue(summary.contains("junctions=2"))
+        assertTrue(summary.contains("junctions=1"))
         assertTrue(
             summary.contains(
                 "id=navigation-junction-1 coord=35.176000,129.060000 tone=NEUTRAL includeInProjection=false",

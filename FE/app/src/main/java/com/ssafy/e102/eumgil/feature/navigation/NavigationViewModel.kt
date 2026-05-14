@@ -23,6 +23,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
+import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -933,6 +934,7 @@ private data class NavigationRouteSession(
         return NavigationTransitPresentation(
             statusLabel = statusLabel,
             supportingText = supportingText,
+            info = targetLeg.toNavigationTransitInfo(arrivalRouteNo = refreshedArrival?.routeNo, arrivalMinutes = waitMinutes),
         )
     }
 }
@@ -994,7 +996,70 @@ private data class NavigationTransitRefreshTrigger(
 private data class NavigationTransitPresentation(
     val statusLabel: String,
     val supportingText: String,
+    val info: NavigationTransitInfoUiState? = null,
 )
+
+private fun RouteLeg.toNavigationTransitInfo(
+    arrivalRouteNo: String?,
+    arrivalMinutes: Int?,
+): NavigationTransitInfoUiState? {
+    if (type != RouteLegType.BUS && type != RouteLegType.SUBWAY) return null
+    val guidanceAction =
+        when (type) {
+            RouteLegType.BUS -> NavigationGuidanceAction.BUS
+            RouteLegType.SUBWAY -> NavigationGuidanceAction.SUBWAY
+            RouteLegType.WALK -> return null
+        }
+    val startName =
+        boardingStop?.name?.takeIf(String::isNotBlank)
+            ?: if (type == RouteLegType.SUBWAY) "출발역" else "출발 정류장"
+    val endName =
+        alightingStop?.name?.takeIf(String::isNotBlank)
+            ?: if (type == RouteLegType.SUBWAY) "도착역" else "도착 정류장"
+    val durationLabel =
+        estimatedTimeMinutes?.takeIf { minute -> minute > 0 }?.let { minute -> "${minute}분" }
+            ?: durationSeconds?.takeIf { seconds -> seconds > 0 }?.let { seconds -> "${((seconds + 59) / 60).coerceAtLeast(1)}분" }
+    val routeNumbers =
+        buildList {
+            routeNo?.takeIf(String::isNotBlank)?.let(::add)
+            addAll(laneOptions.mapNotNull { option -> option.routeNo?.takeIf(String::isNotBlank) })
+            arrivalRouteNo?.takeIf(String::isNotBlank)?.let(::add)
+        }.distinct()
+    val arrivalByRouteNo =
+        laneOptions
+            .mapNotNull { option ->
+                val optionRouteNo = option.routeNo?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                val arrivalLabel =
+                    option.remainingMinute?.let { minute -> "${minute}분" }
+                        ?: option.estimatedTimeMinutes?.let { minute -> "${minute}분" }
+                optionRouteNo to arrivalLabel
+            }.toMap()
+    val options =
+        routeNumbers.map { routeNo ->
+            RouteTransitOptionLabelUiState(
+                typeLabel =
+                    when (type) {
+                        RouteLegType.SUBWAY -> "지하철"
+                        else -> if (isLowFloor == true || laneOptions.any { option -> option.routeNo == routeNo && option.isLowFloor == true }) "저상" else "일반"
+                    },
+                routeNo = routeNo,
+                arrivalLabel =
+                    if (routeNo == arrivalRouteNo && arrivalMinutes != null) {
+                        "${arrivalMinutes}분"
+                    } else {
+                        arrivalByRouteNo[routeNo]
+                    },
+            )
+        }.take(NAVIGATION_TRANSIT_OPTION_LABEL_LIMIT)
+
+    return NavigationTransitInfoUiState(
+        guidanceAction = guidanceAction,
+        startName = startName,
+        endName = endName,
+        durationLabel = durationLabel,
+        optionLabels = options,
+    )
+}
 
 private data class RoutePolylineProjection(
     val distanceToPolylineMeters: Double,
@@ -1921,6 +1986,7 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
             } ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
                 "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
         guidanceAction = heroDetail?.guidanceAction ?: NavigationGuidanceAction.STRAIGHT,
+        transitInfo = transitPresentation?.info,
         metrics =
             listOf(
                 NavigationStepMetricUiState(
@@ -2089,6 +2155,7 @@ private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_INTERVAL_MILLIS = 5_000L
 private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS = 20.0
 private const val LOW_VISION_ACTUAL_METRICS_REUSE_DISTANCE_METERS = 25.0
 private const val LOW_VISION_ACTUAL_METRICS_CACHE_MAX_AGE_MILLIS = 10_000L
+private const val NAVIGATION_TRANSIT_OPTION_LABEL_LIMIT = 4
 
 private object NoOpRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =

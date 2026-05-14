@@ -1000,8 +1000,8 @@ private fun MapViewportOverlayTone.toKakaoRouteLinePalette(): KakaoRouteLinePale
 
         MapViewportOverlayTone.NAVY ->
             KakaoRouteLinePalette(
-                lineColor = 0xFF304583.toInt(),
-                casingColor = 0xFF304583.toInt(),
+                lineColor = 0xFF4A5D93.toInt(),
+                casingColor = 0xFF4A5D93.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->

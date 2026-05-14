@@ -389,6 +389,7 @@ private fun List<NavigationMapSegmentUiState>.toSegmentMarkerOverlays(
 ): List<MapViewportPointOverlay> =
     mapIndexedNotNull { index, segment ->
         if (index == 0) return@mapIndexedNotNull null
+        if (segment.travelKind == NavigationSegmentTravelKind.TRANSIT) return@mapIndexedNotNull null
         val coordinate = segment.segmentStartCoordinate ?: segment.polyline.firstOrNull() ?: return@mapIndexedNotNull null
         MapViewportPointOverlay(
             overlayId = "navigation-junction-$index",

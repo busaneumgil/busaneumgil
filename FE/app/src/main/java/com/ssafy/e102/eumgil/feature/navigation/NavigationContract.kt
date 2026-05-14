@@ -6,6 +6,7 @@ import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.feature.route.RouteDetailStepKind
+import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
 import com.ssafy.e102.eumgil.feature.route.toRouteDetailStepKind
 
 data class NavigationUiState(
@@ -148,6 +149,7 @@ data class NavigationStepCardUiState(
     val instruction: String = "경로 안내를 준비하고 있습니다",
     val supportingText: String = "현재 위치를 확인한 뒤 안내를 시작합니다.",
     val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
+    val transitInfo: NavigationTransitInfoUiState? = null,
     val metrics: List<NavigationStepMetricUiState> =
         listOf(
             NavigationStepMetricUiState(
@@ -163,6 +165,14 @@ data class NavigationStepCardUiState(
                 value = "-",
             ),
         ),
+)
+
+data class NavigationTransitInfoUiState(
+    val guidanceAction: NavigationGuidanceAction,
+    val startName: String,
+    val endName: String,
+    val durationLabel: String? = null,
+    val optionLabels: List<RouteTransitOptionLabelUiState> = emptyList(),
 )
 
 data class NavigationStepMetricUiState(

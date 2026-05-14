@@ -167,6 +167,50 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
+    fun `navigation side panel and exit CTA match route detail reference shell`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val expandedPanelSection =
+            source
+                .substringAfter("private fun NavigationExpandedSidePanel(")
+                .substringBefore("@Composable\nprivate fun NavigationSidePanelRow")
+        val rowSection =
+            source
+                .substringAfter("private fun NavigationSidePanelRow(")
+                .substringBefore("@Composable\nprivate fun NavigationSidePanelStepIcon")
+        val bottomBarSection =
+            source
+                .substringAfter("private fun NavigationBottomBar(")
+                .substringBefore("@Composable\nprivate fun NavigationMapStage")
+
+        assertTrue(
+            "Expanded guidance panel should use the dimmed map scrim shown in the reference side-sheet state.",
+            source.contains("NavigationExpandedSidePanelScrimColor"),
+        )
+        assertTrue(
+            "Expanded panel rows should use the same start/end and turn icons as the collapsed rail.",
+            expandedPanelSection.contains("isFirst = index == 0") &&
+                expandedPanelSection.contains("isLast = index == uiState.segmentSync.railItems.lastIndex") &&
+                rowSection.contains("NavigationSidePanelStepIcon("),
+        )
+        assertTrue(
+            "Exit CTA should share the full-width bottom placement and 30dp bottom gap used by route start.",
+            bottomBarSection.contains(".fillMaxWidth()") &&
+                bottomBarSection.contains("bottom = NavigationBottomBarBottomGap") &&
+                source.contains("NavigationBottomBarBottomGap = 30.dp"),
+        )
+        assertFalse(
+            "Exit CTA should not add navigation bar inset on top of the explicit 30dp app-bottom gap.",
+            bottomBarSection.contains(".navigationBarsPadding()"),
+        )
+        assertFalse(
+            "Exit CTA text should not be squeezed by the old fixed-width button.",
+            bottomBarSection.contains(".width(NavigationBottomBarButtonWidth)"),
+        )
+    }
+
+    @Test
     fun `hero content prioritizes focused segment guidance over the active step card`() {
         val heroContent =
             navigationHeroContent(

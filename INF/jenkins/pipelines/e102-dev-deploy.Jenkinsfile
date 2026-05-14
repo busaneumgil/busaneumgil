@@ -260,6 +260,11 @@ pipeline {
   }
 
   post {
+    always {
+      script {
+        deleteDir()
+      }
+    }
     success {
       script {
         String message = """\

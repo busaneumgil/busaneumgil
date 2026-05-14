@@ -298,7 +298,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding limits active projection to the active segment focus instead of the full route overview`() {
+    fun `navigation binding keeps active projection on current location instead of the route overview`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -339,6 +339,7 @@ class MapViewportOverlayBindingsTest {
                         mapFocusMode = NavigationMapFocusMode.ACTIVE,
                     ),
             )
+        val cameraState = createKakaoRouteCameraRenderState(overlayState)
 
         assertEquals(
             listOf(
@@ -361,9 +362,10 @@ class MapViewportOverlayBindingsTest {
             overlayState.points.map { it.kind },
         )
         assertEquals(
-            listOf(false, false, false, true),
+            listOf(true, false, false, false),
             overlayState.points.map { it.includeInProjection },
         )
+        assertEquals(null, cameraState)
     }
 
     @Test
@@ -557,7 +559,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding includes single coordinate segment junctions in active camera projection`() {
+    fun `navigation binding keeps single coordinate segment junctions outside active camera projection`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -593,16 +595,12 @@ class MapViewportOverlayBindingsTest {
                     ),
             )
 
-        val cameraState = createKakaoRouteCameraRenderState(overlayState)
-
-        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.SEGMENT_JUNCTION && it.includeInProjection })
-        assertTrue(
-            cameraState?.points?.contains(MapCoordinate(latitude = 35.176, longitude = 129.060)) == true,
-        )
+        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.SEGMENT_JUNCTION })
+        assertTrue(overlayState.points.none { it.kind == MapViewportPointKind.SEGMENT_JUNCTION && it.includeInProjection })
     }
 
     @Test
-    fun `navigation binding includes the focused segment junction in focused camera projection`() {
+    fun `navigation binding keeps focused camera projection on the focus halo`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -650,6 +648,51 @@ class MapViewportOverlayBindingsTest {
             projectionPoints.map { it.kind },
         )
         assertEquals(MapCoordinate(latitude = 35.176, longitude = 129.060), projectionPoints.first().coordinate)
+    }
+
+    @Test
+    fun `navigation binding falls back to the active focus halo when current location is unavailable`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "First",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline = emptyList(),
+                                    segmentStartCoordinate = GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                                    distanceMeters = 120,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Sparse walk",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                            ),
+                        focusCoordinate = GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+
+        assertEquals(
+            listOf(MapViewportPointKind.FOCUS_HALO),
+            overlayState.points
+                .filter(MapViewportPointOverlay::includeInProjection)
+                .map(MapViewportPointOverlay::kind),
+        )
+        assertEquals(null, createKakaoRouteCameraRenderState(overlayState))
     }
 
     @Test

@@ -549,7 +549,7 @@ class NavigationViewModel(
             )
         val mapOverlay =
             runtimeRequest.toMapOverlayUiState(
-                currentLocationCoordinate = latestLocationCoordinate ?: runtimeRequest.origin.coordinate,
+                currentLocationCoordinate = latestLocationCoordinate,
                 activeSegmentIndex = activeSegmentIndex,
                 focusedSegmentIndex = focusedSegmentIndex,
                 mapFocusMode = mapFocusMode,
@@ -1581,7 +1581,7 @@ private fun RouteNavigationRequest.toMapPlaceholderDescription(screenState: Navi
 }
 
 private fun RouteNavigationRequest.toMapOverlayUiState(
-    currentLocationCoordinate: GeoCoordinate,
+    currentLocationCoordinate: GeoCoordinate?,
     activeSegmentIndex: Int,
     focusedSegmentIndex: Int,
     mapFocusMode: NavigationMapFocusMode,
@@ -1592,7 +1592,8 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     val activeSegmentPolyline = activeSegment?.polyline?.points.orEmpty()
     val focusedSegmentPolyline = focusedSegment?.polyline?.points.orEmpty()
     val activeFocusCoordinate =
-        selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
+        currentLocationCoordinate
+            ?: selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
             ?: selectedRoute.resolveSegmentFocusCoordinate(activeSegmentIndex)
             ?: origin.coordinate
     val inspectedFocusCoordinate =
@@ -1623,7 +1624,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         currentLocation =
             NavigationMapPointUiState(
                 label = originPoint.label,
-                coordinate = currentLocationCoordinate,
+                coordinate = currentLocationCoordinate ?: origin.coordinate,
             ),
         origin = originPoint,
         destination = destinationPoint,

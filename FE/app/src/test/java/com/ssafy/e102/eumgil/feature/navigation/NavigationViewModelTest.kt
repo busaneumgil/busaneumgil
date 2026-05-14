@@ -148,7 +148,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `active navigation focus stays on the route start instead of jumping to the latest gps point`() =
+    fun `active navigation focus follows the latest gps point before segment fallbacks`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel = createViewModel(locationManager = locationManager)
@@ -166,7 +166,7 @@ class NavigationViewModelTest {
 
             assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.mapOverlay.mapFocusMode)
             assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
-            assertEquals(WALK_START_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
+            assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
         }
 
     @Test

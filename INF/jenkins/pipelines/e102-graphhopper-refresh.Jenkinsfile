@@ -156,6 +156,9 @@ pipeline {
           ssh -i "$S2_KEY" -o StrictHostKeyChecking=accept-new "$S2_USER@$S2_HOST" "cd '$REMOTE_DIR' && ls -t runtime/graphhopper/refresh/*.json 2>/dev/null | head -n 1 | xargs -r cat && docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper ps graphhopper-blue graphhopper-green" || true
         '''
       }
+      script {
+        deleteDir()
+      }
     }
     success {
       script {

@@ -82,16 +82,14 @@ class LowVisionRouteBriefingScreenTest {
     }
 
     @Test
-    fun `briefing route still loads route details when current location is not ready`() {
+    fun `briefing route does not replace a missing current location with the default origin`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionRouteBriefingRoute.kt")
                 .readText()
 
-        assertTrue(source.contains("selectedOrigin.collectAsStateWithLifecycle()"))
         assertTrue(source.contains("toLowVisionRouteOriginWaypointOrNull()"))
-        assertTrue(source.contains("selectedOrigin?.toRouteWaypointOrNull()"))
-        assertTrue(source.contains("originSnapshot.toLowVisionRouteOriginWaypoint()"))
-        assertFalse(source.contains("showLocationRequired()"))
+        assertTrue(source.contains("showLocationRequired()"))
+        assertFalse(source.contains(").toLowVisionRouteOriginWaypoint()"))
     }
 
     @Test

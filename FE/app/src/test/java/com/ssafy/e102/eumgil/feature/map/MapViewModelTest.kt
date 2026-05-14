@@ -296,7 +296,53 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `search preview clears map pin state when selected pin leaves viewport`() =
+    fun `search preview keeps map pin state during programmatic offscreen callback`() =
+        runTest {
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val locationManager = FakeCurrentLocationManager()
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-programmatic-offscreen",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = destination.latitude, longitude = destination.longitude),
+                    zoomLevel = viewModel.uiState.value.cameraTarget.resolvedZoomLevel(),
+                    isUserGesture = false,
+                    isSelectedMapPinVisibleInViewport = false,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.selectedMapPinCoordinate?.longitude ?: 0.0, 0.0)
+            assertEquals(destination, viewModel.uiState.value.facilityDetailSheetState.destinationPreview?.destination)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
+    fun `search preview clears map pin state when user moves selected pin offscreen`() =
         runTest {
             val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
             val locationManager = FakeCurrentLocationManager()

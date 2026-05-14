@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.feedback.EumLoadingState
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -634,11 +635,13 @@ private fun SearchResultSection(
             is SearchResultUiState.Typing -> Unit
 
             is SearchResultUiState.Loading ->
-                SearchStateCard(
+                EumLoadingState(
                     title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                     description = stringResource(id = R.string.search_screen_loading_description),
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = EumSpacing.small),
                 )
 
             is SearchResultUiState.Success -> {

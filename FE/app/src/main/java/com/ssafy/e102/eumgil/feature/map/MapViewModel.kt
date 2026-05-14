@@ -922,7 +922,8 @@ class MapViewModel(
         }
         if (ignoredStaleProgrammaticCallback) return
 
-        if (isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {
+        // Automatic camera sync can report the preview pin as offscreen before the viewport stabilizes.
+        if (isUserGesture && isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {
             renderSelectedFacilityState()
             renderUiState()
         }

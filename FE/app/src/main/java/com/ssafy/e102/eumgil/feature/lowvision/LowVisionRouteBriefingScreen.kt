@@ -102,8 +102,28 @@ fun LowVisionRouteBriefingScreen(
                         .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                visibleSteps.forEach { step ->
-                    BriefingStepRow(step = step, suppressTalkBack = isPlaying)
+                uiState.errorMessage?.let { errorMessage ->
+                    BriefingStatusMessage(message = errorMessage)
+                }
+                if (uiState.errorMessage == null) {
+                    when {
+                        uiState.isLoading ->
+                            BriefingStatusMessage(
+                                message =
+                                    "\uD604\uC7AC \uC704\uCE58 \uAE30\uC900\uC73C\uB85C \uACBD\uB85C \uBE0C\uB9AC\uD551\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4.",
+                            )
+
+                        visibleSteps.isEmpty() ->
+                            BriefingStatusMessage(
+                                message =
+                                    "\uACBD\uB85C \uBE0C\uB9AC\uD551\uC744 \uBD88\uB7EC\uC62C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+                            )
+
+                        else ->
+                            visibleSteps.forEach { step ->
+                                BriefingStepRow(step = step, suppressTalkBack = isPlaying)
+                            }
+                    }
                 }
             }
 
@@ -131,6 +151,26 @@ fun LowVisionRouteBriefingScreen(
                 onTabSelected = onTabSelected,
             )
         }
+    }
+}
+
+@Composable
+private fun BriefingStatusMessage(message: String) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = LowVisionRouteBriefingLayoutDefaults.stepRowMinHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = message,
+            color = BriefingWhite,
+            fontSize = 32.sp,
+            lineHeight = 38.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

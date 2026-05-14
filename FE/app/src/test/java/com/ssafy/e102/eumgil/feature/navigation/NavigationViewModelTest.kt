@@ -39,6 +39,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -450,6 +451,37 @@ class NavigationViewModelTest {
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
                 eventsDeferred.await(),
             )
+        }
+
+    @Test
+    fun `low vision mode plays route change alert before the next segment boundary`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    initialLowVisionMode = true,
+                )
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_PRE_TURN_POINT.latitude,
+                    longitude = WALK_PRE_TURN_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(NavigationUiEvent.PlayRouteChangeAlert, eventDeferred.await())
         }
 
     @Test
@@ -1406,6 +1438,7 @@ private fun lowVisionRemainingSearchData(
     )
 
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+private val WALK_PRE_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.077905)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1815, longitude = 129.0756)

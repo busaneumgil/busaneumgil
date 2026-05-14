@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.search.SearchUiAction
 import com.ssafy.e102.eumgil.feature.search.SearchUiEvent
@@ -65,8 +66,11 @@ fun LowVisionSearchRoute(
         appContainer.currentLocationManager.refreshLatestLocation()
     }
 
-    LaunchedEffect(viewModel, initialQuery) {
+    LaunchedEffect(viewModel, initialQuery, categoryLabel) {
         viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = RouteEditingTarget.DESTINATION))
+        if (!categoryLabel.isNullOrBlank()) {
+            viewModel.onAction(SearchUiAction.SortOptionSelected(sortOption = SearchSortOption.DISTANCE))
+        }
         viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
     }
 

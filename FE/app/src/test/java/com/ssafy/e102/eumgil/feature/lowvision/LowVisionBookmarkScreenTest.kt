@@ -25,7 +25,8 @@ class LowVisionBookmarkScreenTest {
         assertEquals(2, LowVisionBookmarkLayoutDefaults.actionButtonCount)
         assertEquals(LowVisionSearchLayoutDefaults.actionButtonHeight, LowVisionBookmarkLayoutDefaults.actionButtonHeight)
         assertEquals(LowVisionSearchLayoutDefaults.actionButtonGap, LowVisionBookmarkLayoutDefaults.actionButtonGap)
-        assertTrue(LowVisionBookmarkLayoutDefaults.placeCardMinHeight >= minimumButtonStackHeight + 170.dp)
+        assertTrue(LowVisionBookmarkLayoutDefaults.placeCardMinHeight >= minimumButtonStackHeight + 160.dp)
+        assertEquals(116.dp, LowVisionBookmarkLayoutDefaults.infoSectionMinHeight)
     }
 
     @Test
@@ -35,6 +36,8 @@ class LowVisionBookmarkScreenTest {
         assertEquals(LowVisionSearchLayoutDefaults.titleLineHeight, LowVisionBookmarkLayoutDefaults.titleLineHeight)
         assertEquals(20.sp, LowVisionBookmarkLayoutDefaults.addressFontSize)
         assertEquals(24.sp, LowVisionBookmarkLayoutDefaults.addressLineHeight)
+        assertEquals(LowVisionSearchLayoutDefaults.infoSectionMinHeight, LowVisionBookmarkLayoutDefaults.infoSectionMinHeight)
+        assertEquals(LowVisionSearchLayoutDefaults.sectionDividerThickness, LowVisionBookmarkLayoutDefaults.sectionDividerThickness)
     }
 
     @Test

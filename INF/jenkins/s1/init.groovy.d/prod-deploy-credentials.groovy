@@ -130,4 +130,22 @@ upsertStringCredential(
     System.getenv('MATTERMOST_WEBHOOK_URL')
 )
 
+upsertStringCredential(
+    'e102-log-analysis-webhook-url',
+    'E102 shared log analysis Mattermost incoming webhook URL',
+    System.getenv('LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL')
+)
+
+upsertStringCredential(
+    'e102-dev-log-analysis-webhook-url',
+    'E102 DEV log analysis Mattermost incoming webhook URL',
+    System.getenv('DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL') ?: System.getenv('LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL')
+)
+
+upsertStringCredential(
+    'e102-prod-log-analysis-webhook-url',
+    'E102 PROD log analysis Mattermost incoming webhook URL',
+    System.getenv('PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL') ?: System.getenv('LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL')
+)
+
 SystemCredentialsProvider.getInstance().save()

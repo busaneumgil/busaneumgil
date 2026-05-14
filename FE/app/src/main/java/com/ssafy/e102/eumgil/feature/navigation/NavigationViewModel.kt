@@ -1591,6 +1591,14 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex)
     val activeSegmentPolyline = activeSegment?.polyline?.points.orEmpty()
     val focusedSegmentPolyline = focusedSegment?.polyline?.points.orEmpty()
+    val activeFocusCoordinate =
+        selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
+            ?: selectedRoute.resolveSegmentFocusCoordinate(activeSegmentIndex)
+            ?: origin.coordinate
+    val inspectedFocusCoordinate =
+        selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
+            ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
+            ?: activeFocusCoordinate
     val routeSegments =
         selectedRoute.segments.mapIndexed { index, segment ->
             NavigationMapSegmentUiState(
@@ -1626,11 +1634,8 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         focusedSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(focusedSegment),
         focusCoordinate =
             when (mapFocusMode) {
-                NavigationMapFocusMode.ACTIVE -> currentLocationCoordinate
-                NavigationMapFocusMode.FOCUSED ->
-                    selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
-                        ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
-                        ?: currentLocationCoordinate
+                NavigationMapFocusMode.ACTIVE -> activeFocusCoordinate
+                NavigationMapFocusMode.FOCUSED -> inspectedFocusCoordinate
             },
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,

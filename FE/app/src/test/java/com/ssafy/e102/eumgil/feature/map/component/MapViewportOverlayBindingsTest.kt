@@ -298,7 +298,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding keeps full navigation context in active projection`() {
+    fun `navigation binding limits active projection to the active segment focus instead of the full route overview`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -347,7 +347,8 @@ class MapViewportOverlayBindingsTest {
             ),
             overlayState.polylines.map { it.style },
         )
-        assertTrue(overlayState.polylines.all { it.includeInProjection })
+        assertFalse(overlayState.polylines[0].includeInProjection)
+        assertFalse(overlayState.polylines[1].includeInProjection)
         assertFalse(overlayState.polylines[0].showDirectionArrows)
         assertTrue(overlayState.polylines[1].showDirectionArrows)
         assertEquals(
@@ -355,10 +356,14 @@ class MapViewportOverlayBindingsTest {
                 MapViewportPointKind.CURRENT_LOCATION,
                 MapViewportPointKind.ORIGIN,
                 MapViewportPointKind.DESTINATION,
+                MapViewportPointKind.FOCUS_HALO,
             ),
             overlayState.points.map { it.kind },
         )
-        assertTrue(overlayState.points.all { it.includeInProjection })
+        assertEquals(
+            listOf(false, false, false, true),
+            overlayState.points.map { it.includeInProjection },
+        )
     }
 
     @Test

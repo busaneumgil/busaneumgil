@@ -131,6 +131,19 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
+    fun `arrival completion actions keep ctas above the system navigation bar`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival completion actions should apply navigation-bar padding so the home and new-route buttons stay above three-button system navigation.",
+            source.contains(
+                "modifier\n                .fillMaxWidth()\n                .navigationBarsPadding()\n                .padding(horizontal = EumSpacing.large)\n                .padding(bottom = EumSpacing.medium)",
+            ),
+        )
+    }
+
+    @Test
     fun `arrival evaluation sheet dismisses by animating its real offset instead of relying on parent slide out placement`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()

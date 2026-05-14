@@ -194,6 +194,7 @@ private fun ArrivalCompletionActions(
         modifier =
             modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = EumSpacing.large)
                 .padding(bottom = EumSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),

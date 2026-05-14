@@ -33,9 +33,49 @@ public record RouteLegResponse(
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	RouteStopResponse arrivingStop,
 	@JsonInclude(JsonInclude.Include.NON_NULL)
+	Integer remainingMinute,
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	String headsign,
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	Boolean isLowFloor,
 	@JsonIgnore
 	List<RouteBadge> badges) {
+
+	public RouteLegResponse(
+		int sequence,
+		TransportMode type,
+		RouteLegRole role,
+		String instruction,
+		BigDecimal distanceMeter,
+		int durationSecond,
+		int estimatedTimeMinute,
+		String geometry,
+		List<RouteGuidanceEventResponse> guidanceEvents,
+		String routeNo,
+		List<TransitLaneOptionResponse> laneOptions,
+		RouteStopResponse boardingStop,
+		RouteStopResponse arrivingStop,
+		Boolean isLowFloor,
+		List<RouteBadge> badges) {
+		this(
+			sequence,
+			type,
+			role,
+			instruction,
+			distanceMeter,
+			durationSecond,
+			estimatedTimeMinute,
+			geometry,
+			guidanceEvents,
+			routeNo,
+			laneOptions,
+			boardingStop,
+			arrivingStop,
+			null,
+			null,
+			isLowFloor,
+			badges);
+	}
 
 	public RouteLegResponse(
 		int sequence,
@@ -59,6 +99,8 @@ public record RouteLegResponse(
 			guidanceEvents,
 			null,
 			List.of(),
+			null,
+			null,
 			null,
 			null,
 			null,

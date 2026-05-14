@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.core.stt
+package com.example.llmtest.stt
 
 import android.content.Context
 import android.util.Log
@@ -7,10 +7,6 @@ import com.k2fsa.sherpa.onnx.SpeechSegment
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
 
-/**
- * Silero VAD 래퍼.
- * WINDOW_SIZE=512, 16kHz, threshold=0.5
- */
 internal class VadManager(context: Context) {
 
     companion object {
@@ -27,11 +23,11 @@ internal class VadManager(context: Context) {
         val config = VadModelConfig(
             sileroVadModelConfig = SileroVadModelConfig(
                 model = vadPath,
-                threshold = 0.5f, // before: 0.3f
+                threshold = 0.5f,
                 minSilenceDuration = 1.5f,
                 minSpeechDuration = 0.25f,
                 windowSize = WINDOW_SIZE,
-                maxSpeechDuration = 10.0f, // before: 30.0f
+                maxSpeechDuration = 10.0f,
             ),
             sampleRate = 16000,
             numThreads = 1,

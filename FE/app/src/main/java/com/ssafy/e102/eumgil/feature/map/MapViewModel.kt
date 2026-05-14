@@ -231,7 +231,6 @@ class MapViewModel(
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
-            is MapUiAction.RecentDestinationPreviewClicked -> handleRecentDestinationPreviewClicked(action.placeId)
             is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
             MapUiAction.SearchHereClicked -> handleSearchHereClicked()
             MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch(RouteEditingTarget.DESTINATION))
@@ -565,17 +564,6 @@ class MapViewModel(
         }
         destinationSelectionRepository.updateSelectedDestination(destination)
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
-    }
-
-    private fun handleRecentDestinationPreviewClicked(placeId: String) {
-        val recentDestination =
-            recentDestinations.firstOrNull { destination -> destination.placeId == placeId } ?: return
-
-        destinationPreviewRepository.requestPreview(
-            destination = recentDestination.toPlaceDestination(),
-            editingTarget = routeEditingTarget,
-            accessibilityTagKeys = recentDestination.accessibilityTagKeys,
-        )
     }
 
     private fun resetMarkerCategoryFilter() {

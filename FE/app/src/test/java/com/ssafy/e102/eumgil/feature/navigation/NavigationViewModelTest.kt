@@ -417,6 +417,9 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, bookmarkRepository.savedBookmarks.size)
+            assertEquals(42L, bookmarkRepository.savedBookmarks.single().serverPlaceId)
+            assertEquals("KAKAO", bookmarkRepository.savedBookmarks.single().provider)
+            assertEquals("kakao-destination-42", bookmarkRepository.savedBookmarks.single().providerPlaceId)
             assertEquals(listOf("walk-route-1"), routeRepository.endRouteCalls)
             assertEquals(
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToSavedRoute),
@@ -425,7 +428,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `saving destination bookmark failure keeps navigation active and suppresses bookmark navigation`() =
+    fun `saving destination bookmark failure keeps navigation active and shows toast`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val bookmarkRepository = FakeBookmarkRepository(failSave = true)
@@ -438,6 +441,7 @@ class NavigationViewModelTest {
                 )
             viewModel.bindNavigationRequest(testWalkNavigationRequest())
             advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
 
             viewModel.onAction(NavigationUiAction.SaveBookmarkClicked)
             advanceUntilIdle()
@@ -445,6 +449,46 @@ class NavigationViewModelTest {
             assertTrue(locationManager.isUpdating)
             assertTrue(bookmarkRepository.savedBookmarks.isEmpty())
             assertTrue(routeRepository.endRouteCalls.isEmpty())
+            assertEquals(
+                listOf(NavigationUiEvent.ShowToast("북마크를 저장하지 못했습니다. 다시 시도해 주세요.")),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
+    fun `saving destination bookmark without server metadata shows unavailable toast and keeps navigation active`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository = FakeBookmarkRepository()
+            val routeRepository = FakeRouteRepository(endSessionId = "ended-session")
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    bookmarkRepository = bookmarkRepository,
+                    routeRepository = routeRepository,
+                )
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    destination =
+                        RouteWaypoint(
+                            name = "목적지",
+                            coordinate = WALK_END_POINT,
+                        ),
+                ),
+            )
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+
+            viewModel.onAction(NavigationUiAction.SaveBookmarkClicked)
+            advanceUntilIdle()
+
+            assertTrue(locationManager.isUpdating)
+            assertTrue(bookmarkRepository.savedBookmarks.isEmpty())
+            assertTrue(routeRepository.endRouteCalls.isEmpty())
+            assertEquals(
+                listOf(NavigationUiEvent.ShowToast("서버에 저장할 수 있는 목적지에서만 북마크를 저장할 수 있습니다.")),
+                eventsDeferred.await(),
+            )
         }
 
     @Test
@@ -854,6 +898,10 @@ private fun testWalkNavigationRequest(): RouteNavigationRequest =
             RouteWaypoint(
                 name = "목적지",
                 placeId = "destination-place",
+                serverPlaceId = 42L,
+                provider = "KAKAO",
+                providerPlaceId = "kakao-destination-42",
+                providerCategory = "ELEVATOR",
                 coordinate = WALK_END_POINT,
             ),
         selectedRoute =

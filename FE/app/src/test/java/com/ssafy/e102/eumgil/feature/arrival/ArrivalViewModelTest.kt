@@ -145,6 +145,17 @@ class ArrivalViewModelTest {
         }
 
     @Test
+    fun `route save is disabled when ended route id is missing`() =
+        runTest {
+            val viewModel = createViewModel(routeBookmarkDraft = testUnsavableRouteBookmarkDraft())
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isRouteSaveEnabled)
+            assertFalse(viewModel.uiState.value.routeSaveDraft?.canSaveToServer ?: true)
+            assertTrue(viewModel.uiState.value.isEvaluationSheetVisible)
+        }
+
+    @Test
     fun `save route click toggles saved route off on second tap`() =
         runTest {
             val routeBookmarkRepository = FakeRouteBookmarkRepository()
@@ -162,6 +173,29 @@ class ArrivalViewModelTest {
             assertEquals(null, viewModel.uiState.value.routeSaveBookmarkId)
             assertTrue(viewModel.uiState.value.isRouteSaveEnabled)
             assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
+        }
+
+    @Test
+    fun `save route failure keeps route unsaved and emits toast`() =
+        runTest {
+            val routeBookmarkRepository =
+                FakeRouteBookmarkRepository(
+                    saveFailure = IllegalStateException("save failed"),
+                )
+            val viewModel = createViewModel(routeBookmarkRepository = routeBookmarkRepository)
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+
+            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isRouteSaveSelected)
+            assertEquals(null, viewModel.uiState.value.routeSaveBookmarkId)
+            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
+            assertEquals(
+                listOf(ArrivalUiEvent.ShowToast("경로 북마크를 저장하지 못했습니다. 다시 시도해 주세요.")),
+                eventsDeferred.await(),
+            )
         }
 }
 
@@ -260,6 +294,9 @@ private fun testRouteBookmarkDraft(): RouteBookmarkDraft =
         distanceMeters = 11_200,
         durationMinutes = 28,
     )
+
+private fun testUnsavableRouteBookmarkDraft(): RouteBookmarkDraft =
+    testRouteBookmarkDraft().copy(routeId = null)
 
 private fun testRouteBookmark(
     draft: RouteBookmarkDraft,

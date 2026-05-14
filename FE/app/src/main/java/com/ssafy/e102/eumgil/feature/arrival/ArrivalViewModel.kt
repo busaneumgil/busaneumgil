@@ -37,10 +37,10 @@ class ArrivalViewModel(
         val hasRatingSession = !currentRatingSessionId.isNullOrBlank()
         mutableUiState.update { state ->
             state.copy(
-                isEvaluationSheetVisible = hasRatingSession && currentRouteBookmarkDraft == null,
+                isEvaluationSheetVisible = hasRatingSession && currentRouteBookmarkDraft?.canSaveToServer != true,
                 hasRatingSession = hasRatingSession,
                 routeSaveDraft = currentRouteBookmarkDraft?.toUiState(),
-                isRouteSaveUpdating = currentRouteBookmarkDraft != null,
+                isRouteSaveUpdating = currentRouteBookmarkDraft?.canSaveToServer == true,
             )
         }
         currentRouteBookmarkDraft?.let(::syncInitialRouteSaveState)
@@ -61,6 +61,15 @@ class ArrivalViewModel(
     }
 
     private fun syncInitialRouteSaveState(draft: RouteBookmarkDraft) {
+        if (!draft.canSaveToServer) {
+            mutableUiState.update { state ->
+                state.copy(
+                    isEvaluationSheetVisible = state.hasRatingSession,
+                    isRouteSaveUpdating = false,
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             runCatching {
                 val bookmarkId = resolveRouteBookmarkId(draft)
@@ -97,6 +106,10 @@ class ArrivalViewModel(
 
     private fun saveRouteBookmark() {
         val draft = currentRouteBookmarkDraft ?: return
+        if (!draft.canSaveToServer) {
+            emitUiEvent(ArrivalUiEvent.ShowToast(ARRIVAL_ROUTE_BOOKMARK_UNAVAILABLE_MESSAGE))
+            return
+        }
         if (!uiState.value.isRouteSaveEnabled) return
 
         mutableUiState.update { state ->
@@ -121,6 +134,7 @@ class ArrivalViewModel(
                 mutableUiState.update { state ->
                     state.copy(isRouteSaveUpdating = false)
                 }
+                emitUiEvent(ArrivalUiEvent.ShowToast(ARRIVAL_ROUTE_BOOKMARK_SAVE_FAILURE_MESSAGE))
             }
         }
     }
@@ -265,7 +279,11 @@ private fun RouteBookmarkDraft.toUiState(): ArrivalRouteSaveDraftUiState =
             },
         distanceMeters = distanceMeters,
         durationMinutes = durationMinutes,
+        canSaveToServer = canSaveToServer,
     )
+
+private const val ARRIVAL_ROUTE_BOOKMARK_UNAVAILABLE_MESSAGE = "안내 종료 경로 ID가 없어 경로 북마크를 저장할 수 없습니다."
+private const val ARRIVAL_ROUTE_BOOKMARK_SAVE_FAILURE_MESSAGE = "경로 북마크를 저장하지 못했습니다. 다시 시도해 주세요."
 
 private object NoOpArrivalRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =

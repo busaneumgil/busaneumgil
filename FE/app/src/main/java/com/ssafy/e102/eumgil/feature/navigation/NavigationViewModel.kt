@@ -22,6 +22,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.data.repository.toBookmarkDataOrNull
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
 import java.util.Locale
@@ -195,7 +196,7 @@ class NavigationViewModel(
     }
 
     fun currentRouteBookmarkDraft(): RouteBookmarkDraft? =
-        navigationRequest?.toRouteBookmarkDraft(routeSession?.route)
+        navigationRequest?.toRouteBookmarkDraft(routeSession = routeSession)
 
     fun currentRatingSessionId(): String? =
         routeSession?.latestEndedSessionId ?: routeSession?.sessionId
@@ -685,24 +686,27 @@ class NavigationViewModel(
 
     private fun saveDestinationBookmarkAndNavigate() {
         viewModelScope.launch {
-            val bookmark = navigationRequest?.toDestinationBookmarkData()
+            val bookmark = navigationRequest?.toDestinationBookmarkDataOrNull()
+            if (bookmark == null) {
+                emitUiEvent(NavigationUiEvent.ShowToast(NAVIGATION_BOOKMARK_UNAVAILABLE_MESSAGE))
+                return@launch
+            }
             val saveResult =
                 runCatching {
-                    bookmark?.let { pendingBookmark ->
-                        bookmarkRepository.saveBookmark(pendingBookmark)
-                    }
+                    bookmarkRepository.saveBookmark(bookmark)
                 }
 
             saveResult
                 .onSuccess {
                     println(
-                        "BookmarkSaveTrace[NavigationViewModel] result=success placeId=${bookmark?.placeId.orEmpty()}",
+                        "BookmarkSaveTrace[NavigationViewModel] result=success placeId=${bookmark.placeId}",
                     )
                     completeNavigation(NavigationUiEvent.NavigateToSavedRoute)
                 }.onFailure { throwable ->
                     println(
-                        "BookmarkSaveTrace[NavigationViewModel] result=failure placeId=${bookmark?.placeId.orEmpty()} message=${throwable.message.orEmpty()}",
+                        "BookmarkSaveTrace[NavigationViewModel] result=failure placeId=${bookmark.placeId} message=${throwable.message.orEmpty()}",
                     )
+                    emitUiEvent(NavigationUiEvent.ShowToast(NAVIGATION_BOOKMARK_SAVE_FAILURE_MESSAGE))
                 }
         }
     }
@@ -1120,6 +1124,28 @@ private data class RouteSegmentProjection(
     val distanceToSegmentMeters: Double,
     val distanceAlongSegmentMeters: Double,
 )
+
+private fun RouteNavigationRequest.toDestinationBookmarkDataOrNull(): BookmarkData? =
+    destination.toBookmarkDataOrNull(
+        fallbackPlaceId = destination.toNavigationDestinationPlaceId(),
+        fallbackPlaceName = destination.name.orEmpty().ifBlank { "목적지" },
+    )
+
+private fun RouteNavigationRequest.toRouteBookmarkDraft(
+    routeSession: NavigationRouteSession? = null,
+    route: RouteCandidate? = routeSession?.route ?: selectedRoute,
+): RouteBookmarkDraft =
+    RouteBookmarkDraft(
+        routeId = routeSession?.routeId ?: selectionHandoff?.routeId ?: route?.serverRouteId ?: selectedRoute.serverRouteId,
+        startLabel = origin.name.orEmpty().ifBlank { "출발지" },
+        endLabel = destination.name.orEmpty().ifBlank { "목적지" },
+        startPoint = origin.coordinate,
+        endPoint = destination.coordinate,
+        routeOption = route?.routeOption ?: selectedRoute.routeOption,
+        distanceMeters = route?.summary?.distanceMeters?.takeIf { distance -> distance > 0 },
+        durationMinutes = route?.summary?.estimatedTimeMinutes?.takeIf { duration -> duration > 0 },
+        routeSnapshot = route,
+    )
 
 private fun RouteNavigationRequest.toDestinationBookmarkData(): BookmarkData {
     val destinationWaypoint = destination
@@ -2225,6 +2251,8 @@ private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS = 20.0
 private const val LOW_VISION_ACTUAL_METRICS_REUSE_DISTANCE_METERS = 25.0
 private const val LOW_VISION_ACTUAL_METRICS_CACHE_MAX_AGE_MILLIS = 10_000L
 private const val NAVIGATION_TRANSIT_OPTION_LABEL_LIMIT = 4
+private const val NAVIGATION_BOOKMARK_UNAVAILABLE_MESSAGE = "서버에 저장할 수 있는 목적지에서만 북마크를 저장할 수 있습니다."
+private const val NAVIGATION_BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크를 저장하지 못했습니다. 다시 시도해 주세요."
 
 private object NoOpRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =

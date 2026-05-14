@@ -20,7 +20,7 @@ data class ArrivalUiState(
         get() = routeSaveDraft != null
 
     val isRouteSaveEnabled: Boolean
-        get() = hasRouteSaveTarget && !isRouteSaveUpdating
+        get() = routeSaveDraft?.canSaveToServer == true && !isRouteSaveUpdating
 }
 
 data class ArrivalRouteSaveDraftUiState(
@@ -30,6 +30,7 @@ data class ArrivalRouteSaveDraftUiState(
     val routeOptionLabel: String,
     val distanceMeters: Int? = null,
     val durationMinutes: Int? = null,
+    val canSaveToServer: Boolean,
 )
 
 enum class ArrivalEvaluationLabel(val labelResId: Int?) {
@@ -59,4 +60,8 @@ sealed interface ArrivalUiEvent {
     data object NavigateToMap : ArrivalUiEvent
 
     data object NavigateToSearch : ArrivalUiEvent
+
+    data class ShowToast(
+        val message: String,
+    ) : ArrivalUiEvent
 }

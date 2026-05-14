@@ -2052,44 +2052,6 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `recent destination preview click centers camera and opens detail sheet`() =
-        runTest {
-            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
-            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
-            val viewModel =
-                MapViewModel(
-                    locationPermissionManager =
-                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
-                    currentLocationManager = FakeCurrentLocationManager(),
-                    destinationSelectionRepository = destinationSelectionRepository,
-                    destinationPreviewRepository = destinationPreviewRepository,
-                    facilitySeedRepository = testFacilitySeedRepository(),
-                    bookmarkRepository = FakeBookmarkRepository(),
-                    searchRepository =
-                        FakeSearchRepository(
-                            recentDestinations =
-                                listOf(
-                                    recentDestination(placeId = "recent-place-1", searchedAtMillis = 2_000L),
-                                ),
-                        ),
-                )
-
-            advanceUntilIdle()
-
-            viewModel.onAction(MapUiAction.RecentDestinationPreviewClicked(placeId = "recent-place-1"))
-            advanceUntilIdle()
-
-            assertNull(destinationSelectionRepository.selectedDestination.value)
-            assertNull(destinationPreviewRepository.pendingPreview.value)
-            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
-            assertEquals(35.1796, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
-            assertEquals(129.0756, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
-            assertEquals("recent-place-1", viewModel.uiState.value.facilityDetailSheetState.destinationPreview?.destination?.placeId)
-            assertEquals("Recent Destination recent-place-1", viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.name)
-            assertEquals(listOf("accessible-parking"), viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.accessibilityTags)
-        }
-
-    @Test
     fun `recent destination route click stores destination and emits navigation event`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()

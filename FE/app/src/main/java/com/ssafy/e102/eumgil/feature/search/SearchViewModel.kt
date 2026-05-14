@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
@@ -13,6 +12,9 @@ import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
+import com.ssafy.e102.eumgil.core.model.bookmarkProvider
+import com.ssafy.e102.eumgil.core.model.bookmarkProviderPlaceId
+import com.ssafy.e102.eumgil.core.model.isAddressSearchFallback
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -772,20 +774,6 @@ private fun SearchResultUiState.hasResultQuery(query: String): Boolean =
         is SearchResultUiState.Error -> this.query == query
         else -> false
     }
-
-private fun SearchResult.bookmarkProvider(): String? =
-    when {
-        isAddressSearchFallback() -> "KAKAO"
-        !provider.isNullOrBlank() -> provider
-        !providerPlaceId.isNullOrBlank() -> "KAKAO"
-        else -> null
-    }
-
-private fun SearchResult.bookmarkProviderPlaceId(): String? =
-    providerPlaceId?.takeIf { !isAddressSearchFallback() && it.isNotBlank() }
-
-private fun SearchResult.isAddressSearchFallback(): Boolean =
-    provider?.equals(ANDROID_GEOCODER_PROVIDER, ignoreCase = true) == true
 
 private data class SearchLocationOrigin(
     val latitude: Double,

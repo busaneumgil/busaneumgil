@@ -49,7 +49,8 @@ internal class LowVisionSearchRepository(
     override suspend fun getRecentSearches(): List<RecentSearch> = delegate.getRecentSearches()
 
     override suspend fun saveRecentSearch(keyword: String) {
-        delegate.saveRecentSearch(keyword)
+        // Low-vision flows do not surface recent-search UI, so category/voice queries should not pollute shared history.
+        Unit
     }
 
     override suspend fun getRecentDestinations(): List<RecentDestination> = delegate.getRecentDestinations()

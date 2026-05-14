@@ -190,6 +190,39 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `facility detail route action labels shrink instead of ellipsizing`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val iconTextButtonSection =
+            source
+                .substringAfter("private fun IconTextButtonContent(")
+                .substringBefore("@Composable\nprivate fun NoRippleMapPrimaryActionButton")
+        val adaptiveLabelSection =
+            source
+                .substringAfter("private fun AdaptiveSingleLineButtonLabel(")
+                .substringBefore("@Composable\nprivate fun NoRippleMapPrimaryActionButton")
+
+        assertTrue(
+            "Route endpoint action labels should use the adaptive label component.",
+            iconTextButtonSection.contains("AdaptiveSingleLineButtonLabel(label = label)"),
+        )
+        assertTrue(
+            "Adaptive route action labels should reduce font size when one-line text overflows.",
+            adaptiveLabelSection.contains("result.didOverflowWidth") &&
+                adaptiveLabelSection.contains("fontSize.value > minFontSize.value"),
+        )
+        assertTrue(
+            "Adaptive route action labels should keep text on one line.",
+            adaptiveLabelSection.contains("maxLines = 1") &&
+                adaptiveLabelSection.contains("softWrap = false"),
+        )
+        assertFalse(
+            "Adaptive route action labels should not use ellipsis because truncated endpoint actions are ambiguous.",
+            adaptiveLabelSection.contains("TextOverflow.Ellipsis"),
+        )
+    }
+
+    @Test
     fun `map viewport state routes preview metadata by editing target before selected endpoints`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()

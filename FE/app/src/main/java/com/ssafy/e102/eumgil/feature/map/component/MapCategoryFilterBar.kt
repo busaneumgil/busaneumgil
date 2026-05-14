@@ -79,7 +79,11 @@ fun MapCategoryFilterBar(
                             FilterChipIcon(iconRes = R.drawable.ic_nav_facility)
                         },
                         label = {
-                            Text(text = stringResource(id = R.string.map_filter_chip_all))
+                            Text(
+                                text = stringResource(id = R.string.map_filter_chip_all),
+                                maxLines = 1,
+                                softWrap = false,
+                            )
                         },
                     )
                 }
@@ -101,7 +105,11 @@ fun MapCategoryFilterBar(
                             )
                         },
                         label = {
-                            Text(text = categoryLabel)
+                            Text(
+                                text = categoryLabel,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
                         },
                     )
                 }

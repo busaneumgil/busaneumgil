@@ -112,6 +112,27 @@ class MapShortcutFilterRowConfigurationTest {
     }
 
     @Test
+    fun `map shortcut filter labels avoid wrapping without ellipsis`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+        val labelSection =
+            source
+                .substringAfter("text = shortcutFilterLabel(chip.key)")
+                .substringBefore("        }")
+
+        assertTrue(
+            "Shortcut filter labels should stay on one line to keep chip height stable.",
+            labelSection.contains("maxLines = 1") &&
+                labelSection.contains("softWrap = false"),
+        )
+        assertFalse(
+            "Shortcut filter labels should not ellipsize; the row can scroll horizontally instead.",
+            labelSection.contains("TextOverflow.Ellipsis"),
+        )
+    }
+
+    @Test
     fun `map shortcut filter row keeps disabled styling without lowering whole chip opacity`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")

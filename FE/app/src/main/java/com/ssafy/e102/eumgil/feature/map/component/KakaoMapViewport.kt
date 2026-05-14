@@ -494,12 +494,6 @@ private class KakaoMapViewportController {
                                 markerId = poiId,
                                 position = position,
                             )
-                        } else if (poiId.isNotBlank()) {
-                            dispatchExternalPoiTap(
-                                position = position,
-                                providerPlaceId = poiId,
-                                nameHint = null,
-                            )
                         }
                     }
                     readyMap.setOnTerrainClickListener { _, position, _ ->

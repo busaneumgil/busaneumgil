@@ -617,6 +617,7 @@
     <string name="map_facility_detail_bookmark_state_saved">북마크됨</string>
     <string name="map_facility_detail_bookmark_state_unsaved">북마크 안 됨</string>
     <string name="map_facility_detail_bookmark_state_updating">북마크 저장 중</string>
+    <string name="map_facility_detail_bookmark_state_unavailable">이 장소는 북마크할 수 없습니다.</string>
     <string name="arrival_screen_title">도착 완료</string>
     <string name="arrival_screen_headline">오늘도 안전한 이동\n수고하셨습니다!</string>
     <string name="arrival_screen_description">부산이음길이 함께하여 더 편안한 이동이 되셨기를 바랍니다.</string>

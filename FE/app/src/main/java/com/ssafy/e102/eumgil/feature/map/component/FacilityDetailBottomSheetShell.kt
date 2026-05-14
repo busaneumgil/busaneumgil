@@ -33,8 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -76,7 +74,6 @@ data class FacilityDetailBottomSheetShellState(
 @Composable
 fun FacilityDetailBottomSheetShell(
     state: FacilityDetailBottomSheetShellState,
-    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     detailContent: @Composable ColumnScope.() -> Unit,
     headerActionContent: (@Composable () -> Unit)? = null,
@@ -245,13 +242,6 @@ fun FacilityDetailBottomSheetShell(
                         ) {
                             headerActionContent?.let { content ->
                                 content()
-                            }
-                            IconButton(onClick = onDismiss) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_action_close),
-                                    contentDescription = stringResource(id = R.string.map_facility_detail_close),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
                             }
                         }
                     }

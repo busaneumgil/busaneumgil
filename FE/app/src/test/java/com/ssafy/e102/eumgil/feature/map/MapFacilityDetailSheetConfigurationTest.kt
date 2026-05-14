@@ -110,27 +110,39 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
-    fun `facility detail bottom sheet separates collapse from explicit close`() {
-        val source =
+    fun `facility detail bottom sheet keeps collapse handle but moves bookmark action to the header`() {
+        val shellSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
 
         assertTrue(
             "The drag handle should expose a collapse and expand label instead of a close label.",
-            source.contains("map_facility_detail_sheet_toggle"),
+            shellSource.contains("map_facility_detail_sheet_toggle"),
         )
         assertTrue(
-            "The explicit close affordance should be the only header control wired to onDismiss.",
-            source.contains("map_facility_detail_close"),
+            "The detail sheet header should render injected actions from the screen so bookmark can replace the old close icon.",
+            shellSource.contains("headerActionContent?.let"),
         )
         assertTrue(
             "Dragging down should collapse the place sheet instead of dismissing and clearing selection state.",
-            source.contains("isCollapsed =") &&
-                source.contains("sheetOffsetPx >= collapseThresholdPx") &&
-                !source.contains("sheetOffsetPx >= dismissThresholdPx"),
+            shellSource.contains("isCollapsed =") &&
+                shellSource.contains("sheetOffsetPx >= collapseThresholdPx") &&
+                !shellSource.contains("sheetOffsetPx >= dismissThresholdPx"),
         )
         assertTrue(
             "Collapsed state should keep the fixed action area visible while hiding the detailed body content.",
-            source.contains("if (state.hasDetailContent && !isCollapsed)"),
+            shellSource.contains("if (state.hasDetailContent && !isCollapsed)"),
+        )
+        assertFalse(
+            "The explicit close icon should be removed from the place sheet header once bookmark occupies that slot.",
+            shellSource.contains("map_facility_detail_close") ||
+                shellSource.contains("IconButton(onClick = onDismiss)"),
+        )
+        assertTrue(
+            "MapScreen should provide the bookmark action through the sheet header slot.",
+            screenSource.contains("headerActionContent = {") &&
+                screenSource.contains("FacilityDetailBookmarkActionButton("),
         )
     }
 
@@ -155,11 +167,15 @@ class MapFacilityDetailSheetConfigurationTest {
             shellSource.contains("maxLines = if (isCollapsed) 1 else 2"),
         )
         assertTrue(
-            "Bottom actions should fill the row with origin and destination CTAs before the right-aligned bookmark icon.",
+            "Bottom actions should keep origin before destination in the fixed action row.",
             actionContentSection.indexOf("map_facility_detail_set_origin_action") <
                 actionContentSection.indexOf("map_facility_detail_set_destination_action") &&
-                actionContentSection.indexOf("map_facility_detail_set_destination_action") <
-                actionContentSection.indexOf("FacilityDetailBookmarkActionButton("),
+                !actionContentSection.contains("FacilityDetailBookmarkActionButton("),
+        )
+        assertTrue(
+            "Origin and destination CTAs should split the row evenly after the bookmark action moves to the header.",
+            actionContentSection.contains(".weight(1f)") &&
+                !actionContentSection.contains("weight(1.15f)"),
         )
         assertTrue(
             "Origin and destination action labels should share the same button text style.",

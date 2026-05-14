@@ -188,11 +188,16 @@ fun MapScreen(
 
                 FacilityDetailBottomSheetShell(
                     state = facilityDetailSheetUiState.toShellState(),
-                    onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
                     modifier = Modifier.fillMaxSize(),
                     detailContent = {
                         FacilityDetailAccessibilityTagSection(
                             tags = facilityDetailSheetUiState.accessibilityTags,
+                        )
+                    },
+                    headerActionContent = {
+                        FacilityDetailBookmarkActionButton(
+                            state = facilityDetailSheetUiState,
+                            onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
                         )
                     },
                     actionContent = {
@@ -215,9 +220,9 @@ fun MapScreen(
                                     enabled = facilityDetailSheetUiState.isRouteActionEnabled,
                                     modifier =
                                         Modifier
-                                            .weight(1.15f)
+                                            .weight(1f)
                                             .height(56.dp),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(EumRadius.medium),
                                 ) {
                                     IconTextButtonContent(
                                         iconRes = R.drawable.ic_route_start_navigation_button,
@@ -235,9 +240,9 @@ fun MapScreen(
                                     enabled = facilityDetailSheetUiState.isRouteActionEnabled,
                                     modifier =
                                         Modifier
-                                            .weight(1.15f)
+                                            .weight(1f)
                                             .height(56.dp),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(EumRadius.medium),
                                     containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = MaterialTheme.colorScheme.onPrimary,
                                 ) {
@@ -248,10 +253,6 @@ fun MapScreen(
                                         ),
                                     )
                                 }
-                                FacilityDetailBookmarkActionButton(
-                                    state = facilityDetailSheetUiState,
-                                    onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
-                                )
                             }
                             facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
                                 Text(
@@ -598,7 +599,7 @@ private fun NoRippleMapPrimaryActionButton(
     onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = RoundedCornerShape(EumRadius.medium),
     containerColor: Color = MaterialTheme.colorScheme.primary,
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     content: @Composable RowScope.() -> Unit,
@@ -641,7 +642,8 @@ private fun FacilityDetailBookmarkActionButton(
     val bookmarkButtonLabel = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
     val bookmarkStateDescription =
         when {
-            state.isBookmarkEnabled.not() -> "Bookmark is unavailable for this place."
+            state.isBookmarkEnabled.not() ->
+                stringResource(id = R.string.map_facility_detail_bookmark_state_unavailable)
 
             state.isBookmarkUpdating ->
                 stringResource(id = R.string.map_facility_detail_bookmark_state_updating)

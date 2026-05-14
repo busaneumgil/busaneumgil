@@ -34,4 +34,20 @@ class MapBookmarkActionButtonConfigurationTest {
             source.contains("primaryContainer.copy(alpha = 0.5f)"),
         )
     }
+
+    @Test
+    fun `facility detail bookmark accessibility copy comes from string resources`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val stringsSource = File("src/main/res/values/strings.xml").readText()
+
+        assertFalse(
+            "Bookmark state copy should not be hardcoded inside MapScreen.",
+            source.contains("\"Bookmark is unavailable for this place.\""),
+        )
+        assertTrue(
+            "Bookmark unavailable state copy should live in string resources with the other bookmark labels.",
+            stringsSource.contains("map_facility_detail_bookmark_state_unavailable"),
+        )
+    }
 }

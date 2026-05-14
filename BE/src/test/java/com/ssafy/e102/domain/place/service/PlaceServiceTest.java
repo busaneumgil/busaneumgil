@@ -97,7 +97,7 @@ class PlaceServiceTest {
 			1000,
 			1,
 			10,
-			"distance")))
+			"accuracy")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(kakaoPlace), 1, true));
 		when(placeRepository.findAllByProviderPlaceIdIn(List.of("123456789")))
 			.thenReturn(List.of(matchedPlace));
@@ -107,6 +107,7 @@ class PlaceServiceTest {
 			"35.1686",
 			"129.0576",
 			"1000",
+			null,
 			null,
 			"10");
 
@@ -121,8 +122,8 @@ class PlaceServiceTest {
 	}
 
 	@Test
-	@DisplayName("좌표 기반 장소 검색은 부산 결과만 남기고 정확한 장소명 매칭을 거리보다 우선한다")
-	void searchPlacesFiltersBusanAndRanksExactNameBeforeDistance() {
+	@DisplayName("관련도순 장소 검색은 부산 결과만 남기고 카카오 정확도 순서를 유지한다")
+	void searchPlacesFiltersBusanAndKeepsKakaoAccuracyOrder() {
 		KakaoPlaceDocument mobileStore = new KakaoPlaceDocument(
 			"mobile",
 			"삼성스토어 부산삼성전기모바일",
@@ -162,9 +163,9 @@ class PlaceServiceTest {
 			null,
 			1,
 			15,
-			"distance")))
+			"accuracy")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(mobileStore, gate, exactPlace, outOfBusan), 4, true));
-		when(placeRepository.findAllByProviderPlaceIdIn(List.of("exact", "gate", "mobile")))
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("mobile", "gate", "exact")))
 			.thenReturn(List.of());
 
 		PlaceSearchResponse response = placeService.searchPlaces(
@@ -173,14 +174,15 @@ class PlaceServiceTest {
 			"128.9",
 			null,
 			null,
+			null,
 			"15");
 
 		assertThat(response.places())
 			.extracting(PlaceSearchItemResponse::name)
 			.containsExactly(
-				"삼성전기 부산사업장",
+				"삼성스토어 부산삼성전기모바일",
 				"삼성전기 부산사업장 후문",
-				"삼성스토어 부산삼성전기모바일");
+				"삼성전기 부산사업장");
 		assertThat(response.places())
 			.extracting(PlaceSearchItemResponse::address)
 			.allMatch(address -> address.startsWith("부산"));
@@ -223,6 +225,7 @@ class PlaceServiceTest {
 			"128.9",
 			null,
 			null,
+			"distance",
 			"15");
 
 		assertThat(response.places())
@@ -276,6 +279,7 @@ class PlaceServiceTest {
 			"128.9",
 			null,
 			null,
+			"distance",
 			"15");
 
 		assertThat(response.places())
@@ -294,10 +298,18 @@ class PlaceServiceTest {
 			null,
 			null,
 			1,
-			10)))
+			10,
+			"accuracy")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(), 30, false));
 
-		PlaceSearchResponse firstResponse = placeService.searchPlaces("부산시민공원", null, null, null, null, "10");
+		PlaceSearchResponse firstResponse = placeService.searchPlaces(
+			"부산시민공원",
+			null,
+			null,
+			null,
+			null,
+			null,
+			"10");
 
 		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
 			"부산시민공원",
@@ -305,7 +317,8 @@ class PlaceServiceTest {
 			null,
 			null,
 			2,
-			10)))
+			10,
+			"accuracy")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(), 30, true));
 
 		PlaceSearchResponse secondResponse = placeService.searchPlaces(
@@ -314,6 +327,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			firstResponse.nextCursor(),
+			null,
 			"10");
 
 		assertThat(firstResponse.hasNext()).isTrue();
@@ -796,7 +810,7 @@ class PlaceServiceTest {
 	@Test
 	@DisplayName("검색어가 없으면 장소 검색 도메인 에러를 반환한다")
 	void rejectBlankKeyword() {
-		assertThatThrownBy(() -> placeService.searchPlaces(" ", null, null, null, null, null))
+		assertThatThrownBy(() -> placeService.searchPlaces(" ", null, null, null, null, null, null))
 			.isInstanceOf(PlaceException.class)
 			.extracting("errorCode")
 			.isEqualTo(PlaceErrorCode.PLACE_KEYWORD_REQUIRED);
@@ -814,10 +828,11 @@ class PlaceServiceTest {
 			null,
 			null,
 			1,
-			10)))
+			10,
+			"accuracy")))
 			.thenThrow(cause);
 
-		assertThatThrownBy(() -> placeService.searchPlaces("부산시민공원", null, null, null, null, null))
+		assertThatThrownBy(() -> placeService.searchPlaces("부산시민공원", null, null, null, null, null, null))
 			.isInstanceOf(PlaceException.class)
 			.hasCause(cause)
 			.extracting("errorCode")

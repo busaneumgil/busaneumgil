@@ -12,7 +12,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +70,8 @@ public class PlaceService {
 	private static final String EMPTY_FILTER_SENTINEL = "__EMPTY_FILTER__";
 	private static final String BUS_STOP_PROVIDER_ID_PREFIX = "BS";
 	private static final String BUS_STOP_PROVIDER_CATEGORY = "교통,수송 > 버스정류장";
+	private static final String SEARCH_SORT_RELEVANCE = "relevance";
+	private static final String KAKAO_SEARCH_SORT_ACCURACY = "accuracy";
 	private static final String KAKAO_SEARCH_SORT_DISTANCE = "distance";
 	private static final String BUSAN_REGION_PREFIX = "부산";
 	private static final String SUBWAY_CATEGORY_GROUP_CODE = "SW8";
@@ -96,6 +97,7 @@ public class PlaceService {
 		String lng,
 		String radius,
 		String cursor,
+		String sort,
 		String size) {
 		String normalizedKeyword = normalizeKeyword(keyword);
 		Double parsedLat = parseOptionalDouble(lat);
@@ -105,6 +107,8 @@ public class PlaceService {
 		int kakaoPage = parseSearchCursor(cursor);
 		int parsedSize = parseIntegerOrDefault(size, DEFAULT_SEARCH_SIZE);
 		validateSearchSize(parsedSize);
+		PlaceSearchSort searchSort = parsePlaceSearchSort(sort);
+		validateSearchSortCoordinateCondition(searchSort, parsedLat, parsedLng);
 
 		try {
 			SearchDocumentBatch searchBatch = searchBusanDocuments(
@@ -114,10 +118,8 @@ public class PlaceService {
 				parsedRadius,
 				kakaoPage,
 				parsedSize,
-				searchSort(parsedLat, parsedLng));
-			List<KakaoPlaceDocument> searchDocuments = rankSearchDocuments(
-				normalizedKeyword,
-				searchBatch.documents())
+				searchSort.kakaoSort);
+			List<KakaoPlaceDocument> searchDocuments = searchBatch.documents()
 				.stream()
 				.limit(parsedSize)
 				.toList();
@@ -152,7 +154,7 @@ public class PlaceService {
 		int page = startPage;
 		long totalElements = 0;
 		boolean isEnd = false;
-		boolean shouldBackfillBusanResults = StringUtils.hasText(sort);
+		boolean shouldBackfillBusanResults = lat != null && lng != null;
 
 		while (page <= MAX_KAKAO_SEARCH_PAGE && documents.size() < size) {
 			KakaoPlaceSearchResult kakaoResult = kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
@@ -179,10 +181,6 @@ public class PlaceService {
 		return new SearchDocumentBatch(documents, hasNext, page + 1, totalElements);
 	}
 
-	private String searchSort(Double lat, Double lng) {
-		return lat != null && lng != null ? KAKAO_SEARCH_SORT_DISTANCE : null;
-	}
-
 	private List<KakaoPlaceDocument> filterBusanSearchDocuments(List<KakaoPlaceDocument> documents) {
 		return documents.stream()
 			.filter(this::isBusanPlace)
@@ -194,80 +192,24 @@ public class PlaceService {
 			&& document.address().trim().startsWith(BUSAN_REGION_PREFIX);
 	}
 
-	private List<KakaoPlaceDocument> rankSearchDocuments(
-		String normalizedKeyword,
-		List<KakaoPlaceDocument> documents) {
-		if (!shouldPrioritizeKeywordMatch(normalizedKeyword)) {
-			return documents;
+	private PlaceSearchSort parsePlaceSearchSort(String sort) {
+		if (!StringUtils.hasText(sort)) {
+			return PlaceSearchSort.RELEVANCE;
 		}
-		return IntStream.range(0, documents.size())
-			.mapToObj(index -> new SearchDocumentCandidate(index, documents.get(index)))
-			.sorted(
-				Comparator
-					.comparingInt((SearchDocumentCandidate candidate) -> searchKeywordMatchRank(
-						normalizedKeyword,
-						candidate.document().placeName()))
-					.thenComparingInt(SearchDocumentCandidate::index))
-			.map(SearchDocumentCandidate::document)
-			.toList();
+		return switch (sort.trim().toLowerCase()) {
+			case SEARCH_SORT_RELEVANCE, KAKAO_SEARCH_SORT_ACCURACY -> PlaceSearchSort.RELEVANCE;
+			case KAKAO_SEARCH_SORT_DISTANCE -> PlaceSearchSort.DISTANCE;
+			default -> throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
+		};
 	}
 
-	private boolean shouldPrioritizeKeywordMatch(String keyword) {
-		String normalizedKeyword = normalizeSearchRankText(keyword);
-		return searchRankTokens(keyword).size() >= 2
-			|| normalizedKeyword.contains("부산")
-			|| normalizedKeyword.length() >= 6;
-	}
-
-	private int searchKeywordMatchRank(String keyword, String placeName) {
-		String normalizedKeyword = normalizeSearchRankText(keyword);
-		String normalizedPlaceName = normalizeSearchRankText(placeName);
-		if (!StringUtils.hasText(normalizedKeyword) || !StringUtils.hasText(normalizedPlaceName)) {
-			return 4;
+	private void validateSearchSortCoordinateCondition(
+		PlaceSearchSort sort,
+		Double lat,
+		Double lng) {
+		if (sort == PlaceSearchSort.DISTANCE && (lat == null || lng == null)) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
 		}
-		if (normalizedPlaceName.equals(normalizedKeyword)) {
-			return 0;
-		}
-		if (normalizedPlaceName.contains(normalizedKeyword)) {
-			return 1;
-		}
-		List<String> tokens = searchRankTokens(keyword);
-		if (!tokens.isEmpty() && containsAllTokensInOrder(normalizedPlaceName, tokens)) {
-			return 2;
-		}
-		if (!tokens.isEmpty() && tokens.stream().allMatch(normalizedPlaceName::contains)) {
-			return 3;
-		}
-		return 4;
-	}
-
-	private String normalizeSearchRankText(String value) {
-		if (!StringUtils.hasText(value)) {
-			return "";
-		}
-		return value.replaceAll("\\s+", "").toLowerCase();
-	}
-
-	private List<String> searchRankTokens(String keyword) {
-		if (!StringUtils.hasText(keyword)) {
-			return List.of();
-		}
-		return Arrays.stream(keyword.trim().split("\\s+"))
-			.map(this::normalizeSearchRankText)
-			.filter(StringUtils::hasText)
-			.toList();
-	}
-
-	private boolean containsAllTokensInOrder(String value, List<String> tokens) {
-		int searchFrom = 0;
-		for (String token : tokens) {
-			int tokenIndex = value.indexOf(token, searchFrom);
-			if (tokenIndex < 0) {
-				return false;
-			}
-			searchFrom = tokenIndex + token.length();
-		}
-		return true;
 	}
 
 	public PlaceReverseGeocodeResponse reverseGeocode(String lat, String lng) {
@@ -979,15 +921,21 @@ public class PlaceService {
 			.collect(Collectors.toSet());
 	}
 
-	private record SearchDocumentCandidate(
-		int index,
-		KakaoPlaceDocument document) {
-	}
-
 	private record SearchDocumentBatch(
 		List<KakaoPlaceDocument> documents,
 		boolean hasNext,
 		int nextPage,
 		long totalElements) {
+	}
+
+	private enum PlaceSearchSort {
+		RELEVANCE(KAKAO_SEARCH_SORT_ACCURACY),
+		DISTANCE(KAKAO_SEARCH_SORT_DISTANCE);
+
+		private final String kakaoSort;
+
+		PlaceSearchSort(String kakaoSort) {
+			this.kakaoSort = kakaoSort;
+		}
 	}
 }

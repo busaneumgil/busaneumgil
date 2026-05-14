@@ -52,10 +52,11 @@ import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListOnAmber
 import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListSubText
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.feature.search.SearchResultUiState
-import com.ssafy.e102.eumgil.feature.search.resolveSearchResultDistanceUiState
 import com.ssafy.e102.eumgil.feature.search.SearchUiAction
 import com.ssafy.e102.eumgil.feature.search.SearchUiState
+import com.ssafy.e102.eumgil.feature.search.resolveSearchResultDistanceUiState
 
 internal object LowVisionSearchLayoutDefaults {
     val resultCardMinHeight = 320.dp
@@ -136,6 +137,12 @@ fun LowVisionSearchScreen(
         if (!categoryLabel.isNullOrBlank()) {
             LowVisionSearchCategoryHeader(categoryLabel = categoryLabel)
         }
+        LowVisionSearchSortControl(
+            selectedSortOption = uiState.sortOption,
+            onSortOptionSelected = { sortOption ->
+                onAction(SearchUiAction.SortOptionSelected(sortOption = sortOption))
+            },
+        )
 
         Box(
             modifier =
@@ -198,6 +205,80 @@ private fun LowVisionSearchCategoryHeader(categoryLabel: String) {
                         color = PlaceListAmber,
                         shape = RoundedCornerShape(999.dp),
                     ),
+        )
+    }
+}
+
+@Composable
+private fun LowVisionSearchSortControl(
+    selectedSortOption: SearchSortOption,
+    onSortOptionSelected: (SearchSortOption) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 2.dp,
+                    color = PlaceListAmber,
+                    shape = RoundedCornerShape(18.dp),
+                )
+                .padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LowVisionSearchSortButton(
+            label = stringResource(id = R.string.search_screen_sort_relevance),
+            selected = selectedSortOption == SearchSortOption.RELEVANCE,
+            onClick = { onSortOptionSelected(SearchSortOption.RELEVANCE) },
+            modifier = Modifier.weight(1f),
+        )
+        LowVisionSearchSortButton(
+            label = stringResource(id = R.string.search_screen_sort_distance),
+            selected = selectedSortOption == SearchSortOption.DISTANCE,
+            onClick = { onSortOptionSelected(SearchSortOption.DISTANCE) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun LowVisionSearchSortButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val backgroundColor = if (selected) PlaceListAmber else Color.Transparent
+    val contentColor = if (selected) PlaceListOnAmber else PlaceListAmber
+
+    Box(
+        modifier =
+            modifier
+                .heightIn(min = 64.dp)
+                .background(
+                    color = backgroundColor,
+                    shape = RoundedCornerShape(14.dp),
+                )
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .semantics {
+                    contentDescription =
+                        if (selected) {
+                            label + " 선택됨"
+                        } else {
+                            label + " 선택 안 됨"
+                        }
+                }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = contentColor,
+            fontSize = 28.sp,
+            lineHeight = 32.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.sp,
+            textAlign = TextAlign.Center,
         )
     }
 }

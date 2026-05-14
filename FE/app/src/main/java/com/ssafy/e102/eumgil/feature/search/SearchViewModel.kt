@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
@@ -82,6 +83,7 @@ class SearchViewModel(
             SearchUiAction.VoiceInputDismissed -> dismissVoiceInput()
             SearchUiAction.ClearQueryClicked -> clearQuery()
             SearchUiAction.SearchSubmitted -> submitSearch()
+            is SearchUiAction.SortOptionSelected -> selectSortOption(action.sortOption)
             is SearchUiAction.VoiceTranscriptReceived ->
                 handleVoiceTranscript(
                     transcript = action.transcript,
@@ -421,6 +423,31 @@ class SearchViewModel(
         }
     }
 
+    private fun selectSortOption(sortOption: SearchSortOption) {
+        val currentState = mutableUiState.value
+        if (currentState.sortOption == sortOption) return
+
+        mutableUiState.update { state ->
+            state.copy(sortOption = sortOption)
+        }
+
+        val normalizedQuery = currentState.query.trim()
+        if (normalizedQuery.isEmpty()) return
+
+        when (currentState.resultState) {
+            is SearchResultUiState.Loading,
+            is SearchResultUiState.Success,
+            is SearchResultUiState.Empty,
+            is SearchResultUiState.Error,
+            -> submitSearch(keyword = normalizedQuery, navigateToResults = false)
+
+            SearchResultUiState.Initial,
+            SearchResultUiState.EmptyQuery,
+            is SearchResultUiState.Typing,
+            -> Unit
+        }
+    }
+
     private fun enterResultsRoute(query: String) {
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) return
@@ -444,6 +471,7 @@ class SearchViewModel(
         navigateToResults: Boolean = true,
     ) {
         val normalizedQuery = (keyword ?: mutableUiState.value.query).trim()
+        val searchSortOption = mutableUiState.value.sortOption
 
         if (normalizedQuery.isEmpty()) {
             mutableUiState.update { state ->
@@ -475,11 +503,26 @@ class SearchViewModel(
         searchJob =
             viewModelScope.launch {
                 val searchOrigin = resolveSearchLocationOrigin()
+                if (searchSortOption == SearchSortOption.DISTANCE && searchOrigin == null) {
+                    mutableUiState.update { state ->
+                        state.copy(
+                            resultState =
+                                SearchResultUiState.Error(
+                                    query = normalizedQuery,
+                                    message = DISTANCE_SORT_LOCATION_REQUIRED_MESSAGE,
+                                ),
+                        )
+                    }
+                    return@launch
+                }
                 activeSearchOrigin = searchOrigin
                 val searchPage =
                     try {
                         searchRepository.searchPage(
-                            normalizedQuery.toSearchQuery(origin = searchOrigin),
+                            normalizedQuery.toSearchQuery(
+                                origin = searchOrigin,
+                                sortOption = searchSortOption,
+                            ),
                         )
                     } catch (throwable: Throwable) {
                         if (throwable is CancellationException) throw throwable
@@ -507,6 +550,9 @@ class SearchViewModel(
                     }
 
                 mutableUiState.update { state ->
+                    if (state.sortOption != searchSortOption) {
+                        return@update state
+                    }
                     state.copy(
                         recentSearches = recentSearches,
                         resultState =
@@ -531,6 +577,7 @@ class SearchViewModel(
         if (!currentResultState.hasNext || currentResultState.isLoadingNextPage) return
 
         val searchOrigin = activeSearchOrigin
+        val searchSortOption = mutableUiState.value.sortOption
         mutableUiState.update { state ->
             state.copy(resultState = currentResultState.copy(isLoadingNextPage = true))
         }
@@ -543,6 +590,7 @@ class SearchViewModel(
                             currentResultState.query.toSearchQuery(
                                 origin = searchOrigin,
                                 cursor = nextCursor,
+                                sortOption = searchSortOption,
                             ),
                         )
                     } catch (throwable: Throwable) {
@@ -564,6 +612,8 @@ class SearchViewModel(
                 mutableUiState.update { state ->
                     val latestSuccess = state.resultState as? SearchResultUiState.Success
                     if (latestSuccess == null || latestSuccess.query != currentResultState.query) {
+                        state
+                    } else if (state.sortOption != searchSortOption) {
                         state
                     } else {
                         state.copy(
@@ -684,6 +734,7 @@ class SearchViewModel(
         private const val INVALID_DESTINATION_HANDOFF_MESSAGE = "좌표 정보가 올바르지 않아 경로 설정으로 넘길 수 없습니다."
         private const val UNVERIFIED_PLACE_HANDOFF_MESSAGE = "접근성 정보가 확인된 장소만 길찾기를 시작할 수 있습니다."
         private const val BOOKMARK_TOGGLE_FAILURE_MESSAGE = "북마크 상태를 변경하지 못했습니다. 다시 시도해 주세요."
+        private const val DISTANCE_SORT_LOCATION_REQUIRED_MESSAGE = "거리순 검색을 위해 현재 위치를 확인해 주세요."
 
         fun provideFactory(
             searchRepository: SearchRepository,
@@ -744,12 +795,14 @@ private data class SearchLocationOrigin(
 private fun String.toSearchQuery(
     origin: SearchLocationOrigin?,
     cursor: String? = null,
+    sortOption: SearchSortOption,
 ): SearchQuery =
     SearchQuery(
         keyword = this,
         latitude = origin?.latitude,
         longitude = origin?.longitude,
         cursor = cursor,
+        sortOption = sortOption,
     )
 
 private fun LocationSnapshot?.toSearchLocationOriginOrNull(): SearchLocationOrigin? {

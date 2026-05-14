@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
@@ -178,6 +179,7 @@ class SearchViewModelTest {
             val requestedQuery = searchRepository.searchPageQueries.single()
             assertEquals(currentLocation.latitude, requestedQuery.latitude ?: -1.0, 0.0)
             assertEquals(currentLocation.longitude, requestedQuery.longitude ?: -1.0, 0.0)
+            assertEquals(SearchSortOption.RELEVANCE, requestedQuery.sortOption)
             assertEquals(1, locationManager.refreshLatestLocationCallCount)
 
             val resultState = viewModel.uiState.value.resultState
@@ -230,6 +232,7 @@ class SearchViewModelTest {
             val requestedQuery = searchRepository.searchPageQueries.single()
             assertEquals(null, requestedQuery.latitude)
             assertEquals(null, requestedQuery.longitude)
+            assertEquals(SearchSortOption.RELEVANCE, requestedQuery.sortOption)
 
             val resultState = viewModel.uiState.value.resultState
             assertTrue(resultState is SearchResultUiState.Success)
@@ -292,12 +295,56 @@ class SearchViewModelTest {
                 listOf(currentLocation.longitude, currentLocation.longitude),
                 searchRepository.searchPageQueries.map { query -> query.longitude },
             )
+            assertEquals(
+                listOf(SearchSortOption.RELEVANCE, SearchSortOption.RELEVANCE),
+                searchRepository.searchPageQueries.map { query -> query.sortOption },
+            )
 
             val resultState = viewModel.uiState.value.resultState
             assertTrue(resultState is SearchResultUiState.Success)
             assertEquals(
                 listOf("far-place", "near-place"),
                 (resultState as SearchResultUiState.Success).results.map(SearchResult::placeId),
+            )
+        }
+
+    @Test
+    fun `sort option change refreshes current result query with selected sort`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0000)
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "이마트",
+                    subtitle = "부산",
+                    latitude = 35.1010,
+                    longitude = 129.0000,
+                )
+            val searchRepository = FakeSearchRepository(searchResults = listOf(result))
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = FakeCurrentLocationManager(initialLocation = currentLocation),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "이마트"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.SortOptionSelected(sortOption = SearchSortOption.DISTANCE))
+            advanceUntilIdle()
+
+            assertEquals(SearchSortOption.DISTANCE, viewModel.uiState.value.sortOption)
+            assertEquals(
+                listOf(SearchSortOption.RELEVANCE, SearchSortOption.DISTANCE),
+                searchRepository.searchPageQueries.map { query -> query.sortOption },
+            )
+            assertEquals(
+                listOf(currentLocation.latitude, currentLocation.latitude),
+                searchRepository.searchPageQueries.map { query -> query.latitude },
             )
         }
 

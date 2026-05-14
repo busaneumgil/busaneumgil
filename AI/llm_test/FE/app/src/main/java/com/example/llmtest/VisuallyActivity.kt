@@ -1,16 +1,13 @@
 package com.example.llmtest
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -19,24 +16,36 @@ import androidx.lifecycle.lifecycleScope
 import com.example.llmtest.databinding.ActivityVisuallyBinding
 import com.example.llmtest.network.VoiceApiClient
 import com.example.llmtest.network.models.VoiceAnalyzeRequest
+import com.example.llmtest.stt.AudioRecorder
+import com.example.llmtest.stt.SherpaManager
+import com.example.llmtest.stt.SttManager
+import com.example.llmtest.stt.VadManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class VisuallyActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVisuallyBinding
-    private lateinit var speechRecognizer: SpeechRecognizer
     private lateinit var tts: TextToSpeech
 
-    private var isListening = false
+    private val audioRecorder = AudioRecorder(this)
+    private var vadManager: VadManager? = null
+    private var sttManager: SttManager? = null
+    private var recordingJob: Job? = null
+
     private val conversationHistory = mutableListOf<Map<String, String>>()
     private val resultLog = StringBuilder()
 
     companion object {
+        private const val TAG = "VisuallyActivity"
         private const val MIC_PERMISSION_REQUEST = 100
         private const val COLOR_YELLOW = "#FFC107"
         private const val COLOR_RED = "#F44336"
         private const val UTTERANCE_CONFIRMATION = "confirmation"
+        private const val SILENCE_FRAMES_FOR_STOP = 20
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,18 +54,18 @@ class VisuallyActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupTts()
-        setupSpeechRecognizer()
+        initSttModels()
 
         binding.btnMic.setOnClickListener {
             if (!hasMicPermission()) {
                 requestMicPermission()
                 return@setOnClickListener
             }
-            if (isListening) {
-                speechRecognizer.stopListening()
+            if (recordingJob?.isActive == true) {
+                stopRecording()
             } else {
                 resetSession()
-                startListening()
+                startRecording()
             }
         }
     }
@@ -74,7 +83,7 @@ class VisuallyActivity : AppCompatActivity() {
                 if (utteranceId == UTTERANCE_CONFIRMATION) {
                     runOnUiThread {
                         binding.tvStatus.text = "말씀해 주세요"
-                        startListening()
+                        startRecording()
                     }
                 }
             }
@@ -84,41 +93,21 @@ class VisuallyActivity : AppCompatActivity() {
         })
     }
 
-    private fun setupSpeechRecognizer() {
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                isListening = true
-                setMicColor(COLOR_RED)
-                binding.tvStatus.text = "녹음 중..."
+    private fun initSttModels() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                SherpaManager.ensureModelsExtracted(this@VisuallyActivity)
+                if (!SherpaManager.modelsExist(this@VisuallyActivity)) {
+                    Log.e(TAG, "STT 모델 파일 없음")
+                    return@launch
+                }
+                vadManager = VadManager(this@VisuallyActivity)
+                sttManager = SttManager.getInstance(this@VisuallyActivity)
+                Log.d(TAG, "STT 모델 초기화 완료")
+            } catch (e: Exception) {
+                Log.e(TAG, "STT 초기화 실패: ${e.message}", e)
             }
-
-            override fun onEndOfSpeech() {
-                isListening = false
-                setMicColor(COLOR_YELLOW)
-                binding.tvStatus.text = "음성 인식 중..."
-            }
-
-            override fun onError(error: Int) {
-                isListening = false
-                setMicColor(COLOR_YELLOW)
-                binding.tvStatus.text = "마이크를 눌러 말씀하세요"
-            }
-
-            override fun onResults(results: Bundle?) {
-                val text = results
-                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.getOrNull(0) ?: return
-                binding.tvStatus.text = "분석 중..."
-                callAnalyzeApi(text)
-            }
-
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
+        }
     }
 
     private fun resetSession() {
@@ -127,45 +116,125 @@ class VisuallyActivity : AppCompatActivity() {
         binding.tvResult.text = ""
     }
 
-    private fun startListening() {
-        speechRecognizer.startListening(buildRecognizeIntent())
+    private fun startRecording() {
+        if (vadManager == null || sttManager == null) {
+            Toast.makeText(this, "STT 모델 초기화 중입니다. 잠시 후 다시 시도해주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        setMicColor(COLOR_RED)
+        binding.tvStatus.text = "녹음 중..."
+
+        recordingJob = lifecycleScope.launch(Dispatchers.IO) {
+            runPipeline()
+        }
     }
 
-    private fun buildRecognizeIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR")
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
+    private fun stopRecording() {
+        audioRecorder.stop()
+        recordingJob?.cancel()
+        setMicColor(COLOR_YELLOW)
+        binding.tvStatus.text = "마이크를 눌러 말씀하세요"
     }
 
-    private fun callAnalyzeApi(text: String) {
-        val historySnapshot = conversationHistory.toList()
-        lifecycleScope.launch {
-            try {
-                val response = VoiceApiClient.service.analyze(
-                    VoiceAnalyzeRequest(
-                        text = text,
-                        model = "gemini",
-                        mode = "LOW_VISION",
-                        history = historySnapshot
-                    )
-                )
+    private suspend fun runPipeline() {
+        try {
+            var voiceDetectedEver = false
+            var silenceFrameCount = 0
+            val accumulatedSamples = mutableListOf<Float>()
+            var skipStt = false
 
-                // 히스토리에 이번 턴 추가
-                conversationHistory.add(mapOf("role" to "user", "content" to text))
-                // history는 API 응답 형식(camelCase + 대문자 intent) 그대로 저장
-                val assistantContent = buildString {
-                    append("{\"intent\":\"${response.intent}\"")
-                    append(",\"placeName\":${if (response.placeName != null) "\"${response.placeName}\"" else "null"}")
-                    append(",\"confirmed\":${response.confirmed ?: "null"}")
-                    append(",\"confirmationMessage\":${if (response.confirmationMessage != null) "\"${response.confirmationMessage}\"" else "null"}")
-                    append("}")
+            audioRecorder.startRecording().collect { floatSamples ->
+                vadManager?.acceptWaveform(floatSamples)
+
+                var hadSegment = false
+                while (vadManager?.isEmpty() == false) {
+                    val segment = vadManager?.front() ?: break
+                    vadManager?.popSegment()
+                    accumulatedSamples.addAll(segment.samples.toList())
+                    hadSegment = true
                 }
-                conversationHistory.add(mapOf("role" to "assistant", "content" to assistantContent))
 
+                val currentlySpeaking = vadManager?.isSpeechDetected() ?: false
+
+                when {
+                    hadSegment -> {
+                        voiceDetectedEver = true
+                        silenceFrameCount = 0
+                    }
+                    currentlySpeaking -> {
+                        voiceDetectedEver = true
+                        silenceFrameCount = 0
+                    }
+                    else -> silenceFrameCount++
+                }
+
+                when {
+                    voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP -> {
+                        audioRecorder.stop()
+                    }
+                    !voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP * 2 -> {
+                        skipStt = true
+                        audioRecorder.stop()
+                    }
+                }
+            }
+
+            vadManager?.flush()
+            while (vadManager?.isEmpty() == false) {
+                val segment = vadManager?.front() ?: break
+                vadManager?.popSegment()
+                accumulatedSamples.addAll(segment.samples.toList())
+            }
+
+            withContext(Dispatchers.Main) {
+                setMicColor(COLOR_YELLOW)
+                binding.tvStatus.text = "음성 인식 중..."
+            }
+
+            if (!skipStt && voiceDetectedEver && accumulatedSamples.isNotEmpty()) {
+                val text = sttManager?.recognize(accumulatedSamples.toFloatArray()).orEmpty()
+                if (text.isBlank()) {
+                    withContext(Dispatchers.Main) { binding.tvStatus.text = "음성을 인식하지 못했습니다." }
+                } else {
+                    withContext(Dispatchers.Main) { binding.tvStatus.text = "분석 중..." }
+                    callAnalyzeApi(text)
+                }
+            } else {
+                withContext(Dispatchers.Main) { binding.tvStatus.text = "마이크를 눌러 말씀하세요" }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "STT 파이프라인 오류: ${e.message}", e)
+            withContext(Dispatchers.Main) {
+                setMicColor(COLOR_YELLOW)
+                binding.tvStatus.text = "오류가 발생했습니다. 다시 시도해주세요."
+            }
+        }
+    }
+
+    private suspend fun callAnalyzeApi(text: String) {
+        val historySnapshot = conversationHistory.toList()
+        try {
+            val response = VoiceApiClient.service.analyze(
+                VoiceAnalyzeRequest(
+                    text = text,
+                    model = "gemini",
+                    mode = "LOW_VISION",
+                    history = historySnapshot
+                )
+            )
+
+            conversationHistory.add(mapOf("role" to "user", "content" to text))
+            val assistantContent = buildString {
+                append("{\"intent\":\"${response.intent}\"")
+                append(",\"placeName\":${if (response.placeName != null) "\"${response.placeName}\"" else "null"}")
+                append(",\"confirmed\":${response.confirmed ?: "null"}")
+                append(",\"confirmationMessage\":${if (response.confirmationMessage != null) "\"${response.confirmationMessage}\"" else "null"}")
+                append("}")
+            }
+            conversationHistory.add(mapOf("role" to "assistant", "content" to assistantContent))
+
+            withContext(Dispatchers.Main) {
                 if (response.confirmed == true) {
-                    // 확인 완료 → 검색 진행
                     resultLog.appendLine("[완료] 장소명: ${response.placeName ?: "-"} / confirmed: true")
                     binding.tvResult.text = resultLog.toString().trimEnd()
                     binding.tvStatus.text = "완료"
@@ -176,12 +245,13 @@ class VisuallyActivity : AppCompatActivity() {
                     resultLog.appendLine("[TTS] \"$msg\"")
                     binding.tvResult.text = resultLog.toString().trimEnd()
                     if (response.intent == "UNKNOWN") {
-                        // unknown이면 히스토리 초기화 후 재시도
                         conversationHistory.clear()
                     }
                     speakOut(msg, UTTERANCE_CONFIRMATION)
                 }
-            } catch (e: Exception) {
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
                 binding.tvStatus.text = "오류가 발생했습니다. 다시 시도해주세요."
             }
         }
@@ -192,7 +262,9 @@ class VisuallyActivity : AppCompatActivity() {
     }
 
     private fun setMicColor(hex: String) {
-        binding.btnMic.backgroundTintList = ColorStateList.valueOf(Color.parseColor(hex))
+        runOnUiThread {
+            binding.btnMic.backgroundTintList = ColorStateList.valueOf(Color.parseColor(hex))
+        }
     }
 
     private fun hasMicPermission() =
@@ -218,7 +290,9 @@ class VisuallyActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        speechRecognizer.destroy()
+        audioRecorder.stop()
+        recordingJob?.cancel()
+        vadManager?.release()
         tts.shutdown()
     }
 }

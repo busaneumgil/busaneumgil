@@ -74,6 +74,7 @@ class MapPlaceBrowseDataMapperTest {
                     latitude = 35.1587,
                     longitude = 129.1604,
                     category = PlaceCategory.ACCOMMODATION,
+                    phoneNumber = "051-700-1000",
                     features =
                         listOf(
                             PlaceFeatureAvailability(
@@ -107,6 +108,7 @@ class MapPlaceBrowseDataMapperTest {
             ),
             detail.accessibilityTags,
         )
+        assertEquals("051-700-1000", detail.phoneNumber)
         assertEquals("Front desk can confirm the accessible room on arrival.", detail.description)
     }
 

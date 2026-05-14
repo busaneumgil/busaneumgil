@@ -63,6 +63,7 @@ data class PlaceDetail(
     val isBookmarked: Boolean = false,
     val accessibilityTags: List<String> = emptyList(),
     val providerPlaceId: String? = null,
+    val phoneNumber: String? = null,
     val description: String? = null,
 )
 
@@ -110,6 +111,7 @@ data class MapTappedPlaceDetail(
     val features: List<PlaceFeatureAvailability> = emptyList(),
     val isBookmarked: Boolean = false,
     val accessibilityTags: List<String> = emptyList(),
+    val phoneNumber: String? = null,
     val transitArrivals: List<PlaceTransitArrival> = emptyList(),
     val description: String? = null,
 )

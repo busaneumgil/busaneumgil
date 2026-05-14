@@ -416,6 +416,8 @@ public class RerouteService {
 			leg.laneOptions(),
 			leg.boardingStop(),
 			leg.arrivingStop(),
+			leg.remainingMinute(),
+			leg.headsign(),
 			leg.isLowFloor(),
 			leg.badges());
 	}
@@ -499,6 +501,8 @@ public class RerouteService {
 			leg.laneOptions(),
 			leg.boardingStop(),
 			leg.arrivingStop(),
+			leg.remainingMinute(),
+			leg.headsign(),
 			leg.isLowFloor(),
 			leg.badges());
 	}
@@ -526,6 +530,8 @@ public class RerouteService {
 			leg.laneOptions(),
 			leg.boardingStop(),
 			leg.arrivingStop(),
+			leg.remainingMinute(),
+			leg.headsign(),
 			leg.isLowFloor(),
 			leg.badges());
 	}

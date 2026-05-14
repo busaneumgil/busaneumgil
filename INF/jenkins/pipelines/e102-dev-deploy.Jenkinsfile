@@ -57,6 +57,7 @@ pipeline {
   environment {
     REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
     DEPLOY_BRANCH = 'develop'
+    RUNTIME_STATE_DIR = '/opt/e102-server/runtime-state'
   }
 
   stages {
@@ -249,6 +250,27 @@ pipeline {
       }
     }
 
+    stage('Write Release Manifest') {
+      steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
+        sh '''
+          mkdir -p "$RUNTIME_STATE_DIR"
+          python3 scripts/deploy/write-release-manifest.py \
+            --output "$RUNTIME_STATE_DIR/dev-release.json" \
+            --environment dev \
+            --branch "$DEPLOY_BRANCH" \
+            --commit "$DEPLOY_COMMIT" \
+            --build-number "$BUILD_NUMBER" \
+            --build-url "$BUILD_URL" \
+            --services backend ai graphhopper minio redis postgres \
+            --metadata source=jenkins \
+            --metadata pipeline=e102-dev-deploy
+        '''
+      }
+    }
+
     stage('Status') {
       steps {
         script {
@@ -260,6 +282,11 @@ pipeline {
   }
 
   post {
+    always {
+      script {
+        deleteDir()
+      }
+    }
     success {
       script {
         String message = """\

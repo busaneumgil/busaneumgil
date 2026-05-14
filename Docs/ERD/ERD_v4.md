@@ -23,6 +23,7 @@
 | `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
 | `bookmarks` | `user_id`, `place_id`만 저장하는 내부 장소 전용 구조 | `bookmark_target_id`, 선택적 `place_id`, 외부 snapshot 컬럼을 갖는 hybrid 북마크 구조 |
 | `subway_stations`, `subway_timetables` | 지하철 시간표/역 정보 테이블 없음 | ODsay 역 식별자 기반 지하철 역 마스터와 시간표 저장 |
+| `odsay_load_lane` | ODsay `loadLane` 응답을 매번 외부 API에서 조회 | `map_obj` 기준 lane 전체 LineString 목록을 DB에 저장 |
 
 장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 전역 `places` 마스터 컬럼으로는 보존하지 않고, 외부 북마크 snapshot의 `bookmarks.provider_category`에서만 제한적으로 보존한다. 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
 
@@ -79,9 +80,11 @@
 - `subway_stations`
 - `subway_timetables`
 - `subway_station_elevators`
+- `odsay_load_lane`
 - Redis `routeSearch:{searchId}`는 검색 후보 묶음 임시 저장소로 사용
 - Redis `bims:arrival:{bstopid}:{lineid}`는 BUS 실시간 도착정보 TTL cache로 사용
 - ODsay 등 외부 대중교통 길찾기 API로 경로 후보 조회
+- ODsay `loadLane` 결과는 `map_obj` 기준으로 `odsay_load_lane`에 영속 저장하고, DB에 없을 때만 외부 API를 호출
 - 부산광역시_부산버스정보시스템 OpenAPI로 버스 실시간 도착/저상버스 여부 조회
 - 부산교통공사 공공데이터로 지하철 시간표/역 접근성 정보 보강
 - 저상버스 예약은 백엔드 API 없이 프론트에서 부산시버스정보시스템 외부 화면 직접 연결
@@ -269,6 +272,12 @@ erDiagram
         VARCHAR line_name
         VARCHAR entrance_no
         GEOMETRY point
+    }
+
+    ODSAY_LOAD_LANE {
+        BIGINT odsay_load_lane_id PK
+        VARCHAR map_obj
+        JSONB lane_geometries
     }
 ```
 
@@ -962,6 +971,45 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - `subway_stations`와 물리 FK는 두지 않고, `odsay_station_id` 기준 논리 관계로 연결한다.
 - `station_id`는 부산교통공사 기준 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
+
+---
+
+## 18) odsay_load_lane
+
+### 역할
+
+ODsay `loadLane` 호출 결과를 `map_obj` 기준으로 영속 저장한다.
+
+대중교통 경로 검색 시 ODSay `searchPubTransPathT` 결과의 `info.mapObj`를 기준으로 먼저 DB를 조회하고, 없을 때만 ODSay `loadLane?mapObject=0:0@{mapObj}`를 호출한다. 저장 단위는 segment가 아니라 ODSay lane 1개당 전체 LineString 1개다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| ODsay loadLane ID | odsay_load_lane_id | BIGSERIAL | NOT NULL |  |
+| ODsay mapObj | map_obj | VARCHAR(255) | NOT NULL |  |
+| lane geometry 목록 | lane_geometries | JSONB | NOT NULL |  |
+
+### 제약
+
+- `odsay_load_lane_id` PK
+- `UNIQUE (map_obj)`
+
+### 비고
+
+- `map_obj`는 ODSay `searchPubTransPathT` 응답의 `info.mapObj`를 그대로 저장한다.
+- 실제 ODSay `loadLane` 호출 파라미터는 `mapObject=0:0@{map_obj}`다.
+- `0:0@` prefix는 호출 시 조립하므로 DB에 별도 저장하지 않는다.
+- `lane_geometries`는 ODSay `result.lane[]` 순서를 보존한다.
+- `lane_geometries`의 각 원소는 `order`, `transportMode`, `geometry`를 가진다.
+- `geometry`는 lane 전체를 하나의 `LINESTRING(lng lat, ...)` 문자열로 저장한다.
+- `order`는 segment 분해 목적이 아니라 transit leg geometry 매칭 순서 보존 목적이다.
+- 조회 시 shortlist의 `map_obj`를 `IN` 조건으로 batch 조회하고, miss 난 `map_obj`만 ODSay API로 보강한다.
+
+### 관계
+
+- 물리 FK 관계가 없다.
+- `TransitRouteSearchService`가 ODSay `searchPubTransPathT` 응답의 `map_obj`와 `odsay_load_lane.map_obj`를 문자열 계약으로 매칭한다.
 
 ---
 

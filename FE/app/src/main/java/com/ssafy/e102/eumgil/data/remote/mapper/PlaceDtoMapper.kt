@@ -73,6 +73,7 @@ internal object PlaceDtoMapper {
             isBookmarked = dto.isBookmarked,
             accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
             providerPlaceId = dto.providerPlaceId?.takeIf { providerPlaceId -> providerPlaceId.isNotBlank() },
+            phoneNumber = dto.phone?.takeIf { phone -> phone.isNotBlank() },
             description = dto.description?.takeIf { description -> description.isNotBlank() },
         )
     }
@@ -94,6 +95,7 @@ internal object PlaceDtoMapper {
             features = features,
             isBookmarked = dto.isBookmarked,
             accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
+            phoneNumber = dto.phone?.takeIf { phone -> phone.isNotBlank() },
             transitArrivals = dto.transitArrivals.map { arrival -> arrival.toDomain() },
             description = dto.description?.takeIf { description -> description.isNotBlank() },
         )
@@ -171,6 +173,7 @@ internal object PlaceDtoMapper {
                     ?.let(::toAccessibilityFeatureDtos)
                     .orEmpty(),
             isBookmarked = optBoolean("isBookmarked"),
+            phone = optNullableString("phone"),
             description = optNullableString("description"),
         )
     }
@@ -202,6 +205,7 @@ internal object PlaceDtoMapper {
                     ?.let(::toTransitArrivalDtos)
                     .orEmpty(),
             isBookmarked = optBoolean("isBookmarked"),
+            phone = optNullableString("phone"),
             description = optNullableString("description"),
         )
     }

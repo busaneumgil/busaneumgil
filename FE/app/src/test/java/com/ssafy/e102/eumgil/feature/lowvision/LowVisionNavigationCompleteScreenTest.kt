@@ -22,7 +22,9 @@ class LowVisionNavigationCompleteScreenTest {
         assertEquals(44.dp, LowVisionNavigationCompleteLayoutDefaults.verticalPadding)
         assertEquals(28.dp, LowVisionNavigationCompleteLayoutDefaults.cardGap)
         assertEquals(26.dp, LowVisionNavigationCompleteLayoutDefaults.cardCornerRadius)
-        assertEquals(64.sp, LowVisionNavigationCompleteLayoutDefaults.titleFontSize)
+        assertEquals(20.dp, LowVisionNavigationCompleteLayoutDefaults.cardContentPadding)
+        assertEquals(148.dp, LowVisionNavigationCompleteLayoutDefaults.completeIconSize)
+        assertEquals(52.sp, LowVisionNavigationCompleteLayoutDefaults.titleFontSize)
     }
 
     @Test

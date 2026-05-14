@@ -39,23 +39,39 @@ class ArrivalScreenConfigurationTest {
 
         assertTrue(
             "Arrival completion content should define a dedicated hero-band height so the illustration reads like a background section instead of a card.",
-            source.contains("private val ArrivalHeroBandHeight = 236.dp"),
+            source.contains("private val ArrivalHeroBandHeight = 332.dp"),
         )
         assertTrue(
-            "Arrival completion content should crop the illustration to fill the hero band width.",
-            source.contains("contentScale = ContentScale.Crop"),
+            "Arrival completion content should scale the illustration by width so the full skyline remains visible inside the hero band.",
+            source.contains("contentScale = ContentScale.FillWidth"),
         )
         assertTrue(
-            "Arrival completion content should anchor the illustration to the bottom of the hero band to preserve the skyline composition from the approved design.",
+            "Arrival completion content should keep the artwork box attached to the bottom edge of the hero band so the lower skyline still reads as a background section.",
             source.contains(".align(Alignment.BottomCenter)"),
         )
         assertTrue(
-            "Arrival completion content should leave the hero band full-bleed by moving horizontal padding into inner content blocks.",
-            source.contains("private val ArrivalHeroBandTopSpacing = 20.dp"),
+            "Arrival completion content should preserve the original artwork ratio instead of forcing a cropped fixed-height box.",
+            source.contains("private const val ArrivalHeroArtworkAspectRatio = 1440f / 900f"),
         )
         assertTrue(
-            "Arrival completion content should push the hero band slightly lower from the top edge to match the approved composition.",
+            "Arrival completion content should size the artwork from its aspect ratio so the top and bottom of the illustration are both kept intact.",
+            source.contains(".aspectRatio(ArrivalHeroArtworkAspectRatio)"),
+        )
+        assertTrue(
+            "Arrival completion content should keep the taller hero band offset from the top edge to leave room for the brand lockup.",
+            source.contains("private val ArrivalHeroBandTopSpacing = 36.dp"),
+        )
+        assertTrue(
+            "Arrival completion content should lower the artwork slightly inside the hero band so the skyline reads further down the page.",
+            source.contains("private val ArrivalHeroArtworkBottomSpacing = 28.dp"),
+        )
+        assertTrue(
+            "Arrival completion content should push the hero band slightly lower from the top edge to match the updated composition.",
             source.contains("Spacer(modifier = Modifier.height(ArrivalHeroBandTopSpacing))"),
+        )
+        assertFalse(
+            "Arrival completion content should no longer force the artwork into a fixed height that clips the skyline.",
+            source.contains("private val ArrivalHeroArtworkHeight = 156.dp"),
         )
         assertFalse(
             "Arrival completion content should not keep the old root padding that inset the hero band on both sides.",
@@ -100,6 +116,57 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
+    fun `arrival completion keeps home actions inside completion content instead of lifting them to the root layer`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival completion content should keep the home actions wired inside the completion content so ARR-01 remains the owner of the post-arrival CTA area.",
+            source.contains("ArrivalCompletionContent(\n            onHomeClicked = { onAction(ArrivalUiAction.HomeClicked) },"),
+        )
+        assertFalse(
+            "Arrival screen should not promote the home actions to a root-level overlay as a workaround for the bottom-sheet interaction bug.",
+            source.contains("if (!uiState.isEvaluationSheetVisible) {\n            ArrivalCompletionActions("),
+        )
+    }
+
+    @Test
+    fun `arrival completion actions keep ctas above the system navigation bar`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival completion actions should apply navigation-bar padding so the home and new-route buttons stay above three-button system navigation.",
+            source.contains(
+                "modifier\n                .fillMaxWidth()\n                .navigationBarsPadding()\n                .padding(horizontal = EumSpacing.large)\n                .padding(bottom = EumSpacing.medium)",
+            ),
+        )
+    }
+
+    @Test
+    fun `arrival evaluation sheet dismisses by animating its real offset instead of relying on parent slide out placement`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival evaluation sheet should animate the actual sheet offset so the uncovered completion CTA becomes tappable as soon as the sheet moves away.",
+            source.contains("animateFloatAsState("),
+        )
+        assertTrue(
+            "Arrival evaluation sheet should finish the dismiss flow only after the offset animation reaches the bottom edge.",
+            source.contains("finishedListener = { offsetPx ->"),
+        )
+        assertTrue(
+            "Arrival evaluation sheet should tell the ViewModel that the sheet is dismissed as soon as the dismiss gesture is accepted, so the uncovered completion CTA becomes immediately actionable.",
+            source.contains("onAction(ArrivalUiAction.EvaluationSheetDismissed)"),
+        )
+        assertFalse(
+            "Arrival evaluation sheet should not depend on AnimatedVisibility slide-out placement for dismissal because that leaves the original hit area blocking the completion CTA.",
+            source.contains("exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut()"),
+        )
+    }
+
+    @Test
     fun `arrival evaluation sheet tightens rating action spacing and removes route save dialog`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
@@ -115,6 +182,19 @@ class ArrivalScreenConfigurationTest {
         assertFalse(
             "Arrival screen should no longer keep the route save dialog composable in this evaluation flow.",
             source.contains("private fun ArrivalRouteSaveDialog("),
+        )
+    }
+
+    @Test
+    fun `arrival evaluation action buttons keep the same label typography`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival evaluation submit CTA should use the same labelLarge typography as the route save CTA so the two actions read as a matched button group.",
+            source.contains(
+                "text = stringResource(id = R.string.arrival_evaluation_submit),\n                                style = MaterialTheme.typography.labelLarge,",
+            ),
         )
     }
 

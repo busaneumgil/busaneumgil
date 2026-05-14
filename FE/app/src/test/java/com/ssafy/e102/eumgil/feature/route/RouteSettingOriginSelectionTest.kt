@@ -131,6 +131,35 @@ class RouteSettingOriginSelectionTest {
         }
 
     @Test
+    fun `prechecked route setting skips duplicate permission prompt when automatic origin has no permission`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val locationManager = FakeCurrentLocationManager()
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = RecordingRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = locationManager,
+                    locationPermissionManager = permissionManager,
+                )
+
+            advanceUntilIdle()
+            val event = async { viewModel.uiEvent.first() }
+            viewModel.startLocationUpdates(requestLocationPermissionIfNeeded = false)
+            runCurrent()
+
+            assertFalse(event.isCompleted)
+            event.cancel()
+            assertEquals(1, permissionManager.refreshCallCount)
+            assertEquals(0, locationManager.startCallCount)
+            assertEquals(1, locationManager.stopCallCount)
+        }
+
+    @Test
     fun `granting location permission after auto request starts current location tracking`() =
         runTest {
             val destinationSelectionRepository =

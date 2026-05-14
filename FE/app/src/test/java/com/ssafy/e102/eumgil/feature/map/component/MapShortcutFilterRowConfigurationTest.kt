@@ -124,6 +124,22 @@ class MapShortcutFilterRowConfigurationTest {
     }
 
     @Test
+    fun `map shortcut filter row lowers only label weight without shrinking the chip text`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")
+                .readText()
+
+        assertTrue(
+            "MAP top shortcut filter labels should keep the labelLarge size and lower only the font weight.",
+            source.contains("style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)"),
+        )
+        assertFalse(
+            "MAP top shortcut filter labels should not switch to labelMedium because that also reduces text size.",
+            source.contains("style = MaterialTheme.typography.labelMedium"),
+        )
+    }
+
+    @Test
     fun `map shortcut filter row uses dedicated tourist asset for tourist chip`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapShortcutFilterRow.kt")

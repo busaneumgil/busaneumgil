@@ -63,3 +63,9 @@ echo "$APP_IMAGE_TAG" > "$DEPLOY_STATE_DIR/current-app-image"
 if [ "$BUILD_GRAPHHOPPER" = "true" ] || [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
   echo "$GRAPHHOPPER_IMAGE_TAG" > "$DEPLOY_STATE_DIR/current-graphhopper-image"
 fi
+
+if [ "${DOCKER_DISK_MAINTENANCE_AFTER_DEPLOY:-true}" = "true" ] && [ -f "$ROOT_DIR/scripts/maintenance/docker-disk-maintenance.sh" ]; then
+  DOCKER_DISK_MAINTENANCE_MODE="${DOCKER_DISK_MAINTENANCE_MODE:-pipeline}" \
+    bash "$ROOT_DIR/scripts/maintenance/docker-disk-maintenance.sh" || \
+    echo "Docker disk maintenance failed after deploy; continuing because deploy already passed." >&2
+fi

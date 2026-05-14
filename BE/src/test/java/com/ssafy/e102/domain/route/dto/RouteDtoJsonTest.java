@@ -81,6 +81,8 @@ class RouteDtoJsonTest {
 		assertThat(leg.has("boardingStop")).isFalse();
 		assertThat(leg.has("arrivingStop")).isFalse();
 		assertThat(leg.has("alightingStop")).isFalse();
+		assertThat(leg.has("remainingMinute")).isFalse();
+		assertThat(leg.has("headsign")).isFalse();
 		assertThat(leg.has("isLowFloor")).isFalse();
 		assertThat(leg.has("badges")).isFalse();
 		assertThat(leg.has("steps")).isFalse();
@@ -95,6 +97,39 @@ class RouteDtoJsonTest {
 		assertThat(guidanceEvent.get("distanceFromRouteStartMeter").decimalValue()).isEqualByComparingTo("12");
 		assertThat(guidanceEvent.get("durationFromRouteStartSecond").asInt()).isEqualTo(35);
 		assertThat(guidanceEvent.get("geometry").asText()).isEqualTo("POINT(128.9360 35.1200)");
+	}
+
+	@Test
+	@DisplayName("subway leg는 시간표 기반 remainingMinute와 headsign을 직렬화한다")
+	void subwayLegSerializesArrivalAndHeadsignContract() throws Exception {
+		RouteLegResponse response = new RouteLegResponse(
+			2,
+			TransportMode.SUBWAY,
+			RouteLegRole.TRANSIT,
+			"부산 2호선에 탑승하세요.",
+			BigDecimal.valueOf(4100),
+			780,
+			13,
+			"LINESTRING(129.061 35.161, 129.066 35.166)",
+			List.of(),
+			"부산 2호선",
+			List.of(),
+			null,
+			null,
+			4,
+			"장산행",
+			null,
+			List.of(RouteBadge.ELEVATOR));
+
+		JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(response));
+
+		assertThat(root.get("type").asText()).isEqualTo("SUBWAY");
+		assertThat(root.get("routeNo").asText()).isEqualTo("부산 2호선");
+		assertThat(root.get("remainingMinute").asInt()).isEqualTo(4);
+		assertThat(root.get("headsign").asText()).isEqualTo("장산행");
+		assertThat(root.has("laneOptions")).isFalse();
+		assertThat(root.has("isLowFloor")).isFalse();
+		assertThat(root.has("badges")).isFalse();
 	}
 
 	@Test

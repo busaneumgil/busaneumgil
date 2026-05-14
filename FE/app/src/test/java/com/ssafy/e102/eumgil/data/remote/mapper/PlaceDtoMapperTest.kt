@@ -89,6 +89,7 @@ class PlaceDtoMapperTest {
                             ),
                         ),
                     isBookmarked = true,
+                    phone = "051-555-0101",
                     description = "Wheelchair-friendly lobby and rooms",
                 ),
             )
@@ -97,6 +98,7 @@ class PlaceDtoMapperTest {
         assertEquals(listOf(PlaceFeatureType.ELEVATOR), detail.features.map { feature -> feature.featureType })
         assertEquals(listOf("elevator"), detail.accessibilityTags)
         assertEquals("Wheelchair-friendly lobby and rooms", detail.description)
+        assertEquals("051-555-0101", detail.phoneNumber)
         assertNull(detail.providerPlaceId)
     }
 
@@ -138,6 +140,7 @@ class PlaceDtoMapperTest {
                             ),
                         ),
                     isBookmarked = false,
+                    phone = "051-123-4567",
                     description = "External Kakao POI",
                 ),
             )
@@ -150,6 +153,7 @@ class PlaceDtoMapperTest {
         assertEquals("Cafe", detail.providerCategory)
         assertNull(detail.category)
         assertEquals("Kakao Cafe", detail.name)
+        assertEquals("051-123-4567", detail.phoneNumber)
         assertEquals(PlaceFeatureType.ACCESSIBLE_ENTRANCE, detail.features.first().featureType)
         assertEquals(listOf("step-free-entrance"), detail.accessibilityTags)
         assertEquals("100", detail.transitArrivals.single().routeName)

@@ -11,11 +11,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteUiEvent
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteViewModel
 
 @Composable
 fun LowVisionBookmarkRoute(
+    onNavigateToNavigation: (RouteNavigationRequest) -> Unit,
     onNavigateToRouteSetting: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
@@ -58,9 +60,11 @@ fun LowVisionBookmarkRoute(
         }
     }
 
-    LaunchedEffect(viewModel, onNavigateToRouteSetting) {
+    LaunchedEffect(viewModel, onNavigateToNavigation, onNavigateToRouteSetting) {
         viewModel.uiEvent.collect { event ->
             when (event) {
+                is SavedRouteUiEvent.NavigateToNavigation -> onNavigateToNavigation(event.request)
+                is SavedRouteUiEvent.NavigateToRouteDetail -> Unit
                 is SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 SavedRouteUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SavedRouteUiEvent.NavigateToMap,

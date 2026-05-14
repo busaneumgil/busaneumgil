@@ -84,6 +84,7 @@ public class TransitRouteSearchService {
 	private static final int WHEELCHAIR_SUBWAY_TRANSFER_BUFFER_SECOND = 8 * 60;
 	private static final int DEFAULT_BUS_BOARDING_PREP_SECOND = 2 * 60;
 	private static final int ACCESSIBLE_BUS_BOARDING_PREP_SECOND = 3 * 60;
+	private static final int DAY_SECONDS = 24 * 60 * 60;
 	private static final int OPTION_PRESELECT_LIMIT = 3;
 	private static final int ODSAY_SHORTLIST_LIMIT = 5;
 	private static final Duration BIMS_ENRICHMENT_TIMEOUT = Duration.ofSeconds(6);
@@ -351,6 +352,8 @@ public class TransitRouteSearchService {
 			leg.laneOptions(),
 			leg.boardingStop(),
 			leg.arrivingStop(),
+			leg.remainingMinute(),
+			leg.headsign(),
 			leg.isLowFloor(),
 			leg.badges());
 	}
@@ -400,6 +403,8 @@ public class TransitRouteSearchService {
 			leg.laneOptions(),
 			leg.boardingStop(),
 			leg.arrivingStop(),
+			leg.remainingMinute(),
+			leg.headsign(),
 			leg.isLowFloor(),
 			leg.badges());
 	}
@@ -807,8 +812,17 @@ public class TransitRouteSearchService {
 			laneOptions,
 			leg.boardingStop(),
 			leg.arrivingStop(),
-			leg.isLowFloor(),
+			leg.remainingMinute(),
+			leg.headsign(),
+			representativeLowFloor(laneOptions),
 			leg.badges());
+	}
+
+	private Boolean representativeLowFloor(List<TransitLaneOptionResponse> laneOptions) {
+		if (laneOptions == null || laneOptions.isEmpty()) {
+			return null;
+		}
+		return laneOptions.get(0).isLowFloor();
 	}
 
 	private record OdsayPathCandidate(
@@ -1068,6 +1082,7 @@ public class TransitRouteSearchService {
 		String routeNo = routeNo(odsayLeg, laneOptions);
 		RouteStopResponse boardingStop = boardingStop(odsayLeg, referencePoint);
 		RouteStopResponse arrivingStop = arrivingStop(odsayLeg);
+		SubwayDepartureInfo subwayDeparture = subwayDepartureInfo(odsayLeg);
 		BigDecimal distanceMeter = scale(odsayLeg.distanceMeter());
 		return new RouteLegResponse(
 			sequence,
@@ -1084,7 +1099,9 @@ public class TransitRouteSearchService {
 			laneOptions,
 			boardingStop,
 			arrivingStop,
-			null,
+			subwayRemainingMinute(subwayDeparture),
+			subwayHeadsign(subwayDeparture),
+			odsayLeg.type() == TransportMode.BUS ? representativeLowFloor(laneOptions) : null,
 			odsayLeg.type() == TransportMode.SUBWAY ? List.of(RouteBadge.ELEVATOR) : List.of());
 	}
 
@@ -1527,19 +1544,19 @@ public class TransitRouteSearchService {
 	}
 
 	private Map<String, Object> nextDepartureSnapshot(OdsayTransitLeg leg) {
-		SubwayTimetable nextDeparture = nextDeparture(leg);
+		SubwayDepartureInfo nextDeparture = subwayDepartureInfo(leg);
 		if (nextDeparture == null) {
 			return Map.of();
 		}
 		Map<String, Object> snapshot = new LinkedHashMap<>();
-		snapshot.put("departureTimeText", nextDeparture.getDepartureTimeText());
-		snapshot.put("departureSecondOfDay", nextDeparture.getDepartureSecondOfDay());
-		snapshot.put("endStationName", nextDeparture.getEndStationName());
+		snapshot.put("departureTimeText", nextDeparture.timetable().getDepartureTimeText());
+		snapshot.put("departureSecondOfDay", nextDeparture.timetable().getDepartureSecondOfDay());
+		snapshot.put("endStationName", nextDeparture.timetable().getEndStationName());
 		return snapshot;
 	}
 
-	private SubwayTimetable nextDeparture(OdsayTransitLeg leg) {
-		if (leg.wayCode() == null) {
+	private SubwayDepartureInfo subwayDepartureInfo(OdsayTransitLeg leg) {
+		if (leg.type() != TransportMode.SUBWAY || leg.wayCode() == null) {
 			return null;
 		}
 		LocalDateTime now = LocalDateTime.now(SEOUL_ZONE_ID);
@@ -1552,14 +1569,40 @@ public class TransitRouteSearchService {
 			secondOfDay,
 			PageRequest.of(0, 1));
 		if (!departures.isEmpty()) {
-			return departures.get(0);
+			return new SubwayDepartureInfo(departures.get(0), secondOfDay, false);
 		}
+		SubwayServiceDayType nextServiceDayType = serviceDayType(now.toLocalDate().plusDays(1).getDayOfWeek());
 		List<SubwayTimetable> firstDepartures = subwayTimetableRepository.findFirstDepartures(
 			leg.startId(),
-			serviceDayType,
+			nextServiceDayType,
 			leg.wayCode(),
 			PageRequest.of(0, 1));
-		return firstDepartures.isEmpty() ? null : firstDepartures.get(0);
+		return firstDepartures.isEmpty() ? null : new SubwayDepartureInfo(firstDepartures.get(0), secondOfDay, true);
+	}
+
+	private Integer subwayRemainingMinute(SubwayDepartureInfo departure) {
+		if (departure == null) {
+			return null;
+		}
+		return remainingMinute(
+			departure.nowSecondOfDay(),
+			departure.timetable().getDepartureSecondOfDay(),
+			departure.nextDay());
+	}
+
+	private String subwayHeadsign(SubwayDepartureInfo departure) {
+		if (departure == null || !StringUtils.hasText(departure.timetable().getEndStationName())) {
+			return null;
+		}
+		return departure.timetable().getEndStationName() + "행";
+	}
+
+	private int remainingMinute(int nowSecondOfDay, int departureSecondOfDay, boolean nextDay) {
+		int remainSecond = departureSecondOfDay - nowSecondOfDay;
+		if (nextDay || remainSecond < 0) {
+			remainSecond += DAY_SECONDS;
+		}
+		return Math.max(0, (int)Math.ceil(remainSecond / 60.0));
 	}
 
 	private SubwayServiceDayType serviceDayType(DayOfWeek dayOfWeek) {
@@ -1583,6 +1626,12 @@ public class TransitRouteSearchService {
 			&& point.lat() <= BUSAN_MAX_LAT
 			&& point.lng() >= BUSAN_MIN_LNG
 			&& point.lng() <= BUSAN_MAX_LNG;
+	}
+
+	private record SubwayDepartureInfo(
+		SubwayTimetable timetable,
+		int nowSecondOfDay,
+		boolean nextDay) {
 	}
 
 	private void validateStartEndDistance(GeoPointRequest startPoint, GeoPointRequest endPoint) {

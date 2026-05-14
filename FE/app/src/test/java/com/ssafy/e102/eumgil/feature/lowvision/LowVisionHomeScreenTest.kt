@@ -33,12 +33,12 @@ class LowVisionHomeScreenTest {
 
     @Test
     fun `home action labels match terms guide card typography`() {
-        assertEquals(48.sp, LowVisionHomeLayoutDefaults.actionLabelFontSize)
+        assertEquals(44.sp, LowVisionHomeLayoutDefaults.actionLabelFontSize)
         assertEquals(FontWeight.Black, LowVisionHomeLayoutDefaults.actionLabelFontWeight)
     }
 
     @Test
-    fun `current location display shows gps coordinates when available`() {
+    fun `current location display does not announce gps coordinates when address is unresolved`() {
         val display =
             lowVisionCurrentLocationDisplay(
                 LocationSnapshot(
@@ -51,10 +51,7 @@ class LowVisionHomeScreenTest {
 
         assertEquals("\uD604\uC7AC \uC704\uCE58", display.title)
         assertEquals("", display.supportingText)
-        assertEquals(
-            "\uD604\uC7AC \uC704\uCE58 \uC704\uB3C4 35.17961\uB3C4 \uACBD\uB3C4 129.07563\uB3C4",
-            display.talkBackText,
-        )
+        assertEquals("\uD604\uC7AC \uC704\uCE58", display.talkBackText)
     }
 
     @Test

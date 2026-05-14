@@ -144,6 +144,37 @@ object EumgilDatabaseMigrations {
             }
         }
 
+    val MIGRATION_6_7: Migration =
+        object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE reportDraft ADD COLUMN photosJson TEXT")
+            }
+        }
+
+    val MIGRATION_7_8: Migration =
+        object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE reportDraft ADD COLUMN addressDetail TEXT")
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN addressDetail TEXT")
+            }
+        }
+
+    val MIGRATION_8_9: Migration =
+        object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE favoriteRoute ADD COLUMN routeSnapshotJson TEXT")
+            }
+        }
+
     val all: Array<Migration> =
-        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9,
+        )
 }

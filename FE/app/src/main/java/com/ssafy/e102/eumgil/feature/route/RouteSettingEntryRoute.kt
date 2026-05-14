@@ -19,6 +19,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.app.navigation.rememberNavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.core.external.createDuribalDialIntent
 import com.ssafy.e102.eumgil.core.external.requestLowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
@@ -30,11 +31,13 @@ import kotlinx.coroutines.launch
 @Composable
 fun RouteSettingEntryRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToMap: () -> Unit = {},
     onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     autoStartNavigation: Boolean = false,
     initialRouteOption: RouteOption? = null,
+    requestLocationPermissionIfNeeded: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -51,10 +54,11 @@ fun RouteSettingEntryRoute(
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToSearch, onNavigateToRouteDetail, onStartNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onNavigateToSearch, onNavigateToRouteDetail, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.NavigateToMap -> onNavigateToMap()
                 RouteSettingUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
@@ -70,8 +74,8 @@ fun RouteSettingEntryRoute(
         }
     }
 
-    DisposableEffect(viewModel) {
-        viewModel.startLocationUpdates()
+    DisposableEffect(viewModel, requestLocationPermissionIfNeeded) {
+        viewModel.startLocationUpdates(requestLocationPermissionIfNeeded = requestLocationPermissionIfNeeded)
         onDispose {
             viewModel.stopLocationUpdates()
         }
@@ -137,25 +141,41 @@ fun RouteSettingEntryRoute(
 @Composable
 fun RouteDetailEntryRoute(
     routeOption: RouteOption,
+    hydrateFromNavigation: Boolean = false,
     onNavigateBack: () -> Unit,
+    onNavigateToMap: () -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val viewModel = rememberRouteSettingViewModel()
+    val navigationViewModel = if (hydrateFromNavigation) rememberNavigationGuidanceViewModel() else null
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel, routeOption) {
-        viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+    LaunchedEffect(viewModel, navigationViewModel, routeOption, hydrateFromNavigation) {
+        val detailRequest =
+            if (hydrateFromNavigation) {
+                navigationViewModel
+                    ?.currentRouteDetailRequest()
+                    ?.takeIf { request -> request.selectedRoute.routeOption == routeOption }
+            } else {
+                null
+            }
+        if (detailRequest != null) {
+            viewModel.bindRouteDetailRequest(detailRequest)
+        } else {
+            viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+        }
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.NavigateToMap -> onNavigateToMap()
                 RouteSettingUiEvent.RequestLocationPermission -> Unit
                 is RouteSettingUiEvent.NavigateToSearch -> Unit
                 is RouteSettingUiEvent.NavigateToRouteDetail -> Unit
@@ -167,6 +187,9 @@ fun RouteDetailEntryRoute(
     RouteDetailScreen(
         uiState = uiState,
         onBackClick = onNavigateBack,
+        onCloseClick = {
+            viewModel.onAction(RouteSettingUiAction.CloseClicked)
+        },
         onStartClick = {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
         },

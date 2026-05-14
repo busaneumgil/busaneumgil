@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -33,9 +34,11 @@ class ArrivalViewModel(
     val uiEvent: SharedFlow<ArrivalUiEvent> = mutableUiEvent.asSharedFlow()
 
     init {
+        val hasRatingSession = !currentRatingSessionId.isNullOrBlank()
         mutableUiState.update { state ->
             state.copy(
-                hasRatingSession = !currentRatingSessionId.isNullOrBlank(),
+                isEvaluationSheetVisible = hasRatingSession && currentRouteBookmarkDraft == null,
+                hasRatingSession = hasRatingSession,
                 routeSaveDraft = currentRouteBookmarkDraft?.toUiState(),
                 isRouteSaveUpdating = currentRouteBookmarkDraft != null,
             )
@@ -48,7 +51,7 @@ class ArrivalViewModel(
             ArrivalUiAction.HomeClicked -> emitUiEvent(ArrivalUiEvent.NavigateToMap)
             ArrivalUiAction.ExploreNewRouteClicked -> emitUiEvent(ArrivalUiEvent.NavigateToSearch)
             is ArrivalUiAction.RatingSelected -> updateSelectedRating(action.rating)
-            ArrivalUiAction.SaveRouteClicked -> saveRouteBookmark()
+            ArrivalUiAction.SaveRouteClicked -> toggleRouteBookmark()
             ArrivalUiAction.SubmitEvaluationClicked -> submitEvaluation()
             ArrivalUiAction.EvaluationSheetDismissed ->
                 mutableUiState.update { state ->
@@ -60,20 +63,35 @@ class ArrivalViewModel(
     private fun syncInitialRouteSaveState(draft: RouteBookmarkDraft) {
         viewModelScope.launch {
             runCatching {
-                routeBookmarkRepository.isBookmarked(draft)
-            }.onSuccess { isSaved ->
+                val bookmarkId = resolveRouteBookmarkId(draft)
+                val isSaved = bookmarkId != null || routeBookmarkRepository.isBookmarked(draft)
+                isSaved to bookmarkId
+            }.onSuccess { (isSaved, bookmarkId) ->
                 mutableUiState.update { state ->
                     state.copy(
+                        isEvaluationSheetVisible = state.hasRatingSession && !isSaved,
                         isRouteSaveSelected = isSaved,
+                        routeSaveBookmarkId = bookmarkId,
                         isRouteSaveUpdating = false,
                     )
                 }
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 mutableUiState.update { state ->
-                    state.copy(isRouteSaveUpdating = false)
+                    state.copy(
+                        isEvaluationSheetVisible = state.hasRatingSession,
+                        isRouteSaveUpdating = false,
+                    )
                 }
             }
+        }
+    }
+
+    private fun toggleRouteBookmark() {
+        when {
+            uiState.value.isRouteSaveEnabled.not() -> Unit
+            uiState.value.isRouteSaveSelected -> deleteRouteBookmark()
+            else -> saveRouteBookmark()
         }
     }
 
@@ -90,10 +108,47 @@ class ArrivalViewModel(
                 routeBookmarkRepository.saveRouteBookmark(
                     draft.toSaveRequest(),
                 )
-            }.onSuccess {
+            }.onSuccess { bookmark ->
                 mutableUiState.update { state ->
                     state.copy(
                         isRouteSaveSelected = true,
+                        routeSaveBookmarkId = bookmark.bookmarkId,
+                        isRouteSaveUpdating = false,
+                    )
+                }
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                mutableUiState.update { state ->
+                    state.copy(isRouteSaveUpdating = false)
+                }
+            }
+        }
+    }
+
+    private fun deleteRouteBookmark() {
+        val draft = currentRouteBookmarkDraft ?: return
+        if (!uiState.value.isRouteSaveEnabled) return
+
+        mutableUiState.update { state ->
+            state.copy(isRouteSaveUpdating = true)
+        }
+
+        viewModelScope.launch {
+            val bookmarkId = uiState.value.routeSaveBookmarkId ?: resolveRouteBookmarkId(draft)
+            if (bookmarkId.isNullOrBlank()) {
+                mutableUiState.update { state ->
+                    state.copy(isRouteSaveUpdating = false)
+                }
+                return@launch
+            }
+
+            runCatching {
+                routeBookmarkRepository.deleteRouteBookmark(bookmarkId)
+            }.onSuccess {
+                mutableUiState.update { state ->
+                    state.copy(
+                        isRouteSaveSelected = false,
+                        routeSaveBookmarkId = null,
                         isRouteSaveUpdating = false,
                     )
                 }
@@ -153,6 +208,13 @@ class ArrivalViewModel(
         }
     }
 
+    private suspend fun resolveRouteBookmarkId(draft: RouteBookmarkDraft): String? =
+        routeBookmarkRepository
+            .observeRouteBookmarks()
+            .first()
+            .firstOrNull { bookmark -> bookmark.matchesDraft(draft) }
+            ?.bookmarkId
+
     companion object {
         fun provideFactory(
             routeBookmarkRepository: RouteBookmarkRepository,
@@ -172,6 +234,11 @@ class ArrivalViewModel(
             }
     }
 }
+
+private fun com.ssafy.e102.eumgil.core.model.RouteBookmark.matchesDraft(draft: RouteBookmarkDraft): Boolean =
+    startPoint == draft.startPoint &&
+        endPoint == draft.endPoint &&
+        routeOption == draft.routeOption
 
 private fun Int.toArrivalEvaluationLabel(): ArrivalEvaluationLabel =
     when (this) {

@@ -185,6 +185,9 @@ pipeline {
           ssh -i "$S2_KEY" -o StrictHostKeyChecking=accept-new "$S2_USER@$S2_HOST" "cd '$REMOTE_DIR' && docker compose --env-file .env.prod -f docker-compose.prod.yml ps" || true
         '''
       }
+      script {
+        deleteDir()
+      }
     }
     success {
       script {

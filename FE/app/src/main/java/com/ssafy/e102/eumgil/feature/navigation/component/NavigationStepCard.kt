@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.navigation.component
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -14,10 +15,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -123,15 +128,52 @@ private fun NavigationStepMetricCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
+            NavigationMetricValueText(
                 text = metric.value,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
             )
         }
     }
 }
+
+@Composable
+private fun NavigationMetricValueText(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val candidateStyles =
+        listOf(
+            MaterialTheme.typography.titleSmall,
+            MaterialTheme.typography.bodyLarge,
+            MaterialTheme.typography.bodyMedium,
+            MaterialTheme.typography.labelLarge,
+            MaterialTheme.typography.labelMedium,
+        )
+
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val maxWidthPx = with(density) { maxWidth.roundToPx() }
+        val resolvedStyle =
+            candidateStyles.firstOrNull { style ->
+                textMeasurer.measure(
+                    text = AnnotatedString(text),
+                    style = style.metricValueTextStyle(),
+                    maxLines = 1,
+                ).size.width <= maxWidthPx
+            } ?: candidateStyles.last()
+
+        Text(
+            text = text,
+            style = resolvedStyle.metricValueTextStyle(),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+private fun TextStyle.metricValueTextStyle(): TextStyle =
+    copy(fontWeight = FontWeight.SemiBold)
 
 @Composable
 private fun NavigationStepChip(

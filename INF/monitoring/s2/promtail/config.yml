@@ -30,7 +30,7 @@ scrape_configs:
         regex: "s14p31e102-prod"
         action: keep
       - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
-        regex: "backend|ai|graphhopper|admin"
+        regex: "backend|ai|graphhopper|graphhopper-blue|graphhopper-green|graphhopper-candidate|admin"
         action: keep
       - source_labels: ["__meta_docker_container_name"]
         regex: "/(.*)"

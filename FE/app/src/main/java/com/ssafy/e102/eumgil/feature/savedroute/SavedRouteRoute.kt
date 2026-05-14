@@ -32,6 +32,7 @@ fun SavedRouteRoute(
                 routeBookmarkRepository = appContainer.routeBookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 searchRepository = appContainer.searchRepository,
+                currentLocationManager = appContainer.currentLocationManager,
             )
         }
     val owner = checkNotNull(LocalViewModelStoreOwner.current) { "SavedRouteRoute requires a ViewModelStoreOwner." }
@@ -40,6 +41,10 @@ fun SavedRouteRoute(
             ViewModelProvider(owner, viewModelFactory)[SavedRouteViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) {
+        viewModel.setLowVisionMode(enabled = false)
+    }
 
     LaunchedEffect(viewModel, onNavigateToMap, onNavigateToRouteSetting) {
         viewModel.uiEvent.collect { event ->

@@ -42,9 +42,24 @@ ensure_dev_stack_network() {
 }
 
 proxy_restart_required="false"
+grafana_restart_required="false"
+prometheus_restart_required="false"
+blackbox_restart_required="false"
 promtail_restart_required="false"
 
 mkdir -p "$OPS_DIR" "$JENKINS_DIR"
+
+if [ ! -d "$OPS_DIR/grafana" ] || ! diff -qr "$ROOT_DIR/INF/monitoring/s1/grafana" "$OPS_DIR/grafana" >/dev/null 2>&1; then
+  grafana_restart_required="true"
+fi
+
+if [ ! -f "$OPS_DIR/prometheus/prometheus.yml" ] || ! cmp -s "$ROOT_DIR/INF/monitoring/s1/prometheus/prometheus.yml" "$OPS_DIR/prometheus/prometheus.yml"; then
+  prometheus_restart_required="true"
+fi
+
+if [ ! -f "$OPS_DIR/blackbox/blackbox.yml" ] || ! cmp -s "$ROOT_DIR/INF/monitoring/s1/blackbox/blackbox.yml" "$OPS_DIR/blackbox/blackbox.yml"; then
+  blackbox_restart_required="true"
+fi
 
 if [ ! -f "$OPS_DIR/promtail/config.yml" ] || ! cmp -s "$ROOT_DIR/INF/monitoring/s1/promtail/config.yml" "$OPS_DIR/promtail/config.yml"; then
   promtail_restart_required="true"
@@ -70,6 +85,18 @@ ensure_dev_stack_network
 
 if [ "$proxy_restart_required" = "true" ]; then
   docker restart e102-jenkins-proxy >/dev/null
+fi
+
+if [ "$grafana_restart_required" = "true" ]; then
+  docker restart e102-grafana >/dev/null
+fi
+
+if [ "$prometheus_restart_required" = "true" ]; then
+  docker restart e102-prometheus >/dev/null
+fi
+
+if [ "$blackbox_restart_required" = "true" ]; then
+  docker restart e102-blackbox-exporter >/dev/null
 fi
 
 if [ "$promtail_restart_required" = "true" ]; then

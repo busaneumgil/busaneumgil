@@ -220,7 +220,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding keeps focused polyline visible but limits projection to the focus halo`() {
+    fun `navigation binding includes the focused polyline in focused projection`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -272,7 +272,7 @@ class MapViewportOverlayBindingsTest {
         )
         assertFalse(overlayState.polylines.first().includeInProjection)
         assertFalse(overlayState.polylines[1].includeInProjection)
-        assertFalse(overlayState.polylines[2].includeInProjection)
+        assertTrue(overlayState.polylines[2].includeInProjection)
         assertFalse(overlayState.polylines[0].showDirectionArrows)
         assertFalse(overlayState.polylines[1].showDirectionArrows)
         assertTrue(overlayState.polylines[2].showDirectionArrows)
@@ -600,7 +600,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding keeps focused camera projection on the focus halo`() {
+    fun `navigation binding keeps the focus halo as the only projected point in focused mode`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -648,6 +648,11 @@ class MapViewportOverlayBindingsTest {
             projectionPoints.map { it.kind },
         )
         assertEquals(MapCoordinate(latitude = 35.176, longitude = 129.060), projectionPoints.first().coordinate)
+        assertTrue(
+            overlayState.polylines.any { polyline ->
+                polyline.overlayId == "navigation-focused" && polyline.includeInProjection
+            },
+        )
     }
 
     @Test
@@ -782,6 +787,7 @@ class MapViewportOverlayBindingsTest {
             ),
         )
         assertTrue(summary.contains("projectionPoints=[navigation-focus:FOCUS_HALO]"))
+        assertTrue(summary.contains("projectionPolylines=[navigation-focused:FOCUSED_SEGMENT]"))
     }
 
     @Test

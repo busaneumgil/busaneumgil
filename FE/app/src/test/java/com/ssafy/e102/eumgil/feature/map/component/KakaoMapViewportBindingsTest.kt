@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.map.component
 import com.kakao.vectormap.label.TransformMethod
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -10,6 +11,8 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
+import com.ssafy.e102.eumgil.feature.navigation.NavigationMapFocusMode
+import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -648,6 +651,45 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertNull(cameraState)
+    }
+
+    @Test
+    fun `focused navigation route camera fits the focused segment and focus halo`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                NavigationMapOverlayUiState(
+                    isDisplayable = true,
+                    selectedRoutePolyline =
+                        listOf(
+                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                            GeoCoordinate(latitude = 35.180, longitude = 129.065),
+                            GeoCoordinate(latitude = 35.190, longitude = 129.080),
+                        ),
+                    activeSegmentPolyline =
+                        listOf(
+                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                            GeoCoordinate(latitude = 35.178, longitude = 129.063),
+                        ),
+                    focusedSegmentPolyline =
+                        listOf(
+                            GeoCoordinate(latitude = 35.178, longitude = 129.063),
+                            GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                        ),
+                    focusCoordinate = GeoCoordinate(latitude = 35.1795, longitude = 129.0655),
+                    mapFocusMode = NavigationMapFocusMode.FOCUSED,
+                ),
+            )
+
+        val cameraState = requireNotNull(createKakaoRouteCameraRenderState(overlayState))
+
+        assertEquals(
+            listOf(
+                MapCoordinate(latitude = 35.178, longitude = 129.063),
+                MapCoordinate(latitude = 35.181, longitude = 129.068),
+                MapCoordinate(latitude = 35.1795, longitude = 129.0655),
+            ),
+            cameraState.points,
+        )
     }
 
     @Test

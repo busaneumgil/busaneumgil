@@ -20,6 +20,7 @@ import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
 import com.ssafy.e102.eumgil.feature.navigation.NavigationTtsStatus
+import com.ssafy.e102.eumgil.feature.navigation.NavigationRouteChangeAlertPlayer
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiEvent
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel
@@ -68,6 +69,7 @@ fun LowVisionNavigationRoute(
         remember(appContext) {
             AndroidTextToSpeechController(context = appContext)
         }
+    val routeChangeAlertPlayer = remember { NavigationRouteChangeAlertPlayer() }
     val textToSpeechState by textToSpeechController.state.collectAsStateWithLifecycle()
     LaunchedEffect(textToSpeechState) {
         viewModel.updateTextToSpeechState(
@@ -89,6 +91,7 @@ fun LowVisionNavigationRoute(
 
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
+                    NavigationUiEvent.PlayRouteChangeAlert -> routeChangeAlertPlayer.play()
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->
                         textToSpeechController.setEnabled(event.enabled)
@@ -127,6 +130,7 @@ fun LowVisionNavigationRoute(
             appContainer.currentLocationManager.stopLocationUpdates()
             textToSpeechController.stop()
             textToSpeechController.shutdown()
+            routeChangeAlertPlayer.release()
         }
     }
 

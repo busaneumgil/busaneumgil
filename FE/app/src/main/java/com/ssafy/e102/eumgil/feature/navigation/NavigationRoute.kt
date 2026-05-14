@@ -39,6 +39,7 @@ fun NavigationRoute(
         remember(appContext) {
             AndroidTextToSpeechController(context = appContext)
         }
+    val routeChangeAlertPlayer = remember { NavigationRouteChangeAlertPlayer() }
     val currentLocationManager = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.currentLocationManager
     }
@@ -97,6 +98,7 @@ fun NavigationRoute(
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     NavigationUiEvent.NavigateToArrival -> onNavigateToArrival()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
+                    NavigationUiEvent.PlayRouteChangeAlert -> routeChangeAlertPlayer.play()
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->
                         textToSpeechController.setEnabled(event.enabled)
@@ -110,6 +112,7 @@ fun NavigationRoute(
         onDispose {
             textToSpeechController.stop()
             textToSpeechController.shutdown()
+            routeChangeAlertPlayer.release()
         }
     }
 

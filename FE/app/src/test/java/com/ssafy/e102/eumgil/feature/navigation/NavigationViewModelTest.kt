@@ -439,7 +439,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `low vision mode announces route change before the next segment boundary`() =
+    fun `low vision mode plays route change alert before the next segment boundary`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel =
@@ -466,7 +466,7 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(NavigationUiEvent.SpeakBriefing("경로 변경"), eventDeferred.await())
+            assertEquals(NavigationUiEvent.PlayRouteChangeAlert, eventDeferred.await())
         }
 
     @Test

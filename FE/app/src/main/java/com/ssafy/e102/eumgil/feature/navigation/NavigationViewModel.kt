@@ -280,7 +280,7 @@ class NavigationViewModel(
                 latestEstimatedMinutes = remainingMetrics.estimatedMinutes
                 latestRemainingMetricsSource = remainingMetrics.source
             }
-            maybeAnnounceLowVisionRouteChange(currentSession.route, progress)
+            maybePlayLowVisionRouteChangeAlert(currentSession.route, progress)
             syncActiveSegment(progress.activeSegmentIndex)
             latestTransitPresentation = currentSession.resolveTransitPresentation(progress.activeLegIndex)
             maybeRefreshTransit(currentSession, progress, snapshot)
@@ -590,7 +590,7 @@ class NavigationViewModel(
         }
     }
 
-    private fun maybeAnnounceLowVisionRouteChange(
+    private fun maybePlayLowVisionRouteChangeAlert(
         route: RouteCandidate,
         progress: NavigationProgressSnapshot,
     ) {
@@ -598,14 +598,13 @@ class NavigationViewModel(
         val nextSegmentIndex = progress.activeSegmentIndex + 1
         if (nextSegmentIndex !in route.segments.indices) return
         if (lastLowVisionRouteChangeAlertSegmentIndex == nextSegmentIndex) return
-        val tts = uiState.value.tts
-        if (!tts.isEnabled || !tts.canSpeak || tts.status != NavigationTtsStatus.Ready) return
+        if (!uiState.value.tts.isEnabled) return
 
         val distanceToBoundaryMeters = route.distanceToNextSegmentBoundaryMeters(progress) ?: return
         if (distanceToBoundaryMeters !in 0..LOW_VISION_ROUTE_CHANGE_ALERT_DISTANCE_METERS) return
 
         lastLowVisionRouteChangeAlertSegmentIndex = nextSegmentIndex
-        emitUiEvent(NavigationUiEvent.SpeakBriefing(LOW_VISION_ROUTE_CHANGE_ALERT_TEXT))
+        emitUiEvent(NavigationUiEvent.PlayRouteChangeAlert)
     }
 
     private fun emitUiEvent(event: NavigationUiEvent) {
@@ -1465,7 +1464,6 @@ private const val LOW_VISION_WALKABLE_DISTANCE_THRESHOLD_METERS = 750
 private const val MIN_NAVIGATION_DURATION_SECONDS = 60
 private const val LOW_VISION_ACTUAL_METRICS_BUCKET_SCALE = 10_000.0
 private const val LOW_VISION_ROUTE_CHANGE_ALERT_DISTANCE_METERS = 50
-private const val LOW_VISION_ROUTE_CHANGE_ALERT_TEXT = "경로 변경"
 private const val PENDING_ACTIVE_SEGMENT_LABEL = "Current segment updated"
 
 internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {

@@ -952,24 +952,25 @@ private data class NavigationRouteSession(
         val waitMinutes = refreshedArrival?.remainingMinute ?: fallbackLaneOption?.remainingMinute
         val transitLabel =
             when (targetLeg.type) {
-                RouteLegType.BUS -> targetLeg.routeNo?.let { routeNo -> "$routeNo bus" } ?: "Bus"
-                RouteLegType.SUBWAY -> targetLeg.routeNo?.let { routeNo -> "$routeNo subway" } ?: "Subway"
-                RouteLegType.WALK -> "Transit"
+                RouteLegType.BUS -> targetLeg.routeNo?.let { routeNo -> "${routeNo}번 버스" } ?: "버스"
+                RouteLegType.SUBWAY -> targetLeg.routeNo ?: "지하철"
+                RouteLegType.WALK -> "대중교통"
             }
         val statusLabel =
             when (refreshData?.arrivalStatus) {
-                "REALTIME_AVAILABLE" -> "Live ETA"
+                "REALTIME_AVAILABLE" -> "실시간 도착"
+                "SCHEDULE_BASED" -> "시간표 기준"
                 "NO_CURRENT_ARRIVAL",
                 "ARRIVAL_UNKNOWN",
-                    -> "ETA unavailable"
+                    -> "도착 정보 없음"
 
-                else -> "Transit ETA"
+                else -> "도착 정보"
             }
         val supportingText =
             when {
-                waitMinutes != null -> "$transitLabel arrives in $waitMinutes min."
-                targetLeg.boardingStop != null -> "${targetLeg.boardingStop.name} boarding info unavailable."
-                else -> "Boarding info unavailable."
+                waitMinutes != null -> "${arrivalBasis(refreshData?.arrivalStatus)} $transitLabel ${waitMinutes}분 후 도착 예정"
+                targetLeg.boardingStop != null -> "${targetLeg.boardingStop.name} 승차 정보 없음"
+                else -> "승차 정보 없음"
             }
 
         return NavigationTransitPresentation(
@@ -979,6 +980,13 @@ private data class NavigationRouteSession(
         )
     }
 }
+
+private fun arrivalBasis(arrivalStatus: String?): String =
+    when (arrivalStatus) {
+        "REALTIME_AVAILABLE" -> "실시간 기준"
+        "SCHEDULE_BASED" -> "시간표 기준"
+        else -> "도착 정보 기준"
+    }
 
 private data class NavigationProgressSnapshot(
     val coordinate: GeoCoordinate,
@@ -2045,9 +2053,7 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
                 ?.takeIf { guidanceMessage -> guidanceMessage.isNotEmpty() }
                 ?: "목적지 방향으로 계속 이동해 주세요.",
         supportingText =
-            transitPresentation?.let { presentation ->
-                "${presentation.statusLabel} ${presentation.supportingText}"
-            } ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
+            transitPresentation?.supportingText ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
                 "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
         guidanceAction = heroDetail?.guidanceAction ?: NavigationGuidanceAction.STRAIGHT,
         transitInfo = transitPresentation?.info,

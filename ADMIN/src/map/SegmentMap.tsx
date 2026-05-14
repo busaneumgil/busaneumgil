@@ -135,6 +135,7 @@ export function SegmentMap({
     crossWalk: true,
     transitionConnector: true,
   });
+  const [showBridgeGuides, setShowBridgeGuides] = useState(true);
   const [segmentFeatureLayers, setSegmentFeatureLayers] = useState<Record<SegmentFeatureType, boolean>>({
     CROSSWALK: true,
     AUDIO_SIGNAL: true,
@@ -237,7 +238,7 @@ export function SegmentMap({
       }
     });
 
-    const bridgeFeatures = bridgePayload?.bridges.features ?? [];
+    const bridgeFeatures = showBridgeGuides ? bridgePayload?.bridges.features ?? [] : [];
     bridgeFeatures.forEach((feature) => {
       const bridge = createBridgeOverlay(feature, mapRef.current!);
       if (bridge) overlaysRef.current.push(...bridge);
@@ -252,7 +253,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, roadSegmentLayers, toolbarMode]);
+  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, roadSegmentLayers, showBridgeGuides, toolbarMode]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -736,6 +737,7 @@ export function SegmentMap({
   }
 
   const segmentFeatureCounts = countSegmentFeatureTypes(visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits));
+  const bridgeCandidateCount = bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0;
 
   return (
     <section className="map-shell">
@@ -756,6 +758,9 @@ export function SegmentMap({
             </>
           )}
           <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
+          <button className={showBridgeGuides ? "selected-tool" : ""} onClick={() => setShowBridgeGuides((visible) => !visible)}>
+            연결 가이드 {bridgeCandidateCount}
+          </button>
           <span className="draft-count-badge">변경 {draftEditCount}건</span>
           <button onClick={onUndoDraftEdit} disabled={!draftEditCount || !onUndoDraftEdit}>Undo</button>
           <button onClick={onClearDraftEdits} disabled={!draftEditCount || !onClearDraftEdits}>Clear</button>

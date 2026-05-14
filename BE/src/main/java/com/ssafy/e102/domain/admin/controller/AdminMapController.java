@@ -23,6 +23,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutePreviewResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgePayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
@@ -69,6 +70,16 @@ public class AdminMapController {
 		@Parameter(description = "조회 개수. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "10000") @Min(1) @Max(20000)
 		int limit) {
 		return ApiResponse.success(adminMapService.getRoadNetwork(gu, dong, limit));
+	}
+
+	@Operation(summary = "관리자 보행 네트워크 연결 후보 조회", description = "선택한 구/동에서 서로 다른 보행 네트워크 컴포넌트를 연결할 수 있는 가이드 후보를 조회한다.")
+	@GetMapping("/road-network/bridges")
+	public ApiResponse<AdminRoadNetworkBridgePayloadResponse> getRoadNetworkBridges(
+		@Parameter(description = "구") @RequestParam
+		String gu,
+		@Parameter(description = "동") @RequestParam
+		String dong) {
+		return ApiResponse.success(adminMapService.getRoadNetworkBridges(gu, dong));
 	}
 
 	@Operation(summary = "관리자 보행 네트워크 편집 반영", description = "관리자 페이지의 추가/삭제 편집안을 보행 네트워크 테이블에 반영한다.")

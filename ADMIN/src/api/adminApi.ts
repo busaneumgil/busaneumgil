@@ -25,6 +25,7 @@ import type {
   WorkStatus,
   AssignmentType,
   GeoPoint,
+  BridgePayload,
 } from "../types";
 
 const configuredBackendApiUrl = import.meta.env.VITE_BACKEND_API_URL as string | undefined;
@@ -308,6 +309,19 @@ export async function fetchAdminRoadNetworkPayload({
     params.set("dong", dong);
   }
   return requestAdminJson<SegmentPayload>(`/admin/road-network/segments?${params.toString()}`, accessToken);
+}
+
+export async function fetchAdminRoadNetworkBridges({
+  gu,
+  dong,
+  accessToken,
+}: {
+  gu: string;
+  dong: string;
+  accessToken: string;
+}): Promise<BridgePayload> {
+  const params = new URLSearchParams({ gu, dong });
+  return requestAdminJson<BridgePayload>(`/admin/road-network/bridges?${params.toString()}`, accessToken);
 }
 
 export async function applyAdminRoadNetworkEdits(

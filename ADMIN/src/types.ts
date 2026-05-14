@@ -134,10 +134,14 @@ export interface BridgeFeature {
 
 export interface BridgePayload {
   summary?: {
+    componentCount?: number;
+    endpointCount?: number;
     bridgeCandidateCount?: number | null;
     visibleBridgeCandidateCount?: number;
     bridgeMaxDistanceMeter?: number;
+    bridgeAutoDistanceMeter?: number;
   };
+  bbox?: [number, number, number, number] | null;
   bridges: {
     type: "FeatureCollection";
     features: BridgeFeature[];

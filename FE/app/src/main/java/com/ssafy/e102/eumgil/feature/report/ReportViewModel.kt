@@ -66,7 +66,9 @@ class ReportViewModel(
             ReportUiAction.ReportTypeBlurred -> touchReportType()
             ReportUiAction.CurrentLocationResetClicked -> requestCurrentLocation()
             ReportUiAction.RefreshLocationPermission -> handleRefreshLocationPermission()
-            ReportUiAction.LocationPickerClicked -> setPickedLocationShell()
+            // LocationPickerClicked: REPORT-02에 inline 카카오맵이 임베드되어 사용자가
+            // 직접 지도를 드래그·줌으로 위치를 선택하므로 별도 picker 액션 불필요. no-op.
+            ReportUiAction.LocationPickerClicked -> Unit
             is ReportUiAction.LocationSelected -> selectLocation(action.location, action.source)
             is ReportUiAction.AddressTextChanged -> updateAddressText(action.address)
             ReportUiAction.LocationBlurred -> touchLocation()
@@ -462,20 +464,6 @@ class ReportViewModel(
     private fun cancelPermissionPendingTimeout() {
         permissionPendingTimeoutJob?.cancel()
         permissionPendingTimeoutJob = null
-    }
-
-    private fun setPickedLocationShell() {
-        val shellLocation =
-            ReportLocation(
-                latitude = 35.1578,
-                longitude = 129.0592,
-                address = "부산광역시 부산진구 서면역 인근",
-            )
-
-        selectLocation(
-            location = shellLocation,
-            source = ReportLocationSource.MapPin,
-        )
     }
 
     private fun selectLocation(

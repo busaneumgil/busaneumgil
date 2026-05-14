@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 from typing import Any
@@ -177,31 +176,6 @@ def post_json_request(
     req = request.Request(url, data=encoded, headers=req_headers, method="POST")
     with request.urlopen(req, timeout=timeout) as response:
         return response.read().decode("utf-8")
-
-
-def curl_json_request(
-    url: str,
-    *,
-    headers: dict[str, str],
-    payload: dict[str, Any] | None = None,
-    timeout: int = 20,
-) -> dict[str, Any]:
-    curl_path = shutil.which("curl") or shutil.which("curl.exe")
-    if not curl_path:
-        raise ValueError("curl is not available for anthropic-gms provider")
-    command = [curl_path, "-fsS", "--max-time", str(timeout), url]
-    for key, value in headers.items():
-        command.extend(["-H", f"{key}: {value}"])
-    if payload is not None:
-        has_content_type = any(key.lower() == "content-type" for key in headers)
-        if not has_content_type:
-            command.extend(["-H", "Content-Type: application/json"])
-        command.extend(["-d", json.dumps(payload, ensure_ascii=False)])
-    result = subprocess.run(command, check=True, capture_output=True)
-    body = result.stdout.decode("utf-8", errors="replace")
-    if not body.strip():
-        raise ValueError(f"empty JSON response from {url}")
-    return json.loads(body)
 
 
 def query_prometheus_value(prometheus_url: str, query: str) -> float:
@@ -1068,21 +1042,13 @@ def maybe_generate_agent_analysis(
                 "x-api-key": api_key,
                 "anthropic-version": "2023-06-01",
             }
-            if provider_name == "anthropic-gms":
-                data = curl_json_request(
-                    endpoint,
-                    headers=headers,
-                    payload=payload,
-                    timeout=25,
-                )
-            else:
-                data = json_request(
-                    endpoint,
-                    method="POST",
-                    headers=headers,
-                    payload=payload,
-                    timeout=25,
-                )
+            data = json_request(
+                endpoint,
+                method="POST",
+                headers=headers,
+                payload=payload,
+                timeout=25,
+            )
             return parse_agent_analysis(extract_anthropic_text(data), fallback_analysis)
 
         payload = {

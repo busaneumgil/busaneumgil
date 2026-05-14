@@ -345,7 +345,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         )
         with mock.patch.object(
             MODULE,
-            "curl_json_request",
+            "json_request",
             return_value={
                 "content": [
                     {
@@ -389,7 +389,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         self.assertIn("JSON", called_payload["messages"][0]["content"])
         self.assertIn("conclusion", called_payload["messages"][0]["content"])
 
-    def test_maybe_generate_agent_analysis_uses_fallback_on_gms_curl_failure(self):
+    def test_maybe_generate_agent_analysis_uses_fallback_on_gms_request_failure(self):
         fallback = MODULE.EnvAnalysis(
             conclusion="rule conclusion",
             evidence="rule evidence",
@@ -400,8 +400,8 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         )
         with mock.patch.object(
             MODULE,
-            "curl_json_request",
-            side_effect=subprocess.CalledProcessError(22, ["curl"], output=b"", stderr=b"bad gateway"),
+            "json_request",
+            side_effect=ValueError("bad gateway"),
         ):
             analysis = MODULE.maybe_generate_agent_analysis(
                 enabled=True,
@@ -428,7 +428,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
             confidence="medium",
             source="rule",
         )
-        with mock.patch.object(MODULE, "curl_json_request", return_value={"content": "not-a-list"}):
+        with mock.patch.object(MODULE, "json_request", return_value={"content": "not-a-list"}):
             analysis = MODULE.maybe_generate_agent_analysis(
                 enabled=True,
                 api_key="test-key",

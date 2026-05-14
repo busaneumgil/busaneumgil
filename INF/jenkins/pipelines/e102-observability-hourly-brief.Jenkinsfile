@@ -61,6 +61,7 @@ pipeline {
       steps {
         withCredentials([file(credentialsId: 'e102-prod-env-file', variable: 'E102_PROD_ENV')]) {
           sh '''
+            set +x
             mkdir -p reports/observability
             GMS_KEY_VALUE="$(python3 - <<'PY' "$E102_PROD_ENV"
 import sys

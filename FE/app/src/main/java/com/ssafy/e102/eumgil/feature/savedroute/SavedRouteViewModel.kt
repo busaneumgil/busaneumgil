@@ -398,7 +398,6 @@ class SavedRouteViewModel(
         destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
         destinationSelectionRepository.updateSelectedDestination(destination)
         viewModelScope.launch {
-            persistRecentDestination(destination)
             mutableUiEvent.emit(event)
         }
     }

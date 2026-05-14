@@ -50,6 +50,7 @@ fun LowVisionSearchRoute(
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 placesRepository = appContainer.placesRepository,
+                currentLocationManager = appContainer.currentLocationManager,
             )
         }
     val viewModel =
@@ -60,6 +61,7 @@ fun LowVisionSearchRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(appContainer.currentLocationManager) {
+        appContainer.currentLocationManager.startLocationUpdates()
         appContainer.currentLocationManager.refreshLatestLocation()
     }
 

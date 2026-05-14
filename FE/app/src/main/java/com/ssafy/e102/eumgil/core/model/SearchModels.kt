@@ -28,6 +28,7 @@ data class SearchResult(
     val providerPlaceId: String? = null,
     val accessibilityTagKeys: List<String> = emptyList(),
     val matched: Boolean = true,
+    val distanceMeters: Int? = null,
 ) {
     val displayPlaceId: String
         get() = serverPlaceId ?: providerPlaceId ?: placeId

@@ -175,7 +175,7 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `empty destination falls back to default destination and still renders summary`() =
+    fun `empty destination keeps destination placeholder and hides route summary`() =
         runTest {
             val viewModel =
                 RouteSettingViewModel(
@@ -191,10 +191,10 @@ class RouteSettingViewModelTest {
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
             assertEquals("목적지를 선택하면 경로를 보여드릴게요.", uiState.destinationFallbackMessage)
             assertEquals(null, uiState.destination.metadataLabel)
-            assertEquals("부산역", uiState.destination.name)
-            assertEquals("부산 동구 중앙대로 206", uiState.destination.supportingText)
-            assertEquals(RouteOption.SAFE, uiState.selectedRoute?.routeOption)
-            assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+            assertEquals("도착지를 선택해 주세요", uiState.destination.name)
+            assertEquals("검색 또는 지도에서 도착지를 설정할 수 있어요.", uiState.destination.supportingText)
+            assertEquals(null, uiState.selectedRoute)
+            assertTrue(uiState.optionCards.isEmpty())
             assertEquals(RoutePreviewMapStatus.NO_DESTINATION, uiState.routePreviewMap.status)
             assertEquals("Destination is required before showing a route preview map.", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
@@ -337,8 +337,9 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.isUsingFallbackDestination)
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
-            assertEquals("부산역", uiState.destination.name)
+            assertEquals("도착지를 선택해 주세요", uiState.destination.name)
             assertEquals(RouteOption.SAFE, uiState.selectedOption)
+            assertEquals(null, uiState.selectedRoute)
             assertFalse(uiState.isStartEnabled)
         }
 

@@ -59,6 +59,8 @@ internal data class MapViewportUiState(
     val cameraTarget: MapCameraTarget,
     val rendererSessionKey: Long = 0L,
     val currentLocation: MapCoordinate?,
+    val selectedOriginCoordinate: MapCoordinate? = null,
+    val selectedOriginName: String? = null,
     val selectedDestinationCoordinate: MapCoordinate? = null,
     val selectedDestinationName: String? = null,
     val markerOverlayState: MapMarkerOverlayState,

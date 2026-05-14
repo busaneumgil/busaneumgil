@@ -118,29 +118,13 @@ class KakaoMapViewportConfigurationTest {
 
         assertTrue(
             "Terrain taps on the bare map should be ignored at the viewport layer so blank road/background presses do not open the place detail flow.",
-            source.contains(
-                """
-                setOnTerrainClickListener { _, position, _ ->
-                        ignoreBackgroundSingleTap(
-                            source = "terrain",
-                            position = position,
-                        )
-                    }
-                """.trimIndent(),
-            ),
+            Regex("""setOnTerrainClickListener\s*\{\s*_,\s*position,\s*_\s*->\s*ignoreBackgroundSingleTap\(\s*source = "terrain",\s*position = position,\s*\)""")
+                .containsMatchIn(source),
         )
         assertTrue(
             "Generic map clicks with no POI payload should also stop at the viewport layer instead of flowing into MapTapped detail lookup.",
-            source.contains(
-                """
-                } else if (poi == null) {
-                            ignoreBackgroundSingleTap(
-                                source = "map",
-                                position = position,
-                            )
-                        }
-                """.trimIndent(),
-            ),
+            Regex("""else if \(poi == null\)\s*\{\s*ignoreBackgroundSingleTap\(\s*source = "map",\s*position = position,\s*\)""")
+                .containsMatchIn(source),
         )
         assertFalse(
             "Terrain taps should no longer dispatch ADDRESS map taps from the viewport.",
@@ -239,22 +223,18 @@ class KakaoMapViewportConfigurationTest {
             source.contains("nameHint = poi.name"),
         )
         assertTrue(
-            "The POI callback should still fall back to providerPlaceId when Kakao does not expose a name in that callback.",
+            "The POI callback should only handle app markers so Kakao POIs can flow through the map click callback with a name hint.",
+            Regex("""readyMap\.setOnPoiClickListener\s*\{\s*_,\s*position,\s*layerId,\s*poiId\s*->\s*if \(layerId == KAKAO_MARKER_LAYER_ID && poiId\.isNotBlank\(\)\)""")
+                .containsMatchIn(source),
+        )
+        assertFalse(
+            "Kakao POI taps must not dispatch a name-less detail request before the map click callback can provide poi.name.",
             source.contains(
                 """
-                readyMap.setOnPoiClickListener { _, position, layerId, poiId ->
-                        if (layerId == KAKAO_MARKER_LAYER_ID && poiId.isNotBlank()) {
-                """.trimIndent(),
-            ) &&
-                source.contains(
-                    """
-                    dispatchExternalPoiTap(
-                                position = position,
-                                providerPlaceId = poiId,
+                providerPlaceId = poiId,
                                 nameHint = null,
-                            )
-                    """.trimIndent(),
-                ),
+                """.trimIndent(),
+            ),
         )
     }
 }

@@ -15,6 +15,20 @@ class MapBookmarkActionButtonConfigurationTest {
             "Facility detail bookmark button should keep a transparent container behind the icon.",
             source.contains("color = Color.Transparent"),
         )
+        assertTrue(
+            "Facility detail bookmark button should use a compact transparent icon target.",
+            source.contains("color = Color.Transparent") &&
+                source.contains(".size(48.dp)"),
+        )
+        assertFalse(
+            "Facility detail bookmark button should not draw a separate circular outline around the icon.",
+            source.contains("border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)"),
+        )
+        assertTrue(
+            "Facility detail bookmark icon should use the primary tint in both saved and unsaved enabled states.",
+            source.contains("state.isBookmarked -> MaterialTheme.colorScheme.primary") &&
+                source.contains("else -> MaterialTheme.colorScheme.primary"),
+        )
         assertFalse(
             "Facility detail bookmark button should not render a selected-state tint background.",
             source.contains("primaryContainer.copy(alpha = 0.5f)"),

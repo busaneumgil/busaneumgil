@@ -155,22 +155,33 @@ class MapFacilityDetailSheetConfigurationTest {
             shellSource.contains("maxLines = if (isCollapsed) 1 else 2"),
         )
         assertTrue(
-            "Bottom actions should put secondary icons before the origin and destination CTA buttons.",
-            actionContentSection.indexOf("FacilityDetailBookmarkActionButton(") <
-                actionContentSection.indexOf("map_facility_detail_set_origin_action") &&
-                actionContentSection.indexOf("map_facility_detail_set_origin_action") <
-                actionContentSection.indexOf("map_facility_detail_set_destination_action"),
+            "Bottom actions should fill the row with origin and destination CTAs before the right-aligned bookmark icon.",
+            actionContentSection.indexOf("map_facility_detail_set_origin_action") <
+                actionContentSection.indexOf("map_facility_detail_set_destination_action") &&
+                actionContentSection.indexOf("map_facility_detail_set_destination_action") <
+                actionContentSection.indexOf("FacilityDetailBookmarkActionButton("),
+        )
+        assertTrue(
+            "Origin and destination action labels should share the same button text style.",
+            screenSource.contains("style = MaterialTheme.typography.labelLarge") &&
+                screenSource.contains("fontWeight = FontWeight.SemiBold"),
         )
     }
 
     @Test
-    fun `map viewport state uses destination preview metadata before route destination`() {
+    fun `map viewport state routes preview metadata by editing target before selected endpoints`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
 
         assertTrue(
-            "Map viewport state should derive display metadata from the active destination preview before falling back to the persisted route destination.",
-            source.contains("val viewportDestination = uiState.facilityDetailSheetState.destinationPreview?.destination ?: uiState.selectedDestination"),
+            "Map viewport state should treat an origin preview as the effective origin endpoint.",
+            source.contains("preview?.editingTarget == RouteEditingTarget.ORIGIN") &&
+                source.contains("uiState.selectedOrigin"),
+        )
+        assertTrue(
+            "Map viewport state should treat a destination preview as the effective destination endpoint.",
+            source.contains("preview?.editingTarget == RouteEditingTarget.DESTINATION") &&
+                source.contains("uiState.selectedDestination"),
         )
         assertTrue(
             "Selected destination summary should use the effective viewport destination so preview screens announce the searched place name.",

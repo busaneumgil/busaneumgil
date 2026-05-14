@@ -851,8 +851,27 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertEquals(listOf("selected-destination"), markerStates.map { it.markerId })
-        assertEquals(KakaoProjectedMarkerKind.SELECTED_DESTINATION, markerStates.first().kind)
-        assertEquals(R.drawable.ic_map_selected_pin_blue, markerStates.first().iconResId)
+        assertEquals(KakaoProjectedMarkerKind.ROUTE_DESTINATION, markerStates.first().kind)
+        assertEquals(R.drawable.ic_navigation_rail_destination_pin, markerStates.first().iconResId)
+    }
+
+    @Test
+    fun `selected route endpoints render as distinct origin and destination projected markers`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedOriginCoordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                selectedDestinationCoordinate = MapCoordinate(latitude = 35.1801, longitude = 129.0822),
+                selectedMapPinCoordinate = null,
+            )
+
+        assertEquals(listOf("selected-origin", "selected-destination"), markerStates.map { it.markerId })
+        assertEquals(
+            listOf(KakaoProjectedMarkerKind.ROUTE_ORIGIN, KakaoProjectedMarkerKind.ROUTE_DESTINATION),
+            markerStates.map { it.kind },
+        )
+        assertEquals(R.drawable.ic_navigation_rail_origin_pin, markerStates.first().iconResId)
+        assertEquals(R.drawable.ic_navigation_rail_destination_pin, markerStates.last().iconResId)
     }
 
     @Test

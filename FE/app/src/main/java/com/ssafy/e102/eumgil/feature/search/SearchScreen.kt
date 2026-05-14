@@ -457,11 +457,14 @@ private fun SearchResultsContent(
 
             is SearchResultUiState.Loading ->
                 item(key = "loading-state") {
-                    SearchStateCard(
+                    EumLoadingState(
                         title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                         description = stringResource(id = R.string.search_screen_loading_description),
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f),
-                        borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
+                        indicatorSize = SearchResultsLoadingIndicatorSize,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = EumSpacing.small),
                     )
                 }
 
@@ -792,6 +795,7 @@ private fun SearchResultSection(
                 EumLoadingState(
                     title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                     description = stringResource(id = R.string.search_screen_loading_description),
+                    indicatorSize = SearchResultsLoadingIndicatorSize,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -1293,6 +1297,7 @@ private fun searchResultAccessibilityTagIconSizeDp(
 
 private const val METERS_PER_KILOMETER = 1_000
 private const val SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD = 3
+private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable

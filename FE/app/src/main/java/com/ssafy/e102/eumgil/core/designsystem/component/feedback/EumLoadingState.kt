@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 
@@ -20,6 +21,7 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun EumLoadingState(
     title: String,
     description: String,
+    indicatorSize: Dp = 28.dp,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -30,7 +32,7 @@ fun EumLoadingState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
-        EumCircularLoadingIndicator()
+        EumCircularLoadingIndicator(size = indicatorSize)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
@@ -53,10 +55,11 @@ fun EumLoadingState(
 
 @Composable
 fun EumCircularLoadingIndicator(
+    size: Dp = 28.dp,
     modifier: Modifier = Modifier,
 ) {
     CircularProgressIndicator(
-        modifier = modifier.size(28.dp),
+        modifier = modifier.size(size),
         color = MaterialTheme.colorScheme.secondary,
         trackColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.42f),
         strokeWidth = 3.dp,

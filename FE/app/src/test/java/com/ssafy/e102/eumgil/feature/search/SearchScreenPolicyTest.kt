@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.search
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,6 +35,34 @@ class SearchScreenPolicyTest {
         assertTrue(
             "Search result rows should keep a dedicated interaction source when ripple is suppressed.",
             searchResultItemSection.contains("MutableInteractionSource()"),
+        )
+    }
+
+    @Test
+    fun `results screen loading state uses spinner instead of placeholder card`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val searchResultsContentSection =
+            source
+                .substringAfter("private fun SearchResultsContent(")
+                .substringBefore("@Composable\nprivate fun SearchInputField")
+        val loadingStateSection =
+            searchResultsContentSection
+                .substringAfter("is SearchResultUiState.Loading ->")
+                .substringBefore("is SearchResultUiState.Success ->")
+
+        assertTrue(
+            "Search results loading state should render the shared spinner-based loading component.",
+            loadingStateSection.contains("EumLoadingState("),
+        )
+        assertTrue(
+            "Search results loading state should request the enlarged spinner size for the loading affordance.",
+            loadingStateSection.contains("indicatorSize = SearchResultsLoadingIndicatorSize"),
+        )
+        assertFalse(
+            "Search results loading state should not fall back to the boxed SearchStateCard placeholder.",
+            loadingStateSection.contains("SearchStateCard("),
         )
     }
 }

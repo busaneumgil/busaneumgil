@@ -444,7 +444,19 @@ class MapFacilityDetailSheetConfigurationTest {
         )
         assertTrue(
             "The phone row should render the dedicated contact icon beside the number so the affordance stays clear even without a text glyph prefix.",
-            shellSource.contains("R.drawable.ic_permission_contacts"),
+            shellSource.contains("R.drawable.ic_place_detail_phone"),
+        )
+        assertTrue(
+            "The phone row should use the attached place-detail phone icon asset instead of falling back to an unrelated shared contacts icon.",
+            File("src/main/res/drawable/ic_place_detail_phone.png").exists(),
+        )
+        assertTrue(
+            "The phone icon should stay slightly smaller than the text block so the row reads as a link first and an affordance second.",
+            shellSource.contains("Modifier.size(16.dp)"),
+        )
+        assertTrue(
+            "The attached phone icon should be tinted with the theme primary blue so it reads as an interactive call action.",
+            shellSource.contains("ColorFilter.tint(MaterialTheme.colorScheme.primary)"),
         )
         assertTrue(
             "The visible phone label should now keep only the number text because the call affordance comes from the separate icon.",

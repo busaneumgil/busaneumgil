@@ -260,8 +260,9 @@ fun FacilityDetailBottomSheetShell(
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_permission_contacts),
+                                            painter = painterResource(id = R.drawable.ic_place_detail_phone),
                                             contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
                                             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary),
                                         )
                                         Text(

@@ -1265,6 +1265,9 @@ private class KakaoOverlayMarkerStyleCache(
                 fillColorArgb = marker.fillColorArgb,
                 strokeColorArgb = marker.strokeColorArgb,
                 rotationDegrees = marker.rotationDegrees.roundToInt(),
+                label = marker.label,
+                secondaryLabel = marker.secondaryLabel,
+                secondaryFillColorArgb = marker.secondaryFillColorArgb,
                 densityBucket = densityBucket,
             )
         return stylesCache.getOrPut(key) {
@@ -1292,6 +1295,8 @@ private class KakaoOverlayMarkerStyleCache(
         bitmapCache.getOrPut(key) {
             when (marker.kind) {
                 KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION -> createSegmentJunctionBitmap(marker)
+                KakaoOverlayMarkerKind.TRANSIT_STOP -> createTransitStopBitmap(marker)
+                KakaoOverlayMarkerKind.TRANSIT_TRANSFER -> createTransitTransferBitmap(marker)
                 KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW -> createDirectionArrowBitmap(marker)
             }
         }
@@ -1331,49 +1336,146 @@ private class KakaoOverlayMarkerStyleCache(
         val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
         val outerRadius = sizePx / 2f
         val center = outerRadius
-        val innerRadius = sizePx * 0.29f
-        val outerStrokeWidth = dpToPx(0.75f).coerceAtLeast(1f)
-        val innerStrokeWidth = dpToPx(1f).coerceAtLeast(1f)
+        val strokeWidth = dpToPx(3f).coerceAtLeast(1f)
         val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val outerPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
-                color = 0xFFFFFFFF.toInt()
+                color = marker.fillColorArgb
             }
-        val outerStrokePaint =
+        val strokePaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = outerStrokeWidth
-                color = 0x26000000
+                this.strokeWidth = strokeWidth
+                color = marker.strokeColorArgb
             }
-        val innerPaint =
+
+        canvas.drawCircle(center, center, outerRadius - strokeWidth / 2f, outerPaint)
+        canvas.drawCircle(center, center, outerRadius - strokeWidth / 2f, strokePaint)
+        return bitmap
+    }
+
+    private fun createTransitStopBitmap(
+        marker: KakaoOverlayMarkerRenderState,
+    ): Bitmap {
+        val sizePx = dpToPx(marker.sizeDp.toFloat())
+        val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
+        val cornerRadius = dpToPx(7f)
+        val strokeWidth = dpToPx(2f).coerceAtLeast(1f)
+        val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val rect = RectF(strokeWidth / 2f, strokeWidth / 2f, sizePx - strokeWidth / 2f, sizePx - strokeWidth / 2f)
+        val fillPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
                 color = marker.fillColorArgb
             }
-        val innerStrokePaint =
+        val strokePaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = innerStrokeWidth
+                this.strokeWidth = strokeWidth
                 color = marker.strokeColorArgb
             }
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, fillPaint)
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, strokePaint)
+        drawCenteredMarkerText(canvas, marker.label.orEmpty(), sizePx, if (marker.label == "BUS") 8.5f else 11f)
+        return bitmap
+    }
 
-        canvas.drawCircle(center, center, outerRadius, outerPaint)
-        canvas.drawCircle(
-            center,
-            center,
-            outerRadius - outerStrokeWidth / 2f,
-            outerStrokePaint,
-        )
-        canvas.drawCircle(center, center, innerRadius, innerPaint)
-        canvas.drawCircle(
-            center,
-            center,
-            innerRadius - innerStrokeWidth / 2f,
-            innerStrokePaint,
+    private fun createTransitTransferBitmap(
+        marker: KakaoOverlayMarkerRenderState,
+    ): Bitmap {
+        val heightPx = dpToPx(30f)
+        val widthPx = dpToPx(marker.sizeDp.toFloat())
+        val bitmap = Bitmap.createBitmap(widthPx.roundToInt().coerceAtLeast(1), heightPx.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val strokeWidth = dpToPx(1.5f).coerceAtLeast(1f)
+        val cardRect = RectF(strokeWidth / 2f, strokeWidth / 2f, widthPx - strokeWidth / 2f, heightPx - strokeWidth / 2f)
+        val cardPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = 0xFFFFFFFF.toInt()
+            }
+        val strokePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                this.strokeWidth = strokeWidth
+                color = 0xFFE5E7EB.toInt()
+            }
+        canvas.drawRoundRect(cardRect, heightPx / 2f, heightPx / 2f, cardPaint)
+        canvas.drawRoundRect(cardRect, heightPx / 2f, heightPx / 2f, strokePaint)
+        val iconSize = dpToPx(22f)
+        drawTransitTransferIcon(canvas, marker.label.orEmpty(), marker.fillColorArgb, dpToPx(5f), (heightPx - iconSize) / 2f, iconSize)
+        drawTransferArrow(canvas, widthPx / 2f, heightPx / 2f)
+        drawTransitTransferIcon(
+            canvas = canvas,
+            label = marker.secondaryLabel.orEmpty(),
+            color = marker.secondaryFillColorArgb ?: marker.fillColorArgb,
+            left = widthPx - dpToPx(5f) - iconSize,
+            top = (heightPx - iconSize) / 2f,
+            size = iconSize,
         )
         return bitmap
+    }
+
+    private fun drawTransitTransferIcon(
+        canvas: Canvas,
+        label: String,
+        color: Int,
+        left: Float,
+        top: Float,
+        size: Float,
+    ) {
+        val rect = RectF(left, top, left + size, top + size)
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                this.color = color
+            }
+        canvas.drawRoundRect(rect, dpToPx(5f), dpToPx(5f), paint)
+        drawCenteredMarkerText(canvas, label, size, if (label == "BUS") 8f else 10f, offsetX = left, offsetY = top)
+    }
+
+    private fun drawTransferArrow(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+    ) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = 0xFF111827.toInt()
+            }
+        val path =
+            AndroidPath().apply {
+                moveTo(centerX + dpToPx(4f), centerY)
+                lineTo(centerX - dpToPx(3f), centerY - dpToPx(5f))
+                lineTo(centerX - dpToPx(3f), centerY + dpToPx(5f))
+                close()
+            }
+        canvas.drawPath(path, paint)
+    }
+
+    private fun drawCenteredMarkerText(
+        canvas: Canvas,
+        label: String,
+        sizePx: Float,
+        textSizeDp: Float,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+    ) {
+        if (label.isBlank()) return
+        val textPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFFFFFFFF.toInt()
+                textAlign = Paint.Align.CENTER
+                textSize = dpToPx(textSizeDp)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }
+        val x = offsetX + sizePx / 2f
+        val y = offsetY + sizePx / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
+        canvas.drawText(label, x, y, textPaint)
     }
 
     private fun dpToPx(dp: Float): Float = dp * context.resources.displayMetrics.density
@@ -1603,11 +1705,14 @@ private data class KakaoOverlayMarkerBitmapCacheKey(
     val fillColorArgb: Int,
     val strokeColorArgb: Int,
     val rotationDegrees: Int,
+    val label: String?,
+    val secondaryLabel: String?,
+    val secondaryFillColorArgb: Int?,
     val densityBucket: Int,
 ) {
     val styleId: String
         get() =
-            "overlay-${kind.name.lowercase(Locale.US)}-$fillColorArgb-$strokeColorArgb-$rotationDegrees-$densityBucket"
+            "overlay-${kind.name.lowercase(Locale.US)}-$fillColorArgb-$strokeColorArgb-$rotationDegrees-${label.orEmpty()}-${secondaryLabel.orEmpty()}-${secondaryFillColorArgb ?: 0}-$densityBucket"
 }
 
 private data class KakaoFacilityMarkerPalette(

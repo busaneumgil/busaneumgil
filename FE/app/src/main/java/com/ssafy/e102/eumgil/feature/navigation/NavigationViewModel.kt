@@ -1981,7 +1981,7 @@ private fun NavigationScreenState.toExitCtaUiState(): NavigationCtaUiState =
         NavigationScreenState.Ready,
         NavigationScreenState.Empty,
             -> NavigationCtaUiState(
-                label = "길 안내 종료",
+                label = "안내 종료",
                 supportingText = "안내를 종료하고 지도로 돌아갑니다.",
                 isEnabled = true,
             )

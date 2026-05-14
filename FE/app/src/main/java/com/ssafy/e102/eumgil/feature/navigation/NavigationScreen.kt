@@ -98,18 +98,6 @@ fun NavigationScreen(
                     onCloseClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
                 )
             },
-            bottomBar = {
-                val bottomBarLayoutPolicy =
-                    navigationBottomBarLayoutPolicy(
-                        showSegmentRail = screenPolicy.showSegmentRail,
-                        railWidth = railWidth,
-                    )
-                NavigationBottomBar(
-                    uiState = uiState,
-                    onAction = onAction,
-                    layoutPolicy = bottomBarLayoutPolicy,
-                )
-            },
         ) { innerPadding ->
             Column(
                 modifier =
@@ -169,7 +157,7 @@ fun NavigationScreen(
                                 )
                                 NavigationSidePanelExpandHandle(
                                     onClick = { isSidePanelExpanded = true },
-                                    modifier = Modifier.align(Alignment.Bottom),
+                                    modifier = Modifier.align(Alignment.CenterVertically),
                                 )
                             }
                         }
@@ -177,6 +165,18 @@ fun NavigationScreen(
                 }
             }
         }
+
+        val bottomBarLayoutPolicy =
+            navigationBottomBarLayoutPolicy(
+                showSegmentRail = screenPolicy.showSegmentRail,
+                railWidth = railWidth,
+            )
+        NavigationBottomBar(
+            uiState = uiState,
+            onAction = onAction,
+            layoutPolicy = bottomBarLayoutPolicy,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
 
         if (uiState.isExitConfirmDialogVisible) {
             NavigationExitConfirmDialog(
@@ -280,13 +280,13 @@ internal fun navigationScreenPolicy(uiState: NavigationUiState): NavigationScree
 
 internal fun navigationHeroLayoutPolicy(screenHeight: Dp): NavigationHeroLayoutPolicy =
     NavigationHeroLayoutPolicy(
-        minHeight = 116.dp,
-        maxHeight = (screenHeight * 0.24f).coerceAtLeast(132.dp),
-        directionIconSize = 64.dp,
+        minHeight = 92.dp,
+        maxHeight = (screenHeight * 0.16f).coerceIn(108.dp, 132.dp),
+        directionIconSize = 44.dp,
         showBottomDivider = false,
     )
 
-private val NavigationHeroTransitDirectionIconSize = 56.dp
+private val NavigationHeroTransitDirectionIconSize = 40.dp
 
 internal fun navigationHeroContent(uiState: NavigationUiState): NavigationHeroContentUiState {
     val focusedSegmentCard = uiState.focusedSegmentCard
@@ -341,45 +341,27 @@ private fun NavigationExpandedSidePanel(
                 bottomEnd = NavigationSidePanelCornerRadius,
             ),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-        ) {
-            Row(
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-                        .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
             ) {
-                Text(
-                    text = navigationRouteSummary(uiState),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
-                IconButton(onClick = onCollapse) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_action_close),
-                        contentDescription = stringResource(id = R.string.map_facility_detail_close),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                uiState.segmentSync.railItems.forEach { item ->
+                    NavigationSidePanelRow(
+                        item = item,
+                        onClick = { onSegmentTapped(item.index) },
                     )
                 }
             }
-            uiState.segmentSync.railItems.forEach { item ->
-                NavigationSidePanelRow(
-                    item = item,
-                    onClick = { onSegmentTapped(item.index) },
-                )
-            }
+            NavigationSidePanelExpandHandle(
+                isExpanded = true,
+                onClick = onCollapse,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
         }
     }
 }
@@ -422,20 +404,14 @@ private fun NavigationSidePanelRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_map_current_location),
-                        contentDescription = "지도 위치 보기",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+            item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
+                Text(
+                    text = distance,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.End,
+                )
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.84f))
@@ -444,6 +420,7 @@ private fun NavigationSidePanelRow(
 
 @Composable
 private fun NavigationSidePanelExpandHandle(
+    isExpanded: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -455,13 +432,15 @@ private fun NavigationSidePanelExpandHandle(
     Surface(
         modifier =
             modifier
-                .padding(bottom = EumSpacing.small)
-                .size(width = 28.dp, height = 56.dp)
+                .size(width = NavigationSidePanelHandleTouchWidth, height = NavigationSidePanelHandleTouchHeight)
                 .draggable(
                     state = dragState,
                     orientation = Orientation.Horizontal,
                     onDragStopped = {
-                        if (dragOffsetPx > NavigationSidePanelSwipeThresholdPx) {
+                        if (
+                            (!isExpanded && dragOffsetPx > NavigationSidePanelSwipeThresholdPx) ||
+                            (isExpanded && dragOffsetPx < -NavigationSidePanelSwipeThresholdPx)
+                        ) {
                             onClick()
                         }
                         dragOffsetPx = 0f
@@ -474,15 +453,20 @@ private fun NavigationSidePanelExpandHandle(
                 bottomEnd = NavigationSidePanelHandleRadius,
             ),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 3.dp,
+        border = BorderStroke(NavigationSidePanelHandleStrokeWidth, NavigationSidePanelHandleBorderColor),
+        shadowElevation = 0.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_control_next),
-                contentDescription = "안내 패널 펼치기",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
+            Text(
+                text = if (isExpanded) "<" else ">",
+                color = NavigationSidePanelHandleContentColor,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = if (isExpanded) "안내 패널 접기" else "안내 패널 펼치기"
+                    },
             )
         }
     }
@@ -490,8 +474,8 @@ private fun NavigationSidePanelExpandHandle(
 
 private fun navigationRouteSummary(uiState: NavigationUiState): String =
     uiState.focusedSegmentCard?.sequenceLabel?.takeIf { it.isNotBlank() }
-        ?: uiState.stepCard.sectionLabel.takeIf { it.isNotBlank() }
-        ?: "출발지 -> 도착지"
+        ?: uiState.progressLabel.takeIf { it.isNotBlank() && it != "-" }
+        ?: "1 / 1"
 
 @Composable
 private fun NavigationHeroCard(
@@ -535,13 +519,15 @@ private fun NavigationHeroCard(
                     ) {
                         Text(
                             text = heroContent.title,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onPrimary,
+                            maxLines = 1,
                         )
                         Text(
                             text = heroContent.description,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimary,
+                            maxLines = 2,
                         )
                     }
                 }
@@ -769,9 +755,11 @@ private fun NavigationBottomBar(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
     layoutPolicy: NavigationBottomBarLayoutPolicy,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        color = Color.Transparent,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
@@ -1055,4 +1043,9 @@ private const val NavigationSidePanelSwipeThresholdPx = 80f
 private val NavigationMapMarkerSize = 38.dp
 private val NavigationSidePanelCornerRadius = 20.dp
 private val NavigationSidePanelHandleRadius = 14.dp
+private val NavigationSidePanelHandleTouchWidth = 48.dp
+private val NavigationSidePanelHandleTouchHeight = 64.dp
+private val NavigationSidePanelHandleStrokeWidth = 0.5.dp
+private val NavigationSidePanelHandleBorderColor = Color(0xFFD9D9D9)
+private val NavigationSidePanelHandleContentColor = Color(0xFF333333)
 private val NavigationSidePanelIconSize = 32.dp

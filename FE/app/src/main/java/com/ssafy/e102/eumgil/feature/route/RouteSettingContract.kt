@@ -90,6 +90,7 @@ data class RouteOptionSegmentBarUiState(
     val kind: RouteOptionSegmentKind,
     val label: String,
     val weight: Float,
+    val routeLabel: String? = null,
 )
 
 enum class RouteOptionSegmentKind {
@@ -160,10 +161,11 @@ data class RouteDetailStepUiState(
     val kind: RouteDetailStepKind = RouteDetailStepKind.STRAIGHT,
     val tone: RouteDetailTone = RouteDetailTone.NEUTRAL,
     val coordinate: GeoCoordinate? = null,
+    val transitLabel: String? = null,
 )
 
 data class RouteSettingCtaUiState(
-    val label: String = "길 안내 시작",
+    val label: String = "안내 시작",
     val supportingText: String = "경로 요약을 불러오는 동안 CTA를 잠시 비활성화합니다.",
     val isEnabled: Boolean = false,
 )
@@ -256,6 +258,8 @@ enum class RouteOptionBadge {
 sealed interface RouteSettingUiAction {
     data object BackClicked : RouteSettingUiAction
 
+    data object CloseClicked : RouteSettingUiAction
+
     data class WaypointClicked(
         val editingTarget: RouteEditingTarget,
     ) : RouteSettingUiAction
@@ -279,6 +283,8 @@ sealed interface RouteSettingUiAction {
 
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
+
+    data object NavigateToMap : RouteSettingUiEvent
 
     data object RequestLocationPermission : RouteSettingUiEvent
 

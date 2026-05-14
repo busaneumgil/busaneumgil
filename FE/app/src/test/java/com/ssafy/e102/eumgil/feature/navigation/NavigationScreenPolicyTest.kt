@@ -80,20 +80,20 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
-    fun `hero layout policy uses taller blue header and removes divider`() {
+    fun `hero layout policy uses compact current guidance card and removes divider`() {
         val policy = navigationHeroLayoutPolicy(800.dp)
 
-        assertEquals(116.dp, policy.minHeight)
-        assertEquals(192.dp, policy.maxHeight)
-        assertEquals(64.dp, policy.directionIconSize)
+        assertEquals(92.dp, policy.minHeight)
+        assertEquals(128.dp, policy.maxHeight)
+        assertEquals(44.dp, policy.directionIconSize)
         assertFalse(policy.showBottomDivider)
     }
 
     @Test
-    fun `hero layout policy keeps a taller minimum max height on compact screens`() {
+    fun `hero layout policy keeps compact minimum max height on compact screens`() {
         val policy = navigationHeroLayoutPolicy(480.dp)
 
-        assertEquals(132.dp, policy.maxHeight)
+        assertEquals(108.dp, policy.maxHeight)
     }
 
     @Test
@@ -111,7 +111,7 @@ class NavigationScreenPolicyTest {
         )
         assertTrue(
             "Navigation hero should document the slightly reduced transit icon token.",
-            navigationScreenSource.contains("private val NavigationHeroTransitDirectionIconSize = 56.dp"),
+            navigationScreenSource.contains("private val NavigationHeroTransitDirectionIconSize = 40.dp"),
         )
         assertTrue(
             "Navigation segment rail should route transit actions through a dedicated helper.",
@@ -149,6 +149,20 @@ class NavigationScreenPolicyTest {
             "Transit guidance actions should use the same side panel row path as walk guidance.",
             source.contains("item.guidanceAction.iconRes()") &&
                 source.contains("uiState.segmentSync.railItems.forEach"),
+        )
+        assertFalse(
+            "Expanded side panel rows should not keep the radio-like current-location button.",
+            source
+                .substringAfter("private fun NavigationSidePanelRow(")
+                .substringBefore("@Composable\nprivate fun NavigationSidePanelExpandHandle")
+                .contains("ic_map_current_location"),
+        )
+        assertFalse(
+            "Expanded side panel should not render a duplicate progress header.",
+            source
+                .substringAfter("private fun NavigationExpandedSidePanel(")
+                .substringBefore("@Composable\nprivate fun NavigationSidePanelRow")
+                .contains("navigationRouteSummary(uiState)"),
         )
     }
 

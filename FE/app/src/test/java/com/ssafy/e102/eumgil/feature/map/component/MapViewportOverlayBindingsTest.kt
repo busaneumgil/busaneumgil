@@ -154,6 +154,62 @@ class MapViewportOverlayBindingsTest {
         assertEquals(MapViewportPolylineStyle.ROUTE_PREVIEW, overlayState.polylines.first().style)
         assertEquals(MapViewportOverlayTone.PRIMARY, overlayState.polylines.first().tone)
         assertTrue(overlayState.polylines.first().includeInProjection)
+        assertTrue(overlayState.polylines.first().showDirectionArrows)
+    }
+
+    @Test
+    fun `route preview hides detailed guidance markers and arrows until a guidance marker is focused`() {
+        val previewMap =
+            RoutePreviewMapUiState(
+                status = RoutePreviewMapStatus.READY,
+                originCoordinate = GeoCoordinate(latitude = 35.17, longitude = 129.05),
+                destinationCoordinate = GeoCoordinate(latitude = 35.18, longitude = 129.07),
+                polyline =
+                    listOf(
+                        GeoCoordinate(latitude = 35.17, longitude = 129.05),
+                        GeoCoordinate(latitude = 35.18, longitude = 129.07),
+                    ),
+            )
+        val transitMarker =
+            MapViewportPointOverlay(
+                overlayId = "bus-marker",
+                coordinate = MapCoordinate(latitude = 35.175, longitude = 129.06),
+                kind = MapViewportPointKind.TRANSIT_BUS_STOP,
+                transitMarker =
+                    MapViewportTransitMarker(
+                        from = MapViewportTransitMarkerLeg(kind = MapViewportTransitMarkerKind.BUS),
+                    ),
+            )
+        val genericMarker =
+            transitMarker.copy(
+                overlayId = "generic-marker",
+                kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                transitMarker = null,
+            )
+
+        val initialState =
+            createRoutePreviewViewportOverlayState(
+                previewMap = previewMap,
+                guidanceMarkers = listOf(genericMarker, transitMarker),
+                showDetailedRouteOverlay = false,
+            )
+        val focusedState =
+            createRoutePreviewViewportOverlayState(
+                previewMap = previewMap,
+                guidanceMarkers = listOf(genericMarker.copy(isSelected = true), transitMarker.copy(isSelected = true)),
+                focusSelectedGuidanceMarker = true,
+                showDetailedRouteOverlay = true,
+            )
+
+        assertEquals(
+            listOf(MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
+            initialState.points.map { it.kind },
+        )
+        assertFalse(initialState.polylines.first().showDirectionArrows)
+
+        assertTrue(focusedState.points.any { it.kind == MapViewportPointKind.TRANSIT_BUS_STOP })
+        assertFalse(focusedState.points.any { it.overlayId == "generic-marker" })
+        assertTrue(focusedState.polylines.first().showDirectionArrows)
     }
 
     @Test

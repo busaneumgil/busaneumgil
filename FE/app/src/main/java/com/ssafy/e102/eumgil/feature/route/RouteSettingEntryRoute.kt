@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun RouteSettingEntryRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToMap: () -> Unit = {},
     onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
@@ -51,10 +52,11 @@ fun RouteSettingEntryRoute(
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToSearch, onNavigateToRouteDetail, onStartNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onNavigateToSearch, onNavigateToRouteDetail, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.NavigateToMap -> onNavigateToMap()
                 RouteSettingUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
@@ -138,6 +140,7 @@ fun RouteSettingEntryRoute(
 fun RouteDetailEntryRoute(
     routeOption: RouteOption,
     onNavigateBack: () -> Unit,
+    onNavigateToMap: () -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -152,10 +155,11 @@ fun RouteDetailEntryRoute(
         viewModel.onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onStartNavigation) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 RouteSettingUiEvent.NavigateBack -> onNavigateBack()
+                RouteSettingUiEvent.NavigateToMap -> onNavigateToMap()
                 RouteSettingUiEvent.RequestLocationPermission -> Unit
                 is RouteSettingUiEvent.NavigateToSearch -> Unit
                 is RouteSettingUiEvent.NavigateToRouteDetail -> Unit
@@ -167,6 +171,9 @@ fun RouteDetailEntryRoute(
     RouteDetailScreen(
         uiState = uiState,
         onBackClick = onNavigateBack,
+        onCloseClick = {
+            viewModel.onAction(RouteSettingUiAction.CloseClicked)
+        },
         onStartClick = {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
         },

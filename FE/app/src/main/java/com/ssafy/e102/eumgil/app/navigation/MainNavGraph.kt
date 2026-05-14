@@ -305,6 +305,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
+            onNavigateToMap = {
+                navController.navigateToTopLevelMapForHomeEntry()
+            },
             onNavigateToSearch = { editingTarget ->
                 navController.navigate(SearchRoute.Entry.createRoute(editingTarget)) {
                     launchSingleTop = true
@@ -346,6 +349,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             routeOption = routeOption,
             onNavigateBack = {
                 navController.popBackStack()
+            },
+            onNavigateToMap = {
+                navController.navigateToTopLevelMapForHomeEntry()
             },
             onStartNavigation = { request ->
                 navigationViewModel.bindNavigationRequest(request)

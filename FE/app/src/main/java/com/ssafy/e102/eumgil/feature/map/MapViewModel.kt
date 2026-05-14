@@ -231,6 +231,7 @@ class MapViewModel(
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
+            is MapUiAction.RecentDestinationPreviewClicked -> handleRecentDestinationPreviewClicked(action.placeId)
             is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
             MapUiAction.SearchHereClicked -> handleSearchHereClicked()
             MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch(RouteEditingTarget.DESTINATION))
@@ -564,6 +565,17 @@ class MapViewModel(
         }
         destinationSelectionRepository.updateSelectedDestination(destination)
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun handleRecentDestinationPreviewClicked(placeId: String) {
+        val recentDestination =
+            recentDestinations.firstOrNull { destination -> destination.placeId == placeId } ?: return
+
+        destinationPreviewRepository.requestPreview(
+            destination = recentDestination.toPlaceDestination(),
+            editingTarget = routeEditingTarget,
+            accessibilityTagKeys = recentDestination.accessibilityTagKeys,
+        )
     }
 
     private fun resetMarkerCategoryFilter() {
@@ -1797,7 +1809,7 @@ private fun DestinationPreviewRequest.toMapTappedPlaceDetail(): MapTappedPlaceDe
         providerPlaceId = providerPlaceId,
         name = destination.name,
         category = destination.category,
-        providerCategory = null,
+        providerCategory = destination.providerCategory,
         address = destination.address.orEmpty(),
         latitude = destination.latitude,
         longitude = destination.longitude,
@@ -1891,6 +1903,10 @@ private fun MapTappedPlaceDetail.toPlaceDestinationOrNull(): PlaceDestination? {
         latitude = latitude,
         longitude = longitude,
         category = category,
+        serverPlaceId = placeId?.toLongOrNull(),
+        provider = provider?.takeIf { it.isNotBlank() },
+        providerPlaceId = providerPlaceId?.takeIf { it.isNotBlank() },
+        providerCategory = providerCategory?.takeIf { it.isNotBlank() },
     )
 }
 

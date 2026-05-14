@@ -16,7 +16,9 @@ import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
@@ -44,6 +46,7 @@ class SavedRouteViewModel(
     private val bookmarkRepository: BookmarkRepository,
     private val routeBookmarkRepository: RouteBookmarkRepository,
     private val destinationSelectionRepository: DestinationSelectionRepository,
+    private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val searchRepository: SearchRepository? = null,
     private val currentLocationManager: CurrentLocationManager? = null,
     initialLowVisionMode: Boolean = false,
@@ -401,7 +404,14 @@ class SavedRouteViewModel(
         }
 
         destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
-        destinationSelectionRepository.updateSelectedDestination(destination)
+        if (event == SavedRouteUiEvent.NavigateToMap) {
+            destinationPreviewRepository.requestPreview(
+                destination = destination,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            )
+        } else {
+            destinationSelectionRepository.updateSelectedDestination(destination)
+        }
         viewModelScope.launch {
             mutableUiEvent.emit(event)
         }
@@ -550,6 +560,7 @@ class SavedRouteViewModel(
             bookmarkRepository: BookmarkRepository,
             routeBookmarkRepository: RouteBookmarkRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
+            destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
             searchRepository: SearchRepository? = null,
             currentLocationManager: CurrentLocationManager? = null,
             isLowVisionMode: Boolean = false,
@@ -563,6 +574,7 @@ class SavedRouteViewModel(
                             bookmarkRepository = bookmarkRepository,
                             routeBookmarkRepository = routeBookmarkRepository,
                             destinationSelectionRepository = destinationSelectionRepository,
+                            destinationPreviewRepository = destinationPreviewRepository,
                             searchRepository = searchRepository,
                             currentLocationManager = currentLocationManager,
                             initialLowVisionMode = isLowVisionMode,
@@ -585,6 +597,10 @@ private fun BookmarkData.toSavedPlaceUiModel(): SavedPlaceUiModel =
         category = category,
         latitude = latitude,
         longitude = longitude,
+        serverPlaceId = serverPlaceId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
     )
 
 private fun RouteBookmark.toSavedRouteBookmarkUiModel(): SavedRouteBookmarkUiModel =
@@ -610,6 +626,10 @@ private fun SavedPlaceUiModel.toPlaceDestination(): PlaceDestination =
         latitude = latitude,
         longitude = longitude,
         category = category.toPlaceCategoryOrNull(),
+        serverPlaceId = serverPlaceId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
     )
 
 private fun SavedRouteBookmarkUiModel.toOriginPlaceDestination(): PlaceDestination =

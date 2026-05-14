@@ -93,6 +93,10 @@ sealed interface MapUiAction {
         val key: MapShortcutFilterKey,
     ) : MapUiAction
 
+    data class RecentDestinationPreviewClicked(
+        val placeId: String,
+    ) : MapUiAction
+
     data class RecentDestinationRouteClicked(
         val placeId: String,
     ) : MapUiAction

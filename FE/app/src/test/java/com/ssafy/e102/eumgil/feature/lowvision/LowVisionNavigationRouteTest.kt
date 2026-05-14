@@ -41,6 +41,7 @@ class LowVisionNavigationRouteTest {
         assertEquals(false, shouldNavigateLowVisionHome(NavigationUiEvent.NavigateBack))
         assertEquals(false, shouldNavigateLowVisionHome(NavigationUiEvent.NavigateToSavedRoute))
         assertEquals(false, shouldNavigateLowVisionHome(NavigationUiEvent.NavigateToRouteDetail(RouteOption.SAFE)))
+        assertEquals(false, shouldNavigateLowVisionHome(NavigationUiEvent.ShowToast("Saved")))
     }
 
     @Test

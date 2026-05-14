@@ -22,12 +22,15 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.util.StreamUtils;
 
 import com.ssafy.e102.domain.admin.entity.AdminArea;
+import com.ssafy.e102.domain.admin.entity.AdminAreaAssignment;
 import com.ssafy.e102.domain.bookmark.entity.FavoriteRoute;
 import com.ssafy.e102.domain.place.entity.Bookmark;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
 import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.entity.HazardReportImage;
+import com.ssafy.e102.domain.route.entity.BusStop;
+import com.ssafy.e102.domain.route.entity.OdsayLoadLane;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RouteRating;
@@ -35,6 +38,7 @@ import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.entity.SourceFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayStationAccessibilityFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.user.entity.User;
@@ -58,6 +62,9 @@ class DatabaseNamingStrategyTest {
 		PlaceAccessibilityFeature.class,
 		HazardReport.class,
 		HazardReportImage.class,
+		AdminAreaAssignment.class,
+		BusStop.class,
+		OdsayLoadLane.class,
 		RoadNode.class,
 		RoadSegment.class,
 		AdminArea.class,
@@ -66,6 +73,7 @@ class DatabaseNamingStrategyTest {
 		RouteRating.class,
 		RouteSession.class,
 		SubwayStation.class,
+		SubwayStationAccessibilityFeature.class,
 		SubwayStationElevator.class,
 		SubwayTimetable.class);
 
@@ -257,6 +265,16 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(SubwayStation.class, "point")).isEqualTo("point");
 		assertThat(uniqueColumnNames(SubwayStation.class)).contains("odsay_station_id");
 
+		assertThat(physicalColumnName(SubwayStationAccessibilityFeature.class, "id")).isEqualTo("id");
+		assertThat(joinColumnName(SubwayStationAccessibilityFeature.class, "subwayStation"))
+			.isEqualTo("subway_station_id");
+		assertThat(physicalColumnName(SubwayStationAccessibilityFeature.class, "featureType"))
+			.isEqualTo("feature_type");
+		assertThat(physicalColumnName(SubwayStationAccessibilityFeature.class, "isAvailable"))
+			.isEqualTo("is_available");
+		assertThat(uniqueColumnNames(SubwayStationAccessibilityFeature.class))
+			.contains("subway_station_id", "feature_type");
+
 		assertThat(physicalColumnName(SubwayTimetable.class, "subwayTimetableId"))
 			.isEqualTo("subway_timetable_id");
 		assertThat(physicalColumnName(SubwayTimetable.class, "odsayStationId"))
@@ -298,6 +316,9 @@ class DatabaseNamingStrategyTest {
 			PlaceAccessibilityFeature.class,
 			HazardReport.class,
 			HazardReportImage.class,
+			AdminAreaAssignment.class,
+			BusStop.class,
+			OdsayLoadLane.class,
 			RoadNode.class,
 			RoadSegment.class,
 			AdminArea.class,
@@ -306,6 +327,7 @@ class DatabaseNamingStrategyTest {
 			RouteRating.class,
 			RouteSession.class,
 			SubwayStation.class,
+			SubwayStationAccessibilityFeature.class,
 			SubwayTimetable.class);
 
 		for (Class<?> entity : entities) {

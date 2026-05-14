@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -41,7 +42,9 @@ import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceClickType;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
+import com.ssafy.e102.domain.route.entity.SubwayStation;
 import com.ssafy.e102.domain.route.service.BusStopMasterService;
+import com.ssafy.e102.domain.route.service.SubwayStationMasterService;
 import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceDocument;
@@ -65,6 +68,9 @@ class PlaceServiceTest {
 	@Mock
 	private BusStopMasterService busStopMasterService;
 
+	@Mock
+	private SubwayStationMasterService subwayStationMasterService;
+
 	private PlaceService placeService;
 	private GeoPointConverter geoPointConverter;
 
@@ -77,6 +83,7 @@ class PlaceServiceTest {
 			bookmarkRepository,
 			kakaoLocalClient,
 			busStopMasterService,
+			subwayStationMasterService,
 			geoPointConverter);
 	}
 
@@ -722,8 +729,8 @@ class PlaceServiceTest {
 	}
 
 	@Test
-	@DisplayName("지도 클릭 지하철역은 일반 POI 검색 실패 후 지하철 카테고리 검색으로 보강한다")
-	void getPlaceDetailSubwayUsesCategoryFallback() {
+	@DisplayName("지도 클릭 지하철역은 subway_stations 매칭 결과와 접근성 정보를 반환한다")
+	void getPlaceDetailSubwayUsesSubwayStationMaster() {
 		UUID userId = UUID.randomUUID();
 		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
 			35.162166,
@@ -732,14 +739,23 @@ class PlaceServiceTest {
 			"KAKAO",
 			null,
 			"사상역 1번출구");
-		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
-			"사상역 1번출구",
-			35.162166,
-			128.984611,
-			300,
-			1,
-			5)))
-			.thenReturn(new KakaoPlaceSearchResult(List.of(), 0, true));
+		SubwayStation station = SubwayStation.create(
+			"70227",
+			"사상",
+			"부산 2호선",
+			geoPointConverter.toPoint(new GeoPointRequest(35.162166, 128.984611)));
+		when(subwayStationMasterService.findPlaceDetail("사상역 1번출구", 35.162166, 128.984611, 300.0))
+			.thenReturn(Optional.of(new SubwayStationMasterService.SubwayStationPlaceDetail(
+				station,
+				"GROUP:70227-70901",
+				List.of("부산 2호선", "부산-김해경전철"),
+				List.of(
+					new SubwayStationMasterService.SubwayAccessibilityFeature(
+						AccessibilityFeatureType.accessibleToilet,
+						true),
+					new SubwayStationMasterService.SubwayAccessibilityFeature(
+						AccessibilityFeatureType.elevator,
+						true)))));
 		when(kakaoLocalClient.reverseGeocode(35.162166, 128.984611))
 			.thenReturn(Optional.of(new KakaoAddressDocument(
 				"부산 사상구 괘법동 529-1",
@@ -748,25 +764,54 @@ class PlaceServiceTest {
 				"부산",
 				"사상구",
 				"괘법동")));
-		KakaoPlaceDocument subway = new KakaoPlaceDocument(
-			"21160880",
-			"사상역 부산2호선",
-			"부산광역시 사상구 사상로 지하 203",
-			"교통,수송 > 지하철,전철 > 부산2호선",
-			"051-678-6191",
-			17,
-			new GeoPointResponse(35.162166, 128.984611));
-		when(kakaoLocalClient.searchCategory("SW8", 35.162166, 128.984611, 300, 1, 5))
-			.thenReturn(new KakaoPlaceSearchResult(List.of(subway), 1, true));
 		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
 
 		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
 
 		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
-		assertThat(response.providerPlaceId()).isEqualTo("21160880");
-		assertThat(response.name()).isEqualTo("사상역 부산2호선");
-		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 지하철,전철 > 부산2호선");
-		assertThat(response.phone()).isEqualTo("051-678-6191");
+		assertThat(response.provider()).isEqualTo("SUBWAY_STATION");
+		assertThat(response.providerPlaceId()).isEqualTo("GROUP:70227-70901");
+		assertThat(response.name()).isEqualTo("사상역");
+		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 지하철,전철 > 부산 2호선 · 부산-김해경전철");
+		assertThat(response.address()).isEqualTo("부산광역시 사상구 사상로 지하 203");
+		assertThat(response.accessibilityFeatures())
+			.extracting(feature -> feature.featureType())
+			.containsExactly(AccessibilityFeatureType.accessibleToilet, AccessibilityFeatureType.elevator);
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+		verify(kakaoLocalClient, never()).searchCategory(anyString(), any(), any(), any(), anyInt(), anyInt());
+	}
+
+	@Test
+	@DisplayName("지도 클릭 지하철역이 subway_stations에 매칭되지 않으면 주소 상세로 fallback한다")
+	void getPlaceDetailSubwayFallsBackToAddressWhenMasterHasNoMatch() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.162166,
+			128.984611,
+			PlaceClickType.POI,
+			"KAKAO",
+			null,
+			"사상역 1번출구");
+		when(subwayStationMasterService.findPlaceDetail("사상역 1번출구", 35.162166, 128.984611, 300.0))
+			.thenReturn(Optional.empty());
+		when(kakaoLocalClient.reverseGeocode(35.162166, 128.984611))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사상구 괘법동 529-1",
+				"부산광역시 사상구 사상로 지하 203",
+				null,
+				"부산",
+				"사상구",
+				"괘법동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_ADDRESS);
+		assertThat(response.providerPlaceId()).isNull();
+		assertThat(response.name()).isEqualTo("부산광역시 사상구 사상로 지하 203");
+		assertThat(response.address()).isEqualTo("부산광역시 사상구 사상로 지하 203");
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+		verify(kakaoLocalClient, never()).searchCategory(anyString(), any(), any(), any(), anyInt(), anyInt());
 	}
 
 	@Test

@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,7 +17,8 @@ class LowVisionSearchScreenTest {
         assertEquals(2, LowVisionSearchLayoutDefaults.actionButtonCount)
         assertEquals(58.dp, LowVisionSearchLayoutDefaults.actionButtonHeight)
         assertEquals(10.dp, LowVisionSearchLayoutDefaults.actionButtonGap)
-        assertTrue(LowVisionSearchLayoutDefaults.resultCardMinHeight >= minimumButtonStackHeight + 170.dp)
+        assertTrue(LowVisionSearchLayoutDefaults.resultCardMinHeight >= minimumButtonStackHeight + 160.dp)
+        assertEquals(116.dp, LowVisionSearchLayoutDefaults.infoSectionMinHeight)
     }
 
     @Test
@@ -25,7 +27,7 @@ class LowVisionSearchScreenTest {
             LowVisionSearchLayoutDefaults.resultCardMinHeight * 2 +
                 LowVisionSearchLayoutDefaults.resultCardGap
 
-        assertEquals(320.dp, LowVisionSearchLayoutDefaults.resultCardMinHeight)
+        assertEquals(288.dp, LowVisionSearchLayoutDefaults.resultCardMinHeight)
         assertEquals(12.dp, LowVisionSearchLayoutDefaults.resultCardGap)
         assertTrue(twoCardHeight <= LowVisionSearchLayoutDefaults.twoCardViewportBudget)
     }
@@ -35,6 +37,8 @@ class LowVisionSearchScreenTest {
         assertEquals(34.sp, LowVisionSearchLayoutDefaults.titleLineHeight)
         assertEquals(24.sp, LowVisionSearchLayoutDefaults.addressLineHeight)
         assertEquals(64.dp, LowVisionSearchLayoutDefaults.resultListBottomPadding)
+        assertEquals(116.dp, LowVisionSearchLayoutDefaults.infoSectionMinHeight)
+        assertEquals(3.dp, LowVisionSearchLayoutDefaults.sectionDividerThickness)
     }
 
     @Test
@@ -55,5 +59,20 @@ class LowVisionSearchScreenTest {
         assertEquals(2, compactMetrics.addressMaxLines)
         assertEquals(3, s24UltraMetrics.titleMaxLines)
         assertEquals(3, s24UltraMetrics.addressMaxLines)
+    }
+
+    @Test
+    fun `search route starts location updates so low vision results can use current location ordering`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionSearchRoute.kt")
+                .readText()
+
+        assertTrue(source.contains("currentLocationManager.startLocationUpdates()"))
+        assertTrue(source.contains("currentLocationManager.stopLocationUpdates()"))
+        assertTrue(source.contains("currentLocationManager.refreshLatestLocation()"))
+        assertTrue(source.contains("retainedCurrentLocationSnapshot"))
+        assertTrue(source.contains("awaitLowVisionSearchLocationSnapshot"))
+        assertTrue(source.contains("awaitLowVisionSearchLocationSnapshot("))
+        assertTrue(!source.contains("freshLocation == null"))
     }
 }

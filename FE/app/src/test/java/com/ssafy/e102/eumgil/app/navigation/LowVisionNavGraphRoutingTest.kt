@@ -115,6 +115,18 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `low vision category result decodes selected category before search`() {
+        assertEquals(
+            "음식점",
+            decodeLowVisionCategoryRouteArgument("%EC%9D%8C%EC%8B%9D%EC%A0%90"),
+        )
+        assertEquals(
+            "숙박시설",
+            decodeLowVisionCategoryRouteArgument("숙박시설"),
+        )
+    }
+
+    @Test
     fun `low vision selected tab follows current route`() {
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.Home.route))
         assertEquals(LowVisionBottomTab.HOME, resolveLowVisionSelectedBottomTab(LowVisionRoute.VoiceInput.route))

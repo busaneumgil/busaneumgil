@@ -41,6 +41,7 @@ import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceClickType;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
+import com.ssafy.e102.domain.route.service.BusStopMasterService;
 import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceDocument;
@@ -61,6 +62,9 @@ class PlaceServiceTest {
 	@Mock
 	private KakaoLocalClient kakaoLocalClient;
 
+	@Mock
+	private BusStopMasterService busStopMasterService;
+
 	private PlaceService placeService;
 	private GeoPointConverter geoPointConverter;
 
@@ -68,7 +72,12 @@ class PlaceServiceTest {
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
 		geoPointConverter = new GeoPointConverter();
-		placeService = new PlaceService(placeRepository, bookmarkRepository, kakaoLocalClient, geoPointConverter);
+		placeService = new PlaceService(
+			placeRepository,
+			bookmarkRepository,
+			kakaoLocalClient,
+			busStopMasterService,
+			geoPointConverter);
 	}
 
 	@Test
@@ -636,6 +645,77 @@ class PlaceServiceTest {
 		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
 		assertThat(response.providerPlaceId()).isEqualTo("BS97494");
 		assertThat(response.name()).isEqualTo("다대현대아파트");
+		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 버스정류장");
+		assertThat(response.address()).isEqualTo("부산광역시 사하구 다대로 473");
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+	}
+
+	@Test
+	@DisplayName("지도 클릭 버스정류장은 일반명 힌트면 BIMS 정류장 마스터로 이름을 보강한다")
+	void getPlaceDetailBusStopResolvesGenericNameWithBimsMaster() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.061481,
+			128.9793128,
+			PlaceClickType.POI,
+			"KAKAO",
+			"BS97494",
+			"버스정류장");
+		when(busStopMasterService.findNearest(35.061481, 128.9793128, 150.0))
+			.thenReturn(Optional.of(new BusStopMasterService.BusStopMatch(
+				"178700302",
+				"다대현대아파트",
+				"10175",
+				"일반",
+				12.0)));
+		when(kakaoLocalClient.reverseGeocode(35.061481, 128.9793128))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사하구 다대동 120-1",
+				"부산광역시 사하구 다대로 473",
+				null,
+				"부산",
+				"사하구",
+				"다대동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
+		assertThat(response.providerPlaceId()).isEqualTo("BS97494");
+		assertThat(response.name()).isEqualTo("다대현대아파트");
+		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 버스정류장");
+		assertThat(response.address()).isEqualTo("부산광역시 사하구 다대로 473");
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+	}
+
+	@Test
+	@DisplayName("지도 클릭 버스정류장은 BIMS 정류장 마스터 매칭이 없으면 건물명으로 이름을 보강한다")
+	void getPlaceDetailBusStopFallsBackToBuildingNameWhenBimsMasterHasNoMatch() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.061481,
+			128.9793128,
+			PlaceClickType.POI,
+			"KAKAO",
+			"BS97494",
+			"버스정류장");
+		when(busStopMasterService.findNearest(35.061481, 128.9793128, 150.0))
+			.thenReturn(Optional.empty());
+		when(kakaoLocalClient.reverseGeocode(35.061481, 128.9793128))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사하구 다대동 120-1",
+				"부산광역시 사하구 다대로 473",
+				"다대포현대아파트",
+				"부산",
+				"사하구",
+				"다대동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
+		assertThat(response.providerPlaceId()).isEqualTo("BS97494");
+		assertThat(response.name()).isEqualTo("다대포현대아파트");
 		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 버스정류장");
 		assertThat(response.address()).isEqualTo("부산광역시 사하구 다대로 473");
 		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));

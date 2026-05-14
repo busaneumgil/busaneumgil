@@ -37,6 +37,7 @@ import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceClickType;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
+import com.ssafy.e102.domain.route.service.BusStopMasterService;
 import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceDocument;
@@ -69,7 +70,9 @@ public class PlaceService {
 	private static final String SEARCH_CURSOR_PREFIX = "kakao:";
 	private static final String EMPTY_FILTER_SENTINEL = "__EMPTY_FILTER__";
 	private static final String BUS_STOP_PROVIDER_ID_PREFIX = "BS";
+	private static final String BUS_STOP_FALLBACK_KEYWORD = "버스정류장";
 	private static final String BUS_STOP_PROVIDER_CATEGORY = "교통,수송 > 버스정류장";
+	private static final double BUS_STOP_MATCH_MAX_DISTANCE_METER = 150.0;
 	private static final String SEARCH_SORT_RELEVANCE = "relevance";
 	private static final String KAKAO_SEARCH_SORT_ACCURACY = "accuracy";
 	private static final String KAKAO_SEARCH_SORT_DISTANCE = "distance";
@@ -78,16 +81,19 @@ public class PlaceService {
 	private final PlaceRepository placeRepository;
 	private final BookmarkRepository bookmarkRepository;
 	private final KakaoLocalClient kakaoLocalClient;
+	private final BusStopMasterService busStopMasterService;
 	private final GeoPointConverter geoPointConverter;
 
 	public PlaceService(
 		PlaceRepository placeRepository,
 		BookmarkRepository bookmarkRepository,
 		KakaoLocalClient kakaoLocalClient,
+		BusStopMasterService busStopMasterService,
 		GeoPointConverter geoPointConverter) {
 		this.placeRepository = placeRepository;
 		this.bookmarkRepository = bookmarkRepository;
 		this.kakaoLocalClient = kakaoLocalClient;
+		this.busStopMasterService = busStopMasterService;
 		this.geoPointConverter = geoPointConverter;
 	}
 
@@ -479,11 +485,8 @@ public class PlaceService {
 	private PlaceClickDetailResponse getExternalBusStopDetail(UUID userId, PlaceClickDetailRequest request) {
 		log.debug("지도 클릭 POI를 버스정류장으로 식별해 정류장 POI로 반환합니다. providerPlaceId={}",
 			request.providerPlaceId());
-		String displayName = StringUtils.hasText(request.nameHint())
-			? request.nameHint()
-				.trim()
-			: "버스정류장";
 		KakaoAddressDocument addressDocument = getAddressDocumentOrNull(request);
+		String displayName = resolveBusStopDisplayName(request, addressDocument);
 		String provider = normalizeProvider(request.provider(), request.providerPlaceId());
 		String providerPlaceId = request.providerPlaceId()
 			.trim();
@@ -508,6 +511,39 @@ public class PlaceService {
 				.toResponse(geoPointConverter.toPoint(new GeoPointRequest(request.lat(), request.lng()))),
 			List.of(),
 			bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId));
+	}
+
+	private String resolveBusStopDisplayName(PlaceClickDetailRequest request, KakaoAddressDocument addressDocument) {
+		if (hasSpecificBusStopNameHint(request.nameHint())) {
+			return request.nameHint()
+				.trim();
+		}
+		return busStopMasterService.findNearest(
+			request.lat(),
+			request.lng(),
+			BUS_STOP_MATCH_MAX_DISTANCE_METER)
+			.map(BusStopMasterService.BusStopMatch::stopName)
+			.or(() -> busStopBuildingName(addressDocument))
+			.orElseGet(() -> StringUtils.hasText(request.nameHint())
+				? request.nameHint()
+					.trim()
+				: BUS_STOP_FALLBACK_KEYWORD);
+	}
+
+	private boolean hasSpecificBusStopNameHint(String nameHint) {
+		return StringUtils.hasText(nameHint) && !isGenericBusStopName(nameHint);
+	}
+
+	private boolean isGenericBusStopName(String value) {
+		return normalizeComparableText(value).replace(" ", "").equals(BUS_STOP_FALLBACK_KEYWORD);
+	}
+
+	private Optional<String> busStopBuildingName(KakaoAddressDocument addressDocument) {
+		if (addressDocument == null || !StringUtils.hasText(addressDocument.buildingName())) {
+			return Optional.empty();
+		}
+		return Optional.of(addressDocument.buildingName()
+			.trim());
 	}
 
 	private Optional<PlaceClickDetailResponse> trySubwayCategoryFallback(UUID userId, PlaceClickDetailRequest request) {

@@ -55,6 +55,32 @@ void sendMattermost(def script, String message) {
   """
 }
 
+String resolveTextOrFileCredential(def script, String value, String name) {
+  if (!value?.trim()) {
+    script.error "${name} is blank."
+  }
+
+  String resolved = ''
+  script.withEnv(["CREDENTIAL_VALUE=${value}"]) {
+    resolved = script.sh(
+      script: '''
+        set +x
+        if [ -f "$CREDENTIAL_VALUE" ]; then
+          tr -d '\\r\\n' < "$CREDENTIAL_VALUE"
+        else
+          printf '%s' "$CREDENTIAL_VALUE"
+        fi
+      ''',
+      returnStdout: true
+    ).trim()
+  }
+
+  if (!resolved) {
+    script.error "${name} resolved to blank."
+  }
+  return resolved
+}
+
 pipeline {
   agent any
 
@@ -85,6 +111,15 @@ pipeline {
         git branch: params.DEPLOY_BRANCH, credentialsId: 'gitlab-pat', url: env.REPO_URL
         script {
           env.DEPLOY_COMMIT = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+        }
+      }
+    }
+
+    stage('Resolve S2 Host Credential') {
+      steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+          env.S2_HOST = resolveTextOrFileCredential(this, env.S2_HOST, 'e102-s2-host')
         }
       }
     }

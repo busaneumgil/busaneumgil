@@ -1360,7 +1360,11 @@ private fun coordinateText(location: MapCoordinate): String =
 
 @DrawableRes
 private fun mapTapDetailPlaceIconRes(detail: MapTappedPlaceDetail): Int =
-    recentDestinationIcon(detail.category)
+    when (detail.category) {
+        null -> R.drawable.ic_place_other
+        PlaceCategory.OTHER -> R.drawable.ic_place_other
+        else -> recentDestinationIcon(detail.category)
+    }
 
 @Composable
 private fun mapTapDetailMetaLabel(
@@ -1670,7 +1674,7 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
         FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
         FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
@@ -1688,7 +1692,7 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.WELFARE -> R.drawable.ic_place_welfare
         PlaceCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         PlaceCategory.OTHER -> R.drawable.ic_place_other
         null -> R.drawable.ic_nav_facility

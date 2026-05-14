@@ -299,7 +299,7 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
-    fun `facility detail and recent destinations use dedicated food cafe icon asset for food categories`() {
+    fun `facility detail and recent destinations split restaurant icon from food cafe icon asset`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
 
@@ -308,20 +308,24 @@ class MapFacilityDetailSheetConfigurationTest {
             source.contains("FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
         )
         assertTrue(
-            "Restaurant category should map to a dedicated place icon asset in the detail sheet.",
-            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+            "Restaurant category should map to the dedicated restaurant icon asset in the detail sheet.",
+            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant"),
         )
         assertTrue(
             "Recent destinations should reuse the dedicated food cafe place icon for food cafes.",
             source.contains("PlaceCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
         )
         assertTrue(
-            "Recent destinations should reuse the dedicated food cafe place icon for restaurants.",
-            source.contains("PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+            "Recent destinations should reuse the dedicated restaurant place icon for restaurants.",
+            source.contains("PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant"),
         )
         assertTrue(
             "Dedicated food cafe place drawable should exist for detail and recent destination surfaces.",
             File("src/main/res/drawable/ic_place_food_cafe.png").exists(),
+        )
+        assertTrue(
+            "Dedicated restaurant place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_restaurant.xml").exists(),
         )
     }
 
@@ -341,6 +345,33 @@ class MapFacilityDetailSheetConfigurationTest {
         assertTrue(
             "Dedicated other place drawable should exist for detail and recent destination surfaces.",
             File("src/main/res/drawable/ic_place_other.png").exists(),
+        )
+    }
+
+    @Test
+    fun `map tap place detail uses other icon for unclassified categories`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val mapTapIconSection =
+            source
+                .substringAfter("private fun mapTapDetailPlaceIconRes(detail: MapTappedPlaceDetail): Int =")
+                .substringBefore("@Composable")
+
+        assertTrue(
+            "Map tap place detail should treat missing category mappings as the dedicated other place icon.",
+            mapTapIconSection.contains("when (detail.category)"),
+        )
+        assertTrue(
+            "Map tap place detail should map the explicit other category to the dedicated other place icon.",
+            mapTapIconSection.contains("PlaceCategory.OTHER -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Map tap place detail should map null categories to the dedicated other place icon.",
+            mapTapIconSection.contains("null -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Recognized place categories should continue reusing the recent destination icon mapping.",
+            mapTapIconSection.contains("else -> recentDestinationIcon(detail.category)"),
         )
     }
 

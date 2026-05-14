@@ -185,6 +185,9 @@ fun MapScreen(
                                     facilityDetailSheetUiState.isVisible.not(),
                         ),
                     onViewAllClick = onNavigateToSavedRoutes,
+                    onPreviewClick = { placeId ->
+                        onAction(MapUiAction.RecentDestinationPreviewClicked(placeId))
+                    },
                     onRouteClick = { placeId ->
                         onAction(MapUiAction.RecentDestinationRouteClicked(placeId))
                     },

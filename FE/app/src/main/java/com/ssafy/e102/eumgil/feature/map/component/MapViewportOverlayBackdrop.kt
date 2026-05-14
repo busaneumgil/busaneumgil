@@ -747,9 +747,7 @@ private fun MapMarkerCategoryType.toFacilityMarkerSpec(isSelected: Boolean): Vie
             },
         size =
             when {
-                isBrailleBlock && isSelected -> 46.dp
                 isBrailleBlock -> 40.dp
-                isSelected -> 52.dp
                 else -> 44.dp
             },
         isDiamond = isBrailleBlock,

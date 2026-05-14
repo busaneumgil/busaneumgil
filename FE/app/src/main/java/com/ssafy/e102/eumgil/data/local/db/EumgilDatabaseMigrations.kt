@@ -160,6 +160,21 @@ object EumgilDatabaseMigrations {
             }
         }
 
+    /**
+     * v8 — 사용자가 직접 적는 "건물명·주변 장소" 보충 정보를 자동 RGC 결과(address)와 분리해 저장.
+     *
+     * 기존 단일 address 컬럼은 좌표 → 도로명/지번 자동 변환 결과를 그대로 보존하고,
+     * 새 addressDetail 컬럼이 사용자 입력 메모를 별도로 보관한다. 옵션 4(자동 readonly + 사용자
+     * 보충 분리) UX의 데이터 모델 기반이다.
+     */
+    val MIGRATION_7_8: Migration =
+        object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE reportDraft ADD COLUMN addressDetail TEXT")
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN addressDetail TEXT")
+            }
+        }
+
     val all: Array<Migration> =
         arrayOf(
             MIGRATION_1_2,
@@ -168,5 +183,6 @@ object EumgilDatabaseMigrations {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
+            MIGRATION_7_8,
         )
 }

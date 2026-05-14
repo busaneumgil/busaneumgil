@@ -332,7 +332,14 @@ private fun haversineLowVisionDistanceMeters(
 private fun RouteSearchQuery.toLowVisionFallbackRoute(): RouteCandidate {
     val path = origin.coordinate.toFallbackPath(destination.coordinate)
     val routePolyline = RoutePolyline(points = path)
-    val segmentDistance = LOW_VISION_FALLBACK_DISTANCE_METERS / LOW_VISION_FALLBACK_SEGMENT_COUNT
+    val fallbackDistanceMeters =
+        routePolyline.points
+            .totalLowVisionPolylineDistanceMeters()
+            .roundToInt()
+            .takeIf { distanceMeters -> distanceMeters > 0 }
+            ?: LOW_VISION_FALLBACK_DISTANCE_METERS
+    val fallbackDurationSeconds = lowVisionFallbackDurationSeconds(distanceMeters = fallbackDistanceMeters)
+    val segmentDistance = fallbackDistanceMeters / LOW_VISION_FALLBACK_SEGMENT_COUNT
     val segments =
         listOf(
             fallbackSegment(
@@ -351,7 +358,7 @@ private fun RouteSearchQuery.toLowVisionFallbackRoute(): RouteCandidate {
                 sequence = 3,
                 points = listOf(path[2], path[3]),
                 distanceMeters =
-                    LOW_VISION_FALLBACK_DISTANCE_METERS -
+                    fallbackDistanceMeters -
                         segmentDistance * (LOW_VISION_FALLBACK_SEGMENT_COUNT - 1),
                 guidanceMessage = "Continue toward the destination.",
             ),
@@ -362,10 +369,10 @@ private fun RouteSearchQuery.toLowVisionFallbackRoute(): RouteCandidate {
         title = LOW_VISION_FALLBACK_ROUTE_TITLE,
         summary =
             RouteSummary(
-                distanceMeters = LOW_VISION_FALLBACK_DISTANCE_METERS,
-                estimatedTimeMinutes = LOW_VISION_FALLBACK_DURATION_SECONDS / SECONDS_PER_MINUTE,
+                distanceMeters = fallbackDistanceMeters,
+                estimatedTimeMinutes = ceil(fallbackDurationSeconds / SECONDS_PER_MINUTE.toDouble()).toInt(),
                 riskLevel = RouteRiskLevel.LOW,
-                durationSeconds = LOW_VISION_FALLBACK_DURATION_SECONDS,
+                durationSeconds = fallbackDurationSeconds,
             ),
         geometry = routePolyline,
         preview =
@@ -377,6 +384,11 @@ private fun RouteSearchQuery.toLowVisionFallbackRoute(): RouteCandidate {
         segments = segments,
     )
 }
+
+private fun lowVisionFallbackDurationSeconds(distanceMeters: Int): Int =
+    ceil(distanceMeters / LOW_VISION_WALKING_SPEED_METERS_PER_SECOND)
+        .toInt()
+        .coerceAtLeast(SECONDS_PER_MINUTE)
 
 private fun fallbackSegment(
     sequence: Int,

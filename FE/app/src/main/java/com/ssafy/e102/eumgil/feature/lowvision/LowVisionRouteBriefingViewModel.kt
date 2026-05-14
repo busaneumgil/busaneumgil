@@ -3,14 +3,15 @@ package com.ssafy.e102.eumgil.feature.lowvision
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
-import com.ssafy.e102.eumgil.feature.navigation.NavigationBriefingItem
 import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
 import com.ssafy.e102.eumgil.feature.navigation.toCompactNavigationInstruction
-import com.ssafy.e102.eumgil.feature.navigation.toNavigationBriefingItems
+import com.ssafy.e102.eumgil.feature.navigation.toNavigationGuidanceAction
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -114,7 +115,7 @@ class LowVisionRouteBriefingViewModel(
                                 ?.name
                                 .orEmpty()
                                 .ifBlank { "목적지" },
-                        steps = plan?.selectedRoute?.toNavigationBriefingItems().orEmpty().map(NavigationBriefingItem::toUiState),
+                        steps = plan?.selectedRoute?.toLowVisionRouteBriefingSteps().orEmpty(),
                         errorMessage = null,
                     )
                 }
@@ -151,24 +152,55 @@ class LowVisionRouteBriefingViewModel(
     }
 }
 
-private fun NavigationBriefingItem.toUiState(): LowVisionRouteBriefingStepUiState =
-    LowVisionRouteBriefingStepUiState(
-        sequence = sequence,
-        instruction = instruction,
-        icon =
-            when (guidanceAction) {
-                NavigationGuidanceAction.TURN_LEFT,
-                NavigationGuidanceAction.TURN_RIGHT,
-                    -> LowVisionRouteBriefingStepIcon.TURN
-
-                NavigationGuidanceAction.BUS,
-                NavigationGuidanceAction.SUBWAY,
-                NavigationGuidanceAction.CROSSWALK,
-                    -> LowVisionRouteBriefingStepIcon.TRANSIT
-
-                NavigationGuidanceAction.STRAIGHT -> LowVisionRouteBriefingStepIcon.STRAIGHT
-            },
-    )
+private fun RouteCandidate.toLowVisionRouteBriefingSteps(): List<LowVisionRouteBriefingStepUiState> =
+    segments.mapIndexed { index, segment ->
+        LowVisionRouteBriefingStepUiState(
+            sequence = index + 1,
+            instruction = segment.toDetailedBriefingInstruction(),
+            icon = toNavigationGuidanceAction(segment).toBriefingStepIcon(),
+        )
+    }
 
 internal fun RouteSegment.toCompactBriefingInstruction(): String =
     toCompactNavigationInstruction()
+
+internal fun RouteSegment.toDetailedBriefingInstruction(): String {
+    val compactInstruction = toCompactNavigationInstruction()
+    val message = guidanceMessage.trim().trimEnd('.', '。')
+    if (message.isBlank()) return compactInstruction
+
+    val distanceLabel = distanceMeters.toBriefingDistanceLabel()
+    return when {
+        distanceLabel.isBlank() -> message
+        message.containsBriefingDistance() -> message
+        else -> "$distanceLabel $message"
+    }
+}
+
+private fun NavigationGuidanceAction.toBriefingStepIcon(): LowVisionRouteBriefingStepIcon =
+    when (this) {
+        NavigationGuidanceAction.TURN_LEFT,
+        NavigationGuidanceAction.TURN_RIGHT,
+            -> LowVisionRouteBriefingStepIcon.TURN
+
+        NavigationGuidanceAction.BUS,
+        NavigationGuidanceAction.SUBWAY,
+        NavigationGuidanceAction.CROSSWALK,
+            -> LowVisionRouteBriefingStepIcon.TRANSIT
+
+        NavigationGuidanceAction.STRAIGHT -> LowVisionRouteBriefingStepIcon.STRAIGHT
+    }
+
+private fun Int.toBriefingDistanceLabel(): String =
+    when {
+        this <= 0 -> ""
+        this < 1_000 -> "${this}m"
+        this % 1_000 == 0 -> "${this / 1_000}km"
+        else -> String.format(Locale.US, "%.1fkm", this / 1_000.0)
+    }
+
+private fun String.containsBriefingDistance(): Boolean =
+    briefingDistanceRegex.containsMatchIn(this)
+
+private val briefingDistanceRegex =
+    Regex("""\d+(?:\.\d+)?\s*(?:km|m|미터|킬로미터)""", RegexOption.IGNORE_CASE)

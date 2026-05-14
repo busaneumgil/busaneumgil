@@ -84,6 +84,7 @@ class NavigationViewModel(
     private var lowVisionActualMetricsFailedKey: LowVisionActualMetricsKey? = null
     private var lowVisionActualMetricsLastAttemptCoordinate: GeoCoordinate? = null
     private var lowVisionActualMetricsLastAttemptRecordedAtMillis: Long? = null
+    private val upcomingSegmentBriefingAlertedIndices = mutableSetOf<Int>()
 
     init {
         collectLocationUpdates()
@@ -160,6 +161,7 @@ class NavigationViewModel(
         lowVisionActualMetricsFailedKey = null
         lowVisionActualMetricsLastAttemptCoordinate = null
         lowVisionActualMetricsLastAttemptRecordedAtMillis = null
+        upcomingSegmentBriefingAlertedIndices.clear()
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
         initialBriefingRequested = false
@@ -279,6 +281,7 @@ class NavigationViewModel(
                 latestRemainingMetricsSource = remainingMetrics.source
             }
             syncActiveSegment(progress.activeSegmentIndex)
+            maybeRequestUpcomingSegmentBriefing(currentSession, progress)
             latestTransitPresentation = currentSession.resolveTransitPresentation(progress.activeLegIndex)
             maybeRefreshTransit(currentSession, progress, snapshot)
             maybeRequestReroute(currentSession, progress, snapshot)
@@ -640,6 +643,37 @@ class NavigationViewModel(
         val tts = uiState.value.tts
         if (!tts.canRequestBriefing) return
         emitUiEvent(NavigationUiEvent.SpeakBriefing(tts.briefingText))
+    }
+
+    private fun maybeRequestUpcomingSegmentBriefing(
+        currentSession: NavigationRouteSession,
+        progress: NavigationProgressSnapshot,
+    ) {
+        if (!isLowVisionMode) return
+        val nextSegmentIndex = progress.activeSegmentIndex + 1
+        val route = currentSession.route
+        if (nextSegmentIndex > route.segments.lastIndex) return
+        if (nextSegmentIndex in upcomingSegmentBriefingAlertedIndices) return
+
+        val distanceToNextSegmentMeters =
+            route.distanceToSegmentStartMeters(
+                segmentIndex = nextSegmentIndex,
+                progress = progress,
+            ) ?: return
+        if (distanceToNextSegmentMeters > UPCOMING_SEGMENT_BRIEFING_THRESHOLD_METERS) return
+
+        val tts = uiState.value.tts
+        if (!tts.canRequestBriefing) return
+
+        val briefingText =
+            route.segments
+                .getOrNull(nextSegmentIndex)
+                ?.toCompactNavigationInstruction()
+                ?: tts.briefingText
+        if (briefingText.isBlank()) return
+
+        upcomingSegmentBriefingAlertedIndices += nextSegmentIndex
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(briefingText))
     }
 
     private fun saveDestinationBookmarkAndNavigate() {
@@ -1228,6 +1262,20 @@ private fun RouteCandidate.resolveActiveLegIndex(progressRatio: Double): Int =
             },
         advanceAtBoundary = false,
     )
+
+private fun RouteCandidate.distanceToSegmentStartMeters(
+    segmentIndex: Int,
+    progress: NavigationProgressSnapshot,
+): Int? {
+    if (segmentIndex !in segments.indices) return null
+    val boundaryRatio =
+        resolveSegmentStartProgressRatio(
+            segmentIndex = segmentIndex,
+            weights = segmentWeights(),
+        )
+    val boundaryDistanceMeters = (totalDistanceMeters() * boundaryRatio).roundToInt().coerceAtLeast(0)
+    return (boundaryDistanceMeters - progress.distanceAlongRouteMeters).coerceAtLeast(0)
+}
 
 private fun resolveActiveIndex(
     progressRatio: Double,
@@ -2089,6 +2137,7 @@ private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_INTERVAL_MILLIS = 5_000L
 private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS = 20.0
 private const val LOW_VISION_ACTUAL_METRICS_REUSE_DISTANCE_METERS = 25.0
 private const val LOW_VISION_ACTUAL_METRICS_CACHE_MAX_AGE_MILLIS = 10_000L
+private const val UPCOMING_SEGMENT_BRIEFING_THRESHOLD_METERS = 35
 
 private object NoOpRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =

@@ -14,12 +14,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
-import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionNavigationScreen
-import com.ssafy.e102.eumgil.feature.lowvision.rememberLowVisionCurrentLocationAddress
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -65,13 +63,6 @@ fun NavigationRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textToSpeechState by textToSpeechController.state.collectAsStateWithLifecycle()
-    val currentLocationAddressResolver =
-        remember(appContext) { AndroidCurrentLocationAddressResolver(context = appContext) }
-    val currentLocationAddress =
-        rememberLowVisionCurrentLocationAddress(
-            coordinate = uiState.mapOverlay.currentLocation?.coordinate.takeIf { useLowVisionUi },
-            addressResolver = currentLocationAddressResolver,
-        )
 
     LaunchedEffect(textToSpeechState) {
         viewModel.updateTextToSpeechState(
@@ -127,7 +118,6 @@ fun NavigationRoute(
             uiState = uiState,
             onAction = viewModel::onAction,
             modifier = modifier,
-            currentLocationAddress = currentLocationAddress,
         )
     } else {
         NavigationScreen(

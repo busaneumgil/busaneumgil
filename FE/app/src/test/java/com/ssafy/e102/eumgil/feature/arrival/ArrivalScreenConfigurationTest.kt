@@ -116,6 +116,44 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
+    fun `arrival completion keeps home actions inside completion content instead of lifting them to the root layer`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival completion content should keep the home actions wired inside the completion content so ARR-01 remains the owner of the post-arrival CTA area.",
+            source.contains("ArrivalCompletionContent(\n            onHomeClicked = { onAction(ArrivalUiAction.HomeClicked) },"),
+        )
+        assertFalse(
+            "Arrival screen should not promote the home actions to a root-level overlay as a workaround for the bottom-sheet interaction bug.",
+            source.contains("if (!uiState.isEvaluationSheetVisible) {\n            ArrivalCompletionActions("),
+        )
+    }
+
+    @Test
+    fun `arrival evaluation sheet dismisses by animating its real offset instead of relying on parent slide out placement`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival evaluation sheet should animate the actual sheet offset so the uncovered completion CTA becomes tappable as soon as the sheet moves away.",
+            source.contains("animateFloatAsState("),
+        )
+        assertTrue(
+            "Arrival evaluation sheet should finish the dismiss flow only after the offset animation reaches the bottom edge.",
+            source.contains("finishedListener = { offsetPx ->"),
+        )
+        assertTrue(
+            "Arrival evaluation sheet should tell the ViewModel that the sheet is dismissed as soon as the dismiss gesture is accepted, so the uncovered completion CTA becomes immediately actionable.",
+            source.contains("onAction(ArrivalUiAction.EvaluationSheetDismissed)"),
+        )
+        assertFalse(
+            "Arrival evaluation sheet should not depend on AnimatedVisibility slide-out placement for dismissal because that leaves the original hit area blocking the completion CTA.",
+            source.contains("exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut()"),
+        )
+    }
+
+    @Test
     fun `arrival evaluation sheet tightens rating action spacing and removes route save dialog`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()

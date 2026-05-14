@@ -3,8 +3,13 @@ package com.ssafy.e102.eumgil.feature.arrival
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,11 +45,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,7 +68,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -84,6 +88,7 @@ private val ArrivalHeroLogoTopPadding = 58.dp
 private val ArrivalHeroLogoWidth = 108.dp
 private val ArrivalHeroLogoHeight = 60.dp
 private val ArrivalRouteSaveIconSize = 24.dp
+private const val ArrivalSheetDismissAnimationDurationMillis = 220
 private const val ArrivalHeroArtworkAspectRatio = 1440f / 900f
 private const val ArrivalRatingCount = 5
 
@@ -100,19 +105,10 @@ fun ArrivalScreen(
                 .background(MaterialTheme.colorScheme.background),
     ) {
         ArrivalCompletionContent(
+            onHomeClicked = { onAction(ArrivalUiAction.HomeClicked) },
+            onExploreNewRouteClicked = { onAction(ArrivalUiAction.ExploreNewRouteClicked) },
             modifier = Modifier.fillMaxSize(),
         )
-
-        if (!uiState.isEvaluationSheetVisible) {
-            ArrivalCompletionActions(
-                onHomeClicked = { onAction(ArrivalUiAction.HomeClicked) },
-                onExploreNewRouteClicked = { onAction(ArrivalUiAction.ExploreNewRouteClicked) },
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .zIndex(1f),
-            )
-        }
 
         AnimatedVisibility(
             visible = uiState.isEvaluationSheetVisible,
@@ -138,6 +134,8 @@ fun ArrivalScreen(
 
 @Composable
 private fun ArrivalCompletionContent(
+    onHomeClicked: () -> Unit,
+    onExploreNewRouteClicked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -178,6 +176,11 @@ private fun ArrivalCompletionContent(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        ArrivalCompletionActions(
+            onHomeClicked = onHomeClicked,
+            onExploreNewRouteClicked = onExploreNewRouteClicked,
+        )
     }
 }
 
@@ -322,6 +325,8 @@ private fun ArrivalEvaluationBottomSheet(
     var sheetHeightPx by remember(uiState.isEvaluationSheetVisible) { mutableIntStateOf(0) }
     var sheetOffsetPx by remember(uiState.isEvaluationSheetVisible) { mutableFloatStateOf(0f) }
     var isDragging by remember(uiState.isEvaluationSheetVisible) { mutableStateOf(false) }
+    var isDismissAnimating by remember(uiState.isEvaluationSheetVisible) { mutableStateOf(false) }
+    var shouldRenderSheet by remember(uiState.isEvaluationSheetVisible) { mutableStateOf(uiState.isEvaluationSheetVisible) }
 
     BoxWithConstraints(
         modifier = modifier,
@@ -329,25 +334,72 @@ private fun ArrivalEvaluationBottomSheet(
         val sheetMaxHeight = maxHeight * 0.82f
         val maxSheetOffsetPx = sheetHeightPx.toFloat().coerceAtLeast(0f)
         val dismissThresholdPx = (sheetHeightPx * 0.35f).coerceAtLeast(dismissThresholdMinPx)
+        val isSheetVisible = shouldRenderSheet
+        val animatedSheetOffsetPx by
+            animateFloatAsState(
+                targetValue =
+                    when {
+                        isDismissAnimating -> maxSheetOffsetPx
+                        else -> sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
+                    },
+                animationSpec =
+                    when {
+                        isDragging -> snap()
+                        isDismissAnimating ->
+                            tween(
+                                durationMillis = ArrivalSheetDismissAnimationDurationMillis,
+                                easing = FastOutSlowInEasing,
+                            )
+
+                        else ->
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            )
+                    },
+                finishedListener = { offsetPx ->
+                    if (isDismissAnimating && maxSheetOffsetPx > 0f && offsetPx >= maxSheetOffsetPx) {
+                        isDismissAnimating = false
+                        shouldRenderSheet = false
+                        sheetOffsetPx = 0f
+                    }
+                },
+                label = "arrivalEvaluationSheetOffset",
+            )
         val dragState =
             rememberDraggableState { delta ->
                 isDragging = true
                 sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
             }
 
+        fun requestDismiss() {
+            if (isDismissAnimating) return
+            isDragging = false
+            if (maxSheetOffsetPx <= 0f) {
+                onAction(ArrivalUiAction.EvaluationSheetDismissed)
+                shouldRenderSheet = false
+                return
+            }
+            isDismissAnimating = true
+            onAction(ArrivalUiAction.EvaluationSheetDismissed)
+        }
+
         LaunchedEffect(uiState.isEvaluationSheetVisible, maxSheetOffsetPx) {
-            if (!uiState.isEvaluationSheetVisible) {
-                isDragging = false
-                sheetOffsetPx = 0f
-            } else {
+            if (uiState.isEvaluationSheetVisible) {
+                shouldRenderSheet = true
+                isDismissAnimating = false
                 sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
+            } else if (!isDismissAnimating) {
+                isDragging = false
+                shouldRenderSheet = false
+                sheetOffsetPx = 0f
             }
         }
 
         AnimatedVisibility(
-            visible = uiState.isEvaluationSheetVisible,
+            visible = isSheetVisible,
             enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut(),
+            exit = fadeOut(),
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -362,7 +414,7 @@ private fun ArrivalEvaluationBottomSheet(
                             sheetHeightPx = size.height
                             sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
                         }
-                        .offset { IntOffset(x = 0, y = sheetOffsetPx.roundToInt()) },
+                        .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
                 handleModifier =
                     Modifier
                         .height(MapBottomSheetHandleHeight)
@@ -374,9 +426,7 @@ private fun ArrivalEvaluationBottomSheet(
                             interactionSource = handleInteractionSource,
                             indication = null,
                             onClick = {
-                                isDragging = false
-                                sheetOffsetPx = 0f
-                                onAction(ArrivalUiAction.EvaluationSheetDismissed)
+                                requestDismiss()
                             },
                         )
                         .draggable(
@@ -388,8 +438,7 @@ private fun ArrivalEvaluationBottomSheet(
                                     velocity >= dragSettleVelocityThresholdPx ||
                                     sheetOffsetPx >= dismissThresholdPx
                                 ) {
-                                    sheetOffsetPx = 0f
-                                    onAction(ArrivalUiAction.EvaluationSheetDismissed)
+                                    requestDismiss()
                                 } else {
                                     sheetOffsetPx = 0f
                                 }
@@ -412,7 +461,7 @@ private fun ArrivalEvaluationBottomSheet(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
-                        IconButton(onClick = { onAction(ArrivalUiAction.EvaluationSheetDismissed) }) {
+                        IconButton(onClick = ::requestDismiss) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_action_close),
                                 contentDescription = closeSheetLabel,

@@ -61,6 +61,17 @@ class LowVisionRouteBriefingScreenTest {
     }
 
     @Test
+    fun `briefing route waits for current location before loading route details`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionRouteBriefingRoute.kt")
+                .readText()
+
+        assertTrue(source.contains("currentLocationManager.startLocationUpdates()"))
+        assertTrue(source.contains("currentLocationManager.refreshLatestLocation()"))
+        assertTrue(source.contains("awaitLowVisionOriginSnapshot("))
+    }
+
+    @Test
     fun `briefing and navigation route loading are not keyed by live location updates`() {
         val briefingRouteSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionRouteBriefingRoute.kt")

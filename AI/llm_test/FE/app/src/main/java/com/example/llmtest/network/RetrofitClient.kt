@@ -1,6 +1,7 @@
 package com.example.llmtest.network
 
 import android.util.Log
+import com.example.llmtest.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -11,9 +12,7 @@ object RetrofitClient {
 
     private const val TAG = "RetrofitClient"
 
-    // 에뮬레이터: 10.0.2.2
-    // 실제 기기: 192.168.30.162 (사용자가 설정한 PC IP)
-    const val BASE_URL = "http://172.30.1.52:5000"
+    val BASE_URL: String get() = BuildConfig.SERVER_URL
 
     private val loggingInterceptor = HttpLoggingInterceptor { message ->
         Log.d(TAG, message)

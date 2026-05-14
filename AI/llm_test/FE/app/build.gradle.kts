@@ -1,6 +1,13 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+val localProperties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
 }
 
 android {
@@ -15,6 +22,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 에뮬레이터 기본값: http://10.0.2.2:5000
+        // 실기기 테스트: local.properties에 server.url=http://<PC_IP>:5000 추가
+        buildConfigField("String", "SERVER_URL", "\"${localProperties.getProperty("server.url", "http://10.0.2.2:5000")}\"")
     }
 
     buildTypes {
@@ -38,6 +49,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 

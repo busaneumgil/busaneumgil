@@ -10,8 +10,10 @@ import com.ssafy.e102.eumgil.data.remote.dto.CreateHazardReportRequestDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPointDto
+import java.time.Instant
 import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +46,11 @@ data class ReportDraftData(
     val draftId: String,
     val reportCategory: String?,
     val description: String,
+    // 좌표 → RGC 자동 변환 결과(도로명/지번). 사용자가 손대지 않는 객관 정보.
     val address: String?,
+    // 사용자가 "건물명·주변 장소" 입력란에 직접 적은 현장 맥락 보충 메모 (v8 신설).
+    // 기존 단일 address 필드만 사용하던 코드/테스트 호환을 위해 default null.
+    val addressDetail: String? = null,
     val latitude: Double?,
     val longitude: Double?,
     val locationSource: String?,
@@ -69,7 +75,10 @@ data class ReportOutboxData(
     val outboxId: String,
     val reportCategory: String,
     val description: String,
+    // 자동 RGC 결과. 서버 submit DTO에는 address 필드 자체가 없어 로컬에서만 사용된다.
     val address: String?,
+    // 사용자 직접 보충 메모. 마찬가지로 로컬 전용 (v8 신설).
+    val addressDetail: String? = null,
     val latitude: Double,
     val longitude: Double,
     val photoUri: String?,
@@ -373,13 +382,32 @@ class DefaultReportRepository(
         )
     }
 
-    private fun String.toServerEpochMillisOrNull(): Long? =
-        runCatching {
+    /**
+     * 서버 응답의 createdAt(ISO 8601 형식)을 epoch millis로 변환한다.
+     *
+     * BE 명세에는 `"2026-04-28T17:00:00"`처럼 timezone offset이 명시되지 않은 LocalDateTime
+     * 형식으로 정의되어 있다. 기존 구현은 이 값을 `ZoneId.systemDefault()`(=KST)로 해석해
+     * BE가 UTC로 보낸 경우 9시간 오차가 발생했다.
+     *
+     * Fallback chain으로 견고하게 처리:
+     * 1. ISO Instant("...Z") — 추후 BE가 UTC offset을 명시할 때 자동 호환
+     * 2. ISO with offset("...+09:00") — 추후 BE가 KST offset 명시할 때
+     * 3. offset 없는 LocalDateTime — 일반 REST API 관례대로 UTC로 가정
+     */
+    private fun String.toServerEpochMillisOrNull(): Long? {
+        runCatching { Instant.parse(this).toEpochMilli() }
+            .getOrNull()
+            ?.let { return it }
+        runCatching { OffsetDateTime.parse(this).toInstant().toEpochMilli() }
+            .getOrNull()
+            ?.let { return it }
+        return runCatching {
             LocalDateTime.parse(this)
-                .atZone(ZoneId.systemDefault())
+                .atZone(ZoneOffset.UTC)
                 .toInstant()
                 .toEpochMilli()
         }.getOrNull()
+    }
 
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 50
@@ -404,6 +432,7 @@ private fun ReportDraftEntity.toData(): ReportDraftData =
         reportCategory = reportCategory,
         description = description,
         address = address,
+        addressDetail = addressDetail,
         latitude = latitude,
         longitude = longitude,
         locationSource = locationSource,
@@ -419,6 +448,7 @@ private fun ReportDraftData.toEntity(): ReportDraftEntity {
         reportCategory = reportCategory,
         description = description,
         address = address,
+        addressDetail = addressDetail,
         latitude = latitude,
         longitude = longitude,
         locationSource = locationSource,
@@ -494,6 +524,7 @@ private fun ReportOutboxEntity.toData(): ReportOutboxData =
         reportCategory = reportCategory,
         description = description,
         address = address,
+        addressDetail = addressDetail,
         latitude = latitude,
         longitude = longitude,
         photoUri = photoUri,
@@ -512,6 +543,7 @@ private fun ReportOutboxData.toEntity(): ReportOutboxEntity =
         reportCategory = reportCategory,
         description = description,
         address = address,
+        addressDetail = addressDetail,
         latitude = latitude,
         longitude = longitude,
         photoUri = photoUri,

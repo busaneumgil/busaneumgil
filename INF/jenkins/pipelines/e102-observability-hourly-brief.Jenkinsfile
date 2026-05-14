@@ -1,5 +1,4 @@
 import groovy.json.JsonOutput
-import groovy.json.JsonSlurperClassic
 
 String safeValue(String value, String fallback = '-') {
   String normalized = value?.trim()
@@ -24,12 +23,6 @@ List<String> collectFailureWebhooks(def script) {
   List<String> urls = [
     script.env.PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL,
     script.env.DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL,
-    script.env.LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL,
-    System.getenv('PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL'),
-    System.getenv('DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL'),
-    System.getenv('LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL'),
-    script.env.MATTERMOST_WEBHOOK_URL,
-    System.getenv('MATTERMOST_WEBHOOK_URL'),
   ]
   return urls.findAll { it?.trim() }.collect { it.trim() }.unique()
 }
@@ -53,7 +46,10 @@ pipeline {
     stage('Checkout') {
       steps {
         git branch: 'master', credentialsId: 'gitlab-pat', url: env.REPO_URL
-        sh 'git fetch origin develop master --prune'
+        sh '''
+          git rev-parse --verify refs/remotes/origin/develop >/dev/null
+          git rev-parse --verify refs/remotes/origin/master >/dev/null
+        '''
       }
     }
 
@@ -105,10 +101,26 @@ PY
 
     stage('Send Mattermost') {
       steps {
+        sh '''
+          python3 - <<'PY'
+import json
+from pathlib import Path
+
+report_path = Path("reports/observability/hourly-brief.json")
+report = json.loads(report_path.read_text(encoding="utf-8"))
+out_dir = report_path.parent
+fallback = report.get("mattermost_text") or ""
+messages = {
+    "prod-message.md": report.get("prod_mattermost_text") or fallback,
+    "dev-message.md": report.get("dev_mattermost_text") or fallback,
+}
+for filename, message in messages.items():
+    (out_dir / filename).write_text(message, encoding="utf-8")
+PY
+        '''
         script {
-          def report = new JsonSlurperClassic().parseText(readFile(env.REPORT_JSON))
-          String prodMessage = report.prod_mattermost_text ?: report.mattermost_text ?: ''
-          String devMessage = report.dev_mattermost_text ?: report.mattermost_text ?: ''
+          String prodMessage = readFile('reports/observability/prod-message.md')
+          String devMessage = readFile('reports/observability/dev-message.md')
           if (env.PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL?.trim() && prodMessage?.trim()) {
             sendMattermost(this, env.PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL, prodMessage)
           } else {

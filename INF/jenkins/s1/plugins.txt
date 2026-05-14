@@ -7,3 +7,4 @@ pipeline-stage-view
 gitlab-plugin
 gitlab-oauth
 matrix-auth
+timestamper

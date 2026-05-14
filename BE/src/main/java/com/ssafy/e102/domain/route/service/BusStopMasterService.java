@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,7 @@ public class BusStopMasterService {
 	private final Clock clock;
 	private volatile List<CachedBusStop> cachedBusStops = List.of();
 
+	@Autowired
 	public BusStopMasterService(
 		BusStopRepository busStopRepository,
 		BusanBimsClient busanBimsClient,

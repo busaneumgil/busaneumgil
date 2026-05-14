@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,11 +26,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -39,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
@@ -94,6 +95,7 @@ fun NavigationScreen(
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 NavigationTopBar(
                     uiState = uiState,
@@ -310,6 +312,25 @@ internal fun navigationBottomBarLayoutPolicy(
 ): NavigationBottomBarLayoutPolicy =
     NavigationBottomBarLayoutPolicy(
         topDividerStartInset = if (showSegmentRail) railWidth else 0.dp,
+    )
+
+internal data class NavigationExitDialogPolicy(
+    val maxWidth: Dp,
+    val containerCornerRadius: Dp,
+    val buttonCornerRadius: Dp,
+    val primaryButtonHeight: Dp,
+    val secondaryButtonHeight: Dp,
+    val shadowElevation: Dp,
+)
+
+internal fun navigationExitDialogPolicy(): NavigationExitDialogPolicy =
+    NavigationExitDialogPolicy(
+        maxWidth = 360.dp,
+        containerCornerRadius = EumRadius.scaleL,
+        buttonCornerRadius = EumRadius.scaleM,
+        primaryButtonHeight = 48.dp,
+        secondaryButtonHeight = 44.dp,
+        shadowElevation = 10.dp,
     )
 
 @Composable
@@ -1002,43 +1023,131 @@ private fun NavigationExitConfirmDialog(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AlertDialog(
+    val policy = navigationExitDialogPolicy()
+
+    Dialog(
         onDismissRequest = onDismiss,
-        modifier = modifier,
-        title = {
-            Text(
-                text = stringResource(id = R.string.navigation_exit_confirm_dialog_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-        },
-        text = {
-            Text(
-                text = stringResource(id = R.string.navigation_exit_confirm_dialog_message),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                shape = RoundedCornerShape(EumRadius.scaleM),
+    ) {
+        Surface(
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = EumSpacing.medium)
+                    .widthIn(max = policy.maxWidth),
+            shape = RoundedCornerShape(policy.containerCornerRadius),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+            shadowElevation = policy.shadowElevation,
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = EumSpacing.medium,
+                            end = EumSpacing.medium,
+                            top = EumSpacing.large,
+                            bottom = EumSpacing.medium,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.large),
             ) {
-                Text(
-                    text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm),
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.navigation_exit_confirm_dialog_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(id = R.string.navigation_exit_confirm_dialog_message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                ) {
+                    Button(
+                        onClick = onConfirm,
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            ),
+                        elevation =
+                            ButtonDefaults.buttonElevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp,
+                                focusedElevation = 0.dp,
+                                hoveredElevation = 0.dp,
+                                disabledElevation = 0.dp,
+                            ),
+                        shape = RoundedCornerShape(policy.buttonCornerRadius),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(policy.primaryButtonHeight),
+                    ) {
+                        NavigationExitDialogStopIcon(
+                            tint = MaterialTheme.colorScheme.onError,
+                            modifier = Modifier.size(NavigationExitDialogConfirmIconSize),
+                        )
+                        Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+                        Text(
+                            text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Button(
+                        onClick = onDismiss,
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+                        elevation =
+                            ButtonDefaults.buttonElevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp,
+                                focusedElevation = 0.dp,
+                                hoveredElevation = 0.dp,
+                                disabledElevation = 0.dp,
+                            ),
+                        shape = RoundedCornerShape(policy.buttonCornerRadius),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(policy.secondaryButtonHeight),
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.navigation_exit_confirm_dialog_cancel),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = stringResource(id = R.string.navigation_exit_confirm_dialog_cancel),
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                )
-            }
-        },
+        }
+    }
+}
+
+private val NavigationExitDialogConfirmIconSize = 18.dp
+
+@Composable
+private fun NavigationExitDialogStopIcon(
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    Icon(
+        painter = painterResource(id = R.drawable.ic_control_stop),
+        contentDescription = null,
+        tint = tint,
+        modifier = modifier,
     )
 }
 

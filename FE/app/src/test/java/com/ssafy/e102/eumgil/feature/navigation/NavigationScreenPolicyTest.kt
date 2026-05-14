@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -285,5 +287,53 @@ class NavigationScreenPolicyTest {
             )
 
         assertEquals(0.dp, policy.topDividerStartInset)
+    }
+
+    @Test
+    fun `exit dialog policy follows navigation design tokens`() {
+        val policy = navigationExitDialogPolicy()
+
+        assertEquals(360.dp, policy.maxWidth)
+        assertEquals(EumRadius.scaleL, policy.containerCornerRadius)
+        assertEquals(EumRadius.scaleM, policy.buttonCornerRadius)
+        assertEquals(48.dp, policy.primaryButtonHeight)
+        assertEquals(44.dp, policy.secondaryButtonHeight)
+        assertEquals(10.dp, policy.shadowElevation)
+    }
+
+    @Test
+    fun `exit dialog uses custom dialog shell instead of default alert dialog`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val dialogSection =
+            source
+                .substringAfter("private fun NavigationExitConfirmDialog(")
+                .substringBefore("private fun DrawScope.drawNavigationMapGrid")
+
+        assertTrue(dialogSection.contains("Dialog("))
+        assertTrue(dialogSection.contains("navigationExitDialogPolicy()"))
+        assertTrue(dialogSection.contains("BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f))"))
+        assertTrue(dialogSection.contains("Arrangement.spacedBy(EumSpacing.large)"))
+        assertTrue(dialogSection.contains("Arrangement.spacedBy(EumSpacing.medium)"))
+        assertFalse(dialogSection.contains(".background(MaterialTheme.colorScheme.error)"))
+        assertFalse(dialogSection.contains("navigation_exit_confirm_dialog_supporting"))
+        assertFalse(dialogSection.contains("navigation_exit_confirm_dialog_eyebrow"))
+        assertFalse(dialogSection.contains("AlertDialog("))
+    }
+
+    @Test
+    fun `screen scaffold disables default window insets to avoid header gap`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+
+        val screenSection =
+            source
+                .substringAfter("fun NavigationScreen(")
+                .substringBefore("private fun NavigationTopBar(")
+
+        assertTrue(screenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"))
+        assertTrue(screenSection.contains(".statusBarsPadding()"))
     }
 }

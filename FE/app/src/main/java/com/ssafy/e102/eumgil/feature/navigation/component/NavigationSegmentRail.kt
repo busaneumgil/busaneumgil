@@ -49,15 +49,13 @@ fun NavigationSegmentRail(
     isRouteDetailEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val railColor = MaterialTheme.colorScheme.surface
     val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
     val railSlots = createNavigationSegmentRailSlots(uiState)
 
     Box(
         modifier =
             modifier
-                .fillMaxHeight()
-                .background(color = railColor),
+                .fillMaxHeight(),
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),

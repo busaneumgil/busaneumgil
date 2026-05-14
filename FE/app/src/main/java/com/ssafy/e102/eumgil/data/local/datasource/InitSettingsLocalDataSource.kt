@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.map
 class InitSettingsLocalDataSource(
     private val dataStore: DataStore<Preferences>,
 ) {
-    fun observeInitSettings(): Flow<InitSettings> =
+    fun observeInitSettings(scopeKey: String): Flow<InitSettings> =
         dataStore.data
             .catch { exception ->
                 if (exception is IOException) {
@@ -24,65 +24,80 @@ class InitSettingsLocalDataSource(
                     throw exception
                 }
             }.map { preferences ->
+                val selectedPrimaryUserTypeKey = InitSettingsPreferences.selectedPrimaryUserType(scopeKey)
+                val selectedMobilitySubtypeKey = InitSettingsPreferences.selectedMobilitySubtype(scopeKey)
+                val lowVisionFollowUpCompletedKey =
+                    InitSettingsPreferences.isLowVisionFollowUpCompleted(scopeKey)
+                val locationTermsAgreedKey = InitSettingsPreferences.isLocationTermsAgreed(scopeKey)
+                val privacyPolicyAgreedKey = InitSettingsPreferences.isPrivacyPolicyAgreed(scopeKey)
                 InitSettings(
-                    selectedPrimaryUserType =
-                        preferences[InitSettingsPreferences.selectedPrimaryUserType],
-                    selectedMobilitySubtype =
-                        preferences[InitSettingsPreferences.selectedMobilitySubtype],
-                    isLowVisionFollowUpCompleted =
-                        preferences[InitSettingsPreferences.isLowVisionFollowUpCompleted] ?: false,
-                    isLocationTermsAgreed =
-                        preferences[InitSettingsPreferences.isLocationTermsAgreed] ?: false,
-                    isPrivacyPolicyAgreed =
-                        preferences[InitSettingsPreferences.isPrivacyPolicyAgreed] ?: false,
+                    selectedPrimaryUserType = preferences[selectedPrimaryUserTypeKey],
+                    selectedMobilitySubtype = preferences[selectedMobilitySubtypeKey],
+                    isLowVisionFollowUpCompleted = preferences[lowVisionFollowUpCompletedKey] ?: false,
+                    isLocationTermsAgreed = preferences[locationTermsAgreedKey] ?: false,
+                    isPrivacyPolicyAgreed = preferences[privacyPolicyAgreedKey] ?: false,
                 )
             }
 
-    suspend fun getInitSettings(): InitSettings = observeInitSettings().first()
+    suspend fun getInitSettings(scopeKey: String): InitSettings = observeInitSettings(scopeKey).first()
 
-    suspend fun savePrimaryUserType(selectedPrimaryUserType: String) {
+    suspend fun savePrimaryUserType(
+        scopeKey: String,
+        selectedPrimaryUserType: String,
+    ) {
         dataStore.edit { preferences ->
-            val currentType = preferences[InitSettingsPreferences.selectedPrimaryUserType]
+            val selectedPrimaryUserTypeKey = InitSettingsPreferences.selectedPrimaryUserType(scopeKey)
+            val selectedMobilitySubtypeKey = InitSettingsPreferences.selectedMobilitySubtype(scopeKey)
+            val lowVisionFollowUpCompletedKey =
+                InitSettingsPreferences.isLowVisionFollowUpCompleted(scopeKey)
+            val currentType = preferences[selectedPrimaryUserTypeKey]
 
-            preferences[InitSettingsPreferences.selectedPrimaryUserType] = selectedPrimaryUserType
+            preferences[selectedPrimaryUserTypeKey] = selectedPrimaryUserType
             if (currentType != selectedPrimaryUserType || selectedPrimaryUserType == LOW_VISION_ROUTE_VALUE) {
-                preferences.remove(InitSettingsPreferences.selectedMobilitySubtype)
+                preferences.remove(selectedMobilitySubtypeKey)
             }
             if (selectedPrimaryUserType != LOW_VISION_ROUTE_VALUE || currentType != selectedPrimaryUserType) {
-                preferences.remove(InitSettingsPreferences.isLowVisionFollowUpCompleted)
+                preferences.remove(lowVisionFollowUpCompletedKey)
             }
         }
     }
 
-    suspend fun saveMobilitySubtype(selectedMobilitySubtype: String) {
+    suspend fun saveMobilitySubtype(
+        scopeKey: String,
+        selectedMobilitySubtype: String,
+    ) {
         dataStore.edit { preferences ->
-            preferences[InitSettingsPreferences.selectedMobilitySubtype] = selectedMobilitySubtype
+            preferences[InitSettingsPreferences.selectedMobilitySubtype(scopeKey)] = selectedMobilitySubtype
         }
     }
 
-    suspend fun saveLowVisionFollowUpCompleted(isCompleted: Boolean) {
+    suspend fun saveLowVisionFollowUpCompleted(
+        scopeKey: String,
+        isCompleted: Boolean,
+    ) {
         dataStore.edit { preferences ->
-            preferences[InitSettingsPreferences.isLowVisionFollowUpCompleted] = isCompleted
+            preferences[InitSettingsPreferences.isLowVisionFollowUpCompleted(scopeKey)] = isCompleted
         }
     }
 
     suspend fun saveLocationTermsAgreement(
+        scopeKey: String,
         isLocationTermsAgreed: Boolean,
         isPrivacyPolicyAgreed: Boolean,
     ) {
         dataStore.edit { preferences ->
-            preferences[InitSettingsPreferences.isLocationTermsAgreed] = isLocationTermsAgreed
-            preferences[InitSettingsPreferences.isPrivacyPolicyAgreed] = isPrivacyPolicyAgreed
+            preferences[InitSettingsPreferences.isLocationTermsAgreed(scopeKey)] = isLocationTermsAgreed
+            preferences[InitSettingsPreferences.isPrivacyPolicyAgreed(scopeKey)] = isPrivacyPolicyAgreed
         }
     }
 
-    suspend fun clearInitSettings() {
+    suspend fun clearInitSettings(scopeKey: String) {
         dataStore.edit { preferences ->
-            preferences.remove(InitSettingsPreferences.selectedPrimaryUserType)
-            preferences.remove(InitSettingsPreferences.selectedMobilitySubtype)
-            preferences.remove(InitSettingsPreferences.isLowVisionFollowUpCompleted)
-            preferences.remove(InitSettingsPreferences.isLocationTermsAgreed)
-            preferences.remove(InitSettingsPreferences.isPrivacyPolicyAgreed)
+            preferences.remove(InitSettingsPreferences.selectedPrimaryUserType(scopeKey))
+            preferences.remove(InitSettingsPreferences.selectedMobilitySubtype(scopeKey))
+            preferences.remove(InitSettingsPreferences.isLowVisionFollowUpCompleted(scopeKey))
+            preferences.remove(InitSettingsPreferences.isLocationTermsAgreed(scopeKey))
+            preferences.remove(InitSettingsPreferences.isPrivacyPolicyAgreed(scopeKey))
         }
     }
 

@@ -110,27 +110,39 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
-    fun `facility detail bottom sheet separates collapse from explicit close`() {
-        val source =
+    fun `facility detail bottom sheet keeps collapse handle but moves bookmark action to the header`() {
+        val shellSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
 
         assertTrue(
             "The drag handle should expose a collapse and expand label instead of a close label.",
-            source.contains("map_facility_detail_sheet_toggle"),
+            shellSource.contains("map_facility_detail_sheet_toggle"),
         )
         assertTrue(
-            "The explicit close affordance should be the only header control wired to onDismiss.",
-            source.contains("map_facility_detail_close"),
+            "The detail sheet header should render injected actions from the screen so bookmark can replace the old close icon.",
+            shellSource.contains("headerActionContent?.let"),
         )
         assertTrue(
             "Dragging down should collapse the place sheet instead of dismissing and clearing selection state.",
-            source.contains("isCollapsed =") &&
-                source.contains("sheetOffsetPx >= collapseThresholdPx") &&
-                !source.contains("sheetOffsetPx >= dismissThresholdPx"),
+            shellSource.contains("isCollapsed =") &&
+                shellSource.contains("sheetOffsetPx >= collapseThresholdPx") &&
+                !shellSource.contains("sheetOffsetPx >= dismissThresholdPx"),
         )
         assertTrue(
             "Collapsed state should keep the fixed action area visible while hiding the detailed body content.",
-            source.contains("if (state.hasDetailContent && !isCollapsed)"),
+            shellSource.contains("if (state.hasDetailContent && !isCollapsed)"),
+        )
+        assertFalse(
+            "The explicit close icon should be removed from the place sheet header once bookmark occupies that slot.",
+            shellSource.contains("map_facility_detail_close") ||
+                shellSource.contains("IconButton(onClick = onDismiss)"),
+        )
+        assertTrue(
+            "MapScreen should provide the bookmark action through the sheet header slot.",
+            screenSource.contains("headerActionContent = {") &&
+                screenSource.contains("FacilityDetailBookmarkActionButton("),
         )
     }
 
@@ -155,11 +167,15 @@ class MapFacilityDetailSheetConfigurationTest {
             shellSource.contains("maxLines = if (isCollapsed) 1 else 2"),
         )
         assertTrue(
-            "Bottom actions should fill the row with origin and destination CTAs before the right-aligned bookmark icon.",
+            "Bottom actions should keep origin before destination in the fixed action row.",
             actionContentSection.indexOf("map_facility_detail_set_origin_action") <
                 actionContentSection.indexOf("map_facility_detail_set_destination_action") &&
-                actionContentSection.indexOf("map_facility_detail_set_destination_action") <
-                actionContentSection.indexOf("FacilityDetailBookmarkActionButton("),
+                !actionContentSection.contains("FacilityDetailBookmarkActionButton("),
+        )
+        assertTrue(
+            "Origin and destination CTAs should split the row evenly after the bookmark action moves to the header.",
+            actionContentSection.contains(".weight(1f)") &&
+                !actionContentSection.contains("weight(1.15f)"),
         )
         assertTrue(
             "Origin and destination action labels should share the same button text style.",
@@ -299,7 +315,7 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
-    fun `facility detail and recent destinations use dedicated food cafe icon asset for food categories`() {
+    fun `facility detail and recent destinations split restaurant icon from food cafe icon asset`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
 
@@ -308,20 +324,24 @@ class MapFacilityDetailSheetConfigurationTest {
             source.contains("FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
         )
         assertTrue(
-            "Restaurant category should map to a dedicated place icon asset in the detail sheet.",
-            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+            "Restaurant category should map to the dedicated restaurant icon asset in the detail sheet.",
+            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant"),
         )
         assertTrue(
             "Recent destinations should reuse the dedicated food cafe place icon for food cafes.",
             source.contains("PlaceCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
         )
         assertTrue(
-            "Recent destinations should reuse the dedicated food cafe place icon for restaurants.",
-            source.contains("PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+            "Recent destinations should reuse the dedicated restaurant place icon for restaurants.",
+            source.contains("PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant"),
         )
         assertTrue(
             "Dedicated food cafe place drawable should exist for detail and recent destination surfaces.",
             File("src/main/res/drawable/ic_place_food_cafe.png").exists(),
+        )
+        assertTrue(
+            "Dedicated restaurant place drawable should exist for detail and recent destination surfaces.",
+            File("src/main/res/drawable/ic_place_restaurant.xml").exists(),
         )
     }
 
@@ -345,6 +365,48 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `recent destinations treat missing category as dedicated other icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val recentDestinationIconSection =
+            source
+                .substringAfter("private fun recentDestinationIcon(category: PlaceCategory?): Int =")
+                .substringBefore("private const val EARTH_RADIUS_METERS")
+
+        assertTrue(
+            "Recent destinations should render missing categories with the dedicated other place icon so uncategorized entries stay visually aligned with the other category.",
+            recentDestinationIconSection.contains("null -> R.drawable.ic_place_other"),
+        )
+    }
+
+    @Test
+    fun `map tap place detail uses other icon for unclassified categories`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val mapTapIconSection =
+            source
+                .substringAfter("private fun mapTapDetailPlaceIconRes(detail: MapTappedPlaceDetail): Int =")
+                .substringBefore("@Composable")
+
+        assertTrue(
+            "Map tap place detail should treat missing category mappings as the dedicated other place icon.",
+            mapTapIconSection.contains("when (detail.category)"),
+        )
+        assertTrue(
+            "Map tap place detail should map the explicit other category to the dedicated other place icon.",
+            mapTapIconSection.contains("PlaceCategory.OTHER -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Map tap place detail should map null categories to the dedicated other place icon.",
+            mapTapIconSection.contains("null -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Recognized place categories should continue reusing the recent destination icon mapping.",
+            mapTapIconSection.contains("else -> recentDestinationIcon(detail.category)"),
+        )
+    }
+
+    @Test
     fun `facility detail route entry button reuses the active current location icon`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
@@ -356,6 +418,54 @@ class MapFacilityDetailSheetConfigurationTest {
         assertTrue(
             "The active current-location button asset should exist before the facility detail CTA reuses it.",
             File("src/main/res/drawable/ic_route_start_navigation_button.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail sheet renders phone row below address and wires dial action`() {
+        val shellSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+        val stringsSource =
+            File("src/main/res/values/strings.xml").readText()
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "The bottom-sheet shell should expose an optional phone number field so place detail can render the backend phone value under the address.",
+            shellSource.contains("val phoneNumber: String? = null"),
+        )
+        assertTrue(
+            "The bottom-sheet shell should render the dedicated phone copy string so the phone number appears as its own tappable line.",
+            shellSource.contains("map_facility_detail_phone_value"),
+        )
+        assertTrue(
+            "The phone line should use underlined text so users can recognize it as a tappable call action.",
+            shellSource.contains("TextDecoration.Underline"),
+        )
+        assertTrue(
+            "The phone row should render the dedicated contact icon beside the number so the affordance stays clear even without a text glyph prefix.",
+            shellSource.contains("R.drawable.ic_place_detail_phone"),
+        )
+        assertTrue(
+            "The phone row should use the attached place-detail phone icon asset instead of falling back to an unrelated shared contacts icon.",
+            File("src/main/res/drawable/ic_place_detail_phone.png").exists(),
+        )
+        assertTrue(
+            "The phone icon should stay slightly smaller than the text block so the row reads as a link first and an affordance second.",
+            shellSource.contains("Modifier.size(16.dp)"),
+        )
+        assertTrue(
+            "The attached phone icon should be tinted with the theme primary blue so it reads as an interactive call action.",
+            shellSource.contains("ColorFilter.tint(MaterialTheme.colorScheme.primary)"),
+        )
+        assertTrue(
+            "The visible phone label should now keep only the number text because the call affordance comes from the separate icon.",
+            stringsSource.contains("<string name=\"map_facility_detail_phone_value\">%1\$s</string>"),
+        )
+        assertTrue(
+            "The map screen should wire the phone row tap back into the feature action so tapping the number can open the dialer.",
+            screenSource.contains("onPhoneClick =") &&
+                screenSource.contains("MapUiAction.FacilityPhoneClicked"),
         )
     }
 

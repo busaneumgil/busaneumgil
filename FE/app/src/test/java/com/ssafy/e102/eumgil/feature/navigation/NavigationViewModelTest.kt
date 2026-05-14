@@ -132,6 +132,21 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `current route detail request exposes the active navigation request`() =
+        runTest {
+            val viewModel = createViewModel()
+            val request = testWalkNavigationRequest()
+
+            viewModel.bindNavigationRequest(request)
+            advanceUntilIdle()
+
+            val detailRequest = viewModel.currentRouteDetailRequest()
+
+            assertEquals(request.selectedRoute.serverRouteId, detailRequest?.selectedRoute?.serverRouteId)
+            assertEquals(request.destination.coordinate, detailRequest?.destination?.coordinate)
+        }
+
+    @Test
     fun `segment tap focuses map on the tapped segment start coordinate`() =
         runTest {
             val viewModel = createViewModel()

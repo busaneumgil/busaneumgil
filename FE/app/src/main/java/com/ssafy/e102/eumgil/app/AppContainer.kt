@@ -89,7 +89,13 @@ class AppContainer(
         )
     }
 
-    private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesLocalDataSource() }
+    private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        PlacesLocalDataSource(
+            currentAccountScopeProvider = {
+                authSessionRepository.getAuthGateState().authSession?.resolveAccountScopeKey()
+            },
+        )
+    }
     private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
     private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
@@ -218,6 +224,9 @@ class AppContainer(
             authSessionRepository = authSessionRepository,
             bookmarkDao = localDatabase.bookmarkDao(),
             favoriteRouteDao = localDatabase.favoriteRouteDao(),
+            placesLocalDataSource = placesLocalDataSource,
+            destinationSelectionRepository = destinationSelectionRepository,
+            destinationPreviewRepository = destinationPreviewRepository,
         )
     }
 
@@ -257,6 +266,7 @@ class AppContainer(
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
+            authSessionRepository = authSessionRepository,
         )
     }
 

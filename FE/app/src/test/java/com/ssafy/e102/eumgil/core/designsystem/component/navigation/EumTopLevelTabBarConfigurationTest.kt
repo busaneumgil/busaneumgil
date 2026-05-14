@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.app.navigation.TopLevelDestination
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -52,6 +53,22 @@ class EumTopLevelTabBarConfigurationTest {
         assertTrue(
             "Top-level tab navigation should use its own interaction source when ripple is suppressed.",
             source.contains("interactionSource = remember { MutableInteractionSource() }"),
+        )
+    }
+
+    @Test
+    fun `top level tab bar uses a lighter label typography step`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/navigation/EumTopLevelTabBar.kt")
+                .readText()
+
+        assertTrue(
+            "Top-level tab labels should keep the labelLarge size and lower only the font weight.",
+            source.contains("style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)"),
+        )
+        assertFalse(
+            "Top-level tab labels should not switch to labelMedium because that also shrinks the label size.",
+            source.contains("style = MaterialTheme.typography.labelMedium"),
         )
     }
 }

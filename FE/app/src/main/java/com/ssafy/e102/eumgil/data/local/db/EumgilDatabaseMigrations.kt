@@ -144,15 +144,6 @@ object EumgilDatabaseMigrations {
             }
         }
 
-    /**
-     * v7 — 제보 임시저장 사진 다장(최대 5장) 영속화.
-     *
-     * `reportDraft.photosJson` 컬럼 신설. ReportDraftPhotoItem 리스트의 JSON 표현을 저장한다.
-     * 기존 row의 legacy `photoUri` 정보는 그대로 두고, 새 코드가 read 시점에 `photosJson`이
-     * null이면 legacy 단일 사진 정보로 fallback해 1-item list를 만들어 사용한다.
-     * (SQL UPDATE로 JSON을 만들지 않는 이유: URI에 특수 문자가 있을 경우 escape 처리 부담을
-     *  회피하고, 코드 레이어에서 안전하게 변환하기 위해.)
-     */
     val MIGRATION_6_7: Migration =
         object : Migration(6, 7) {
             override fun migrate(database: SupportSQLiteDatabase) {
@@ -160,18 +151,18 @@ object EumgilDatabaseMigrations {
             }
         }
 
-    /**
-     * v8 — 사용자가 직접 적는 "건물명·주변 장소" 보충 정보를 자동 RGC 결과(address)와 분리해 저장.
-     *
-     * 기존 단일 address 컬럼은 좌표 → 도로명/지번 자동 변환 결과를 그대로 보존하고,
-     * 새 addressDetail 컬럼이 사용자 입력 메모를 별도로 보관한다. 옵션 4(자동 readonly + 사용자
-     * 보충 분리) UX의 데이터 모델 기반이다.
-     */
     val MIGRATION_7_8: Migration =
         object : Migration(7, 8) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE reportDraft ADD COLUMN addressDetail TEXT")
                 database.execSQL("ALTER TABLE reportOutbox ADD COLUMN addressDetail TEXT")
+            }
+        }
+
+    val MIGRATION_8_9: Migration =
+        object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE favoriteRoute ADD COLUMN routeSnapshotJson TEXT")
             }
         }
 
@@ -184,5 +175,6 @@ object EumgilDatabaseMigrations {
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
+            MIGRATION_8_9,
         )
 }

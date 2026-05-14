@@ -16,6 +16,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapPointUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentTravelKind
+import com.ssafy.e102.eumgil.feature.navigation.navigationSegmentMarkerId
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapStatus
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
 import org.junit.Assert.assertEquals
@@ -272,6 +273,9 @@ class MapViewportOverlayBindingsTest {
         assertFalse(overlayState.polylines.first().includeInProjection)
         assertFalse(overlayState.polylines[1].includeInProjection)
         assertFalse(overlayState.polylines[2].includeInProjection)
+        assertFalse(overlayState.polylines[0].showDirectionArrows)
+        assertFalse(overlayState.polylines[1].showDirectionArrows)
+        assertTrue(overlayState.polylines[2].showDirectionArrows)
         assertEquals(
             listOf(
                 MapViewportPointKind.CURRENT_LOCATION,
@@ -344,6 +348,8 @@ class MapViewportOverlayBindingsTest {
             overlayState.polylines.map { it.style },
         )
         assertTrue(overlayState.polylines.all { it.includeInProjection })
+        assertFalse(overlayState.polylines[0].showDirectionArrows)
+        assertTrue(overlayState.polylines[1].showDirectionArrows)
         assertEquals(
             listOf(
                 MapViewportPointKind.CURRENT_LOCATION,
@@ -789,5 +795,61 @@ class MapViewportOverlayBindingsTest {
             baselineTones,
         )
         assertEquals(MapViewportOverlayTone.NAVY, overlayState.polylines.last().tone)
+    }
+
+    @Test
+    fun `navigation bindings preserve click targets for projected origin and overlay junction markers`() {
+        val mapOverlay =
+            NavigationMapOverlayUiState(
+                isDisplayable = true,
+                origin =
+                    NavigationMapPointUiState(
+                        label = "Origin",
+                        coordinate = GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                    ),
+                routeSegments =
+                    listOf(
+                        NavigationMapSegmentUiState(
+                            sequence = 1,
+                            polyline =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                    GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                ),
+                            distanceMeters = 300,
+                            riskLevel = RouteRiskLevel.LOW,
+                            guidanceMessage = "Start walking",
+                            travelKind = NavigationSegmentTravelKind.WALK,
+                        ),
+                        NavigationMapSegmentUiState(
+                            sequence = 2,
+                            polyline =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                    GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                                ),
+                            distanceMeters = 320,
+                            riskLevel = RouteRiskLevel.LOW,
+                            guidanceMessage = "Turn right",
+                            travelKind = NavigationSegmentTravelKind.WALK,
+                        ),
+                    ),
+            )
+        val overlayState = createNavigationViewportOverlayState(mapOverlay)
+
+        val projectedOriginMarker =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints = overlayState.points,
+            ).first { marker -> marker.markerId == "overlay-navigation-origin" }
+        val overlayJunctionMarker =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = overlayState.points,
+            ).first { marker -> marker.markerId == "overlay-navigation-junction-1" }
+
+        assertEquals(navigationSegmentMarkerId(0), projectedOriginMarker.clickTargetId)
+        assertEquals(navigationSegmentMarkerId(1), overlayJunctionMarker.clickTargetId)
     }
 }

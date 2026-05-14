@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.View
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -69,6 +70,7 @@ import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.feature.map.MapTapClickType
 import com.ssafy.e102.eumgil.feature.map.MapTapPayload
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
@@ -218,6 +220,7 @@ internal fun KakaoMapViewport(
                             overlay.resolveContentDescription(
                                 selectedDestinationName = state.selectedDestinationName,
                             ),
+                        onMarkerClick = onMarkerClick,
                     )
                 }
             }
@@ -559,6 +562,9 @@ private class KakaoMapViewportController {
                             gestureType.isUserDrivenCameraMove(),
                             selectedMapPinVisibleInViewport,
                         )
+                        latestState?.let { state ->
+                            syncMarkers(readyMap = readyMap, state = state)
+                        }
                         stopProjectedMarkerTracking()
                         updateProjectedMarkerOverlays(readyMap = readyMap, state = latestState)
                     }
@@ -796,6 +802,12 @@ private class KakaoMapViewportController {
         readyMap: KakaoMap,
         state: MapViewportUiState,
     ) {
+        // Overlay-only screens do not own a feature-level camera state, so arrow spacing/rotation
+        // must follow the Kakao renderer's actual camera values instead of a copied FE snapshot.
+        val cameraPosition = readyMap.getCameraPosition()
+        val cameraLatitude = cameraPosition?.position?.latitude ?: state.cameraTarget.center.latitude
+        val cameraZoomLevel = cameraPosition?.zoomLevel ?: state.cameraTarget.resolvedZoomLevel()
+        val cameraBearingDegrees = cameraPosition?.rotationAngle ?: 0.0
         val markerRenderStates =
             createKakaoMarkerRenderStates(
                 markerOverlayState = state.markerOverlayState,
@@ -805,6 +817,10 @@ private class KakaoMapViewportController {
             createKakaoOverlayMarkerRenderStates(
                 overlayPoints = state.overlayState.points,
                 polylines = state.overlayState.polylines,
+                cameraLatitude = cameraLatitude,
+                zoomLevel = cameraZoomLevel,
+                cameraBearingDegrees = cameraBearingDegrees,
+                screenDensity = mapView?.resources?.displayMetrics?.density ?: 1f,
             )
         if (
             lastRenderedMarkers == markerRenderStates &&
@@ -848,16 +864,17 @@ private class KakaoMapViewportController {
                     }
         }
         if (overlayMarkerRenderStates.isNotEmpty()) {
+            val isOverlayMarkerLayerClickable = overlayMarkerRenderStates.any { marker -> marker.clickTargetId != null }
             val overlayMarkerLayer =
                 labelManager.addLayer(
                     LabelLayerOptions
                         .from(KAKAO_OVERLAY_MARKER_LAYER_ID)
                         .setCompetitionType(CompetitionType.None)
                         .setOrderingType(OrderingType.Rank)
-                        .setClickable(false)
+                        .setClickable(isOverlayMarkerLayerClickable)
                         .setZOrder(KAKAO_OVERLAY_MARKER_LAYER_Z_ORDER),
                 ) ?: return
-            overlayMarkerLayer.setClickable(false)
+            overlayMarkerLayer.setClickable(isOverlayMarkerLayerClickable)
             overlayMarkerRenderStates
                 .sortedBy(KakaoOverlayMarkerRenderState::markerId)
                 .forEach { marker ->
@@ -873,10 +890,11 @@ private class KakaoMapViewportController {
                                     ),
                                 ).setStyles(labelStyles)
                                 .setRank(KAKAO_OVERLAY_MARKER_RANK)
-                                .setClickable(false)
-                                .setTag(marker.markerId),
+                                .setClickable(marker.clickTargetId != null)
+                                .setTag(marker.clickTargetId ?: marker.markerId),
                         ) ?: return@forEach
-                    label.setClickable(false)
+                    marker.clickTargetId?.let(label::setTag)
+                    label.setClickable(marker.clickTargetId != null)
                 }
         }
         lastRenderedMarkers = markerRenderStates
@@ -909,6 +927,8 @@ private class KakaoMapViewportController {
                 }
                 append(" overlay=")
                 append(overlayMarkerRenderStates.size)
+                append(" bearing=")
+                append(String.format(Locale.US, "%.2f", cameraBearingDegrees))
             },
         )
     }
@@ -1173,11 +1193,16 @@ private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", 
 private fun MapProjectedMarkerOverlay(
     overlay: KakaoProjectedMarkerOverlay,
     contentDescription: String?,
+    onMarkerClick: (String) -> Unit,
 ) {
     val density = LocalDensity.current
     val markerSize = overlay.sizeDp.dp
     val markerWidthPx = with(density) { markerSize.roundToPx() }
     val markerHeightPx = markerWidthPx
+    val clickableModifier =
+        overlay.clickTargetId?.let { clickTargetId ->
+            Modifier.clickable { onMarkerClick(clickTargetId) }
+        } ?: Modifier
     val markerModifier =
         Modifier
             .zIndex(overlay.zIndex)
@@ -1188,6 +1213,7 @@ private fun MapProjectedMarkerOverlay(
                 )
             }
             .size(markerSize)
+            .then(clickableModifier)
 
     if (overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION) {
         val fillColor = Color(overlay.fillColorArgb ?: 0xFF2A7BFF.toInt())

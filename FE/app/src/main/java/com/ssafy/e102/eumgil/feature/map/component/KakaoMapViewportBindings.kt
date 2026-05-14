@@ -11,7 +11,7 @@ import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -139,6 +139,7 @@ internal data class KakaoProjectedMarkerRenderState(
     val zIndex: Float,
     val fillColorArgb: Int? = null,
     val strokeColorArgb: Int? = null,
+    val clickTargetId: String? = null,
 )
 
 internal data class KakaoOverlayMarkerRenderState(
@@ -155,6 +156,7 @@ internal data class KakaoOverlayMarkerRenderState(
     val label: String? = null,
     val secondaryLabel: String? = null,
     val secondaryFillColorArgb: Int? = null,
+    val clickTargetId: String? = null,
 )
 
 internal data class KakaoProjectedMarkerOverlay(
@@ -168,6 +170,7 @@ internal data class KakaoProjectedMarkerOverlay(
     val zIndex: Float,
     val fillColorArgb: Int? = null,
     val strokeColorArgb: Int? = null,
+    val clickTargetId: String? = null,
 )
 
 internal data class KakaoProjectedMarkerProjectionResult(
@@ -398,47 +401,66 @@ internal fun createKakaoProjectedMarkerRenderStates(
 internal fun createKakaoOverlayMarkerRenderStates(
     overlayPoints: List<MapViewportPointOverlay>,
     polylines: List<MapViewportPolylineOverlay> = emptyList(),
+    cameraLatitude: Double = DEFAULT_VIEWPORT_CENTER_LATITUDE,
+    zoomLevel: Int = DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_ZOOM_LEVEL,
+    cameraBearingDegrees: Double = 0.0,
+    screenDensity: Float = DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_SCREEN_DENSITY,
 ): List<KakaoOverlayMarkerRenderState> =
     overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState) +
         polylines
             .filter(MapViewportPolylineOverlay::showDirectionArrows)
-            .flatMap(::createKakaoRouteDirectionArrowRenderStates)
+            .flatMap { polyline ->
+                createKakaoRouteDirectionArrowRenderStates(
+                    polyline = polyline,
+                    cameraLatitude = cameraLatitude,
+                    zoomLevel = zoomLevel,
+                    cameraBearingDegrees = cameraBearingDegrees,
+                    screenDensity = screenDensity,
+                )
+            }
 
 private fun createKakaoRouteDirectionArrowRenderStates(
     polyline: MapViewportPolylineOverlay,
+    cameraLatitude: Double,
+    zoomLevel: Int,
+    cameraBearingDegrees: Double,
+    screenDensity: Float,
 ): List<KakaoOverlayMarkerRenderState> =
-    polyline.points
-        .zipWithNext()
-        .flatMapIndexed { index, (start, end) ->
-            val deltaLatitude = end.latitude - start.latitude
-            val deltaLongitude = end.longitude - start.longitude
-            val segmentLengthMeters = start.distanceMetersTo(end)
-            if (segmentLengthMeters < KAKAO_ROUTE_DIRECTION_ARROW_INTERVAL_METERS) return@flatMapIndexed emptyList()
-            val arrowCount = max(1, (segmentLengthMeters / KAKAO_ROUTE_DIRECTION_ARROW_INTERVAL_METERS).roundToInt())
-
-            (1..arrowCount).map { arrowIndex ->
-                val fraction = arrowIndex.toDouble() / (arrowCount + 1)
-                KakaoOverlayMarkerRenderState(
-                    markerId = "arrow-${polyline.overlayId}-$index-$arrowIndex",
-                    coordinate =
-                        MapCoordinate(
-                            latitude = start.latitude + (deltaLatitude * fraction),
-                            longitude = start.longitude + (deltaLongitude * fraction),
-                        ),
-                    kind = KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW,
-                    anchorPointX = 0.5f,
-                    anchorPointY = 0.5f,
-                    sizeDp = 14,
-                    zIndex = 4.4f,
-                    fillColorArgb = 0xFFFFFFFF.toInt(),
-                    strokeColorArgb = 0x00FFFFFF,
-                    rotationDegrees =
-                        Math
-                            .toDegrees(atan2(-deltaLatitude, deltaLongitude))
-                            .toFloat(),
-                )
-            }
-        }
+    sampleRouteDirectionArrowPlacements(
+        points = polyline.points,
+        intervalDistance =
+            resolveKakaoRouteDirectionArrowSpacingMeters(
+                cameraLatitude = cameraLatitude,
+                zoomLevel = zoomLevel,
+                screenDensity = screenDensity,
+            ),
+        edgePaddingDistance =
+            resolveKakaoRouteDirectionArrowEdgePaddingMeters(
+                cameraLatitude = cameraLatitude,
+                zoomLevel = zoomLevel,
+                screenDensity = screenDensity,
+            ),
+        measureDistance = MapCoordinate::distanceMetersTo,
+        interpolatePoint = { start, end, fraction -> start.interpolateTo(end = end, fraction = fraction) },
+    ).mapIndexed { index, placement ->
+        KakaoOverlayMarkerRenderState(
+            markerId = "arrow-${polyline.overlayId}-$index",
+            coordinate = placement.point,
+            kind = KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW,
+            anchorPointX = 0.5f,
+            anchorPointY = 0.5f,
+            sizeDp = 14,
+            zIndex = 4.4f,
+            fillColorArgb = 0xFFFFFFFF.toInt(),
+            strokeColorArgb = 0x00FFFFFF,
+            rotationDegrees =
+                resolveKakaoRouteDirectionArrowScreenRotationDegrees(
+                    segmentStart = placement.segmentStart,
+                    segmentEnd = placement.segmentEnd,
+                    cameraBearingDegrees = cameraBearingDegrees,
+                ),
+        )
+    }
 
 internal fun createKakaoRouteLineRenderStates(
     polylines: List<MapViewportPolylineOverlay>,
@@ -496,6 +518,7 @@ internal fun createKakaoProjectedMarkerOverlays(
                 zIndex = marker.zIndex,
                 fillColorArgb = marker.fillColorArgb,
                 strokeColorArgb = marker.strokeColorArgb,
+                clickTargetId = marker.clickTargetId,
             )
         }
     }
@@ -812,6 +835,7 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
         zIndex = markerSpec.zIndex,
         fillColorArgb = markerSpec.fillColorArgb,
         strokeColorArgb = markerSpec.strokeColorArgb,
+        clickTargetId = clickTargetId,
     )
 }
 
@@ -828,6 +852,7 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
                 zIndex = 3.6f,
                 fillColorArgb = 0xFFFFFFFF.toInt(),
                 strokeColorArgb = 0xFF8C8C8E.toInt(),
+                clickTargetId = clickTargetId,
             )
 
         MapViewportPointKind.TRANSIT_BUS_STOP ->
@@ -842,6 +867,7 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
                 fillColorArgb = 0xFF304583.toInt(),
                 strokeColorArgb = 0xFFFFFFFF.toInt(),
                 label = "BUS",
+                clickTargetId = clickTargetId,
             )
 
         MapViewportPointKind.TRANSIT_SUBWAY_STATION -> {
@@ -857,6 +883,7 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
                 fillColorArgb = routeLabel.toKakaoSubwayLineColor(),
                 strokeColorArgb = 0xFFFFFFFF.toInt(),
                 label = routeLabel.toKakaoSubwayLineShortLabel(),
+                clickTargetId = clickTargetId,
             )
         }
 
@@ -877,6 +904,7 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
                 label = from.toKakaoTransitShortLabel(),
                 secondaryLabel = to.toKakaoTransitShortLabel(),
                 secondaryFillColorArgb = to.toKakaoTransitColor(),
+                clickTargetId = clickTargetId,
             )
         }
 
@@ -932,8 +960,89 @@ private fun MapCoordinate.distanceMetersTo(other: MapCoordinate): Double {
     return sqrt(latitudeMeters * latitudeMeters + longitudeMeters * longitudeMeters)
 }
 
-private const val KAKAO_ROUTE_DIRECTION_ARROW_INTERVAL_METERS = 20.0
+private fun MapCoordinate.interpolateTo(
+    end: MapCoordinate,
+    fraction: Double,
+): MapCoordinate =
+    MapCoordinate(
+        latitude = latitude + ((end.latitude - latitude) * fraction),
+        longitude = longitude + ((end.longitude - longitude) * fraction),
+    )
+
+private fun MapCoordinate.rotationDegreesTo(end: MapCoordinate): Float =
+    Math.toDegrees(
+        atan2(
+            -(end.latitude - latitude),
+            end.longitude - longitude,
+        ),
+    ).toFloat()
+
+private fun resolveKakaoRouteDirectionArrowScreenRotationDegrees(
+    segmentStart: MapCoordinate,
+    segmentEnd: MapCoordinate,
+    cameraBearingDegrees: Double,
+): Float =
+    normalizeKakaoRouteDirectionArrowRotationDegrees(
+        /*
+         * Kakao label bitmaps stay screen-aligned even while the map camera rotates.
+         * Convert the segment's absolute north-up heading into screen space by subtracting
+         * the current camera bearing reported by the SDK.
+         */
+        segmentStart.rotationDegreesTo(end = segmentEnd) - cameraBearingDegrees,
+    ).toFloat()
+
+private fun normalizeKakaoRouteDirectionArrowRotationDegrees(
+    rotationDegrees: Double,
+): Double {
+    val normalizedRotation = rotationDegrees % 360.0
+    return when {
+        normalizedRotation <= -180.0 -> normalizedRotation + 360.0
+        normalizedRotation > 180.0 -> normalizedRotation - 360.0
+        else -> normalizedRotation
+    }
+}
+
+private fun resolveKakaoRouteDirectionArrowSpacingMeters(
+    cameraLatitude: Double,
+    zoomLevel: Int,
+    screenDensity: Float,
+): Double =
+    resolveKakaoMetersPerScreenDp(
+        cameraLatitude = cameraLatitude,
+        zoomLevel = zoomLevel,
+        screenDensity = screenDensity,
+        distanceDp = ROUTE_DIRECTION_ARROW_TARGET_SPACING_DP,
+    ).coerceAtLeast(KAKAO_ROUTE_DIRECTION_ARROW_MIN_INTERVAL_METERS)
+
+private fun resolveKakaoRouteDirectionArrowEdgePaddingMeters(
+    cameraLatitude: Double,
+    zoomLevel: Int,
+    screenDensity: Float,
+): Double =
+    resolveKakaoMetersPerScreenDp(
+        cameraLatitude = cameraLatitude,
+        zoomLevel = zoomLevel,
+        screenDensity = screenDensity,
+        distanceDp = ROUTE_DIRECTION_ARROW_EDGE_PADDING_DP,
+    )
+
+private fun resolveKakaoMetersPerScreenDp(
+    cameraLatitude: Double,
+    zoomLevel: Int,
+    screenDensity: Float,
+    distanceDp: Double,
+): Double {
+    val metersPerPixel =
+        (KAKAO_WEB_MERCATOR_METERS_PER_PIXEL_AT_ZOOM_ZERO * cos(Math.toRadians(cameraLatitude))) /
+            2.0.pow(zoomLevel.toDouble())
+    return distanceDp * screenDensity.coerceAtLeast(1f) * metersPerPixel
+}
+
+private const val KAKAO_ROUTE_DIRECTION_ARROW_MIN_INTERVAL_METERS = 24.0
 private const val KAKAO_METERS_PER_LATITUDE_DEGREE = 111_320.0
+private const val KAKAO_WEB_MERCATOR_METERS_PER_PIXEL_AT_ZOOM_ZERO = 156_543.03392
+private const val DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_ZOOM_LEVEL = 17
+private const val DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_SCREEN_DENSITY = 1f
 
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()

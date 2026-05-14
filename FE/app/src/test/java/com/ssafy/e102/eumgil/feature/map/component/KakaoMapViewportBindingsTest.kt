@@ -953,15 +953,85 @@ class KakaoMapViewportBindingsTest {
                             tone = MapViewportOverlayTone.PRIMARY,
                         ),
                     ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                screenDensity = 3f,
             )
 
-        assertTrue(markerStates.size >= 8)
+        assertEquals(2, markerStates.size)
         assertTrue(markerStates.all { it.kind == KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW })
-        assertEquals("arrow-route-preview-0-1", markerStates.first().markerId)
+        assertEquals("arrow-route-preview-0", markerStates.first().markerId)
         assertEquals(35.1700, markerStates.first().coordinate.latitude, 0.000001)
         assertTrue(markerStates.first().coordinate.longitude > 129.0500)
         assertTrue(markerStates.last().coordinate.longitude < 129.0520)
         assertEquals(0f, markerStates.first().rotationDegrees, 0.01f)
+    }
+
+    @Test
+    fun `route polylines reduce kakao direction arrow count when the map zooms out`() {
+        val polyline =
+            listOf(
+                MapViewportPolylineOverlay(
+                    overlayId = "route-preview",
+                    points =
+                        listOf(
+                            MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                            MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                        ),
+                    style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                    tone = MapViewportOverlayTone.PRIMARY,
+                ),
+            )
+
+        val zoomedIn =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines = polyline,
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                screenDensity = 3f,
+            )
+        val zoomedOut =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines = polyline,
+                cameraLatitude = 35.1700,
+                zoomLevel = 17,
+                screenDensity = 3f,
+            )
+
+        assertTrue(zoomedIn.size > zoomedOut.size)
+        assertEquals(2, zoomedIn.size)
+        assertEquals(1, zoomedOut.size)
+    }
+
+    @Test
+    fun `route polylines subtract camera bearing from kakao direction arrow rotation`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                cameraBearingDegrees = 90.0,
+                screenDensity = 3f,
+            )
+
+        assertEquals(2, markerStates.size)
+        assertEquals(-90f, markerStates.first().rotationDegrees, 0.01f)
+        assertEquals(-90f, markerStates.last().rotationDegrees, 0.01f)
     }
 
     @Test

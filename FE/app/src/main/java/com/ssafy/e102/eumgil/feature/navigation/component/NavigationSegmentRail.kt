@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -52,6 +54,16 @@ fun NavigationSegmentRail(
     val railColor = MaterialTheme.colorScheme.surface
     val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
     val railSlots = createNavigationSegmentRailSlots(uiState)
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(uiState.focusedSegmentIndex, uiState.railItems.size) {
+        if (uiState.railItems.isEmpty()) return@LaunchedEffect
+        val targetItemIndex = uiState.focusedSegmentIndex.coerceIn(0, uiState.railItems.lastIndex)
+        val isTargetVisible = listState.layoutInfo.visibleItemsInfo.any { item -> item.index == targetItemIndex }
+        if (!isTargetVisible) {
+            listState.animateScrollToItem(targetItemIndex)
+        }
+    }
 
     Box(
         modifier =
@@ -67,6 +79,7 @@ fun NavigationSegmentRail(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth(),
+                state = listState,
             ) {
                 items(items = listOf("navigation-rail-start"), key = { it }) {
                     NavigationSegmentRailWaypoint(

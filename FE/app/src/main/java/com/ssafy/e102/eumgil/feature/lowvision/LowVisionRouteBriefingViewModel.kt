@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.core.model.RouteStep
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
@@ -152,14 +154,63 @@ class LowVisionRouteBriefingViewModel(
     }
 }
 
-private fun RouteCandidate.toLowVisionRouteBriefingSteps(): List<LowVisionRouteBriefingStepUiState> =
-    segments.mapIndexed { index, segment ->
+internal fun RouteCandidate.toLowVisionRouteBriefingSteps(): List<LowVisionRouteBriefingStepUiState> {
+    val briefingSegments =
+        segments.takeIf(List<RouteSegment>::isNotEmpty)
+            ?: legs.toLowVisionBriefingSegments()
+
+    return briefingSegments.mapIndexed { index, segment ->
         LowVisionRouteBriefingStepUiState(
             sequence = index + 1,
             instruction = segment.toDetailedBriefingInstruction(),
             icon = toNavigationGuidanceAction(segment).toBriefingStepIcon(),
         )
     }
+}
+
+private fun List<RouteLeg>.toLowVisionBriefingSegments(): List<RouteSegment> =
+    buildList {
+        var nextSequence = 1
+        sortedBy(RouteLeg::sequence).forEach { leg ->
+            if (leg.steps.isNotEmpty()) {
+                leg.steps
+                    .sortedBy(RouteStep::sequence)
+                    .forEach { step ->
+                        add(
+                            step.toLowVisionBriefingSegment(
+                                sequence = nextSequence++,
+                                sourceLegSequence = leg.sequence,
+                            ),
+                        )
+                    }
+            } else {
+                add(leg.toLowVisionBriefingSegment(sequence = nextSequence++))
+            }
+        }
+    }
+
+private fun RouteStep.toLowVisionBriefingSegment(
+    sequence: Int,
+    sourceLegSequence: Int,
+): RouteSegment =
+    RouteSegment(
+        sequence = sequence,
+        polyline = polyline,
+        anchorCoordinate = anchorCoordinate,
+        distanceMeters = distanceMeters,
+        guidanceMessage = instruction,
+        sourceLegSequence = sourceLegSequence,
+        sourceStepSequence = this.sequence,
+    )
+
+private fun RouteLeg.toLowVisionBriefingSegment(sequence: Int): RouteSegment =
+    RouteSegment(
+        sequence = sequence,
+        polyline = polyline,
+        distanceMeters = distanceMeters ?: steps.sumOf(RouteStep::distanceMeters),
+        guidanceMessage = instruction,
+        sourceLegSequence = this.sequence,
+    )
 
 internal fun RouteSegment.toCompactBriefingInstruction(): String =
     toCompactNavigationInstruction()

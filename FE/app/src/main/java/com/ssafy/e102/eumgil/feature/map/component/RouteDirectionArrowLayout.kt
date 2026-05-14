@@ -11,6 +11,9 @@ internal const val ROUTE_DIRECTION_ARROW_TARGET_SPACING_DP = 28.0
 internal const val ROUTE_DIRECTION_ARROW_EDGE_PADDING_DP = 8.0
 internal const val ROUTE_DIRECTION_ARROW_LENGTH_DP = 10
 internal const val ROUTE_DIRECTION_ARROW_HALF_WIDTH_DP = 5
+internal const val ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL = 16
+
+internal fun shouldShowDetailedRouteOverlay(zoomLevel: Int): Boolean = zoomLevel >= ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL
 
 internal fun <T> sampleRouteDirectionArrowPlacements(
     points: List<T>,

@@ -47,12 +47,14 @@ import kotlin.math.sqrt
 @Composable
 internal fun MapViewportOverlayBackdrop(
     overlayState: MapViewportOverlayState,
+    zoomLevel: Int = ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 24.dp,
     verticalPadding: Dp = 24.dp,
     contentDescription: String? = null,
     onPointClick: (String) -> Unit = {},
 ) {
+    val showDetailedRouteOverlay = shouldShowDetailedRouteOverlay(zoomLevel)
     val backgroundBrush =
         Brush.verticalGradient(
             colors =
@@ -93,12 +95,15 @@ internal fun MapViewportOverlayBackdrop(
             overlayState.polylines.forEach { polyline ->
                 drawViewportPolyline(
                     overlay = polyline,
+                    showDetailedRouteOverlay = showDetailedRouteOverlay,
                     bounds = projectionBounds,
                     canvasSize = size,
                     palette = palette,
                 )
             }
-            overlayState.points.forEach { point ->
+            overlayState.points
+                .filter { point -> showDetailedRouteOverlay || !point.isDetailedRouteOverlayMarker() }
+                .forEach { point ->
                 drawViewportPointHalo(
                     overlay = point,
                     bounds = projectionBounds,
@@ -108,7 +113,9 @@ internal fun MapViewportOverlayBackdrop(
             }
         }
 
-        overlayState.points.forEach { point ->
+        overlayState.points
+            .filter { point -> showDetailedRouteOverlay || !point.isDetailedRouteOverlayMarker() }
+            .forEach { point ->
             val markerSpec = point.toViewportPointMarkerSpec() ?: return@forEach
             val projectedPoint = projectionBounds.project(point.coordinate)
 
@@ -160,6 +167,7 @@ private fun DrawScope.drawViewportGrid(outline: Color) {
 
 private fun DrawScope.drawViewportPolyline(
     overlay: MapViewportPolylineOverlay,
+    showDetailedRouteOverlay: Boolean,
     bounds: ViewportProjectionBounds,
     canvasSize: Size,
     palette: ViewportOverlayPalette,
@@ -263,7 +271,7 @@ private fun DrawScope.drawViewportPolyline(
             )
         }
     }
-    if (overlay.showDirectionArrows) {
+    if (showDetailedRouteOverlay && overlay.showDirectionArrows) {
         drawViewportPolylineDirectionArrows(
             overlay = overlay,
             bounds = bounds,
@@ -736,6 +744,9 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.FOCUS_HALO -> null
     }
+
+private fun MapViewportPointOverlay.isDetailedRouteOverlayMarker(): Boolean =
+    kind == MapViewportPointKind.SEGMENT_JUNCTION
 
 @Composable
 private fun MapMarkerCategoryType.toFacilityMarkerSpec(isSelected: Boolean): ViewportPointMarkerSpec {

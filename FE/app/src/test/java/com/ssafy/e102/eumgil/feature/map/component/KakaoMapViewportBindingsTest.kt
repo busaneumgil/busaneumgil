@@ -316,6 +316,35 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `native overlay marker render state hides segment junction markers below route detail zoom`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "junction-walk",
+                            coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                        MapViewportPointOverlay(
+                            overlayId = "bus-stop",
+                            coordinate = MapCoordinate(latitude = 35.1810, longitude = 129.0785),
+                            kind = MapViewportPointKind.TRANSIT_BUS_STOP,
+                            transitMarker =
+                                MapViewportTransitMarker(
+                                    from = MapViewportTransitMarkerLeg(MapViewportTransitMarkerKind.BUS, "58-2"),
+                                ),
+                        ),
+                    ),
+                zoomLevel = ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL - 1,
+            )
+
+        assertEquals(listOf("overlay-bus-stop"), markerStates.map { it.markerId })
+        assertEquals(KakaoOverlayMarkerKind.TRANSIT_STOP, markerStates.single().kind)
+    }
+
+    @Test
     fun `native overlay marker render state uses transit stop and transfer marker tokens`() {
         val markerStates =
             createKakaoOverlayMarkerRenderStates(
@@ -1004,6 +1033,32 @@ class KakaoMapViewportBindingsTest {
         assertTrue(zoomedIn.size > zoomedOut.size)
         assertEquals(3, zoomedIn.size)
         assertEquals(1, zoomedOut.size)
+    }
+
+    @Test
+    fun `route polylines hide kakao direction arrows below route detail zoom`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL - 1,
+                screenDensity = 3f,
+            )
+
+        assertTrue(markerStates.isEmpty())
     }
 
     @Test

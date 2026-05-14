@@ -454,21 +454,32 @@ internal fun createKakaoOverlayMarkerRenderComputation(
     cameraBearingDegrees: Double = 0.0,
     screenDensity: Float = DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_SCREEN_DENSITY,
 ): KakaoOverlayMarkerRenderComputation {
-    val pointMarkers = overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState)
+    val showDetailedRouteOverlay = shouldShowDetailedRouteOverlay(zoomLevel)
+    val pointMarkers =
+        overlayPoints
+            .asSequence()
+            .filter { overlayPoint ->
+                showDetailedRouteOverlay || !overlayPoint.isDetailedRouteOverlayMarker()
+            }.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState)
+            .toList()
     val arrowComputations =
-        polylines
-            .filter(MapViewportPolylineOverlay::showDirectionArrows)
-            .flatMap { polyline ->
-                createKakaoRouteDirectionArrowRenderComputations(
-                    polyline = polyline,
-                    cameraLatitude = cameraLatitude,
-                    zoomLevel = zoomLevel,
-                    cameraBearingSource = cameraBearingSource,
-                    cameraBearingRadians = cameraBearingRadians,
-                    cameraBearingDegrees = cameraBearingDegrees,
-                    screenDensity = screenDensity,
-                )
-            }
+        if (showDetailedRouteOverlay) {
+            polylines
+                .filter(MapViewportPolylineOverlay::showDirectionArrows)
+                .flatMap { polyline ->
+                    createKakaoRouteDirectionArrowRenderComputations(
+                        polyline = polyline,
+                        cameraLatitude = cameraLatitude,
+                        zoomLevel = zoomLevel,
+                        cameraBearingSource = cameraBearingSource,
+                        cameraBearingRadians = cameraBearingRadians,
+                        cameraBearingDegrees = cameraBearingDegrees,
+                        screenDensity = screenDensity,
+                    )
+                }
+        } else {
+            emptyList()
+        }
     return KakaoOverlayMarkerRenderComputation(
         markers = pointMarkers + arrowComputations.map(KakaoRouteDirectionArrowRenderComputation::marker),
         routeDirectionArrowDebugStates = arrowComputations.map(KakaoRouteDirectionArrowRenderComputation::debugState),
@@ -1017,6 +1028,9 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
         else -> null
     }
 }
+
+private fun MapViewportPointOverlay.isDetailedRouteOverlayMarker(): Boolean =
+    kind == MapViewportPointKind.SEGMENT_JUNCTION
 
 private fun MapViewportTransitMarkerLeg.toKakaoTransitColor(): Int =
     when (kind) {

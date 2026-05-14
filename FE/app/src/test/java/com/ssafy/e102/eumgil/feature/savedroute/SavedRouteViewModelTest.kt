@@ -258,6 +258,25 @@ class SavedRouteViewModelTest {
         }
 
     @Test
+    fun `route setting click navigates to empty route setting flow`() =
+        runTest {
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteSettingClicked)
+            advanceUntilIdle()
+
+            assertEquals(SavedRouteUiEvent.NavigateToRouteSetting(), uiEvent.await())
+        }
+
+    @Test
     fun `route guide click with invalid origin coordinate keeps user on saved route screen`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()

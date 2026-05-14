@@ -280,6 +280,7 @@
     <string name="saved_route_action_remove_a11y">%1$s 북마크 삭제</string>
     <string name="saved_route_done">완료</string>
     <string name="saved_route_start_route">길찾기</string>
+    <string name="saved_route_route_setting_action">경로 설정하기</string>
     <string name="saved_route_remove_bookmark">삭제</string>
     <string name="saved_route_place_a11y_description">%1$s, %2$s. 지도에서 확인하려면 선택하세요.</string>
     <string name="saved_route_route_a11y_description">%1$s 경로 북마크. %2$s에서 %3$s까지.</string>

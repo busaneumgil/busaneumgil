@@ -155,11 +155,16 @@ class MapFacilityDetailSheetConfigurationTest {
             shellSource.contains("maxLines = if (isCollapsed) 1 else 2"),
         )
         assertTrue(
-            "Bottom actions should put secondary icons before the origin and destination CTA buttons.",
-            actionContentSection.indexOf("FacilityDetailBookmarkActionButton(") <
-                actionContentSection.indexOf("map_facility_detail_set_origin_action") &&
-                actionContentSection.indexOf("map_facility_detail_set_origin_action") <
-                actionContentSection.indexOf("map_facility_detail_set_destination_action"),
+            "Bottom actions should fill the row with origin and destination CTAs before the right-aligned bookmark icon.",
+            actionContentSection.indexOf("map_facility_detail_set_origin_action") <
+                actionContentSection.indexOf("map_facility_detail_set_destination_action") &&
+                actionContentSection.indexOf("map_facility_detail_set_destination_action") <
+                actionContentSection.indexOf("FacilityDetailBookmarkActionButton("),
+        )
+        assertTrue(
+            "Origin and destination action labels should share the same button text style.",
+            screenSource.contains("style = MaterialTheme.typography.labelLarge") &&
+                screenSource.contains("fontWeight = FontWeight.SemiBold"),
         )
     }
 

@@ -204,11 +204,6 @@ fun MapScreen(
                                 horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
                                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                             ) {
-                                FacilityDetailBookmarkActionButton(
-                                    state = facilityDetailSheetUiState,
-                                    onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
-                                )
-                                Spacer(modifier = Modifier.weight(1f))
                                 OutlinedButton(
                                     onClick = {
                                         onAction(
@@ -253,6 +248,10 @@ fun MapScreen(
                                         ),
                                     )
                                 }
+                                FacilityDetailBookmarkActionButton(
+                                    state = facilityDetailSheetUiState,
+                                    onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
+                                )
                             }
                             facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
                                 Text(
@@ -587,7 +586,11 @@ private fun IconTextButtonContent(
         modifier = Modifier.size(18.dp),
     )
     Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-    Text(text = label)
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
@@ -652,20 +655,20 @@ private fun FacilityDetailBookmarkActionButton(
         when {
             state.isBookmarkEnabled.not() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
             state.isBookmarked -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.primary
         }
 
     Surface(
         modifier = modifier,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        color = Color.Transparent,
     ) {
         IconButton(
             onClick = onToggle,
             enabled = state.isBookmarkEnabled && state.isBookmarkUpdating.not(),
             modifier =
                 Modifier
-                    .size(56.dp)
+                    .size(48.dp)
                     .semantics {
                         contentDescription = bookmarkButtonLabel
                         stateDescription = bookmarkStateDescription

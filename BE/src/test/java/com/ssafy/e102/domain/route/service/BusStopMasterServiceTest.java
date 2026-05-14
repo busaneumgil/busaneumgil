@@ -2,6 +2,7 @@ package com.ssafy.e102.domain.route.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -65,6 +66,20 @@ class BusStopMasterServiceTest {
 		assertThat(match.get().stopId()).isEqualTo("2");
 		assertThat(match.get().stopName()).isEqualTo("다대현대아파트");
 		assertThat(match.get().arsNo()).isEqualTo("10175");
+	}
+
+	@Test
+	@DisplayName("애플리케이션 시작 시 버스정류장 마스터 캐시를 미리 적재한다")
+	void warmUpCache() {
+		when(busStopRepository.findAllByActiveTrue())
+			.thenReturn(List.of(busStop("1", "시작정류장", "10001", 35.0, 128.0)));
+
+		busStopMasterService.warmUpCache();
+		Optional<BusStopMasterService.BusStopMatch> match = busStopMasterService.findNearest(35.0, 128.0, 30.0);
+
+		assertThat(match).isPresent();
+		assertThat(match.get().stopName()).isEqualTo("시작정류장");
+		Mockito.verify(busStopRepository, times(1)).findAllByActiveTrue();
 	}
 
 	@Test

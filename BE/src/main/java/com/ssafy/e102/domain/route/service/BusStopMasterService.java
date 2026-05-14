@@ -28,6 +28,7 @@ import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -64,6 +65,11 @@ public class BusStopMasterService {
 	@Transactional(readOnly = true)
 	public void reloadCache() {
 		cachedBusStops = loadActiveBusStops();
+	}
+
+	@PostConstruct
+	void warmUpCache() {
+		reloadCache();
 	}
 
 	public Optional<BusStopMatch> findNearest(double lat, double lng, double maxDistanceMeter) {

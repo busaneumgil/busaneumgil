@@ -65,6 +65,8 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("replacement: s1-ops", dev_promtail)
         self.assertIn("replacement: prod", prod_promtail)
         self.assertIn("replacement: s2-prod", prod_promtail)
+        self.assertIn("graphhopper-blue", prod_promtail)
+        self.assertIn("graphhopper-green", prod_promtail)
 
     def test_prod_dashboard_explicitly_marks_dependency_health_cards(self):
         dashboard_content = PROD_DASHBOARD.read_text(encoding="utf-8")
@@ -79,8 +81,8 @@ class MonitoringConfigsTest(unittest.TestCase):
         prod_dashboard = PROD_DASHBOARD.read_text(encoding="utf-8")
         dev_dashboard = DEV_DASHBOARD.read_text(encoding="utf-8")
 
-        self.assertIn("GraphHopper 상태", prod_dashboard)
-        self.assertIn('target_name=~\\"graphhopper|graphhopper-blue|graphhopper-green\\"', prod_dashboard)
+        self.assertIn("GraphHopper blue/green 상태", prod_dashboard)
+        self.assertIn('target_name=~\\"graphhopper-blue|graphhopper-green\\"', prod_dashboard)
         self.assertIn("MinIO 상태", dev_dashboard)
         self.assertIn("GraphHopper 상태", dev_dashboard)
 
@@ -144,6 +146,9 @@ class MonitoringConfigsTest(unittest.TestCase):
         self.assertIn("docker network create", script_content)
         self.assertIn("s14p31e102-dev_default", script_content)
         self.assertIn("docker restart e102-jenkins-proxy", script_content)
+        self.assertIn("docker restart e102-grafana", script_content)
+        self.assertIn("docker restart e102-prometheus", script_content)
+        self.assertIn("docker restart e102-blackbox-exporter", script_content)
         self.assertIn("docker restart e102-promtail", script_content)
 
 

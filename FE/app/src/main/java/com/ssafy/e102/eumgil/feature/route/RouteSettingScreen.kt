@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -134,6 +135,7 @@ fun RouteSettingScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             RouteSearchHeaderKakao(
                 uiState = uiState,
@@ -2021,6 +2023,7 @@ private fun RouteSearchHeaderKakao(
                     RouteSearchHeaderModeTab(
                         label = "대중교통",
                         iconResId = R.drawable.ic_route_mode_transit,
+                        iconSize = RouteSearchHeaderTransitTabIconSize,
                         selected = uiState.selectedTravelMode == RouteTravelMode.TRANSIT,
                         enabled = true,
                         onClick = { onModeSelected(RouteTravelMode.TRANSIT) },
@@ -2028,6 +2031,7 @@ private fun RouteSearchHeaderKakao(
                     RouteSearchHeaderModeTab(
                         label = "도보",
                         iconResId = R.drawable.ic_route_mode_walk,
+                        iconSize = RouteSearchHeaderWalkTabIconSize,
                         selected = uiState.selectedTravelMode == RouteTravelMode.WALK,
                         enabled = true,
                         onClick = { onModeSelected(RouteTravelMode.WALK) },
@@ -2080,6 +2084,7 @@ private fun RouteSearchHeader(
                     RouteSearchHeaderModeTab(
                         label = "자동차",
                         iconResId = R.drawable.ic_nav_route,
+                        iconSize = RouteSearchHeaderTransitTabIconSize,
                         selected = false,
                         enabled = false,
                         onClick = {},
@@ -2087,6 +2092,7 @@ private fun RouteSearchHeader(
                     RouteSearchHeaderModeTab(
                         label = "대중교통",
                         iconResId = R.drawable.ic_route_mode_transit,
+                        iconSize = RouteSearchHeaderTransitTabIconSize,
                         selected = uiState.selectedTravelMode == RouteTravelMode.TRANSIT,
                         enabled = true,
                         onClick = { onModeSelected(RouteTravelMode.TRANSIT) },
@@ -2094,6 +2100,7 @@ private fun RouteSearchHeader(
                     RouteSearchHeaderModeTab(
                         label = "도보",
                         iconResId = R.drawable.ic_route_mode_walk,
+                        iconSize = RouteSearchHeaderWalkTabIconSize,
                         selected = uiState.selectedTravelMode == RouteTravelMode.WALK,
                         enabled = true,
                         onClick = { onModeSelected(RouteTravelMode.WALK) },
@@ -2101,6 +2108,7 @@ private fun RouteSearchHeader(
                     RouteSearchHeaderModeTab(
                         label = "자전거",
                         iconResId = R.drawable.ic_nav_route,
+                        iconSize = RouteSearchHeaderTransitTabIconSize,
                         selected = false,
                         enabled = false,
                         onClick = {},
@@ -2160,6 +2168,7 @@ private fun RouteSearchHeader(
 private fun RouteSearchHeaderModeTab(
     label: String,
     iconResId: Int,
+    iconSize: Dp,
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -2172,7 +2181,7 @@ private fun RouteSearchHeaderModeTab(
                 .semantics {
                     contentDescription = label
                 },
-        shape = RoundedCornerShape(RouteSearchHeaderModeTabHeight / 2),
+        shape = RoundedCornerShape(RouteSearchHeaderModeTabCornerRadius),
         color = if (selected) Color.White else Color.Transparent,
     ) {
         Row(
@@ -2183,7 +2192,7 @@ private fun RouteSearchHeaderModeTab(
             Icon(
                 painter = painterResource(id = iconResId),
                 contentDescription = null,
-                modifier = Modifier.size(RouteSearchHeaderModeIconSize),
+                modifier = Modifier.size(iconSize),
                 tint =
                     when {
                         selected -> RouteSearchHeaderBlue
@@ -4677,8 +4686,10 @@ private val RouteButtonCornerRadius = 12.dp
 private val RouteCompactChipCornerRadius = 8.dp
 private val RouteSearchHeaderVerticalPadding = 8.dp
 private val RouteSearchHeaderModeTabWidth = 132.dp
-private val RouteSearchHeaderModeTabHeight = 44.dp
-private val RouteSearchHeaderModeIconSize = 22.dp
+private val RouteSearchHeaderModeTabHeight = 36.dp
+private val RouteSearchHeaderModeTabCornerRadius = 10.dp
+private val RouteSearchHeaderTransitTabIconSize = 22.dp
+private val RouteSearchHeaderWalkTabIconSize = 26.dp
 private val RouteSearchHeaderSummaryMinHeight = 92.dp
 private val RouteSearchHeaderWaypointGap = 10.dp
 private val RouteSearchHeaderSummaryCornerRadius = 8.dp
@@ -4793,7 +4804,7 @@ private val RouteSettingBottomBarButtonHeight = 50.dp
 private val RouteSettingBottomBarBottomGap = 30.dp
 private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
 private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance + RouteDetailSidePanelBottomActionSpace
-private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 4.dp
+private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035

@@ -78,6 +78,22 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route setting scaffold disables default bottom insets so the fixed cta owns the bottom gap`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("@Composable\nfun RouteDetailScreen")
+
+        assertTrue(
+            "Route selection should opt out of the scaffold's default system-bar content inset so the 30dp CTA gap is the only bottom spacing.",
+            screenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"),
+        )
+    }
+
+    @Test
     fun `route setting transit result list implements UIUX plan skeleton`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -138,6 +154,35 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route search header mode tabs use denser geometry and a larger walk icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val kakaoHeaderSection =
+            source
+                .substringAfter("private fun RouteSearchHeaderKakao(")
+                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
+        val headerModeTabSection =
+            source
+                .substringAfter("private fun RouteSearchHeaderModeTab(")
+                .substringBefore("@Composable\nprivate fun RouteSearchHeaderWaypointLine")
+
+        assertTrue(
+            "The compact route-mode tabs should use separate icon sizes so the walk glyph can render larger than transit.",
+            kakaoHeaderSection.contains("iconSize = RouteSearchHeaderTransitTabIconSize") &&
+                kakaoHeaderSection.contains("iconSize = RouteSearchHeaderWalkTabIconSize") &&
+                source.contains("private val RouteSearchHeaderTransitTabIconSize = 22.dp") &&
+                source.contains("private val RouteSearchHeaderWalkTabIconSize = 26.dp"),
+        )
+        assertTrue(
+            "The compact route-mode tabs should reduce vertical height and stop using a full pill radius.",
+            headerModeTabSection.contains("shape = RoundedCornerShape(RouteSearchHeaderModeTabCornerRadius)") &&
+                source.contains("private val RouteSearchHeaderModeTabHeight = 36.dp") &&
+                source.contains("private val RouteSearchHeaderModeTabCornerRadius = 10.dp"),
+        )
+    }
+
+    @Test
     fun `route setting walk preview reserves space for full width bottom CTA`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -167,7 +212,7 @@ class RouteSettingLayoutPolicyTest {
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
-                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 4.dp"),
+                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",

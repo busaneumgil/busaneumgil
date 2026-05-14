@@ -249,6 +249,7 @@ private fun rememberSearchViewModel(): SearchViewModel {
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 placesRepository = appContainer.placesRepository,
+                currentLocationManager = appContainer.currentLocationManager,
             )
         }
 

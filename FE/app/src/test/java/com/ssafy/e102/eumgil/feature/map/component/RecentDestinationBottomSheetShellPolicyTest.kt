@@ -59,4 +59,19 @@ class RecentDestinationBottomSheetShellPolicyTest {
                 source.contains("indication = null"),
         )
     }
+
+    @Test
+    fun `recent destination sheet leaves a restore handle after user dismissal`() {
+        assertTrue(
+            "Recent destination dismissal should switch to a compact restore handle instead of making the sheet unreachable.",
+            source.contains("val isRestoreHandleVisible = state.isVisible && isDismissedByUser") &&
+                source.contains("RecentDestinationRestoreHandle("),
+        )
+        assertTrue(
+            "The restore handle should support both tap and upward drag to reopen recent destinations.",
+            source.contains("isDismissedByUser = false") &&
+                source.contains("if (delta < 0f)") &&
+                source.contains("map_recent_destination_sheet_restore"),
+        )
+    }
 }

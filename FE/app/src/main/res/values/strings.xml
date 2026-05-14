@@ -180,6 +180,7 @@
     <string name="map_filter_summary_empty_result">선택한 접근성 시설 마커가 없습니다.</string>
     <string name="map_filter_summary_empty_data">표시할 접근성 시설 데이터가 없습니다.</string>
     <string name="map_filter_summary_error">주변 접근성 시설 정보를 불러오지 못했어요. 잠시 후 다시 확인해 주세요.</string>
+    <string name="map_search_here_action">현 지도에서 재검색</string>
     <string name="map_filter_chip_all">전체 시설</string>
     <string name="map_filter_category_restaurant">접근 가능 음식점</string>
     <string name="map_filter_category_tourist_attraction">무장애 관광지</string>
@@ -248,8 +249,12 @@
     <string name="map_facility_detail_guide_fallback_braille_generic">점자블록 위치를 기준으로 주변 보행 동선을 먼저 확인해 주세요.</string>
     <string name="map_facility_detail_guide_fallback_other">시설 상세 정보는 계속 보강 중입니다. 길안내 전 주소와 주변 동선을 함께 확인해 주세요.</string>
     <string name="map_facility_detail_route_entry_action">도착지로 설정</string>
-    <string name="map_facility_detail_set_origin_action">출발</string>
-    <string name="map_facility_detail_set_destination_action">도착</string>
+    <string name="map_facility_detail_set_origin_action">출발지로 설정</string>
+    <string name="map_facility_detail_set_destination_action">도착지로 설정</string>
+    <string name="map_route_selection_origin_empty">미선택</string>
+    <string name="map_route_selection_destination_empty">미선택</string>
+    <string name="map_route_selection_status_a11y">출발 %1$s. 도착 %2$s.</string>
+    <string name="map_recent_destination_sheet_restore">최근 목적지 다시 펼치기</string>
     <string name="map_facility_detail_sheet_toggle">장소 상세 접기/펼치기</string>
     <string name="map_facility_detail_close">장소 선택 닫기</string>
     <string name="map_facility_detail_action_supporting">실제 route setting 연결은 다음 스레드에서 마무리하고, 추가 CTA 슬롯도 이 영역에 확장합니다.</string>
@@ -276,6 +281,7 @@
     <string name="saved_route_action_remove_a11y">%1$s 북마크 삭제</string>
     <string name="saved_route_done">완료</string>
     <string name="saved_route_start_route">길찾기</string>
+    <string name="saved_route_route_setting_action">경로 설정하기</string>
     <string name="saved_route_remove_bookmark">삭제</string>
     <string name="saved_route_place_a11y_description">%1$s, %2$s. 지도에서 확인하려면 선택하세요.</string>
     <string name="saved_route_route_a11y_description">%1$s 경로 북마크. %2$s에서 %3$s까지.</string>
@@ -405,6 +411,8 @@
     <string name="search_screen_recent_delete">%1$s 삭제</string>
     <string name="search_screen_result_action_label">도착지 미리보기 열기</string>
     <string name="search_screen_result_selectable">도착지 미리보기 가능</string>
+    <string name="search_screen_result_distance_meters">현재 위치에서 %1$d m</string>
+    <string name="search_screen_result_distance_kilometers">현재 위치에서 %1$.1f km</string>
     <string name="search_origin_screen_title">출발지 검색</string>
     <string name="search_origin_results_screen_title">출발지 검색 결과</string>
     <string name="search_origin_screen_entry_headline">출발지를 어디로 할까요?</string>
@@ -422,6 +430,8 @@
     <string name="search_screen_result_action_limited">길찾기 제한됨, 접근성 정보 확인 필요</string>
     <string name="search_screen_result_a11y_with_address">%1$s, %2$s</string>
     <string name="search_screen_result_a11y_without_address">%1$s</string>
+    <string name="search_screen_result_a11y_with_address_and_distance">%1$s, %2$s, %3$s</string>
+    <string name="search_screen_result_a11y_without_address_with_distance">%1$s, %2$s</string>
     <string name="place_accessibility_label_entry_available">출입 가능</string>
     <string name="place_accessibility_label_step_free">단차 없음</string>
     <string name="place_accessibility_label_ramp">경사로 있음</string>

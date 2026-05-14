@@ -383,8 +383,8 @@ private fun SavedRouteBookmarkContent(
                 title = stringResource(id = R.string.saved_route_route_empty_title),
                 description = stringResource(id = R.string.saved_route_route_empty_description),
                 iconRes = R.drawable.ic_status_help_circle,
-                primaryActionLabel = stringResource(id = R.string.saved_route_explore_map),
-                onPrimaryActionClick = { onAction(SavedRouteUiAction.ExploreMapClicked) },
+                primaryActionLabel = stringResource(id = R.string.saved_route_route_setting_action),
+                onPrimaryActionClick = { onAction(SavedRouteUiAction.RouteSettingClicked) },
                 modifier = modifier.fillMaxWidth(),
             )
         SavedBookmarkContentState.ERROR ->
@@ -394,8 +394,8 @@ private fun SavedRouteBookmarkContent(
                 iconRes = R.drawable.ic_status_warning,
                 primaryActionLabel = stringResource(id = R.string.saved_route_retry),
                 onPrimaryActionClick = { onAction(SavedRouteUiAction.RetryClicked) },
-                secondaryActionLabel = stringResource(id = R.string.saved_route_explore_map),
-                onSecondaryActionClick = { onAction(SavedRouteUiAction.ExploreMapClicked) },
+                secondaryActionLabel = stringResource(id = R.string.saved_route_route_setting_action),
+                onSecondaryActionClick = { onAction(SavedRouteUiAction.RouteSettingClicked) },
                 isError = true,
                 modifier = modifier.fillMaxWidth(),
             )

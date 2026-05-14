@@ -29,6 +29,40 @@ scripts/
   maintenance/          # 백업, 로그 수집, 정리, 운영 점검
 ```
 
+## Docker 디스크 자동관리
+
+S1/S2 호스트의 루트 디스크 증가는 주로 Docker BuildKit cache, 오래된 image, stopped container, Jenkins workspace/archive에서 발생한다. 운영 서버에는 `scripts/maintenance/install-docker-disk-maintenance.sh`로 아래 자동관리 체계를 설치한다.
+
+```bash
+sudo bash scripts/maintenance/install-docker-disk-maintenance.sh
+```
+
+설치 항목:
+
+- `/usr/local/sbin/e102-docker-disk-maintenance.sh`: 실제 정리 스크립트
+- `/etc/e102-docker-disk-maintenance.env`: 보관 기간과 prune 범위
+- `/etc/cron.d/e102-docker-disk-maintenance`: 3시간 주기 정리
+- `/etc/logrotate.d/e102-docker-disk-maintenance`: 정리 로그 회전
+- `/etc/docker/daemon.json`: Docker json-file log rotation 기본값
+
+기본 정책:
+
+- stopped container: 24시간 초과분 정리
+- old image: 7일 초과 dangling image만 정리
+- BuildKit cache: dangling 여부와 무관하게 24시간 초과분 정리, 8GB 보관 상한 적용
+- Docker volume: 기본 정리하지 않음
+- Jenkins workspace: 3일 초과분 정리
+- Jenkins backup archive: 14일 초과분 정리
+
+rollback용 tag image를 보존하기 위해 tagged image 전체 정리는 기본값에서 하지 않는다. 디스크 압박으로 수동 정리가 필요할 때만 `DOCKER_DISK_PRUNE_IMAGES_ALL=true`를 명시한다.
+
+운영 배포와 GraphHopper refresh가 성공한 뒤에도 `pipeline` mode로 한 번 더 보수적인 정리를 수행한다. 수동 점검은 아래처럼 dry-run으로 먼저 확인한다.
+
+```bash
+DOCKER_DISK_MAINTENANCE_DRY_RUN=true bash scripts/maintenance/docker-disk-maintenance.sh report
+DOCKER_DISK_MAINTENANCE_DRY_RUN=true bash scripts/maintenance/docker-disk-maintenance.sh scheduled
+```
+
 ## Docker 스크립트 구분
 
 `scripts/make/docker/`는 Makefile의 Docker 관련 target 구현체다.

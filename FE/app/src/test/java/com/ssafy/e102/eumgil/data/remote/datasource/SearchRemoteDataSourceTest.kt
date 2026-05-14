@@ -110,6 +110,7 @@ class SearchRemoteDataSourceTest {
             assertEquals("10", matchedResult.displayPlaceId)
             assertEquals(PlaceCategory.TOURIST_SPOT, matchedResult.category)
             assertEquals(listOf("step-free-entrance"), matchedResult.accessibilityTagKeys)
+            assertEquals(350, matchedResult.distanceMeters)
             assertTrue(matchedResult.matched)
 
             val unmatchedResult = results[1]
@@ -118,6 +119,7 @@ class SearchRemoteDataSourceTest {
             assertEquals("987654321", unmatchedResult.displayPlaceId)
             assertNull(unmatchedResult.category)
             assertEquals(emptyList<String>(), unmatchedResult.accessibilityTagKeys)
+            assertEquals(120, unmatchedResult.distanceMeters)
             assertTrue(unmatchedResult.matched.not())
         }
 

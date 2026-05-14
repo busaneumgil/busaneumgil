@@ -20,6 +20,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.collect
 
 @Composable
@@ -28,7 +29,7 @@ fun MapRoute(
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
     onNavigateToRouteSetting: () -> Unit = {},
-    onNavigateToSearch: () -> Unit = {},
+    onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
     shouldResetForHomeEntry: Boolean = false,
     onHomeReentryResetConsumed: () -> Unit = {},
     onFacilityDetailVisibilityChanged: (Boolean) -> Unit = {},
@@ -103,7 +104,7 @@ fun MapRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 MapUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
-                MapUiEvent.NavigateToSearch -> onNavigateToSearch()
+                is MapUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is MapUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)

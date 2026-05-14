@@ -2,7 +2,9 @@ import jenkins.model.Jenkins
 import hudson.plugins.git.BranchSpec
 import hudson.plugins.git.GitSCM
 import hudson.plugins.git.UserRemoteConfig
+import hudson.triggers.TimerTrigger
 import org.jenkinsci.plugins.workflow.job.WorkflowJob
+import org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty
 import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition
 
 String jobName = 'e102-graphhopper-refresh'
@@ -31,5 +33,7 @@ if (job == null) {
 }
 job.setDescription('3시간마다 S2 prod GraphHopper inactive blue/green slot을 갱신하고 smoke 통과 후 Redis active slot을 전환합니다.')
 job.setDefinition(flowDefinition)
+job.removeProperty(PipelineTriggersJobProperty.class)
+job.addProperty(new PipelineTriggersJobProperty([new TimerTrigger('H H/3 * * *')]))
 job.save()
 println("${jobName} configured")

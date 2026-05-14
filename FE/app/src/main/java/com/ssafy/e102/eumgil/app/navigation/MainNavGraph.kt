@@ -64,8 +64,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToRouteSetting = {
                 navController.navigateToRouteSettingPermissionGate()
             },
-            onNavigateToSearch = {
-                navController.navigate(SearchRoute.Entry.createRoute())
+            onNavigateToSearch = { editingTarget ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget))
             },
             shouldResetForHomeEntry = shouldResetForHomeEntry,
             onHomeReentryResetConsumed = {

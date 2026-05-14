@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -52,6 +53,7 @@ import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListSubText
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.feature.search.SearchResultUiState
+import com.ssafy.e102.eumgil.feature.search.resolveSearchResultDistanceUiState
 import com.ssafy.e102.eumgil.feature.search.SearchUiAction
 import com.ssafy.e102.eumgil.feature.search.SearchUiState
 
@@ -231,12 +233,13 @@ private fun LowVisionSearchResultList(
                     address = result.subtitle.ifBlank { null },
                     latitude = result.latitude,
                     longitude = result.longitude,
+                    distanceMeters = result.distanceMeters,
                     onBookmarkClick = { onBookmarkClick(result) },
                     onNavigateClick = { onNavigateClick(result) },
                     onContentClick = { onBriefingClick(result) },
-                    contentClickDescription = "${result.title} 경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
-                    bookmarkContentDescription = "${result.title} 저장. 저장 후 북마크로 이동합니다.",
-                    navigateContentDescription = "${result.title} 길찾기. 저시력 안내 화면으로 이동합니다.",
+                    contentClickDescription = result.lowVisionSearchContentClickDescription(),
+                    bookmarkContentDescription = result.lowVisionSearchBookmarkContentDescription(),
+                    navigateContentDescription = result.lowVisionSearchNavigateContentDescription(),
                     titleMaxLines = cardMetrics.titleMaxLines,
                     addressMaxLines = cardMetrics.addressMaxLines,
                     modifier =
@@ -256,6 +259,7 @@ private fun LowVisionSearchResultCard(
     address: String?,
     latitude: Double,
     longitude: Double,
+    distanceMeters: Int?,
     onBookmarkClick: () -> Unit,
     onNavigateClick: () -> Unit,
     onContentClick: () -> Unit,
@@ -268,18 +272,29 @@ private fun LowVisionSearchResultCard(
 ) {
     val view = LocalView.current
     val addressText = lowVisionBriefAddress(address)
+    val distanceUiState = resolveSearchResultDistanceUiState(distanceMeters)
+    val distanceText =
+        distanceUiState?.let { uiState ->
+            stringResource(id = uiState.labelResId, uiState.value)
+        }
     val placeInfoContentDescription =
-        lowVisionPlaceInfoA11yLabel(
-            name = name,
-            address = address,
-        )
+        listOfNotNull(
+            lowVisionPlaceInfoA11yLabel(
+                name = name,
+                address = address,
+            ),
+            distanceText,
+        ).joinToString(separator = " ")
     val placeInfoSpeechText =
-        lowVisionPlaceInfoSpeechText(
-            name = name,
-            address = address,
-            latitude = latitude,
-            longitude = longitude,
-        )
+        listOfNotNull(
+            lowVisionPlaceInfoSpeechText(
+                name = name,
+                address = address,
+                latitude = latitude,
+                longitude = longitude,
+            ),
+            distanceText,
+        ).joinToString(separator = "\n")
 
     Column(
         modifier =
@@ -359,6 +374,17 @@ private fun LowVisionSearchResultCard(
                     letterSpacing = 0.sp,
                     maxLines = addressMaxLines,
                 )
+                if (distanceText != null) {
+                    Text(
+                        text = distanceText,
+                        fontSize = LowVisionSearchLayoutDefaults.addressFontSize,
+                        fontWeight = FontWeight.Bold,
+                        color = PlaceListAmber,
+                        lineHeight = LowVisionSearchLayoutDefaults.addressLineHeight,
+                        letterSpacing = 0.sp,
+                        maxLines = 1,
+                    )
+                }
             }
         }
 
@@ -385,6 +411,27 @@ private fun LowVisionSearchResultCard(
         }
     }
 }
+
+private fun SearchResult.lowVisionSearchContentClickDescription(): String =
+    listOfNotNull(
+        title,
+        resolveSearchResultDistanceUiState(distanceMeters)?.let { "${distanceMeters}미터 거리" },
+        "경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
+    ).joinToString(separator = " ")
+
+private fun SearchResult.lowVisionSearchBookmarkContentDescription(): String =
+    listOfNotNull(
+        title,
+        resolveSearchResultDistanceUiState(distanceMeters)?.let { "${distanceMeters}미터 거리" },
+        "저장. 저장 후 북마크로 이동합니다.",
+    ).joinToString(separator = " ")
+
+private fun SearchResult.lowVisionSearchNavigateContentDescription(): String =
+    listOfNotNull(
+        title,
+        resolveSearchResultDistanceUiState(distanceMeters)?.let { "${distanceMeters}미터 거리" },
+        "길찾기. 저시력 안내 화면으로 이동합니다.",
+    ).joinToString(separator = " ")
 
 @Composable
 private fun LowVisionSearchActionButton(

@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
@@ -26,8 +29,17 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 internal const val VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS = 2_000L
 
@@ -37,6 +49,7 @@ class SearchViewModel(
     private val destinationSelectionRepository: DestinationSelectionRepository,
     private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val placesRepository: PlacesRepository? = null,
+    private val currentLocationManager: CurrentLocationManager? = null,
 ) : ViewModel() {
     private val mutableUiState =
         MutableStateFlow(
@@ -51,6 +64,7 @@ class SearchViewModel(
 
     private var searchJob: Job? = null
     private var voiceSearchNavigationJob: Job? = null
+    private var activeSearchOrigin: SearchLocationOrigin? = null
 
     init {
         refreshRecentSearches()
@@ -460,9 +474,13 @@ class SearchViewModel(
         }
         searchJob =
             viewModelScope.launch {
+                val searchOrigin = resolveSearchLocationOrigin()
+                activeSearchOrigin = searchOrigin
                 val searchPage =
                     try {
-                        searchRepository.searchPage(SearchQuery(keyword = normalizedQuery))
+                        searchRepository.searchPage(
+                            normalizedQuery.toSearchQuery(origin = searchOrigin),
+                        )
                     } catch (throwable: Throwable) {
                         if (throwable is CancellationException) throw throwable
 
@@ -477,7 +495,7 @@ class SearchViewModel(
                         }
                         return@launch
                     }
-                val results = searchPage.results
+                val results = searchPage.results.withDistanceFrom(origin = searchOrigin)
 
                 val recentSearches =
                     try {
@@ -512,6 +530,7 @@ class SearchViewModel(
         val nextCursor = currentResultState.nextCursor?.trim()?.takeIf(String::isNotEmpty) ?: return
         if (!currentResultState.hasNext || currentResultState.isLoadingNextPage) return
 
+        val searchOrigin = activeSearchOrigin
         mutableUiState.update { state ->
             state.copy(resultState = currentResultState.copy(isLoadingNextPage = true))
         }
@@ -521,8 +540,8 @@ class SearchViewModel(
                 val nextPage =
                     try {
                         searchRepository.searchPage(
-                            SearchQuery(
-                                keyword = currentResultState.query,
+                            currentResultState.query.toSearchQuery(
+                                origin = searchOrigin,
                                 cursor = nextCursor,
                             ),
                         )
@@ -550,7 +569,7 @@ class SearchViewModel(
                         state.copy(
                             resultState =
                                 latestSuccess.copy(
-                                    results = latestSuccess.results + nextPage.results,
+                                    results = (latestSuccess.results + nextPage.results).withDistanceFrom(searchOrigin),
                                     nextCursor = nextPage.nextCursor,
                                     hasNext = nextPage.hasNext,
                                     isLoadingNextPage = false,
@@ -559,6 +578,22 @@ class SearchViewModel(
                     }
                 }
             }
+    }
+
+    private suspend fun resolveSearchLocationOrigin(): SearchLocationOrigin? {
+        val locationManager = currentLocationManager ?: return null
+        locationManager.startLocationUpdates()
+        locationManager.refreshLatestLocation()
+        locationManager.latestLocation.value.toSearchLocationOriginOrNull()?.let { origin ->
+            return origin
+        }
+
+        return withTimeoutOrNull(SEARCH_LOCATION_WAIT_TIMEOUT_MILLIS) {
+            locationManager.latestLocation
+                .filterNotNull()
+                .first { snapshot -> snapshot.toSearchLocationOriginOrNull() != null }
+                .toSearchLocationOriginOrNull()
+        }
     }
 
     private fun refreshRecentSearches() {
@@ -656,6 +691,7 @@ class SearchViewModel(
             destinationSelectionRepository: DestinationSelectionRepository,
             destinationPreviewRepository: DestinationPreviewRepository,
             placesRepository: PlacesRepository,
+            currentLocationManager: CurrentLocationManager? = null,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -667,6 +703,7 @@ class SearchViewModel(
                             destinationSelectionRepository = destinationSelectionRepository,
                             destinationPreviewRepository = destinationPreviewRepository,
                             placesRepository = placesRepository,
+                            currentLocationManager = currentLocationManager,
                         ) as T
                     }
 
@@ -698,3 +735,87 @@ private fun SearchResult.bookmarkProviderPlaceId(): String? =
 
 private fun SearchResult.isAddressSearchFallback(): Boolean =
     provider?.equals(ANDROID_GEOCODER_PROVIDER, ignoreCase = true) == true
+
+private data class SearchLocationOrigin(
+    val latitude: Double,
+    val longitude: Double,
+)
+
+private fun String.toSearchQuery(
+    origin: SearchLocationOrigin?,
+    cursor: String? = null,
+): SearchQuery =
+    SearchQuery(
+        keyword = this,
+        latitude = origin?.latitude,
+        longitude = origin?.longitude,
+        cursor = cursor,
+    )
+
+private fun LocationSnapshot?.toSearchLocationOriginOrNull(): SearchLocationOrigin? {
+    if (this == null || !isFreshCurrentLocation()) return null
+    if (!isValidSearchCoordinate(latitude = latitude, longitude = longitude)) return null
+
+    return SearchLocationOrigin(
+        latitude = latitude,
+        longitude = longitude,
+    )
+}
+
+private fun List<SearchResult>.withDistanceFrom(origin: SearchLocationOrigin?): List<SearchResult> {
+    if (origin == null) return this
+
+    return mapIndexed { index, result ->
+        val resolvedDistanceMeters =
+            result.distanceMeters?.takeIf { distanceMeters -> distanceMeters >= 0 }
+                ?: distanceMetersBetween(
+                    startLatitude = origin.latitude,
+                    startLongitude = origin.longitude,
+                    endLatitude = result.latitude,
+                    endLongitude = result.longitude,
+                )
+        index to result.copy(distanceMeters = resolvedDistanceMeters)
+    }.sortedWith(
+        compareBy<Pair<Int, SearchResult>> { (_, result) -> result.distanceMeters ?: Int.MAX_VALUE }
+            .thenBy { (index, _) -> index },
+    ).map { (_, result) -> result }
+}
+
+private fun distanceMetersBetween(
+    startLatitude: Double,
+    startLongitude: Double,
+    endLatitude: Double,
+    endLongitude: Double,
+): Int? {
+    if (!isValidSearchCoordinate(latitude = endLatitude, longitude = endLongitude)) return null
+
+    val deltaLatitude = (endLatitude - startLatitude) * DEGREES_TO_RADIANS
+    val deltaLongitude = (endLongitude - startLongitude) * DEGREES_TO_RADIANS
+    val startLatitudeRadians = startLatitude * DEGREES_TO_RADIANS
+    val endLatitudeRadians = endLatitude * DEGREES_TO_RADIANS
+    val haversine =
+        sin(deltaLatitude / 2).let { sinHalfLatitude -> sinHalfLatitude * sinHalfLatitude } +
+            cos(startLatitudeRadians) *
+            cos(endLatitudeRadians) *
+            sin(deltaLongitude / 2).let { sinHalfLongitude -> sinHalfLongitude * sinHalfLongitude }
+    val angularDistance = 2 * atan2(sqrt(haversine), sqrt(1 - haversine))
+
+    return (EARTH_RADIUS_METERS * angularDistance).roundToInt().coerceAtLeast(0)
+}
+
+private fun isValidSearchCoordinate(
+    latitude: Double,
+    longitude: Double,
+): Boolean =
+    latitude.isFinite() &&
+        longitude.isFinite() &&
+        latitude in MIN_LATITUDE..MAX_LATITUDE &&
+        longitude in MIN_LONGITUDE..MAX_LONGITUDE
+
+private const val EARTH_RADIUS_METERS = 6_371_000.0
+private const val DEGREES_TO_RADIANS = PI / 180.0
+private const val MIN_LATITUDE = -90.0
+private const val MAX_LATITUDE = 90.0
+private const val MIN_LONGITUDE = -180.0
+private const val MAX_LONGITUDE = 180.0
+private const val SEARCH_LOCATION_WAIT_TIMEOUT_MILLIS = 1_500L

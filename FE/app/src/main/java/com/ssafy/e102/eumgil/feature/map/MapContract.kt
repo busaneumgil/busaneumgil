@@ -17,7 +17,9 @@ import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
     val rendererSessionKey: Long = 0L,
+    val selectedOrigin: PlaceDestination? = null,
     val selectedDestination: PlaceDestination? = null,
+    val routeEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     val selectedMarkerId: String? = null,
     val selectedMapPinCoordinate: MapCoordinate? = null,
     val locationStatus: MapLocationStatus = MapLocationStatus.PermissionDenied,
@@ -26,6 +28,7 @@ data class MapUiState(
     val markerOverlayState: MapMarkerOverlayState = MapMarkerOverlayState(),
     val markerFilterState: MapMarkerFilterUiState = MapMarkerFilterUiState(),
     val shortcutFilterState: MapShortcutFilterRowState = MapShortcutFilterRowState(),
+    val isSearchHereVisible: Boolean = false,
     val recentDestinations: List<RecentDestination> = emptyList(),
     val facilityDetailSheetState: MapFacilityDetailSheetState = MapFacilityDetailSheetState(),
 )
@@ -66,6 +69,8 @@ enum class MapTapClickType {
 sealed interface MapUiAction {
     data object SearchEntryClicked : MapUiAction
 
+    data object SearchHereClicked : MapUiAction
+
     data object LocationActionClicked : MapUiAction
 
     data object ZoomInClicked : MapUiAction
@@ -77,6 +82,10 @@ sealed interface MapUiAction {
     data object FacilitySetDestinationClicked : MapUiAction
 
     data class FacilitySetRouteEndpointClicked(
+        val editingTarget: RouteEditingTarget,
+    ) : MapUiAction
+
+    data class RouteEndpointStatusClicked(
         val editingTarget: RouteEditingTarget,
     ) : MapUiAction
 
@@ -113,7 +122,9 @@ sealed interface MapUiAction {
 }
 
 sealed interface MapUiEvent {
-    data object NavigateToSearch : MapUiEvent
+    data class NavigateToSearch(
+        val editingTarget: RouteEditingTarget,
+    ) : MapUiEvent
 
     data object NavigateToRouteSetting : MapUiEvent
 

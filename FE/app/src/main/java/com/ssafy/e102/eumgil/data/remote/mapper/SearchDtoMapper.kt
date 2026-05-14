@@ -65,6 +65,7 @@ internal object SearchDtoMapper {
                         providerPlaceId = providerPlaceId,
                         accessibilityTagKeys = accessibilityTagKeys.takeIf { isVerifiedPlace }.orEmpty(),
                         matched = isVerifiedPlace,
+                        distanceMeters = placeDto.distanceMeter?.takeIf { distanceMeters -> distanceMeters >= 0 },
                     )
                 },
             nextCursor = dto.nextCursor,

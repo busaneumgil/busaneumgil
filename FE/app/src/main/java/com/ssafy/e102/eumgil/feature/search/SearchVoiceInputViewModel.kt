@@ -40,7 +40,7 @@ class SearchVoiceInputViewModel(application: Application) : AndroidViewModel(app
 
     companion object {
         private const val TAG = "SearchVoiceInputVM"
-        private const val SILENCE_FRAMES_FOR_STOP = 30
+        private const val SILENCE_FRAMES_FOR_STOP = 20 // before: 30
     }
 
     private val _uiEvent = Channel<SearchVoiceInputEvent>(Channel.BUFFERED)

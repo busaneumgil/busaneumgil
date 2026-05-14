@@ -76,8 +76,11 @@ class MapViewportOverlayBindingsTest {
         assertEquals(MapViewportPointKind.FACILITY, overlayState.points[1].kind)
         assertEquals(FacilityCategory.TOILET, overlayState.points[1].categoryType?.category)
         assertFalse(overlayState.points[1].isSelected)
+        assertFalse(overlayState.points[1].includeInProjection)
         assertTrue(overlayState.points[2].isSelected)
+        assertFalse(overlayState.points[2].includeInProjection)
         assertEquals("elevator", overlayState.points[2].clickTargetId)
+        assertEquals(null, createKakaoRouteCameraRenderState(overlayState))
     }
 
     @Test
@@ -123,7 +126,10 @@ class MapViewportOverlayBindingsTest {
         )
         assertEquals(currentLocation, overlayState.points[1].coordinate)
         assertEquals("현", overlayState.points[1].label)
+        assertFalse(overlayState.points[1].includeInProjection)
         assertEquals("toilet", overlayState.points[2].overlayId)
+        assertFalse(overlayState.points[2].includeInProjection)
+        assertEquals(null, createKakaoRouteCameraRenderState(overlayState))
     }
 
     @Test

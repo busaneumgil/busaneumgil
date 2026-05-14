@@ -1,5 +1,6 @@
 package com.example.llmtest.network
 
+import com.example.llmtest.BuildConfig
 import com.example.llmtest.network.models.VoiceAnalyzeRequest
 import com.example.llmtest.network.models.VoiceAnalyzeResponse
 import com.example.llmtest.network.models.VoiceConfirmRequest
@@ -21,7 +22,7 @@ interface VoiceApiService {
 }
 
 object VoiceApiClient {
-    private const val BASE_URL = "http://10.0.2.2:5000"
+    private val BASE_URL: String get() = BuildConfig.SERVER_URL
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)

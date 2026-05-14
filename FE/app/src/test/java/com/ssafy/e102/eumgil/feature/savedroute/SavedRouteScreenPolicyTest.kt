@@ -82,4 +82,24 @@ class SavedRouteScreenPolicyTest {
             source.contains("MutableInteractionSource()"),
         )
     }
+
+    @Test
+    fun `route tab empty state opens route setting instead of map exploration`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val routeContentSection =
+            source
+                .substringAfter("private fun SavedRouteBookmarkContent(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkStateCard")
+
+        assertTrue(
+            "Saved route tab empty/error CTA should use route-setting wording.",
+            routeContentSection.contains("R.string.saved_route_route_setting_action"),
+        )
+        assertTrue(
+            "Saved route tab empty/error CTA should navigate to route setting, not map exploration.",
+            routeContentSection.contains("SavedRouteUiAction.RouteSettingClicked"),
+        )
+    }
 }

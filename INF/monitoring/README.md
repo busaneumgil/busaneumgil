@@ -105,7 +105,7 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
 - 현재 제약:
   - `dev` overview는 `dev` 전용으로 고정하고, `prod`는 별도 dashboard로 분리한다.
   - `prod`의 `DB 연결 상태`, `Redis 연결 상태`는 RDS/ElastiCache 자체 상태가 아니라 backend dependency health를 의미한다.
-  - `prod`의 `GraphHopper 상태` 카드는 Redis active slot 기준의 `graphhopper` probe와 슬롯별 원시 `graphhopper-blue`, `graphhopper-green` probe 결과를 함께 본다.
+  - `prod`의 `GraphHopper active / blue / green 상태` 카드는 Redis active slot 기준 공개 `graphhopper` probe와 슬롯별 원시 `graphhopper-blue`, `graphhopper-green` probe 결과를 함께 본다.
   - 상단 `경고/오류` 집계 카드와 그래프는 아무 위치의 raw 문자열 키워드 검색이 아니라 `level=error`, `ERROR ...`, `E0513 ...`처럼 실제 severity 위치만 보는 필터로 집계한다.
   - 상세 로그 패널도 기본값은 같은 severity 위치 기준을 사용한다. `exception/timeout/failed` 같은 단어 탐색은 Grafana Explore에서 2차 조사로 수행한다.
   - `prod log`는 S2 promtail 배치 후 같은 Grafana에서 즉시 조회 가능하다.

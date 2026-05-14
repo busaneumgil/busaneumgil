@@ -494,12 +494,6 @@ private class KakaoMapViewportController {
                                 markerId = poiId,
                                 position = position,
                             )
-                        } else if (poiId.isNotBlank()) {
-                            dispatchExternalPoiTap(
-                                position = position,
-                                providerPlaceId = poiId,
-                                nameHint = null,
-                            )
                         }
                     }
                     readyMap.setOnTerrainClickListener { _, position, _ ->
@@ -1018,6 +1012,7 @@ private class KakaoMapViewportController {
         val projectedMarkers =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = state?.currentLocation,
+                selectedOriginCoordinate = state?.selectedOriginCoordinate,
                 selectedDestinationCoordinate = state?.selectedDestinationCoordinate,
                 selectedMapPinCoordinate = state?.selectedMapPinCoordinate,
                 overlayPoints = state?.overlayState?.points.orEmpty(),

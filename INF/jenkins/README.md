@@ -22,6 +22,7 @@ S1 Jenkins의 기준 설정은 `INF/jenkins/s1`에서 관리한다.
 - `Dockerfile`: Jenkins Docker CLI/Compose plugin 포함 이미지
 - `plugins.txt`: Jenkins 필수 plugin 목록
 - `nginx.conf`: Jenkins, dev API, Grafana/PLG, SonarQube, Portainer host-based routing
+Jenkins container는 monitoring 조회와 release manifest 저장을 위해 `e102-ops` network와 `/home/ubuntu/e102/runtime-state -> /opt/e102-server/runtime-state` mount를 함께 사용한다.
 GitLab OAuth Application에는 아래 Redirect URI가 등록되어 있어야 한다.
 
 ```text
@@ -36,7 +37,16 @@ Mattermost 배포 알림 webhook도 같은 흐름으로 관리한다.
 MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
 ```
 
+시간별 로그 분석 브리프는 dev/prod 분리 webhook을 사용한다.
+
+```text
+LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
+DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
+PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
+```
+
 Jenkins container는 `.env.jenkins` 값을 환경변수로 읽고, init groovy가 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url` 같은 운영 보조 credential을 동기화한다. 배포용 `.env.dev`와 `.env.prod`는 Jenkins Secret file credential이 원본이며, host 파일 mount로 동기화하지 않는다.
+시간별 observability brief는 `e102-dev-log-analysis-webhook-url`, `e102-prod-log-analysis-webhook-url` credential을 통해 `E102_로그분석채널`용 dev/prod 분리 webhook을 사용한다.
 
 ## 2026-04-29 반영 상태
 
@@ -104,13 +114,25 @@ Jenkins job에서 사용하는 secret은 Jenkins Credentials를 source of truth�
 | `gitlab-pat` | Username/Password 또는 Secret text | GitLab repository checkout | 적용 완료 |
 | `e102-dev-env-file` | Secret file | S1 dev 배포 env 파일 | 적용 완료 |
 | `e102-prod-env-file` | Secret file | S2 prod 배포 env 파일 | 적용 완료 |
-| `e102-s2-host` | Secret text | S2 SSH host 또는 IP | 적용 완료 |
+| `e102-s2-host` | Secret text | S2 SSH host 또는 IP. `E102_S2_HOST` 또는 `/home/ubuntu/e102/prod-secrets/e102-s2-host`에서 bootstrap | 적용 완료 |
 | `e102-s2-ssh-key` | SSH Username with private key | S2 배포 SSH 접속 | 적용 완료 |
-| `e102-mattermost-webhook-url` | Secret text | Jenkins/MM 배포 알림 webhook | 적용 예정 |
+| `e102-mattermost-webhook-url` | Secret text | Jenkins/MM 배포 알림 webhook | 적용 완료 |
+| `e102-log-analysis-webhook-url` | Secret text | Jenkins/MM 공통 로그분석 webhook fallback. dev/prod 전용 credential이 있으면 없어도 됨 | 선택 |
+| `e102-dev-log-analysis-webhook-url` | Secret text | Jenkins/MM DEV 로그분석 채널 webhook | 적용 예정 |
+| `e102-prod-log-analysis-webhook-url` | Secret text | Jenkins/MM PROD 로그분석 채널 webhook | 적용 예정 |
 
 `e102-dev-env-file`과 `e102-prod-env-file`은 Jenkins UI/API에서 Secret file credential로 직접 교체한다. 이 두 credential이 배포 env의 source of truth다. 값을 바꿀 때는 서버에 SSH로 접속해 host `.env` 파일을 수정하지 말고, Jenkins credential 파일을 새 버전으로 교체한 뒤 해당 배포 job을 실행한다.
 
 S1 `/home/ubuntu/e102/prod-secrets` 하위는 S2 SSH key 같은 Jenkins bootstrap 보조 파일만 보관한다. Jenkins 컨테이너 재시작 시 `prod-deploy-credentials.groovy`는 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url`만 동기화하고, `e102-dev-env-file`/`e102-prod-env-file`은 덮어쓰지 않는다.
+
+S2 host는 환경변수 없이 파일로도 bootstrap할 수 있다.
+
+```bash
+sudo install -m 644 -o root -g root /dev/null /home/ubuntu/e102/prod-secrets/e102-s2-host
+echo '43.201.198.214' | sudo tee /home/ubuntu/e102/prod-secrets/e102-s2-host >/dev/null
+```
+
+필요하면 SSH username도 `/home/ubuntu/e102/prod-secrets/e102-s2-user` 파일로 둘 수 있다. 파일이 없으면 기본 username은 `ubuntu`다. S2 host/user 파일은 Jenkins 컨테이너의 `jenkins` 사용자가 읽어야 하므로 `600 root:root`로 두지 않는다.
 
 현재 prod는 초기 환경 bootstrap 단계이므로 `.env.prod`의 `JPA_DDL_AUTO`를 `update`로 두고 테이블/컬럼을 먼저 생성한다. 운영 모드로 전환하기 전에는 반드시 `.env.prod` 값을 `validate`로 되돌리고 한 번 더 배포해 schema drift를 차단한다.
 
@@ -125,6 +147,7 @@ prod 배포 pipeline 기준 파일은 `INF/jenkins/pipelines/e102-prod-deploy.Je
 3. S2 `/home/ubuntu/e102/prod`로 코드와 `.env.prod` 업로드
 4. `scripts/deploy/prod-deploy.sh` 또는 `scripts/deploy/prod-rollback.sh` 실행
 5. `scripts/deploy/prod-smoke.sh`로 backend/AI/GraphHopper 상태 확인
+6. remote deploy state를 읽어 `/opt/e102-server/runtime-state/prod-release.json` 갱신
 
 운영 주의:
 
@@ -226,6 +249,42 @@ S1 monitoring/Grafana/Prometheus/nginx 설정은 prod 앱 배포와 별도 경�
 - 따라서 `INF/monitoring/**` 또는 `INF/jenkins/s1/nginx.conf` 변경은 `e102-monitoring-deploy`를 같이 태우는 것을 기본 절차로 본다.
 - sync 스크립트는 `s14p31e102-dev_default` 네트워크가 아직 없으면 bootstrap network를 먼저 만든다.
 
+## `e102-observability-hourly-brief`
+
+dev/prod warning/error와 health를 1시간 단위로 요약해 Mattermost에 보고하는 Jenkins 잡이다.
+
+처리 순서:
+
+1. `master` checkout
+2. `origin/develop`, `origin/master` fetch
+3. `scripts/monitoring/hourly_observability_brief.py` 실행
+4. `reports/observability/hourly-brief.json` 아카이브
+5. dev/prod 분리 Mattermost webhook으로 메시지 전송
+
+수집 데이터:
+
+- Loki warning/error 집계
+- Prometheus blackbox health
+- `/opt/e102-server/runtime-state/dev-release.json`
+- `/opt/e102-server/runtime-state/prod-release.json`
+- local git commit history
+- optional GitLab MR metadata
+- optional LLM summary
+
+기본 LLM 요약 경로:
+
+- source secret: Jenkins `e102-prod-env-file` 안의 `GMS_KEY`
+- provider: Anthropic Messages API via `https://gms.ssafy.io/gmsapi/api.anthropic.com/v1/messages`
+- model: `claude-opus-4-5-20251101`
+- fallback: `GMS_KEY`가 없거나 호출 실패 시 deterministic summary만 전송
+
+운영 원칙:
+
+- 스케줄은 매시 1회다.
+- GitLab token이 없으면 merged MR은 생략하고 local commit 기준으로 보강한다.
+- LLM API key가 없거나 호출이 실패해도 deterministic fallback으로 계속 보고한다.
+- report JSON은 Jenkins artifact로 남겨 장애 시점 비교 근거로 사용한다.
+
 ## Webhook
 
 Jenkins job에는 GitLab Push Hook 수신 트리거가 설정되어 있다.
@@ -259,3 +318,19 @@ Jenkins home volume은 S1 로컬에서 매일 백업한다.
 - 보관 기간: 14일
 
 백업 archive에는 Jenkins credential과 secret material이 포함될 수 있으므로 root 전용 권한으로 관리한다.
+
+## Disk Maintenance
+
+S1 Jenkins와 S2 prod는 Docker build cache와 image layer가 빠르게 누적될 수 있으므로 호스트 단위 자동 정리를 둔다.
+
+- 설치 스크립트: `scripts/maintenance/install-docker-disk-maintenance.sh`
+- 실행 스크립트: `/usr/local/sbin/e102-docker-disk-maintenance.sh`
+- 설정 파일: `/etc/e102-docker-disk-maintenance.env`
+- 스케줄: `/etc/cron.d/e102-docker-disk-maintenance`, 기본 3시간마다
+- 로그: `/var/log/e102-docker-disk-maintenance.log`
+
+정리 대상은 stopped container, 오래된 dangling image, BuildKit cache, Jenkins workspace/archive다. Docker volume은 graph-cache와 DB data를 보존하기 위해 기본값에서 정리하지 않는다. rollback용 tag image를 보존하기 위해 tagged image 전체 정리는 `DOCKER_DISK_PRUNE_IMAGES_ALL=true`를 명시한 수동 정리에서만 사용한다.
+
+prod deploy와 GraphHopper refresh는 성공 후 `pipeline` mode로 정리 스크립트를 한 번 더 실행한다. 정리 실패는 이미 성공한 배포/refresh를 실패로 뒤집지 않고 경고 로그만 남긴다.
+
+Docker container log rotation은 `/etc/docker/daemon.json`에 `json-file` `max-size=50m`, `max-file=3` 기본값을 기록한다. 이 설정은 Docker daemon 재시작 후 새로 만들어지는 container부터 적용된다.

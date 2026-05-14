@@ -137,6 +137,69 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `result list requests next page near the bottom`() {
+        assertEquals(
+            true,
+            shouldAutoRequestNextSearchPage(
+                lastVisibleItemIndex = 13,
+                totalItemsCount = 16,
+                hasNext = true,
+                isLoadingNextPage = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `result list does not request next page without next cursor state`() {
+        assertEquals(
+            false,
+            shouldAutoRequestNextSearchPage(
+                lastVisibleItemIndex = 13,
+                totalItemsCount = 16,
+                hasNext = false,
+                isLoadingNextPage = false,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldAutoRequestNextSearchPage(
+                lastVisibleItemIndex = 13,
+                totalItemsCount = 16,
+                hasNext = true,
+                isLoadingNextPage = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `search result distance uses meter label below one kilometer`() {
+        assertEquals(
+            SearchResultDistanceUiState(
+                labelResId = R.string.search_screen_result_distance_meters,
+                value = 350,
+            ),
+            resolveSearchResultDistanceUiState(distanceMeters = 350),
+        )
+    }
+
+    @Test
+    fun `search result distance uses kilometer label at one kilometer or more`() {
+        assertEquals(
+            SearchResultDistanceUiState(
+                labelResId = R.string.search_screen_result_distance_kilometers,
+                value = 1.5,
+            ),
+            resolveSearchResultDistanceUiState(distanceMeters = 1_500),
+        )
+    }
+
+    @Test
+    fun `search result distance hides negative or missing values`() {
+        assertEquals(null, resolveSearchResultDistanceUiState(distanceMeters = null))
+        assertEquals(null, resolveSearchResultDistanceUiState(distanceMeters = -1))
+    }
+
+    @Test
     fun `voice input sheet uses fe bottom sheet radius and app surface background`() {
         assertEquals(EumRadius.scaleL, searchVoiceInputSheetTopCornerRadius())
         assertEquals(BusanEumgilLightColorScheme.surface, searchVoiceInputSheetContainerColor())

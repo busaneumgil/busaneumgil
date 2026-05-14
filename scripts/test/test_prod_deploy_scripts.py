@@ -344,6 +344,16 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("INF/jenkins/pipelines/e102-graphhopper-refresh.Jenkinsfile", seed_content)
         self.assertIn("*/master", seed_content)
 
+    def test_prod_pipelines_accept_s2_host_secret_text_or_file_credential(self):
+        prod_content = JENKINSFILE.read_text(encoding="utf-8")
+        refresh_content = REFRESH_JENKINSFILE.read_text(encoding="utf-8")
+
+        for content in (prod_content, refresh_content):
+            self.assertIn("resolveTextOrFileCredential", content)
+            self.assertIn("Resolve S2 Host Credential", content)
+            self.assertIn("if [ -f \"$CREDENTIAL_VALUE\" ]; then", content)
+            self.assertIn("env.S2_HOST = resolveTextOrFileCredential(this, env.S2_HOST, 'e102-s2-host')", content)
+
     def test_prod_credential_bootstrap_keeps_only_non_env_credentials(self):
         content = PROD_CREDENTIAL_BOOTSTRAP.read_text(encoding="utf-8")
 

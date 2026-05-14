@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.util.Log
 import android.view.View
 import android.widget.Toast
@@ -21,15 +18,24 @@ import com.example.llmtest.databinding.ActivityMainBinding
 import com.example.llmtest.network.RetrofitClient
 import com.example.llmtest.network.models.CompareResult
 import com.example.llmtest.network.models.LLMRequest
+import com.example.llmtest.stt.AudioRecorder
+import com.example.llmtest.stt.SherpaManager
+import com.example.llmtest.stt.SttManager
+import com.example.llmtest.stt.VadManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var speechRecognizer: SpeechRecognizer
     private lateinit var ttsManager: TTSManager
 
-    private var isRecording = false
+    private val audioRecorder = AudioRecorder(this)
+    private var vadManager: VadManager? = null
+    private var sttManager: SttManager? = null
+    private var recordingJob: Job? = null
     private var sttStartMs = 0L
 
     private val modelMap = mapOf(
@@ -41,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_CODE = 101
+        private const val SILENCE_FRAMES_FOR_STOP = 20
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,9 +56,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         checkMicPermission()
-        setupSpeechRecognizer()
         setupTTS()
         setupListeners()
+        initSttModels()
     }
 
     private fun checkMicPermission() {
@@ -73,45 +80,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupSpeechRecognizer() {
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                sttStartMs = System.currentTimeMillis()
-                runOnUiThread { binding.tvStatus.text = "말씀하세요..." }
-            }
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {
-                isRecording = false
-                runOnUiThread {
-                    binding.btnRecord.text = "🎙️\n녹음 시작"
-                    binding.tvStatus.text = "변환 중..."
+    private fun initSttModels() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                SherpaManager.ensureModelsExtracted(this@MainActivity)
+                if (!SherpaManager.modelsExist(this@MainActivity)) {
+                    Log.e(TAG, "STT 모델 파일 없음")
+                    return@launch
                 }
+                vadManager = VadManager(this@MainActivity)
+                sttManager = SttManager.getInstance(this@MainActivity)
+                Log.d(TAG, "STT 모델 초기화 완료")
+            } catch (e: Exception) {
+                Log.e(TAG, "STT 초기화 실패: ${e.message}", e)
             }
-            override fun onError(error: Int) {
-                isRecording = false
-                Log.e(TAG, "STT error: $error")
-                runOnUiThread {
-                    binding.btnRecord.text = "🎙️\n녹음 시작"
-                    binding.tvStatus.text = "음성 인식 오류 (code=$error)"
-                    showLoading(false)
-                }
-            }
-            override fun onResults(results: Bundle?) {
-                val text = results
-                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull() ?: return
-                runOnUiThread {
-                    binding.tvRecognizedText.text = "\"$text\""
-                    binding.tvStatus.text = "LLM 분석 중..."
-                }
-                sendToLLM(text)
-            }
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
+        }
     }
 
     private fun setupTTS() {
@@ -124,7 +107,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         binding.btnRecord.setOnClickListener {
-            if (!isRecording) startRecording() else stopRecording()
+            if (recordingJob?.isActive == true) stopRecording() else startRecording()
         }
         binding.btnOpenCompare.setOnClickListener {
             startActivity(Intent(this, CompareActivity::class.java))
@@ -146,44 +129,125 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "마이크 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
             return
         }
-        isRecording = true
+        if (vadManager == null || sttManager == null) {
+            Toast.makeText(this, "STT 모델 초기화 중입니다. 잠시 후 다시 시도해주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         binding.btnRecord.text = "⏹️\n녹음 중단"
-        binding.tvStatus.text = "준비 중..."
+        binding.tvStatus.text = "말씀하세요..."
         binding.cardResult.visibility = View.GONE
         binding.btnStartNavigation.visibility = View.GONE
+        sttStartMs = System.currentTimeMillis()
 
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        recordingJob = lifecycleScope.launch(Dispatchers.IO) {
+            runPipeline()
         }
-        speechRecognizer.startListening(intent)
     }
 
     private fun stopRecording() {
-        speechRecognizer.stopListening()
-        isRecording = false
-        binding.btnRecord.text = "🎙️\n녹음 시작"
-        binding.tvStatus.text = ""
+        audioRecorder.stop()
+        recordingJob?.cancel()
+        runOnUiThread {
+            binding.btnRecord.text = "🎙️\n녹음 시작"
+            binding.tvStatus.text = ""
+        }
     }
 
-    private fun sendToLLM(text: String) {
+    private suspend fun runPipeline() {
+        try {
+            var voiceDetectedEver = false
+            var silenceFrameCount = 0
+            val accumulatedSamples = mutableListOf<Float>()
+            var skipStt = false
+
+            audioRecorder.startRecording().collect { floatSamples ->
+                vadManager?.acceptWaveform(floatSamples)
+
+                var hadSegment = false
+                while (vadManager?.isEmpty() == false) {
+                    val segment = vadManager?.front() ?: break
+                    vadManager?.popSegment()
+                    accumulatedSamples.addAll(segment.samples.toList())
+                    hadSegment = true
+                }
+
+                val currentlySpeaking = vadManager?.isSpeechDetected() ?: false
+
+                when {
+                    hadSegment -> {
+                        voiceDetectedEver = true
+                        silenceFrameCount = 0
+                    }
+                    currentlySpeaking -> {
+                        voiceDetectedEver = true
+                        silenceFrameCount = 0
+                    }
+                    else -> silenceFrameCount++
+                }
+
+                when {
+                    voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP -> {
+                        audioRecorder.stop()
+                    }
+                    !voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP * 2 -> {
+                        skipStt = true
+                        audioRecorder.stop()
+                    }
+                }
+            }
+
+            vadManager?.flush()
+            while (vadManager?.isEmpty() == false) {
+                val segment = vadManager?.front() ?: break
+                vadManager?.popSegment()
+                accumulatedSamples.addAll(segment.samples.toList())
+            }
+
+            withContext(Dispatchers.Main) {
+                binding.btnRecord.text = "🎙️\n녹음 시작"
+            }
+
+            if (!skipStt && voiceDetectedEver && accumulatedSamples.isNotEmpty()) {
+                withContext(Dispatchers.Main) { binding.tvStatus.text = "변환 중..." }
+                val text = sttManager?.recognize(accumulatedSamples.toFloatArray()).orEmpty()
+                if (text.isBlank()) {
+                    withContext(Dispatchers.Main) { binding.tvStatus.text = "음성을 인식하지 못했습니다." }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        binding.tvRecognizedText.text = "\"$text\""
+                        binding.tvStatus.text = "LLM 분석 중..."
+                    }
+                    sendToLLM(text)
+                }
+            } else {
+                withContext(Dispatchers.Main) { binding.tvStatus.text = "발화가 감지되지 않았습니다." }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "STT 파이프라인 오류: ${e.message}", e)
+            withContext(Dispatchers.Main) {
+                binding.btnRecord.text = "🎙️\n녹음 시작"
+                binding.tvStatus.text = "오류: ${e.message}"
+                showLoading(false)
+            }
+        }
+    }
+
+    private suspend fun sendToLLM(text: String) {
         val selectedModel = binding.spinnerModel.selectedItem.toString()
         val modelId = modelMap[selectedModel] ?: "gemini"
 
-        showLoading(true)
-        lifecycleScope.launch {
-            try {
-                val result = RetrofitClient.apiService.chatWithLLM(
-                    LLMRequest(text = text, model = modelId, stt_start_ms = sttStartMs)
-                )
-                runOnUiThread { displayResult(result) }
-            } catch (e: Exception) {
-                Log.e(TAG, "LLM request failed", e)
-                runOnUiThread {
-                    showLoading(false)
-                    binding.tvStatus.text = "❌ 서버 오류: ${e.message}"
-                }
+        withContext(Dispatchers.Main) { showLoading(true) }
+        try {
+            val result = RetrofitClient.apiService.chatWithLLM(
+                LLMRequest(text = text, model = modelId, stt_start_ms = sttStartMs)
+            )
+            withContext(Dispatchers.Main) { displayResult(result) }
+        } catch (e: Exception) {
+            Log.e(TAG, "LLM 요청 실패", e)
+            withContext(Dispatchers.Main) {
+                showLoading(false)
+                binding.tvStatus.text = "❌ 서버 오류: ${e.message}"
             }
         }
     }
@@ -222,7 +286,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        speechRecognizer.destroy()
+        audioRecorder.stop()
+        recordingJob?.cancel()
+        vadManager?.release()
         ttsManager.shutdown()
         super.onDestroy()
     }

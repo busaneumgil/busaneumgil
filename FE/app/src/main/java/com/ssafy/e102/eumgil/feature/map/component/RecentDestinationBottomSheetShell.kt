@@ -11,7 +11,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -92,11 +94,14 @@ fun RecentDestinationBottomSheetShell(
     val dragSettleVelocityThresholdPx = with(density) { 320.dp.toPx() }
     val dismissThresholdMinPx = with(density) { 72.dp.toPx() }
     val handleInteractionSource = remember { MutableInteractionSource() }
+    val restoreHandleInteractionSource = remember { MutableInteractionSource() }
     var isDismissedByUser by remember(state.items) { mutableStateOf(false) }
     var sheetHeightPx by remember(state.items, state.isVisible) { mutableIntStateOf(0) }
     var sheetOffsetPx by remember(state.items, state.isVisible) { mutableFloatStateOf(0f) }
     var isDragging by remember(state.items, state.isVisible) { mutableStateOf(false) }
     val isSheetVisible = state.isVisible && !isDismissedByUser
+    val isRestoreHandleVisible = state.isVisible && isDismissedByUser
+    val restoreHandleDescription = stringResource(id = R.string.map_recent_destination_sheet_restore)
 
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
@@ -121,6 +126,13 @@ fun RecentDestinationBottomSheetShell(
             rememberDraggableState { delta ->
                 isDragging = true
                 sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
+            }
+        val restoreDragState =
+            rememberDraggableState { delta ->
+                if (delta < 0f) {
+                    isDismissedByUser = false
+                    sheetOffsetPx = 0f
+                }
             }
 
         LaunchedEffect(isSheetVisible, maxSheetOffsetPx) {
@@ -226,6 +238,80 @@ fun RecentDestinationBottomSheetShell(
                     }
                 }
             }
+        }
+
+        AnimatedVisibility(
+            visible = isRestoreHandleVisible,
+            enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut(),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+        ) {
+            RecentDestinationRestoreHandle(
+                contentDescription = restoreHandleDescription,
+                interactionSource = restoreHandleInteractionSource,
+                dragState = restoreDragState,
+                onClick = {
+                    isDismissedByUser = false
+                    sheetOffsetPx = 0f
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentDestinationRestoreHandle(
+    contentDescription: String,
+    interactionSource: MutableInteractionSource,
+    dragState: DraggableState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(RecentDestinationRestoreHandleHeight),
+        shape =
+            RoundedCornerShape(
+                topStart = 24.dp,
+                topEnd = 24.dp,
+            ),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)),
+        shadowElevation = 12.dp,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .draggable(
+                        state = dragState,
+                        orientation = Orientation.Vertical,
+                    )
+                    .semantics {
+                        role = Role.Button
+                        this.contentDescription = contentDescription
+                    }
+                    .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .width(42.dp)
+                        .height(4.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(999.dp)),
+            )
         }
     }
 }
@@ -473,3 +559,5 @@ private fun recentDestinationTagIconSizeDp(
         R.drawable.ic_accessibility_tag_accessible_toilet -> 14
         else -> 12
     }
+
+private val RecentDestinationRestoreHandleHeight = 32.dp

@@ -7,6 +7,7 @@ data class SearchQuery(
     val longitude: Double? = null,
     val radiusMeters: Int? = null,
     val cursor: String? = null,
+    val sortOption: SearchSortOption = SearchSortOption.RELEVANCE,
 ) {
     val normalizedKeyword: String
         get() = keyword.trim()
@@ -14,6 +15,13 @@ data class SearchQuery(
     companion object {
         const val DEFAULT_LIMIT: Int = 15
     }
+}
+
+enum class SearchSortOption(
+    val apiValue: String,
+) {
+    RELEVANCE(apiValue = "relevance"),
+    DISTANCE(apiValue = "distance"),
 }
 
 data class SearchResult(
@@ -28,6 +36,7 @@ data class SearchResult(
     val providerPlaceId: String? = null,
     val accessibilityTagKeys: List<String> = emptyList(),
     val matched: Boolean = true,
+    val distanceMeters: Int? = null,
 ) {
     val displayPlaceId: String
         get() = serverPlaceId ?: providerPlaceId ?: placeId

@@ -100,6 +100,7 @@ class SavedRouteViewModel(
             SavedRouteUiAction.EditClicked -> enterEditMode()
             SavedRouteUiAction.EditDoneClicked -> applyPendingRemovals()
             SavedRouteUiAction.ExploreMapClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToMap)
+            SavedRouteUiAction.RouteSettingClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToRouteSetting())
             SavedRouteUiAction.RetryClicked -> retryCurrentTab()
             is SavedRouteUiAction.PlaceClicked -> handoffPlace(action.placeId, SavedRouteUiEvent.NavigateToMap)
             is SavedRouteUiAction.PlaceRouteGuideClicked ->

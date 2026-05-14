@@ -57,6 +57,7 @@ pipeline {
   environment {
     REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
     DEPLOY_BRANCH = 'develop'
+    RUNTIME_STATE_DIR = '/opt/e102-server/runtime-state'
   }
 
   stages {
@@ -245,6 +246,27 @@ pipeline {
           done
           docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml logs --tail=120 backend ai graphhopper
           exit 1
+        '''
+      }
+    }
+
+    stage('Write Release Manifest') {
+      steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
+        sh '''
+          mkdir -p "$RUNTIME_STATE_DIR"
+          python3 scripts/deploy/write-release-manifest.py \
+            --output "$RUNTIME_STATE_DIR/dev-release.json" \
+            --environment dev \
+            --branch "$DEPLOY_BRANCH" \
+            --commit "$DEPLOY_COMMIT" \
+            --build-number "$BUILD_NUMBER" \
+            --build-url "$BUILD_URL" \
+            --services backend ai graphhopper minio redis postgres \
+            --metadata source=jenkins \
+            --metadata pipeline=e102-dev-deploy
         '''
       }
     }

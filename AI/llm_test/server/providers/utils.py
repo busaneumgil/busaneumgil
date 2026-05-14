@@ -9,6 +9,7 @@ import json
 
 SYSTEM_PROMPT_MOBILITY = """부산 지역 교통약자 길찾기 앱의 음성 명령을 분석해 JSON으로만 응답하세요.
 다른 텍스트는 절대 포함하지 마세요. 한국어만 사용하세요. 해당 없는 필드는 null.
+입력 텍스트에서 로마자나 숫자가 한국어 음절로 발음 표기된 경우 원래 로마자·숫자 표기로 복원 후 장소명을 추출하세요.
 
 출력 형식:
 {"intent": "place_search" | "unknown", "place_name": "장소명 또는 null"}
@@ -77,10 +78,17 @@ SYSTEM_PROMPT_MOBILITY = """부산 지역 교통약자 길찾기 앱의 음성 �
 
 입력: "근처"
 출력: {"intent":"unknown","place_name":null}
+
+입력: "지에스이십오 찾아줘" 출력: {"intent":"place_search","place_name":"GS25"}
+입력: "씨유 어디야" 출력: {"intent":"place_search","place_name":"CU"}
+입력: "케이에프씨 알려줘" 출력: {"intent":"place_search","place_name":"KFC"}
+입력: "에이치앤엠 어디고" 출력: {"intent":"place_search","place_name":"H&M"}
+입력: "이케아 어디 있노" 출력: {"intent":"place_search","place_name":"IKEA"}
 """
 
 SYSTEM_PROMPT_VISUALLY = """부산 지역 시각장애인 길찾기 앱의 음성 명령을 분석해 JSON으로만 응답하세요.
 다른 텍스트는 절대 포함하지 마세요. 한국어만 사용하세요. 해당 없는 필드는 null.
+입력 텍스트에서 로마자나 숫자가 한국어 음절로 발음 표기된 경우 원래 로마자·숫자 표기로 복원 후 장소명을 추출하세요.
 대화 히스토리가 있으면 이전 맥락을 참고해서 판단하세요.
 
 출력 형식:
@@ -121,6 +129,12 @@ SYSTEM_PROMPT_VISUALLY = """부산 지역 시각장애인 길찾기 앱의 음�
 
 입력: "빨리"
 출력: {"intent":"unknown","place_name":null,"confirmed":false,"confirmation_message":"찾으시는 장소를 다시 말씀해 주세요"}
+
+입력: "지에스이십오 찾아줘" 출력: {"intent":"place_search","place_name":"GS25","confirmed":null,"confirmation_message":"GS25를 찾으시나요?"}
+입력: "씨유 어디야" 출력: {"intent":"place_search","place_name":"CU","confirmed":null,"confirmation_message":"CU를 찾으시나요?"}
+입력: "케이에프씨 알려줘" 출력: {"intent":"place_search","place_name":"KFC","confirmed":null,"confirmation_message":"KFC를 찾으시나요?"}
+입력: "에이치앤엠 어디고" 출력: {"intent":"place_search","place_name":"H&M","confirmed":null,"confirmation_message":"H&M을 찾으시나요?"}
+입력: "이케아 어디 있노" 출력: {"intent":"place_search","place_name":"IKEA","confirmed":null,"confirmation_message":"IKEA를 찾으시나요?"}
 
 [히스토리 있음 - 긍정]
 이전 assistant: {"intent":"PLACE_SEARCH","placeName":"부산역","confirmed":null,"confirmationMessage":"부산역을 찾으시나요?"}

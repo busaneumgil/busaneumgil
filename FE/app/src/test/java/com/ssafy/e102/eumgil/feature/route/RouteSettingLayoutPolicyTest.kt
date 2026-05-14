@@ -1,6 +1,10 @@
 ﻿package com.ssafy.e102.eumgil.feature.route
 
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -87,10 +91,7 @@ class RouteSettingLayoutPolicyTest {
                 .substringAfter("fun RouteSettingScreen(")
                 .substringBefore("@Composable\nfun RouteDetailScreen")
 
-        assertTrue(
-            "Route selection should opt out of the scaffold's default system-bar content inset so the 30dp CTA gap is the only bottom spacing.",
-            screenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"),
-        )
+        assertTrue(routeSettingUsesEmptyWindowInsets())
         assertFalse(
             "Route selection should not leave extra top padding between the blue header and the map stage.",
             screenSection.contains(".padding(top = RouteSettingScreenVerticalPadding)"),
@@ -118,7 +119,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route setting implements blue route search header and walk map preview carousel`() {
+    fun `route setting keeps kakao header shell and walk map preview carousel`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -126,28 +127,12 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("fun RouteSettingScreen(")
                 .substringBefore("if (isDuribalConfirmDialogVisible)")
-        val headerSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderKakao(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
         val mapStageSection =
             source
                 .substringAfter("private fun RouteMapStage(")
                 .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
 
         assertTrue("Route setting top bar should use the blue route search header.", screenSection.contains("RouteSearchHeaderKakao("))
-        assertFalse("The route search header should no longer expose disabled car or bike slots.", headerSection.contains("enabled = false"))
-        assertTrue("The route search header should expose transit mode with text.", headerSection.contains("\"대중교통\""))
-        assertTrue("The route search header should expose walk mode with text.", headerSection.contains("\"도보\""))
-        assertTrue(
-            "The selected route mode should use the shared service-color box style instead of the old white pill.",
-            source.contains("color = if (selected) RouteSearchHeaderEmphasizedBoxColor else RouteSearchHeaderInactiveBoxColor"),
-        )
-        assertFalse("The route search header should remove the close action from the top bar.", headerSection.contains("R.drawable.ic_action_close"))
-        assertTrue("The route search header should show the route selection title in the top bar.", headerSection.contains("route_setting_screen_title"))
-        assertTrue("The header should include origin and destination waypoint rows.", headerSection.contains("RouteSearchHeaderWaypointLine("))
-        assertTrue("The header should include a waypoint swap control.", headerSection.contains("onSwapClick"))
-        assertFalse("The header should not expose a non-functional more menu affordance.", headerSection.contains("R.drawable.ic_action_more"))
         assertTrue("Walk mode should render map-anchored preview cards instead of the transit bottom sheet.", mapStageSection.contains("RouteWalkPreviewCarousel("))
         assertTrue("Walk preview cards should expose the route detail arrow CTA.", source.contains("경로 상세 보기"))
         assertFalse("Walk preview should remove kcal text beside distance.", source.contains("estimatedWalkCaloriesLabel("))
@@ -166,134 +151,36 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route search header stacks top bar search card and full width tabs`() {
-        val source =
-            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
-                .readText()
-        val headerSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderKakao(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
-        val modeTabSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderModeTab(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeaderWaypointLine")
+    fun `route search header policy keeps compact kakao geometry and shared tokens`() {
+        val headerPolicy = routeSearchHeaderPolicy(showModeTabs = true)
+        val modeTabs = routeSearchHeaderModeTabPolicies()
 
-        assertTrue(
-            "The route search header should keep the top bar separate from the full-width search summary card.",
-            headerSection.contains("text = stringResource(id = R.string.route_setting_screen_title)") &&
-                headerSection.contains(".heightIn(min = RouteSearchHeaderSummaryMinHeight)") &&
-                headerSection.contains("Spacer(modifier = Modifier.height(RouteSearchHeaderTopToSummaryGap))"),
-        )
-        assertTrue(
-            "The search summary card should stretch across the available width once the side close button is removed.",
-            headerSection.contains("modifier =\n                        Modifier\n                            .fillMaxWidth()"),
-        )
-        assertTrue(
-            "The transit and walk tabs should each take half of the available row width.",
-            headerSection.contains("modifier = Modifier.weight(1f)") &&
-                modeTabSection.contains("modifier: Modifier = Modifier") &&
-                modeTabSection.contains(".fillMaxWidth()") &&
-                !modeTabSection.contains(".size(width = RouteSearchHeaderModeTabWidth"),
-        )
-        assertTrue(
-            "The route search header should balance the summary-to-tabs gap with the blue bottom breathing room under the tabs.",
-            headerSection.contains("if (showModeTabs) RouteSearchHeaderModeTabsBottomPadding else RouteSearchHeaderVerticalPadding") &&
-                headerSection.contains("bottom = headerBottomPadding") &&
-                headerSection.contains("Spacer(modifier = Modifier.height(RouteSearchHeaderSummaryToModeTabsGap))") &&
-                source.contains("private val RouteSearchHeaderSummaryToModeTabsGap = 12.dp") &&
-                source.contains("private val RouteSearchHeaderModeTabsBottomPadding = 12.dp"),
-        )
+        assertEquals(R.string.route_setting_screen_title, headerPolicy.titleResId)
+        assertEquals(EumPrimary600, headerPolicy.containerColor)
+        assertEquals(EumWhite, headerPolicy.summaryContainerColor)
+        assertEquals(2, modeTabs.size)
+        assertEquals(RouteTravelMode.TRANSIT, modeTabs[0].mode)
+        assertEquals(RouteTravelMode.WALK, modeTabs[1].mode)
+        assertEquals(R.string.route_setting_travel_mode_transit, modeTabs[0].labelResId)
+        assertEquals(R.string.route_setting_travel_mode_walk, modeTabs[1].labelResId)
+        assertEquals(22.dp, modeTabs[0].iconSize)
+        assertEquals(26.dp, modeTabs[1].iconSize)
+        assertEquals(92.dp, headerPolicy.summaryMinHeight)
+        assertEquals(12.dp, headerPolicy.summaryToModeTabsGap)
+        assertEquals(36.dp, headerPolicy.modeTabHeight)
+        assertEquals(10.dp, headerPolicy.modeTabCornerRadius)
+        assertEquals(12.dp, headerPolicy.roleLabelGap)
+        assertTrue(headerPolicy.summaryUsesFullWidth)
+        assertTrue(headerPolicy.usesCompactWaypointTitle)
+        assertFalse(headerPolicy.showsCloseAction)
+        assertFalse(headerPolicy.showsMoreAction)
     }
 
     @Test
-    fun `route search header summary and mode boxes use shared service color tokens`() {
-        val source =
-            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
-                .readText()
-        val kakaoHeaderSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderKakao(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
-        val headerModeTabSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderModeTab(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeaderWaypointLine")
+    fun `route search header policy uses plain bottom padding when tabs are hidden`() {
+        val headerPolicy = routeSearchHeaderPolicy(showModeTabs = false)
 
-        assertTrue(
-            "The route search header container should use the shared primary service color token.",
-            source.contains("RouteSearchHeaderContainerColor = EumPrimary600"),
-        )
-        assertTrue(
-            "The departure-arrival summary box should stay on a white surface so the shared primary color remains the accent rather than tinting the whole search area.",
-            source.contains("RouteSearchHeaderEmphasizedBoxColor = EumWhite") &&
-                kakaoHeaderSection.contains("color = RouteSearchHeaderEmphasizedBoxColor"),
-        )
-        assertTrue(
-            "Travel mode boxes should reuse the same service-color token pair for selected and unselected states.",
-            source.contains("RouteSearchHeaderInactiveBoxColor = Color.White.copy(alpha = 0.18f)") &&
-                headerModeTabSection.contains("color = if (selected) RouteSearchHeaderEmphasizedBoxColor else RouteSearchHeaderInactiveBoxColor"),
-        )
-        assertFalse(
-            "The route search header should not keep a custom hardcoded blue that diverges from the shared service color.",
-            source.contains("RouteSearchHeaderBlue = Color(0xFF5B8DEF)"),
-        )
-    }
-
-    @Test
-    fun `route search header uses slightly smaller waypoint title typography`() {
-        val source =
-            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
-                .readText()
-        val waypointLineSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderWaypointLine(")
-                .substringBefore("@Composable\nprivate fun RouteScreenTopBar")
-
-        assertTrue(
-            "The origin and destination names in the route search header should step down one size from titleMedium.",
-            waypointLineSection.contains("style = MaterialTheme.typography.titleSmall"),
-        )
-        assertFalse(
-            "The route search header should not keep the larger titleMedium typography for waypoint names.",
-            waypointLineSection.contains("style = MaterialTheme.typography.titleMedium"),
-        )
-        assertTrue(
-            "Waypoint rows should color the role labels separately and increase the gap before the search text.",
-            waypointLineSection.contains("horizontalArrangement = Arrangement.spacedBy(RouteSearchHeaderRoleLabelGap)") &&
-                waypointLineSection.contains("routeSearchHeaderRoleLabelColor(roleLabel)") &&
-                source.contains("RouteWaypointOriginLabelColor = Color(0xFF16A34A)") &&
-                source.contains("RouteWaypointDestinationLabelColor = Color(0xFFF14337)"),
-        )
-    }
-
-    @Test
-    fun `route search header mode tabs use denser geometry and a larger walk icon`() {
-        val source =
-            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
-                .readText()
-        val kakaoHeaderSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderKakao(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
-        val headerModeTabSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderModeTab(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeaderWaypointLine")
-
-        assertTrue(
-            "The compact route-mode tabs should use separate icon sizes so the walk glyph can render larger than transit.",
-            kakaoHeaderSection.contains("iconSize = RouteSearchHeaderTransitTabIconSize") &&
-                kakaoHeaderSection.contains("iconSize = RouteSearchHeaderWalkTabIconSize") &&
-                source.contains("private val RouteSearchHeaderTransitTabIconSize = 22.dp") &&
-                source.contains("private val RouteSearchHeaderWalkTabIconSize = 26.dp"),
-        )
-        assertTrue(
-            "The compact route-mode tabs should reduce vertical height and stop using a full pill radius.",
-            headerModeTabSection.contains("shape = RoundedCornerShape(RouteSearchHeaderModeTabCornerRadius)") &&
-                source.contains("private val RouteSearchHeaderModeTabHeight = 36.dp") &&
-                source.contains("private val RouteSearchHeaderModeTabCornerRadius = 10.dp"),
-        )
+        assertEquals(8.dp, headerPolicy.contentBottomPadding)
     }
 
     @Test

@@ -235,7 +235,7 @@ private fun NavigationSegmentRailItem(
     }
 }
 
-private fun NavigationGuidanceAction.railIconSize(): Dp =
+internal fun NavigationGuidanceAction.railIconSize(): Dp =
     if (this == NavigationGuidanceAction.BUS || this == NavigationGuidanceAction.SUBWAY) {
         NavigationSegmentRailTransitIconSize
     } else {
@@ -430,7 +430,7 @@ private val NavigationSegmentRailItemUiState.isSelected: Boolean
     get() = isFocused || isActive
 
 private val NavigationSegmentRailIconSize = 34.dp
-private val NavigationSegmentRailTransitIconSize = 30.dp
+internal val NavigationSegmentRailTransitIconSize = 30.dp
 
 private val NavigationSegmentRailItemUiState.stateLabel: String
     get() =

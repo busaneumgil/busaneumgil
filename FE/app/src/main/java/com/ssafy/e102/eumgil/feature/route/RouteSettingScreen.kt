@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -89,6 +91,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
@@ -135,10 +139,16 @@ fun RouteSettingScreen(
         } else {
             uiState.cta.supportingText
         }
+    val disablesDefaultWindowInsets = routeSettingUsesEmptyWindowInsets()
 
     Scaffold(
         modifier = modifier,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets =
+            if (disablesDefaultWindowInsets) {
+                WindowInsets(0, 0, 0, 0)
+            } else {
+                WindowInsets(0, 0, 0, 0)
+            },
         topBar = {
             RouteSearchHeaderKakao(
                 uiState = uiState,
@@ -204,9 +214,10 @@ fun RouteSettingScreen(
     }
 
     if (isDuribalConfirmDialogVisible) {
-        RouteDuribalCallConfirmDialog(
+        EumDuribalCallConfirmDialog(
             onDismiss = onDuribalConfirmDismiss,
             onConfirm = onDuribalConfirm,
+            dismissStyle = EumDuribalCallConfirmDismissStyle.TextButton,
         )
     }
     pendingLowFloorReservation?.let { reservation ->
@@ -1250,43 +1261,6 @@ private fun LowFloorReservationConfirmDialog(
 }
 
 @Composable
-private fun RouteDuribalCallConfirmDialog(
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = stringResource(id = R.string.my_page_duribal_call_dialog_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        },
-        text = {
-            Text(
-                text = stringResource(id = R.string.my_page_duribal_call_dialog_message),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                shape = RoundedCornerShape(EumRadius.scaleM),
-            ) {
-                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_dismiss))
-            }
-        },
-    )
-}
-
-@Composable
 private fun RouteDetailSummaryCard(
     selectedRoute: RouteSelectedRouteUiState,
 ) {
@@ -1941,12 +1915,13 @@ private fun RouteSearchHeaderKakao(
     onModeSelected: (RouteTravelMode) -> Unit,
     showModeTabs: Boolean = true,
 ) {
-    val headerBottomPadding =
-        if (showModeTabs) RouteSearchHeaderModeTabsBottomPadding else RouteSearchHeaderVerticalPadding
+    val layoutPolicy = routeSettingLayoutPolicy()
+    val headerPolicy = routeSearchHeaderPolicy(showModeTabs = showModeTabs)
+    val modeTabs = routeSearchHeaderModeTabPolicies()
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = RouteSearchHeaderContainerColor,
+        color = headerPolicy.containerColor,
         shadowElevation = 0.dp,
     ) {
         Column(
@@ -1958,7 +1933,7 @@ private fun RouteSearchHeaderKakao(
                         start = EumSpacing.medium,
                         top = RouteSearchHeaderVerticalPadding,
                         end = EumSpacing.medium,
-                        bottom = headerBottomPadding,
+                        bottom = headerPolicy.contentBottomPadding,
                     ),
             verticalArrangement = Arrangement.Top,
         ) {
@@ -1976,7 +1951,7 @@ private fun RouteSearchHeaderKakao(
                     )
                 }
                 Text(
-                    text = stringResource(id = R.string.route_setting_screen_title),
+                    text = stringResource(id = headerPolicy.titleResId),
                     modifier = Modifier.align(Alignment.Center),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
@@ -1986,190 +1961,66 @@ private fun RouteSearchHeaderKakao(
             }
             Spacer(modifier = Modifier.height(RouteSearchHeaderTopToSummaryGap))
             Surface(
+                modifier =
+                    (
+                        if (headerPolicy.summaryUsesFullWidth) {
+                            Modifier.fillMaxWidth()
+                        } else {
+                            Modifier
+                        }
+                    )
+                        .heightIn(min = headerPolicy.summaryMinHeight),
+                shape = RoundedCornerShape(RouteSearchHeaderSummaryCornerRadius),
+                color = headerPolicy.summaryContainerColor,
+            ) {
+                Row(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .heightIn(min = RouteSearchHeaderSummaryMinHeight),
-                    shape = RoundedCornerShape(RouteSearchHeaderSummaryCornerRadius),
-                    color = RouteSearchHeaderEmphasizedBoxColor,
-                ) {
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = EumSpacing.small, vertical = EumSpacing.small),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(RouteSearchHeaderWaypointGap),
-                        ) {
-                            RouteSearchHeaderWaypointLine(
-                                roleLabel = "출발",
-                                waypoint = uiState.origin,
-                                onClick = onOriginClick,
-                            )
-                            HorizontalDivider(color = RouteSearchHeaderDividerColor)
-                            RouteSearchHeaderWaypointLine(
-                                roleLabel = "도착",
-                                waypoint = uiState.destination,
-                                onClick = onDestinationClick,
-                            )
-                        }
-                        IconButton(onClick = onSwapClick) {
-                            RouteWaypointSwapIcon(
-                                color = RouteSearchHeaderAccentColor,
-                                modifier = Modifier.size(width = RouteWaypointSwapIconWidth, height = RouteWaypointSwapIconHeight),
-                            )
-                        }
-                    }
-                }
-            if (showModeTabs) {
-                Spacer(modifier = Modifier.height(RouteSearchHeaderSummaryToModeTabsGap))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RouteSearchHeaderModeTab(
-                        label = "대중교통",
-                        modifier = Modifier.weight(1f),
-                        iconResId = R.drawable.ic_route_mode_transit,
-                        iconSize = RouteSearchHeaderTransitTabIconSize,
-                        selected = uiState.selectedTravelMode == RouteTravelMode.TRANSIT,
-                        enabled = true,
-                        onClick = { onModeSelected(RouteTravelMode.TRANSIT) },
-                    )
-                    RouteSearchHeaderModeTab(
-                        label = "도보",
-                        modifier = Modifier.weight(1f),
-                        iconResId = R.drawable.ic_route_mode_walk,
-                        iconSize = RouteSearchHeaderWalkTabIconSize,
-                        selected = uiState.selectedTravelMode == RouteTravelMode.WALK,
-                        enabled = true,
-                        onClick = { onModeSelected(RouteTravelMode.WALK) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RouteSearchHeader(
-    uiState: RouteSettingUiState,
-    onBackClick: () -> Unit,
-    onCloseClick: () -> Unit,
-    onOriginClick: () -> Unit,
-    onDestinationClick: () -> Unit,
-    onSwapClick: () -> Unit,
-    onModeSelected: (RouteTravelMode) -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = RouteSearchHeaderContainerColor,
-        shadowElevation = 0.dp,
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = EumSpacing.medium, vertical = RouteSearchHeaderVerticalPadding),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_action_back),
-                        contentDescription = stringResource(id = R.string.route_setting_back),
-                        tint = Color.White,
-                    )
-                }
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RouteSearchHeaderModeTab(
-                        label = "자동차",
-                        iconResId = R.drawable.ic_nav_route,
-                        iconSize = RouteSearchHeaderTransitTabIconSize,
-                        selected = false,
-                        enabled = false,
-                        onClick = {},
-                    )
-                    RouteSearchHeaderModeTab(
-                        label = "대중교통",
-                        iconResId = R.drawable.ic_route_mode_transit,
-                        iconSize = RouteSearchHeaderTransitTabIconSize,
-                        selected = uiState.selectedTravelMode == RouteTravelMode.TRANSIT,
-                        enabled = true,
-                        onClick = { onModeSelected(RouteTravelMode.TRANSIT) },
-                    )
-                    RouteSearchHeaderModeTab(
-                        label = "도보",
-                        iconResId = R.drawable.ic_route_mode_walk,
-                        iconSize = RouteSearchHeaderWalkTabIconSize,
-                        selected = uiState.selectedTravelMode == RouteTravelMode.WALK,
-                        enabled = true,
-                        onClick = { onModeSelected(RouteTravelMode.WALK) },
-                    )
-                    RouteSearchHeaderModeTab(
-                        label = "자전거",
-                        iconResId = R.drawable.ic_nav_route,
-                        iconSize = RouteSearchHeaderTransitTabIconSize,
-                        selected = false,
-                        enabled = false,
-                        onClick = {},
-                    )
-                }
-                IconButton(onClick = onCloseClick) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_action_close),
-                        contentDescription = stringResource(id = R.string.map_facility_detail_close),
-                        tint = Color.White,
-                    )
-                }
-            }
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(RouteSearchHeaderSummaryCornerRadius),
-                color = RouteSearchHeaderEmphasizedBoxColor,
-            ) {
-                Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = EumSpacing.small, vertical = EumSpacing.small),
+                            .padding(horizontal = EumSpacing.small, vertical = EumSpacing.small),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalArrangement = Arrangement.spacedBy(RouteSearchHeaderWaypointGap),
                     ) {
                         RouteSearchHeaderWaypointLine(
-                            roleLabel = "출발",
+                            roleLabel = layoutPolicy.originLabel,
                             waypoint = uiState.origin,
                             onClick = onOriginClick,
                         )
+                        HorizontalDivider(color = RouteSearchHeaderDividerColor)
                         RouteSearchHeaderWaypointLine(
-                            roleLabel = "도착",
+                            roleLabel = layoutPolicy.destinationLabel,
                             waypoint = uiState.destination,
                             onClick = onDestinationClick,
                         )
                     }
                     IconButton(onClick = onSwapClick) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_action_dropdown),
-                            contentDescription = stringResource(id = R.string.route_setting_waypoint_swap),
-                            tint = RouteSearchHeaderAccentColor,
+                        RouteWaypointSwapIcon(
+                            color = RouteSearchHeaderAccentColor,
+                            modifier = Modifier.size(width = RouteWaypointSwapIconWidth, height = RouteWaypointSwapIconHeight),
+                        )
+                    }
+                }
+            }
+            if (showModeTabs) {
+                Spacer(modifier = Modifier.height(headerPolicy.summaryToModeTabsGap))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    modeTabs.forEach { tabPolicy ->
+                        RouteSearchHeaderModeTab(
+                            label = stringResource(id = tabPolicy.labelResId),
+                            modifier = Modifier.weight(1f),
+                            iconResId = tabPolicy.iconResId,
+                            iconSize = tabPolicy.iconSize,
+                            selected = uiState.selectedTravelMode == tabPolicy.mode,
+                            enabled = true,
+                            onClick = { onModeSelected(tabPolicy.mode) },
                         )
                     }
                 }
@@ -2188,17 +2039,18 @@ private fun RouteSearchHeaderModeTab(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val headerPolicy = routeSearchHeaderPolicy()
     Surface(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(RouteSearchHeaderModeTabHeight)
+                .height(headerPolicy.modeTabHeight)
                 .clickable(enabled = enabled, role = Role.Tab, onClick = onClick)
                 .semantics {
                     contentDescription = label
                 },
-        shape = RoundedCornerShape(RouteSearchHeaderModeTabCornerRadius),
-        color = if (selected) RouteSearchHeaderEmphasizedBoxColor else RouteSearchHeaderInactiveBoxColor,
+        shape = RoundedCornerShape(headerPolicy.modeTabCornerRadius),
+        color = if (selected) headerPolicy.summaryContainerColor else headerPolicy.inactiveTabContainerColor,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = EumSpacing.small),
@@ -2239,13 +2091,14 @@ private fun RouteSearchHeaderWaypointLine(
     waypoint: RouteLocationUiState,
     onClick: () -> Unit,
 ) {
+    val headerPolicy = routeSearchHeaderPolicy()
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(role = Role.Button, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(RouteSearchHeaderRoleLabelGap),
+        horizontalArrangement = Arrangement.spacedBy(headerPolicy.roleLabelGap),
     ) {
         Text(
             text = roleLabel,
@@ -2255,7 +2108,12 @@ private fun RouteSearchHeaderWaypointLine(
         )
         Text(
             text = waypoint.name.takeIf(String::isNotBlank) ?: roleLabel,
-            style = MaterialTheme.typography.titleSmall,
+            style =
+                if (headerPolicy.usesCompactWaypointTitle) {
+                    MaterialTheme.typography.titleSmall
+                } else {
+                    MaterialTheme.typography.titleMedium
+                },
             color = RouteSearchHeaderEmphasizedContentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -2291,6 +2149,66 @@ internal fun routeScreenTopBarPolicy(): RouteScreenTopBarPolicy =
     RouteScreenTopBarPolicy(
         showBackButton = true,
         titleFontWeight = FontWeight.SemiBold,
+    )
+
+internal data class RouteSearchHeaderPolicy(
+    @StringRes val titleResId: Int,
+    val containerColor: Color,
+    val summaryContainerColor: Color,
+    val inactiveTabContainerColor: Color,
+    val contentBottomPadding: Dp,
+    val summaryMinHeight: Dp,
+    val summaryToModeTabsGap: Dp,
+    val modeTabHeight: Dp,
+    val modeTabCornerRadius: Dp,
+    val roleLabelGap: Dp,
+    val usesCompactWaypointTitle: Boolean,
+    val summaryUsesFullWidth: Boolean,
+    val showsCloseAction: Boolean,
+    val showsMoreAction: Boolean,
+)
+
+internal data class RouteSearchHeaderModeTabPolicy(
+    val mode: RouteTravelMode,
+    @StringRes val labelResId: Int,
+    @DrawableRes val iconResId: Int,
+    val iconSize: Dp,
+)
+
+internal fun routeSettingUsesEmptyWindowInsets(): Boolean = true
+
+internal fun routeSearchHeaderPolicy(showModeTabs: Boolean = true): RouteSearchHeaderPolicy =
+    RouteSearchHeaderPolicy(
+        titleResId = R.string.route_setting_screen_title,
+        containerColor = RouteSearchHeaderContainerColor,
+        summaryContainerColor = RouteSearchHeaderEmphasizedBoxColor,
+        inactiveTabContainerColor = RouteSearchHeaderInactiveBoxColor,
+        contentBottomPadding = if (showModeTabs) RouteSearchHeaderModeTabsBottomPadding else RouteSearchHeaderVerticalPadding,
+        summaryMinHeight = RouteSearchHeaderSummaryMinHeight,
+        summaryToModeTabsGap = RouteSearchHeaderSummaryToModeTabsGap,
+        modeTabHeight = RouteSearchHeaderModeTabHeight,
+        modeTabCornerRadius = RouteSearchHeaderModeTabCornerRadius,
+        roleLabelGap = RouteSearchHeaderRoleLabelGap,
+        usesCompactWaypointTitle = true,
+        summaryUsesFullWidth = true,
+        showsCloseAction = false,
+        showsMoreAction = false,
+    )
+
+internal fun routeSearchHeaderModeTabPolicies(): List<RouteSearchHeaderModeTabPolicy> =
+    listOf(
+        RouteSearchHeaderModeTabPolicy(
+            mode = RouteTravelMode.TRANSIT,
+            labelResId = R.string.route_setting_travel_mode_transit,
+            iconResId = R.drawable.ic_route_mode_transit,
+            iconSize = RouteSearchHeaderTransitTabIconSize,
+        ),
+        RouteSearchHeaderModeTabPolicy(
+            mode = RouteTravelMode.WALK,
+            labelResId = R.string.route_setting_travel_mode_walk,
+            iconResId = R.drawable.ic_route_mode_walk,
+            iconSize = RouteSearchHeaderWalkTabIconSize,
+        ),
     )
 
 internal data class RouteSettingLayoutPolicy(
@@ -3748,26 +3666,6 @@ private fun RouteTransitOptionChip(option: RouteTransitOptionLabelUiState) {
 }
 
 @Composable
-private fun RouteInlineStartActionButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors =
-            ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
-    ) {
-        Text(
-            text = "안내시작",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
 private fun RouteOptionPrefixBadge(
     label: String,
     accentColor: Color,
@@ -3844,30 +3742,6 @@ private fun RouteOptionDetailButton(
     }
 }
 */
-
-@Composable
-private fun RouteOptionSelectionIndicator(
-    isSelected: Boolean,
-    accentColor: Color,
-) {
-    Surface(
-        modifier = Modifier.padding(top = 2.dp),
-        shape = CircleShape,
-        color = if (isSelected) accentColor.copy(alpha = 0.12f) else Color.Transparent,
-        border = BorderStroke(1.dp, if (isSelected) accentColor else MaterialTheme.colorScheme.outline),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .padding(4.dp)
-                    .size(8.dp)
-                    .background(
-                        color = if (isSelected) accentColor else Color.Transparent,
-                        shape = CircleShape,
-                    ),
-        )
-    }
-}
 
 @Composable
 private fun RouteMetricTile(

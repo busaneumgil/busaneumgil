@@ -438,6 +438,40 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `low vision mode speaks next segment before the turn boundary`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    initialLowVisionMode = true,
+                )
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_PRE_TURN_POINT.latitude,
+                    longitude = WALK_PRE_TURN_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(NavigationUiEvent.SpeakBriefing("600m \uD6C4 \uC6B0\uD68C\uC804")),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
     fun `low vision far off route uses fresh walk search metrics when destination is walkable`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -1391,6 +1425,7 @@ private fun lowVisionRemainingSearchData(
     )
 
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+private val WALK_PRE_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.077905)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1815, longitude = 129.0756)

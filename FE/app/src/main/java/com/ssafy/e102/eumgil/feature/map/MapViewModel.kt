@@ -78,7 +78,9 @@ class MapViewModel(
 
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
+    private var selectedOrigin: PlaceDestination? = destinationSelectionRepository.selectedOrigin.value
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
+    private var routeEditingTarget: RouteEditingTarget = destinationSelectionRepository.editingTarget.value
     private var selectedMarkerId: String? = null
     private var selectedMapPinCoordinate: MapCoordinate? = null
     private var selectedFacilityDetail: FacilityDetailSeed? = null
@@ -103,7 +105,11 @@ class MapViewModel(
 
     init {
         mutableUiState.update { state ->
-            state.copy(selectedDestination = selectedDestination)
+            state.copy(
+                selectedOrigin = selectedOrigin,
+                selectedDestination = selectedDestination,
+                routeEditingTarget = routeEditingTarget,
+            )
         }
         selectedDestination?.let { destination ->
             syncCameraToSelectedDestination(
@@ -219,7 +225,8 @@ class MapViewModel(
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
             is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
             MapUiAction.SearchHereClicked -> handleSearchHereClicked()
-            MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch)
+            MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch(RouteEditingTarget.DESTINATION))
+            is MapUiAction.RouteEndpointStatusClicked -> handleRouteEndpointStatusClicked(action.editingTarget)
         }
     }
 
@@ -505,7 +512,7 @@ class MapViewModel(
             renderSelectedFacilityState()
             destinationSelectionRepository.setEditingTarget(editingTarget)
             destinationSelectionRepository.updateSelectionForEditingTarget(preview.destination)
-            emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+            navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
             return
         }
 
@@ -517,7 +524,24 @@ class MapViewModel(
         renderSelectedFacilityState()
         destinationSelectionRepository.setEditingTarget(editingTarget)
         destinationSelectionRepository.updateSelectionForEditingTarget(destination)
+        navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
+    }
+
+    private fun navigateToRouteSettingIfRouteEndpointsReady(editingTarget: RouteEditingTarget) {
+        val hasDestination = destinationSelectionRepository.selectedDestination.value != null
+        if (editingTarget == RouteEditingTarget.ORIGIN && !hasDestination) {
+            return
+        }
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun handleRouteEndpointStatusClicked(editingTarget: RouteEditingTarget) {
+        destinationSelectionRepository.setEditingTarget(editingTarget)
+        routeEditingTarget = editingTarget
+        mutableUiState.update { state ->
+            state.copy(routeEditingTarget = editingTarget)
+        }
+        emitUiEvent(MapUiEvent.NavigateToSearch(editingTarget))
     }
 
     private fun handleRecentDestinationRouteClicked(placeId: String) {
@@ -704,6 +728,14 @@ class MapViewModel(
     private fun observeSelectionRequests() {
         viewModelScope.launch {
             destinationSelectionRepository.selectionRequests.collectLatest { request ->
+                selectedOrigin = request.state.selectedOrigin
+                routeEditingTarget = request.state.editingTarget
+                mutableUiState.update { state ->
+                    state.copy(
+                        selectedOrigin = selectedOrigin,
+                        routeEditingTarget = routeEditingTarget,
+                    )
+                }
                 if (
                     request.reason != RouteSelectionRequestReason.DESTINATION_UPDATED &&
                     request.reason != RouteSelectionRequestReason.DESTINATION_CLEARED &&
@@ -1219,7 +1251,9 @@ class MapViewModel(
 
         mutableUiState.update { state ->
             state.copy(
+                selectedOrigin = selectedOrigin,
                 selectedDestination = selectedDestination,
+                routeEditingTarget = routeEditingTarget,
                 locationStatus = locationStatus,
                 recenterButtonState = recenterButtonState,
                 isRecenterButtonActive = isRecenterButtonActive,

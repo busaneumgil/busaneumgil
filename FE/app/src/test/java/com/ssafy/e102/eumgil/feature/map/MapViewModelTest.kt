@@ -97,6 +97,56 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `route endpoint state exposes selected origin and active editing target`() =
+        runTest {
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val locationManager = FakeCurrentLocationManager()
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val origin = testDestination().copy(placeId = "origin-1", name = "부산시청")
+
+            destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
+            destinationSelectionRepository.updateSelectedOrigin(origin)
+            advanceUntilIdle()
+
+            assertEquals(RouteEditingTarget.ORIGIN, viewModel.uiState.value.routeEditingTarget)
+            assertEquals(origin, viewModel.uiState.value.selectedOrigin)
+        }
+
+    @Test
+    fun `route endpoint status click opens search for requested endpoint`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onAction(MapUiAction.RouteEndpointStatusClicked(RouteEditingTarget.ORIGIN))
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals(RouteEditingTarget.ORIGIN, destinationSelectionRepository.editingTarget.value)
+            assertEquals(RouteEditingTarget.ORIGIN, viewModel.uiState.value.routeEditingTarget)
+            assertEquals(MapUiEvent.NavigateToSearch(RouteEditingTarget.ORIGIN), event)
+        }
+
+    @Test
     fun `search preview centers camera and opens bottom sheet without selecting route destination`() =
         runTest {
             val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
@@ -424,8 +474,14 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.ORIGIN))
             advanceUntilIdle()
 
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(event)
         }
 
     @Test
@@ -469,6 +525,58 @@ class MapViewModelTest {
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
+        }
+
+    @Test
+    fun `origin CTA navigates to route setting when destination already exists`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val origin =
+                PlaceDestination(
+                    placeId = "origin-new",
+                    name = "New Origin",
+                    address = "1 Origin-ro, Busan",
+                    latitude = 35.1200,
+                    longitude = 129.0400,
+                    category = PlaceCategory.OTHER,
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "destination-existing",
+                    name = "Existing Destination",
+                    address = "2 Destination-ro, Busan",
+                    latitude = 35.1400,
+                    longitude = 129.0600,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                )
+            destinationSelectionRepository.updateSelectedDestination(destination)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            destinationPreviewRepository.requestPreview(
+                destination = origin,
+                editingTarget = RouteEditingTarget.ORIGIN,
+            )
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.ORIGIN))
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
 
     @Test

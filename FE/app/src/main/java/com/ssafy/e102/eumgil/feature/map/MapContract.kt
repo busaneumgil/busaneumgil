@@ -17,7 +17,9 @@ import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
     val rendererSessionKey: Long = 0L,
+    val selectedOrigin: PlaceDestination? = null,
     val selectedDestination: PlaceDestination? = null,
+    val routeEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     val selectedMarkerId: String? = null,
     val selectedMapPinCoordinate: MapCoordinate? = null,
     val locationStatus: MapLocationStatus = MapLocationStatus.PermissionDenied,
@@ -83,6 +85,10 @@ sealed interface MapUiAction {
         val editingTarget: RouteEditingTarget,
     ) : MapUiAction
 
+    data class RouteEndpointStatusClicked(
+        val editingTarget: RouteEditingTarget,
+    ) : MapUiAction
+
     data class ShortcutFilterClicked(
         val key: MapShortcutFilterKey,
     ) : MapUiAction
@@ -116,7 +122,9 @@ sealed interface MapUiAction {
 }
 
 sealed interface MapUiEvent {
-    data object NavigateToSearch : MapUiEvent
+    data class NavigateToSearch(
+        val editingTarget: RouteEditingTarget,
+    ) : MapUiEvent
 
     data object NavigateToRouteSetting : MapUiEvent
 

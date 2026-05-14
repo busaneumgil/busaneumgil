@@ -164,13 +164,19 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
-    fun `map viewport state uses destination preview metadata before route destination`() {
+    fun `map viewport state routes preview metadata by editing target before selected endpoints`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
 
         assertTrue(
-            "Map viewport state should derive display metadata from the active destination preview before falling back to the persisted route destination.",
-            source.contains("val viewportDestination = uiState.facilityDetailSheetState.destinationPreview?.destination ?: uiState.selectedDestination"),
+            "Map viewport state should treat an origin preview as the effective origin endpoint.",
+            source.contains("preview?.editingTarget == RouteEditingTarget.ORIGIN") &&
+                source.contains("uiState.selectedOrigin"),
+        )
+        assertTrue(
+            "Map viewport state should treat a destination preview as the effective destination endpoint.",
+            source.contains("preview?.editingTarget == RouteEditingTarget.DESTINATION") &&
+                source.contains("uiState.selectedDestination"),
         )
         assertTrue(
             "Selected destination summary should use the effective viewport destination so preview screens announce the searched place name.",

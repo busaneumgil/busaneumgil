@@ -1012,6 +1012,7 @@ private class KakaoMapViewportController {
         val projectedMarkers =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = state?.currentLocation,
+                selectedOriginCoordinate = state?.selectedOriginCoordinate,
                 selectedDestinationCoordinate = state?.selectedDestinationCoordinate,
                 selectedMapPinCoordinate = state?.selectedMapPinCoordinate,
                 overlayPoints = state?.overlayState?.points.orEmpty(),

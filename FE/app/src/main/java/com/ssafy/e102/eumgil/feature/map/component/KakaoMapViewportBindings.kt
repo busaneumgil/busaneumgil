@@ -309,6 +309,7 @@ internal fun createKakaoMarkerRenderStates(
 
 internal fun createKakaoProjectedMarkerRenderStates(
     currentLocation: MapCoordinate?,
+    selectedOriginCoordinate: MapCoordinate? = null,
     selectedDestinationCoordinate: MapCoordinate?,
     selectedMapPinCoordinate: MapCoordinate?,
     overlayPoints: List<MapViewportPointOverlay> = emptyList(),
@@ -337,17 +338,31 @@ internal fun createKakaoProjectedMarkerRenderStates(
             },
         )
         if (selectedMapPinCoordinate == null) {
+            selectedOriginCoordinate?.let { coordinate ->
+                add(
+                    KakaoProjectedMarkerRenderState(
+                        markerId = "selected-origin",
+                        coordinate = coordinate,
+                        kind = KakaoProjectedMarkerKind.ROUTE_ORIGIN,
+                        iconResId = R.drawable.ic_navigation_rail_origin_pin,
+                        anchorPointX = 0.5f,
+                        anchorPointY = 1.0f,
+                        sizeDp = 34,
+                        zIndex = 3f,
+                    ),
+                )
+            }
             selectedDestinationCoordinate?.let { coordinate ->
                 add(
                     KakaoProjectedMarkerRenderState(
                         markerId = "selected-destination",
                         coordinate = coordinate,
-                        kind = KakaoProjectedMarkerKind.SELECTED_DESTINATION,
-                        iconResId = R.drawable.ic_map_selected_pin_blue,
+                        kind = KakaoProjectedMarkerKind.ROUTE_DESTINATION,
+                        iconResId = R.drawable.ic_navigation_rail_destination_pin,
                         anchorPointX = 0.5f,
                         anchorPointY = 1.0f,
-                        sizeDp = 32,
-                        zIndex = 3f,
+                        sizeDp = 34,
+                        zIndex = 4f,
                     ),
                 )
             }

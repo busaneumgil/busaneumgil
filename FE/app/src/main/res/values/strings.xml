@@ -249,8 +249,11 @@
     <string name="map_facility_detail_guide_fallback_braille_generic">점자블록 위치를 기준으로 주변 보행 동선을 먼저 확인해 주세요.</string>
     <string name="map_facility_detail_guide_fallback_other">시설 상세 정보는 계속 보강 중입니다. 길안내 전 주소와 주변 동선을 함께 확인해 주세요.</string>
     <string name="map_facility_detail_route_entry_action">도착지로 설정</string>
-    <string name="map_facility_detail_set_origin_action">출발</string>
-    <string name="map_facility_detail_set_destination_action">도착</string>
+    <string name="map_facility_detail_set_origin_action">출발지로 설정</string>
+    <string name="map_facility_detail_set_destination_action">도착지로 설정</string>
+    <string name="map_route_selection_origin_empty">미선택</string>
+    <string name="map_route_selection_destination_empty">미선택</string>
+    <string name="map_route_selection_status_a11y">출발 %1$s. 도착 %2$s.</string>
     <string name="map_facility_detail_sheet_toggle">장소 상세 접기/펼치기</string>
     <string name="map_facility_detail_close">장소 선택 닫기</string>
     <string name="map_facility_detail_action_supporting">실제 route setting 연결은 다음 스레드에서 마무리하고, 추가 CTA 슬롯도 이 영역에 확장합니다.</string>

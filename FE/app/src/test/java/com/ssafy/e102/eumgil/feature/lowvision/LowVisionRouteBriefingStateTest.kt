@@ -1,6 +1,13 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteLeg
+import com.ssafy.e102.eumgil.core.model.RouteLegType
+import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.core.model.RouteStep
+import com.ssafy.e102.eumgil.core.model.RouteSummary
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -77,6 +84,47 @@ class LowVisionRouteBriefingStateTest {
                 guidanceMessage = "\uC624\uB978\uCABD\uC73C\uB85C \uC774\uB3D9\uD558\uC138\uC694",
             ).toDetailedBriefingInstruction(),
         )
+    }
+
+    @Test
+    fun `route briefing falls back to leg step elements when route segments are absent`() {
+        val route =
+            RouteCandidate(
+                routeOption = RouteOption.SAFE,
+                title = "Safe route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 160,
+                        estimatedTimeMinutes = 3,
+                        riskLevel = RouteRiskLevel.LOW,
+                    ),
+                segments = emptyList(),
+                legs =
+                    listOf(
+                        RouteLeg(
+                            sequence = 1,
+                            type = RouteLegType.WALK,
+                            steps =
+                                listOf(
+                                    RouteStep(
+                                        sequence = 1,
+                                        instruction = "Continue straight",
+                                        distanceMeters = 120,
+                                    ),
+                                    RouteStep(
+                                        sequence = 2,
+                                        instruction = "Turn right",
+                                        distanceMeters = 40,
+                                    ),
+                                ),
+                        ),
+                    ),
+            )
+
+        val steps = route.toLowVisionRouteBriefingSteps()
+
+        assertEquals(listOf(1, 2), steps.map(LowVisionRouteBriefingStepUiState::sequence))
+        assertEquals(listOf("120m Continue straight", "40m Turn right"), steps.map { it.instruction })
     }
 
     private fun briefingStep(sequence: Int): LowVisionRouteBriefingStepUiState =

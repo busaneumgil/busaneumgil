@@ -626,7 +626,14 @@ fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
 }
 
 internal fun NavController.navigateToTopLevelMapForHomeEntry() {
-    navigateToTopLevel(TopLevelDestination.Map)
+    val didPopToMap =
+        popBackStack(
+            route = TopLevelRoute.Map.route,
+            inclusive = false,
+        )
+    if (!didPopToMap) {
+        navigateToTopLevel(TopLevelDestination.Map)
+    }
     getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestMapHomeReentryReset()
 }
 

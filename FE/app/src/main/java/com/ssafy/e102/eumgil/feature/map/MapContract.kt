@@ -99,6 +99,8 @@ sealed interface MapUiAction {
 
     data object FacilityBookmarkClicked : MapUiAction
 
+    data object FacilityPhoneClicked : MapUiAction
+
     data class MarkerTapped(
         val markerId: String,
     ) : MapUiAction
@@ -132,6 +134,10 @@ sealed interface MapUiEvent {
 
     data class ShowSnackbar(
         val message: String,
+    ) : MapUiEvent
+
+    data class OpenDialer(
+        val phoneNumber: String,
     ) : MapUiEvent
 }
 

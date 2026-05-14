@@ -196,6 +196,60 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `search preview hydrates internal place detail phone number when detail api is available`() =
+        runTest {
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val locationManager = FakeCurrentLocationManager()
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val placesRepository =
+                FakePlacesRepository(
+                    placeDetailsById =
+                        mapOf(
+                            "preview-1" to
+                                PlaceDetail(
+                                    placeId = "preview-1",
+                                    name = "Busan Tower",
+                                    address = "1 Yongdusan-gil, Busan",
+                                    latitude = 35.1000,
+                                    longitude = 129.0320,
+                                    category = PlaceCategory.TOURIST_SPOT,
+                                    phoneNumber = "051-600-1000",
+                                ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-1",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(
+                destination = destination,
+                accessibilityTagKeys = listOf("elevator"),
+            )
+            advanceUntilIdle()
+
+            val sheetState = viewModel.uiState.value.facilityDetailSheetState
+            assertEquals("051-600-1000", sheetState.mapTapDetail?.phoneNumber)
+            assertEquals(listOf("elevator"), sheetState.mapTapDetail?.accessibilityTags)
+        }
+
+    @Test
     fun `search preview keeps preview camera when map route restarts with current location available`() =
         runTest {
             val initialLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
@@ -1444,6 +1498,51 @@ class MapViewModelTest {
             assertEquals("Kakao Cafe", selectedDestination.name)
             assertEquals(tappedCoordinate.latitude, selectedDestination.latitude, 0.0)
             assertEquals(tappedCoordinate.longitude, selectedDestination.longitude, 0.0)
+        }
+
+    @Test
+    fun `facility phone click emits dialer event for selected marker detail`() =
+        runTest {
+            val placesRepository =
+                FakePlacesRepository(
+                    placeDetailsById =
+                        mapOf(
+                            "101" to
+                                PlaceDetail(
+                                    placeId = "101",
+                                    name = "Accessible Hotel",
+                                    address = "10 Haeundae-ro, Busan",
+                                    latitude = 35.1587,
+                                    longitude = 129.1604,
+                                    category = PlaceCategory.ACCOMMODATION,
+                                    phoneNumber = "051-700-1000",
+                                ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.MarkerTapped("101"))
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.FacilityPhoneClicked)
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals(MapUiEvent.OpenDialer("051-700-1000"), event)
         }
 
     @Test
@@ -2727,6 +2826,7 @@ private fun testMapTappedDetail(
     longitude: Double,
     isBookmarked: Boolean = false,
     accessibilityTags: List<String> = emptyList(),
+    phoneNumber: String? = null,
 ): MapTappedPlaceDetail =
     MapTappedPlaceDetail(
         bookmarkTargetId = bookmarkTargetId,
@@ -2742,6 +2842,7 @@ private fun testMapTappedDetail(
         longitude = longitude,
         isBookmarked = isBookmarked,
         accessibilityTags = accessibilityTags,
+        phoneNumber = phoneNumber,
     )
 
 private class FakeLocationPermissionManager(

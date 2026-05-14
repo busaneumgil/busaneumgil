@@ -91,7 +91,7 @@ fun EumMapFloatingControls(
                     Icon(
                         painter = painterResource(id = actionButtonState.iconRes),
                         contentDescription = actionButtonState.contentDescription,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(MAP_FLOATING_ACTION_ICON_SIZE),
                         tint = actionButtonState.tint,
                     )
                 } else {
@@ -106,6 +106,8 @@ fun EumMapFloatingControls(
         }
     }
 }
+
+private val MAP_FLOATING_ACTION_ICON_SIZE = 18.dp
 
 @Composable
 private fun EumMapZoomControlButton(

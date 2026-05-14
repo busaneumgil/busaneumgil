@@ -196,6 +196,8 @@
     <string name="map_facility_detail_distance_meters">%1$d m</string>
     <string name="map_facility_detail_distance_kilometers">%.1f km</string>
     <string name="map_facility_detail_address_fallback">주소 정보 준비 중</string>
+    <string name="map_facility_detail_phone_value">%1$s</string>
+    <string name="map_facility_detail_phone_action">%1$s 번호로 전화 앱 열기</string>
     <string name="map_facility_detail_accessibility_section_title">접근성 태그</string>
     <string name="map_facility_detail_accessibility_empty">접근성 정보 준비 중</string>
     <string name="map_facility_detail_tag_ramp">경사로</string>

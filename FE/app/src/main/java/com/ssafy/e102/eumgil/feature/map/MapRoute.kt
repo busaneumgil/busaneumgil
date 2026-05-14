@@ -20,6 +20,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.external.createDialIntent
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.flow.collect
 
@@ -97,6 +98,7 @@ fun MapRoute(
         viewModel,
         activity,
         appContainer,
+        context,
         onNavigateToRouteSetting,
         onNavigateToSearch,
         snackbarHostState,
@@ -105,6 +107,7 @@ fun MapRoute(
             when (event) {
                 MapUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 is MapUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
+                is MapUiEvent.OpenDialer -> context.startActivity(createDialIntent(event.phoneNumber))
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
                 is MapUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)

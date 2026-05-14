@@ -54,6 +54,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -68,6 +69,7 @@ data class FacilityDetailBottomSheetShellState(
     val metaLabel: String = "",
     val title: String = "",
     val address: String = "",
+    val phoneNumber: String? = null,
     val hasDetailContent: Boolean = false,
 )
 
@@ -75,6 +77,7 @@ data class FacilityDetailBottomSheetShellState(
 fun FacilityDetailBottomSheetShell(
     state: FacilityDetailBottomSheetShellState,
     modifier: Modifier = Modifier,
+    onPhoneClick: (() -> Unit)? = null,
     detailContent: @Composable ColumnScope.() -> Unit,
     headerActionContent: (@Composable () -> Unit)? = null,
     actionContent: @Composable ColumnScope.() -> Unit,
@@ -83,6 +86,7 @@ fun FacilityDetailBottomSheetShell(
     val dragSettleVelocityThresholdPx = with(density) { 320.dp.toPx() }
     val collapseThresholdMinPx = with(density) { 72.dp.toPx() }
     val handleInteractionSource = remember { MutableInteractionSource() }
+    val phoneInteractionSource = remember { MutableInteractionSource() }
     var sheetHeightPx by remember(state.isVisible) { mutableIntStateOf(0) }
     var sheetOffsetPx by remember(state.isVisible) { mutableFloatStateOf(0f) }
     var isDragging by remember(state.isVisible) { mutableStateOf(false) }
@@ -233,6 +237,47 @@ fun FacilityDetailBottomSheetShell(
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                                val phoneNumber = state.phoneNumber?.takeIf { it.isNotBlank() }
+                                if (phoneNumber != null && onPhoneClick != null) {
+                                    val phoneActionDescription =
+                                        stringResource(
+                                            id = R.string.map_facility_detail_phone_action,
+                                            phoneNumber,
+                                        )
+                                    Row(
+                                        modifier =
+                                            Modifier
+                                                .semantics {
+                                                    role = Role.Button
+                                                    contentDescription = phoneActionDescription
+                                                }
+                                                .clickable(
+                                                    interactionSource = phoneInteractionSource,
+                                                    indication = null,
+                                                    onClick = onPhoneClick,
+                                                ),
+                                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = R.drawable.ic_permission_contacts),
+                                            contentDescription = null,
+                                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary),
+                                        )
+                                        Text(
+                                            text =
+                                                stringResource(
+                                                    id = R.string.map_facility_detail_phone_value,
+                                                    phoneNumber,
+                                                ),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            textDecoration = TextDecoration.Underline,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
                             }
                         }
 

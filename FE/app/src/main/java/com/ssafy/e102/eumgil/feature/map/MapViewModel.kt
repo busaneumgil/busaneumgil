@@ -17,6 +17,7 @@ import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
 import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
+import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
@@ -210,6 +211,7 @@ class MapViewModel(
         when (action) {
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
+            MapUiAction.FacilityPhoneClicked -> handleFacilityPhoneClicked()
             MapUiAction.FacilitySetDestinationClicked ->
                 handleFacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION)
             is MapUiAction.FacilitySetRouteEndpointClicked ->
@@ -830,6 +832,7 @@ class MapViewModel(
             )
 
         mapTapDetailRequestId += 1L
+        val requestId = mapTapDetailRequestId
         mapTapDetailLookupJob?.cancel()
         mapTapDetailLookupJob = null
         selectedMapPinCoordinate = coordinate
@@ -852,6 +855,42 @@ class MapViewModel(
         )
         renderSelectedFacilityState()
         renderUiState()
+        hydrateDestinationPreviewDetail(
+            previewRequest = previewRequest,
+            requestId = requestId,
+        )
+    }
+
+    private fun hydrateDestinationPreviewDetail(
+        previewRequest: DestinationPreviewRequest,
+        requestId: Long,
+    ) {
+        if (previewRequest.detailType != MapPlaceDetailType.INTERNAL_PLACE) return
+
+        val placeId = previewRequest.destination.placeId.takeIf(String::isNotBlank) ?: return
+        val placesRepository = placesRepository ?: return
+
+        viewModelScope.launch {
+            runCatching { placesRepository.getPlaceDetail(placeId) }
+                .onSuccess { placeDetail ->
+                    if (requestId != mapTapDetailRequestId) return@onSuccess
+                    if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onSuccess
+                    if (placeDetail == null) return@onSuccess
+
+                    selectedMapTapDetail =
+                        selectedMapTapDetail?.mergeInternalPreviewDetail(placeDetail)
+                    selectedFacilityBookmarkState =
+                        selectedFacilityBookmarkState.copy(
+                            facilityId = selectedMapTapDetail?.bookmarkCacheKey(),
+                            isBookmarked = placeDetail.isBookmarked,
+                        )
+                    renderSelectedFacilityState()
+                }
+                .onFailure {
+                    if (requestId != mapTapDetailRequestId) return@onFailure
+                    if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onFailure
+                }
+        }
     }
 
     private fun observeLocationUpdates() {
@@ -1458,6 +1497,14 @@ class MapViewModel(
         }
     }
 
+    private fun handleFacilityPhoneClicked() {
+        val phoneNumber =
+            selectedMapTapDetail?.phoneNumber?.takeIf(String::isNotBlank)
+                ?: selectedFacilityDetail?.phoneNumber?.takeIf(String::isNotBlank)
+                ?: return
+        emitUiEvent(MapUiEvent.OpenDialer(phoneNumber))
+    }
+
     private fun toggleFacilityBookmark(detail: FacilityDetailSeed) {
         val currentBookmarkState = selectedFacilityBookmarkState
         if (currentBookmarkState.isUpdating) return
@@ -1755,6 +1802,22 @@ private fun DestinationPreviewRequest.toMapTappedPlaceDetail(): MapTappedPlaceDe
         latitude = destination.latitude,
         longitude = destination.longitude,
         accessibilityTags = accessibilityTagKeys,
+    )
+
+private fun MapTappedPlaceDetail.mergeInternalPreviewDetail(detail: PlaceDetail): MapTappedPlaceDetail =
+    copy(
+        bookmarkTargetId = bookmarkTargetId.ifBlank { detail.placeId },
+        placeId = detail.placeId,
+        name = detail.name,
+        category = detail.category,
+        address = detail.address,
+        features = detail.features,
+        isBookmarked = detail.isBookmarked,
+        accessibilityTags =
+            detail.accessibilityTags.takeIf { detailAccessibilityTags -> detailAccessibilityTags.isNotEmpty() }
+                ?: accessibilityTags,
+        phoneNumber = detail.phoneNumber ?: phoneNumber,
+        description = detail.description ?: description,
     )
 
 private fun MapTappedPlaceDetail.toBookmarkData(): BookmarkData {

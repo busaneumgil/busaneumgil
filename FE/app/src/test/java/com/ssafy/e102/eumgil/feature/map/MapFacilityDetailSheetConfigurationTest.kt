@@ -365,6 +365,21 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `recent destinations treat missing category as dedicated other icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val recentDestinationIconSection =
+            source
+                .substringAfter("private fun recentDestinationIcon(category: PlaceCategory?): Int =")
+                .substringBefore("private const val EARTH_RADIUS_METERS")
+
+        assertTrue(
+            "Recent destinations should render missing categories with the dedicated other place icon so uncategorized entries stay visually aligned with the other category.",
+            recentDestinationIconSection.contains("null -> R.drawable.ic_place_other"),
+        )
+    }
+
+    @Test
     fun `map tap place detail uses other icon for unclassified categories`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
@@ -403,6 +418,42 @@ class MapFacilityDetailSheetConfigurationTest {
         assertTrue(
             "The active current-location button asset should exist before the facility detail CTA reuses it.",
             File("src/main/res/drawable/ic_route_start_navigation_button.png").exists(),
+        )
+    }
+
+    @Test
+    fun `facility detail sheet renders phone row below address and wires dial action`() {
+        val shellSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+        val stringsSource =
+            File("src/main/res/values/strings.xml").readText()
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "The bottom-sheet shell should expose an optional phone number field so place detail can render the backend phone value under the address.",
+            shellSource.contains("val phoneNumber: String? = null"),
+        )
+        assertTrue(
+            "The bottom-sheet shell should render the dedicated phone copy string so the phone number appears as its own tappable line.",
+            shellSource.contains("map_facility_detail_phone_value"),
+        )
+        assertTrue(
+            "The phone line should use underlined text so users can recognize it as a tappable call action.",
+            shellSource.contains("TextDecoration.Underline"),
+        )
+        assertTrue(
+            "The phone row should render the dedicated contact icon beside the number so the affordance stays clear even without a text glyph prefix.",
+            shellSource.contains("R.drawable.ic_permission_contacts"),
+        )
+        assertTrue(
+            "The visible phone label should now keep only the number text because the call affordance comes from the separate icon.",
+            stringsSource.contains("<string name=\"map_facility_detail_phone_value\">%1\$s</string>"),
+        )
+        assertTrue(
+            "The map screen should wire the phone row tap back into the feature action so tapping the number can open the dialer.",
+            screenSource.contains("onPhoneClick =") &&
+                screenSource.contains("MapUiAction.FacilityPhoneClicked"),
         )
     }
 

@@ -56,6 +56,7 @@ fi
 
 PRUNE_CONTAINERS="${DOCKER_DISK_PRUNE_CONTAINERS:-$DEFAULT_PRUNE_CONTAINERS}"
 PRUNE_IMAGES="${DOCKER_DISK_PRUNE_IMAGES:-$DEFAULT_PRUNE_IMAGES}"
+PRUNE_IMAGES_ALL="${DOCKER_DISK_PRUNE_IMAGES_ALL:-false}"
 PRUNE_BUILDER="${DOCKER_DISK_PRUNE_BUILDER:-$DEFAULT_PRUNE_BUILDER}"
 PRUNE_VOLUMES="${DOCKER_DISK_PRUNE_VOLUMES:-$DEFAULT_PRUNE_VOLUMES}"
 BUILDER_ALL="${DOCKER_DISK_BUILDER_ALL:-true}"
@@ -110,7 +111,11 @@ fi
 
 if [ "$PRUNE_IMAGES" = "true" ]; then
   section "docker image prune"
-  run docker image prune --all --force --filter "until=$IMAGE_UNTIL"
+  image_prune_args=(docker image prune --force)
+  if [ "$PRUNE_IMAGES_ALL" = "true" ]; then
+    image_prune_args+=(--all)
+  fi
+  run "${image_prune_args[@]}" --filter "until=$IMAGE_UNTIL"
 fi
 
 if [ "$PRUNE_BUILDER" = "true" ]; then

@@ -48,11 +48,13 @@ sudo bash scripts/maintenance/install-docker-disk-maintenance.sh
 기본 정책:
 
 - stopped container: 24시간 초과분 정리
-- old image: 7일 초과분 정리
+- old image: 7일 초과 dangling image만 정리
 - BuildKit cache: dangling 여부와 무관하게 24시간 초과분 정리, 8GB 보관 상한 적용
 - Docker volume: 기본 정리하지 않음
 - Jenkins workspace: 3일 초과분 정리
 - Jenkins backup archive: 14일 초과분 정리
+
+rollback용 tag image를 보존하기 위해 tagged image 전체 정리는 기본값에서 하지 않는다. 디스크 압박으로 수동 정리가 필요할 때만 `DOCKER_DISK_PRUNE_IMAGES_ALL=true`를 명시한다.
 
 운영 배포와 GraphHopper refresh가 성공한 뒤에도 `pipeline` mode로 한 번 더 보수적인 정리를 수행한다. 수동 점검은 아래처럼 dry-run으로 먼저 확인한다.
 

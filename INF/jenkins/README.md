@@ -270,7 +270,7 @@ S1 Jenkins와 S2 prod는 Docker build cache와 image layer가 빠르게 누적�
 - 스케줄: `/etc/cron.d/e102-docker-disk-maintenance`, 기본 3시간마다
 - 로그: `/var/log/e102-docker-disk-maintenance.log`
 
-정리 대상은 stopped container, 오래된 image, BuildKit cache, Jenkins workspace/archive다. Docker volume은 graph-cache와 DB data를 보존하기 위해 기본값에서 정리하지 않는다.
+정리 대상은 stopped container, 오래된 dangling image, BuildKit cache, Jenkins workspace/archive다. Docker volume은 graph-cache와 DB data를 보존하기 위해 기본값에서 정리하지 않는다. rollback용 tag image를 보존하기 위해 tagged image 전체 정리는 `DOCKER_DISK_PRUNE_IMAGES_ALL=true`를 명시한 수동 정리에서만 사용한다.
 
 prod deploy와 GraphHopper refresh는 성공 후 `pipeline` mode로 정리 스크립트를 한 번 더 실행한다. 정리 실패는 이미 성공한 배포/refresh를 실패로 뒤집지 않고 경고 로그만 남긴다.
 

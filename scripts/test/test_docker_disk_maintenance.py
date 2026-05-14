@@ -25,7 +25,10 @@ class DockerDiskMaintenanceTest(unittest.TestCase):
         content = MAINTENANCE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("docker container prune --force", content)
-        self.assertIn("docker image prune --all --force", content)
+        self.assertIn("image_prune_args=(docker image prune --force)", content)
+        self.assertIn("DOCKER_DISK_PRUNE_IMAGES_ALL", content)
+        self.assertIn("image_prune_args+=(--all)", content)
+        self.assertNotIn("docker image prune --all --force", content)
         self.assertIn("docker builder prune --force", content)
         self.assertIn("--max-used-space", content)
         self.assertIn("--keep-storage", content)
@@ -53,6 +56,7 @@ class DockerDiskMaintenanceTest(unittest.TestCase):
         self.assertIn("/etc/docker/daemon.json", content)
         self.assertIn('"max-size"', content)
         self.assertIn('"max-file"', content)
+        self.assertIn("DOCKER_DISK_PRUNE_IMAGES_ALL=false", content)
         self.assertIn("DOCKER_DISK_BUILDER_ALL=true", content)
         self.assertIn("DOCKER_DISK_BUILDER_UNTIL=24h", content)
         self.assertIn("RESTART_DOCKER_DAEMON", content)
@@ -89,8 +93,10 @@ class DockerDiskMaintenanceTest(unittest.TestCase):
 
         self.assertIn("Docker 디스크 자동관리", scripts_readme)
         self.assertIn("Docker volume: 기본 정리하지 않음", scripts_readme)
+        self.assertIn("DOCKER_DISK_PRUNE_IMAGES_ALL=true", scripts_readme)
         self.assertIn("Disk Maintenance", jenkins_readme)
         self.assertIn("Docker volume은 graph-cache와 DB data를 보존", jenkins_readme)
+        self.assertIn("tagged image 전체 정리", jenkins_readme)
 
 
 if __name__ == "__main__":

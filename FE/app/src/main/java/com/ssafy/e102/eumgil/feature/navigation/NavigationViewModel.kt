@@ -84,8 +84,6 @@ class NavigationViewModel(
     private var lowVisionActualMetricsFailedKey: LowVisionActualMetricsKey? = null
     private var lowVisionActualMetricsLastAttemptCoordinate: GeoCoordinate? = null
     private var lowVisionActualMetricsLastAttemptRecordedAtMillis: Long? = null
-    private val upcomingSegmentBriefingAlertedIndices = mutableSetOf<Int>()
-
     init {
         collectLocationUpdates()
     }
@@ -161,7 +159,6 @@ class NavigationViewModel(
         lowVisionActualMetricsFailedKey = null
         lowVisionActualMetricsLastAttemptCoordinate = null
         lowVisionActualMetricsLastAttemptRecordedAtMillis = null
-        upcomingSegmentBriefingAlertedIndices.clear()
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
         initialBriefingRequested = false
@@ -281,7 +278,6 @@ class NavigationViewModel(
                 latestRemainingMetricsSource = remainingMetrics.source
             }
             syncActiveSegment(progress.activeSegmentIndex)
-            maybeRequestUpcomingSegmentBriefing(currentSession, progress)
             latestTransitPresentation = currentSession.resolveTransitPresentation(progress.activeLegIndex)
             maybeRefreshTransit(currentSession, progress, snapshot)
             maybeRequestReroute(currentSession, progress, snapshot)
@@ -519,7 +515,6 @@ class NavigationViewModel(
                 estimatedMinutes = latestEstimatedMinutes,
                 remainingMetricsSource = latestRemainingMetricsSource,
                 transitPresentation = latestTransitPresentation,
-                isLowVisionMode = isLowVisionMode,
             )
         val briefingText =
             runtimeRequest.toNavigationBriefingText(
@@ -643,37 +638,6 @@ class NavigationViewModel(
         val tts = uiState.value.tts
         if (!tts.canRequestBriefing) return
         emitUiEvent(NavigationUiEvent.SpeakBriefing(tts.briefingText))
-    }
-
-    private fun maybeRequestUpcomingSegmentBriefing(
-        currentSession: NavigationRouteSession,
-        progress: NavigationProgressSnapshot,
-    ) {
-        if (!isLowVisionMode) return
-        val nextSegmentIndex = progress.activeSegmentIndex + 1
-        val route = currentSession.route
-        if (nextSegmentIndex > route.segments.lastIndex) return
-        if (nextSegmentIndex in upcomingSegmentBriefingAlertedIndices) return
-
-        val distanceToNextSegmentMeters =
-            route.distanceToSegmentStartMeters(
-                segmentIndex = nextSegmentIndex,
-                progress = progress,
-            ) ?: return
-        if (distanceToNextSegmentMeters > UPCOMING_SEGMENT_BRIEFING_THRESHOLD_METERS) return
-
-        val tts = uiState.value.tts
-        if (!tts.canRequestBriefing) return
-
-        val briefingText =
-            route.segments
-                .getOrNull(nextSegmentIndex)
-                ?.toCompactNavigationInstruction()
-                ?: tts.briefingText
-        if (briefingText.isBlank()) return
-
-        upcomingSegmentBriefingAlertedIndices += nextSegmentIndex
-        emitUiEvent(NavigationUiEvent.SpeakBriefing(briefingText))
     }
 
     private fun saveDestinationBookmarkAndNavigate() {
@@ -1262,20 +1226,6 @@ private fun RouteCandidate.resolveActiveLegIndex(progressRatio: Double): Int =
             },
         advanceAtBoundary = false,
     )
-
-private fun RouteCandidate.distanceToSegmentStartMeters(
-    segmentIndex: Int,
-    progress: NavigationProgressSnapshot,
-): Int? {
-    if (segmentIndex !in segments.indices) return null
-    val boundaryRatio =
-        resolveSegmentStartProgressRatio(
-            segmentIndex = segmentIndex,
-            weights = segmentWeights(),
-        )
-    val boundaryDistanceMeters = (totalDistanceMeters() * boundaryRatio).roundToInt().coerceAtLeast(0)
-    return (boundaryDistanceMeters - progress.distanceAlongRouteMeters).coerceAtLeast(0)
-}
 
 private fun resolveActiveIndex(
     progressRatio: Double,
@@ -1882,7 +1832,6 @@ private fun RouteNavigationRequest.toStepCardUiState(
     estimatedMinutes: Int?,
     remainingMetricsSource: NavigationRemainingMetricsSource,
     transitPresentation: NavigationTransitPresentation?,
-    isLowVisionMode: Boolean,
 ): NavigationStepCardUiState =
     when (screenState) {
         NavigationScreenState.Loading -> NavigationStepCardUiState()
@@ -1893,7 +1842,6 @@ private fun RouteNavigationRequest.toStepCardUiState(
                 estimatedMinutes = estimatedMinutes,
                 remainingMetricsSource = remainingMetricsSource,
                 transitPresentation = transitPresentation,
-                isLowVisionMode = isLowVisionMode,
             )
         NavigationScreenState.Empty -> toEmptyStepCardUiState()
     }
@@ -1931,7 +1879,6 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
     estimatedMinutes: Int?,
     remainingMetricsSource: NavigationRemainingMetricsSource,
     transitPresentation: NavigationTransitPresentation?,
-    isLowVisionMode: Boolean,
 ): NavigationStepCardUiState {
     val primarySegment =
         selectedRoute.segments.getOrNull(activeSegmentIndex)
@@ -1945,7 +1892,6 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
             distanceMeters = remainingDistanceMeters ?: selectedRoute.summary.distanceMeters,
             estimatedMinutes = estimatedMinutes ?: selectedRoute.summary.estimatedTimeMinutes,
             source = remainingMetricsSource,
-            isLowVisionMode = isLowVisionMode,
         )
 
     return NavigationStepCardUiState(
@@ -2077,7 +2023,6 @@ private fun navigationRemainingMetricPresentation(
     distanceMeters: Int,
     estimatedMinutes: Int,
     source: NavigationRemainingMetricsSource,
-    isLowVisionMode: Boolean,
 ): NavigationRemainingMetricPresentation {
     if (source == NavigationRemainingMetricsSource.Unavailable) {
         return NavigationRemainingMetricPresentation(
@@ -2137,8 +2082,6 @@ private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_INTERVAL_MILLIS = 5_000L
 private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS = 20.0
 private const val LOW_VISION_ACTUAL_METRICS_REUSE_DISTANCE_METERS = 25.0
 private const val LOW_VISION_ACTUAL_METRICS_CACHE_MAX_AGE_MILLIS = 10_000L
-private const val UPCOMING_SEGMENT_BRIEFING_THRESHOLD_METERS = 35
-
 private object NoOpRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
         error("NavigationViewModel requires a RouteRepository for route search.")

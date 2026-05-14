@@ -202,12 +202,7 @@ private fun RouteCandidate.withLowVisionNavigationDefaults(query: RouteSearchQue
         summary.estimatedTimeMinutes
             .takeIf { estimatedMinutes -> estimatedMinutes > 0 }
             ?: ceil(resolvedDurationSeconds / SECONDS_PER_MINUTE.toDouble()).toInt().coerceAtLeast(1)
-    val resolvedSegments =
-        segments
-            .takeIf(List<RouteSegment>::isNotEmpty)
-            ?: resolvedPolyline.toLowVisionRouteSegments(
-                totalDistanceMeters = resolvedDistanceMeters,
-            )
+    val resolvedSegments = segments
     val renderableSegmentCount = resolvedSegments.count(RouteSegment::hasRenderablePolyline)
 
     return copy(
@@ -258,37 +253,6 @@ private fun RouteCandidate.lowVisionDurationSeconds(distanceMeters: Int): Int =
             .takeIf { estimatedMinutes -> estimatedMinutes > 0 }
             ?.times(SECONDS_PER_MINUTE)
         ?: ceil(distanceMeters / LOW_VISION_WALKING_SPEED_METERS_PER_SECOND).toInt().coerceAtLeast(SECONDS_PER_MINUTE)
-
-private fun RoutePolyline.toLowVisionRouteSegments(totalDistanceMeters: Int): List<RouteSegment> {
-    val path = points.takeIf { routePoints -> routePoints.size >= 2 } ?: return emptyList()
-    val segmentDistances =
-        path.zipWithNext().map { (start, end) ->
-            haversineLowVisionDistanceMeters(start, end)
-        }
-    val measuredDistance = segmentDistances.sum().takeIf { distance -> distance > 0.0 }
-    val fallbackDistance = (totalDistanceMeters / segmentDistances.size).coerceAtLeast(1)
-
-    return path.zipWithNext().mapIndexed { index, (start, end) ->
-        val proportionalDistance =
-            measuredDistance
-                ?.let { totalMeasuredDistance ->
-                    (totalDistanceMeters * (segmentDistances[index] / totalMeasuredDistance)).roundToInt()
-                }
-                ?.coerceAtLeast(1)
-                ?: fallbackDistance
-        fallbackSegment(
-            sequence = index + 1,
-            points = listOf(start, end),
-            distanceMeters = proportionalDistance,
-            guidanceMessage =
-                when (index) {
-                    0 -> "Start the route."
-                    path.lastIndex - 1 -> "Approach the destination."
-                    else -> "Follow the next route segment."
-                },
-        )
-    }
-}
 
 private fun List<RouteSegment>.toLowVisionRoutePolyline(): RoutePolyline =
     RoutePolyline(points = flatMapPolylinePoints { segment -> segment.polyline.points })

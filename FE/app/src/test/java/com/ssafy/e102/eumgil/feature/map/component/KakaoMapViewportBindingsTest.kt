@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import com.kakao.vectormap.label.TransformMethod
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
@@ -958,7 +959,7 @@ class KakaoMapViewportBindingsTest {
                 screenDensity = 3f,
             )
 
-        assertEquals(2, markerStates.size)
+        assertEquals(3, markerStates.size)
         assertTrue(markerStates.all { it.kind == KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW })
         assertEquals("arrow-route-preview-0", markerStates.first().markerId)
         assertEquals(35.1700, markerStates.first().coordinate.latitude, 0.000001)
@@ -1001,8 +1002,38 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertTrue(zoomedIn.size > zoomedOut.size)
-        assertEquals(2, zoomedIn.size)
+        assertEquals(3, zoomedIn.size)
         assertEquals(1, zoomedOut.size)
+    }
+
+    @Test
+    fun `route polylines keep a single kakao direction arrow for short routes when zoomed out`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0510),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 17,
+                screenDensity = 3f,
+            )
+
+        assertEquals(1, markerStates.size)
+        assertEquals(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW, markerStates.single().kind)
+        assertEquals(35.1700, markerStates.single().coordinate.latitude, 0.000001)
+        assertTrue(markerStates.single().coordinate.longitude > 129.0500)
+        assertTrue(markerStates.single().coordinate.longitude < 129.0510)
     }
 
     @Test
@@ -1029,9 +1060,59 @@ class KakaoMapViewportBindingsTest {
                 screenDensity = 3f,
             )
 
-        assertEquals(2, markerStates.size)
+        assertEquals(3, markerStates.size)
         assertEquals(-90f, markerStates.first().rotationDegrees, 0.01f)
         assertEquals(-90f, markerStates.last().rotationDegrees, 0.01f)
+    }
+
+    @Test
+    fun `route polyline debug state keeps raw radian and converted degree camera bearing`() {
+        val computation =
+            createKakaoOverlayMarkerRenderComputation(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                cameraBearingRadians = Math.PI / 2.0,
+                cameraBearingDegrees = 90.0,
+                screenDensity = 3f,
+            )
+
+        assertEquals(3, computation.routeDirectionArrowDebugStates.size)
+        val firstDebugState = computation.routeDirectionArrowDebugStates.first()
+        assertEquals(0f, firstDebugState.segmentHeadingDegrees, 0.01f)
+        assertEquals(Math.PI / 2.0, firstDebugState.cameraBearingRadians, 0.000001)
+        assertEquals(90.0, firstDebugState.cameraBearingDegrees, 0.0)
+        assertEquals(-90f, firstDebugState.finalRotationDegrees, 0.01f)
+        assertTrue(
+            createKakaoRouteDirectionArrowDebugSummary(firstDebugState).contains("cameraBearingRad=1.5708"),
+        )
+        assertTrue(
+            createKakaoRouteDirectionArrowDebugSummary(firstDebugState).contains("cameraBearingDeg=90.00"),
+        )
+    }
+
+    @Test
+    fun `route direction arrow labels keep explicit screen space transform mode`() {
+        assertEquals(
+            TransformMethod.None,
+            resolveKakaoOverlayMarkerTransformMethod(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW),
+        )
+        assertNull(
+            resolveKakaoOverlayMarkerTransformMethod(KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION),
+        )
     }
 
     @Test
@@ -1056,5 +1137,44 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertTrue(markerStates.isEmpty())
+    }
+
+    @Test
+    fun `overlay marker partition separates direction arrows from point overlays`() {
+        val partitioned =
+            partitionKakaoOverlayMarkerRenderStates(
+                createKakaoOverlayMarkerRenderStates(
+                    overlayPoints =
+                        listOf(
+                            MapViewportPointOverlay(
+                                overlayId = "junction",
+                                coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                                kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                                tone = MapViewportOverlayTone.PRIMARY,
+                            ),
+                        ),
+                    polylines =
+                        listOf(
+                            MapViewportPolylineOverlay(
+                                overlayId = "route-preview",
+                                points =
+                                    listOf(
+                                        MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                        MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                    ),
+                                style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                                tone = MapViewportOverlayTone.PRIMARY,
+                            ),
+                        ),
+                    cameraLatitude = 35.1700,
+                    zoomLevel = 18,
+                    screenDensity = 3f,
+                ),
+            )
+
+        assertEquals(1, partitioned.pointMarkers.size)
+        assertEquals(KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION, partitioned.pointMarkers.single().kind)
+        assertEquals(3, partitioned.directionArrowMarkers.size)
+        assertTrue(partitioned.directionArrowMarkers.all { it.kind == KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW })
     }
 }

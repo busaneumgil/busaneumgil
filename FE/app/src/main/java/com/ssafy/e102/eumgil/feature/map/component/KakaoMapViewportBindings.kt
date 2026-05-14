@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.annotation.DrawableRes
+import com.kakao.vectormap.label.TransformMethod
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
@@ -157,6 +158,30 @@ internal data class KakaoOverlayMarkerRenderState(
     val secondaryLabel: String? = null,
     val secondaryFillColorArgb: Int? = null,
     val clickTargetId: String? = null,
+)
+
+internal data class KakaoOverlayMarkerRenderPartition(
+    val pointMarkers: List<KakaoOverlayMarkerRenderState>,
+    val directionArrowMarkers: List<KakaoOverlayMarkerRenderState>,
+)
+
+internal data class KakaoRouteDirectionArrowDebugState(
+    val markerId: String,
+    val overlayId: String,
+    val segmentStart: MapCoordinate,
+    val segmentEnd: MapCoordinate,
+    val segmentHeadingDegrees: Float,
+    val rotationModel: String,
+    val transformMethodName: String,
+    val cameraBearingSource: String,
+    val cameraBearingRadians: Double,
+    val cameraBearingDegrees: Double,
+    val finalRotationDegrees: Float,
+)
+
+internal data class KakaoOverlayMarkerRenderComputation(
+    val markers: List<KakaoOverlayMarkerRenderState>,
+    val routeDirectionArrowDebugStates: List<KakaoRouteDirectionArrowDebugState> = emptyList(),
 )
 
 internal data class KakaoProjectedMarkerOverlay(
@@ -403,29 +428,72 @@ internal fun createKakaoOverlayMarkerRenderStates(
     polylines: List<MapViewportPolylineOverlay> = emptyList(),
     cameraLatitude: Double = DEFAULT_VIEWPORT_CENTER_LATITUDE,
     zoomLevel: Int = DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_ZOOM_LEVEL,
+    cameraBearingSource: String = KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT,
+    cameraBearingRadians: Double = 0.0,
     cameraBearingDegrees: Double = 0.0,
     screenDensity: Float = DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_SCREEN_DENSITY,
 ): List<KakaoOverlayMarkerRenderState> =
-    overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState) +
+    createKakaoOverlayMarkerRenderComputation(
+        overlayPoints = overlayPoints,
+        polylines = polylines,
+        cameraLatitude = cameraLatitude,
+        zoomLevel = zoomLevel,
+        cameraBearingSource = cameraBearingSource,
+        cameraBearingRadians = cameraBearingRadians,
+        cameraBearingDegrees = cameraBearingDegrees,
+        screenDensity = screenDensity,
+    ).markers
+
+internal fun createKakaoOverlayMarkerRenderComputation(
+    overlayPoints: List<MapViewportPointOverlay>,
+    polylines: List<MapViewportPolylineOverlay> = emptyList(),
+    cameraLatitude: Double = DEFAULT_VIEWPORT_CENTER_LATITUDE,
+    zoomLevel: Int = DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_ZOOM_LEVEL,
+    cameraBearingSource: String = KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT,
+    cameraBearingRadians: Double = 0.0,
+    cameraBearingDegrees: Double = 0.0,
+    screenDensity: Float = DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_SCREEN_DENSITY,
+): KakaoOverlayMarkerRenderComputation {
+    val pointMarkers = overlayPoints.mapNotNull(MapViewportPointOverlay::toOverlayMarkerRenderState)
+    val arrowComputations =
         polylines
             .filter(MapViewportPolylineOverlay::showDirectionArrows)
             .flatMap { polyline ->
-                createKakaoRouteDirectionArrowRenderStates(
+                createKakaoRouteDirectionArrowRenderComputations(
                     polyline = polyline,
                     cameraLatitude = cameraLatitude,
                     zoomLevel = zoomLevel,
+                    cameraBearingSource = cameraBearingSource,
+                    cameraBearingRadians = cameraBearingRadians,
                     cameraBearingDegrees = cameraBearingDegrees,
                     screenDensity = screenDensity,
                 )
             }
+    return KakaoOverlayMarkerRenderComputation(
+        markers = pointMarkers + arrowComputations.map(KakaoRouteDirectionArrowRenderComputation::marker),
+        routeDirectionArrowDebugStates = arrowComputations.map(KakaoRouteDirectionArrowRenderComputation::debugState),
+    )
+}
 
-private fun createKakaoRouteDirectionArrowRenderStates(
+private data class KakaoRouteDirectionArrowRenderComputation(
+    val marker: KakaoOverlayMarkerRenderState,
+    val debugState: KakaoRouteDirectionArrowDebugState,
+)
+
+private data class KakaoRouteDirectionArrowRotationSpec(
+    val rotationDegrees: Float,
+    val rotationModel: String,
+)
+
+private fun createKakaoRouteDirectionArrowRenderComputations(
     polyline: MapViewportPolylineOverlay,
     cameraLatitude: Double,
     zoomLevel: Int,
+    cameraBearingSource: String,
+    cameraBearingRadians: Double,
     cameraBearingDegrees: Double,
     screenDensity: Float,
-): List<KakaoOverlayMarkerRenderState> =
+): List<KakaoRouteDirectionArrowRenderComputation> =
     sampleRouteDirectionArrowPlacements(
         points = polyline.points,
         intervalDistance =
@@ -440,24 +508,48 @@ private fun createKakaoRouteDirectionArrowRenderStates(
                 zoomLevel = zoomLevel,
                 screenDensity = screenDensity,
             ),
+        minimumPlacementCount = 1,
         measureDistance = MapCoordinate::distanceMetersTo,
         interpolatePoint = { start, end, fraction -> start.interpolateTo(end = end, fraction = fraction) },
     ).mapIndexed { index, placement ->
-        KakaoOverlayMarkerRenderState(
-            markerId = "arrow-${polyline.overlayId}-$index",
-            coordinate = placement.point,
-            kind = KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW,
-            anchorPointX = 0.5f,
-            anchorPointY = 0.5f,
-            sizeDp = 14,
-            zIndex = 4.4f,
-            fillColorArgb = 0xFFFFFFFF.toInt(),
-            strokeColorArgb = 0x00FFFFFF,
-            rotationDegrees =
-                resolveKakaoRouteDirectionArrowScreenRotationDegrees(
+        val markerId = "arrow-${polyline.overlayId}-$index"
+        val segmentHeadingDegrees = placement.segmentStart.rotationDegreesTo(end = placement.segmentEnd)
+        val transformMethod =
+            resolveKakaoOverlayMarkerTransformMethod(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW)
+                ?: TransformMethod.None
+        val rotationSpec =
+            resolveKakaoRouteDirectionArrowRotationSpec(
+                segmentHeadingDegrees = segmentHeadingDegrees,
+                cameraBearingDegrees = cameraBearingDegrees,
+                transformMethod = transformMethod,
+            )
+        KakaoRouteDirectionArrowRenderComputation(
+            marker =
+                KakaoOverlayMarkerRenderState(
+                    markerId = markerId,
+                    coordinate = placement.point,
+                    kind = KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW,
+                    anchorPointX = 0.5f,
+                    anchorPointY = 0.5f,
+                    sizeDp = 14,
+                    zIndex = 4.4f,
+                    fillColorArgb = 0xFFFFFFFF.toInt(),
+                    strokeColorArgb = 0x00FFFFFF,
+                    rotationDegrees = rotationSpec.rotationDegrees,
+                ),
+            debugState =
+                KakaoRouteDirectionArrowDebugState(
+                    markerId = markerId,
+                    overlayId = polyline.overlayId,
                     segmentStart = placement.segmentStart,
                     segmentEnd = placement.segmentEnd,
+                    segmentHeadingDegrees = segmentHeadingDegrees,
+                    rotationModel = rotationSpec.rotationModel,
+                    transformMethodName = transformMethod.name,
+                    cameraBearingSource = cameraBearingSource,
+                    cameraBearingRadians = cameraBearingRadians,
                     cameraBearingDegrees = cameraBearingDegrees,
+                    finalRotationDegrees = rotationSpec.rotationDegrees,
                 ),
         )
     }
@@ -522,6 +614,20 @@ internal fun createKakaoProjectedMarkerOverlays(
             )
         }
     }
+
+internal fun partitionKakaoOverlayMarkerRenderStates(
+    markers: List<KakaoOverlayMarkerRenderState>,
+): KakaoOverlayMarkerRenderPartition =
+    KakaoOverlayMarkerRenderPartition(
+        pointMarkers =
+            markers.filter { marker ->
+                marker.kind != KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW
+            },
+        directionArrowMarkers =
+            markers.filter { marker ->
+                marker.kind == KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW
+            },
+    )
 
 internal fun createKakaoProjectedMarkerProjectionResult(
     projectedMarkers: List<KakaoProjectedMarkerRenderState>,
@@ -978,18 +1084,83 @@ private fun MapCoordinate.rotationDegreesTo(end: MapCoordinate): Float =
     ).toFloat()
 
 private fun resolveKakaoRouteDirectionArrowScreenRotationDegrees(
-    segmentStart: MapCoordinate,
-    segmentEnd: MapCoordinate,
+    segmentHeadingDegrees: Float,
     cameraBearingDegrees: Double,
 ): Float =
     normalizeKakaoRouteDirectionArrowRotationDegrees(
         /*
-         * Kakao label bitmaps stay screen-aligned even while the map camera rotates.
-         * Convert the segment's absolute north-up heading into screen space by subtracting
-         * the current camera bearing reported by the SDK.
+         * Kakao CameraPosition.rotationAngle is reported in radians by the SDK. Convert it to
+         * degrees before subtracting it from the segment's north-up heading so the bitmap's
+         * screen-space rotation stays in the same unit system end-to-end.
          */
-        segmentStart.rotationDegreesTo(end = segmentEnd) - cameraBearingDegrees,
+        segmentHeadingDegrees - cameraBearingDegrees,
     ).toFloat()
+
+private fun resolveKakaoRouteDirectionArrowRotationSpec(
+    segmentHeadingDegrees: Float,
+    cameraBearingDegrees: Double,
+    transformMethod: TransformMethod,
+): KakaoRouteDirectionArrowRotationSpec =
+    when (transformMethod) {
+        TransformMethod.AbsoluteRotation,
+        TransformMethod.AbsoluteRotation_Decal,
+        TransformMethod.AbsoluteRotation_KeepUpright,
+            ->
+            KakaoRouteDirectionArrowRotationSpec(
+                rotationDegrees = normalizeKakaoRouteDirectionArrowRotationDegrees(segmentHeadingDegrees.toDouble()).toFloat(),
+                rotationModel = KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_MAP_ABSOLUTE,
+            )
+
+        else ->
+            KakaoRouteDirectionArrowRotationSpec(
+                rotationDegrees =
+                    resolveKakaoRouteDirectionArrowScreenRotationDegrees(
+                        segmentHeadingDegrees = segmentHeadingDegrees,
+                        cameraBearingDegrees = cameraBearingDegrees,
+                    ),
+                rotationModel = KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_SCREEN_RELATIVE,
+            )
+    }
+
+internal fun createKakaoRouteDirectionArrowDebugSummary(
+    debugState: KakaoRouteDirectionArrowDebugState,
+): String =
+    buildString {
+        append("id=")
+        append(debugState.markerId)
+        append(" overlayId=")
+        append(debugState.overlayId)
+        append(" segmentHeading=")
+        append(String.format(Locale.US, "%.2f", debugState.segmentHeadingDegrees))
+        append(" rotationModel=")
+        append(debugState.rotationModel)
+        append(" transform=")
+        append(debugState.transformMethodName)
+        append(" cameraSource=")
+        append(debugState.cameraBearingSource)
+        append(" cameraBearingRad=")
+        append(String.format(Locale.US, "%.4f", debugState.cameraBearingRadians))
+        append(" cameraBearingDeg=")
+        append(String.format(Locale.US, "%.2f", debugState.cameraBearingDegrees))
+        append(" finalRotation=")
+        append(String.format(Locale.US, "%.2f", debugState.finalRotationDegrees))
+        append(" segment=")
+        append(debugState.segmentStart.latitude.toLogCoordinate())
+        append(",")
+        append(debugState.segmentStart.longitude.toLogCoordinate())
+        append("->")
+        append(debugState.segmentEnd.latitude.toLogCoordinate())
+        append(",")
+        append(debugState.segmentEnd.longitude.toLogCoordinate())
+    }
+
+internal fun resolveKakaoOverlayMarkerTransformMethod(
+    kind: KakaoOverlayMarkerKind,
+): TransformMethod? =
+    when (kind) {
+        KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW -> KAKAO_ROUTE_DIRECTION_ARROW_TRANSFORM_METHOD
+        else -> null
+    }
 
 private fun normalizeKakaoRouteDirectionArrowRotationDegrees(
     rotationDegrees: Double,
@@ -1038,11 +1209,15 @@ private fun resolveKakaoMetersPerScreenDp(
     return distanceDp * screenDensity.coerceAtLeast(1f) * metersPerPixel
 }
 
-private const val KAKAO_ROUTE_DIRECTION_ARROW_MIN_INTERVAL_METERS = 24.0
+private const val KAKAO_ROUTE_DIRECTION_ARROW_MIN_INTERVAL_METERS = 12.0
 private const val KAKAO_METERS_PER_LATITUDE_DEGREE = 111_320.0
 private const val KAKAO_WEB_MERCATOR_METERS_PER_PIXEL_AT_ZOOM_ZERO = 156_543.03392
 private const val DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_ZOOM_LEVEL = 17
 private const val DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_SCREEN_DENSITY = 1f
+internal const val KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT = "sync-snapshot"
+private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_SCREEN_RELATIVE = "screen-relative"
+private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_MAP_ABSOLUTE = "map-absolute"
+private val KAKAO_ROUTE_DIRECTION_ARROW_TRANSFORM_METHOD = TransformMethod.AbsoluteRotation
 
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()

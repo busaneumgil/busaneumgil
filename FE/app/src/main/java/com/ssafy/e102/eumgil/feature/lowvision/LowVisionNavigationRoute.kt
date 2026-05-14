@@ -158,7 +158,7 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
         else -> null
     }
 
-private suspend fun awaitLowVisionOriginSnapshot(
+internal suspend fun awaitLowVisionOriginSnapshot(
     currentLocationManager: CurrentLocationManager,
     immediateSnapshot: LocationSnapshot?,
 ): LocationSnapshot? {

@@ -10,6 +10,7 @@ import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
@@ -76,7 +77,7 @@ class LowVisionSearchRepositoryTest {
         }
 
     @Test
-    fun `searchPage sorts live results by current location for low vision mode`() =
+    fun `searchPage delegates live search unchanged while sorting returned results by current location`() =
         runBlocking {
             val delegate =
                 RecordingSearchRepository(
@@ -107,20 +108,11 @@ class LowVisionSearchRepositoryTest {
                     currentLocationProvider = { freshCurrentLocationSnapshot() },
                 )
 
-            val page = repository.searchPage(SearchQuery(keyword = "시설"))
+            val query = SearchQuery(keyword = "시설", sortOption = SearchSortOption.DISTANCE)
+            val page = repository.searchPage(query)
 
             assertEquals(listOf("near-place", "far-place"), page.results.map(SearchResult::placeId))
-            assertEquals(
-                listOf(
-                    SearchQuery(
-                        keyword = "시설",
-                        latitude = 35.1796,
-                        longitude = 129.0756,
-                        radiusMeters = 3_000,
-                    ),
-                ),
-                delegate.searchPageRequests,
-            )
+            assertEquals(listOf(query), delegate.searchPageRequests)
         }
 
     @Test
@@ -222,7 +214,7 @@ class LowVisionSearchRepositoryTest {
         }
 
     @Test
-    fun `category result falls back to live keyword search when places repository is empty`() =
+    fun `category result keeps places repository results only when category places are empty`() =
         runBlocking {
             val delegate =
                 RecordingSearchRepository(
@@ -250,24 +242,14 @@ class LowVisionSearchRepositoryTest {
 
             val page = repository.searchPage(SearchQuery(keyword = "병원"))
 
-            assertEquals(listOf("hospital-search"), page.results.map(SearchResult::placeId))
+            assertTrue(page.results.isEmpty())
             assertEquals(setOf(PlaceCategory.HEALTHCARE), placesRepository.queries.single().categories)
             assertEquals(3_000, placesRepository.queries.single().radiusMeters)
-            assertEquals(
-                listOf(
-                    SearchQuery(
-                        keyword = "병원",
-                        latitude = 35.1796,
-                        longitude = 129.0756,
-                        radiusMeters = 3_000,
-                    ),
-                ),
-                delegate.searchPageRequests,
-            )
+            assertTrue(delegate.searchPageRequests.isEmpty())
         }
 
     @Test
-    fun `category result falls back to live keyword search when places repository fails`() =
+    fun `category result does not call live keyword search when places repository fails`() =
         runBlocking {
             val delegate =
                 RecordingSearchRepository(
@@ -297,60 +279,34 @@ class LowVisionSearchRepositoryTest {
                     currentLocationProvider = { freshCurrentLocationSnapshot() },
                 )
 
-            val page = repository.searchPage(SearchQuery(keyword = "병원"))
+            val error =
+                assertThrows(IllegalStateException::class.java) {
+                    runBlocking {
+                        repository.searchPage(SearchQuery(keyword = "병원"))
+                    }
+                }
 
-            assertEquals(listOf("hospital-search"), page.results.map(SearchResult::placeId))
-            assertEquals(
-                listOf(
-                    SearchQuery(
-                        keyword = "병원",
-                        latitude = 35.1796,
-                        longitude = 129.0756,
-                        radiusMeters = 3_000,
-                    ),
-                ),
-                delegate.searchPageRequests,
-            )
+            assertEquals("places unavailable", error.message)
+            assertTrue(delegate.searchPageRequests.isEmpty())
         }
 
     @Test
-    fun `category result reinforces welfare and public office live keyword fallback when exact label is empty`() =
+    fun `category result keeps welfare and public office labels on places category filters only`() =
         runBlocking {
             val scenarios =
                 listOf(
-                    Triple(
+                    Pair(
                         "복지관",
-                        "복지센터",
                         PlaceCategory.WELFARE,
                     ),
-                    Triple(
+                    Pair(
                         "관공서",
-                        "주민센터",
                         PlaceCategory.PUBLIC_OFFICE,
                     ),
                 )
 
-            scenarios.forEach { (label, reinforcedKeyword, expectedCategory) ->
-                val delegate =
-                    RecordingSearchRepository(
-                        searchPagesByKeyword =
-                            mapOf(
-                                label to SearchPage(results = emptyList()),
-                                reinforcedKeyword to
-                                    SearchPage(
-                                        results =
-                                            listOf(
-                                                SearchResult(
-                                                    placeId = "$reinforcedKeyword-place",
-                                                    title = "$reinforcedKeyword Result",
-                                                    subtitle = "Busan",
-                                                    latitude = 35.1797,
-                                                    longitude = 129.0757,
-                                                ),
-                                            ),
-                                    ),
-                            ),
-                    )
+            scenarios.forEach { (label, expectedCategory) ->
+                val delegate = RecordingSearchRepository()
                 val placesRepository = RecordingPlacesRepository(places = emptyList())
                 val repository =
                     LowVisionSearchRepository(
@@ -361,14 +317,9 @@ class LowVisionSearchRepositoryTest {
 
                 val page = repository.searchPage(SearchQuery(keyword = label))
 
-                assertEquals(listOf("$reinforcedKeyword-place"), page.results.map(SearchResult::placeId))
+                assertTrue(page.results.isEmpty())
                 assertEquals(expectedCategory, placesRepository.queries.single().categories.single())
-                assertEquals(listOf(label, reinforcedKeyword), delegate.searchPageRequests.map(SearchQuery::keyword))
-                delegate.searchPageRequests.forEach { request ->
-                    assertEquals(35.1796, request.latitude ?: 0.0, 0.0)
-                    assertEquals(129.0756, request.longitude ?: 0.0, 0.0)
-                    assertEquals(3_000, request.radiusMeters)
-                }
+                assertTrue(delegate.searchPageRequests.isEmpty())
             }
         }
 

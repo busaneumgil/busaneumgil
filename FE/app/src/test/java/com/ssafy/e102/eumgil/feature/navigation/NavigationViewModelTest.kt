@@ -39,6 +39,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -438,7 +439,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `low vision mode speaks next segment before the turn boundary`() =
+    fun `low vision mode does not speak next segment automatically before the turn boundary`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel =
@@ -453,7 +454,7 @@ class NavigationViewModelTest {
                 status = NavigationTtsStatus.Ready,
             )
             advanceUntilIdle()
-            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
 
             locationManager.emitLocation(
                 LocationSnapshot(
@@ -465,10 +466,8 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(
-                listOf(NavigationUiEvent.SpeakBriefing("600m \uD6C4 \uC6B0\uD68C\uC804")),
-                eventsDeferred.await(),
-            )
+            assertFalse(eventDeferred.isCompleted)
+            eventDeferred.cancel()
         }
 
     @Test

@@ -193,7 +193,7 @@ class LowVisionNavigationRouteTest {
         }
 
     @Test
-    fun `low vision navigation repairs incomplete route metrics and steps`() =
+    fun `low vision navigation repairs incomplete route metrics without synthesizing route segments`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             destinationSelectionRepository.updateSelectedDestination(
@@ -213,14 +213,14 @@ class LowVisionNavigationRouteTest {
             assertTrue(request?.selectedRoute?.summary?.distanceMeters ?: 0 > 0)
             assertTrue(request?.selectedRoute?.summary?.estimatedTimeMinutes ?: 0 > 0)
             assertTrue(request?.selectedRoute?.summary?.durationSeconds ?: 0 > 0)
-            assertTrue(request?.selectedRoute?.segments?.isNotEmpty() == true)
+            assertTrue(request?.selectedRoute?.segments?.isEmpty() == true)
             assertTrue(request?.selectedRoute?.previewPolyline?.isRenderable == true)
             assertTrue(request?.selectionHandoff?.initialRemainingDistanceMeters ?: 0 > 0)
             assertTrue(request?.selectionHandoff?.initialRemainingDurationSeconds ?: 0 > 0)
         }
 
     @Test
-    fun `low vision navigation creates distinct briefing messages for repaired route steps`() =
+    fun `low vision navigation keeps missing route segment elements empty`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             destinationSelectionRepository.updateSelectedDestination(
@@ -235,15 +235,7 @@ class LowVisionNavigationRouteTest {
             val routeRepository = IncompleteFreshRouteRepository()
 
             val request = routeRepository.buildLowVisionNavigationRequest(destinationSelectionRepository)
-            val instructions =
-                request
-                    ?.selectedRoute
-                    ?.segments
-                    .orEmpty()
-                    .map(RouteSegment::toCompactBriefingInstruction)
-
-            assertTrue(instructions.size >= 2)
-            assertEquals(instructions.size, instructions.distinct().size)
+            assertTrue(request?.selectedRoute?.segments?.isEmpty() == true)
         }
 
     @Test

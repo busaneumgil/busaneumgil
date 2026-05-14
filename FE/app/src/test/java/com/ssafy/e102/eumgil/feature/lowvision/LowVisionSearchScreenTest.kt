@@ -62,17 +62,15 @@ class LowVisionSearchScreenTest {
     }
 
     @Test
-    fun `search route starts location updates so low vision results can use current location ordering`() {
+    fun `search route starts location updates and enters category results as distance sort`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionSearchRoute.kt")
                 .readText()
 
         assertTrue(source.contains("currentLocationManager.startLocationUpdates()"))
-        assertTrue(source.contains("currentLocationManager.stopLocationUpdates()"))
         assertTrue(source.contains("currentLocationManager.refreshLatestLocation()"))
-        assertTrue(source.contains("retainedCurrentLocationSnapshot"))
-        assertTrue(source.contains("awaitLowVisionSearchLocationSnapshot"))
-        assertTrue(source.contains("awaitLowVisionSearchLocationSnapshot("))
-        assertTrue(!source.contains("freshLocation == null"))
+        assertTrue(source.contains("SortOptionSelected(sortOption = SearchSortOption.DISTANCE)"))
+        assertTrue(!source.contains("retainedCurrentLocationSnapshot"))
+        assertTrue(!source.contains("awaitLowVisionSearchLocationSnapshot"))
     }
 }

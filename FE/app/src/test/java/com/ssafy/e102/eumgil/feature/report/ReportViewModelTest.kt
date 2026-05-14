@@ -7,6 +7,7 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
+import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
@@ -86,9 +87,14 @@ class ReportViewModelTest {
                             latitude = 35.1151,
                             longitude = 129.0414,
                             locationSource = ReportLocationSource.MapPin.name,
-                            photoUri = "content://draft/photo.jpg",
-                            photoMimeType = "image/jpeg",
-                            photoSizeBytes = 1000L,
+                            photos =
+                                listOf(
+                                    ReportDraftPhotoData(
+                                        localUri = "content://draft/photo.jpg",
+                                        mimeType = "image/jpeg",
+                                        sizeBytes = 1000L,
+                                    ),
+                                ),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -125,9 +131,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -159,9 +163,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -213,9 +215,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -276,9 +276,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -628,9 +626,7 @@ class ReportViewModelTest {
                             latitude = 35.1151,
                             longitude = 129.0414,
                             locationSource = ReportLocationSource.MapPin.name,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -650,9 +646,17 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
 
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(3) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
+            }
             advanceUntilIdle()
 
             val photoInput = viewModel.uiState.value.photo
@@ -667,8 +671,16 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
 
-            repeat(ReportFormLimits.PHOTO_MAX_COUNT + 2) {
-                viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(ReportFormLimits.PHOTO_MAX_COUNT + 2) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
             }
             advanceUntilIdle()
 
@@ -679,14 +691,43 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `selecting photo with same localUri is ignored to dedupe attachments`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = createReportViewModel(repository)
+
+            val photo =
+                ReportPhoto(
+                    localUri = "content://picker/123",
+                    mimeType = "image/jpeg",
+                    sizeBytes = 1024L,
+                )
+            viewModel.onAction(ReportUiAction.PhotoSelected(photo))
+            viewModel.onAction(ReportUiAction.PhotoSelected(photo))
+            advanceUntilIdle()
+
+            val photoInput = viewModel.uiState.value.photo
+            assertEquals(1, photoInput.count)
+            assertEquals(photo.localUri, photoInput.values.single().localUri)
+        }
+
+    @Test
     fun `removing photo at index drops only that entry`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
 
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(3) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
+            }
             advanceUntilIdle()
             val before = viewModel.uiState.value.photo.values
             assertEquals(3, before.size)
@@ -718,9 +759,17 @@ class ReportViewModelTest {
                     source = ReportLocationSource.MapPin,
                 ),
             )
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(3) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
+            }
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
 
@@ -792,7 +841,15 @@ class ReportViewModelTest {
                     source = ReportLocationSource.MapPin,
                 ),
             )
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(
+                ReportUiAction.PhotoSelected(
+                    ReportPhoto(
+                        localUri = "content://picker/photo-0.jpg",
+                        mimeType = "image/jpeg",
+                        sizeBytes = 1_024_000L,
+                    ),
+                ),
+            )
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
 
@@ -978,9 +1035,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -1065,7 +1120,7 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
 
-            uiEvent.await() // drain ShowSnackbar / NavigateToReportComplete
+            uiEvent.await() // drain submit completion event(s)
             val backToMapEvent = async { viewModel.uiEvent.first() }
 
             viewModel.onAction(ReportUiAction.BackToMapClicked)
@@ -1093,9 +1148,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -1150,9 +1203,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -1193,9 +1244,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -1276,9 +1325,7 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -1311,9 +1358,7 @@ class ReportViewModelTest {
                             latitude = 35.1151,
                             longitude = 129.0414,
                             locationSource = ReportLocationSource.MapPin.name,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
@@ -1387,7 +1432,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `refresh location permission after still denied finishes resolving with permission error and snackbar`() =
+    fun `refresh location permission after still denied finishes resolving with permission error`() =
         runTest {
             val permissionManager =
                 FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
@@ -1402,17 +1447,12 @@ class ReportViewModelTest {
 
             // 사용자가 권한 다이얼로그에서 거부 후 Activity가 ON_RESUME으로 돌아옴.
             // permissionState는 여전히 Denied. RefreshLocationPermission 한 번 들어옴.
-            val snackbarEvent =
-                async {
-                    viewModel.uiEvent.first { it is ReportUiEvent.ShowSnackbar }
-                }
             viewModel.onAction(ReportUiAction.RefreshLocationPermission)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
             assertFalse(state.location.isResolvingCurrentLocation)
             assertEquals(ReportLocationError.PermissionDenied, state.location.error)
-            assertTrue(snackbarEvent.await() is ReportUiEvent.ShowSnackbar)
         }
 
     @Test
@@ -1452,7 +1492,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `current location with GPS disabled emits unavailable error and snackbar`() =
+    fun `current location with GPS disabled emits unavailable error`() =
         runTest {
             val permissionManager =
                 FakeLocationPermissionManager(
@@ -1467,10 +1507,6 @@ class ReportViewModelTest {
                     repository = FakeReportRepository(),
                     locationPermissionManager = permissionManager,
                 )
-            val snackbarEvent =
-                async {
-                    viewModel.uiEvent.first { it is ReportUiEvent.ShowSnackbar }
-                }
 
             viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
             advanceUntilIdle()
@@ -1478,8 +1514,6 @@ class ReportViewModelTest {
             val state = viewModel.uiState.value
             assertFalse(state.location.isResolvingCurrentLocation)
             assertEquals(ReportLocationError.CurrentLocationUnavailable, state.location.error)
-            val emitted = snackbarEvent.await() as ReportUiEvent.ShowSnackbar
-            assertTrue(emitted.message.contains("위치 서비스"))
         }
 
     @Test

@@ -185,34 +185,54 @@ class DefaultRouteBookmarkRepository(
             val datasource = favoriteRoutesRemoteDataSource ?: return@runCatching
             val token = resolveAccessToken() ?: return@runCatching
 
-            val page =
-                datasource.getFavoriteRoutes(
-                    accessToken = token,
-                    cursor = null,
-                    size = DEFAULT_PAGE_SIZE,
+            val serverFavoriteRoutes =
+                fetchAllFavoriteRoutesFromServer(
+                    datasource = datasource,
+                    token = token,
                 )
 
             val now = clock()
-            val cachedById =
-                favoriteRouteDao
-                    .getFavoriteRoutes(accountScopeKey)
-                    .associateBy(FavoriteRouteEntity::favoriteRouteId)
+            val cachedRoutes = favoriteRouteDao.getFavoriteRoutes(accountScopeKey)
+            val cachedById = cachedRoutes.associateBy(FavoriteRouteEntity::favoriteRouteId)
+            val localOnlyRoutes = cachedRoutes.filter { it.favoriteRouteId <= 0L }
 
             favoriteRouteDao.clearFavoriteRoutes(accountScopeKey)
             favoriteRouteDao.upsertFavoriteRoutes(
-                page.content.map { item ->
-                    val cached = cachedById[item.favRouteId]
-                    item.toFavoriteRouteEntity(
-                        accountScopeKey = accountScopeKey,
-                        createdAt = cached?.createdAt ?: now,
-                        updatedAt = now,
-                        cachedDistanceMeters = cached?.summaryDistanceMeters,
-                        cachedDurationSeconds = cached?.summaryDurationSeconds,
-                        cachedRouteSnapshotJson = cached?.routeSnapshotJson,
-                    )
-                },
+                localOnlyRoutes +
+                    serverFavoriteRoutes.map { item ->
+                        val cached = cachedById[item.favRouteId]
+                        item.toFavoriteRouteEntity(
+                            accountScopeKey = accountScopeKey,
+                            createdAt = cached?.createdAt ?: now,
+                            updatedAt = now,
+                            cachedDistanceMeters = cached?.summaryDistanceMeters,
+                            cachedDurationSeconds = cached?.summaryDurationSeconds,
+                            cachedRouteSnapshotJson = cached?.routeSnapshotJson,
+                        )
+                    },
             )
         }
+    }
+
+    private suspend fun fetchAllFavoriteRoutesFromServer(
+        datasource: FavoriteRoutesRemoteDataSource,
+        token: String,
+    ): List<FavoriteRouteListItemDto> {
+        val favoriteRoutes = mutableListOf<FavoriteRouteListItemDto>()
+        var cursor: Long? = null
+
+        do {
+            val page =
+                datasource.getFavoriteRoutes(
+                    accessToken = token,
+                    cursor = cursor,
+                    size = DEFAULT_PAGE_SIZE,
+                )
+            favoriteRoutes += page.content
+            cursor = page.nextCursor
+        } while (page.hasNext && cursor != null)
+
+        return favoriteRoutes
     }
 
     private fun observeAccountScope(): Flow<String> =

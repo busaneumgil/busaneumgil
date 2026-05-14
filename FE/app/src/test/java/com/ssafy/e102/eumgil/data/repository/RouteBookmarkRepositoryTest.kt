@@ -109,6 +109,101 @@ class RouteBookmarkRepositoryTest {
         }
 
     @Test
+    fun `observeRouteBookmarks fetches every server page before replacing cache`() =
+        runBlocking {
+            val firstPageItem =
+                FavoriteRouteListItemDto(
+                    favRouteId = 7L,
+                    routeName = "first-page",
+                    startLabel = "start-a",
+                    endLabel = "end-a",
+                    startPoint = FavoriteRoutePointDto(lat = 35.0, lng = 129.0),
+                    endPoint = FavoriteRoutePointDto(lat = 35.1, lng = 129.1),
+                    transportMode = "WALK",
+                    routeOption = "SAFE",
+                )
+            val secondPageItem =
+                FavoriteRouteListItemDto(
+                    favRouteId = 8L,
+                    routeName = "second-page",
+                    startLabel = "start-b",
+                    endLabel = "end-b",
+                    startPoint = FavoriteRoutePointDto(lat = 35.2, lng = 129.2),
+                    endPoint = FavoriteRoutePointDto(lat = 35.3, lng = 129.3),
+                    transportMode = "WALK",
+                    routeOption = "SHORTEST",
+                )
+            val staleEntity = testFavoriteRouteEntity(favoriteRouteId = 99L, routeName = "stale-cache")
+            val fakeDao = FakeFavoriteRouteDao(routes = listOf(staleEntity))
+            val fakeDataSource =
+                FakeFavoriteRoutesRemoteDataSource(
+                    pagesByCursor =
+                        mapOf(
+                            null to
+                                FavoriteRoutePageDto(
+                                    content = listOf(firstPageItem),
+                                    size = 50,
+                                    nextCursor = 50L,
+                                    hasNext = true,
+                                ),
+                            50L to
+                                FavoriteRoutePageDto(
+                                    content = listOf(secondPageItem),
+                                    size = 50,
+                                    nextCursor = null,
+                                    hasNext = false,
+                                ),
+                        ),
+                )
+
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    favoriteRoutesRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val bookmarks = repository.observeRouteBookmarks().first()
+
+            assertEquals(listOf(null, 50L), fakeDataSource.requestedCursors)
+            assertEquals(listOf("7", "8"), bookmarks.map { it.bookmarkId })
+            assertFalse(bookmarks.any { it.bookmarkId == "99" })
+        }
+
+    @Test
+    fun `observeRouteBookmarks preserves local only routes during server refresh`() =
+        runBlocking {
+            val localOnlyEntity =
+                testFavoriteRouteEntity(favoriteRouteId = -1L, routeName = "local-only")
+                    .copy(routeSnapshotJson = "{\"routeId\":\"local\"}")
+            val serverItem =
+                FavoriteRouteListItemDto(
+                    favRouteId = 7L,
+                    routeName = "server-route",
+                    startLabel = "start-a",
+                    endLabel = "end-a",
+                    startPoint = FavoriteRoutePointDto(lat = 35.0, lng = 129.0),
+                    endPoint = FavoriteRoutePointDto(lat = 35.1, lng = 129.1),
+                    transportMode = "WALK",
+                    routeOption = "SAFE",
+                )
+            val fakeDao = FakeFavoriteRouteDao(routes = listOf(localOnlyEntity))
+            val fakeDataSource = FakeFavoriteRoutesRemoteDataSource(serverContent = listOf(serverItem))
+
+            val repository =
+                DefaultRouteBookmarkRepository(
+                    favoriteRouteDao = fakeDao,
+                    favoriteRoutesRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val bookmarks = repository.observeRouteBookmarks().first()
+
+            assertEquals(setOf("-1", "7"), bookmarks.map { it.bookmarkId }.toSet())
+            assertTrue(fakeDao.routes().any { it.favoriteRouteId == -1L })
+        }
+
+    @Test
     fun `observeRouteBookmarks preserves transit transport mode and unknown route option label`() =
         runBlocking {
             val serverItem =
@@ -686,12 +781,14 @@ private fun List<FavoriteRouteEntity>.upsert(entity: FavoriteRouteEntity): List<
 
 private class FakeFavoriteRoutesRemoteDataSource(
     private val serverContent: List<FavoriteRouteListItemDto> = emptyList(),
+    private val pagesByCursor: Map<Long?, FavoriteRoutePageDto> = emptyMap(),
     private val createdId: Long = 1L,
     private val detail: FavoriteRouteDetailDto? = null,
     private val throwOnGet: Boolean = false,
     private val throwOnDelete: Boolean = false,
 ) : FavoriteRoutesRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "http://test.invalid")) {
     val deletedFavRouteIds = mutableListOf<Long>()
+    val requestedCursors = mutableListOf<Long?>()
     var getFavoriteRoutesCallCount: Int = 0
         private set
     var getFavoriteRouteDetailCallCount: Int = 0
@@ -708,7 +805,9 @@ private class FakeFavoriteRoutesRemoteDataSource(
         size: Int?,
     ): FavoriteRoutePageDto {
         getFavoriteRoutesCallCount++
+        requestedCursors += cursor
         if (throwOnGet) throw RuntimeException("server get failure")
+        pagesByCursor[cursor]?.let { return it }
         return FavoriteRoutePageDto(
             content = serverContent,
             size = size ?: serverContent.size,

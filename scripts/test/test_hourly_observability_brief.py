@@ -120,9 +120,11 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         self.assertIn("##### :memo: 전체 요약", rendered)
         self.assertIn("**[prod]**", rendered)
         self.assertIn("**[dev]**", rendered)
-        self.assertIn("최근 배포", rendered)
         self.assertIn("전체 로그", rendered)
         self.assertIn("경고 비율", rendered)
+        self.assertIn("ㅤ\n##### :pushpin: 대표 패턴", rendered)
+        self.assertNotIn("##### :paperclip: 참고", rendered)
+        self.assertNotIn("최근 배포", rendered)
 
     def test_render_environment_mattermost_formats_structured_incident_analysis(self):
         dev_report = self.sample_report("dev", 4, 1)
@@ -145,10 +147,14 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         )
 
         self.assertIn("#### :mag: DEV 60분 로그 브리프", rendered)
+        self.assertIn("ㅤ\n##### :bar_chart: 지표", rendered)
         self.assertIn("##### :bar_chart: 지표", rendered)
         self.assertIn("##### :memo: 요약", rendered)
-        self.assertIn(":warning: backend에서 `timeout on upstream` 패턴", rendered)
-        self.assertIn(":wrench: 다음 확인: prod 이슈 확인 후 dev backend 패턴을 추적합니다.", rendered)
+        self.assertIn("backend에서 `timeout on upstream` 패턴", rendered)
+        self.assertIn("다음 확인: prod 이슈 확인 후 dev backend 패턴을 추적합니다.", rendered)
+        self.assertNotIn(":warning:", rendered)
+        self.assertNotIn(":wrench:", rendered)
+        self.assertNotIn("##### :paperclip: 참고", rendered)
         self.assertNotIn("**결론:**", rendered)
         self.assertNotIn("**근거:**", rendered)
         self.assertNotIn("**영향:**", rendered)
@@ -246,8 +252,11 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         )
         self.assertIn("##### :bar_chart: 지표", rendered)
         self.assertIn("##### :memo: 요약", rendered)
-        self.assertIn(":white_check_mark:", rendered)
-        self.assertIn(":eyes: 다음 확인:", rendered)
+        self.assertIn("warning/error가 없고 health도", rendered)
+        self.assertIn("다음 확인:", rendered)
+        self.assertNotIn(":white_check_mark:", rendered)
+        self.assertNotIn(":eyes:", rendered)
+        self.assertNotIn("##### :paperclip: 참고", rendered)
         self.assertNotIn("**결론:**", rendered)
         self.assertNotIn("**근거:**", rendered)
         self.assertNotIn("**영향:**", rendered)
@@ -274,9 +283,9 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
             analysis=analysis,
         )
 
-        self.assertIn(":grey_question:", rendered)
         self.assertIn("관측 데이터가 완전하지 않습니다", rendered)
         self.assertIn("Loki/Prometheus", rendered)
+        self.assertNotIn(":grey_question:", rendered)
         self.assertNotIn("정상 베이스라인", rendered)
 
     def test_build_rule_analysis_uses_favorite_routes_constraint_next_action(self):

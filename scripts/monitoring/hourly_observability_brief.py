@@ -48,6 +48,8 @@ BENIGN_DOMAIN_PATTERNS: dict[str, list[str]] = {
     ],
 }
 KST = datetime.now().astimezone().tzinfo or UTC
+MESSAGE_SECTION_BREAK = "ㅤ"
+MATTERMOST_EMOJI_PATTERN = re.compile(r":[a-z0-9_+-]+:\s*", re.IGNORECASE)
 
 
 @dataclass
@@ -1227,6 +1229,10 @@ def render_metric_section(report: EnvReport) -> str:
     )
 
 
+def clean_summary_text(text: str) -> str:
+    return MATTERMOST_EMOJI_PATTERN.sub("", text).strip()
+
+
 def render_summary_bullets(report: EnvReport, peer_report: EnvReport, analysis: EnvAnalysis) -> list[str]:
     bullets: list[str] = []
     top_service = report.top_services[0][0] if report.top_services else "서비스"
@@ -1238,80 +1244,71 @@ def render_summary_bullets(report: EnvReport, peer_report: EnvReport, analysis: 
 
     if observability_gap:
         bullets.append(
-            ":grey_question: "
             f"{report.environment} 관측 데이터가 완전하지 않습니다. "
             f"health가 {health_text(report)}로 잡혀 실제 정상/장애 여부를 이 브리프만으로 단정하면 안 됩니다."
         )
     elif has_favorite_routes_constraint_signal(report):
         pattern_count = favorite_routes_pattern_count(report) or top_count or report.current_count
         bullets.append(
-            ":rotating_light: backend에서 `/favorite-routes` 저장 중 "
+            "backend에서 `/favorite-routes` 저장 중 "
             f"`favorite_routes_route_option_check` 제약조건 오류가 약 `{pattern_count}`건 반복되고 있습니다. "
             "`route_option` 값과 DB check constraint, enum/validation mapping이 어긋났을 가능성이 큽니다."
         )
     elif report.down_targets:
         bullets.append(
-            ":rotating_light: "
             f"{', '.join(target.upper() for target in report.down_targets)} health가 DOWN입니다. "
             "로그 증가보다 먼저 실제 의존성/컨테이너 상태를 확인해야 합니다."
         )
     elif report.current_count > 0 and top_pattern:
         bullets.append(
-            ":warning: "
             f"{top_service}에서 `{compact_text(top_pattern, 90)}` 패턴이 `{top_count}`건 중심으로 반복됩니다. "
             f"{report.environment} 쪽 특정 도메인/서비스 로직을 먼저 의심하는 편이 맞습니다."
         )
     elif report.current_count > 0:
         bullets.append(
-            ":warning: "
             f"{report.environment} warning/error가 `{report.current_count}`건 감지됐고, "
             f"{top_service} 비중이 가장 큽니다. 같은 시간대 원문 로그를 서비스 기준으로 묶어 봐야 합니다."
         )
     else:
         bullets.append(
-            ":white_check_mark: "
             f"{report.environment}는 지난 1시간 warning/error가 없고 health도 {health_text(report)} 상태입니다. "
             "지금은 장애 징후보다 정상 베이스라인에 가깝습니다."
         )
 
     if observability_gap:
         bullets.append(
-            ":memo: "
             "warning/error와 전체 로그가 낮게 보여도 Loki/Prometheus 조회 실패가 섞여 있어 "
             "실제 로그 유입량이 과소 집계됐을 수 있습니다."
         )
     elif report.current_count > 0:
         bullets.append(
-            ":memo: "
             f"전체 로그 대비 경고 비율은 `{format_ratio(report.warning_error_ratio)}`이고, "
             f"{peer_title} warning/error는 `{peer_report.current_count}`건입니다. "
             f"health가 유지된다면 전체 장애보다는 `{top_service}` 쪽 반복 오류 가능성이 더 큽니다."
         )
     elif report.total_logs_current > 0:
         bullets.append(
-            ":memo: "
             f"전체 로그는 `{report.total_logs_current}`건으로 직전 대비 `{report.total_logs_delta:+d}`건입니다. "
             "경고 비율이 낮으므로 로그 유입 자체보다 health 변화 여부만 계속 비교하면 됩니다."
         )
 
     if report.suppressed_count > 0:
         bullets.append(
-            ":mute: "
             f"GraphHopper no-route 계열처럼 운영성 낮은 도메인 경고 `{report.suppressed_count}`건은 "
             "메인 warning/error 집계에서 제외했습니다."
         )
 
     if observability_gap:
-        bullets.append(f":wrench: 다음 확인: {analysis.next_action}")
+        bullets.append(f"다음 확인: {analysis.next_action}")
     elif report.current_count > 0 or report.down_targets:
-        bullets.append(f":wrench: 다음 확인: {analysis.next_action}")
+        bullets.append(f"다음 확인: {analysis.next_action}")
     else:
         bullets.append(
-            ":eyes: 다음 확인: 배포 직후 같은 지표가 튀는지만 보고, "
+            "다음 확인: 배포 직후 같은 지표가 튀는지만 보고, "
             f"이상 징후가 생기면 {peer_title}와 같은 시간대로 비교하면 됩니다."
         )
 
-    return bullets
+    return [clean_summary_text(bullet) for bullet in bullets]
 
 
 def render_summary_section(report: EnvReport, peer_report: EnvReport, analysis: EnvAnalysis) -> str:
@@ -1325,40 +1322,22 @@ def render_detail_section(report: EnvReport, analysis: EnvAnalysis | None = None
     sample_text = "\n".join(
         f"- [{sample.service}/{sample.level}] {compact_text(sample.message)}" for sample in report.sample_logs
     ) or "- 없음"
-    deploy_lines = ["- 배포 정보: unavailable"]
-    if report.deploy_manifest:
-        deployed_at = parse_iso8601(report.deploy_manifest.deployed_at)
-        deployed_text = deployed_at.astimezone(KST).strftime("%m-%d %H:%M") if deployed_at else report.deploy_manifest.deployed_at
-        deploy_lines = [
-            f"- 최근 배포: `{report.deploy_manifest.branch}` `{report.deploy_manifest.commit}` ({deployed_text})",
-            f"- 배포 서비스: {', '.join(report.deploy_manifest.services) or '-'}",
-        ]
-
-    change_text = "\n".join(render_changes(report.recent_changes)) or "- 없음"
-    notes_text = "\n".join(f"- {note}" for note in report.notes) or ""
-    reference_lines: list[str] = []
-    if analysis:
-        reference_lines.append(f"- 분석 신뢰도: `{analysis.confidence}`")
-    if peer_title:
-        reference_lines.append(f"- 비교 대상: {peer_title}")
-    reference_lines.extend(deploy_lines)
-    reference_lines.append("- 최근 변경:")
-    reference_lines.append(change_text)
-    if notes_text:
-        reference_lines.append("- 참고:")
-        reference_lines.append(notes_text)
     return (
         "##### :pushpin: 대표 패턴\n"
-        f"{pattern_text}\n\n"
+        f"{pattern_text}\n"
+        f"{MESSAGE_SECTION_BREAK}\n"
         "##### :page_facing_up: 대표 로그\n"
-        f"{sample_text}\n\n"
-        "##### :paperclip: 참고\n"
-        + "\n".join(reference_lines)
+        f"{sample_text}"
     )
 
 
 def render_env_section(report: EnvReport) -> str:
-    return f"**[{report.environment}]**\n{render_metric_section(report)}\n\n{render_detail_section(report)}"
+    return (
+        f"**[{report.environment}]**\n"
+        f"{render_metric_section(report)}\n"
+        f"{MESSAGE_SECTION_BREAK}\n"
+        f"{render_detail_section(report)}"
+    )
 
 
 def render_mattermost(
@@ -1374,14 +1353,14 @@ def render_mattermost(
     start_text = (now - timedelta(minutes=lookback_minutes)).astimezone(KST).strftime("%H:%M")
     summary_title = agent_summary or rule_summary
     return (
-        "----\n"
-        f"#### :mag: {lookback_minutes}분 운영 로그 브리프 ({start_text} ~ {end_text} KST)\n\n"
+        f"#### :mag: {lookback_minutes}분 운영 로그 브리프 ({start_text} ~ {end_text} KST)\n"
+        f"{MESSAGE_SECTION_BREAK}\n"
         "##### :memo: 전체 요약\n"
         f"- {summary_title}\n"
-        f"- 규칙 기반: {rule_summary}\n\n"
+        f"- 규칙 기반: {rule_summary}\n"
+        f"{MESSAGE_SECTION_BREAK}\n"
         f"{render_env_section(prod_report)}\n\n"
-        f"{render_env_section(dev_report)}\n"
-        "----"
+        f"{render_env_section(dev_report)}"
     )
 
 
@@ -1398,12 +1377,13 @@ def render_environment_mattermost(
     env_title = report.environment.upper()
     peer_title = peer_report.environment.upper()
     return (
-        "----\n"
-        f"#### :mag: {env_title} {lookback_minutes}분 로그 브리프 ({start_text} ~ {end_text} KST)\n\n"
-        f"{render_metric_section(report)}\n\n"
-        f"{render_summary_section(report, peer_report, analysis)}\n\n"
-        f"{render_detail_section(report, analysis=analysis, peer_title=peer_title)}\n"
-        "----"
+        f"#### :mag: {env_title} {lookback_minutes}분 로그 브리프 ({start_text} ~ {end_text} KST)\n"
+        f"{MESSAGE_SECTION_BREAK}\n"
+        f"{render_metric_section(report)}\n"
+        f"{MESSAGE_SECTION_BREAK}\n"
+        f"{render_summary_section(report, peer_report, analysis)}\n"
+        f"{MESSAGE_SECTION_BREAK}\n"
+        f"{render_detail_section(report, analysis=analysis, peer_title=peer_title)}"
     )
 
 

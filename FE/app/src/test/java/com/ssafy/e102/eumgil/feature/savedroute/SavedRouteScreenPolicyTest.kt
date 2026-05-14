@@ -59,8 +59,12 @@ class SavedRouteScreenPolicyTest {
             savedPlaceSection.contains("verticalAlignment = Alignment.CenterVertically"),
         )
         assertTrue(
-            "Saved-place category icon token should stay larger than the previous compact size.",
-            source.contains("private val SavedBookmarkCategoryIconSize = 24.dp"),
+            "Saved-place category icon should also declare its own vertical centering inside the row.",
+            savedPlaceSection.contains(".align(Alignment.CenterVertically)"),
+        )
+        assertTrue(
+            "Saved-place category icon token should stay noticeably larger than the previous compact size.",
+            source.contains("private val SavedBookmarkCategoryIconSize = 40.dp"),
         )
     }
 
@@ -129,6 +133,18 @@ class SavedRouteScreenPolicyTest {
         assertTrue(
             "Saved-route primary CTA should use the no-ripple navigation button when it opens route guidance.",
             primaryActionSection.contains("NoRippleSavedRouteNavigationButton("),
+        )
+        assertTrue(
+            "Saved-route primary CTA should use a less-rounded shape than the old pill button.",
+            primaryActionSection.contains("val navigationButtonShape = RoundedCornerShape(EumRadius.small)"),
+        )
+        assertTrue(
+            "Saved-route primary CTA should reduce its minimum height slightly inside bookmark rows.",
+            primaryActionSection.contains("sharedModifier.heightIn(min = 38.dp)"),
+        )
+        assertTrue(
+            "Saved-route primary CTA should tighten horizontal and vertical padding to read smaller.",
+            primaryActionSection.contains("contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)"),
         )
         assertTrue(
             "Saved-route list action buttons should avoid forcing full-width content inside list rows.",

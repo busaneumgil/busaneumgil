@@ -704,13 +704,16 @@ private fun SavedPlaceListItem(
             ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                    verticalAlignment = Alignment.Top,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         painter = painterResource(id = savedPlaceCategoryIconRes(place.category)),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(SavedBookmarkCategoryIconSize),
+                        modifier =
+                            Modifier
+                                .align(Alignment.CenterVertically)
+                                .size(SavedBookmarkCategoryIconSize),
                     )
                     Column(
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
@@ -867,7 +870,8 @@ private fun SavedBookmarkPrimaryActionButton(
     enabled: Boolean = true,
     accessibilityContext: String? = null,
 ) {
-    val shape = RoundedCornerShape(EumRadius.full)
+    val editButtonShape = RoundedCornerShape(EumRadius.full)
+    val navigationButtonShape = RoundedCornerShape(EumRadius.small)
     val accessibilityLabel =
         accessibilityContext?.let { context ->
             if (isEditMode) {
@@ -888,7 +892,7 @@ private fun SavedBookmarkPrimaryActionButton(
             modifier =
                 sharedModifier.heightIn(min = 42.dp),
             enabled = enabled,
-            shape = shape,
+            shape = editButtonShape,
             colors =
                 ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error,
@@ -907,19 +911,19 @@ private fun SavedBookmarkPrimaryActionButton(
         NoRippleSavedRouteNavigationButton(
             onClick = onClick,
             modifier =
-                sharedModifier.heightIn(min = 42.dp),
+                sharedModifier.heightIn(min = 38.dp),
             enabled = enabled,
             isOutlined = true,
-            shape = shape,
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            shape = navigationButtonShape,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(14.dp),
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = stringResource(id = R.string.saved_route_start_route),
                 style = MaterialTheme.typography.labelLarge,
@@ -1070,4 +1074,4 @@ private const val SavedBookmarkPrimaryTextMaxLines = 2
 private const val SavedBookmarkWaypointValueMaxLines = 1
 private val SavedBookmarkPlaceNameLineHeight = 20.sp
 private val SavedBookmarkWaypointValueLineHeight = 18.sp
-private val SavedBookmarkCategoryIconSize = 20.dp
+private val SavedBookmarkCategoryIconSize = 40.dp

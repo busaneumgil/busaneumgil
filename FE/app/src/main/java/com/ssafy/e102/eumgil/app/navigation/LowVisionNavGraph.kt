@@ -187,7 +187,10 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 navController = navController,
                 backStackEntry = backStackEntry,
             )
-            val category = backStackEntry.arguments?.getString(LowVisionRoute.CategoryResult.ARG_CATEGORY).orEmpty()
+            val category =
+                decodeLowVisionCategoryRouteArgument(
+                    backStackEntry.arguments?.getString(LowVisionRoute.CategoryResult.ARG_CATEGORY).orEmpty(),
+                )
             LowVisionSearchResultShell(
                 navController = navController,
                 selectedTab = LowVisionBottomTab.CATEGORY,
@@ -400,6 +403,9 @@ internal fun resolveLowVisionSearchPopUpRoute(selectedTab: LowVisionBottomTab = 
         LowVisionBottomTab.CATEGORY -> LowVisionRoute.CategorySearch.route
         else -> LowVisionRoute.Search.route
     }
+
+internal fun decodeLowVisionCategoryRouteArgument(encodedCategory: String): String =
+    URLDecoder.decode(encodedCategory, StandardCharsets.UTF_8.toString()).trim()
 
 internal fun resolveNavigationCompletionRoute(selectedPrimaryUserType: String? = null): String =
     if (shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {

@@ -33,6 +33,25 @@ external:
   ai:
     base-url: ${AI_BASE_URL:http://localhost:5000}
 
+report:
+  idempotency:
+    cleanup-cron: ${REPORT_IDEMPOTENCY_CLEANUP_CRON:0 0 * * * *}
+  image-storage:
+    bucket: ${REPORT_IMAGE_STORAGE_BUCKET:${S3_BUCKET:${MINIO_BUCKET:e102-report-images}}}
+    region: ${REPORT_IMAGE_STORAGE_REGION:${S3_REGION:${MINIO_REGION:ap-northeast-2}}}
+    endpoint: ${REPORT_IMAGE_STORAGE_ENDPOINT:${S3_ENDPOINT:${MINIO_ENDPOINT:}}}
+    access-key: ${REPORT_IMAGE_STORAGE_ACCESS_KEY:${S3_ACCESS_KEY:${MINIO_ROOT_USER:}}}
+    secret-key: ${REPORT_IMAGE_STORAGE_SECRET_KEY:${S3_SECRET_KEY:${MINIO_ROOT_PASSWORD:}}}
+    key-prefix: ${REPORT_IMAGE_STORAGE_KEY_PREFIX:hazard-reports}
+    presign-ttl: ${REPORT_IMAGE_STORAGE_PRESIGN_TTL:10m}
+    max-content-length: ${REPORT_IMAGE_STORAGE_MAX_CONTENT_LENGTH:10MB}
+    allowed-content-types:
+      - image/jpeg
+      - image/png
+      - image/webp
+      - image/heic
+      - image/heif
+
 auth:
   test:
     enabled: ${AUTH_TEST_ENABLED:false}

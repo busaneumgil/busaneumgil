@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.remote.dto
 
+import com.ssafy.e102.eumgil.data.route.RouteDto
+
 data class FavoriteRoutePointDto(
     val lat: Double,
     val lng: Double,
@@ -25,4 +27,16 @@ data class FavoriteRoutePageDto(
 
 data class CreateFavoriteRouteResponseDto(
     val favRouteId: Long,
+)
+
+data class FavoriteRouteDetailDto(
+    val favRouteId: Long,
+    val routeName: String,
+    val startLabel: String,
+    val endLabel: String,
+    val startPoint: FavoriteRoutePointDto,
+    val endPoint: FavoriteRoutePointDto,
+    val transportMode: String?,
+    val routeOption: String,
+    val route: RouteDto? = null,
 )

@@ -155,7 +155,7 @@ class MapCategoryFilterBarConfigurationTest {
     }
 
     @Test
-    fun `map category filter bar uses dedicated food cafe icon asset for food categories`() {
+    fun `map category filter bar uses dedicated restaurant icon asset separate from food cafe`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
                 .readText()
@@ -165,8 +165,8 @@ class MapCategoryFilterBarConfigurationTest {
             source.contains("FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
         )
         assertTrue(
-            "Restaurant category chip should use the dedicated food cafe drawable resource.",
-            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+            "Restaurant category chip should use the dedicated restaurant drawable resource.",
+            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant"),
         )
     }
 

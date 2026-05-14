@@ -188,11 +188,20 @@ fun MapScreen(
 
                 FacilityDetailBottomSheetShell(
                     state = facilityDetailSheetUiState.toShellState(),
-                    onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
                     modifier = Modifier.fillMaxSize(),
+                    onPhoneClick =
+                        facilityDetailSheetUiState.phoneNumber?.let {
+                            { onAction(MapUiAction.FacilityPhoneClicked) }
+                        },
                     detailContent = {
                         FacilityDetailAccessibilityTagSection(
                             tags = facilityDetailSheetUiState.accessibilityTags,
+                        )
+                    },
+                    headerActionContent = {
+                        FacilityDetailBookmarkActionButton(
+                            state = facilityDetailSheetUiState,
+                            onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
                         )
                     },
                     actionContent = {
@@ -215,9 +224,9 @@ fun MapScreen(
                                     enabled = facilityDetailSheetUiState.isRouteActionEnabled,
                                     modifier =
                                         Modifier
-                                            .weight(1.15f)
+                                            .weight(1f)
                                             .height(56.dp),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(EumRadius.medium),
                                 ) {
                                     IconTextButtonContent(
                                         iconRes = R.drawable.ic_route_start_navigation_button,
@@ -235,9 +244,9 @@ fun MapScreen(
                                     enabled = facilityDetailSheetUiState.isRouteActionEnabled,
                                     modifier =
                                         Modifier
-                                            .weight(1.15f)
+                                            .weight(1f)
                                             .height(56.dp),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(EumRadius.medium),
                                     containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = MaterialTheme.colorScheme.onPrimary,
                                 ) {
@@ -248,10 +257,6 @@ fun MapScreen(
                                         ),
                                     )
                                 }
-                                FacilityDetailBookmarkActionButton(
-                                    state = facilityDetailSheetUiState,
-                                    onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
-                                )
                             }
                             facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
                                 Text(
@@ -304,6 +309,7 @@ private data class MapFacilityDetailSheetUiState(
     val metaLabel: String,
     val title: String,
     val address: String,
+    val phoneNumber: String?,
     val accessibilityTags: List<String>,
     val isBookmarked: Boolean,
     val isBookmarkUpdating: Boolean,
@@ -318,6 +324,7 @@ private data class MapFacilityDetailSheetUiState(
             metaLabel = metaLabel,
             title = title,
             address = address,
+            phoneNumber = phoneNumber,
             hasDetailContent = accessibilityTags.isNotEmpty(),
         )
 }
@@ -598,7 +605,7 @@ private fun NoRippleMapPrimaryActionButton(
     onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = RoundedCornerShape(EumRadius.medium),
     containerColor: Color = MaterialTheme.colorScheme.primary,
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     content: @Composable RowScope.() -> Unit,
@@ -641,7 +648,8 @@ private fun FacilityDetailBookmarkActionButton(
     val bookmarkButtonLabel = stringResource(id = R.string.map_facility_detail_bookmark_button_label)
     val bookmarkStateDescription =
         when {
-            state.isBookmarkEnabled.not() -> "Bookmark is unavailable for this place."
+            state.isBookmarkEnabled.not() ->
+                stringResource(id = R.string.map_facility_detail_bookmark_state_unavailable)
 
             state.isBookmarkUpdating ->
                 stringResource(id = R.string.map_facility_detail_bookmark_state_updating)
@@ -830,7 +838,7 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                 title = stringResource(id = R.string.map_location_status_loading_title),
                 description = stringResource(id = R.string.map_location_status_loading_description),
                 supportingText = stringResource(id = R.string.map_location_status_loading_supporting),
-                actionIconRes = R.drawable.ic_status_hourglass,
+                actionIconRes = R.drawable.ic_map_current_location_loading,
                 actionLabel = stringResource(id = R.string.map_location_action_loading),
                 isActionEnabled = false,
                 isPrimaryAction = false,
@@ -853,7 +861,7 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                         id = R.string.map_location_status_ready_supporting,
                         locationSummary,
                     ),
-                actionIconRes = R.drawable.ic_status_refresh,
+                actionIconRes = R.drawable.ic_map_current_location_retry,
                 actionLabel = stringResource(id = R.string.map_location_action_recenter),
                 isActionEnabled = true,
                 isPrimaryAction = true,
@@ -899,7 +907,7 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
                 supportingText = stringResource(id = R.string.map_location_status_unavailable_supporting),
                 actionIconRes =
                     if (isRetryEnabled) {
-                        R.drawable.ic_status_refresh
+                        R.drawable.ic_map_current_location_retry
                     } else {
                         R.drawable.ic_status_cancel
                     },
@@ -996,6 +1004,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 ),
                 title = mapTapDetail.name,
                 address = mapTapDetailAddressLabel(mapTapDetail),
+                phoneNumber = mapTapDetail.phoneNumber,
                 accessibilityTags =
                     mapTapDetailAccessibilityLabels(
                         detail = mapTapDetail,
@@ -1020,6 +1029,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                     uiState.selectedMapPinCoordinate
                         ?.let { coordinate -> coordinateText(coordinate) }
                         .orEmpty(),
+                phoneNumber = null,
                 accessibilityTags = emptyList(),
                 isBookmarked = false,
                 isBookmarkUpdating = true,
@@ -1038,6 +1048,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                     uiState.selectedMapPinCoordinate
                         ?.let { coordinate -> coordinateText(coordinate) }
                         .orEmpty(),
+                phoneNumber = null,
                 accessibilityTags = emptyList(),
                 isBookmarked = false,
                 isBookmarkUpdating = false,
@@ -1064,6 +1075,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             metaLabel = "",
             title = "",
             address = "",
+            phoneNumber = null,
             accessibilityTags = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = false,
@@ -1083,6 +1095,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             ),
             title = mapTapDetail.name,
             address = mapTapDetailAddressLabel(mapTapDetail),
+            phoneNumber = mapTapDetail.phoneNumber,
             accessibilityTags =
                 mapTapDetailAccessibilityLabels(
                     detail = mapTapDetail,
@@ -1104,6 +1117,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                 uiState.selectedMapPinCoordinate
                     ?.let { coordinate -> coordinateText(coordinate) }
                     .orEmpty(),
+            phoneNumber = null,
             accessibilityTags = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = true,
@@ -1121,6 +1135,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
                 uiState.selectedMapPinCoordinate
                     ?.let { coordinate -> coordinateText(coordinate) }
                     .orEmpty(),
+            phoneNumber = null,
             accessibilityTags = emptyList(),
             isBookmarked = false,
             isBookmarkUpdating = false,
@@ -1139,6 +1154,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             ),
             title = detail.name,
             address = facilityDetailAddressLabel(detail),
+            phoneNumber = detail.phoneNumber,
             accessibilityTags =
                 facilityDetailAccessibilityLabels(
                     detail = detail,
@@ -1360,7 +1376,11 @@ private fun coordinateText(location: MapCoordinate): String =
 
 @DrawableRes
 private fun mapTapDetailPlaceIconRes(detail: MapTappedPlaceDetail): Int =
-    recentDestinationIcon(detail.category)
+    when (detail.category) {
+        null -> R.drawable.ic_place_other
+        PlaceCategory.OTHER -> R.drawable.ic_place_other
+        else -> recentDestinationIcon(detail.category)
+    }
 
 @Composable
 private fun mapTapDetailMetaLabel(
@@ -1670,7 +1690,7 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
         FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
         FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
@@ -1688,10 +1708,10 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.WELFARE -> R.drawable.ic_place_welfare
         PlaceCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        PlaceCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
         PlaceCategory.OTHER -> R.drawable.ic_place_other
-        null -> R.drawable.ic_nav_facility
+        null -> R.drawable.ic_place_other
     }
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0

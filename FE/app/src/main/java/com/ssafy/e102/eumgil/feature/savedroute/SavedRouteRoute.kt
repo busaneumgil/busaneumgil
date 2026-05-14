@@ -11,11 +11,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import kotlinx.coroutines.flow.collect
 
 @Composable
 fun SavedRouteRoute(
     onNavigateToMap: () -> Unit,
+    onNavigateToNavigation: (RouteNavigationRequest) -> Unit,
+    onNavigateToRouteDetail: (RouteNavigationRequest) -> Unit,
     onNavigateToRouteSetting: (RouteOption?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -46,10 +49,12 @@ fun SavedRouteRoute(
         viewModel.setLowVisionMode(enabled = false)
     }
 
-    LaunchedEffect(viewModel, onNavigateToMap, onNavigateToRouteSetting) {
+    LaunchedEffect(viewModel, onNavigateToMap, onNavigateToNavigation, onNavigateToRouteDetail, onNavigateToRouteSetting) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 SavedRouteUiEvent.NavigateToMap -> onNavigateToMap()
+                is SavedRouteUiEvent.NavigateToNavigation -> onNavigateToNavigation(event.request)
+                is SavedRouteUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.request)
                 is SavedRouteUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting(event.initialRouteOption)
                 SavedRouteUiEvent.NavigateToRouteBriefing -> Unit
                 is SavedRouteUiEvent.ShowSnackbar -> Unit

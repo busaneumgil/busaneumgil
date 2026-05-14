@@ -196,6 +196,8 @@
     <string name="map_facility_detail_distance_meters">%1$d m</string>
     <string name="map_facility_detail_distance_kilometers">%.1f km</string>
     <string name="map_facility_detail_address_fallback">주소 정보 준비 중</string>
+    <string name="map_facility_detail_phone_value">%1$s</string>
+    <string name="map_facility_detail_phone_action">%1$s 번호로 전화 앱 열기</string>
     <string name="map_facility_detail_accessibility_section_title">접근성 태그</string>
     <string name="map_facility_detail_accessibility_empty">접근성 정보 준비 중</string>
     <string name="map_facility_detail_tag_ramp">경사로</string>
@@ -617,6 +619,7 @@
     <string name="map_facility_detail_bookmark_state_saved">북마크됨</string>
     <string name="map_facility_detail_bookmark_state_unsaved">북마크 안 됨</string>
     <string name="map_facility_detail_bookmark_state_updating">북마크 저장 중</string>
+    <string name="map_facility_detail_bookmark_state_unavailable">이 장소는 북마크할 수 없습니다.</string>
     <string name="arrival_screen_title">도착 완료</string>
     <string name="arrival_screen_headline">오늘도 안전한 이동\n수고하셨습니다!</string>
     <string name="arrival_screen_description">부산이음길이 함께하여 더 편안한 이동이 되셨기를 바랍니다.</string>
@@ -625,6 +628,7 @@
     <string name="arrival_evaluation_title">경로 평가</string>
     <string name="arrival_evaluation_save_route">이 경로 저장하기</string>
     <string name="arrival_evaluation_route_saved">경로 저장 완료</string>
+    <string name="arrival_evaluation_route_save_cancel">경로 저장 취소</string>
     <string name="arrival_evaluation_submit">평가 등록</string>
     <string name="arrival_evaluation_close">평가 건너뛰기</string>
     <string name="arrival_evaluation_question">이번 경로는 어떠셨나요?</string>

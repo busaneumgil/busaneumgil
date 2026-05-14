@@ -90,7 +90,26 @@ class AppNavHostRoutingTest {
     fun `guidance and route setting routes hide top level tab`() {
         assertNull(NavigationRoute.Guidance.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.Setting.route.toCurrentTopLevelRoute())
+        assertNull(RouteSettingRoute.PermissionGate.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.Detail.createRoute(RouteOption.SAFE).toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `route setting routes preserve permission gate and prechecked query arguments`() {
+        assertEquals(
+            "route_setting/permission?autoStartNavigation=true&initialRouteOption=SAFE",
+            RouteSettingRoute.PermissionGate.createRoute(
+                autoStartNavigation = true,
+                initialRouteOption = RouteOption.SAFE,
+            ),
+        )
+        assertEquals(
+            "route_setting?initialRouteOption=SAFE&locationPermissionPrechecked=true",
+            RouteSettingRoute.Setting.createRoute(
+                initialRouteOption = RouteOption.SAFE,
+                locationPermissionPrechecked = true,
+            ),
+        )
     }
 
     @Test
@@ -120,5 +139,10 @@ class AppNavHostRoutingTest {
         assertNull(OnboardingRoute.UserTypePrimary.route.toCurrentTopLevelRoute())
         assertNull(LowVisionRoute.Home.route.toCurrentTopLevelRoute())
         assertNull(LowVisionRoute.Search.route.toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `app route changes use instant destination transitions`() {
+        assertEquals(true, shouldUseInstantAppDestinationTransitions())
     }
 }

@@ -1,9 +1,11 @@
 package com.ssafy.e102.eumgil.feature.report
 
 import androidx.activity.ComponentActivity
+import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.NoOpCurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
@@ -83,7 +85,10 @@ class ReportViewModelTest {
                             draftId = "draft-1",
                             reportCategory = ReportType.OTHER_OBSTACLE.apiValue,
                             description = "복원할 설명",
-                            address = "부산역 인근",
+                            // 옵션 4(v8): "부산역 인근"은 사용자 직접 보충 메모로 의도된 값이라
+                            // addressDetail에 저장 → 복원 시 addressText로 노출.
+                            address = null,
+                            addressDetail = "부산역 인근",
                             latitude = 35.1151,
                             longitude = 129.0414,
                             locationSource = ReportLocationSource.MapPin.name,
@@ -1354,7 +1359,10 @@ class ReportViewModelTest {
                             draftId = "draft-1",
                             reportCategory = ReportType.RAMP.apiValue,
                             description = "복원할 설명",
-                            address = "부산역",
+                            // 옵션 4(v8): "부산역"은 사용자 직접 보충 메모로 의도 — addressDetail에 저장,
+                            // 복원 시 addressText로 노출되어 L1380 검증과 부합.
+                            address = null,
+                            addressDetail = "부산역",
                             latitude = 35.1151,
                             longitude = 129.0414,
                             locationSource = ReportLocationSource.MapPin.name,
@@ -1600,11 +1608,13 @@ private fun createReportViewModel(
     repository: ReportRepository,
     currentLocationManager: CurrentLocationManager = FakeCurrentLocationManager(),
     locationPermissionManager: LocationPermissionManager = FakeLocationPermissionManager(),
+    addressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
 ): ReportViewModel =
     ReportViewModel(
         reportRepository = repository,
         currentLocationManager = currentLocationManager,
         locationPermissionManager = locationPermissionManager,
+        addressResolver = addressResolver,
     )
 
 private class FakeCurrentLocationManager(

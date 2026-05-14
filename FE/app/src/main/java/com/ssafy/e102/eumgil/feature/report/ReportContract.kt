@@ -214,8 +214,6 @@ sealed interface ReportUiAction {
      */
     data object RefreshLocationPermission : ReportUiAction
 
-    data object LocationPickerClicked : ReportUiAction
-
     data class LocationSelected(
         val location: ReportLocation,
         val source: ReportLocationSource,
@@ -275,8 +273,6 @@ sealed interface ReportUiEvent {
     ) : ReportUiEvent
 
     data object RequestLocationPermission : ReportUiEvent
-
-    data object OpenLocationPicker : ReportUiEvent
 
     data object OpenPhotoPicker : ReportUiEvent
 

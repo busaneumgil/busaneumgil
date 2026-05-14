@@ -172,6 +172,27 @@ class NavigationViewModel(
         currentLocationManager.startLocationUpdates()
     }
 
+    fun currentRouteDetailRequest(): RouteNavigationRequest? {
+        val request = navigationRequest ?: return null
+        val currentSession = routeSession
+        val currentRoute = currentSession?.route ?: request.selectedRoute
+        val currentSelectionHandoff =
+            request.selectionHandoff?.let { selectionHandoff ->
+                selectionHandoff.copy(
+                    routeId = currentSession?.routeId ?: selectionHandoff.routeId,
+                    sessionId = currentSession?.sessionId ?: selectionHandoff.sessionId,
+                )
+            }
+        return if (currentRoute == request.selectedRoute && currentSelectionHandoff == request.selectionHandoff) {
+            request
+        } else {
+            request.copy(
+                selectedRoute = currentRoute,
+                selectionHandoff = currentSelectionHandoff,
+            )
+        }
+    }
+
     fun currentRouteBookmarkDraft(): RouteBookmarkDraft? =
         navigationRequest?.toRouteBookmarkDraft(routeSession?.route)
 
@@ -1054,6 +1075,7 @@ private fun RouteNavigationRequest.toRouteBookmarkDraft(
         routeOption = route?.routeOption ?: selectedRoute.routeOption,
         distanceMeters = route?.summary?.distanceMeters?.takeIf { distance -> distance > 0 },
         durationMinutes = route?.summary?.estimatedTimeMinutes?.takeIf { duration -> duration > 0 },
+        routeSnapshot = route,
     )
 
 private fun RouteWaypoint.toNavigationDestinationPlaceId(): String =

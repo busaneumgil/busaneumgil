@@ -7,6 +7,8 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.AccessibilityTag
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
@@ -36,9 +38,10 @@ import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
-import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.TestAuthSessionRepository
 import com.ssafy.e102.eumgil.feature.map.component.createKakaoCameraRenderState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -193,6 +196,60 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `search preview hydrates internal place detail phone number when detail api is available`() =
+        runTest {
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val locationManager = FakeCurrentLocationManager()
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val placesRepository =
+                FakePlacesRepository(
+                    placeDetailsById =
+                        mapOf(
+                            "preview-1" to
+                                PlaceDetail(
+                                    placeId = "preview-1",
+                                    name = "Busan Tower",
+                                    address = "1 Yongdusan-gil, Busan",
+                                    latitude = 35.1000,
+                                    longitude = 129.0320,
+                                    category = PlaceCategory.TOURIST_SPOT,
+                                    phoneNumber = "051-600-1000",
+                                ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-1",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(
+                destination = destination,
+                accessibilityTagKeys = listOf("elevator"),
+            )
+            advanceUntilIdle()
+
+            val sheetState = viewModel.uiState.value.facilityDetailSheetState
+            assertEquals("051-600-1000", sheetState.mapTapDetail?.phoneNumber)
+            assertEquals(listOf("elevator"), sheetState.mapTapDetail?.accessibilityTags)
+        }
+
+    @Test
     fun `search preview keeps preview camera when map route restarts with current location available`() =
         runTest {
             val initialLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
@@ -343,7 +400,53 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `search preview clears map pin state when selected pin leaves viewport`() =
+    fun `search preview keeps map pin state during programmatic offscreen callback`() =
+        runTest {
+            val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val locationManager = FakeCurrentLocationManager()
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-programmatic-offscreen",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = destination.latitude, longitude = destination.longitude),
+                    zoomLevel = viewModel.uiState.value.cameraTarget.resolvedZoomLevel(),
+                    isUserGesture = false,
+                    isSelectedMapPinVisibleInViewport = false,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.selectedMapPinCoordinate?.longitude ?: 0.0, 0.0)
+            assertEquals(destination, viewModel.uiState.value.facilityDetailSheetState.destinationPreview?.destination)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
+    fun `search preview clears map pin state when user moves selected pin offscreen`() =
         runTest {
             val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
             val locationManager = FakeCurrentLocationManager()
@@ -1398,6 +1501,51 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `facility phone click emits dialer event for selected marker detail`() =
+        runTest {
+            val placesRepository =
+                FakePlacesRepository(
+                    placeDetailsById =
+                        mapOf(
+                            "101" to
+                                PlaceDetail(
+                                    placeId = "101",
+                                    name = "Accessible Hotel",
+                                    address = "10 Haeundae-ro, Busan",
+                                    latitude = 35.1587,
+                                    longitude = 129.1604,
+                                    category = PlaceCategory.ACCOMMODATION,
+                                    phoneNumber = "051-700-1000",
+                                ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.MarkerTapped("101"))
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.FacilityPhoneClicked)
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals(MapUiEvent.OpenDialer("051-700-1000"), event)
+        }
+
+    @Test
     fun `external poi bookmark posts snapshot and deletes by returned target id`() =
         runTest {
             val tappedCoordinate = MapCoordinate(latitude = 35.1799, longitude = 129.0752)
@@ -2373,6 +2521,78 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `account scope change clears stale map preview state and reloads places`() =
+        runTest {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "access-token-a",
+                                    refreshToken = "refresh-token-a",
+                                    userId = "user-a",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val placesRepository =
+                FakePlacesRepository(
+                    places =
+                        listOf(
+                            PlaceSummary(
+                                placeId = "scoped-place-1",
+                                name = "Scoped Place",
+                                address = "1 Scoped-ro, Busan",
+                                latitude = 35.1801,
+                                longitude = 129.0722,
+                                category = PlaceCategory.WELFARE,
+                            ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    authSessionRepository = authSessionRepository,
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+
+            destinationPreviewRepository.requestPreview(destination = testDestination())
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertEquals(1, placesRepository.queries.size)
+
+            authSessionRepository.updateAuthSession(
+                authSession =
+                    AuthSession(
+                        accessToken = "access-token-b",
+                        refreshToken = "refresh-token-b",
+                        userId = "user-b",
+                    ),
+                isProfileCompleted = true,
+            )
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.selectedMarkerId)
+            assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.detail)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.mapTapDetail)
+            assertNull(viewModel.uiState.value.facilityDetailSheetState.destinationPreview)
+            assertEquals(2, placesRepository.queries.size)
+        }
+
+    @Test
     fun `live places browse uses the fallback busan camera center before current location is ready`() =
         runTest {
             val placesRepository =
@@ -2606,6 +2826,7 @@ private fun testMapTappedDetail(
     longitude: Double,
     isBookmarked: Boolean = false,
     accessibilityTags: List<String> = emptyList(),
+    phoneNumber: String? = null,
 ): MapTappedPlaceDetail =
     MapTappedPlaceDetail(
         bookmarkTargetId = bookmarkTargetId,
@@ -2621,6 +2842,7 @@ private fun testMapTappedDetail(
         longitude = longitude,
         isBookmarked = isBookmarked,
         accessibilityTags = accessibilityTags,
+        phoneNumber = phoneNumber,
     )
 
 private class FakeLocationPermissionManager(

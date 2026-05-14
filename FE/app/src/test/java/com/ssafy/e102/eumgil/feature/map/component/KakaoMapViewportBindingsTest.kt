@@ -652,13 +652,14 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `facility glyph mapping keeps category specific icons for native bitmap labels`() {
+    fun `facility glyph mapping uses dedicated tourist icon for tourist categories`() {
         assertEquals(
             listOf(
                 R.drawable.ic_place_restaurant,
                 R.drawable.ic_place_charging,
                 R.drawable.ic_place_healthcare,
-                R.drawable.ic_nav_facility,
+                R.drawable.ic_place_tourist_spot,
+                R.drawable.ic_place_tourist_spot,
                 R.drawable.ic_place_other,
             ),
             listOf(
@@ -666,6 +667,7 @@ class KakaoMapViewportBindingsTest {
                 facilityMarkerGlyphResId(FacilityCategory.CHARGING_STATION),
                 facilityMarkerGlyphResId(FacilityCategory.HEALTHCARE),
                 facilityMarkerGlyphResId(FacilityCategory.TOURIST_SPOT),
+                facilityMarkerGlyphResId(FacilityCategory.TOURIST_ATTRACTION),
                 facilityMarkerGlyphResId(FacilityCategory.OTHER),
             ),
         )

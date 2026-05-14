@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -233,12 +233,8 @@ private fun ReportPrimaryActionBar(
     suppressRipple: Boolean = false,
 ) {
     Surface(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .imePadding(),
+        modifier = Modifier.fillMaxWidth(),
         shadowElevation = 8.dp,
-        tonalElevation = 2.dp,
     ) {
         if (suppressRipple) {
             NoRippleReportPrimaryActionButton(
@@ -498,8 +494,9 @@ private fun ReportLocationStep(
     input: ReportLocationInput,
     onAction: (ReportUiAction) -> Unit,
 ) {
+    val errorText = reportLocationErrorText(input.error)
     val helperText =
-        reportLocationErrorText(input.error)
+        errorText
             ?: "지도를 드래그해 위치를 조정하거나, '현재 위치로 설정' 버튼으로 GPS 좌표를 적용할 수 있습니다."
     val isError = input.error != null
 
@@ -552,6 +549,9 @@ private fun ReportLocationStep(
             // "지도에서 위치 선택" 버튼은 inline 지도가 직접 노출되어 사용자가 드래그·줌으로
             // 위치를 조정할 수 있으므로 제거되었다 (Task 2.2).
         }
+        // 옵션 4 — 자동 도로명 영역(카드의 location.address 표시)과 분리된 사용자 보충 입력 영역.
+        // 자동 영역에는 손대지 않고 여기에 건물명·정문/후문 같은 현장 맥락을 직접 보강한다.
+        // forward geocoding(주소→좌표 검색)은 의도적으로 비활성: 좌표는 지도 핀이 truth.
         OutlinedTextField(
             value = input.addressText,
             onValueChange = { onAction(ReportUiAction.AddressTextChanged(it)) },
@@ -563,8 +563,10 @@ private fun ReportLocationStep(
                             onAction(ReportUiAction.LocationBlurred)
                         }
                     },
-            label = { Text(text = "주소 (선택 입력)") },
-            placeholder = { Text(text = "예: 부산광역시 부산진구 중앙대로 인근") },
+            label = { Text(text = "건물명·주변 장소 (선택 입력)") },
+            placeholder = {
+                Text(text = "예: 삼성전기기숙사 후문 앞, 횡단보도 옆 보도블록")
+            },
             keyboardOptions =
                 KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
@@ -771,12 +773,18 @@ private fun ReportMapPanel(
         )
         // 화면 정중앙 고정 핀 — 사용자가 지도를 드래그하면 핀은 그대로, 지도가 움직이며 핀이 가리키는
         // 좌표가 현재 선택된 위치가 된다. 일반 지도앱 표준 "drag-the-map" 패턴.
+        //
+        // ic_map_selected_pin_blue의 뾰족 끝은 viewport y=22(24기준), 즉 박스 중심에서 약 41.7%
+        // 아래에 있어 단순 Alignment.Center로 두면 사용자가 인지하는 "핀 끝"이 카메라 중심보다
+        // 아이콘 높이의 약 절반만큼 아래쪽 좌표를 가리키게 된다. 박스 자체를 위로 offset해서
+        // 뾰족 끝(=좌표 anchor)이 정확히 카메라 중심에 오도록 보정한다. 계산: (22-12)/24 × 40dp ≈ 17dp.
         Icon(
             painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
             contentDescription = "위치 선택 핀",
             modifier =
                 Modifier
                     .align(Alignment.Center)
+                    .offset(y = (-17).dp)
                     .size(40.dp),
             tint = Color.Unspecified,
         )
@@ -797,14 +805,12 @@ private fun ReportLocationBottomCard(
     location: ReportLocation?,
     addressText: String,
 ) {
-    val mainAddress =
-        location?.address
-            ?.takeIf { it.isNotBlank() }
-            ?: addressText.ifBlank { null }
-    val coordinateLine =
-        location?.let {
-            "위도 ${"%.4f".format(it.latitude)}, 경도 ${"%.4f".format(it.longitude)}"
-        }
+    // 옵션 4: 자동 RGC 결과(자동 도로명)와 사용자 직접 보충(addressText)을 별도 라인으로 표시.
+    // 한쪽이 다른 쪽을 가리지 않으므로 두 정보가 동시에 보존되고, 사용자의 멘탈 모델("자동은 객관,
+    // 내 입력은 보충")과 UI가 일치한다.
+    val autoAddress = location?.address?.takeIf { it.isNotBlank() }
+    val userDetail = addressText.ifBlank { null }
+    val hasAnyAddress = autoAddress != null || userDetail != null
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -822,16 +828,26 @@ private fun ReportLocationBottomCard(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Text(
-                text = mainAddress ?: "아직 위치가 선택되지 않았습니다.",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (coordinateLine != null) {
+            if (!hasAnyAddress) {
                 Text(
-                    text = coordinateLine,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "아직 위치가 선택되지 않았습니다.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            if (autoAddress != null) {
+                Text(
+                    text = autoAddress,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            if (userDetail != null) {
+                Text(
+                    text = userDetail,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -1038,6 +1054,10 @@ private fun ReportCompleteHero() {
 @Composable
 private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
     val photoCount = uiState.photo.count
+    // 옵션 4 데이터 모델 — 자동 도로명(location.value.address)과 사용자 보충(addressText)을
+    // 각각 별도 행으로 표시. 카드(LocationBottomCard)와 일관된 분리 표시.
+    val autoAddress = uiState.location.value?.address?.takeIf { it.isNotBlank() }
+    val userDetail = uiState.location.addressText.ifBlank { null }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1057,22 +1077,34 @@ private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
                 label = "유형",
                 value = uiState.reportType.value?.label ?: "-",
             )
+            // 자동 RGC 결과가 있으면 "위치"에 노출. 둘 다 없으면 "위치 정보 없음".
             ReportCompleteSummaryRow(
                 label = "위치",
-                value =
-                    uiState.location.value?.address?.takeIf { it.isNotBlank() }
-                        ?: uiState.location.addressText.ifBlank { "위치 정보 없음" },
+                value = autoAddress ?: userDetail ?: "위치 정보 없음",
             )
+            // 자동 도로명이 표시될 때만 보충 메모를 별도 줄로 노출. 자동이 없으면 위 "위치"에
+            // 이미 userDetail이 들어가므로 중복을 피한다.
+            if (autoAddress != null && userDetail != null) {
+                ReportCompleteSummaryRow(
+                    label = "위치 보충",
+                    value = userDetail,
+                )
+            }
             ReportCompleteSummaryRow(
                 label = "설명",
                 value = uiState.description.value.trim().ifBlank { "설명 없음" },
             )
-            if (photoCount > 0) {
-                ReportCompleteSummaryRow(
-                    label = "사진",
-                    value = stringResource(id = R.string.report_complete_photo_attached, photoCount),
-                )
-            }
+            // 사진 미첨부 케이스도 명시적으로 노출 — 사용자가 자기 제보 내역에서 사진 유무를
+            // 한눈에 확인할 수 있도록.
+            ReportCompleteSummaryRow(
+                label = "사진",
+                value =
+                    if (photoCount > 0) {
+                        stringResource(id = R.string.report_complete_photo_attached, photoCount)
+                    } else {
+                        "첨부 없음"
+                    },
+            )
         }
     }
 }

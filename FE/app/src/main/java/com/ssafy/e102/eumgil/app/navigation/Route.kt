@@ -216,9 +216,45 @@ sealed interface RouteSettingRoute : AppRoute {
     data object Setting : RouteSettingRoute {
         const val ARG_AUTO_START_NAVIGATION: String = "autoStartNavigation"
         const val ARG_INITIAL_ROUTE_OPTION: String = "initialRouteOption"
+        const val ARG_LOCATION_PERMISSION_PRECHECKED: String = "locationPermissionPrechecked"
 
         override val route: String =
             "$ROUTE_SETTING_BASE_ROUTE?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}" +
+                "&$ARG_INITIAL_ROUTE_OPTION={$ARG_INITIAL_ROUTE_OPTION}" +
+                "&$ARG_LOCATION_PERMISSION_PRECHECKED={$ARG_LOCATION_PERMISSION_PRECHECKED}"
+
+        fun createRoute(
+            autoStartNavigation: Boolean = false,
+            initialRouteOption: RouteOption? = null,
+            locationPermissionPrechecked: Boolean = false,
+        ): String {
+            val queryParameters =
+                buildList {
+                    if (autoStartNavigation) {
+                        add("$ARG_AUTO_START_NAVIGATION=true")
+                    }
+                    initialRouteOption?.let { routeOption ->
+                        add("$ARG_INITIAL_ROUTE_OPTION=${Uri.encode(routeOption.name)}")
+                    }
+                    if (locationPermissionPrechecked) {
+                        add("$ARG_LOCATION_PERMISSION_PRECHECKED=true")
+                    }
+                }
+
+            return if (queryParameters.isEmpty()) {
+                ROUTE_SETTING_BASE_ROUTE
+            } else {
+                "$ROUTE_SETTING_BASE_ROUTE?${queryParameters.joinToString(separator = "&")}"
+            }
+        }
+    }
+
+    data object PermissionGate : RouteSettingRoute {
+        const val ARG_AUTO_START_NAVIGATION: String = Setting.ARG_AUTO_START_NAVIGATION
+        const val ARG_INITIAL_ROUTE_OPTION: String = Setting.ARG_INITIAL_ROUTE_OPTION
+
+        override val route: String =
+            "$ROUTE_SETTING_BASE_ROUTE/permission?$ARG_AUTO_START_NAVIGATION={$ARG_AUTO_START_NAVIGATION}" +
                 "&$ARG_INITIAL_ROUTE_OPTION={$ARG_INITIAL_ROUTE_OPTION}"
 
         fun createRoute(
@@ -235,21 +271,32 @@ sealed interface RouteSettingRoute : AppRoute {
                     }
                 }
 
+            val baseRoute = "$ROUTE_SETTING_BASE_ROUTE/permission"
             return if (queryParameters.isEmpty()) {
-                ROUTE_SETTING_BASE_ROUTE
+                baseRoute
             } else {
-                "$ROUTE_SETTING_BASE_ROUTE?${queryParameters.joinToString(separator = "&")}"
+                "$baseRoute?${queryParameters.joinToString(separator = "&")}"
             }
         }
     }
 
     data object Detail : RouteSettingRoute {
         const val ARG_ROUTE_OPTION: String = "routeOption"
+        const val ARG_FROM_NAVIGATION: String = "fromNavigation"
 
-        override val route: String = "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}"
+        override val route: String =
+            "$ROUTE_SETTING_BASE_ROUTE/detail/{$ARG_ROUTE_OPTION}?$ARG_FROM_NAVIGATION={$ARG_FROM_NAVIGATION}"
 
-        fun createRoute(routeOption: RouteOption): String =
-            "$ROUTE_SETTING_BASE_ROUTE/detail/${routeOption.name.navArgEncode()}"
+        fun createRoute(
+            routeOption: RouteOption,
+            fromNavigation: Boolean = false,
+        ): String =
+            buildString {
+                append("$ROUTE_SETTING_BASE_ROUTE/detail/${routeOption.name.navArgEncode()}")
+                if (fromNavigation) {
+                    append("?$ARG_FROM_NAVIGATION=true")
+                }
+            }
     }
 }
 

@@ -418,7 +418,7 @@ class LowVisionSearchRepositoryTest {
         }
 
     @Test
-    fun `recent storage delegates to backing repository`() =
+    fun `low vision search skips recent search persistence but keeps recent destination persistence`() =
         runBlocking {
             val delegate = RecordingSearchRepository()
             val repository = LowVisionSearchRepository(delegate = delegate)
@@ -433,7 +433,7 @@ class LowVisionSearchRepositoryTest {
             repository.saveRecentSearch("busan")
             repository.saveRecentDestination(destination)
 
-            assertEquals(listOf("busan"), delegate.savedRecentSearches)
+            assertTrue(delegate.savedRecentSearches.isEmpty())
             assertEquals(listOf(destination), delegate.savedRecentDestinations)
         }
 }

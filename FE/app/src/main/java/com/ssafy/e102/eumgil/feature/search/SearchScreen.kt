@@ -56,6 +56,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.feedback.EumLoadingState
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -456,11 +457,14 @@ private fun SearchResultsContent(
 
             is SearchResultUiState.Loading ->
                 item(key = "loading-state") {
-                    SearchStateCard(
+                    EumLoadingState(
                         title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                         description = stringResource(id = R.string.search_screen_loading_description),
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f),
-                        borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
+                        indicatorSize = SearchResultsLoadingIndicatorSize,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = EumSpacing.small),
                     )
                 }
 
@@ -788,11 +792,14 @@ private fun SearchResultSection(
             is SearchResultUiState.Typing -> Unit
 
             is SearchResultUiState.Loading ->
-                SearchStateCard(
+                EumLoadingState(
                     title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                     description = stringResource(id = R.string.search_screen_loading_description),
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
+                    indicatorSize = SearchResultsLoadingIndicatorSize,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = EumSpacing.small),
                 )
 
             is SearchResultUiState.Success -> {
@@ -1290,6 +1297,7 @@ private fun searchResultAccessibilityTagIconSizeDp(
 
 private const val METERS_PER_KILOMETER = 1_000
 private const val SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD = 3
+private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable

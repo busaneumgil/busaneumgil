@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,5 +38,20 @@ class LowVisionBookmarkScreenTest {
         assertEquals(24.sp, LowVisionBookmarkLayoutDefaults.addressLineHeight)
         assertEquals(LowVisionSearchLayoutDefaults.infoSectionMinHeight, LowVisionBookmarkLayoutDefaults.infoSectionMinHeight)
         assertEquals(LowVisionSearchLayoutDefaults.sectionDividerThickness, LowVisionBookmarkLayoutDefaults.sectionDividerThickness)
+    }
+
+    @Test
+    fun `bookmark cards show category icon before low vision place title`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionBookmarkScreen.kt").readText()
+
+        assertTrue(
+            "Low-vision bookmark cards should reuse the shared saved-place category icon mapping.",
+            source.contains("savedPlaceCategoryIconRes(place.category)"),
+        )
+        assertTrue(
+            "Low-vision bookmark cards should reserve a dedicated large icon size in the title row.",
+            source.contains("categoryIconSize"),
+        )
     }
 }

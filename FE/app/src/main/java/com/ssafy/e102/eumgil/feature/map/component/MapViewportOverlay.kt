@@ -181,12 +181,12 @@ internal fun createRoutePreviewViewportOverlayState(
                 previewMap.originCoordinate?.toOverlayPoint(
                     overlayId = "route-origin",
                     kind = MapViewportPointKind.ORIGIN,
-                    label = "O",
+                    label = "출발",
                 )?.copy(includeInProjection = !focusSelectedGuidanceMarker)?.let(::add)
                 previewMap.destinationCoordinate?.toOverlayPoint(
                     overlayId = "route-destination",
                     kind = MapViewportPointKind.DESTINATION,
-                    label = "D",
+                    label = "도착",
                 )?.copy(includeInProjection = !focusSelectedGuidanceMarker)?.let(::add)
                 addAll(
                     visibleGuidanceMarkers.map { marker ->

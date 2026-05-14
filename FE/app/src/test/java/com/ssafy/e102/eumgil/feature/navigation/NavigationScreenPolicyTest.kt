@@ -104,6 +104,9 @@ class NavigationScreenPolicyTest {
         val railSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
                 .readText()
+        val guideSidePanelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
 
         assertTrue(
             "Navigation hero icon sizing should route transit actions through a dedicated helper.",
@@ -114,12 +117,13 @@ class NavigationScreenPolicyTest {
             navigationScreenSource.contains("private val NavigationHeroTransitDirectionIconSize = 40.dp"),
         )
         assertTrue(
-            "Navigation segment rail should route transit actions through a dedicated helper.",
-            railSource.contains(".size(item.guidanceAction.railIconSize())"),
+            "Navigation segment rail should delegate collapsed icon sizing to the shared guide side-panel item.",
+            railSource.contains("GuideCollapsedRailItem(") &&
+                guideSidePanelSource.contains("action.collapsedIconSize()"),
         )
         assertTrue(
-            "Navigation segment rail should document the slightly reduced transit icon token.",
-            railSource.contains("private val NavigationSegmentRailTransitIconSize = 30.dp"),
+            "Shared collapsed rail icons should document the slightly reduced transit icon token.",
+            guideSidePanelSource.contains("private val GuideCollapsedRailTransitIconSize = 22.dp"),
         )
     }
 
@@ -137,8 +141,7 @@ class NavigationScreenPolicyTest {
         )
         assertTrue(
             "The side panel should support horizontal swipe collapse.",
-            source.contains("Orientation.Horizontal") &&
-                source.contains("NavigationSidePanelSwipeThresholdPx"),
+            source.contains("GuideSidePanelShell("),
         )
         assertTrue(
             "Rows should collapse the panel and reuse SegmentTapped so map focus stays on the existing ViewModel path.",
@@ -147,14 +150,14 @@ class NavigationScreenPolicyTest {
         )
         assertTrue(
             "Transit guidance actions should use the same side panel row path as walk guidance.",
-            source.contains("item.guidanceAction.iconRes()") &&
+            source.contains("GuideSidePanelStepRow(") &&
                 source.contains("uiState.segmentSync.railItems.forEach"),
         )
         assertFalse(
             "Expanded side panel rows should not keep the radio-like current-location button.",
             source
                 .substringAfter("private fun NavigationSidePanelRow(")
-                .substringBefore("@Composable\nprivate fun NavigationSidePanelExpandHandle")
+                .substringBefore("private fun navigationRouteSummary")
                 .contains("ic_map_current_location"),
         )
         assertFalse(
@@ -171,6 +174,9 @@ class NavigationScreenPolicyTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
                 .readText()
+        val guideSidePanelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
         val expandedPanelSection =
             source
                 .substringAfter("private fun NavigationExpandedSidePanel(")
@@ -178,7 +184,7 @@ class NavigationScreenPolicyTest {
         val rowSection =
             source
                 .substringAfter("private fun NavigationSidePanelRow(")
-                .substringBefore("@Composable\nprivate fun NavigationSidePanelStepIcon")
+                .substringBefore("private fun navigationRouteSummary")
         val bottomBarSection =
             source
                 .substringAfter("private fun NavigationBottomBar(")
@@ -189,10 +195,11 @@ class NavigationScreenPolicyTest {
             source.contains("NavigationExpandedSidePanelScrimColor"),
         )
         assertTrue(
-            "Expanded panel rows should use the same start/end and turn icons as the collapsed rail.",
+            "Expanded panel rows should use the shared start/end and turn icon row as the collapsed rail.",
             expandedPanelSection.contains("isFirst = index == 0") &&
                 expandedPanelSection.contains("isLast = index == uiState.segmentSync.railItems.lastIndex") &&
-                rowSection.contains("NavigationSidePanelStepIcon("),
+                rowSection.contains("GuideSidePanelStepRow(") &&
+                guideSidePanelSource.contains("fun GuideSidePanelStepIcon("),
         )
         assertTrue(
             "Exit CTA should share the full-width bottom placement and 30dp bottom gap used by route start.",
@@ -207,6 +214,12 @@ class NavigationScreenPolicyTest {
         assertFalse(
             "Exit CTA text should not be squeezed by the old fixed-width button.",
             bottomBarSection.contains(".width(NavigationBottomBarButtonWidth)"),
+        )
+        assertTrue(
+            "Exit CTA should use the same 50dp narrower horizontal inset as the route start CTA.",
+            source.contains("NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp") &&
+                bottomBarSection.contains("start = NavigationBottomBarHorizontalPadding") &&
+                bottomBarSection.contains("end = NavigationBottomBarHorizontalPadding"),
         )
     }
 

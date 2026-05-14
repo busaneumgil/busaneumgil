@@ -5,9 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,7 +39,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,6 +70,8 @@ import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingContr
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
@@ -319,50 +317,32 @@ private fun NavigationExpandedSidePanel(
     onSegmentTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
-    val dragState =
-        rememberDraggableState { delta ->
-            dragOffsetPx += delta
-        }
-    val panelWidth = LocalConfiguration.current.screenWidthDp.dp * 0.86f
-
-    Surface(
-        modifier =
-            modifier
-                .width(panelWidth)
-                .draggable(
-                    state = dragState,
-                    orientation = Orientation.Horizontal,
-                    onDragStopped = {
-                        if (dragOffsetPx < -NavigationSidePanelSwipeThresholdPx) {
-                            onCollapse()
-                        }
-                        dragOffsetPx = 0f
-                    },
-                ),
-        shape =
-            RoundedCornerShape(
-                topEnd = NavigationSidePanelCornerRadius,
-                bottomEnd = NavigationSidePanelCornerRadius,
-            ),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 0.dp,
-    ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-            ) {
-                uiState.segmentSync.railItems.forEachIndexed { index, item ->
-                    NavigationSidePanelRow(
-                        item = item,
-                        isFirst = index == 0,
-                        isLast = index == uiState.segmentSync.railItems.lastIndex,
-                        onClick = { onSegmentTapped(item.index) },
-                    )
-                }
+    GuideSidePanelShell(
+        isExpanded = true,
+        onExpandedChange = { expanded ->
+            if (!expanded) {
+                onCollapse()
             }
+        },
+        expandedWidthFraction = 0.86f,
+        stateDescription = "expanded guide panel",
+        modifier = modifier,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+        ) {
+            uiState.segmentSync.railItems.forEachIndexed { index, item ->
+                NavigationSidePanelRow(
+                    item = item,
+                    isFirst = index == 0,
+                    isLast = index == uiState.segmentSync.railItems.lastIndex,
+                    onClick = { onSegmentTapped(item.index) },
+                )
+            }
+        }
     }
 }
 
@@ -373,142 +353,41 @@ private fun NavigationSidePanelRow(
     isLast: Boolean,
     onClick: () -> Unit,
 ) {
-    Column {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 76.dp)
-                    .clickable(role = Role.Button, onClick = onClick)
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-        ) {
-            NavigationSidePanelStepIcon(
-                item = item,
-                isFirst = isFirst,
-                isLast = isLast,
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = item.instruction,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (item.isFocused || item.isActive) FontWeight.SemiBold else FontWeight.Normal,
-                )
-                Text(
-                    text = item.distanceLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
-                Text(
-                    text = distance,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.End,
-                )
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.84f))
-    }
-}
-
-@Composable
-private fun NavigationSidePanelStepIcon(
-    item: NavigationSegmentRailItemUiState,
-    isFirst: Boolean,
-    isLast: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val isEmphasized = item.isFocused || item.isActive
-    val pinIcon =
+    val isSelected = item.isFocused || item.isActive
+    val stateLabel =
         when {
-            isFirst -> R.drawable.ic_navigation_rail_origin_pin
-            isLast -> R.drawable.ic_navigation_rail_destination_pin
-            else -> null
+            item.isFocused -> "Selected segment"
+            item.isActive -> "Current segment"
+            item.isCompleted -> "Completed segment"
+            else -> "Guidance segment"
         }
-    Box(
-        modifier = modifier.size(NavigationSidePanelIconFrameSize),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (pinIcon != null) {
-            Image(
-                painter = painterResource(id = pinIcon),
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .width(NavigationSidePanelPinIconWidth)
-                        .height(NavigationSidePanelPinIconHeight),
-                contentScale = ContentScale.FillBounds,
-            )
-        } else {
-            Icon(
-                painter = painterResource(id = item.guidanceAction.iconRes()),
-                contentDescription = null,
-                tint = if (isEmphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(NavigationSidePanelIconSize),
-            )
-        }
-    }
-}
 
-@Composable
-private fun NavigationSidePanelExpandHandle(
-    isExpanded: Boolean = false,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
-    val dragState =
-        rememberDraggableState { delta ->
-            dragOffsetPx += delta
-        }
-    Surface(
-        modifier =
-            modifier
-                .size(width = NavigationSidePanelHandleTouchWidth, height = NavigationSidePanelHandleTouchHeight)
-                .draggable(
-                    state = dragState,
-                    orientation = Orientation.Horizontal,
-                    onDragStopped = {
-                        if (
-                            (!isExpanded && dragOffsetPx > NavigationSidePanelSwipeThresholdPx) ||
-                            (isExpanded && dragOffsetPx < -NavigationSidePanelSwipeThresholdPx)
-                        ) {
-                            onClick()
-                        }
-                        dragOffsetPx = 0f
-                    },
-                )
-                .clickable(role = Role.Button, onClick = onClick),
-        shape =
-            RoundedCornerShape(
-                topEnd = NavigationSidePanelHandleRadius,
-                bottomEnd = NavigationSidePanelHandleRadius,
-            ),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        border = BorderStroke(NavigationSidePanelHandleStrokeWidth, NavigationSidePanelHandleBorderColor),
-        shadowElevation = 0.dp,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = if (isExpanded) "<" else ">",
-                color = NavigationSidePanelHandleContentColor,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier =
-                    Modifier.semantics {
-                        contentDescription = if (isExpanded) "안내 패널 접기" else "안내 패널 펼치기"
-                    },
-            )
-        }
+    Column {
+        GuideSidePanelStepRow(
+            title = item.instruction,
+            description = item.distanceLabel,
+            action = item.guidanceAction,
+            isOrigin = isFirst,
+            isDestination = isLast,
+            isActive = item.isActive,
+            isFocused = item.isFocused,
+            isSelected = isSelected,
+            contentDescription = "${item.instruction} ${item.distanceLabel}",
+            stateDescription = stateLabel,
+            onClick = onClick,
+            trailingContent = {
+                item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
+                    Text(
+                        text = distance,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.End,
+                    )
+                }
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.84f))
     }
 }
 
@@ -945,8 +824,8 @@ private fun NavigationBottomBar(
                     Modifier
                         .fillMaxWidth()
                         .padding(
-                            start = EumSpacing.medium,
-                            end = EumSpacing.medium,
+                            start = NavigationBottomBarHorizontalPadding,
+                            end = NavigationBottomBarHorizontalPadding,
                             top = EumSpacing.small,
                             bottom = NavigationBottomBarBottomGap,
                         ),
@@ -1204,16 +1083,9 @@ private const val DEFAULT_NAVIGATION_CENTER_LATITUDE = 35.1796
 private const val DEFAULT_NAVIGATION_CENTER_LONGITUDE = 129.0756
 private const val MIN_NAVIGATION_LATITUDE_SPAN = 0.0035
 private const val MIN_NAVIGATION_LONGITUDE_SPAN = 0.0045
-private const val NavigationSidePanelSwipeThresholdPx = 80f
 private val NavigationMapMarkerSize = 38.dp
-private val NavigationSidePanelCornerRadius = 20.dp
-private val NavigationSidePanelHandleRadius = 14.dp
-private val NavigationSidePanelHandleTouchWidth = 48.dp
-private val NavigationSidePanelHandleTouchHeight = 64.dp
-private val NavigationSidePanelHandleStrokeWidth = 0.5.dp
-private val NavigationSidePanelHandleBorderColor = Color(0xFFD9D9D9)
-private val NavigationSidePanelHandleContentColor = Color(0xFF333333)
 private val NavigationBottomBarButtonHeight = 50.dp
+private val NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val NavigationBottomBarBottomGap = 30.dp
 private val NavigationExpandedSidePanelScrimColor = Color(0x66000000)
 private val NavigationTransitTagCornerRadius = 10.dp
@@ -1223,7 +1095,3 @@ private val NavigationTransitTagLowFloorColor = Color(0xFF2671A8)
 private val NavigationTransitTagNormalColor = Color(0xFF4B9EDC)
 private val NavigationTransitTagRouteNumberColor = Color(0xFF333333)
 private val NavigationTransitTagArrivalColor = Color(0xFFF94D4D)
-private val NavigationSidePanelIconFrameSize = 44.dp
-private val NavigationSidePanelIconSize = 32.dp
-private val NavigationSidePanelPinIconWidth = 38.dp
-private val NavigationSidePanelPinIconHeight = 44.dp

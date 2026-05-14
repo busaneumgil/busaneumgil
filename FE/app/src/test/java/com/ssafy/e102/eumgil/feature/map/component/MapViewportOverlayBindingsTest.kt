@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentTravelKind
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapStatus
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -156,11 +157,33 @@ class MapViewportOverlayBindingsTest {
             listOf(MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
             overlayState.points.map { it.kind },
         )
+        assertEquals(listOf("출발", "도착"), overlayState.points.map { it.label })
         assertEquals(1, overlayState.polylines.size)
         assertEquals(MapViewportPolylineStyle.ROUTE_PREVIEW, overlayState.polylines.first().style)
         assertEquals(MapViewportOverlayTone.PRIMARY, overlayState.polylines.first().tone)
         assertTrue(overlayState.polylines.first().includeInProjection)
         assertTrue(overlayState.polylines.first().showDirectionArrows)
+    }
+
+    @Test
+    fun `route waypoint markers share side panel pin assets and colors`() {
+        val backdropSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+        val kakaoBindingSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewportBindings.kt")
+                .readText()
+
+        assertTrue(
+            "Compose map fallback markers should use the requested route waypoint colors.",
+            backdropSource.contains("containerColor = Color(0xFF4D8FF9)") &&
+                backdropSource.contains("containerColor = Color(0xFFF94D4D)"),
+        )
+        assertTrue(
+            "Kakao map markers should reuse the same origin and destination pin assets as the side panel.",
+            kakaoBindingSource.contains("iconResId = R.drawable.ic_navigation_rail_origin_pin") &&
+                kakaoBindingSource.contains("iconResId = R.drawable.ic_navigation_rail_destination_pin"),
+        )
     }
 
     @Test

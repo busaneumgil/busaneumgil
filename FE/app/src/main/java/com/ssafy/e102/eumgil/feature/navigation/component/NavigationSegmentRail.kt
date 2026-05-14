@@ -3,7 +3,6 @@ package com.ssafy.e102.eumgil.feature.navigation.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,16 +28,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideCollapsedRailItem
 import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentRailItemUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentSyncUiState
-import com.ssafy.e102.eumgil.feature.navigation.iconRes
 
 @Composable
 fun NavigationSegmentRail(
@@ -132,59 +130,26 @@ private fun NavigationSegmentRailWaypoint(
     onClick: () -> Unit,
 ) {
     val enabled = segmentItem != null
-    val tone = segmentItem?.let { item -> navigationSegmentRailTone(item) } ?: navigationDisabledRailTone()
-    val isSelected = segmentItem?.isSelected == true
+    val item = segmentItem
     val contentLabel =
-        segmentItem?.let { item ->
+        item?.let {
             "$label ${item.guidanceAction.label} ${item.distanceLabel}"
         } ?: label
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .background(tone.containerColor)
-                    .semantics {
-                        contentDescription = contentLabel
-                        selected = isSelected
-                        stateDescription = segmentItem?.stateLabel ?: label
-                        if (!enabled) {
-                            disabled()
-                        }
-                    }
-                    .clickable(
-                        enabled = enabled,
-                        role = Role.Button,
-                        onClick = onClick,
-                    ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (tone.indicatorColor != Color.Transparent) {
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.CenterStart)
-                            .fillMaxHeight()
-                            .width(2.dp)
-                            .background(tone.indicatorColor),
-                )
-            }
-            Image(
-                painter = painterResource(id = iconRes),
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .width(42.dp)
-                        .height(50.dp)
-                        .alpha(tone.iconAlpha),
-            )
-        }
-        HorizontalDivider(color = dividerColor)
-    }
+    GuideCollapsedRailItem(
+        action = item?.guidanceAction ?: NavigationGuidanceAction.STRAIGHT,
+        isOrigin = iconRes == R.drawable.ic_navigation_rail_origin_pin,
+        isDestination = iconRes == R.drawable.ic_navigation_rail_destination_pin,
+        isActive = item?.isActive == true,
+        isFocused = item?.isFocused == true,
+        isSelected = item?.isSelected == true,
+        enabled = enabled,
+        contentDescription = contentLabel,
+        stateDescription = item?.stateLabel ?: label,
+        dividerColor = dividerColor,
+        height = 64.dp,
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -193,56 +158,18 @@ private fun NavigationSegmentRailItem(
     dividerColor: Color,
     onClick: () -> Unit,
 ) {
-    val tone = navigationSegmentRailTone(item)
-    val isSelected = item.isSelected
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .background(tone.containerColor)
-                    .semantics {
-                        contentDescription = "${item.guidanceAction.label} ${item.distanceLabel}"
-                        selected = isSelected
-                        stateDescription = item.stateLabel
-                    }
-                    .clickable(role = Role.Button, onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (tone.indicatorColor != Color.Transparent) {
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.CenterStart)
-                            .fillMaxHeight()
-                            .width(2.dp)
-                            .background(tone.indicatorColor),
-                )
-            }
-            Icon(
-                painter = painterResource(id = item.guidanceAction.iconRes()),
-                contentDescription = null,
-                tint = tone.iconTint,
-                modifier =
-                    Modifier
-                        .size(item.guidanceAction.railIconSize())
-                        .alpha(tone.iconAlpha),
-            )
-        }
-        HorizontalDivider(color = dividerColor)
-    }
+    GuideCollapsedRailItem(
+        action = item.guidanceAction,
+        isActive = item.isActive,
+        isFocused = item.isFocused,
+        isSelected = item.isSelected,
+        contentDescription = "${item.guidanceAction.label} ${item.distanceLabel}",
+        stateDescription = item.stateLabel,
+        dividerColor = dividerColor,
+        height = 56.dp,
+        onClick = onClick,
+    )
 }
-
-private fun NavigationGuidanceAction.railIconSize(): Dp =
-    if (this == NavigationGuidanceAction.BUS || this == NavigationGuidanceAction.SUBWAY) {
-        NavigationSegmentRailTransitIconSize
-    } else {
-        NavigationSegmentRailIconSize
-    }
 
 @Composable
 private fun NavigationSegmentRailReturnAction(
@@ -351,13 +278,6 @@ private fun NavigationSegmentRailDetailAction(
     }
 }
 
-private data class NavigationSegmentRailTone(
-    val containerColor: Color,
-    val indicatorColor: Color,
-    val iconTint: Color,
-    val iconAlpha: Float,
-)
-
 internal data class NavigationSegmentRailSlots(
     val originItem: NavigationSegmentRailItemUiState? = null,
     val intermediateItems: List<NavigationSegmentRailItemUiState> = emptyList(),
@@ -384,55 +304,8 @@ internal fun createNavigationSegmentRailSlots(uiState: NavigationSegmentSyncUiSt
     )
 }
 
-@Composable
-private fun navigationSegmentRailTone(item: NavigationSegmentRailItemUiState): NavigationSegmentRailTone =
-    when {
-        item.isFocused ->
-            NavigationSegmentRailTone(
-                containerColor = MaterialTheme.colorScheme.primary,
-                indicatorColor = Color.Transparent,
-                iconTint = MaterialTheme.colorScheme.onPrimary,
-                iconAlpha = 1f,
-            )
-
-        item.isActive ->
-            NavigationSegmentRailTone(
-                containerColor = Color.Transparent,
-                indicatorColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
-                iconTint = MaterialTheme.colorScheme.onSurface,
-                iconAlpha = 1f,
-            )
-
-        item.isCompleted ->
-            NavigationSegmentRailTone(
-                containerColor = Color.Transparent,
-                indicatorColor = Color.Transparent,
-                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                iconAlpha = 0.42f,
-            )
-
-        else ->
-            NavigationSegmentRailTone(
-                containerColor = Color.Transparent,
-                indicatorColor = Color.Transparent,
-                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                iconAlpha = 0.72f,
-            )
-    }
-
-private fun navigationDisabledRailTone(): NavigationSegmentRailTone =
-    NavigationSegmentRailTone(
-        containerColor = Color.Transparent,
-        indicatorColor = Color.Transparent,
-        iconTint = Color.Unspecified,
-        iconAlpha = 0.38f,
-    )
-
 private val NavigationSegmentRailItemUiState.isSelected: Boolean
     get() = isFocused || isActive
-
-private val NavigationSegmentRailIconSize = 34.dp
-private val NavigationSegmentRailTransitIconSize = 30.dp
 
 private val NavigationSegmentRailItemUiState.stateLabel: String
     get() =

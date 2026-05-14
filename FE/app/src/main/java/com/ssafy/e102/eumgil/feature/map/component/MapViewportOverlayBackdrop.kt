@@ -644,8 +644,8 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
         MapViewportPointKind.FACILITY -> categoryType?.toFacilityMarkerSpec(isSelected)
         MapViewportPointKind.ORIGIN ->
             ViewportPointMarkerSpec(
-                label = label ?: "O",
-                containerColor = Color(0xFF006BE0),
+                label = label ?: "출발",
+                containerColor = Color(0xFF4D8FF9),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
@@ -654,8 +654,8 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.DESTINATION ->
             ViewportPointMarkerSpec(
-                label = label ?: "D",
-                containerColor = Color(0xFFF14337),
+                label = label ?: "도착",
+                containerColor = Color(0xFFF94D4D),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,

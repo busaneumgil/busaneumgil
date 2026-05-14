@@ -81,8 +81,8 @@ class MonitoringConfigsTest(unittest.TestCase):
         prod_dashboard = PROD_DASHBOARD.read_text(encoding="utf-8")
         dev_dashboard = DEV_DASHBOARD.read_text(encoding="utf-8")
 
-        self.assertIn("GraphHopper blue/green 상태", prod_dashboard)
-        self.assertIn('target_name=~\\"graphhopper-blue|graphhopper-green\\"', prod_dashboard)
+        self.assertIn("GraphHopper active / blue / green 상태", prod_dashboard)
+        self.assertIn('target_name=~\\"graphhopper|graphhopper-blue|graphhopper-green\\"', prod_dashboard)
         self.assertIn("MinIO 상태", dev_dashboard)
         self.assertIn("GraphHopper 상태", dev_dashboard)
 

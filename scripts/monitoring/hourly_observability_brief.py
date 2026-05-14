@@ -593,6 +593,10 @@ def build_env_report(
     top_service_counts = parse_loki_vector(service_results, "service_name")
     top_total_service_counts = parse_loki_vector(total_service_results, "service_name")
     warning_error_ratio = (current_count / total_logs_current) if total_logs_current > 0 else 0.0
+    if total_logs_current <= 0 or not top_total_service_counts:
+        notes.append(
+            "Loki 전체 로그 유입이 0건입니다. Promtail 라벨/수집 중단 또는 실제 무트래픽 여부를 확인해야 합니다."
+        )
     if suppressed_count > 0:
         notes.append(
             f"운영성 낮은 도메인 경고 {suppressed_count}건은 메인 경고 집계에서 제외했습니다. "
@@ -632,6 +636,9 @@ def describe_env(report: EnvReport) -> tuple[str, list[str]]:
     if observability_failures:
         severity = "issue"
         reasons.append("관측 스택 데이터 조회 실패")
+    elif has_log_ingestion_gap(report):
+        severity = "issue"
+        reasons.append("Loki 로그 유입 공백")
     if report.down_targets:
         severity = "issue"
         reasons.append(f"health DOWN: {', '.join(report.down_targets)}")
@@ -726,7 +733,7 @@ def health_impact_summary(report: EnvReport) -> str:
 
 
 def confidence_from_report(report: EnvReport, severity: str) -> str:
-    if any(note.startswith("Loki query failed") or note.startswith("Prometheus query failed") for note in report.notes):
+    if has_observability_gap(report):
         return "low"
     if severity == "normal" and report.health and all(status == "UP" for status in report.health.values()):
         return "high"
@@ -785,10 +792,16 @@ def build_rule_analysis(target_report: EnvReport, peer_report: EnvReport) -> Env
     health_summary = health_impact_summary(target_report)
     confidence = confidence_from_report(target_report, severity)
 
-    if any(note.startswith("Loki query failed") or note.startswith("Prometheus query failed") for note in target_report.notes):
-        conclusion = f"{target_report.environment} 관측 데이터 조회 실패로 서비스 상태 확인이 제한됩니다."
-        impact = f"{health_summary}이며 로그/health 수집 공백 때문에 실제 영향 범위는 낮은 확신으로만 추정할 수 있습니다."
-        next_action = "Loki/Prometheus 쿼리 경로와 인증 상태를 먼저 복구한 뒤 동일 시간대를 재조회합니다."
+    if has_observability_gap(target_report):
+        if has_query_failure(target_report):
+            conclusion = f"{target_report.environment} 관측 데이터 조회 실패로 서비스 상태 확인이 제한됩니다."
+            next_action = "Loki/Prometheus 쿼리 경로와 인증 상태를 먼저 복구한 뒤 동일 시간대를 재조회합니다."
+        else:
+            conclusion = (
+                f"{target_report.environment} Loki 로그 유입이 0건이라 정상으로 단정할 수 없습니다."
+            )
+            next_action = "Promtail target/label 설정과 Loki 수집 상태, 실제 서비스 트래픽 유입 여부를 먼저 확인합니다."
+        impact = f"{health_summary}이나 로그 수집 공백 때문에 실제 영향 범위는 낮은 확신으로만 추정할 수 있습니다."
     elif target_report.down_targets:
         conclusion = (
             f"{target_report.environment} {', '.join(target_report.down_targets)} health DOWN이 확인되어 "
@@ -1173,10 +1186,20 @@ def favorite_routes_pattern_count(report: EnvReport) -> int | None:
 def has_observability_gap(report: EnvReport) -> bool:
     if any(status.upper() == "UNKNOWN" for status in report.health.values()):
         return True
+    return has_query_failure(report) or has_log_ingestion_gap(report)
+
+
+def has_query_failure(report: EnvReport) -> bool:
     return any(
         note.startswith("Loki query failed") or note.startswith("Prometheus query failed")
         for note in report.notes
     )
+
+
+def has_log_ingestion_gap(report: EnvReport) -> bool:
+    if any(note.startswith("Loki 전체 로그 유입이 0건") for note in report.notes):
+        return True
+    return report.total_logs_current <= 0 or not report.top_total_services
 
 
 def render_metric_section(report: EnvReport) -> str:
@@ -1242,10 +1265,15 @@ def render_summary_bullets(report: EnvReport, peer_report: EnvReport, analysis: 
         )
 
     if observability_gap:
-        bullets.append(
-            "warning/error와 전체 로그가 낮게 보여도 Loki/Prometheus 조회 실패가 섞여 있어 "
-            "실제 로그 유입량이 과소 집계됐을 수 있습니다."
-        )
+        if has_query_failure(report):
+            bullets.append(
+                "warning/error와 전체 로그가 낮게 보여도 Loki/Prometheus 조회 실패가 섞여 있어 "
+                "실제 로그 유입량이 과소 집계됐을 수 있습니다."
+            )
+        else:
+            bullets.append(
+                "Loki 전체 로그가 `0`건이라 Promtail 라벨/수집 중단 또는 실제 무트래픽 여부를 확인해야 합니다."
+            )
     elif report.current_count > 0:
         bullets.append(
             f"전체 로그 대비 경고 비율은 `{format_ratio(report.warning_error_ratio)}`이고, "

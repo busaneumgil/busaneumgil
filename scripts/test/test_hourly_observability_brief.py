@@ -288,6 +288,39 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         self.assertNotIn(":grey_question:", rendered)
         self.assertNotIn("정상 베이스라인", rendered)
 
+    def test_zero_loki_total_logs_is_observability_gap_even_when_health_is_up(self):
+        dev_report = self.sample_report("dev", 0, 0)
+        prod_report = self.sample_report("prod", 0, 0)
+        dev_report.total_logs_current = 0
+        dev_report.total_logs_previous = 0
+        dev_report.total_logs_delta = 0
+        dev_report.top_total_services = []
+        dev_report.top_services = []
+        dev_report.top_patterns = []
+        dev_report.sample_logs = []
+        dev_report.notes = []
+
+        severity, reasons = MODULE.describe_env(dev_report)
+        analysis = MODULE.build_rule_analysis(dev_report, prod_report)
+        rendered = MODULE.render_environment_mattermost(
+            now=MODULE.utcnow(),
+            lookback_minutes=60,
+            report=dev_report,
+            peer_report=prod_report,
+            analysis=analysis,
+        )
+
+        self.assertTrue(MODULE.has_observability_gap(dev_report))
+        self.assertEqual("issue", severity)
+        self.assertIn("Loki 로그 유입 공백", reasons)
+        self.assertEqual("low", analysis.confidence)
+        self.assertIn("Loki 로그 유입이 0건", analysis.conclusion)
+        self.assertIn("Promtail", analysis.next_action)
+        self.assertIn("관측 데이터가 완전하지 않습니다", rendered)
+        self.assertIn("Loki 전체 로그가 `0`건", rendered)
+        self.assertNotIn("정상 베이스라인", rendered)
+        self.assertNotIn("warning/error가 없고 health도", rendered)
+
     def test_build_rule_analysis_uses_favorite_routes_constraint_next_action(self):
         dev_report = self.sample_report("dev", 6, 0)
         prod_report = self.sample_report("prod", 0, 0)

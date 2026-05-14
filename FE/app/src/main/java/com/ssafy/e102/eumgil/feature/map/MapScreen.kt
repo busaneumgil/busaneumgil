@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -54,6 +55,7 @@ import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
 import com.ssafy.e102.eumgil.feature.map.component.MapFloatingControls
@@ -165,12 +167,6 @@ fun MapScreen(
                     state = facilityDetailSheetUiState.toShellState(),
                     onDismiss = { onAction(MapUiAction.FacilityDetailDismissed) },
                     modifier = Modifier.fillMaxSize(),
-                    headerActionContent = {
-                        FacilityDetailBookmarkActionButton(
-                            state = facilityDetailSheetUiState,
-                            onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
-                        )
-                    },
                     detailContent = {
                         FacilityDetailAccessibilityTagSection(
                             tags = facilityDetailSheetUiState.accessibilityTags,
@@ -180,21 +176,60 @@ fun MapScreen(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         ) {
-                            NoRippleMapPrimaryActionButton(
-                                onClick = { onAction(MapUiAction.FacilitySetDestinationClicked) },
-                                enabled = facilityDetailSheetUiState.isRouteActionEnabled,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(56.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                             ) {
-                                IconTextButtonContent(
-                                    iconRes = R.drawable.ic_route_start_navigation_button,
-                                    label = stringResource(id = R.string.map_facility_detail_route_entry_action),
+                                FacilityDetailBookmarkActionButton(
+                                    state = facilityDetailSheetUiState,
+                                    onToggle = { onAction(MapUiAction.FacilityBookmarkClicked) },
                                 )
+                                Spacer(modifier = Modifier.weight(1f))
+                                OutlinedButton(
+                                    onClick = {
+                                        onAction(
+                                            MapUiAction.FacilitySetRouteEndpointClicked(
+                                                RouteEditingTarget.ORIGIN,
+                                            ),
+                                        )
+                                    },
+                                    enabled = facilityDetailSheetUiState.isRouteActionEnabled,
+                                    modifier =
+                                        Modifier
+                                            .weight(1.15f)
+                                            .height(56.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                ) {
+                                    IconTextButtonContent(
+                                        iconRes = R.drawable.ic_route_start_navigation_button,
+                                        label = stringResource(id = R.string.map_facility_detail_set_origin_action),
+                                    )
+                                }
+                                NoRippleMapPrimaryActionButton(
+                                    onClick = {
+                                        onAction(
+                                            MapUiAction.FacilitySetRouteEndpointClicked(
+                                                RouteEditingTarget.DESTINATION,
+                                            ),
+                                        )
+                                    },
+                                    enabled = facilityDetailSheetUiState.isRouteActionEnabled,
+                                    modifier =
+                                        Modifier
+                                            .weight(1.15f)
+                                            .height(56.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                ) {
+                                    IconTextButtonContent(
+                                        iconRes = R.drawable.ic_route_start_navigation_button,
+                                        label = stringResource(
+                                            id = R.string.map_facility_detail_set_destination_action,
+                                        ),
+                                    )
+                                }
                             }
                             facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
                                 Text(
@@ -463,15 +498,15 @@ private fun FacilityDetailBookmarkActionButton(
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = Color.Transparent,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
     ) {
         IconButton(
             onClick = onToggle,
             enabled = state.isBookmarkEnabled && state.isBookmarkUpdating.not(),
             modifier =
                 Modifier
-                    .size(44.dp)
+                    .size(56.dp)
                     .semantics {
                         contentDescription = bookmarkButtonLabel
                         stateDescription = bookmarkStateDescription

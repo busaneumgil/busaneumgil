@@ -144,6 +144,29 @@ object EumgilDatabaseMigrations {
             }
         }
 
+    /**
+     * v7 — 제보 임시저장 사진 다장(최대 5장) 영속화.
+     *
+     * `reportDraft.photosJson` 컬럼 신설. ReportDraftPhotoItem 리스트의 JSON 표현을 저장한다.
+     * 기존 row의 legacy `photoUri` 정보는 그대로 두고, 새 코드가 read 시점에 `photosJson`이
+     * null이면 legacy 단일 사진 정보로 fallback해 1-item list를 만들어 사용한다.
+     * (SQL UPDATE로 JSON을 만들지 않는 이유: URI에 특수 문자가 있을 경우 escape 처리 부담을
+     *  회피하고, 코드 레이어에서 안전하게 변환하기 위해.)
+     */
+    val MIGRATION_6_7: Migration =
+        object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE reportDraft ADD COLUMN photosJson TEXT")
+            }
+        }
+
     val all: Array<Migration> =
-        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+        )
 }

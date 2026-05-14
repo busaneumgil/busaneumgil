@@ -559,4 +559,11 @@ fi
 cleanup_temp_candidate_runtime
 status="SUCCESS"
 write_report
+
+if [ "${DOCKER_DISK_MAINTENANCE_AFTER_GRAPHHOPPER_REFRESH:-true}" = "true" ] && [ -f "$ROOT_DIR/scripts/maintenance/docker-disk-maintenance.sh" ]; then
+  DOCKER_DISK_MAINTENANCE_MODE="${DOCKER_DISK_MAINTENANCE_MODE:-pipeline}" \
+    bash "$ROOT_DIR/scripts/maintenance/docker-disk-maintenance.sh" || \
+    echo "Docker disk maintenance failed after GraphHopper refresh; refresh already passed." >&2
+fi
+
 echo "GraphHopper blue/green refresh completed. active=$candidate_slot report=$REPORT_FILE"

@@ -48,11 +48,21 @@ data class ReportDraftData(
     val latitude: Double?,
     val longitude: Double?,
     val locationSource: String?,
-    val photoUri: String?,
-    val photoMimeType: String?,
-    val photoSizeBytes: Long?,
+    // v7부터 사진 다장(최대 5장) 보존. 단일 사진 시절(v6 이전)에 저장된 draft를 read 시점에 자동
+    // 1-item list로 변환하여 자연스럽게 호환된다.
+    val photos: List<ReportDraftPhotoData>,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+)
+
+/**
+ * 제보 임시저장에 포함된 단일 사진 메타데이터.
+ * `ReportPhoto` (UI 모델)와 동일한 shape이지만 도메인 분리를 위해 별도 데이터 클래스로 둔다.
+ */
+data class ReportDraftPhotoData(
+    val localUri: String,
+    val mimeType: String?,
+    val sizeBytes: Long?,
 )
 
 data class ReportOutboxData(
@@ -397,15 +407,14 @@ private fun ReportDraftEntity.toData(): ReportDraftData =
         latitude = latitude,
         longitude = longitude,
         locationSource = locationSource,
-        photoUri = photoUri,
-        photoMimeType = photoMimeType,
-        photoSizeBytes = photoSizeBytes,
+        photos = resolveDraftPhotosFromEntity(),
         createdAtMillis = createdAt,
         updatedAtMillis = updatedAt,
     )
 
-private fun ReportDraftData.toEntity(): ReportDraftEntity =
-    ReportDraftEntity(
+private fun ReportDraftData.toEntity(): ReportDraftEntity {
+    val firstPhoto = photos.firstOrNull()
+    return ReportDraftEntity(
         draftId = draftId,
         reportCategory = reportCategory,
         description = description,
@@ -413,12 +422,71 @@ private fun ReportDraftData.toEntity(): ReportDraftEntity =
         latitude = latitude,
         longitude = longitude,
         locationSource = locationSource,
-        photoUri = photoUri,
-        photoMimeType = photoMimeType,
-        photoSizeBytes = photoSizeBytes,
+        // legacy 단일 사진 컬럼도 first photo로 채워둔다. 미래 cleanup 시 제거 예정이지만
+        // 그 사이에 old reader가 이 row를 읽어도 1장은 복원 가능하도록 유지.
+        photoUri = firstPhoto?.localUri,
+        photoMimeType = firstPhoto?.mimeType,
+        photoSizeBytes = firstPhoto?.sizeBytes,
+        photosJson = serializeDraftPhotos(photos),
         createdAt = createdAtMillis,
         updatedAt = updatedAtMillis,
     )
+}
+
+/**
+ * v7 photosJson이 있으면 그걸 source of truth로 사용한다.
+ * 없으면 legacy single-photo 컬럼으로 fallback (v6 이전 row 또는 마이그레이션 직후 row).
+ */
+private fun ReportDraftEntity.resolveDraftPhotosFromEntity(): List<ReportDraftPhotoData> {
+    val deserialized = photosJson?.let(::deserializeDraftPhotos)
+    if (!deserialized.isNullOrEmpty()) return deserialized
+
+    val legacyUri = photoUri?.takeIf(String::isNotBlank) ?: return emptyList()
+    return listOf(
+        ReportDraftPhotoData(
+            localUri = legacyUri,
+            mimeType = photoMimeType,
+            sizeBytes = photoSizeBytes,
+        ),
+    )
+}
+
+/**
+ * `ReportDraftPhotoData` 리스트를 JSON 배열 문자열로 직렬화.
+ * 빈 리스트는 null로 저장하여 SQL 컬럼 의미를 "사진 없음"으로 명확하게 둔다.
+ */
+private fun serializeDraftPhotos(photos: List<ReportDraftPhotoData>): String? {
+    if (photos.isEmpty()) return null
+    val array = org.json.JSONArray()
+    photos.forEach { photo ->
+        val obj = org.json.JSONObject()
+        obj.put("uri", photo.localUri)
+        photo.mimeType?.let { obj.put("mime", it) }
+        photo.sizeBytes?.let { obj.put("size", it) }
+        array.put(obj)
+    }
+    return array.toString()
+}
+
+private fun deserializeDraftPhotos(json: String): List<ReportDraftPhotoData> {
+    if (json.isBlank()) return emptyList()
+    return runCatching {
+        val array = org.json.JSONArray(json)
+        buildList(array.length()) {
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                val uri = obj.optString("uri").takeIf { it.isNotBlank() } ?: continue
+                add(
+                    ReportDraftPhotoData(
+                        localUri = uri,
+                        mimeType = obj.optString("mime").takeIf { it.isNotBlank() },
+                        sizeBytes = if (obj.has("size")) obj.optLong("size") else null,
+                    ),
+                )
+            }
+        }
+    }.getOrElse { emptyList() }
+}
 
 private fun ReportOutboxEntity.toData(): ReportOutboxData =
     ReportOutboxData(

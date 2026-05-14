@@ -67,6 +67,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onHomeReentryResetConsumed = {
                 backStackEntry.savedStateHandle.consumeMapHomeReentryReset()
             },
+            onFacilityDetailVisibilityChanged = { isVisible ->
+                backStackEntry.savedStateHandle[MAP_FACILITY_DETAIL_VISIBLE_KEY] = isVisible
+            },
         )
     }
 

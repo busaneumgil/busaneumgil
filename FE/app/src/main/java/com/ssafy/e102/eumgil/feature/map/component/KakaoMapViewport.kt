@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path as AndroidPath
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.SystemClock
@@ -806,7 +807,11 @@ private class KakaoMapViewportController {
                 markerOverlayState = state.markerOverlayState,
                 selectedMarkerId = state.selectedMarkerId,
             )
-        val overlayMarkerRenderStates = createKakaoOverlayMarkerRenderStates(state.overlayState.points)
+        val overlayMarkerRenderStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = state.overlayState.points,
+                polylines = state.overlayState.polylines,
+            )
         if (
             lastRenderedMarkers == markerRenderStates &&
             lastRenderedOverlayMarkers == overlayMarkerRenderStates
@@ -1259,6 +1264,7 @@ private class KakaoOverlayMarkerStyleCache(
                 kind = marker.kind,
                 fillColorArgb = marker.fillColorArgb,
                 strokeColorArgb = marker.strokeColorArgb,
+                rotationDegrees = marker.rotationDegrees.roundToInt(),
                 densityBucket = densityBucket,
             )
         return stylesCache.getOrPut(key) {
@@ -1286,8 +1292,37 @@ private class KakaoOverlayMarkerStyleCache(
         bitmapCache.getOrPut(key) {
             when (marker.kind) {
                 KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION -> createSegmentJunctionBitmap(marker)
+                KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW -> createDirectionArrowBitmap(marker)
             }
         }
+
+    private fun createDirectionArrowBitmap(
+        marker: KakaoOverlayMarkerRenderState,
+    ): Bitmap {
+        val sizePx = dpToPx(marker.sizeDp.toFloat())
+        val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
+        val center = sizePx / 2f
+        val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = marker.fillColorArgb
+            }
+        val path =
+            AndroidPath().apply {
+                moveTo(sizePx * 0.82f, center)
+                lineTo(sizePx * 0.24f, sizePx * 0.22f)
+                lineTo(sizePx * 0.24f, sizePx * 0.78f)
+                close()
+            }
+
+        canvas.save()
+        canvas.rotate(marker.rotationDegrees, center, center)
+        canvas.drawPath(path, paint)
+        canvas.restore()
+        return bitmap
+    }
 
     private fun createSegmentJunctionBitmap(
         marker: KakaoOverlayMarkerRenderState,
@@ -1567,11 +1602,12 @@ private data class KakaoOverlayMarkerBitmapCacheKey(
     val kind: KakaoOverlayMarkerKind,
     val fillColorArgb: Int,
     val strokeColorArgb: Int,
+    val rotationDegrees: Int,
     val densityBucket: Int,
 ) {
     val styleId: String
         get() =
-            "overlay-${kind.name.lowercase(Locale.US)}-$fillColorArgb-$strokeColorArgb-$densityBucket"
+            "overlay-${kind.name.lowercase(Locale.US)}-$fillColorArgb-$strokeColorArgb-$rotationDegrees-$densityBucket"
 }
 
 private data class KakaoFacilityMarkerPalette(

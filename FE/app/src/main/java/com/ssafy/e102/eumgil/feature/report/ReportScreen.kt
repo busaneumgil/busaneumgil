@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.report
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,23 +34,33 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -64,13 +76,19 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.kakao.vectormap.KakaoMap
+import com.kakao.vectormap.KakaoMapReadyCallback
+import com.kakao.vectormap.LatLng
+import com.kakao.vectormap.MapLifeCycleCallback
+import com.kakao.vectormap.MapView
+import com.kakao.vectormap.camera.CameraAnimation
+import com.kakao.vectormap.camera.CameraUpdateFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportScreen(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
-    snackbarHostState: SnackbarHostState,
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
@@ -93,7 +111,6 @@ fun ReportScreen(
                 onAction = onAction,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { innerPadding ->
         // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
         // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
@@ -483,13 +500,30 @@ private fun ReportLocationStep(
 ) {
     val helperText =
         reportLocationErrorText(input.error)
-            ?: "지도 위치를 확인하거나 현재 위치 또는 지도에서 직접 선택할 수 있습니다."
+            ?: "지도를 드래그해 위치를 조정하거나, '현재 위치로 설정' 버튼으로 GPS 좌표를 적용할 수 있습니다."
     val isError = input.error != null
 
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        ReportMapPlaceholder(location = input.value)
+        ReportMapPanel(
+            location = input.value,
+            source = input.source,
+            onCenterChanged = { latitude, longitude ->
+                onAction(
+                    ReportUiAction.LocationSelected(
+                        location =
+                            ReportLocation(
+                                latitude = latitude,
+                                longitude = longitude,
+                                // 좌표 → 주소 reverse geocoding은 Task 2.3 영역. 그 전까지 address=null 유지.
+                                address = null,
+                            ),
+                        source = ReportLocationSource.MapPin,
+                    ),
+                )
+            },
+        )
         ReportLocationBottomCard(
             location = input.value,
             addressText = input.addressText,
@@ -497,18 +531,26 @@ private fun ReportLocationStep(
         Column(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
+            val resolvingCurrent = input.isResolvingCurrentLocation
             OutlinedButton(
                 onClick = { onAction(ReportUiAction.CurrentLocationResetClicked) },
+                enabled = !resolvingCurrent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = "현재 위치로 설정")
+                if (resolvingCurrent) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+                    Text(text = "위치 확인 중...")
+                } else {
+                    Text(text = "현재 위치로 설정")
+                }
             }
-            OutlinedButton(
-                onClick = { onAction(ReportUiAction.LocationPickerClicked) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = "지도에서 위치 선택")
-            }
+            // "지도에서 위치 선택" 버튼은 inline 지도가 직접 노출되어 사용자가 드래그·줌으로
+            // 위치를 조정할 수 있으므로 제거되었다 (Task 2.2).
         }
         OutlinedTextField(
             value = input.addressText,
@@ -542,41 +584,213 @@ private fun ReportLocationStep(
     }
 }
 
+/**
+ * REPORT-02 위치 단계의 지도 패널 — KakaoMap SDK 직접 사용 (Task 2.2).
+ *
+ * Map 화면이 사용하는 무거운 `KakaoMapViewport`(렌더러 retry / fallback overlay / marker 시스템 등
+ * Report에 불필요한 기능 포함)를 거치지 않고, KakaoMap Android SDK의 `MapView`를 `AndroidView`로
+ * 직접 wrap하여 가장 가벼운 형태로 지도를 렌더링한다.
+ *
+ * 동작:
+ * - 화면 정중앙에 핀 아이콘 고정 오버레이 (drag-the-map 표준 패턴)
+ * - 사용자가 지도를 드래그·줌하여 카메라가 멈출 때 `onCenterChanged` 호출
+ * - 외부에서 `location`이 변경되면(`source != MapPin`) 카메라가 그 좌표로 이동
+ * - 사용자 드래그로 인한 자동 dispatch와 외부 카메라 이동이 겹치지 않도록 flag로 가드
+ *
+ * Lifecycle:
+ * - Activity ON_RESUME / ON_PAUSE에 맞춰 `MapView.resume()` / `pause()` 호출
+ * - Composable dispose 시 `MapView.finish()`로 정리
+ */
 @Composable
-private fun ReportMapPlaceholder(location: ReportLocation?) {
-    Surface(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 200.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        shape = RoundedCornerShape(EumRadius.medium),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = if (location == null) "지도 (위치 미선택)" else "지도 (선택된 위치)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.xSmall))
-            Text(
-                text = "지도 SDK 연결 전 placeholder입니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+private fun ReportMapPanel(
+    location: ReportLocation?,
+    source: ReportLocationSource,
+    onCenterChanged: (latitude: Double, longitude: Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // 지도 ready 후 채워지는 KakaoMap 인스턴스. 외부 카메라 이동에 사용.
+    val kakaoMapRef = remember { mutableStateOf<KakaoMap?>(null) }
+    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
+    // 외부 카메라 이동으로 인한 `onCameraMoveEnd` 콜백을 무시하기 위한 flag.
+    // 사용자 드래그 후 LocationSelected dispatch → state 갱신 → LaunchedEffect → moveCamera → onCameraMoveEnd
+    // 이 순환이 무한 루프 되는 것을 막는다.
+    val suppressNextCameraMoveEnd = remember { mutableStateOf(false) }
+
+    // 초기 카메라 위치 — 진입 시점의 location 또는 부산시청.
+    val initialPosition =
+        remember {
+            location?.let { LatLng.from(it.latitude, it.longitude) }
+                ?: LatLng.from(DEFAULT_REPORT_MAP_LATITUDE, DEFAULT_REPORT_MAP_LONGITUDE)
+        }
+
+    // location 외부 변경(예: "현재 위치로 설정")에 따라 카메라 이동.
+    LaunchedEffect(location, source) {
+        if (location == null || source == ReportLocationSource.MapPin) return@LaunchedEffect
+        val readyMap = kakaoMapRef.value ?: return@LaunchedEffect
+        suppressNextCameraMoveEnd.value = true
+        readyMap.moveCamera(
+            CameraUpdateFactory.newCenterPosition(
+                LatLng.from(location.latitude, location.longitude),
+                REPORT_MAP_DEFAULT_ZOOM_LEVEL,
+            ),
+            CameraAnimation.from(REPORT_MAP_CAMERA_ANIMATION_DURATION_MS),
+        )
+    }
+
+    // Activity lifecycle에 MapView resume/pause/finish 동기화.
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                val view = mapViewRef.value ?: return@LifecycleEventObserver
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> runCatching { view.resume() }
+                    Lifecycle.Event.ON_PAUSE -> runCatching { view.pause() }
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            runCatching { mapViewRef.value?.finish() }
+            mapViewRef.value = null
+            kakaoMapRef.value = null
         }
     }
+
+    val mapShape = RoundedCornerShape(EumRadius.large)
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                // scrollable parent(verticalScroll) 안에서 max height가 Infinity로 들어오면
+                // heightIn(min=...)은 wrap_content로 collapse되어 SurfaceView가 0 height로 measure된다.
+                // 고정 height로 강제해 KakaoMap GL surface가 일정 크기로 확보되도록 한다.
+                .height(320.dp)
+                // clip은 border보다 먼저 적용해야 지도 타일이 라운드 모서리를 넘지 않는다.
+                .clip(mapShape)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    shape = mapShape,
+                ),
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                // MapView를 직접 AndroidView에 wrap하면 Compose의 verticalScroll이 dispatchTouchEvent
+                // 단계에서 vertical drag를 가로채 MapView가 vertical pan을 못 받는다.
+                // FrameLayout.dispatchTouchEvent에서 ACTION_DOWN 시점에 부모(=AndroidComposeView)에게
+                // intercept 금지를 요청하면 이후 MOVE 이벤트가 그대로 자식 MapView까지 전달된다.
+                // ACTION_UP/CANCEL에 다시 허용해 다음 gesture는 부모도 자유롭게 처리할 수 있게 한다.
+                val frame =
+                    object : android.widget.FrameLayout(ctx) {
+                        override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+                            when (ev.actionMasked) {
+                                android.view.MotionEvent.ACTION_DOWN ->
+                                    parent?.requestDisallowInterceptTouchEvent(true)
+                                android.view.MotionEvent.ACTION_UP,
+                                android.view.MotionEvent.ACTION_CANCEL,
+                                -> parent?.requestDisallowInterceptTouchEvent(false)
+                            }
+                            return super.dispatchTouchEvent(ev)
+                        }
+                    }
+                MapView(ctx).also { view ->
+                    mapViewRef.value = view
+                    frame.addView(
+                        view,
+                        android.widget.FrameLayout.LayoutParams(
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    view.start(
+                        // MapLifeCycleCallback의 4개 메서드 모두 override 필요 (SDK 동작 보장).
+                        object : MapLifeCycleCallback() {
+                            override fun onMapDestroy() {
+                                android.util.Log.d(REPORT_MAP_LOG_TAG, "MapView destroyed")
+                            }
+
+                            override fun onMapError(error: Exception?) {
+                                android.util.Log.w(
+                                    REPORT_MAP_LOG_TAG,
+                                    "Kakao map error in Report tab",
+                                    error,
+                                )
+                            }
+
+                            override fun onMapResumed() {
+                                android.util.Log.d(REPORT_MAP_LOG_TAG, "MapView resumed")
+                            }
+
+                            override fun onMapPaused() {
+                                android.util.Log.d(REPORT_MAP_LOG_TAG, "MapView paused")
+                            }
+                        },
+                        object : KakaoMapReadyCallback() {
+                            override fun onMapReady(readyMap: KakaoMap) {
+                                android.util.Log.i(REPORT_MAP_LOG_TAG, "Kakao map READY in Report tab")
+                                kakaoMapRef.value = readyMap
+                                readyMap.setOnCameraMoveEndListener { _, cameraPosition, _ ->
+                                    if (suppressNextCameraMoveEnd.value) {
+                                        // 외부 카메라 이동(moveCamera 호출)으로 인한 콜백은 한 번만 무시.
+                                        suppressNextCameraMoveEnd.value = false
+                                        return@setOnCameraMoveEndListener
+                                    }
+                                    val pos = cameraPosition.position
+                                    onCenterChanged(pos.latitude, pos.longitude)
+                                }
+                            }
+
+                            override fun getPosition(): LatLng = initialPosition
+
+                            override fun getZoomLevel(): Int = REPORT_MAP_DEFAULT_ZOOM_LEVEL
+                        },
+                    )
+                    // 첫 진입 시 Activity가 이미 RESUMED 상태인 경우, lifecycle observer의 ON_RESUME 이벤트가
+                    // mapViewRef.value 채워지기 전에 fire되어 resume() 호출이 누락될 수 있다.
+                    // view.post로 한 frame 미룬 후 attach·measure 정리된 시점에 명시적으로 resume() 호출.
+                    view.post {
+                        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            runCatching { view.resume() }
+                                .onFailure { error ->
+                                    android.util.Log.w(
+                                        REPORT_MAP_LOG_TAG,
+                                        "Initial MapView resume() failed",
+                                        error,
+                                    )
+                                }
+                        }
+                    }
+                }
+                frame
+            },
+            // matchParentSize는 BoxScope 한정 — 부모 Box의 measure 결과(320.dp)에 강제로 맞춰
+            // AndroidView 자식(FrameLayout → MapView)이 wrap_content로 collapse되는 것을 막는다.
+            modifier = Modifier.matchParentSize(),
+        )
+        // 화면 정중앙 고정 핀 — 사용자가 지도를 드래그하면 핀은 그대로, 지도가 움직이며 핀이 가리키는
+        // 좌표가 현재 선택된 위치가 된다. 일반 지도앱 표준 "drag-the-map" 패턴.
+        Icon(
+            painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+            contentDescription = "위치 선택 핀",
+            modifier =
+                Modifier
+                    .align(Alignment.Center)
+                    .size(40.dp),
+            tint = Color.Unspecified,
+        )
+    }
 }
+
+// 부산시청 좌표 — 사용자 위치 정보가 없을 때 지도 초기 중심.
+private const val DEFAULT_REPORT_MAP_LATITUDE = 35.1796
+private const val DEFAULT_REPORT_MAP_LONGITUDE = 129.0756
+// 초기 줌 레벨 — 17은 카카오맵 기준 도로·건물이 명확히 보이는 수준 (Map 화면 기본값과 일관).
+private const val REPORT_MAP_DEFAULT_ZOOM_LEVEL = 17
+// 외부 카메라 이동(예: "현재 위치로 설정") 시 사용자가 변화를 자연스럽게 인지할 수 있는 짧은 애니메이션.
+private const val REPORT_MAP_CAMERA_ANIMATION_DURATION_MS = 300
+private const val REPORT_MAP_LOG_TAG = "ReportMapPanel"
 
 @Composable
 private fun ReportLocationBottomCard(
@@ -1023,6 +1237,7 @@ private fun ReportPhotoThumb(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     Box(
         modifier =
             modifier
@@ -1037,17 +1252,23 @@ private fun ReportPhotoThumb(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         ) {
-            Box(
+            // Coil SubcomposeAsyncImage로 실제 사진 썸네일 렌더링. 로딩 중·실패 시에는
+            // fallback Composable(회색 박스 + 라벨)로 graceful degradation.
+            // mock URI(`content://mock/...`)이거나 권한 없는 URI는 자연스럽게 error 상태 처리.
+            // (`AsyncImage`는 painter-only fallback만 받으므로 Composable 슬롯을 위해
+            // `SubcomposeAsyncImage` 사용.)
+            SubcomposeAsyncImage(
+                model =
+                    ImageRequest.Builder(context)
+                        .data(photo.localUri)
+                        .crossfade(true)
+                        .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "사진",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                loading = { ReportPhotoThumbFallback(label = "사진") },
+                error = { ReportPhotoThumbFallback(label = "불러오기 실패") },
+            )
         }
         Surface(
             modifier =
@@ -1075,6 +1296,25 @@ private fun ReportPhotoThumb(
                 )
             }
         }
+    }
+}
+
+/**
+ * SubcomposeAsyncImage가 로딩 중이거나 실패했을 때 표시되는 fallback. 기존 텍스트 라벨 패턴
+ * 그대로 유지하여 사용자 입장에서 카드 영역이 비어 보이지 않게 한다.
+ */
+@Composable
+private fun ReportPhotoThumbFallback(label: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

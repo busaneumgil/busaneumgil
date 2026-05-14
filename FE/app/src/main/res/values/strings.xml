@@ -248,6 +248,10 @@
     <string name="map_facility_detail_guide_fallback_braille_generic">점자블록 위치를 기준으로 주변 보행 동선을 먼저 확인해 주세요.</string>
     <string name="map_facility_detail_guide_fallback_other">시설 상세 정보는 계속 보강 중입니다. 길안내 전 주소와 주변 동선을 함께 확인해 주세요.</string>
     <string name="map_facility_detail_route_entry_action">도착지로 설정</string>
+    <string name="map_facility_detail_set_origin_action">출발</string>
+    <string name="map_facility_detail_set_destination_action">도착</string>
+    <string name="map_facility_detail_sheet_toggle">장소 상세 접기/펼치기</string>
+    <string name="map_facility_detail_close">장소 선택 닫기</string>
     <string name="map_facility_detail_action_supporting">실제 route setting 연결은 다음 스레드에서 마무리하고, 추가 CTA 슬롯도 이 영역에 확장합니다.</string>
     <string name="saved_route_error_description">잠시 후 다시 시도해 주세요.</string>
     <string name="saved_route_explore_map">지도에서 장소 찾기</string>
@@ -372,12 +376,10 @@
     <string name="search_voice_input_title">도착지 음성 검색</string>
     <string name="search_voice_input_close">닫기</string>
     <string name="search_voice_input_headline">도착지를 말씀해 주세요</string>
-    <string name="search_voice_input_description">말씀하신 장소를 도착지 후보로 찾아드릴게요.</string>
     <string name="search_voice_input_example_phrase">"부산역 가는 길"</string>
     <string name="search_voice_input_status_idle_title">마이크를 눌러 시작하세요</string>
     <string name="search_voice_input_status_idle_description">버튼을 누르면 STT 연결을 시작하고 음성을 텍스트로 바꿉니다.</string>
     <string name="search_voice_input_status_listening_title">듣고 있어요</string>
-    <string name="search_voice_input_status_listening_description">말씀을 마치면 인식된 문장을 먼저 보여드린 뒤 검색 결과를 보여드릴게요.</string>
     <string name="search_voice_input_status_recognized_title">이렇게 인식했어요</string>
     <string name="search_voice_input_status_recognized_description">확인한 문장으로 검색 결과를 보여드릴게요.</string>
     <string name="search_voice_input_status_retry_message">잘 듣지 못했어요 버튼을 누른 후 다시 말해주세요</string>

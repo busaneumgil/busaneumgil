@@ -136,7 +136,7 @@ fun PlaceListCard(
                 Text(
                     text = index.toString(),
                     fontSize = 42.sp,
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.Bold,
                     color = PlaceListOnAmber,
                     lineHeight = 48.sp,
                     letterSpacing = 0.sp,
@@ -151,7 +151,7 @@ fun PlaceListCard(
                 Text(
                     text = name,
                     fontSize = 44.sp,
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.Bold,
                     color = Color.White,
                     lineHeight = 52.sp,
                     letterSpacing = 0.sp,
@@ -237,7 +237,7 @@ private fun PlaceActionButton(
             text = label,
             fontSize = 36.sp,
             lineHeight = 42.sp,
-            fontWeight = FontWeight.Black,
+            fontWeight = FontWeight.Bold,
             color = PlaceListOnAmber,
             letterSpacing = 0.sp,
         )

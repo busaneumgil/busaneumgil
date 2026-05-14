@@ -125,7 +125,6 @@ fun MyPageScreen(
                                 },
                         ),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                 )
             }
         }
@@ -143,7 +142,7 @@ fun MyPageScreen(
 private fun MyPageTopBar() {
     EumCenteredTopBar(
         title = stringResource(id = R.string.my_page_screen_title),
-        titleFontWeight = FontWeight.Bold,
+        titleFontWeight = FontWeight.SemiBold,
     )
 }
 
@@ -207,7 +206,6 @@ private fun ProfileCard(
                 Text(
                     text = stringResource(id = headlineTextRes),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                 )
                 uiState.mobilitySubtype?.let { subtype ->
                     Text(
@@ -236,7 +234,7 @@ private fun ProfileCard(
                 ) {
                     Text(
                         text = stringResource(id = R.string.my_page_change_user_type),
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.labelLarge,
                     )
                 }
             }
@@ -253,7 +251,6 @@ private fun MainMenuSection(
         Text(
             text = stringResource(id = R.string.my_page_main_menu_title),
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
         DuribalCallButton(onClick = onDuribalCallClick)
@@ -309,8 +306,7 @@ private fun DuribalCallButton(onClick: () -> Unit) {
         Text(
             text = stringResource(id = R.string.my_page_duribal_call_button),
             modifier = Modifier.padding(start = EumSpacing.small),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleSmall,
         )
     }
 }

@@ -39,6 +39,10 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 @Composable
 internal fun MapViewportOverlayBackdrop(
@@ -78,6 +82,8 @@ internal fun MapViewportOverlayBackdrop(
                 primary = MaterialTheme.colorScheme.primary,
                 secondary = MaterialTheme.colorScheme.secondary,
                 tertiary = MaterialTheme.colorScheme.tertiary,
+                neutral = Color(0xFF9CA3AF),
+                navy = Color(0xFF28427F),
                 error = MaterialTheme.colorScheme.error,
                 outline = MaterialTheme.colorScheme.outline,
             )
@@ -257,6 +263,70 @@ private fun DrawScope.drawViewportPolyline(
             )
         }
     }
+    drawViewportPolylineDirectionArrows(
+        overlay = overlay,
+        bounds = bounds,
+        canvasSize = canvasSize,
+    )
+}
+
+private fun DrawScope.drawViewportPolylineDirectionArrows(
+    overlay: MapViewportPolylineOverlay,
+    bounds: ViewportProjectionBounds,
+    canvasSize: Size,
+) {
+    val projectedPoints =
+        overlay.points.map { coordinate ->
+            bounds.project(coordinate).toOffset(canvasSize)
+        }
+    val insetPx = RouteDirectionArrowInsetDp.dp.toPx()
+    val intervalPx = RouteDirectionArrowIntervalDp.dp.toPx()
+    val minSegmentPx = RouteDirectionArrowMinSegmentDp.dp.toPx()
+    val arrowLengthPx = RouteDirectionArrowLengthDp.dp.toPx()
+    val arrowHalfWidthPx = RouteDirectionArrowHalfWidthDp.dp.toPx()
+
+    projectedPoints.zipWithNext().forEach { (start, end) ->
+        val deltaX = end.x - start.x
+        val deltaY = end.y - start.y
+        val segmentLength = sqrt((deltaX * deltaX) + (deltaY * deltaY))
+        if (segmentLength < minSegmentPx) return@forEach
+
+        val angle = atan2(deltaY, deltaX)
+        val unitX = cos(angle)
+        val unitY = sin(angle)
+        val normalX = -unitY
+        val normalY = unitX
+        var distance = insetPx
+
+        while (distance < segmentLength - insetPx) {
+            val tip = Offset(
+                x = start.x + (unitX * distance),
+                y = start.y + (unitY * distance),
+            )
+            val base = Offset(
+                x = tip.x - (unitX * arrowLengthPx),
+                y = tip.y - (unitY * arrowLengthPx),
+            )
+            val arrowPath =
+                Path().apply {
+                    moveTo(tip.x, tip.y)
+                    lineTo(
+                        base.x + (normalX * arrowHalfWidthPx),
+                        base.y + (normalY * arrowHalfWidthPx),
+                    )
+                    lineTo(
+                        base.x - (normalX * arrowHalfWidthPx),
+                        base.y - (normalY * arrowHalfWidthPx),
+                    )
+                    close()
+                }
+            drawPath(
+                path = arrowPath,
+                color = Color.White.copy(alpha = 0.92f),
+            )
+            distance += intervalPx
+        }
+    }
 }
 
 private fun DrawScope.drawViewportPointHalo(
@@ -308,6 +378,8 @@ private data class ViewportOverlayPalette(
     val primary: Color,
     val secondary: Color,
     val tertiary: Color,
+    val neutral: Color,
+    val navy: Color,
     val error: Color,
     val outline: Color,
 )
@@ -433,6 +505,12 @@ private data class ViewportProjectionPoint(
     val yRatio: Float,
 )
 
+private fun ViewportProjectionPoint.toOffset(canvasSize: Size): Offset =
+    Offset(
+        x = xRatio * canvasSize.width,
+        y = yRatio * canvasSize.height,
+    )
+
 @Composable
 private fun ViewportPointMarker(
     point: MapViewportPointOverlay,
@@ -502,7 +580,7 @@ private fun ViewportPointMarker(
                     color = spec.contentColor,
                     style =
                         MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
+                            fontWeight = FontWeight.Bold,
                             fontSize = spec.fontSize,
                         ),
                     textAlign = TextAlign.Center,
@@ -518,6 +596,8 @@ private fun MapViewportOverlayTone.toColor(palette: ViewportOverlayPalette): Col
         MapViewportOverlayTone.PRIMARY -> palette.primary
         MapViewportOverlayTone.SECONDARY -> palette.secondary
         MapViewportOverlayTone.TERTIARY -> palette.tertiary
+        MapViewportOverlayTone.NEUTRAL -> palette.neutral
+        MapViewportOverlayTone.NAVY -> palette.navy
         MapViewportOverlayTone.ERROR -> palette.error
     }
 
@@ -526,6 +606,8 @@ private fun MapViewportOverlayTone.toCasingColor(palette: ViewportOverlayPalette
         MapViewportOverlayTone.PRIMARY -> palette.primary.copy(red = 0.06f, green = 0.30f, blue = 0.78f)
         MapViewportOverlayTone.SECONDARY -> palette.secondary.copy(red = 0.04f, green = 0.47f, blue = 0.36f)
         MapViewportOverlayTone.TERTIARY -> palette.tertiary.copy(red = 0.72f, green = 0.36f, blue = 0.09f)
+        MapViewportOverlayTone.NEUTRAL -> Color(0xFF6B7280)
+        MapViewportOverlayTone.NAVY -> Color(0xFF172554)
         MapViewportOverlayTone.ERROR -> palette.error.copy(red = 0.62f, green = 0.16f, blue = 0.16f)
     }
 
@@ -749,3 +831,9 @@ private fun MapMarkerCategoryType.toFacilityLabel(): String =
                 null -> "BB"
             }
     }
+
+private const val RouteDirectionArrowInsetDp = 28
+private const val RouteDirectionArrowIntervalDp = 58
+private const val RouteDirectionArrowMinSegmentDp = 44
+private const val RouteDirectionArrowLengthDp = 10
+private const val RouteDirectionArrowHalfWidthDp = 5

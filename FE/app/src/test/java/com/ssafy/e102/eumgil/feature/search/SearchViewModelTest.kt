@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.search
 
+import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.RecentDestination
@@ -577,6 +579,47 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `address fallback preview click keeps external address preview metadata`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "external-address:35.1797,129.0750",
+                    title = "Busan City Hall Road Address",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            val preview = destinationPreviewRepository.pendingPreview.value
+            assertEquals(result.toPlaceDestination(), preview?.destination)
+            assertEquals(MapPlaceDetailType.EXTERNAL_ADDRESS, preview?.detailType)
+            assertEquals("KAKAO", preview?.provider)
+            assertEquals(null, preview?.providerPlaceId)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
+        }
+
+    @Test
     fun `search result briefing click stores selected destination and emits route briefing navigation`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -604,6 +647,36 @@ class SearchViewModelTest {
 
             assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
             assertEquals(SearchUiEvent.NavigateToRouteBriefing, uiEvent.await())
+        }
+
+    @Test
+    fun `search result click stores selected destination and emits route setting navigation`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
+            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
         }
 
     @Test
@@ -679,9 +752,10 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only search result click stores destination but does not enrich recent destination`() =
+    fun `provider only search result click selects destination but does not enrich recent destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val searchRepository = FakeSearchRepository()
             val placesRepository = FakePlacesRepository()
             val viewModel =
@@ -689,6 +763,7 @@ class SearchViewModelTest {
                     searchRepository = searchRepository,
                     bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                     placesRepository = placesRepository,
                 )
             val result =
@@ -712,6 +787,7 @@ class SearchViewModelTest {
 
             assertEquals("provider:kakao:987654321", destinationSelectionRepository.selectedDestination.value?.placeId)
             assertEquals("Provider Only Cafe", destinationSelectionRepository.selectedDestination.value?.name)
+            assertEquals(null, destinationPreviewRepository.pendingPreview.value)
             assertTrue(placesRepository.detailRequests.isEmpty())
             assertTrue(searchRepository.savedRecentDestinations.isEmpty())
         }
@@ -816,6 +892,51 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `address fallback bookmark toggle saves supported external address snapshot`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = "35.179700,129.075000",
+                    title = "123 Jungang-daero, Busan",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    placeName = "123 Jungang-daero, Busan",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = null,
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+        }
+
+    @Test
     fun `bookmark toggle saves unbookmarked search result`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository()
@@ -893,6 +1014,53 @@ class SearchViewModelTest {
                     category = null,
                     provider = "KAKAO",
                     providerPlaceId = "987654321",
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+            assertEquals(SearchUiEvent.NavigateToLowVisionBookmark, uiEvent.await())
+        }
+
+    @Test
+    fun `address fallback low vision bookmark save stores supported external address snapshot`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = "35.179700,129.075000",
+                    title = "123 Jungang-daero, Busan",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    placeName = "123 Jungang-daero, Busan",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = null,
                     providerCategory = null,
                 ),
                 bookmarkRepository.bookmarks.value.single(),

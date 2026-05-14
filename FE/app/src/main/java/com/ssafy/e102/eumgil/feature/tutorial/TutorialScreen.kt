@@ -186,7 +186,7 @@ private fun TutorialHeader(uiState: TutorialUiState) {
             text = stringResource(id = uiState.step.titleRes),
             color = EumPrimary600,
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             lineHeight = TutorialLayoutDefaults.headerTitleLineHeight,
         )
@@ -194,7 +194,7 @@ private fun TutorialHeader(uiState: TutorialUiState) {
             text = stringResource(id = uiState.step.headlineRes),
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Black,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             lineHeight = TutorialLayoutDefaults.headerHeadlineLineHeight,
         )
@@ -615,7 +615,7 @@ private fun TutorialRouteCard(
                     text = time,
                     color = EumPrimary600,
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }

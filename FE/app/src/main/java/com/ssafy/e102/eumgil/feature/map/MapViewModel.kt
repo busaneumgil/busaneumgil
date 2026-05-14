@@ -29,6 +29,7 @@ import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
@@ -196,7 +197,10 @@ class MapViewModel(
         when (action) {
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
-            MapUiAction.FacilitySetDestinationClicked -> handleFacilitySetDestinationClicked()
+            MapUiAction.FacilitySetDestinationClicked ->
+                handleFacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION)
+            is MapUiAction.FacilitySetRouteEndpointClicked ->
+                handleFacilitySetRouteEndpointClicked(action.editingTarget)
             MapUiAction.LocationActionClicked -> handleLocationAction()
             MapUiAction.ZoomInClicked -> handleZoomAction(delta = 1)
             MapUiAction.ZoomOutClicked -> handleZoomAction(delta = -1)
@@ -374,6 +378,11 @@ class MapViewModel(
             MAP_VIEW_MODEL_LOG_TAG,
             "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()} clickType=${payload.clickType.name} provider=${payload.provider.orEmpty()} providerPlaceId=${payload.providerPlaceId.orEmpty()}",
         )
+        if (payload.clickType == MapTapClickType.ADDRESS) {
+            clearSelectedFacilitySelection()
+            renderSelectedFacilityState()
+            return
+        }
         mapTapDetailRequestId += 1L
         val requestId = mapTapDetailRequestId
         selectedMapPinCoordinate = coordinate
@@ -456,12 +465,12 @@ class MapViewModel(
         renderSelectedFacilityState()
     }
 
-    private fun handleFacilitySetDestinationClicked() {
+    private fun handleFacilitySetRouteEndpointClicked(editingTarget: RouteEditingTarget) {
         val preview = selectedDestinationPreview
         if (preview != null) {
             clearSelectedFacilitySelection()
             renderSelectedFacilityState()
-            destinationSelectionRepository.setEditingTarget(preview.editingTarget)
+            destinationSelectionRepository.setEditingTarget(editingTarget)
             destinationSelectionRepository.updateSelectionForEditingTarget(preview.destination)
             emitUiEvent(MapUiEvent.NavigateToRouteSetting)
             return
@@ -473,7 +482,8 @@ class MapViewModel(
                 ?: return
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
-        destinationSelectionRepository.updateSelectedDestination(destination)
+        destinationSelectionRepository.setEditingTarget(editingTarget)
+        destinationSelectionRepository.updateSelectionForEditingTarget(destination)
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
     }
 

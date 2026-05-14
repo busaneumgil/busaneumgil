@@ -34,6 +34,7 @@ import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
+import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteFailureKind
@@ -815,21 +816,16 @@ class RouteSettingViewModel(
             searchData.findRoute(uiState.value.selectedOption)
                 ?: searchData.primaryRoute
                 ?: return
-        val searchId = searchData.searchId?.takeIf(String::isNotBlank)
-        val routeId = selectedRoute.serverRouteId?.takeIf(String::isNotBlank)
-        if (searchId == null || routeId == null) {
-            applyNavigationStartFailure()
-            return
-        }
-
         isStartNavigationInFlight = true
         viewModelScope.launch {
             runCatching {
-                routeRepository.selectRoute(
-                    routeId = routeId,
-                    searchId = searchId,
+                selectWithOneExpiredRecovery(
+                    selectedTravelMode = selectedTravelMode,
+                    selectedOption = uiState.value.selectedOption,
+                    currentSearchData = searchData,
+                    currentRoute = selectedRoute,
                 )
-            }.onSuccess { sessionData ->
+            }.onSuccess { selection ->
                 mutableUiState.update { state ->
                     state.copy(
                         loadErrorMessage = null,
@@ -849,31 +845,99 @@ class RouteSettingViewModel(
                     RouteSettingUiEvent.StartNavigationRequested(
                         request =
                             RouteNavigationRequest(
-                                origin = searchData.result.origin,
-                                destination = searchData.result.destination,
-                                selectedRoute = selectedRoute,
-                                source = searchData.source,
+                                origin = selection.searchData.result.origin,
+                                destination = selection.searchData.result.destination,
+                                selectedRoute = selection.selectedRoute,
+                                source = selection.searchData.source,
                                 selectionHandoff =
                                     RouteNavigationSelectionHandoff(
-                                        searchId = searchId,
-                                        routeId = routeId,
-                                        sessionId = sessionData.sessionId,
+                                        searchId = selection.searchId,
+                                        routeId = selection.routeId,
+                                        sessionId = selection.sessionData.sessionId,
                                         initialRemainingDistanceMeters =
-                                            sessionData.totalDistanceMeters ?: selectedRoute.summary.distanceMeters,
+                                            selection.sessionData.totalDistanceMeters
+                                                ?: selection.selectedRoute.summary.distanceMeters,
                                         initialRemainingDurationSeconds =
-                                            sessionData.totalDurationSeconds
-                                                ?: selectedRoute.summary.durationSeconds
-                                                ?: selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
+                                            selection.sessionData.totalDurationSeconds
+                                                ?: selection.selectedRoute.summary.durationSeconds
+                                                ?: selection.selectedRoute.summary.estimatedTimeMinutes * SECONDS_PER_MINUTE,
                                     ),
                             ),
                     ),
                 )
-            }.onFailure {
-                applyNavigationStartFailure()
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                if (throwable is RouteSearchExpiredAfterRecoveryException) {
+                    closeRouteFlow()
+                } else {
+                    applyNavigationStartFailure()
+                }
             }
             isStartNavigationInFlight = false
         }
     }
+
+    private suspend fun selectWithOneExpiredRecovery(
+        selectedTravelMode: RouteTravelMode,
+        selectedOption: RouteOption,
+        currentSearchData: RouteSearchData,
+        currentRoute: RouteCandidate,
+    ): RouteStartSelection {
+        var searchData = currentSearchData
+        var selectedRoute = currentRoute
+        var searchId = searchData.searchId?.takeIf(String::isNotBlank)
+            ?: throw MissingRouteSelectionException()
+        var routeId = selectedRoute.serverRouteId?.takeIf(String::isNotBlank)
+            ?: throw MissingRouteSelectionException()
+
+        repeat(ROUTE_SEARCH_EXPIRED_SELECT_ATTEMPT_COUNT) { attempt ->
+            try {
+                val sessionData =
+                    routeRepository.selectRoute(
+                        routeId = routeId,
+                        searchId = searchId,
+                    )
+                return RouteStartSelection(
+                    searchData = searchData,
+                    selectedRoute = selectedRoute,
+                    searchId = searchId,
+                    routeId = routeId,
+                    sessionData = sessionData,
+                )
+            } catch (throwable: Throwable) {
+                if (throwable is CancellationException) throw throwable
+                if (!throwable.isRouteSearchExpired()) throw throwable
+                if (attempt == ROUTE_SEARCH_EXPIRED_SELECT_ATTEMPT_COUNT - 1) {
+                    throw RouteSearchExpiredAfterRecoveryException(throwable)
+                }
+
+                searchData = loadFreshSearchDataForMode(
+                    mode = selectedTravelMode,
+                    query = searchData.query,
+                )
+                latestSearchDataByMode = latestSearchDataByMode + (selectedTravelMode to searchData)
+                selectedRoute =
+                    searchData.findRoute(selectedOption)
+                        ?: searchData.primaryRoute
+                        ?: throw RouteSearchExpiredAfterRecoveryException(throwable)
+                searchId = searchData.searchId?.takeIf(String::isNotBlank)
+                    ?: throw RouteSearchExpiredAfterRecoveryException(throwable)
+                routeId = selectedRoute.serverRouteId?.takeIf(String::isNotBlank)
+                    ?: throw RouteSearchExpiredAfterRecoveryException(throwable)
+            }
+        }
+
+        throw RouteSearchExpiredAfterRecoveryException()
+    }
+
+    private suspend fun loadFreshSearchDataForMode(
+        mode: RouteTravelMode,
+        query: RouteSearchQuery,
+    ): RouteSearchData =
+        when (mode) {
+            RouteTravelMode.WALK -> routeRepository.getFreshRouteSearchData(query)
+            RouteTravelMode.TRANSIT -> routeRepository.getFreshTransitRouteSearchData(query)
+        }
 
     private suspend fun persistRecentDestination(destination: PlaceDestination) {
         val repository = searchRepository ?: return
@@ -989,6 +1053,9 @@ class RouteSettingViewModel(
 
     private fun Throwable.isNoRouteFailure(): Boolean =
         this is RouteApiException && status == ROUTE_STATUS_NO_ROUTE
+
+    private fun Throwable.isRouteSearchExpired(): Boolean =
+        this is RouteApiException && status == ROUTE_STATUS_SEARCH_EXPIRED
 
     private fun Throwable.toRoutePreviewFailureMapUiState(
         originCoordinate: GeoCoordinate,
@@ -2719,6 +2786,7 @@ private const val ROUTE_SEARCH_WALK_PATH = "/routes/search/walk"
 private const val ROUTE_SEARCH_TRANSIT_PATH = "/routes/search/transit"
 private const val ROUTE_STATUS_SAME_ENDPOINT = "RT4004"
 private const val ROUTE_STATUS_NO_ROUTE = "RT4040"
+private const val ROUTE_STATUS_SEARCH_EXPIRED = "RT4041"
 private const val ROUTE_STATUS_MISSING_SESSION = "ROUTE_AUTH_MISSING_SESSION"
 private const val ROUTE_STATUS_AUTHENTICATION_FAILED = "ROUTE_AUTHENTICATION_FAILED"
 private const val ROUTE_AUTH_REQUIRED_ERROR_MESSAGE = "로그인이 필요해요. 다시 로그인한 뒤 시도해 주세요."
@@ -2728,11 +2796,26 @@ private const val ROUTE_TIMEOUT_ERROR_MESSAGE = "경로 응답이 늦어지고 �
 private const val ROUTE_NETWORK_ERROR_MESSAGE = "네트워크 연결 상태를 확인한 뒤 다시 시도해 주세요."
 private const val TRANSIT_LOADING_NOTICE_MESSAGE = "대중교통 경로를 불러오고 있어요."
 private const val SECONDS_PER_MINUTE = 60
+private const val ROUTE_SEARCH_EXPIRED_SELECT_ATTEMPT_COUNT = 2
 private val DEFAULT_TRAVEL_MODE = RouteTravelMode.WALK
 private val WALK_DEFAULT_SELECTED_OPTION = RouteOption.SAFE
 private val TRANSIT_DEFAULT_SELECTED_OPTION = RouteOption.RECOMMENDED
 private val WALK_ROUTE_OPTIONS = listOf(RouteOption.SAFE, RouteOption.SHORTEST)
 private val TRANSIT_ROUTE_OPTIONS = listOf(RouteOption.RECOMMENDED, RouteOption.MIN_TRANSFER, RouteOption.MIN_WALK)
+
+private data class RouteStartSelection(
+    val searchData: RouteSearchData,
+    val selectedRoute: RouteCandidate,
+    val searchId: String,
+    val routeId: String,
+    val sessionData: RouteSessionData,
+)
+
+private class MissingRouteSelectionException : RuntimeException("Missing route searchId or routeId.")
+
+private class RouteSearchExpiredAfterRecoveryException(
+    cause: Throwable? = null,
+) : RuntimeException("Route search expired after one fresh search recovery.", cause)
 
 private data class RouteOptionCardPresentation(
     val title: String,

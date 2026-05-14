@@ -159,6 +159,7 @@ private suspend fun RouteRepository.selectLowVisionRouteOrNull(
         )
     } catch (throwable: Throwable) {
         if (throwable is CancellationException) throw throwable
+        if (throwable is RouteApiException && throwable.status == ROUTE_STATUS_SEARCH_EXPIRED) throw throwable
         null
     }
 
@@ -416,6 +417,7 @@ private const val LOW_VISION_FALLBACK_ROUTE_ID = "low-vision-fallback-route"
 private const val LOW_VISION_FALLBACK_ROUTE_TITLE = "Low vision route"
 private const val LOW_VISION_FALLBACK_SOURCE_LABEL = "Low vision fallback route"
 private const val SECONDS_PER_MINUTE = 60
+private const val ROUTE_STATUS_SEARCH_EXPIRED = "RT4041"
 private val LOW_VISION_WALK_OPTIONS = listOf(RouteOption.SAFE, RouteOption.SHORTEST)
 private val LOW_VISION_TRANSIT_OPTIONS =
     listOf(

@@ -80,6 +80,7 @@ open class SearchRemoteDataSource internal constructor(
         buildMap {
             put("keyword", normalizedKeyword)
             put("size", limit.toString())
+            put("sort", sortOption.apiValue)
             latitude?.let { latitude -> put("lat", latitude.toString()) }
             longitude?.let { longitude -> put("lng", longitude.toString()) }
             radiusMeters?.let { radiusMeters -> put("radius", radiusMeters.toString()) }

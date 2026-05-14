@@ -51,7 +51,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
 
     companion object {
         private const val TAG = "LowVisionVoiceInputVM"
-        private const val SILENCE_FRAMES_FOR_STOP = 30
+        private const val SILENCE_FRAMES_FOR_STOP = 20 // before: 30
         private const val ROLE_USER = "user"
         private const val ROLE_ASSISTANT = "assistant"
     }

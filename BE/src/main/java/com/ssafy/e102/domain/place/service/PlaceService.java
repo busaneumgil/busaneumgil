@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.place.service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
@@ -52,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PlaceService {
 
 	private static final int DEFAULT_KAKAO_SEARCH_PAGE = 1;
+	private static final int MAX_KAKAO_SEARCH_PAGE = 45;
 	private static final int DEFAULT_SEARCH_SIZE = 10;
 	private static final int MAX_SEARCH_SIZE = 15;
 	private static final int DEFAULT_PLACE_RADIUS_METER = 1000;
@@ -68,6 +70,10 @@ public class PlaceService {
 	private static final String EMPTY_FILTER_SENTINEL = "__EMPTY_FILTER__";
 	private static final String BUS_STOP_PROVIDER_ID_PREFIX = "BS";
 	private static final String BUS_STOP_PROVIDER_CATEGORY = "교통,수송 > 버스정류장";
+	private static final String SEARCH_SORT_RELEVANCE = "relevance";
+	private static final String KAKAO_SEARCH_SORT_ACCURACY = "accuracy";
+	private static final String KAKAO_SEARCH_SORT_DISTANCE = "distance";
+	private static final String BUSAN_REGION_PREFIX = "부산";
 	private static final String SUBWAY_CATEGORY_GROUP_CODE = "SW8";
 	private final PlaceRepository placeRepository;
 	private final BookmarkRepository bookmarkRepository;
@@ -91,6 +97,7 @@ public class PlaceService {
 		String lng,
 		String radius,
 		String cursor,
+		String sort,
 		String size) {
 		String normalizedKeyword = normalizeKeyword(keyword);
 		Double parsedLat = parseOptionalDouble(lat);
@@ -100,32 +107,108 @@ public class PlaceService {
 		int kakaoPage = parseSearchCursor(cursor);
 		int parsedSize = parseIntegerOrDefault(size, DEFAULT_SEARCH_SIZE);
 		validateSearchSize(parsedSize);
+		PlaceSearchSort searchSort = parsePlaceSearchSort(sort);
+		validateSearchSortCoordinateCondition(searchSort, parsedLat, parsedLng);
 
 		try {
-			KakaoPlaceSearchResult kakaoResult = kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			SearchDocumentBatch searchBatch = searchBusanDocuments(
 				normalizedKeyword,
 				parsedLat,
 				parsedLng,
 				parsedRadius,
 				kakaoPage,
-				parsedSize));
-			Map<String, Place> matchedPlaces = getMatchedPlaces(kakaoResult.documents());
-			boolean hasNext = !kakaoResult.isEnd();
+				parsedSize,
+				searchSort.kakaoSort);
+			List<KakaoPlaceDocument> searchDocuments = searchBatch.documents()
+				.stream()
+				.limit(parsedSize)
+				.toList();
+			Map<String, Place> matchedPlaces = getMatchedPlaces(searchDocuments);
 			return new PlaceSearchResponse(
-				kakaoResult.documents()
+				searchDocuments
 					.stream()
 					.map(place -> PlaceSearchItemResponse.of(place, matchedPlaces))
 					.toList(),
-				hasNext ? encodeSearchCursor(kakaoPage + 1) : null,
+				searchBatch.hasNext() ? encodeSearchCursor(searchBatch.nextPage()) : null,
 				parsedSize,
-				kakaoResult.totalElements(),
-				hasNext);
+				searchBatch.totalElements(),
+				searchBatch.hasNext());
 		} catch (RestClientException | IllegalArgumentException exception) {
 			log.warn("장소 검색 외부 API 호출 실패. kakaoPage={}, size={}",
 				kakaoPage,
 				parsedSize,
 				exception);
 			throw new PlaceException(PlaceErrorCode.PLACE_SEARCH_EXTERNAL_API_FAILED, exception);
+		}
+	}
+
+	private SearchDocumentBatch searchBusanDocuments(
+		String keyword,
+		Double lat,
+		Double lng,
+		Integer radius,
+		int startPage,
+		int size,
+		String sort) {
+		List<KakaoPlaceDocument> documents = new ArrayList<>();
+		int page = startPage;
+		long totalElements = 0;
+		boolean isEnd = false;
+		boolean shouldBackfillBusanResults = lat != null && lng != null;
+
+		while (page <= MAX_KAKAO_SEARCH_PAGE && documents.size() < size) {
+			KakaoPlaceSearchResult kakaoResult = kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+				keyword,
+				lat,
+				lng,
+				radius,
+				page,
+				size,
+				sort));
+			totalElements = kakaoResult.totalElements();
+			documents.addAll(filterBusanSearchDocuments(kakaoResult.documents()));
+			isEnd = kakaoResult.isEnd();
+			if (isEnd) {
+				break;
+			}
+			if (!shouldBackfillBusanResults) {
+				break;
+			}
+			page++;
+		}
+
+		boolean hasNext = !isEnd && page < MAX_KAKAO_SEARCH_PAGE;
+		return new SearchDocumentBatch(documents, hasNext, page + 1, totalElements);
+	}
+
+	private List<KakaoPlaceDocument> filterBusanSearchDocuments(List<KakaoPlaceDocument> documents) {
+		return documents.stream()
+			.filter(this::isBusanPlace)
+			.toList();
+	}
+
+	private boolean isBusanPlace(KakaoPlaceDocument document) {
+		return StringUtils.hasText(document.address())
+			&& document.address().trim().startsWith(BUSAN_REGION_PREFIX);
+	}
+
+	private PlaceSearchSort parsePlaceSearchSort(String sort) {
+		if (!StringUtils.hasText(sort)) {
+			return PlaceSearchSort.RELEVANCE;
+		}
+		return switch (sort.trim().toLowerCase()) {
+			case SEARCH_SORT_RELEVANCE, KAKAO_SEARCH_SORT_ACCURACY -> PlaceSearchSort.RELEVANCE;
+			case KAKAO_SEARCH_SORT_DISTANCE -> PlaceSearchSort.DISTANCE;
+			default -> throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
+		};
+	}
+
+	private void validateSearchSortCoordinateCondition(
+		PlaceSearchSort sort,
+		Double lat,
+		Double lng) {
+		if (sort == PlaceSearchSort.DISTANCE && (lat == null || lng == null)) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST);
 		}
 	}
 
@@ -836,5 +919,23 @@ public class PlaceService {
 		return values.stream()
 			.map(Enum::name)
 			.collect(Collectors.toSet());
+	}
+
+	private record SearchDocumentBatch(
+		List<KakaoPlaceDocument> documents,
+		boolean hasNext,
+		int nextPage,
+		long totalElements) {
+	}
+
+	private enum PlaceSearchSort {
+		RELEVANCE(KAKAO_SEARCH_SORT_ACCURACY),
+		DISTANCE(KAKAO_SEARCH_SORT_DISTANCE);
+
+		private final String kakaoSort;
+
+		PlaceSearchSort(String kakaoSort) {
+			this.kakaoSort = kakaoSort;
+		}
 	}
 }

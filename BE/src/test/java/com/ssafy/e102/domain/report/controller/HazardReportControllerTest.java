@@ -2,6 +2,7 @@ package com.ssafy.e102.domain.report.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -25,11 +27,14 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.ssafy.e102.domain.report.dto.request.CreateHazardReportImageUploadUrlRequest;
 import com.ssafy.e102.domain.report.dto.request.CreateHazardReportRequest;
+import com.ssafy.e102.domain.report.dto.response.CreateHazardReportImageUploadUrlResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportIdResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportSummaryResponse;
+import com.ssafy.e102.domain.report.service.HazardReportImageUploadService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
 import com.ssafy.e102.domain.report.type.ReportType;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
@@ -40,14 +45,49 @@ class HazardReportControllerTest {
 	@Mock
 	private HazardReportService hazardReportService;
 
+	@Mock
+	private HazardReportImageUploadService hazardReportImageUploadService;
+
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		mockMvc = MockMvcBuilders.standaloneSetup(new HazardReportController(hazardReportService))
+		mockMvc = MockMvcBuilders.standaloneSetup(
+			new HazardReportController(hazardReportService, hazardReportImageUploadService))
 			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
 			.build();
+	}
+
+	@Test
+	@DisplayName("제보 이미지 업로드 URL은 현재 사용자와 파일 메타데이터로 발급한다")
+	void createPresignedUploadUrl() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(hazardReportImageUploadService.createUploadUrl(
+			eq(userId),
+			any(CreateHazardReportImageUploadUrlRequest.class)))
+			.thenReturn(new CreateHazardReportImageUploadUrlResponse(
+				"https://storage.example.com/upload",
+				"hazard-reports/%s/20260514/image.jpg".formatted(userId),
+				Instant.parse("2026-05-14T01:10:00Z")));
+
+		mockMvc.perform(post("/hazard-reports/images/presigned-upload")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"fileName\":\"image.jpg\",\"contentType\":\"image/jpeg\",\"contentLength\":1024}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.uploadUrl").value("https://storage.example.com/upload"))
+			.andExpect(jsonPath("$.data.imageUrl").doesNotExist())
+			.andExpect(jsonPath("$.data.objectKey")
+				.value("hazard-reports/%s/20260514/image.jpg".formatted(userId)))
+			.andExpect(jsonPath("$.data.expiresAt").value("2026-05-14T01:10:00Z"));
+
+		verify(hazardReportImageUploadService).createUploadUrl(
+			eq(userId),
+			any(CreateHazardReportImageUploadUrlRequest.class));
+		SecurityContextHolder.clearContext();
 	}
 
 	@Test
@@ -55,7 +95,39 @@ class HazardReportControllerTest {
 	void createHazardReport() throws Exception {
 		UUID userId = UUID.randomUUID();
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
-		when(hazardReportService.createHazardReport(eq(userId), any(CreateHazardReportRequest.class)))
+		when(hazardReportService.createHazardReport(
+			eq(userId),
+			any(CreateHazardReportRequest.class),
+			eq("outbox-report-1")))
+			.thenReturn(new HazardReportIdResponse(1L));
+
+		mockMvc.perform(post("/hazard-reports")
+			.principal(authentication)
+			.header("Idempotency-Key", "outbox-report-1")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"reportType\":\"SIDEWALK_MISSING\",\"description\":\"보행 가능한 인도가 없습니다.\","
+				+ "\"reportPoint\":{\"lat\":35.1686,\"lng\":129.0576},"
+				+ "\"imageObjectKeys\":[\"hazard-reports/%s/20260514/image-1.jpg\"]}".formatted(userId)))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.status").value("S2010"))
+			.andExpect(jsonPath("$.data.reportId").value(1));
+
+		verify(hazardReportService).createHazardReport(
+			eq(userId),
+			any(CreateHazardReportRequest.class),
+			eq("outbox-report-1"));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("Idempotency-Key가 없으면 null로 제보 등록 서비스에 전달한다")
+	void createHazardReportWithoutIdempotencyKey() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(hazardReportService.createHazardReport(
+			eq(userId),
+			any(CreateHazardReportRequest.class),
+			isNull()))
 			.thenReturn(new HazardReportIdResponse(1L));
 
 		mockMvc.perform(post("/hazard-reports")
@@ -63,12 +135,15 @@ class HazardReportControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"reportType\":\"SIDEWALK_MISSING\",\"description\":\"보행 가능한 인도가 없습니다.\","
 				+ "\"reportPoint\":{\"lat\":35.1686,\"lng\":129.0576},"
-				+ "\"imageUrls\":[\"https://example.com/reports/1/image-1.jpg\"]}"))
+				+ "\"imageObjectKeys\":[]}"))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("S2010"))
 			.andExpect(jsonPath("$.data.reportId").value(1));
 
-		verify(hazardReportService).createHazardReport(eq(userId), any(CreateHazardReportRequest.class));
+		verify(hazardReportService).createHazardReport(
+			eq(userId),
+			any(CreateHazardReportRequest.class),
+			isNull());
 		SecurityContextHolder.clearContext();
 	}
 
@@ -82,6 +157,8 @@ class HazardReportControllerTest {
 				List.of(new HazardReportSummaryResponse(
 					1L,
 					ReportType.SIDEWALK_MISSING,
+					"부산 부산진구 시민공원로 73",
+					"보행 가능한 인도가 없습니다.",
 					new GeoPointResponse(35.1686, 129.0576),
 					LocalDateTime.of(2026, 4, 28, 17, 0),
 					"https://example.com/reports/1/image-1.jpg")),
@@ -95,6 +172,8 @@ class HazardReportControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.content[0].reportId").value(1))
 			.andExpect(jsonPath("$.data.content[0].reportType").value("SIDEWALK_MISSING"))
+			.andExpect(jsonPath("$.data.content[0].address").value("부산 부산진구 시민공원로 73"))
+			.andExpect(jsonPath("$.data.content[0].description").value("보행 가능한 인도가 없습니다."))
 			.andExpect(jsonPath("$.data.content[0].reportPoint.lat").value(35.1686))
 			.andExpect(jsonPath("$.data.content[0].representativeImageUrl")
 				.value("https://example.com/reports/1/image-1.jpg"))
@@ -115,6 +194,8 @@ class HazardReportControllerTest {
 				List.of(new HazardReportSummaryResponse(
 					3L,
 					ReportType.RAMP,
+					null,
+					null,
 					new GeoPointResponse(35.1686, 129.0576),
 					LocalDateTime.of(2026, 4, 28, 17, 0),
 					null)),
@@ -136,7 +217,7 @@ class HazardReportControllerTest {
 	}
 
 	@Test
-	@DisplayName("내 제보 상세는 전체 이미지 URL을 반환한다")
+	@DisplayName("내 제보 상세는 조회용 presigned 이미지 URL을 반환한다")
 	void getMyHazardReportDetail() throws Exception {
 		UUID userId = UUID.randomUUID();
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);

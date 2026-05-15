@@ -627,6 +627,8 @@ public class AdminMapService {
 			roadSegment.getToNodeId(),
 			roadSegment.getSegmentType(),
 			roadSegment.getLengthMeter(),
+			roadSegment.getAvgSlopePercent(),
+			roadSegment.getWidthMeter(),
 			roadSegment.getWalkAccess(),
 			roadSegment.getBrailleBlockState(),
 			roadSegment.getAudioSignalState(),

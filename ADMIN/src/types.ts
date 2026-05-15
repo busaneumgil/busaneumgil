@@ -79,6 +79,8 @@ export interface SegmentFeature {
     toNodeId?: number | string;
     segmentType?: EditableSegmentType | "TRANSITION_CONNECTOR" | string;
     lengthMeter?: number | string;
+    avgSlopePercent?: number | string | null;
+    widthMeter?: number | string | null;
     walkAccess?: string | null;
     brailleBlockState?: string | null;
     audioSignalState?: string | null;

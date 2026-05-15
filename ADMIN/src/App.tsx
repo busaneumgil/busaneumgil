@@ -443,7 +443,7 @@ function AdminApp() {
         </nav>
       </aside>
 
-      <main className="workspace">
+      <main className={`workspace ${page === "network" || page === "routeTuning" || page === "facilities" ? "workspace-map-page" : ""}`}>
         <header className="topbar">
           <div>
             <h1>{pageMeta[page].label}</h1>

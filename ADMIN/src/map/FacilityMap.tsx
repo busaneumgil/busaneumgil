@@ -43,6 +43,7 @@ export function FacilityMap({
   const onSelectFeatureRef = useRef(onSelectFeature);
   const locationPickEnabledRef = useRef(locationPickEnabled);
   const onPickLocationRef = useRef(onPickLocation);
+  const centeredPayloadKeyRef = useRef<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -105,18 +106,7 @@ export function FacilityMap({
       if (overlay) overlaysRef.current.push(overlay);
     });
 
-    const bbox = payload?.bbox;
-    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
-      const bounds = new window.kakao.maps.LatLngBounds();
-      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
-      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
-      mapRef.current.setBounds(bounds);
-      return;
-    }
-    const firstCoord = features[0]?.geometry.coordinates;
-    if (firstCoord) {
-      mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
-    }
+    centerMapForPayloadOnce(features);
   }, [payload]);
 
   useEffect(() => {
@@ -166,6 +156,27 @@ export function FacilityMap({
       fillOpacity: 0.25,
       zIndex: 20,
     });
+  }
+
+  function centerMapForPayloadOnce(features: FacilityFeature[]) {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    const bbox = payload?.bbox;
+    const firstCoord = features[0]?.geometry.coordinates;
+    const nextKey = bbox ? bbox.join(",") : firstCoord?.join(",");
+    if (!nextKey || centeredPayloadKeyRef.current === nextKey) {
+      return;
+    }
+    centeredPayloadKeyRef.current = nextKey;
+    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
+      const bounds = new window.kakao.maps.LatLngBounds();
+      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
+      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
+      mapRef.current.setBounds(bounds);
+      return;
+    }
+    if (firstCoord) {
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
+    }
   }
 
   function closeRoadviewPanel() {

@@ -503,17 +503,18 @@ class SearchViewModel(
         searchJob =
             viewModelScope.launch {
                 val searchOrigin = resolveSearchLocationOrigin()
-                if (searchSortOption == SearchSortOption.DISTANCE && searchOrigin == null) {
+                val resolvedSortOption =
+                    if (searchSortOption == SearchSortOption.DISTANCE && searchOrigin == null) {
+                        SearchSortOption.RELEVANCE
+                    } else {
+                        searchSortOption
+                    }
+                if (resolvedSortOption != searchSortOption) {
                     mutableUiState.update { state ->
                         state.copy(
-                            resultState =
-                                SearchResultUiState.Error(
-                                    query = normalizedQuery,
-                                    message = DISTANCE_SORT_LOCATION_REQUIRED_MESSAGE,
-                                ),
+                            sortOption = resolvedSortOption,
                         )
                     }
-                    return@launch
                 }
                 activeSearchOrigin = searchOrigin
                 val searchPage =
@@ -521,7 +522,7 @@ class SearchViewModel(
                         searchRepository.searchPage(
                             normalizedQuery.toSearchQuery(
                                 origin = searchOrigin,
-                                sortOption = searchSortOption,
+                                sortOption = resolvedSortOption,
                             ),
                         )
                     } catch (throwable: Throwable) {
@@ -550,7 +551,7 @@ class SearchViewModel(
                     }
 
                 mutableUiState.update { state ->
-                    if (state.sortOption != searchSortOption) {
+                    if (state.sortOption != resolvedSortOption) {
                         return@update state
                     }
                     state.copy(
@@ -734,7 +735,6 @@ class SearchViewModel(
         private const val INVALID_DESTINATION_HANDOFF_MESSAGE = "좌표 정보가 올바르지 않아 경로 설정으로 넘길 수 없습니다."
         private const val UNVERIFIED_PLACE_HANDOFF_MESSAGE = "접근성 정보가 확인된 장소만 길찾기를 시작할 수 있습니다."
         private const val BOOKMARK_TOGGLE_FAILURE_MESSAGE = "북마크 상태를 변경하지 못했습니다. 다시 시도해 주세요."
-        private const val DISTANCE_SORT_LOCATION_REQUIRED_MESSAGE = "거리순 검색을 위해 현재 위치를 확인해 주세요."
 
         fun provideFactory(
             searchRepository: SearchRepository,

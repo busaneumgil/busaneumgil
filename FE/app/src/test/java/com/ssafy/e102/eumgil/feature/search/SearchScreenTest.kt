@@ -329,7 +329,7 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `search result accessibility labels keep positive labels only sorted and collapsed`() {
+    fun `search result accessibility labels keep positive labels sorted without overflow`() {
         val uiState =
             resolveSearchResultAccessibilityTagUiState(
                 listOf(
@@ -346,10 +346,10 @@ class SearchScreenTest {
                 R.string.place_accessibility_label_entry_available,
                 R.string.place_accessibility_label_elevator,
                 R.string.place_accessibility_label_accessible_parking,
+                R.string.place_accessibility_label_accessible_toilet,
             ),
             uiState.labelResIds,
         )
-        assertEquals(1, uiState.overflowCount)
     }
 
     @Test
@@ -363,6 +363,5 @@ class SearchScreenTest {
             )
 
         assertEquals(emptyList<Int>(), uiState.labelResIds)
-        assertEquals(0, uiState.overflowCount)
     }
 }

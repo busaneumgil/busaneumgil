@@ -3929,6 +3929,7 @@ private fun RouteSettingBottomBar(
             onStartClick = onStartClick,
             modifier =
                 Modifier
+                    .navigationBarsPadding()
                     .padding(
                         start = RouteSettingBottomBarHorizontalPadding,
                         end = RouteSettingBottomBarHorizontalPadding,

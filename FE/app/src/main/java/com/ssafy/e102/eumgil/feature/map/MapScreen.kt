@@ -1123,8 +1123,7 @@ private fun mapRecentDestinationBottomSheetState(uiState: MapUiState): RecentDes
                     placeId = destination.placeId,
                     title = destination.name,
                     address = destination.address.orEmpty(),
-                    tags = tagLabels.take(3),
-                    overflowTagCount = (tagLabels.size - 3).coerceAtLeast(0),
+                    tags = tagLabels,
                     iconRes = recentDestinationIcon(destination.category),
                 )
             },
@@ -1138,7 +1137,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
     val loadingTitle =
         sheetState.mapTapNameHint
             ?.takeIf { it.isNotBlank() }
-            ?: stringResource(id = R.string.map_facility_detail_loading_title)
+            ?: stringResource(id = R.string.map_facility_detail_loading_guide)
     val errorTitle =
         sheetState.mapTapNameHint
             ?.takeIf { it.isNotBlank() }
@@ -1177,10 +1176,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 placeIconRes = R.drawable.ic_nav_facility,
                 metaLabel = stringResource(id = R.string.map_facility_detail_location_meta),
                 title = loadingTitle,
-                address =
-                    uiState.selectedMapPinCoordinate
-                        ?.let { coordinate -> coordinateText(coordinate) }
-                        .orEmpty(),
+                address = "",
                 phoneNumber = null,
                 accessibilityTags = emptyList(),
                 transitArrivals = emptyList(),
@@ -1268,11 +1264,8 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isVisible = true,
             placeIconRes = R.drawable.ic_nav_facility,
             metaLabel = "위치 상세",
-            title = "선택한 위치",
-            address =
-                uiState.selectedMapPinCoordinate
-                    ?.let { coordinate -> coordinateText(coordinate) }
-                    .orEmpty(),
+            title = stringResource(id = R.string.map_facility_detail_loading_guide),
+            address = "",
             phoneNumber = null,
             accessibilityTags = emptyList(),
             transitArrivals = emptyList(),
@@ -1820,10 +1813,10 @@ private fun recentDestinationTagLabel(rawKey: String): String? =
     when (rawKey.trim().lowercase()) {
         "accessible-toilet" -> "장애인 화장실"
         "elevator" -> "엘리베이터"
-        "accessible-parking" -> "장애인 주차 가능"
+        "accessible-parking" -> "장애인 주차"
         "step-free-entrance" -> "단차 없음"
         "guidance-facility" -> "안내시설"
-        "accessible-room" -> "객실 이용 가능"
+        "accessible-room" -> "장애인 객실"
         "ramp" -> "경사로"
         "auto-door" -> "출입 가능"
         "wide-entry" -> "출입 가능"

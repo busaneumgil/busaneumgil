@@ -247,7 +247,7 @@ class NavigationScreenPolicyTest {
                 guideSidePanelSource.contains("fun GuideSidePanelStepIcon("),
         )
         assertEquals(30.dp, bottomBarChromePolicy.bottomGap)
-        assertFalse(bottomBarChromePolicy.usesNavigationBarPadding)
+        assertTrue(bottomBarChromePolicy.usesNavigationBarPadding)
         assertTrue(
             "Exit CTA should share the full-width bottom placement and 30dp bottom gap used by route start.",
             bottomBarSection.contains(".fillMaxWidth()") &&

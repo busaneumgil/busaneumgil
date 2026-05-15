@@ -166,6 +166,48 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
+    fun `route preview binding can render transit detail walk and transit polylines separately`() {
+        val detailPolylines =
+            listOf(
+                MapViewportPolylineOverlay(
+                    overlayId = "route-detail-walk",
+                    points =
+                        listOf(
+                            MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                            MapCoordinate(latitude = 35.1710, longitude = 129.0510),
+                        ),
+                    style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                    tone = MapViewportOverlayTone.TRANSIT_WALK,
+                ),
+                MapViewportPolylineOverlay(
+                    overlayId = "route-detail-transit",
+                    points =
+                        listOf(
+                            MapCoordinate(latitude = 35.1710, longitude = 129.0510),
+                            MapCoordinate(latitude = 35.1780, longitude = 129.0590),
+                        ),
+                    style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                    tone = MapViewportOverlayTone.NAVY,
+                ),
+            )
+
+        val overlayState =
+            createRoutePreviewViewportOverlayState(
+                previewMap =
+                    RoutePreviewMapUiState(
+                        status = RoutePreviewMapStatus.READY,
+                        originCoordinate = GeoCoordinate(latitude = 35.1700, longitude = 129.0500),
+                        destinationCoordinate = GeoCoordinate(latitude = 35.1780, longitude = 129.0590),
+                        polyline = emptyList(),
+                    ),
+                routePolylineOverlays = detailPolylines,
+            )
+
+        assertEquals(listOf("route-detail-walk", "route-detail-transit"), overlayState.polylines.map { it.overlayId })
+        assertEquals(listOf(MapViewportOverlayTone.TRANSIT_WALK, MapViewportOverlayTone.NAVY), overlayState.polylines.map { it.tone })
+    }
+
+    @Test
     fun `route waypoint markers share side panel pin assets and colors`() {
         val backdropSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")

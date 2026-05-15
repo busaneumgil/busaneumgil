@@ -1037,6 +1037,38 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `transit selected route keeps walk and transit detail polylines separated`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val detailPolylines = viewModel.uiState.value.selectedRoute?.detailPolylines.orEmpty()
+
+            assertEquals(
+                listOf(
+                    RouteDetailPolylineKind.WALK,
+                    RouteDetailPolylineKind.TRANSIT,
+                    RouteDetailPolylineKind.TRANSIT,
+                    RouteDetailPolylineKind.WALK,
+                ),
+                detailPolylines.map(RouteDetailPolylineUiState::kind),
+            )
+            assertTrue(detailPolylines.all { polyline -> polyline.points.size >= 2 })
+        }
+
+    @Test
     fun `manual transit selection exposes remote success debug info`() =
         runTest {
             val destinationSelectionRepository =

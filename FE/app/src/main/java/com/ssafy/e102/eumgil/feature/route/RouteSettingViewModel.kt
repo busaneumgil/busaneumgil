@@ -1605,6 +1605,14 @@ class RouteSettingViewModel(
             } else {
                 previewPolyline.points
             }
+        val detailPolylines =
+            buildDetailPolylines().let { polylines ->
+                if (reversePreview) {
+                    polylines.asReversed().map { polyline -> polyline.copy(points = polyline.points.reversed()) }
+                } else {
+                    polylines
+                }
+            }
 
         return RouteSelectedRouteUiState(
             routeOption = routeOption,
@@ -1648,6 +1656,7 @@ class RouteSettingViewModel(
             detailAccessibilityChips = buildDetailAccessibilityChips(),
             detailHighlights = buildDetailHighlights(aggregateFlags),
             detailSteps = buildDetailSteps(hasUsableDetailSteps = hasUsableDetailSteps),
+            detailPolylines = detailPolylines,
             detailFallbackMessage = if (hasUsableDetailSteps) null else ROUTE_DETAIL_FALLBACK_MESSAGE,
             lowFloorReservations =
                 legs
@@ -1663,6 +1672,28 @@ class RouteSettingViewModel(
                     },
         )
     }
+
+    private fun RouteCandidate.buildDetailPolylines(): List<RouteDetailPolylineUiState> =
+        segments
+            .filter(RouteSegment::hasRenderablePolyline)
+            .sortedBy(RouteSegment::sequence)
+            .map { segment ->
+                RouteDetailPolylineUiState(
+                    points = segment.polyline.points,
+                    kind = segment.resolveSourceLeg(legs = legs)?.type.toRouteDetailPolylineKind(),
+                )
+            }
+            .ifEmpty {
+                legs
+                    .filter(RouteLeg::hasRenderablePolyline)
+                    .sortedBy(RouteLeg::sequence)
+                    .map { leg ->
+                        RouteDetailPolylineUiState(
+                            points = leg.polyline.points,
+                            kind = leg.type.toRouteDetailPolylineKind(),
+                        )
+                    }
+            }
 
     private fun RouteCandidate.routeBadges(includeSafePriority: Boolean): List<RouteOptionBadge> {
         val aggregateFlags = aggregateSafetyFlags()
@@ -2164,6 +2195,17 @@ private fun RouteOption.toOptionTitle(): String =
         RouteOption.RECOMMENDED -> OPTION_TITLE_RECOMMENDED
         RouteOption.MIN_TRANSFER -> OPTION_TITLE_MIN_TRANSFER
         RouteOption.MIN_WALK -> OPTION_TITLE_MIN_WALK
+    }
+
+private fun RouteLegType?.toRouteDetailPolylineKind(): RouteDetailPolylineKind =
+    when (this) {
+        RouteLegType.BUS,
+        RouteLegType.SUBWAY,
+            -> RouteDetailPolylineKind.TRANSIT
+
+        RouteLegType.WALK,
+        null,
+            -> RouteDetailPolylineKind.WALK
     }
 
 private fun List<RouteSegment>.hasUsableDetailSteps(): Boolean =

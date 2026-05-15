@@ -568,6 +568,28 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `transit detail walk route line uses the confirmed blue token`() {
+        val routeLineStates =
+            createKakaoRouteLineRenderStates(
+                listOf(
+                    MapViewportPolylineOverlay(
+                        overlayId = "route-detail-walk",
+                        points =
+                            listOf(
+                                MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            ),
+                        style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                        tone = MapViewportOverlayTone.TRANSIT_WALK,
+                    ),
+                ),
+            )
+
+        assertEquals(0xFF0061FE.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFF0061FE.toInt(), routeLineStates.single().strokeColor)
+    }
+
+    @Test
     fun `route camera render state fits only projection-included route geometry`() {
         val cameraState =
             createKakaoRouteCameraRenderState(

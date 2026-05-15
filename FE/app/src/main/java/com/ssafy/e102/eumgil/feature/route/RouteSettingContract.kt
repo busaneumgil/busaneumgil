@@ -129,9 +129,20 @@ data class RouteSelectedRouteUiState(
     val detailAccessibilityChips: List<RouteDetailChipUiState> = emptyList(),
     val detailHighlights: List<RouteDetailHighlightUiState> = emptyList(),
     val detailSteps: List<RouteDetailStepUiState> = emptyList(),
+    val detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
     val detailFallbackMessage: String? = null,
     val lowFloorReservations: List<LowFloorBusReservation> = emptyList(),
 )
+
+data class RouteDetailPolylineUiState(
+    val points: List<GeoCoordinate>,
+    val kind: RouteDetailPolylineKind = RouteDetailPolylineKind.WALK,
+)
+
+enum class RouteDetailPolylineKind {
+    WALK,
+    TRANSIT,
+}
 
 data class RouteSummaryMetricUiState(
     val label: String,

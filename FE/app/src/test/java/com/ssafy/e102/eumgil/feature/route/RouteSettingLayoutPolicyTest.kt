@@ -398,6 +398,51 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `no route transit failure shows the Duribal call prompt card instead of a generic error action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val routeOptionSection =
+            source
+                .substringAfter("private fun RouteOptionSection(")
+                .substringBefore("@OptIn(ExperimentalLayoutApi::class)")
+
+        assertTrue(
+            "When the backend reports no route, the transit tab should surface a dedicated Duribal card with call and cancel actions.",
+            routeOptionSection.contains("RouteDuribalCallPromptCard(") &&
+                source.contains("private fun RouteDuribalCallPromptCard(") &&
+                source.contains("route_setting_duribal_call_prompt_title") &&
+                source.contains("route_setting_duribal_call_prompt_call") &&
+                source.contains("route_setting_duribal_call_prompt_cancel"),
+        )
+    }
+
+    @Test
+    fun `collapsed guide rails reserve viewport end padding so the destination can snap to the top card`() {
+        val routeDetailSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val navigationRailSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val routeDetailRailSection =
+            routeDetailSource
+                .substringAfter("private fun RouteDetailIconRail(")
+                .substringBefore("private data class RouteDetailRailPromotionSnapshot")
+
+        assertTrue(
+            "Route detail collapsed rail must reserve bottom padding from the current viewport height so the arrival icon can become the top card even after a fast fling.",
+            routeDetailRailSection.contains("BoxWithConstraints(") &&
+                routeDetailRailSection.contains("contentPadding = PaddingValues(bottom = routeDetailCollapsedRailEndSnapPadding)"),
+        )
+        assertTrue(
+            "Navigation collapsed rail must use the same viewport-derived end padding so the final destination segment can snap fully.",
+            navigationRailSource.contains("val navigationRailEndSnapPadding =") &&
+                navigationRailSource.contains("contentPadding = PaddingValues(bottom = navigationRailEndSnapPadding)"),
+        )
+    }
+
+    @Test
     fun `transit option timeline uses fixed radius transport icons and route option colors`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")

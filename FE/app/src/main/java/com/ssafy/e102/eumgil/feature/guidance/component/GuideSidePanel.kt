@@ -357,15 +357,17 @@ internal fun resolveGuideRailPromotedItemIndex(
     itemCount: Int,
 ): Int? {
     if (itemCount <= 0) return null
-    if (firstVisibleItemIndex !in 0 until itemCount) return null
-    if (firstVisibleItemSizePx <= 0) return firstVisibleItemIndex
+    if (firstVisibleItemIndex < 0) return null
+
+    val clampedFirstVisibleItemIndex = firstVisibleItemIndex.coerceAtMost(itemCount - 1)
+    if (firstVisibleItemSizePx <= 0) return clampedFirstVisibleItemIndex
 
     val shouldPromoteNext =
         firstVisibleItemScrollOffset.coerceAtLeast(0) * 2 > firstVisibleItemSizePx
     return if (shouldPromoteNext) {
-        (firstVisibleItemIndex + 1).coerceAtMost(itemCount - 1)
+        (clampedFirstVisibleItemIndex + 1).coerceAtMost(itemCount - 1)
     } else {
-        firstVisibleItemIndex
+        clampedFirstVisibleItemIndex
     }
 }
 

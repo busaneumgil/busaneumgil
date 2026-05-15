@@ -178,6 +178,19 @@ class GuideSidePanelPolicyTest {
     }
 
     @Test
+    fun `rail promotion clamps fast fling beyond the last guide item to the destination`() {
+        assertEquals(
+            3,
+            resolveGuideRailPromotedItemIndex(
+                firstVisibleItemIndex = 6,
+                firstVisibleItemScrollOffset = 12,
+                firstVisibleItemSizePx = 56,
+                itemCount = 4,
+            ),
+        )
+    }
+
+    @Test
     fun `rail item promoted to the top card is hidden from the rail`() {
         assertTrue(shouldHideGuideRailItemForTopCard(itemIndex = 2, promotedItemIndex = 2))
         assertFalse(shouldHideGuideRailItemForTopCard(itemIndex = 1, promotedItemIndex = 2))

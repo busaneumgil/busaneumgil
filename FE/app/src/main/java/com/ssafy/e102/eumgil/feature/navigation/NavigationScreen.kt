@@ -331,7 +331,7 @@ internal fun navigationUsesEmptyWindowInsets(): Boolean = true
 internal fun navigationSidePanelPolicy(): NavigationSidePanelPolicy =
     NavigationSidePanelPolicy(
         swipeAxis = NavigationSidePanelSwipeAxis.Horizontal,
-        swipeThresholdPx = NavigationSidePanelSwipeThresholdPx,
+        swipeThresholdPx = 80f,
         showsExpandedScrim = true,
         collapseOnSegmentTap = true,
         showsProgressHeader = false,
@@ -1289,7 +1289,6 @@ private val NavigationMapMarkerSize = 38.dp
 private val NavigationBottomBarButtonHeight = 50.dp
 private val NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val NavigationBottomBarBottomGap = 30.dp
-private const val NavigationSidePanelSwipeThresholdPx = 80f
 private val NavigationExpandedSidePanelScrimColor = Color(0x66000000)
 private val NavigationTransitTagCornerRadius = 10.dp
 private val NavigationTransitTagStrokeWidth = 0.5.dp

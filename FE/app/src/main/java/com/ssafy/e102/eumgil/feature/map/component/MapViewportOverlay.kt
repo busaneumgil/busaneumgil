@@ -101,6 +101,7 @@ internal enum class MapViewportOverlayTone {
     TERTIARY,
     NEUTRAL,
     NAVY,
+    TRANSIT_WALK,
     ERROR,
 }
 
@@ -161,6 +162,7 @@ internal fun createMapMarkerViewportOverlayState(
 internal fun createRoutePreviewViewportOverlayState(
     previewMap: RoutePreviewMapUiState,
     routeTone: MapViewportOverlayTone = previewMap.routeOption.toViewportOverlayTone(),
+    routePolylineOverlays: List<MapViewportPolylineOverlay> = emptyList(),
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
     focusSelectedGuidanceMarker: Boolean = false,
     showDetailedRouteOverlay: Boolean = true,
@@ -214,7 +216,8 @@ internal fun createRoutePreviewViewportOverlayState(
                 }
             },
         polylines =
-            listOf(
+            routePolylineOverlays.ifEmpty {
+                listOf(
                 MapViewportPolylineOverlay(
                     overlayId = "route-preview",
                     points = previewMap.polyline.map(GeoCoordinate::toMapCoordinate),
@@ -223,7 +226,8 @@ internal fun createRoutePreviewViewportOverlayState(
                     includeInProjection = !focusSelectedGuidanceMarker,
                     showDirectionArrows = showDetailedRouteOverlay,
                 ),
-            ).filter(MapViewportPolylineOverlay::isRenderable),
+                )
+            }.filter(MapViewportPolylineOverlay::isRenderable),
     )
 }
 
@@ -554,6 +558,12 @@ internal fun MapViewportOverlayTone.toSegmentMarkerPalette(): MapViewportSegment
             MapViewportSegmentMarkerPalette(
                 fillColorArgb = 0xFF304583.toInt(),
                 strokeColorArgb = 0xFF1E2C5A.toInt(),
+            )
+
+        MapViewportOverlayTone.TRANSIT_WALK ->
+            MapViewportSegmentMarkerPalette(
+                fillColorArgb = 0xFF0061FE.toInt(),
+                strokeColorArgb = 0xFF004CC8.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->

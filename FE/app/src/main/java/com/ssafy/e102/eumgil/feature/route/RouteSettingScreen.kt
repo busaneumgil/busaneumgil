@@ -123,6 +123,8 @@ import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayTone
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointOverlay
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportPolylineOverlay
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportPolylineStyle
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarker
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerLeg
@@ -155,6 +157,13 @@ fun RouteSettingScreen(
             uiState.cta.supportingText
         }
     val disablesDefaultWindowInsets = routeSettingUsesEmptyWindowInsets()
+    var isDuribalPromptDismissed by remember(
+        uiState.selectedTravelMode,
+        uiState.loadErrorMessage,
+        uiState.showsDuribalCallAction,
+    ) {
+        mutableStateOf(false)
+    }
 
     Scaffold(
         modifier = modifier,
@@ -207,7 +216,9 @@ fun RouteSettingScreen(
                     RouteSettingRouteSheet(
                         uiState = uiState,
                         onLowFloorReservationClick = onLowFloorReservationClick,
-                        onDuribalCallClick = onDuribalCallClick,
+                        onDuribalCallClick = onDuribalConfirm,
+                        onDuribalCancelClick = { isDuribalPromptDismissed = true },
+                        showDuribalCallPrompt = !isDuribalPromptDismissed,
                         onOptionClick = { routeOption ->
                             onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
                         },
@@ -301,11 +312,12 @@ fun RouteDetailScreen(
                     }
                 }
 
-            RouteMapBackdrop(
-                previewMap = uiState.routePreviewMap,
-                routePath = detailRoutePath,
-                guidanceMarkers = guidanceMarkers,
-                onMarkerClick = { markerId ->
+                RouteMapBackdrop(
+                    previewMap = uiState.routePreviewMap,
+                    routePath = detailRoutePath,
+                    detailPolylines = selectedRoute?.detailPolylines.orEmpty(),
+                    guidanceMarkers = guidanceMarkers,
+                    onMarkerClick = { markerId ->
                     focusedDetailStepIndex = markerId.routeDetailStepMarkerIndexOrNull()
                     if (focusedDetailStepIndex != null) {
                         isDetailSidePanelExpanded = false
@@ -978,7 +990,8 @@ private fun RouteDetailIconRail(
                 if (snapshot.shouldSnapToPromotedStep()) {
                     snapshot.promotedStepIndex?.let { index ->
                         hiddenRailStepIndex = index
-                        listState.animateScrollToItem(index)
+                        listState.animateScrollToItem(index, scrollOffset = 0)
+                        listState.scrollToItem(index, scrollOffset = 0)
                     }
                 } else if (
                     hiddenRailStepIndex != null &&
@@ -990,43 +1003,51 @@ private fun RouteDetailIconRail(
             }
     }
 
-    LazyColumn(
+    BoxWithConstraints(
         modifier =
             modifier
                 .fillMaxWidth()
                 .padding(vertical = EumSpacing.small),
-        state = listState,
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        itemsIndexed(
-            items = steps,
-            key = { index, step -> "route-detail-rail-$index-${step.kind}-${step.indexLabel}" },
-        ) { index, step ->
-            val isFocused = focusedStepIndex == index
-            GuideCollapsedRailItem(
-                action = step.kind.toNavigationGuidanceAction(),
-                isOrigin = step.kind == RouteDetailStepKind.START,
-                isDestination = step.kind == RouteDetailStepKind.ARRIVAL,
-                isFocused = isFocused,
-                isSelected = isFocused,
-                contentDescription = "${step.title} ${step.description}",
-                stateDescription = if (isFocused) "focused guide step" else "guide step",
-                dividerColor = RouteDetailGuideDividerColor,
-                height = RouteDetailCollapsedRailItemSize,
-                isContentHidden = shouldHideGuideRailItemForTopCard(index, hiddenRailStepIndex),
-                onClick = { onStepClick(index) },
-                modifier = Modifier.size(RouteDetailCollapsedRailItemSize),
-            )
-        }
-        item(key = "route-detail-rail-scroll-top") {
-            RouteDetailCollapsedRailScrollTopAction(
-                onClick = {
-                    coroutineScope.launch {
-                        listState.animateScrollToItem(0)
-                        onStepClick(0)
-                    }
-                },
-            )
+        val routeDetailCollapsedRailEndSnapPadding =
+            (maxHeight - RouteDetailCollapsedRailItemSize).coerceAtLeast(0.dp)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(bottom = routeDetailCollapsedRailEndSnapPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            itemsIndexed(
+                items = steps,
+                key = { index, step -> "route-detail-rail-$index-${step.kind}-${step.indexLabel}" },
+            ) { index, step ->
+                val isFocused = focusedStepIndex == index
+                GuideCollapsedRailItem(
+                    action = step.kind.toNavigationGuidanceAction(),
+                    isOrigin = step.kind == RouteDetailStepKind.START,
+                    isDestination = step.kind == RouteDetailStepKind.ARRIVAL,
+                    isFocused = isFocused,
+                    isSelected = isFocused,
+                    contentDescription = "${step.title} ${step.description}",
+                    stateDescription = if (isFocused) "focused guide step" else "guide step",
+                    dividerColor = RouteDetailGuideDividerColor,
+                    height = RouteDetailCollapsedRailItemSize,
+                    isContentHidden = shouldHideGuideRailItemForTopCard(index, hiddenRailStepIndex),
+                    onClick = { onStepClick(index) },
+                    modifier = Modifier.size(RouteDetailCollapsedRailItemSize),
+                )
+            }
+            item(key = "route-detail-rail-scroll-top") {
+                RouteDetailCollapsedRailScrollTopAction(
+                    onClick = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(0, scrollOffset = 0)
+                            listState.scrollToItem(0, scrollOffset = 0)
+                            onStepClick(0)
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -1041,7 +1062,7 @@ private data class RouteDetailRailPromotionSnapshot(
     fun shouldSnapToPromotedStep(): Boolean =
         promotedStepIndex != null &&
             !isScrollInProgress &&
-            firstVisibleItemScrollOffset > 0
+            (firstVisibleItemScrollOffset > 0 || firstVisibleItemIndex != promotedStepIndex)
 }
 
 @Composable
@@ -3152,6 +3173,8 @@ private fun RouteSettingRouteSheet(
     uiState: RouteSettingUiState,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
+    onDuribalCancelClick: () -> Unit,
+    showDuribalCallPrompt: Boolean,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
@@ -3181,6 +3204,8 @@ private fun RouteSettingRouteSheet(
                 uiState = uiState,
                 onLowFloorReservationClick = onLowFloorReservationClick,
                 onDuribalCallClick = onDuribalCallClick,
+                onDuribalCancelClick = onDuribalCancelClick,
+                showDuribalCallPrompt = showDuribalCallPrompt,
                 onOptionClick = onOptionClick,
                 onOptionDetailClick = onOptionDetailClick,
             )
@@ -3193,6 +3218,8 @@ private fun RouteOptionSection(
     uiState: RouteSettingUiState,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
+    onDuribalCancelClick: () -> Unit,
+    showDuribalCallPrompt: Boolean,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
@@ -3203,22 +3230,16 @@ private fun RouteOptionSection(
             uiState.isLoading && uiState.optionCards.isEmpty() ->
                 RouteSearchLoadingState()
 
+            uiState.loadErrorMessage != null && uiState.showsDuribalCallAction && showDuribalCallPrompt ->
+                RouteDuribalCallPromptCard(
+                    onCallClick = onDuribalCallClick,
+                    onCancelClick = onDuribalCancelClick,
+                )
+
             uiState.loadErrorMessage != null ->
                 RouteStateCard(
                     title = stringResource(id = R.string.route_setting_summary_error_title),
                     description = uiState.loadErrorMessage,
-                    actionLabel =
-                        if (uiState.showsDuribalCallAction) {
-                            stringResource(id = R.string.route_setting_duribal_call_action)
-                        } else {
-                            null
-                        },
-                    onActionClick =
-                        if (uiState.showsDuribalCallAction) {
-                            onDuribalCallClick
-                        } else {
-                            null
-                        },
                     containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.32f),
                     borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.24f),
                 )
@@ -3245,6 +3266,66 @@ private fun RouteOptionSection(
                         )
                     }
                 }
+        }
+    }
+}
+
+@Composable
+private fun RouteDuribalCallPromptCard(
+    onCallClick: () -> Unit,
+    onCancelClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(RouteStandardCardCornerRadius),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)),
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Text(
+                text = stringResource(id = R.string.route_setting_duribal_call_prompt_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(id = R.string.route_setting_duribal_call_prompt_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onCancelClick) {
+                    Text(text = stringResource(id = R.string.route_setting_duribal_call_prompt_cancel))
+                }
+                Button(
+                    onClick = onCallClick,
+                    shape = RoundedCornerShape(RouteButtonCornerRadius),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = EumPrimary600,
+                            contentColor = EumWhite,
+                        ),
+                    elevation =
+                        ButtonDefaults.buttonElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp,
+                            disabledElevation = 0.dp,
+                        ),
+                ) {
+                    Text(text = stringResource(id = R.string.route_setting_duribal_call_prompt_call))
+                }
+            }
         }
     }
 }
@@ -3916,12 +3997,18 @@ private fun RouteSettingCtaContent(
 private fun RouteMapBackdrop(
     previewMap: RoutePreviewMapUiState,
     routePath: List<GeoCoordinate>,
+    detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
     onMarkerClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.route_setting_preview_title)
     val hasFocusedGuidanceMarker = guidanceMarkers.any { marker -> marker.isSelected }
+    val routePolylineOverlays =
+        detailPolylines.toRouteDetailPolylineOverlays(
+            includeInProjection = !hasFocusedGuidanceMarker,
+            showDirectionArrows = hasFocusedGuidanceMarker,
+        )
     MapOverlayViewport(
         overlayState =
             createRoutePreviewViewportOverlayState(
@@ -3934,6 +4021,7 @@ private fun RouteMapBackdrop(
                                 previewMap.polyline
                             },
                     ),
+                routePolylineOverlays = routePolylineOverlays,
                 guidanceMarkers = guidanceMarkers,
                 focusSelectedGuidanceMarker = hasFocusedGuidanceMarker,
                 showDetailedRouteOverlay = hasFocusedGuidanceMarker,
@@ -3943,6 +4031,28 @@ private fun RouteMapBackdrop(
         onMarkerClick = onMarkerClick,
     )
 }
+
+private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays(
+    includeInProjection: Boolean,
+    showDirectionArrows: Boolean,
+): List<MapViewportPolylineOverlay> =
+    mapIndexedNotNull { index, detailPolyline ->
+        if (detailPolyline.points.size < 2) return@mapIndexedNotNull null
+        MapViewportPolylineOverlay(
+            overlayId = "route-detail-${detailPolyline.kind.name.lowercase(Locale.US)}-$index",
+            points = detailPolyline.points.map { point -> MapCoordinate(latitude = point.latitude, longitude = point.longitude) },
+            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+            tone = detailPolyline.kind.toMapViewportOverlayTone(),
+            includeInProjection = includeInProjection,
+            showDirectionArrows = showDirectionArrows,
+        )
+    }
+
+private fun RouteDetailPolylineKind.toMapViewportOverlayTone(): MapViewportOverlayTone =
+    when (this) {
+        RouteDetailPolylineKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
+        RouteDetailPolylineKind.TRANSIT -> MapViewportOverlayTone.NAVY
+    }
 
 @Composable
 private fun RoutePreviewMapMarker(

@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -114,7 +116,8 @@ fun NavigationSegmentRail(
                 if (snapshot.shouldSnapToPromotedItem()) {
                     snapshot.promotedItemPosition?.let { position ->
                         hiddenRailItemPosition = position
-                        listState.animateScrollToItem(position)
+                        listState.animateScrollToItem(position, scrollOffset = 0)
+                        listState.scrollToItem(position, scrollOffset = 0)
                     }
                 } else if (
                     hiddenRailItemPosition != null &&
@@ -134,65 +137,73 @@ fun NavigationSegmentRail(
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
-            LazyColumn(
+            BoxWithConstraints(
                 modifier =
                     Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                state = listState,
             ) {
-                items(items = listOf("navigation-rail-start"), key = { it }) {
-                    NavigationSegmentRailWaypoint(
-                        label = stringResource(id = R.string.navigation_rail_origin_label),
-                        iconRes = R.drawable.ic_navigation_rail_origin_pin,
-                        segmentItem = railSlots.originItem,
-                        dividerColor = dividerColor,
-                        isContentHidden =
-                            railSlots.originItem?.index?.let { index ->
-                                shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
-                            } == true,
-                        onClick = {
-                            railSlots.originItem?.index?.let(onSegmentTapped)
-                        },
-                    )
-                }
-                items(items = railSlots.intermediateItems, key = { item -> item.index }) { item ->
-                    NavigationSegmentRailItem(
-                        item = item,
-                        dividerColor = dividerColor,
-                        isContentHidden = shouldHideGuideRailItemForTopCard(item.index, hiddenSegmentIndex),
-                        onClick = { onSegmentTapped(item.index) },
-                    )
-                }
-                items(items = listOf("navigation-rail-destination"), key = { it }) {
-                    NavigationSegmentRailWaypoint(
-                        label = stringResource(id = R.string.navigation_rail_destination_label),
-                        iconRes = R.drawable.ic_navigation_rail_destination_pin,
-                        segmentItem = railSlots.destinationItem,
-                        dividerColor = dividerColor,
-                        isContentHidden =
-                            railSlots.destinationItem?.index?.let { index ->
-                                shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
-                            } == true,
-                        onClick = {
-                            railSlots.destinationItem?.index?.let(onSegmentTapped)
-                        },
-                    )
-                }
-                items(items = listOf("navigation-rail-return"), key = { it }) {
-                    NavigationSegmentRailReturnAction(
-                        enabled = railSlots.canReturnToActiveSegment,
-                        dividerColor = dividerColor,
-                        onClick = {
-                            coroutineScope.launch {
-                                returnTargetItemPosition?.let { position ->
-                                    listState.animateScrollToItem(position)
+                val navigationRailEndSnapPadding =
+                    (maxHeight - NavigationSegmentRailItemHeight).coerceAtLeast(0.dp)
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = navigationRailEndSnapPadding),
+                ) {
+                    items(items = listOf("navigation-rail-start"), key = { it }) {
+                        NavigationSegmentRailWaypoint(
+                            label = stringResource(id = R.string.navigation_rail_origin_label),
+                            iconRes = R.drawable.ic_navigation_rail_origin_pin,
+                            segmentItem = railSlots.originItem,
+                            dividerColor = dividerColor,
+                            isContentHidden =
+                                railSlots.originItem?.index?.let { index ->
+                                    shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
+                                } == true,
+                            onClick = {
+                                railSlots.originItem?.index?.let(onSegmentTapped)
+                            },
+                        )
+                    }
+                    items(items = railSlots.intermediateItems, key = { item -> item.index }) { item ->
+                        NavigationSegmentRailItem(
+                            item = item,
+                            dividerColor = dividerColor,
+                            isContentHidden = shouldHideGuideRailItemForTopCard(item.index, hiddenSegmentIndex),
+                            onClick = { onSegmentTapped(item.index) },
+                        )
+                    }
+                    items(items = listOf("navigation-rail-destination"), key = { it }) {
+                        NavigationSegmentRailWaypoint(
+                            label = stringResource(id = R.string.navigation_rail_destination_label),
+                            iconRes = R.drawable.ic_navigation_rail_destination_pin,
+                            segmentItem = railSlots.destinationItem,
+                            dividerColor = dividerColor,
+                            isContentHidden =
+                                railSlots.destinationItem?.index?.let { index ->
+                                    shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
+                                } == true,
+                            onClick = {
+                                railSlots.destinationItem?.index?.let(onSegmentTapped)
+                            },
+                        )
+                    }
+                    items(items = listOf("navigation-rail-return"), key = { it }) {
+                        NavigationSegmentRailReturnAction(
+                            enabled = railSlots.canReturnToActiveSegment,
+                            dividerColor = dividerColor,
+                            onClick = {
+                                coroutineScope.launch {
+                                    returnTargetItemPosition?.let { position ->
+                                        listState.animateScrollToItem(position, scrollOffset = 0)
+                                        listState.scrollToItem(position, scrollOffset = 0)
+                                    }
+                                    returnTargetSegmentIndex?.let(onSegmentTapped)
+                                        ?: onReturnToActiveSegmentClick()
                                 }
-                                returnTargetSegmentIndex?.let(onSegmentTapped)
-                                    ?: onReturnToActiveSegmentClick()
-                            }
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
             }
             NavigationSegmentRailDetailAction(
@@ -443,7 +454,7 @@ private data class NavigationRailPromotionSnapshot(
     fun shouldSnapToPromotedItem(): Boolean =
         promotedItemPosition != null &&
             !isScrollInProgress &&
-            firstVisibleItemScrollOffset > 0
+            (firstVisibleItemScrollOffset > 0 || firstVisibleItemIndex != promotedItemPosition)
 }
 
 private val NavigationSegmentRailItemHeight = 84.dp

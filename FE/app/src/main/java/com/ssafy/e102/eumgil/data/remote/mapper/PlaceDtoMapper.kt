@@ -5,12 +5,14 @@ import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
+import com.ssafy.e102.eumgil.core.model.PlaceTransitArrival
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceAccessibilityFeatureDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlacePointDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceSummaryDto
+import com.ssafy.e102.eumgil.data.remote.dto.PlaceTransitArrivalDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlacesBrowseDto
 import com.ssafy.e102.eumgil.data.remote.dto.MapPlaceDetailDto
 import org.json.JSONArray
@@ -94,6 +96,7 @@ internal object PlaceDtoMapper {
             isBookmarked = dto.isBookmarked,
             accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
             phoneNumber = dto.phone?.takeIf { phone -> phone.isNotBlank() },
+            transitArrivals = dto.transitArrivals.map { arrival -> arrival.toDomain() },
             description = dto.description?.takeIf { description -> description.isNotBlank() },
         )
     }
@@ -197,11 +200,39 @@ internal object PlaceDtoMapper {
                 optJSONArray("accessibilityFeatures")
                     ?.let(::toAccessibilityFeatureDtos)
                     .orEmpty(),
+            transitArrivals =
+                optJSONArray("transitArrivals")
+                    ?.let(::toTransitArrivalDtos)
+                    .orEmpty(),
             isBookmarked = optBoolean("isBookmarked"),
             phone = optNullableString("phone"),
             description = optNullableString("description"),
         )
     }
+
+    private fun toTransitArrivalDtos(arrivalsJson: JSONArray): List<PlaceTransitArrivalDto> =
+        List(arrivalsJson.length()) { index ->
+            arrivalsJson.getJSONObject(index).let { arrivalJson ->
+                PlaceTransitArrivalDto(
+                    transitType = arrivalJson.optString("transitType"),
+                    routeName = arrivalJson.optString("routeName"),
+                    direction = arrivalJson.optNullableString("direction"),
+                    remainingMinute = arrivalJson.optNullableInt("remainingMinute"),
+                    isLowFloor = arrivalJson.optNullableBoolean("isLowFloor"),
+                    source = arrivalJson.optNullableString("source"),
+                )
+            }
+        }
+
+    private fun PlaceTransitArrivalDto.toDomain(): PlaceTransitArrival =
+        PlaceTransitArrival(
+            transitType = transitType,
+            routeName = routeName,
+            direction = direction?.takeIf { value -> value.isNotBlank() },
+            remainingMinute = remainingMinute,
+            isLowFloor = isLowFloor,
+            source = source?.takeIf { value -> value.isNotBlank() },
+        )
 
     private fun toAccessibilityFeatureDtos(featuresJson: JSONArray): List<PlaceAccessibilityFeatureDto> =
         List(featuresJson.length()) { index ->
@@ -225,6 +256,20 @@ internal object PlaceDtoMapper {
             null
         } else {
             optLong(name)
+        }
+
+    private fun JSONObject.optNullableInt(name: String): Int? =
+        if (isNull(name) || has(name).not()) {
+            null
+        } else {
+            optInt(name)
+        }
+
+    private fun JSONObject.optNullableBoolean(name: String): Boolean? =
+        if (isNull(name) || has(name).not()) {
+            null
+        } else {
+            optBoolean(name)
         }
 
     private fun String.toMapPlaceDetailType(): MapPlaceDetailType =

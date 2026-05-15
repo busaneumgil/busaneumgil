@@ -5,9 +5,6 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,8 +43,7 @@ class BusStopMasterServiceTest {
 		busStopMasterService = new BusStopMasterService(
 			busStopRepository,
 			busanBimsClient,
-			geoPointConverter,
-			Clock.fixed(Instant.parse("2026-05-14T00:00:00Z"), ZoneId.of("Asia/Seoul")));
+			geoPointConverter);
 	}
 
 	@Test

@@ -259,6 +259,16 @@ class PlacesRemoteDataSourceTest {
                                         "isAvailable": true
                                       }
                                     ],
+                                    "transitArrivals": [
+                                      {
+                                        "transitType": "BUS",
+                                        "routeName": "100",
+                                        "direction": null,
+                                        "remainingMinute": 6,
+                                        "isLowFloor": true,
+                                        "source": "REALTIME"
+                                      }
+                                    ],
                                     "isBookmarked": false,
                                     "description": "External Kakao POI"
                                   },
@@ -299,6 +309,8 @@ class PlacesRemoteDataSourceTest {
             assertEquals("Kakao Cafe", detail?.name)
             assertEquals("10 Cafe-ro, Busan", detail?.address)
             assertEquals(listOf("step-free-entrance"), detail?.accessibilityTags)
+            assertEquals("100", detail?.transitArrivals?.single()?.routeName)
+            assertEquals(6, detail?.transitArrivals?.single()?.remainingMinute)
             assertEquals("External Kakao POI", detail?.description)
         }
 }

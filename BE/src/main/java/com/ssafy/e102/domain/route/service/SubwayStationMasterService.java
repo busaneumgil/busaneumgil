@@ -59,6 +59,21 @@ public class SubwayStationMasterService {
 			.map(match -> toPlaceDetail(match.station(), stations));
 	}
 
+	public Optional<SubwayStationPlaceDetail> findNearestPlaceDetail(
+		double lat,
+		double lng,
+		double maxDistanceMeter) {
+		List<SubwayStation> stations = loadStations();
+		return stations.stream()
+			.filter(station -> station.getPoint() != null)
+			.map(station -> new SubwayStationMatch(
+				station,
+				GeoDistanceCalculator.distanceMeter(lat, lng, station.getPoint().getY(), station.getPoint().getX())))
+			.filter(match -> match.distanceMeter() <= maxDistanceMeter)
+			.min(Comparator.comparingDouble(SubwayStationMatch::distanceMeter))
+			.map(match -> toPlaceDetail(match.station(), stations));
+	}
+
 	private List<SubwayStation> loadStations() {
 		try {
 			return subwayStationRepository.findAll();
@@ -72,6 +87,7 @@ public class SubwayStationMasterService {
 		List<SubwayStation> stationGroup = stationGroup(matchedStation, stations);
 		return new SubwayStationPlaceDetail(
 			matchedStation,
+			stationGroup,
 			groupProviderPlaceId(stationGroup),
 			lineNames(stationGroup),
 			resolveAccessibilityFeatures(stationGroup));
@@ -165,6 +181,7 @@ public class SubwayStationMasterService {
 
 	public record SubwayStationPlaceDetail(
 		SubwayStation station,
+		List<SubwayStation> stationGroup,
 		String groupProviderPlaceId,
 		List<String> lineNames,
 		List<SubwayAccessibilityFeature> accessibilityFeatures) {

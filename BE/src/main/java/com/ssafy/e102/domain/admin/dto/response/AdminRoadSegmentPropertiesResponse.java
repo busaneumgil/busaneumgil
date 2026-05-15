@@ -23,6 +23,10 @@ public record AdminRoadSegmentPropertiesResponse(
 	SegmentType segmentType,
 	@Schema(description = "길이 meter", example = "12.35")
 	BigDecimal lengthMeter,
+	@Schema(description = "평균 경사도 percent", example = "3.25")
+	BigDecimal avgSlopePercent,
+	@Schema(description = "보도 폭 meter", example = "1.50")
+	BigDecimal widthMeter,
 	AccessibilityState walkAccess,
 	AccessibilityState brailleBlockState,
 	AccessibilityState audioSignalState,

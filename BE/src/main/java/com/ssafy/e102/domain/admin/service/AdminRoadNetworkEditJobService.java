@@ -4,6 +4,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.core.task.TaskExecutor;
@@ -21,6 +23,9 @@ import com.ssafy.e102.global.exception.CommonErrorCode;
 
 @Service
 public class AdminRoadNetworkEditJobService {
+
+	private static final Logger log = LoggerFactory.getLogger(AdminRoadNetworkEditJobService.class);
+	private static final String EDIT_JOB_FAILED_MESSAGE = "편집 반영에 실패했습니다. 서버 로그를 확인해주세요.";
 
 	private final JdbcTemplate jdbcTemplate;
 	private final ObjectMapper objectMapper;
@@ -142,7 +147,8 @@ public class AdminRoadNetworkEditJobService {
 	}
 
 	private void markFailed(Long jobId, Exception exception) {
-		markFailed(jobId, exception.getMessage());
+		log.error("event=admin_road_network_edit_job_failed jobId={}", jobId, exception);
+		markFailed(jobId, EDIT_JOB_FAILED_MESSAGE);
 	}
 
 	private void markFailed(Long jobId, String errorMessage) {

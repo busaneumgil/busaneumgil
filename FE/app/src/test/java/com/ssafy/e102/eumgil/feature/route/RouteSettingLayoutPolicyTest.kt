@@ -194,8 +194,8 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
         val ctaSection =
             source
-                .substringAfter("private fun RouteSettingCtaContent(")
-                .substringBefore("@Composable\nprivate fun RouteMapBackdrop")
+                .substringAfter("private fun RouteSettingBottomBar(")
+                .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
         val carouselSection =
             source
                 .substringAfter("private fun RouteWalkPreviewCarousel(")
@@ -235,8 +235,8 @@ class RouteSettingLayoutPolicyTest {
             "Route start CTA should keep the requested 30dp bottom gap.",
             source.contains("RouteSettingBottomBarBottomGap = 30.dp"),
         )
-        assertFalse(
-            "Route start CTA should not add navigation bar inset on top of the explicit 30dp app-bottom gap.",
+        assertTrue(
+            "Route start CTA should reserve the system navigation safe zone before the explicit 30dp app-bottom gap.",
             ctaSection.contains(".navigationBarsPadding()"),
         )
     }

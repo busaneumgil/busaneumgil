@@ -4,6 +4,7 @@ import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, t
 import { facilityCategoryColor, facilityCategoryLabel } from "./facilityStyle";
 import { roadviewUnavailableMessage } from "./roadviewMode";
 import type { RoadviewDockState } from "./SegmentMap";
+import type { PlaceCategory } from "../types";
 
 interface FacilityMapProps {
   payload?: FacilityPayload;
@@ -19,6 +20,7 @@ interface FacilityMapProps {
 
 const ROADVIEW_DEFAULT_MESSAGE = "편의시설 점을 클릭하면 근처 Roadview를 엽니다.";
 const ROADVIEW_MAP_CLICK_MESSAGE = "지도에서 클릭한 지점 근처 Roadview를 엽니다.";
+const facilityCategories: PlaceCategory[] = ["PUBLIC_OFFICE", "WELFARE", "HEALTHCARE", "TOURIST_SPOT", "FOOD_CAFE", "ACCOMMODATION", "ETC"];
 
 export function FacilityMap({
   payload,
@@ -44,8 +46,18 @@ export function FacilityMap({
   const onSelectFeatureRef = useRef(onSelectFeature);
   const locationPickEnabledRef = useRef(locationPickEnabled);
   const onPickLocationRef = useRef(onPickLocation);
+  const centeredPayloadKeyRef = useRef<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [categoryLayers, setCategoryLayers] = useState<Record<PlaceCategory, boolean>>({
+    PUBLIC_OFFICE: true,
+    WELFARE: true,
+    HEALTHCARE: true,
+    TOURIST_SPOT: true,
+    FOOD_CAFE: true,
+    ACCOMMODATION: true,
+    ETC: true,
+  });
 
   useEffect(() => {
     onSelectFeatureRef.current = onSelectFeature;
@@ -97,7 +109,8 @@ export function FacilityMap({
     tooltipRef.current?.setMap(null);
     tooltipRef.current = null;
 
-    const features = payload?.facilities.features ?? [];
+    const allFeatures = payload?.facilities.features ?? [];
+    const features = allFeatures.filter((feature) => categoryLayers[feature.properties.category] ?? true);
     features.forEach((feature) => {
       const overlay = createFacilityOverlay(feature, mapRef.current!, {
         onClick: () => {
@@ -110,20 +123,12 @@ export function FacilityMap({
       });
       if (overlay) overlaysRef.current.push(overlay);
     });
+    if (selectedFeature && (categoryLayers[selectedFeature.properties.category] ?? true)) {
+      drawSelectedFeature(selectedFeature);
+    }
 
-    const bbox = payload?.bbox;
-    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
-      const bounds = new window.kakao.maps.LatLngBounds();
-      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
-      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
-      mapRef.current.setBounds(bounds);
-      return;
-    }
-    const firstCoord = features[0]?.geometry.coordinates;
-    if (firstCoord) {
-      mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
-    }
-  }, [mapReady, payload]);
+    centerMapForPayloadOnce(features);
+  }, [categoryLayers, mapReady, payload, selectedFeature]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -173,6 +178,27 @@ export function FacilityMap({
       fillOpacity: 0.25,
       zIndex: 20,
     });
+  }
+
+  function centerMapForPayloadOnce(features: FacilityFeature[]) {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    const bbox = payload?.bbox;
+    const firstCoord = features[0]?.geometry.coordinates;
+    const nextKey = bbox ? bbox.join(",") : firstCoord?.join(",");
+    if (!nextKey || centeredPayloadKeyRef.current === nextKey) {
+      return;
+    }
+    centeredPayloadKeyRef.current = nextKey;
+    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
+      const bounds = new window.kakao.maps.LatLngBounds();
+      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
+      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
+      mapRef.current.setBounds(bounds);
+      return;
+    }
+    if (firstCoord) {
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
+    }
   }
 
   function closeRoadviewPanel() {
@@ -251,13 +277,20 @@ export function FacilityMap({
   }
 
   const visibleCounts = payload?.summary?.visibleCategoryCounts ?? {};
+  const visibleFacilityCount = (payload?.facilities.features ?? []).filter((feature) => categoryLayers[feature.properties.category] ?? true).length;
 
   return (
     <section className="map-shell">
       <div ref={containerRef} className="map-canvas" />
       <div className="map-toolbar attribute-legend">
-        {["PUBLIC_OFFICE", "WELFARE", "HEALTHCARE", "TOURIST_SPOT", "FOOD_CAFE", "ACCOMMODATION", "ETC"].map((category) => (
-          <LegendItem key={category} color={facilityCategoryColor(category)} label={`${facilityCategoryLabel(category)} ${visibleCounts[category] ?? 0}`} />
+        {facilityCategories.map((category) => (
+          <LegendItem
+            key={category}
+            color={facilityCategoryColor(category)}
+            label={`${facilityCategoryLabel(category)} ${visibleCounts[category] ?? 0}`}
+            active={categoryLayers[category]}
+            onClick={() => setCategoryLayers((layers) => ({ ...layers, [category]: !layers[category] }))}
+          />
         ))}
       </div>
       <div className="map-status">
@@ -267,7 +300,7 @@ export function FacilityMap({
             ? `편의시설 오류: ${error.message}`
             : mapError
               ? `지도 오류: ${mapError}`
-              : `${payload?.summary?.visibleFacilityCount ?? payload?.facilities.features.length ?? 0} facilities${selectedFeature ? ` · selected ${selectedFeature.properties.placeId}` : ""}`}
+              : `${visibleFacilityCount} / ${payload?.summary?.visibleFacilityCount ?? payload?.facilities.features.length ?? 0} facilities${selectedFeature ? ` · selected ${selectedFeature.properties.placeId}` : ""}`}
       </div>
     </section>
   );
@@ -304,12 +337,12 @@ function createFacilityOverlay(
   return overlay;
 }
 
-function LegendItem({ color, label }: { color: string; label: string }) {
+function LegendItem({ color, label, active, onClick }: { color: string; label: string; active: boolean; onClick: () => void }) {
   return (
-    <span className="legend-item">
+    <button type="button" className={`legend-item legend-toggle ${active ? "active" : ""}`} onClick={onClick}>
       <span style={{ background: color }} />
       {label}
-    </span>
+    </button>
   );
 }
 

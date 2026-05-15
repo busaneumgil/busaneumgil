@@ -38,6 +38,8 @@ import com.ssafy.e102.eumgil.data.repository.DefaultRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultPlacesRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultReportRepository
+import com.ssafy.e102.eumgil.data.repository.HazardReportImageUploader
+import com.ssafy.e102.eumgil.data.repository.NoOpHazardReportImageUploader
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
@@ -249,12 +251,14 @@ object RepositoryModule {
         reportOutboxDao: ReportOutboxDao,
         hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
+        imageUploader: HazardReportImageUploader = NoOpHazardReportImageUploader,
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
             hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
+            imageUploader = imageUploader,
         )
 
     fun provideVoiceAnalyzeRepository(

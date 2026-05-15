@@ -252,6 +252,9 @@ object RepositoryModule {
         hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
         imageUploader: HazardReportImageUploader = NoOpHazardReportImageUploader,
+        // Task 5.9 — 401 + A4010 자동 재발급/재시도용 인프라. 둘 다 주입되면 Repository가 runner를 사용한다.
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
@@ -259,6 +262,8 @@ object RepositoryModule {
             hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
             imageUploader = imageUploader,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideVoiceAnalyzeRepository(

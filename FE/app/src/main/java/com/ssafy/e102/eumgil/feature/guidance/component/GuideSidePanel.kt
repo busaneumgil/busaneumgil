@@ -202,12 +202,13 @@ fun GuideCollapsedRailItem(
             isSelected = isSelected,
             enabled = enabled,
         )
+    val resolvedHeight = if (isContentHidden) 0.dp else height
     Column(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(height)
+                    .height(resolvedHeight)
                     .background(tone.collapsedContainerColor)
                     .semantics {
                         contentDescription?.let { this.contentDescription = it }
@@ -231,7 +232,9 @@ fun GuideCollapsedRailItem(
                 pinHeight = GuideCollapsedRailPinHeight,
             )
         }
-        HorizontalDivider(color = dividerColor)
+        if (!isContentHidden) {
+            HorizontalDivider(color = dividerColor)
+        }
     }
 }
 

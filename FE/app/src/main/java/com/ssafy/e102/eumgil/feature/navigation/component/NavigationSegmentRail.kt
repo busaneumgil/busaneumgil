@@ -80,14 +80,14 @@ fun NavigationSegmentRail(
                     .firstOrNull { item -> item.index == listState.firstVisibleItemIndex }
                     ?.size
                     ?: fallbackRailItemSizePx
-                NavigationRailPromotionSnapshot(
-                    firstVisibleItemIndex = listState.firstVisibleItemIndex,
-                    firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
-                    firstVisibleItemSizePx = firstVisibleItemSizePx,
-                    isScrollInProgress = listState.isScrollInProgress,
-                    promotedItemPosition =
-                        resolveGuideRailPromotedItemIndex(
-                            firstVisibleItemIndex = listState.firstVisibleItemIndex,
+            NavigationRailPromotionSnapshot(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                firstVisibleItemSizePx = firstVisibleItemSizePx,
+                isScrollInProgress = listState.isScrollInProgress,
+                promotedItemPosition =
+                    resolveGuideRailPromotedItemIndex(
+                        firstVisibleItemIndex = listState.firstVisibleItemIndex,
                         firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
                         firstVisibleItemSizePx = firstVisibleItemSizePx,
                         itemCount = railFocusItems.size,
@@ -96,40 +96,53 @@ fun NavigationSegmentRail(
         }
             .distinctUntilChanged()
             .collect { snapshot ->
+                val promotedItemPosition = snapshot.promotedItemPosition
+                val promotedSegmentIndex =
+                    promotedItemPosition?.let { position -> railFocusItems.getOrNull(position)?.index }
                 if (!hasObservedInitialPosition) {
                     hasObservedInitialPosition = true
+                    hiddenRailItemPosition =
+                        railFocusItems.indexOfFirst { item -> item.index == currentFocusedSegmentIndex }
+                            .takeIf { position -> position >= 0 }
                     return@collect
                 }
-                snapshot.promotedItemPosition
-                    ?.let { position -> railFocusItems.getOrNull(position)?.index }
-                    ?.takeIf { index -> index != currentFocusedSegmentIndex }
-                    ?.let(currentOnTopVisibleSegmentChanged)
                 if (snapshot.shouldSnapToPromotedItem()) {
-                    snapshot.promotedItemPosition?.let { position ->
+                    promotedItemPosition?.let { position ->
                         hiddenRailItemPosition = position
                         listState.animateScrollToItem(position, scrollOffset = 0)
                         listState.scrollToItem(position, scrollOffset = 0)
                     }
-                } else if (
-                    hiddenRailItemPosition != null &&
-                    snapshot.firstVisibleItemIndex != hiddenRailItemPosition &&
-                    snapshot.promotedItemPosition != hiddenRailItemPosition
-                ) {
-                    hiddenRailItemPosition = null
+                }
+                val isSettlingAfterCollapsedTopCard =
+                    !snapshot.isScrollInProgress &&
+                        snapshot.firstVisibleItemScrollOffset == 0 &&
+                        hiddenRailItemPosition != null &&
+                        snapshot.firstVisibleItemIndex == hiddenRailItemPosition?.plus(1)
+                if (!isSettlingAfterCollapsedTopCard && promotedItemPosition != null && promotedSegmentIndex != null) {
+                    hiddenRailItemPosition = promotedItemPosition
+                    promotedSegmentIndex
+                        .takeIf { index -> index != currentFocusedSegmentIndex }
+                        ?.let(currentOnTopVisibleSegmentChanged)
                 }
             }
     }
 
     LaunchedEffect(uiState.focusedSegmentIndex, railFocusItems.size) {
         if (railFocusItems.isEmpty()) return@LaunchedEffect
-        if (uiState.isInspectingSegments || listState.isScrollInProgress) return@LaunchedEffect
+        if (listState.isScrollInProgress) return@LaunchedEffect
         val targetItemPosition =
             railFocusItems.indexOfFirst { item -> item.index == uiState.focusedSegmentIndex }
                 .takeIf { position -> position >= 0 }
                 ?: return@LaunchedEffect
-        val isTargetVisible = listState.layoutInfo.visibleItemsInfo.any { item -> item.index == targetItemPosition }
-        if (!isTargetVisible) {
-            listState.animateScrollToItem(targetItemPosition)
+        hiddenRailItemPosition = targetItemPosition
+        val targetScrollIndex =
+            resolveGuideRailAutoScrollItemIndex(
+                focusedItemPosition = targetItemPosition,
+                itemCount = railFocusItems.size,
+            ) ?: return@LaunchedEffect
+        val isTargetVisible = listState.layoutInfo.visibleItemsInfo.any { item -> item.index == targetScrollIndex }
+        if (!isTargetVisible || listState.firstVisibleItemIndex != targetScrollIndex) {
+            listState.animateScrollToItem(targetScrollIndex, scrollOffset = 0)
         }
     }
 
@@ -149,7 +162,11 @@ fun NavigationSegmentRail(
                         .fillMaxWidth(),
             ) {
                 val navigationRailEndSnapPadding =
-                    (maxHeight - NavigationSegmentRailItemHeight).coerceAtLeast(0.dp)
+                    resolveGuideRailEndSnapPadding(
+                        viewportHeight = maxHeight,
+                        guideItemHeight = NavigationSegmentRailItemHeight,
+                        trailingActionHeight = NavigationSegmentRailTopActionHeight,
+                    )
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     state = listState,
@@ -166,6 +183,8 @@ fun NavigationSegmentRail(
                                     shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
                                 } == true,
                             onClick = {
+                                hiddenRailItemPosition = railFocusItems.indexOfFirst { item -> item == railSlots.originItem }
+                                    .takeIf { position -> position >= 0 }
                                 railSlots.originItem?.index?.let(onSegmentTapped)
                             },
                         )
@@ -175,7 +194,11 @@ fun NavigationSegmentRail(
                             item = item,
                             dividerColor = dividerColor,
                             isContentHidden = shouldHideGuideRailItemForTopCard(item.index, hiddenSegmentIndex),
-                            onClick = { onSegmentTapped(item.index) },
+                            onClick = {
+                                hiddenRailItemPosition = railFocusItems.indexOfFirst { railItem -> railItem.index == item.index }
+                                    .takeIf { position -> position >= 0 }
+                                onSegmentTapped(item.index)
+                            },
                         )
                     }
                     items(items = listOf("navigation-rail-destination"), key = { it }) {
@@ -189,6 +212,8 @@ fun NavigationSegmentRail(
                                     shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
                                 } == true,
                             onClick = {
+                                hiddenRailItemPosition = railFocusItems.indexOfFirst { item -> item == railSlots.destinationItem }
+                                    .takeIf { position -> position >= 0 }
                                 railSlots.destinationItem?.index?.let(onSegmentTapped)
                             },
                         )
@@ -199,9 +224,10 @@ fun NavigationSegmentRail(
                             dividerColor = dividerColor,
                             onClick = {
                                 coroutineScope.launch {
-                                    hiddenRailItemPosition = null
+                                    hiddenRailItemPosition = 0
                                     listState.animateScrollToItem(0, scrollOffset = 0)
                                     listState.scrollToItem(0, scrollOffset = 0)
+                                    railFocusItems.firstOrNull()?.index?.let(onSegmentTapped)
                                 }
                             },
                         )
@@ -304,7 +330,7 @@ private fun NavigationSegmentRailTopAction(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(NavigationSegmentRailTopActionHeight)
                     .semantics {
                         contentDescription = label
                         if (!enabled) {
@@ -368,6 +394,22 @@ internal fun createNavigationSegmentRailSlots(uiState: NavigationSegmentSyncUiSt
     )
 }
 
+internal fun resolveGuideRailAutoScrollItemIndex(
+    focusedItemPosition: Int,
+    itemCount: Int,
+): Int? {
+    if (itemCount <= 0) return null
+    if (focusedItemPosition !in 0 until itemCount) return null
+    return (focusedItemPosition + 1).coerceAtMost(itemCount - 1)
+}
+
+internal fun resolveGuideRailEndSnapPadding(
+    viewportHeight: Dp,
+    guideItemHeight: Dp,
+    trailingActionHeight: Dp,
+): Dp =
+    (viewportHeight - guideItemHeight - trailingActionHeight).coerceAtLeast(0.dp)
+
 private fun NavigationSegmentRailSlots.focusItems(): List<NavigationSegmentRailItemUiState> =
     buildList {
         originItem?.let(::add)
@@ -404,3 +446,4 @@ private data class NavigationRailPromotionSnapshot(
 }
 
 private val NavigationSegmentRailItemHeight = 96.dp
+private val NavigationSegmentRailTopActionHeight = 56.dp

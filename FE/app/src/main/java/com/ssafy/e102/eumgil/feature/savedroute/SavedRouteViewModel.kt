@@ -101,7 +101,8 @@ class SavedRouteViewModel(
                 }
             }
             SavedRouteUiAction.EditClicked -> enterEditMode()
-            SavedRouteUiAction.EditDoneClicked -> applyPendingRemovals()
+            SavedRouteUiAction.EditDoneClicked -> exitEditMode()
+            SavedRouteUiAction.DeleteSelectedClicked -> applyPendingRemovals()
             SavedRouteUiAction.ExploreMapClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToMap)
             SavedRouteUiAction.RouteSettingClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToRouteSetting())
             SavedRouteUiAction.RetryClicked -> retryCurrentTab()
@@ -131,6 +132,20 @@ class SavedRouteViewModel(
                 state
             } else {
                 state.copy(isEditMode = true)
+            }
+        }
+    }
+
+    private fun exitEditMode() {
+        mutableUiState.update { state ->
+            if (state.isApplyingEditChanges) {
+                state
+            } else {
+                state.copy(
+                    isEditMode = false,
+                    pendingPlaceRemovalIds = emptySet(),
+                    pendingRouteRemovalIds = emptySet(),
+                )
             }
         }
     }

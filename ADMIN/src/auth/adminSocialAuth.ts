@@ -5,7 +5,9 @@ const KAKAO_SDK_URL = "https://developers.kakao.com/sdk/js/kakao.min.js";
 const GOOGLE_SDK_URL = "https://accounts.google.com/gsi/client";
 const NAVER_STATE_KEY = "busan-eumgil-ADMIN:naver-state";
 const envAuthConfig: AuthTestConfig = {
-  kakaoJavaScriptKey: (import.meta.env.VITE_ADMIN_KAKAO_JAVASCRIPT_KEY as string | undefined) || "",
+  kakaoJavaScriptKey: (import.meta.env.VITE_ADMIN_KAKAO_JAVASCRIPT_KEY as string | undefined)
+    || (import.meta.env.VITE_KAKAO_MAP_KEY as string | undefined)
+    || "",
   naverClientId: (import.meta.env.VITE_ADMIN_NAVER_CLIENT_ID as string | undefined) || "",
   googleClientId: (import.meta.env.VITE_ADMIN_GOOGLE_CLIENT_ID as string | undefined) || "",
 };

@@ -237,6 +237,7 @@ class MapViewportOverlayBindingsTest {
         assertFalse(initialState.polylines.first().showDirectionArrows)
 
         assertTrue(focusedState.points.any { it.kind == MapViewportPointKind.TRANSIT_BUS_STOP })
+        assertTrue(focusedState.points.any { it.kind == MapViewportPointKind.FOCUS_HALO })
         assertFalse(focusedState.points.any { it.overlayId == "generic-marker" })
         assertTrue(focusedState.polylines.first().showDirectionArrows)
     }
@@ -313,6 +314,19 @@ class MapViewportOverlayBindingsTest {
             overlayState.points
                 .filter { point -> point.includeInProjection }
                 .map { point -> point.kind },
+        )
+    }
+
+    @Test
+    fun `focused guidance marker halo uses requested translucent blue token`() {
+        val backdropSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+
+        assertTrue(
+            "The focused guidance halo should be the requested #4D8FF9 at 50 percent alpha and 26dp diameter.",
+            backdropSource.contains("FocusedGuidanceMarkerHaloColor = Color(0x804D8FF9)") &&
+                backdropSource.contains("FocusedGuidanceMarkerHaloRadius = 13.dp"),
         )
     }
 

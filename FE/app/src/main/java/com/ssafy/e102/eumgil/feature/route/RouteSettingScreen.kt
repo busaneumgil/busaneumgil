@@ -1,5 +1,11 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -48,12 +54,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +93,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
@@ -98,6 +108,8 @@ import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideCollapsedRailItem
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
+import com.ssafy.e102.eumgil.feature.guidance.component.resolveGuideRailPromotedItemIndex
+import com.ssafy.e102.eumgil.feature.guidance.component.shouldHideGuideRailItemForTopCard
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayTone
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointKind
@@ -109,6 +121,7 @@ import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOve
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
 import java.util.Locale
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 @Composable
@@ -198,7 +211,7 @@ fun RouteSettingScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
-    }
+        }
 
     if (isDuribalConfirmDialogVisible) {
         RouteDuribalCallConfirmDialog(
@@ -351,6 +364,9 @@ fun RouteDetailScreen(
                             focusedDetailStepIndex = index
                             isDetailSidePanelExpanded = false
                         },
+                        onTopVisibleStepChanged = { index ->
+                            focusedDetailStepIndex = index
+                        },
                         onLowFloorReservationClick = onLowFloorReservationClick,
                         modifier =
                             Modifier
@@ -452,6 +468,14 @@ private fun RouteDetailCollapsedGuideCard(
         color = MaterialTheme.colorScheme.primary,
         shadowElevation = 0.dp,
     ) {
+        AnimatedContent(
+            targetState = step,
+            label = "route-detail-collapsed-guide",
+            transitionSpec = {
+                (slideInVertically { height -> height / 3 } + fadeIn())
+                    .togetherWith(slideOutVertically { height -> -height / 3 } + fadeOut())
+            },
+        ) { targetStep ->
         Row(
             modifier =
                 Modifier
@@ -461,14 +485,14 @@ private fun RouteDetailCollapsedGuideCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            if (step != null && step.kind.isTransitStep()) {
+            if (targetStep != null && targetStep.kind.isTransitStep()) {
                 RouteDetailCollapsedTransitGuideCardContent(
-                    step = step,
+                    step = targetStep,
                     modifier = Modifier.weight(1f),
                 )
             } else {
             Icon(
-                painter = painterResource(id = routeDetailStepIconRes(step?.kind ?: RouteDetailStepKind.START)),
+                painter = painterResource(id = routeDetailStepIconRes(targetStep?.kind ?: RouteDetailStepKind.START)),
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(RouteDetailCollapsedGuideIconSize),
@@ -478,21 +502,22 @@ private fun RouteDetailCollapsedGuideCard(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
-                    text = step?.title ?: origin.name.ifBlank { "출발지" },
-                    style = MaterialTheme.typography.titleMedium,
+                    text = targetStep?.title ?: origin.name.ifBlank { "출발지" },
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = step?.description ?: "출발지에서 안내를 시작합니다.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = targetStep?.description ?: "출발지에서 안내를 시작합니다.",
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
                     color = Color.White.copy(alpha = 0.9f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
             }
+        }
         }
     }
 }
@@ -645,6 +670,7 @@ private fun RouteDetailSidePanel(
     focusedStepIndex: Int?,
     onExpandedChange: (Boolean) -> Unit,
     onStepClick: (Int) -> Unit,
+    onTopVisibleStepChanged: (Int) -> Unit,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -666,6 +692,7 @@ private fun RouteDetailSidePanel(
             RouteDetailTimelinePanelContent(
                 origin = origin,
                 steps = selectedRoute.detailSteps,
+                badges = selectedRoute.badges,
                 fallbackMessage = selectedRoute.detailFallbackMessage,
                 lowFloorReservations = selectedRoute.lowFloorReservations,
                 onStepClick = { index ->
@@ -679,6 +706,7 @@ private fun RouteDetailSidePanel(
                 steps = selectedRoute.detailSteps,
                 focusedStepIndex = focusedStepIndex,
                 onStepClick = onStepClick,
+                onTopVisibleStepChanged = onTopVisibleStepChanged,
                 modifier =
                     Modifier
                         .fillMaxHeight()
@@ -692,6 +720,7 @@ private fun RouteDetailSidePanel(
 private fun RouteDetailTimelinePanelContent(
     origin: RouteLocationUiState,
     steps: List<RouteDetailStepUiState>,
+    badges: List<RouteOptionBadge>,
     fallbackMessage: String?,
     lowFloorReservations: List<LowFloorBusReservation>,
     onStepClick: (Int) -> Unit,
@@ -736,6 +765,13 @@ private fun RouteDetailTimelinePanelContent(
                     )
                 }
             } else {
+                val visibleBadges = badges.filterNot { badge -> badge == RouteOptionBadge.SAFE_PRIORITY }
+                if (visibleBadges.isNotEmpty()) {
+                    item(key = "route-detail-badges") {
+                        RouteDetailBadgeHeader(badges = visibleBadges)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f))
+                    }
+                }
                 item(key = "route-detail-origin") {
                     RouteDetailOriginStepRow(
                         origin = origin,
@@ -783,6 +819,9 @@ private fun RouteDetailTimelinePanelContent(
                     onReservationClick = onLowFloorReservationClick,
                 )
             }
+            item(key = "route-detail-arrival-divider") {
+                HorizontalDivider(color = RouteDetailGuideDividerColor)
+            }
             item(key = "route-detail-scroll-top") {
                 RouteDetailScrollTopAction(
                     onClick = {
@@ -794,6 +833,45 @@ private fun RouteDetailTimelinePanelContent(
                         Modifier
                             .fillMaxWidth()
                             .padding(top = RouteDetailPanelBottomActionTopPadding),
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RouteDetailBadgeHeader(
+    badges: List<RouteOptionBadge>,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .padding(
+                    horizontal = EumSpacing.large,
+                    vertical = EumSpacing.medium,
+                ),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Text(
+            text = "경로 특징",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            badges.forEach { badge ->
+                val (containerColor, contentColor) = routeOptionBadgeColors(badge)
+                RouteBadgeChip(
+                    label = routeBadgeText(badge),
+                    containerColor = containerColor,
+                    contentColor = contentColor,
+                    borderColor = Color.Transparent,
                 )
             }
         }
@@ -839,18 +917,75 @@ private fun RouteDetailIconRail(
     steps: List<RouteDetailStepUiState>,
     focusedStepIndex: Int?,
     onStepClick: (Int) -> Unit,
+    onTopVisibleStepChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    var hiddenRailStepIndex by remember { mutableStateOf<Int?>(null) }
+    val fallbackRailItemSizePx = with(LocalDensity.current) { RouteDetailCollapsedRailItemSize.roundToPx() }
+    val currentFocusedStepIndex by rememberUpdatedState(focusedStepIndex)
+    val currentOnTopVisibleStepChanged by rememberUpdatedState(onTopVisibleStepChanged)
+
+    LaunchedEffect(listState, steps, fallbackRailItemSizePx) {
+        var hasObservedInitialPosition = false
+        snapshotFlow {
+            val firstVisibleItemSizePx =
+                listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { item -> item.index == listState.firstVisibleItemIndex }
+                    ?.size
+                    ?: fallbackRailItemSizePx
+            val promotedIndex =
+                resolveGuideRailPromotedItemIndex(
+                    firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                    firstVisibleItemSizePx = firstVisibleItemSizePx,
+                    itemCount = steps.size,
+                )
+            RouteDetailRailPromotionSnapshot(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                firstVisibleItemSizePx = firstVisibleItemSizePx,
+                isScrollInProgress = listState.isScrollInProgress,
+                promotedStepIndex = promotedIndex,
+            )
+        }
+            .distinctUntilChanged()
+            .collect { snapshot ->
+                if (!hasObservedInitialPosition) {
+                    hasObservedInitialPosition = true
+                    return@collect
+                }
+                snapshot.promotedStepIndex
+                    ?.takeIf { index -> index != currentFocusedStepIndex }
+                    ?.let(currentOnTopVisibleStepChanged)
+                if (snapshot.shouldSnapToPromotedStep()) {
+                    snapshot.promotedStepIndex?.let { index ->
+                        hiddenRailStepIndex = index
+                        listState.animateScrollToItem(index)
+                    }
+                } else if (
+                    hiddenRailStepIndex != null &&
+                    snapshot.firstVisibleItemIndex != hiddenRailStepIndex &&
+                    snapshot.promotedStepIndex != hiddenRailStepIndex
+                ) {
+                    hiddenRailStepIndex = null
+                }
+            }
+    }
+
+    LazyColumn(
         modifier =
             modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .padding(vertical = EumSpacing.small),
+        state = listState,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
     ) {
-        steps.forEachIndexed { index, step ->
+        itemsIndexed(
+            items = steps,
+            key = { index, step -> "route-detail-rail-$index-${step.kind}-${step.indexLabel}" },
+        ) { index, step ->
             val isFocused = focusedStepIndex == index
             GuideCollapsedRailItem(
                 action = step.kind.toNavigationGuidanceAction(),
@@ -862,9 +997,69 @@ private fun RouteDetailIconRail(
                 stateDescription = if (isFocused) "focused guide step" else "guide step",
                 dividerColor = RouteDetailGuideDividerColor,
                 height = RouteDetailCollapsedRailItemSize,
+                isContentHidden = shouldHideGuideRailItemForTopCard(index, hiddenRailStepIndex),
                 onClick = { onStepClick(index) },
                 modifier = Modifier.size(RouteDetailCollapsedRailItemSize),
             )
+        }
+        item(key = "route-detail-rail-scroll-top") {
+            RouteDetailCollapsedRailScrollTopAction(
+                onClick = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                        onStepClick(0)
+                    }
+                },
+            )
+        }
+    }
+}
+
+private data class RouteDetailRailPromotionSnapshot(
+    val firstVisibleItemIndex: Int,
+    val firstVisibleItemScrollOffset: Int,
+    val firstVisibleItemSizePx: Int,
+    val isScrollInProgress: Boolean,
+    val promotedStepIndex: Int?,
+) {
+    fun shouldSnapToPromotedStep(): Boolean =
+        promotedStepIndex != null &&
+            !isScrollInProgress &&
+            firstVisibleItemScrollOffset > 0
+}
+
+@Composable
+private fun RouteDetailCollapsedRailScrollTopAction(
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(RouteDetailCollapsedRailItemSize),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier =
+                Modifier
+                    .size(RouteDetailCollapsedRailScrollTopButtonSize)
+                    .clickable(role = Role.Button, onClick = onClick)
+                    .semantics {
+                        contentDescription = "?덈궡 紐⑸줉 留??꾨줈 ?대룞"
+                    },
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, RouteDetailGuideDividerColor),
+            shadowElevation = 0.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_route_scroll_top),
+                    contentDescription = null,
+                    tint = RouteDetailGuideIconColor,
+                    modifier = Modifier.size(RouteDetailCollapsedRailScrollTopIconSize),
+                )
+            }
         }
     }
 }
@@ -4004,6 +4199,13 @@ private fun routeBadgeText(badge: RouteOptionBadge): String =
         RouteOptionBadge.CURB_GAP -> stringResource(id = R.string.route_setting_badge_curb_gap)
         RouteOptionBadge.UNSIGNALIZED_CROSSWALK ->
             stringResource(id = R.string.route_setting_badge_unsignalized_crosswalk)
+        RouteOptionBadge.LOW_SLOPE -> "낮은 경사"
+        RouteOptionBadge.MIDDLE_SLOPE -> "중간 경사"
+        RouteOptionBadge.STAIR -> "계단"
+        RouteOptionBadge.CROSSWALK -> "횡단보도"
+        RouteOptionBadge.ELEVATOR -> "엘리베이터"
+        RouteOptionBadge.NARROW_SIDEWALK -> "좁은 보도"
+        RouteOptionBadge.UNPAVED -> "비포장"
     }
 
 @Composable
@@ -4011,6 +4213,10 @@ private fun routeOptionBadgeColors(badge: RouteOptionBadge): Pair<Color, Color> 
     when (badge) {
         RouteOptionBadge.CURB_GAP,
         RouteOptionBadge.UNSIGNALIZED_CROSSWALK,
+        RouteOptionBadge.MIDDLE_SLOPE,
+        RouteOptionBadge.STAIR,
+        RouteOptionBadge.NARROW_SIDEWALK,
+        RouteOptionBadge.UNPAVED,
             ->
             RouteBadgeCautionColor to Color.White
 
@@ -4019,6 +4225,9 @@ private fun routeOptionBadgeColors(badge: RouteOptionBadge): Pair<Color, Color> 
         RouteOptionBadge.AUDIO_SIGNAL,
         RouteOptionBadge.BRAILLE_BLOCK,
         RouteOptionBadge.SIGNAL_CROSSWALK,
+        RouteOptionBadge.LOW_SLOPE,
+        RouteOptionBadge.CROSSWALK,
+        RouteOptionBadge.ELEVATOR,
             ->
             RouteBadgePositiveColor to Color.White
     }
@@ -4528,14 +4737,15 @@ private val RouteDetailRefreshButtonSize = 44.dp
 private val RouteDetailWaypointPinWidth = 22.dp
 private val RouteDetailWaypointPinHeight = 24.dp
 private val RouteDetailCollapsedRailWidth = 58.dp
-private val RouteDetailCollapsedRailItemSize = 48.dp
+private val RouteDetailCollapsedRailItemSize = 72.dp
 private val RouteDetailCollapsedGuideCardMinHeight = 76.dp
 private val RouteDetailCollapsedGuideIconSize = 32.dp
 private val RouteDetailScrollTopButtonSize = 48.dp
 private val RouteDetailScrollTopIconSize = 24.dp
-private val RouteDetailScrollTopActionVerticalPadding = 10.dp
-private val RouteDetailPanelBottomActionTopPadding = 6.dp
-private val RouteDetailSidePanelBottomActionSpace = 120.dp
+private val RouteDetailCollapsedRailScrollTopButtonSize = 36.dp
+private val RouteDetailCollapsedRailScrollTopIconSize = 22.dp
+private val RouteDetailScrollTopActionVerticalPadding = 0.dp
+private val RouteDetailPanelBottomActionTopPadding = 24.dp
 private val RouteDetailGuideRowMinHeight = 76.dp
 private val RouteDetailGuideIconColor = Color(0xFF2B2B2B)
 private val RouteDetailGuideBadgeContainerColor = Color.White
@@ -4593,7 +4803,7 @@ private val RouteSettingBottomBarButtonHeight = 50.dp
 private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val RouteSettingBottomBarBottomGap = 30.dp
 private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
-private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance + RouteDetailSidePanelBottomActionSpace
+private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance
 private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 4.dp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
 private val RoutePreviewMarkerSize = 38.dp

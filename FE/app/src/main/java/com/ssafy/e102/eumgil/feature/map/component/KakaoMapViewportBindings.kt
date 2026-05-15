@@ -62,11 +62,12 @@ internal fun shouldAnimateKakaoCameraTransition(
     previousTarget: MapCameraTarget?,
     nextTarget: MapCameraTarget,
 ): Boolean {
+    if (!nextTarget.shouldAnimateTransition) return false
     if (previousTarget == null) return false
     if (previousTarget.requestId == nextTarget.requestId) return false
     if (previousTarget.source != nextTarget.source) return false
-    if (previousTarget.center != nextTarget.center) return false
-    return previousTarget.resolvedZoomLevel() != nextTarget.resolvedZoomLevel()
+    return previousTarget.center != nextTarget.center ||
+        previousTarget.resolvedZoomLevel() != nextTarget.resolvedZoomLevel()
 }
 
 internal fun syncRenderedKakaoCameraTarget(
@@ -126,6 +127,7 @@ internal enum class KakaoOverlayMarkerKind {
     TRANSIT_STOP,
     TRANSIT_TRANSFER,
     ROUTE_DIRECTION_ARROW,
+    FOCUS_HALO,
 }
 
 internal data class KakaoProjectedMarkerRenderState(
@@ -879,6 +881,19 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
                 secondaryFillColorArgb = to.toKakaoTransitColor(),
             )
         }
+
+        MapViewportPointKind.FOCUS_HALO ->
+            KakaoOverlayMarkerRenderState(
+                markerId = "overlay-$overlayId",
+                coordinate = coordinate,
+                kind = KakaoOverlayMarkerKind.FOCUS_HALO,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 26,
+                zIndex = 3.5f,
+                fillColorArgb = 0x804D8FF9.toInt(),
+                strokeColorArgb = 0x004D8FF9,
+            )
 
         else -> null
     }

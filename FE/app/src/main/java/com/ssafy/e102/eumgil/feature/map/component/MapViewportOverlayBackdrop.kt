@@ -369,8 +369,8 @@ private fun DrawScope.drawViewportPointHalo(
 
         MapViewportPointKind.FOCUS_HALO ->
             drawCircle(
-                color = palette.primary.copy(alpha = 0.18f),
-                radius = 24.dp.toPx(),
+                color = FocusedGuidanceMarkerHaloColor,
+                radius = FocusedGuidanceMarkerHaloRadius.toPx(),
                 center = projectedPoint,
             )
 
@@ -897,3 +897,5 @@ private const val RouteDirectionArrowIntervalDp = 20
 private const val RouteDirectionArrowMinSegmentDp = 44
 private const val RouteDirectionArrowLengthDp = 10
 private const val RouteDirectionArrowHalfWidthDp = 5
+private val FocusedGuidanceMarkerHaloColor = Color(0x804D8FF9)
+private val FocusedGuidanceMarkerHaloRadius = 13.dp

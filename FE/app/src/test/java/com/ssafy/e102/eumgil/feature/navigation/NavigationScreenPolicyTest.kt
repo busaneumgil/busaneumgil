@@ -132,6 +132,9 @@ class NavigationScreenPolicyTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
                 .readText()
+        val railSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
 
         assertTrue(
             "NAV-01 should keep the map as the base layer while the left rail or panel overlays it.",
@@ -152,6 +155,13 @@ class NavigationScreenPolicyTest {
             "Transit guidance actions should use the same side panel row path as walk guidance.",
             source.contains("GuideSidePanelStepRow(") &&
                 source.contains("uiState.segmentSync.railItems.forEach"),
+        )
+        assertTrue(
+            "Collapsed rail vertical scroll should reuse SegmentTapped so the top visible icon drives the hero card and map focus.",
+            source.contains("onTopVisibleSegmentChanged = { index ->") &&
+                railSource.contains("snapshotFlow") &&
+                railSource.contains("firstVisibleItemIndex") &&
+                railSource.contains("onTopVisibleSegmentChanged"),
         )
         assertFalse(
             "Expanded side panel rows should not keep the radio-like current-location button.",
@@ -254,6 +264,32 @@ class NavigationScreenPolicyTest {
         assertEquals("횡단보도 건너기", heroContent.title)
         assertEquals("Cross the street and head toward the elevator", heroContent.description)
         assertEquals("80m", heroContent.distanceLabel)
+    }
+
+    @Test
+    fun `navigation hero animates focused card changes and does not pin transit card during inspection`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val heroSection =
+            source
+                .substringAfter("private fun NavigationHeroCard(")
+                .substringBefore("@Composable\nprivate fun NavigationHeroDirectionIcon")
+
+        assertTrue(
+            "Hero content changes should use vertical AnimatedContent so scroll-driven guidance changes are visible.",
+            heroSection.contains("AnimatedContent(") &&
+                heroSection.contains("slideInVertically") &&
+                heroSection.contains("slideOutVertically"),
+        )
+        assertTrue(
+            "Focused rail inspection should show transit detail only when the focused segment itself is bus/subway.",
+            heroSection.contains("focusedSegmentCard?.transitInfo"),
+        )
+        assertFalse(
+            "The active step transit summary must not pin the top card during normal entry or inspection.",
+            heroSection.contains("uiState.stepCard.transitInfo"),
+        )
     }
 
     @Test

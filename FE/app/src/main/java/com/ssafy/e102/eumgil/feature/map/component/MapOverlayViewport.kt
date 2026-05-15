@@ -75,6 +75,7 @@ private fun MapViewportOverlayState.toMapCameraTarget(): MapCameraTarget {
             source = MapCameraSource.SEARCH_RESULT,
             requestId = hashCode().toLong(),
             zoomLevel = fallbackCamera.toApproximateZoomLevel(),
+            shouldAnimateTransition = shouldAnimateCameraTransition,
         )
     }
 
@@ -94,6 +95,7 @@ private fun MapViewportOverlayState.toMapCameraTarget(): MapCameraTarget {
         source = MapCameraSource.SEARCH_RESULT,
         requestId = hashCode().toLong(),
         zoomLevel = approximateZoomLevel(latitudeSpan = latitudeSpan, longitudeSpan = longitudeSpan),
+        shouldAnimateTransition = shouldAnimateCameraTransition,
     )
 }
 

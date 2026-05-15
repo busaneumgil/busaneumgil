@@ -1,8 +1,8 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.feature.navigation.component.createNavigationSegmentRailSlots
+import com.ssafy.e102.eumgil.feature.navigation.component.resolveNavigationRailReturnTargetSegmentIndex
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,7 +25,7 @@ class NavigationSegmentRailLayoutTest {
         assertEquals(0, slots.originItem?.index)
         assertEquals(3, slots.destinationItem?.index)
         assertEquals(listOf(1, 2), slots.intermediateItems.map { item -> item.index })
-        assertFalse(slots.canReturnToActiveSegment)
+        assertTrue(slots.canReturnToActiveSegment)
     }
 
     @Test
@@ -63,6 +63,35 @@ class NavigationSegmentRailLayoutTest {
 
         assertTrue(slots.canReturnToActiveSegment)
         assertEquals(2, slots.destinationItem?.index)
+    }
+
+    @Test
+    fun `rail return target skips origin when another guidance item exists`() {
+        val slots =
+            createNavigationSegmentRailSlots(
+                NavigationSegmentSyncUiState(
+                    railItems =
+                        listOf(
+                            railItem(index = 0, sequence = 1),
+                            railItem(index = 1, sequence = 2),
+                            railItem(index = 2, sequence = 3),
+                        ),
+                ),
+            )
+
+        assertEquals(1, resolveNavigationRailReturnTargetSegmentIndex(slots))
+    }
+
+    @Test
+    fun `rail return target falls back to origin for a single guidance item`() {
+        val slots =
+            createNavigationSegmentRailSlots(
+                NavigationSegmentSyncUiState(
+                    railItems = listOf(railItem(index = 0, sequence = 1)),
+                ),
+            )
+
+        assertEquals(0, resolveNavigationRailReturnTargetSegmentIndex(slots))
     }
 }
 

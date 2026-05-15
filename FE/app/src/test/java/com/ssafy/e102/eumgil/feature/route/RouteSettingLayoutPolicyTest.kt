@@ -551,6 +551,18 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("RouteDetailCollapsedRailWidth"),
         )
         assertTrue(
+            "Collapsed detail rail should drive the focused top card and map marker from the top visible icon.",
+            source.contains("onTopVisibleStepChanged = { index ->") &&
+                source.contains("snapshotFlow") &&
+                source.contains("firstVisibleItemIndex"),
+        )
+        assertTrue(
+            "Collapsed detail rail should expose an up action below the destination item that scrolls and focuses the origin.",
+            source.contains("RouteDetailCollapsedRailScrollTopAction(") &&
+                source.contains("listState.animateScrollToItem(0)") &&
+                source.contains("onStepClick(0)"),
+        )
+        assertTrue(
             "Detail bottom sheet should expose a segment ratio/timeline bar.",
             source.contains("private fun RouteDetailTimelineBar("),
         )
@@ -653,11 +665,21 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("private fun RouteDetailTimelinePanelContent(")
                 .substringBefore("@Composable\nprivate fun RouteDetailIconRail")
+        val collapsedCardSection =
+            source
+                .substringAfter("private fun RouteDetailCollapsedGuideCard(")
+                .substringBefore("@Composable\nprivate fun RouteDetailCollapsedTransitGuideCardContent")
 
         assertTrue(
             "The open detail side panel must reserve bottom clearance so the arrival row is not hidden by the fixed CTA.",
             timelinePanelSection.contains("contentPadding = PaddingValues(bottom = RouteDetailSidePanelBottomClearance)") &&
-                source.contains("RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance + RouteDetailSidePanelBottomActionSpace"),
+                source.contains("RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance") &&
+                !source.contains("RouteDetailSidePanelBottomActionSpace"),
+        )
+        assertTrue(
+            "The open detail side panel should draw a divider directly below the arrival row before the scroll-top action.",
+            timelinePanelSection.contains("item(key = \"route-detail-arrival-divider\")") &&
+                timelinePanelSection.contains("HorizontalDivider(color = RouteDetailGuideDividerColor)"),
         )
         assertTrue(
             "The bottom of the guide list should expose an in-panel scroll-to-top affordance like the reference.",
@@ -675,6 +697,12 @@ class RouteSettingLayoutPolicyTest {
             "The open detail side panel should not eagerly compose every guide row through a verticalScroll Column.",
             timelinePanelSection.contains(".verticalScroll(listState)") ||
                 timelinePanelSection.contains(".verticalScroll(scrollState)"),
+        )
+        assertTrue(
+            "Collapsed top guide card should animate vertical changes when rail scrolling changes the focused step.",
+            collapsedCardSection.contains("AnimatedContent(") &&
+                collapsedCardSection.contains("slideInVertically") &&
+                collapsedCardSection.contains("slideOutVertically"),
         )
     }
 
@@ -776,8 +804,8 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "Scroll-top affordance should sit close to the final row instead of leaving an oversized gap.",
-            source.contains("RouteDetailPanelBottomActionTopPadding = 6.dp") &&
-                source.contains("RouteDetailScrollTopActionVerticalPadding = 10.dp"),
+            source.contains("RouteDetailPanelBottomActionTopPadding = 24.dp") &&
+                source.contains("RouteDetailScrollTopActionVerticalPadding = 0.dp"),
         )
     }
 

@@ -1,5 +1,11 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -152,6 +158,9 @@ fun NavigationScreen(
                                     onSegmentTapped = { index ->
                                         onAction(NavigationUiAction.SegmentTapped(index = index))
                                     },
+                                    onTopVisibleSegmentChanged = { index ->
+                                        onAction(NavigationUiAction.SegmentTapped(index = index))
+                                    },
                                     onReturnToActiveSegmentClick = {
                                         onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
                                     },
@@ -268,6 +277,11 @@ internal data class NavigationHeroContentUiState(
     val title: String,
     val description: String,
     val distanceLabel: String,
+)
+
+private data class NavigationHeroPresentation(
+    val content: NavigationHeroContentUiState,
+    val transitInfo: NavigationTransitInfoUiState?,
 )
 
 internal data class NavigationBottomBarLayoutPolicy(
@@ -402,6 +416,12 @@ private fun NavigationHeroCard(
     onAction: (NavigationUiAction) -> Unit,
 ) {
     val heroContent = navigationHeroContent(uiState)
+    val focusedSegmentCard = uiState.focusedSegmentCard
+    val heroPresentation =
+        NavigationHeroPresentation(
+            content = heroContent,
+            transitInfo = focusedSegmentCard?.transitInfo,
+        )
     val layoutPolicy = navigationHeroLayoutPolicy(LocalConfiguration.current.screenHeightDp.dp)
 
     Surface(
@@ -424,35 +444,45 @@ private fun NavigationHeroCard(
                 horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                uiState.stepCard.transitInfo?.let { transitInfo ->
-                    NavigationTransitHeroContent(
-                        transitInfo = transitInfo,
-                        modifier = Modifier.weight(1f),
-                    )
-                } ?: Row(
+                AnimatedContent(
+                    targetState = heroPresentation,
+                    label = "navigation-hero-guidance",
+                    transitionSpec = {
+                        (slideInVertically { height -> height / 3 } + fadeIn())
+                            .togetherWith(slideOutVertically { height -> -height / 3 } + fadeOut())
+                    },
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    NavigationHeroDirectionIcon(
-                        guidanceAction = heroContent.guidanceAction,
-                        iconSize = layoutPolicy.directionIconSize,
-                    )
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) { presentation ->
+                    presentation.transitInfo?.let { transitInfo ->
+                        NavigationTransitHeroContent(
+                            transitInfo = transitInfo,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } ?: Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = heroContent.title,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            maxLines = 1,
+                        NavigationHeroDirectionIcon(
+                            guidanceAction = presentation.content.guidanceAction,
+                            iconSize = layoutPolicy.directionIconSize,
                         )
-                        Text(
-                            text = heroContent.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            maxLines = 2,
-                        )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = presentation.content.title,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = presentation.content.description,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 2,
+                            )
+                        }
                     }
                 }
                 NavigationVoiceControl(

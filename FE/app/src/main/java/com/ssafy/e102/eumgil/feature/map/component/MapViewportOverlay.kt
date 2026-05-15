@@ -20,6 +20,7 @@ internal data class MapViewportOverlayState(
     val fallbackCamera: MapViewportFallbackCamera = defaultMapViewportFallbackCamera(),
     val points: List<MapViewportPointOverlay> = emptyList(),
     val polylines: List<MapViewportPolylineOverlay> = emptyList(),
+    val shouldAnimateCameraTransition: Boolean = true,
 )
 
 @Immutable
@@ -197,6 +198,20 @@ internal fun createRoutePreviewViewportOverlayState(
                         }
                     },
                 )
+                if (focusSelectedGuidanceMarker) {
+                    visibleGuidanceMarkers
+                        .firstOrNull(MapViewportPointOverlay::isSelected)
+                        ?.let { selectedMarker ->
+                            add(
+                                MapViewportPointOverlay(
+                                    overlayId = "route-guidance-focus",
+                                    coordinate = selectedMarker.coordinate,
+                                    kind = MapViewportPointKind.FOCUS_HALO,
+                                    includeInProjection = true,
+                                ),
+                            )
+                        }
+                }
             },
         polylines =
             listOf(
@@ -246,8 +261,9 @@ internal fun createNavigationViewportOverlayState(
 
     val overlayState =
         MapViewportOverlayState(
-        points =
-            buildList {
+            shouldAnimateCameraTransition = mapOverlay.shouldAnimateCameraTransition,
+            points =
+                buildList {
                 mapOverlay.currentLocation?.let { point ->
                     add(
                         point.coordinate.toOverlayPoint(
@@ -389,6 +405,7 @@ private fun List<NavigationMapSegmentUiState>.toSegmentMarkerOverlays(
 ): List<MapViewportPointOverlay> =
     mapIndexedNotNull { index, segment ->
         if (index == 0) return@mapIndexedNotNull null
+        if (!segment.showJunctionMarker) return@mapIndexedNotNull null
         if (segment.travelKind == NavigationSegmentTravelKind.TRANSIT) return@mapIndexedNotNull null
         val coordinate = segment.segmentStartCoordinate ?: segment.polyline.firstOrNull() ?: return@mapIndexedNotNull null
         MapViewportPointOverlay(

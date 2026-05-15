@@ -257,6 +257,13 @@ enum class RouteOptionBadge {
     SIGNAL_CROSSWALK,
     CURB_GAP,
     UNSIGNALIZED_CROSSWALK,
+    LOW_SLOPE,
+    MIDDLE_SLOPE,
+    STAIR,
+    CROSSWALK,
+    ELEVATOR,
+    NARROW_SIDEWALK,
+    UNPAVED,
 }
 
 sealed interface RouteSettingUiAction {

@@ -1293,8 +1293,27 @@ private class KakaoOverlayMarkerStyleCache(
                 KakaoOverlayMarkerKind.TRANSIT_STOP -> createTransitStopBitmap(marker)
                 KakaoOverlayMarkerKind.TRANSIT_TRANSFER -> createTransitTransferBitmap(marker)
                 KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW -> createDirectionArrowBitmap(marker)
+                KakaoOverlayMarkerKind.FOCUS_HALO -> createFocusHaloBitmap(marker)
             }
         }
+
+    private fun createFocusHaloBitmap(
+        marker: KakaoOverlayMarkerRenderState,
+    ): Bitmap {
+        val sizePx = dpToPx(marker.sizeDp.toFloat())
+        val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
+        val center = sizePx / 2f
+        val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val fillPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = marker.fillColorArgb
+            }
+
+        canvas.drawCircle(center, center, center, fillPaint)
+        return bitmap
+    }
 
     private fun createDirectionArrowBitmap(
         marker: KakaoOverlayMarkerRenderState,

@@ -668,7 +668,7 @@ class RouteSettingViewModelTest {
             val detailSteps = viewModel.uiState.value.selectedRoute?.detailSteps.orEmpty()
 
             assertEquals(
-                listOf("출발", "직진 이동", "좌회전", "횡단보도 건너기", "우회전", "도착"),
+                listOf("출발", "120m 직진 이동", "80m 후 좌회전", "음향 신호 횡단보도 건너기", "150m 후 우회전", "목적지 도착"),
                 detailSteps.map(RouteDetailStepUiState::title),
             )
             assertEquals(
@@ -683,7 +683,7 @@ class RouteSettingViewModelTest {
                 detailSteps.map(RouteDetailStepUiState::kind),
             )
             assertEquals(
-                "음향신호기 안내를 확인한 뒤 횡단보도를 건너세요.",
+                "목적지까지 약 8분",
                 detailSteps[3].description,
             )
             assertEquals("음향 신호", detailSteps[3].badgeLabel)

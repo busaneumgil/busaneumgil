@@ -1,7 +1,11 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import com.ssafy.e102.eumgil.feature.guidance.component.resolveGuideRailPromotedItemIndex
+import com.ssafy.e102.eumgil.feature.guidance.component.shouldHideGuideRailItemForTopCard
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -116,6 +120,79 @@ class GuideSidePanelPolicyTest {
             "Shared side panel should document the requested origin and destination pin colors.",
             sharedSource.contains("GuideWaypointOriginColor = Color(0xFF4D8FF9)") &&
                 sharedSource.contains("GuideWaypointDestinationColor = Color(0xFFF94D4D)"),
+        )
+        assertTrue(
+            "Expanded and collapsed side-panel waypoint pins should share the same visual size.",
+            sharedSource.contains("GuideSidePanelPinWidth = GuideCollapsedRailPinWidth") &&
+                sharedSource.contains("GuideSidePanelPinHeight = GuideCollapsedRailPinHeight"),
+        )
+        assertTrue(
+            "Waypoint pins should preserve the original bitmap ratio instead of stretching the marker.",
+            sharedSource.contains("contentScale = ContentScale.Fit") &&
+                sharedSource.contains("GuideCollapsedRailPinHeight = GuideCollapsedRailPinWidth"),
+        )
+        assertFalse(
+            "Waypoint pins must not be vertically stretched through FillBounds.",
+            sharedSource.contains("contentScale = ContentScale.FillBounds") ||
+                sharedSource.contains("GuideCollapsedRailPinHeight = 50.dp"),
+        )
+    }
+
+    @Test
+    fun `rail promotion advances only after the visible item crosses half height`() {
+        assertEquals(
+            0,
+            resolveGuideRailPromotedItemIndex(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 28,
+                firstVisibleItemSizePx = 56,
+                itemCount = 4,
+            ),
+        )
+        assertEquals(
+            1,
+            resolveGuideRailPromotedItemIndex(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 29,
+                firstVisibleItemSizePx = 56,
+                itemCount = 4,
+            ),
+        )
+        assertEquals(
+            3,
+            resolveGuideRailPromotedItemIndex(
+                firstVisibleItemIndex = 3,
+                firstVisibleItemScrollOffset = 40,
+                firstVisibleItemSizePx = 56,
+                itemCount = 4,
+            ),
+        )
+        assertNull(
+            resolveGuideRailPromotedItemIndex(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 40,
+                firstVisibleItemSizePx = 56,
+                itemCount = 0,
+            ),
+        )
+    }
+
+    @Test
+    fun `rail item promoted to the top card is hidden from the rail`() {
+        assertTrue(shouldHideGuideRailItemForTopCard(itemIndex = 2, promotedItemIndex = 2))
+        assertFalse(shouldHideGuideRailItemForTopCard(itemIndex = 1, promotedItemIndex = 2))
+        assertFalse(shouldHideGuideRailItemForTopCard(itemIndex = 1, promotedItemIndex = null))
+    }
+
+    @Test
+    fun `collapsed rail spacing supports picker style scrolling`() {
+        val sharedSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
+
+        assertTrue(
+            "Collapsed side-tab icons should use the requested 1.5x spacing so the top card is not visually clipped by adjacent icons.",
+            sharedSource.contains("GuideCollapsedRailItemHeight = 96.dp"),
         )
     }
 }

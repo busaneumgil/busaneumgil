@@ -193,6 +193,7 @@ fun GuideCollapsedRailItem(
     stateDescription: String? = null,
     dividerColor: Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
     height: Dp = GuideCollapsedRailItemHeight,
+    isContentHidden: Boolean = false,
 ) {
     val tone =
         guideSidePanelItemTone(
@@ -224,7 +225,7 @@ fun GuideCollapsedRailItem(
                 isOrigin = isOrigin,
                 isDestination = isDestination,
                 contentColor = tone.iconTint,
-                iconAlpha = tone.iconAlpha,
+                iconAlpha = if (isContentHidden) 0f else tone.iconAlpha,
                 iconSize = action.collapsedIconSize(),
                 pinWidth = GuideCollapsedRailPinWidth,
                 pinHeight = GuideCollapsedRailPinHeight,
@@ -265,7 +266,7 @@ fun GuideSidePanelStepIcon(
                         .width(pinWidth)
                         .height(pinHeight)
                         .alpha(iconAlpha),
-                contentScale = ContentScale.FillBounds,
+                contentScale = ContentScale.Fit,
             )
         } else {
             Icon(
@@ -349,6 +350,30 @@ data class GuideSidePanelItemTone(
     val isEmphasized: Boolean,
 )
 
+internal fun resolveGuideRailPromotedItemIndex(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    firstVisibleItemSizePx: Int,
+    itemCount: Int,
+): Int? {
+    if (itemCount <= 0) return null
+    if (firstVisibleItemIndex !in 0 until itemCount) return null
+    if (firstVisibleItemSizePx <= 0) return firstVisibleItemIndex
+
+    val shouldPromoteNext =
+        firstVisibleItemScrollOffset.coerceAtLeast(0) * 2 > firstVisibleItemSizePx
+    return if (shouldPromoteNext) {
+        (firstVisibleItemIndex + 1).coerceAtMost(itemCount - 1)
+    } else {
+        firstVisibleItemIndex
+    }
+}
+
+internal fun shouldHideGuideRailItemForTopCard(
+    itemIndex: Int,
+    promotedItemIndex: Int?,
+): Boolean = promotedItemIndex != null && itemIndex == promotedItemIndex
+
 private fun NavigationGuidanceAction.collapsedIconSize(): Dp =
     if (this == NavigationGuidanceAction.BUS || this == NavigationGuidanceAction.SUBWAY) {
         GuideCollapsedRailTransitIconSize
@@ -360,18 +385,18 @@ private val GuideSidePanelCollapsedWidth = 56.dp
 private const val GuideSidePanelExpandedWidthFraction = 0.88f
 private const val GuideSidePanelSwipeThresholdPx = 80f
 private val GuideSidePanelRowMinHeight = 76.dp
-private val GuideSidePanelIconFrameSize = 44.dp
+private val GuideSidePanelIconFrameSize = 54.dp
 private val GuideSidePanelIconSize = 28.dp
 private val GuideSidePanelIconColor = Color(0xFF2C2F36)
 private val GuideWaypointOriginColor = Color(0xFF4D8FF9)
 private val GuideWaypointDestinationColor = Color(0xFFF94D4D)
-private val GuideSidePanelPinWidth = 24.dp
-private val GuideSidePanelPinHeight = 30.dp
-private val GuideCollapsedRailItemHeight = 64.dp
+private val GuideCollapsedRailItemHeight = 96.dp
 private val GuideCollapsedRailIconSize = 28.dp
 private val GuideCollapsedRailTransitIconSize = 22.dp
 private val GuideCollapsedRailPinWidth = 42.dp
-private val GuideCollapsedRailPinHeight = 50.dp
+private val GuideCollapsedRailPinHeight = GuideCollapsedRailPinWidth
+private val GuideSidePanelPinWidth = GuideCollapsedRailPinWidth
+private val GuideSidePanelPinHeight = GuideCollapsedRailPinHeight
 private val GuideSidePanelHandleTouchWidth = 48.dp
 private val GuideSidePanelHandleTouchHeight = 64.dp
 private val GuideSidePanelHandleRadius = 24.dp

@@ -315,6 +315,26 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `native overlay marker render state adds focused guidance halo token`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                listOf(
+                    MapViewportPointOverlay(
+                        overlayId = "navigation-focus",
+                        coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                        kind = MapViewportPointKind.FOCUS_HALO,
+                    ),
+                ),
+            )
+
+        assertEquals(listOf("overlay-navigation-focus"), markerStates.map { it.markerId })
+        assertEquals(KakaoOverlayMarkerKind.FOCUS_HALO, markerStates.single().kind)
+        assertEquals(26, markerStates.single().sizeDp)
+        assertEquals(0x804D8FF9.toInt(), markerStates.single().fillColorArgb)
+        assertEquals(0x004D8FF9, markerStates.single().strokeColorArgb)
+    }
+
+    @Test
     fun `native overlay marker render state uses transit stop and transfer marker tokens`() {
         val markerStates =
             createKakaoOverlayMarkerRenderStates(

@@ -69,6 +69,7 @@ data class NavigationMapOverlayUiState(
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
+    val shouldAnimateCameraTransition: Boolean = true,
 ) {
     val shouldUsePlaceholder: Boolean
         get() = !isDisplayable
@@ -91,6 +92,7 @@ data class NavigationMapSegmentUiState(
     val isFocused: Boolean = false,
     val isCompleted: Boolean = false,
     val isRiskUpcoming: Boolean = false,
+    val showJunctionMarker: Boolean = true,
 ) {
     val isRenderable: Boolean
         get() = polyline.size >= 2
@@ -132,6 +134,7 @@ data class NavigationFocusedSegmentCardUiState(
     val riskLabel: String,
     val supportingText: String,
     val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
+    val transitInfo: NavigationTransitInfoUiState? = null,
 )
 
 enum class NavigationMapFocusMode {

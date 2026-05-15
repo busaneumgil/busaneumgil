@@ -9,7 +9,9 @@ data class CreateHazardReportRequestDto(
     val reportType: String,
     val description: String?,
     val reportPoint: HazardReportPointDto,
-    val imageUrls: List<String> = emptyList(),
+    // Task 5.6: BE 명세에 따라 presigned 업로드된 S3 object key 배열을 전송한다.
+    // 이미지 binary는 별도 presigned PUT API로 먼저 업로드해야 한다.
+    val imageObjectKeys: List<String> = emptyList(),
 )
 
 /**
@@ -41,6 +43,10 @@ data class HazardReportListItemDto(
     val reportPoint: HazardReportPointDto,
     val createdAt: String,
     val representativeImageUrl: String?,
+    // Task 5.7 — BE list 응답이 내려주는 80자 preview 설명 (nullable).
+    val description: String? = null,
+    // Task 5.7 — BE가 좌표 역지오코딩으로 채워준 표시 주소 snapshot (nullable).
+    val address: String? = null,
 )
 
 data class HazardReportPageDto(

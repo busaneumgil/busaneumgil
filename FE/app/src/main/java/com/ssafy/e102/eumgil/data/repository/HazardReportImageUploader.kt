@@ -4,7 +4,9 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportImagesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsApiException
 import com.ssafy.e102.eumgil.data.remote.dto.PresignedUploadRequestDto
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * 제보 outbox의 사진 목록을 presigned URL을 통해 S3/MinIO에 업로드한 뒤 안정 저장값(`objectKey`) 목록을 돌려준다 (Task 5.5).
@@ -70,10 +72,21 @@ class DefaultHazardReportImageUploader(
         for ((index, photo) in pending.withIndex()) {
             val absoluteIndex = alreadyUploadedCount + index
             val ok =
-                runCatching { uploadSingle(accessToken, photo, absoluteIndex) }
-                    .onFailure { error ->
-                        Log.w(IMAGE_UPLOADER_LOG_TAG, "Photo upload failed at index $absoluteIndex", error)
-                    }.getOrNull()
+                try {
+                    uploadSingle(accessToken, photo, absoluteIndex)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (apiException: HazardReportsApiException) {
+                    // Task 5.9 — 401(A4010) 등 인증 실패는 swallow하지 않고 throw해서
+                    // Repository의 AuthenticatedRequestRunner가 /auth/reissue + 재시도할 수 있게 한다.
+                    if (apiException.httpStatusCode == HTTP_UNAUTHORIZED) throw apiException
+                    Log.w(IMAGE_UPLOADER_LOG_TAG, "Photo upload failed at index $absoluteIndex", apiException)
+                    null
+                } catch (other: Throwable) {
+                    // 그 외 IO/네트워크 실패는 부분 성공 정책에 맞춰 흐름을 유지한다.
+                    Log.w(IMAGE_UPLOADER_LOG_TAG, "Photo upload failed at index $absoluteIndex", other)
+                    null
+                }
             if (ok == null) {
                 allSucceeded = false
                 break
@@ -119,5 +132,6 @@ class DefaultHazardReportImageUploader(
     private companion object {
         private const val IMAGE_UPLOADER_LOG_TAG = "HazardReportImageUploader"
         private const val DEFAULT_MIME_TYPE = "image/jpeg"
+        private const val HTTP_UNAUTHORIZED = 401
     }
 }

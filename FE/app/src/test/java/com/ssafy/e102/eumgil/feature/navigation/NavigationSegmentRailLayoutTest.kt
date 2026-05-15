@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class NavigationSegmentRailLayoutTest {
     @Test
@@ -63,6 +64,21 @@ class NavigationSegmentRailLayoutTest {
 
         assertTrue(slots.canReturnToActiveSegment)
         assertEquals(2, slots.destinationItem?.index)
+    }
+
+    @Test
+    fun `collapsed rail does not paint a full height surface behind the map`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("fun NavigationSegmentRail(")
+                .substringBefore("@Composable\nprivate fun NavigationSegmentRailWaypoint")
+
+        assertFalse(railSection.contains("val railColor = MaterialTheme.colorScheme.surface"))
+        assertFalse(railSection.contains(".background(color = railColor)"))
+        assertTrue(railSection.contains(".fillMaxHeight()"))
     }
 }
 

@@ -18,7 +18,7 @@ class SearchScreenPolicyTest {
         val searchResultItemSection =
             source
                 .substringAfter("private fun SearchResultItem(")
-                .substringBefore("@Composable\nprivate fun SearchResultAccessibilityTagRow")
+                .substringBefore("private fun SearchResultAccessibilityTagRow")
 
         assertTrue(
             "Recent search rows should suppress ripple because they push the user into the results route.",
@@ -35,6 +35,16 @@ class SearchScreenPolicyTest {
         assertTrue(
             "Search result rows should keep a dedicated interaction source when ripple is suppressed.",
             searchResultItemSection.contains("MutableInteractionSource()"),
+        )
+        assertTrue(
+            "Search result rows should use a list item divider instead of card chrome.",
+            searchResultItemSection.contains("HorizontalDivider("),
+        )
+        assertFalse(
+            "Search result rows should not render each result inside a card-like Surface.",
+            searchResultItemSection.contains("Surface(") ||
+                searchResultItemSection.contains("shadowElevation") ||
+                searchResultItemSection.contains("shape = RoundedCornerShape(EumRadius.large)"),
         )
     }
 
@@ -151,8 +161,39 @@ class SearchScreenPolicyTest {
         )
         assertTrue(
             "Search empty and error copy should use explicit line breaks requested for the empty/error states.",
-            stringsSource.contains("<string name=\"search_screen_empty_result_title\">검색 결과가\\n없습니다</string>") &&
+            stringsSource.contains("<string name=\"search_screen_empty_result_title\">검색 결과가\\n존재하지 않습니다.</string>") &&
                 stringsSource.contains("<string name=\"search_screen_error_title\">검색 결과를\\n불러오지 못했습니다</string>"),
+        )
+    }
+
+    @Test
+    fun `empty result state uses requested title and description typography`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val emptyStateSection =
+            source
+                .substringAfter("is SearchResultUiState.Empty ->")
+                .substringBefore("is SearchResultUiState.Error ->")
+        val centeredStateSection =
+            source
+                .substringAfter("private fun SearchCenteredStateMessage(")
+                .substringBefore("@Composable\nprivate fun SearchStateCard")
+
+        assertTrue(
+            "Empty result state should opt into the dedicated 32px title typography.",
+            emptyStateSection.contains("useEmptyResultTypography = true"),
+        )
+        assertTrue(
+            "Empty result title should be 32px bold.",
+            centeredStateSection.contains("fontSize = 32.sp") &&
+                centeredStateSection.contains("fontWeight = FontWeight.Bold"),
+        )
+        assertTrue(
+            "Empty result description should be 16px regular with 16dp spacing from the title.",
+            centeredStateSection.contains("fontSize = 16.sp") &&
+                centeredStateSection.contains("fontWeight = FontWeight.Normal") &&
+                centeredStateSection.contains("val descriptionTopPadding = if (useEmptyResultTypography) 16.dp"),
         )
     }
 }

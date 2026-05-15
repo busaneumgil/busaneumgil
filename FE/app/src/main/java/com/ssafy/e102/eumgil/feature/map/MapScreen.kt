@@ -1123,8 +1123,7 @@ private fun mapRecentDestinationBottomSheetState(uiState: MapUiState): RecentDes
                     placeId = destination.placeId,
                     title = destination.name,
                     address = destination.address.orEmpty(),
-                    tags = tagLabels.take(MAX_RECENT_DESTINATION_VISIBLE_TAGS),
-                    overflowTagCount = (tagLabels.size - MAX_RECENT_DESTINATION_VISIBLE_TAGS).coerceAtLeast(0),
+                    tags = tagLabels,
                     iconRes = recentDestinationIcon(destination.category),
                 )
             },
@@ -1814,10 +1813,10 @@ private fun recentDestinationTagLabel(rawKey: String): String? =
     when (rawKey.trim().lowercase()) {
         "accessible-toilet" -> "장애인 화장실"
         "elevator" -> "엘리베이터"
-        "accessible-parking" -> "장애인 주차 가능"
+        "accessible-parking" -> "장애인 주차"
         "step-free-entrance" -> "단차 없음"
         "guidance-facility" -> "안내시설"
-        "accessible-room" -> "객실 이용 가능"
+        "accessible-room" -> "장애인 객실"
         "ramp" -> "경사로"
         "auto-door" -> "출입 가능"
         "wide-entry" -> "출입 가능"
@@ -1869,7 +1868,6 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0
-private const val MAX_RECENT_DESTINATION_VISIBLE_TAGS = 2
 private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3
 private const val MAX_FACILITY_DETAIL_TRANSIT_ARRIVALS = 3
 private val MapActionLabelDefaultFontSize = 14.sp

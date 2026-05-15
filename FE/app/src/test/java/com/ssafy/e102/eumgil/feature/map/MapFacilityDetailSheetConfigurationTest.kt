@@ -540,15 +540,23 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
-    fun `recent destination sheet limits visible accessibility chips`() {
+    fun `recent destination sheet keeps accessibility chips visible without overflow count`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val shellSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/RecentDestinationBottomSheetShell.kt").readText()
 
         assertTrue(
-            "Recent destination summary should cap visible tags and collapse remaining tags into the overflow count.",
-            source.contains("private const val MAX_RECENT_DESTINATION_VISIBLE_TAGS = 2") &&
-                source.contains("tagLabels.take(MAX_RECENT_DESTINATION_VISIBLE_TAGS)") &&
-                source.contains("tagLabels.size - MAX_RECENT_DESTINATION_VISIBLE_TAGS"),
+            "Recent destination summary should pass all resolved accessibility tags to the sheet.",
+            source.contains("tags = tagLabels") &&
+                !source.contains("MAX_RECENT_DESTINATION_VISIBLE_TAGS") &&
+                !source.contains("overflowTagCount"),
+        )
+        assertTrue(
+            "Recent destination sheet should wrap chips instead of rendering +n overflow chips.",
+            shellSource.contains("FlowRow(") &&
+                !shellSource.contains("overflowTagCount") &&
+                !shellSource.contains("label = \"+"),
         )
     }
 

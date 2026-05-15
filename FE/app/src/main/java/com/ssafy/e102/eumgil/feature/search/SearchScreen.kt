@@ -10,6 +10,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +30,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +55,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -501,6 +505,7 @@ private fun SearchResultsContent(
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_empty_result_title),
                         description = stringResource(id = copy.emptyResultDescriptionRes),
+                        useEmptyResultTypography = true,
                     )
                 }
 
@@ -822,6 +827,7 @@ private fun SearchResultSection(
                 SearchCenteredStateMessage(
                     title = stringResource(id = R.string.search_screen_empty_result_title),
                     description = stringResource(id = copy.emptyResultDescriptionRes),
+                    useEmptyResultTypography = true,
                 )
 
             is SearchResultUiState.Error ->
@@ -1132,7 +1138,7 @@ private fun SearchResultItem(
                 )
         }
 
-    Surface(
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -1146,63 +1152,81 @@ private fun SearchResultItem(
                     contentDescription = accessibilityDescriptionWithDistance
                     this.stateDescription = stateDescription
                 },
-        shape = RoundedCornerShape(EumRadius.large),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
-        shadowElevation = 2.dp,
     ) {
-        Column(
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                    .padding(vertical = EumSpacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = result.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (trimmedAddress.isNotEmpty()) {
-                Text(
-                    text = trimmedAddress,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Box(
+                modifier =
+                    Modifier
+                        .size(SearchResultPlaceIconContainerSize)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
+                            shape = CircleShape,
+                        ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+                    contentDescription = null,
+                    modifier = Modifier.size(SearchResultPlaceIconSize),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
-            if (distanceText != null) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            ) {
                 Text(
-                    text = distanceText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = result.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
-            }
-            if (accessibilityTagUiState.hasLabels) {
-                SearchResultAccessibilityTagRow(uiState = accessibilityTagUiState)
+                if (trimmedAddress.isNotEmpty()) {
+                    Text(
+                        text = trimmedAddress,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (distanceText != null) {
+                    Text(
+                        text = distanceText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                if (accessibilityTagUiState.hasLabels) {
+                    SearchResultAccessibilityTagRow(uiState = accessibilityTagUiState)
+                }
             }
         }
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+        )
     }
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun SearchResultAccessibilityTagRow(
     uiState: SearchResultAccessibilityTagUiState,
 ) {
-    Row(
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         uiState.labelResIds.forEach { labelResId ->
             SearchResultAccessibilityTagChip(
                 text = stringResource(id = labelResId),
                 iconRes = searchResultAccessibilityTagIconRes(labelResId),
-                isOverflow = false,
-            )
-        }
-        if (uiState.overflowCount > 0) {
-            SearchResultAccessibilityTagChip(
-                text = stringResource(id = R.string.place_accessibility_label_overflow, uiState.overflowCount),
-                isOverflow = true,
             )
         }
     }
@@ -1212,20 +1236,9 @@ private fun SearchResultAccessibilityTagRow(
 private fun SearchResultAccessibilityTagChip(
     text: String,
     @DrawableRes iconRes: Int? = null,
-    isOverflow: Boolean,
 ) {
-    val containerColor =
-        if (isOverflow) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
-        }
-    val contentColor =
-        if (isOverflow) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.primary
-        }
+    val containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+    val contentColor = MaterialTheme.colorScheme.primary
 
     Surface(
         shape = RoundedCornerShape(999.dp),
@@ -1233,12 +1246,7 @@ private fun SearchResultAccessibilityTagChip(
         border =
             BorderStroke(
                 width = 1.dp,
-                color =
-                    if (isOverflow) {
-                        MaterialTheme.colorScheme.outlineVariant
-                    } else {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                    },
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
             ),
     ) {
         Row(
@@ -1287,10 +1295,13 @@ private fun searchResultAccessibilityTagIconSizeDp(
 private const val METERS_PER_KILOMETER = 1_000
 private const val SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD = 3
 private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
+private val SearchResultPlaceIconContainerSize: Dp = 56.dp
+private val SearchResultPlaceIconSize: Dp = 32.dp
 private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 private val SearchStateTitleLineHeight = 34.sp
+private val SearchEmptyResultTitleLineHeight = 40.sp
 
 @Composable
 private fun SearchCenteredStateMessage(
@@ -1300,7 +1311,30 @@ private fun SearchCenteredStateMessage(
     supportingText: String? = null,
     showIllustration: Boolean = true,
     showLoadingIndicator: Boolean = false,
+    useEmptyResultTypography: Boolean = false,
 ) {
+    val titleStyle =
+        if (useEmptyResultTypography) {
+            MaterialTheme.typography.headlineSmall.copy(
+                fontSize = 32.sp,
+                lineHeight = SearchEmptyResultTitleLineHeight,
+                fontWeight = FontWeight.Bold,
+            )
+        } else {
+            MaterialTheme.typography.headlineSmall.copy(lineHeight = SearchStateTitleLineHeight)
+        }
+    val descriptionTopPadding = if (useEmptyResultTypography) 16.dp else EumSpacing.xSmall
+    val descriptionStyle =
+        if (useEmptyResultTypography) {
+            MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                fontWeight = FontWeight.Normal,
+            )
+        } else {
+            MaterialTheme.typography.bodyLarge
+        }
+
     Column(
         modifier =
             modifier
@@ -1333,14 +1367,14 @@ private fun SearchCenteredStateMessage(
         Text(
             text = title,
             modifier = Modifier.padding(top = EumSpacing.medium),
-            style = MaterialTheme.typography.headlineSmall.copy(lineHeight = SearchStateTitleLineHeight),
+            style = titleStyle,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
         Text(
             text = description,
-            modifier = Modifier.padding(top = EumSpacing.xSmall),
-            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = descriptionTopPadding),
+            style = descriptionStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
         )

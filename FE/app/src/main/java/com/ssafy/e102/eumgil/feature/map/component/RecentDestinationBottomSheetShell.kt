@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -79,7 +81,6 @@ data class RecentDestinationRowState(
     val title: String,
     val address: String,
     val tags: List<String> = emptyList(),
-    val overflowTagCount: Int = 0,
     @DrawableRes val iconRes: Int,
 )
 
@@ -317,6 +318,7 @@ private fun RecentDestinationRestoreHandle(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun RecentDestinationRow(
     state: RecentDestinationRowState,
     onRouteClick: () -> Unit,
@@ -354,21 +356,15 @@ private fun RecentDestinationRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (state.tags.isNotEmpty() || state.overflowTagCount > 0) {
-                Row(
+            if (state.tags.isNotEmpty()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     state.tags.forEach { label ->
                         RecentDestinationTagChip(
                             label = label,
-                            isOverflow = false,
-                        )
-                    }
-                    if (state.overflowTagCount > 0) {
-                        RecentDestinationTagChip(
-                            label = "+${state.overflowTagCount}",
-                            isOverflow = true,
                         )
                     }
                 }
@@ -457,21 +453,10 @@ private fun RecentDestinationRouteButton(
 @Composable
 private fun RecentDestinationTagChip(
     label: String,
-    isOverflow: Boolean,
 ) {
-    val iconRes = recentDestinationTagIconRes(label = label, isOverflow = isOverflow)
-    val containerColor =
-        if (isOverflow) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
-        }
-    val contentColor =
-        if (isOverflow) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.primary
-        }
+    val iconRes = recentDestinationTagIconRes(label = label)
+    val containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+    val contentColor = MaterialTheme.colorScheme.primary
 
     Surface(
         shape = RoundedCornerShape(8.dp),
@@ -479,12 +464,7 @@ private fun RecentDestinationTagChip(
         border =
             BorderStroke(
                 width = 1.dp,
-                color =
-                    if (isOverflow) {
-                        MaterialTheme.colorScheme.outlineVariant
-                    } else {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                    },
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
             ),
     ) {
         Row(
@@ -515,10 +495,7 @@ private fun RecentDestinationTagChip(
 @DrawableRes
 private fun recentDestinationTagIconRes(
     label: String,
-    isOverflow: Boolean,
 ): Int? {
-    if (isOverflow) return null
-
     val normalizedLabel = label.trim()
     val bareGuidanceLabel = stringResource(id = R.string.place_accessibility_label_guidance_facility).substringBeforeLast(' ')
     return when (normalizedLabel) {

@@ -77,8 +77,10 @@ export interface SegmentFeature {
     edgeId: number | string;
     fromNodeId?: number | string;
     toNodeId?: number | string;
-    segmentType?: EditableSegmentType | "SIDE_WALK" | "TRANSITION_CONNECTOR" | string;
+    segmentType?: EditableSegmentType | "TRANSITION_CONNECTOR" | string;
     lengthMeter?: number | string;
+    avgSlopePercent?: number | string | null;
+    widthMeter?: number | string | null;
     walkAccess?: string | null;
     brailleBlockState?: string | null;
     audioSignalState?: string | null;
@@ -134,10 +136,14 @@ export interface BridgeFeature {
 
 export interface BridgePayload {
   summary?: {
+    componentCount?: number;
+    endpointCount?: number;
     bridgeCandidateCount?: number | null;
     visibleBridgeCandidateCount?: number;
     bridgeMaxDistanceMeter?: number;
+    bridgeAutoDistanceMeter?: number;
   };
+  bbox?: [number, number, number, number] | null;
   bridges: {
     type: "FeatureCollection";
     features: BridgeFeature[];

@@ -108,8 +108,8 @@ class MapFacilityDetailSheetConfigurationTest {
             source.contains("if (state.hasDetailContent && !isCollapsed)"),
         )
         assertTrue(
-            "Detail sheet body should reserve a bounded scroll area so long place details can scroll above fixed actions.",
-            source.contains(".weight(1f, fill = true)") &&
+            "Detail sheet body should scroll inside a bounded area without forcing the sheet to max height.",
+            source.contains("heightIn(max = detailContentMaxHeight)") &&
                 source.contains(".verticalScroll(detailScrollState)"),
         )
     }
@@ -170,6 +170,12 @@ class MapFacilityDetailSheetConfigurationTest {
         assertTrue(
             "Collapsed title should be one line while expanded title can use two lines.",
             shellSource.contains("maxLines = if (isCollapsed) 1 else 2"),
+        )
+        assertTrue(
+            "Expanded detail content should scroll inside a bounded area instead of forcing the whole sheet to fill the screen.",
+            shellSource.contains("private const val FacilityDetailContentMaxHeightFraction = 0.32f") &&
+                shellSource.contains("heightIn(max = detailContentMaxHeight)") &&
+                !shellSource.contains(".weight(1f, fill = true)"),
         )
         assertTrue(
             "Bottom actions should keep origin before destination in the fixed action row.",
@@ -530,6 +536,46 @@ class MapFacilityDetailSheetConfigurationTest {
         assertTrue(
             "Recent destination elevator chip should use the compact noun label without the trailing status suffix.",
             source.contains("\"elevator\" -> \"엘리베이터\""),
+        )
+    }
+
+    @Test
+    fun `recent destination sheet keeps accessibility chips visible without overflow count`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val shellSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/RecentDestinationBottomSheetShell.kt").readText()
+
+        assertTrue(
+            "Recent destination summary should pass all resolved accessibility tags to the sheet.",
+            source.contains("tags = tagLabels") &&
+                !source.contains("MAX_RECENT_DESTINATION_VISIBLE_TAGS") &&
+                !source.contains("overflowTagCount"),
+        )
+        assertTrue(
+            "Recent destination sheet should wrap chips instead of rendering +n overflow chips.",
+            shellSource.contains("FlowRow(") &&
+                !shellSource.contains("overflowTagCount") &&
+                !shellSource.contains("label = \"+"),
+        )
+    }
+
+    @Test
+    fun `map tap loading sheet hides temporary coordinate address`() {
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val shellSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+
+        assertTrue(
+            "Map tap loading state should show a loading copy instead of a temporary selected-position title.",
+            screenSource.contains("?: stringResource(id = R.string.map_facility_detail_loading_guide)") &&
+                screenSource.contains("title = stringResource(id = R.string.map_facility_detail_loading_guide)") &&
+                screenSource.contains("address = \"\""),
+        )
+        assertTrue(
+            "Facility detail shell should not reserve an address row when the loading state has no confirmed address.",
+            shellSource.contains("!isCollapsed && state.address.isNotBlank()"),
         )
     }
 }

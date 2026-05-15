@@ -349,6 +349,45 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `distance sort without current location falls back to relevance search`() =
+        runTest {
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "신호공원",
+                    subtitle = "부산",
+                    latitude = 35.1000,
+                    longitude = 129.0000,
+                )
+            val searchRepository = FakeSearchRepository(searchResults = listOf(result))
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "신호공원"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.SortOptionSelected(sortOption = SearchSortOption.DISTANCE))
+            advanceUntilIdle()
+
+            assertEquals(SearchSortOption.RELEVANCE, viewModel.uiState.value.sortOption)
+            assertTrue(viewModel.uiState.value.resultState is SearchResultUiState.Success)
+            assertEquals(
+                listOf(SearchSortOption.RELEVANCE, SearchSortOption.RELEVANCE),
+                searchRepository.searchPageQueries.map { query -> query.sortOption },
+            )
+            assertEquals(
+                listOf(null, null),
+                searchRepository.searchPageQueries.map { query -> query.latitude },
+            )
+        }
+
+    @Test
     fun `recent search click emits results navigation with selected keyword`() =
         runTest {
             val viewModel =
@@ -451,7 +490,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `fresh search entry re-entry resets empty query warning to default state`() =
+    fun `blank search submit stays on current search state without warning`() =
         runTest {
             val viewModel =
                 SearchViewModel(
@@ -466,7 +505,8 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.SearchSubmitted)
             advanceUntilIdle()
 
-            assertEquals(SearchResultUiState.EmptyQuery, viewModel.uiState.value.resultState)
+            assertEquals(SearchResultUiState.Initial, viewModel.uiState.value.resultState)
+            assertEquals("   ", viewModel.uiState.value.query)
 
             viewModel.onAction(SearchUiAction.EntryRouteEntered(preserveState = false))
             advanceUntilIdle()

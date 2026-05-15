@@ -409,6 +409,12 @@ textarea::placeholder {
   grid-template-rows: auto 1fr;
 }
 
+.workspace-map-page {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .topbar {
   display: flex;
   position: relative;
@@ -505,6 +511,11 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 420px;
   min-height: 0;
+}
+
+.workspace-map-page .editor-layout {
+  height: 100%;
+  overflow: hidden;
 }
 
 .review-mode-layout {
@@ -730,6 +741,12 @@ textarea::placeholder {
   background: var(--color-gray-100);
 }
 
+.workspace-map-page .map-shell {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .map-canvas {
   position: absolute;
   inset: 0;
@@ -788,6 +805,28 @@ textarea::placeholder {
 
 .legend-toggle:not(.active) {
   opacity: 0.45;
+}
+
+.route-attribute-legend {
+  max-width: min(980px, calc(100% - 20px));
+}
+
+.route-attribute-badge-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border: 1px solid rgb(255 255 255 / 0.9);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: var(--shadow-map-overlay);
+  pointer-events: none;
+}
+
+.route-attribute-badge-stack span {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
 }
 
 .draft-count-badge,
@@ -1041,6 +1080,13 @@ textarea::placeholder {
   background: var(--color-gray-50);
   padding: 14px;
   overflow: auto;
+}
+
+.workspace-map-page .detail-panel {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .panel-section {

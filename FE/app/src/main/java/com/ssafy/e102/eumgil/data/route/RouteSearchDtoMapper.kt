@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteDefaults
 import com.ssafy.e102.eumgil.core.model.RouteGuidanceDirection
 import com.ssafy.e102.eumgil.core.model.RouteGuidanceFeature
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceType
 import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteLegRole
 import com.ssafy.e102.eumgil.core.model.RouteLegType
@@ -255,7 +256,11 @@ private fun RouteLegDto.toDomain(
                         )
                     }
 
-            guidanceEvents.isNotEmpty() -> guidanceEvents.toDomainSteps(geometryParser)
+            guidanceEvents.isNotEmpty() ->
+                guidanceEvents.toDomainSteps(
+                    geometryParser = geometryParser,
+                    legDistanceMeters = distanceMeter.toRoundedMeters(),
+                )
 
             else -> emptyList()
         }.sortedBy(RouteStep::sequence)
@@ -340,23 +345,40 @@ private fun LowFloorBusReservationDto.toDomainOrNull(): LowFloorBusReservation? 
     )
 }
 
-private fun List<RouteGuidanceEventDto>.toDomainSteps(geometryParser: RouteGeometryParser): List<RouteStep> {
+private fun List<RouteGuidanceEventDto>.toDomainSteps(
+    geometryParser: RouteGeometryParser,
+    legDistanceMeters: Int?,
+): List<RouteStep> {
     var previousDistanceMeters = 0
+    val sortedEvents =
+        sortedWith(
+            compareBy<RouteGuidanceEventDto> { event ->
+                event.sequence ?: Int.MAX_VALUE
+            }.thenBy { event ->
+                event.distanceFromLegStartMeter?.toRoundedMeters() ?: Int.MAX_VALUE
+            },
+        )
 
-    return sortedWith(
-        compareBy<RouteGuidanceEventDto> { event ->
-            event.sequence ?: Int.MAX_VALUE
-        }.thenBy { event ->
-            event.distanceFromLegStartMeter?.toRoundedMeters() ?: Int.MAX_VALUE
-        },
-    ).mapIndexed { index, event ->
+    return sortedEvents.mapIndexed { index, event ->
         val cumulativeDistance = event.distanceFromLegStartMeter.toRoundedMeters() ?: previousDistanceMeters
         val stepDistance = (cumulativeDistance - previousDistanceMeters).coerceAtLeast(0)
+        val nextEventDistance =
+            sortedEvents
+                .drop(index + 1)
+                .firstNotNullOfOrNull { nextEvent -> nextEvent.distanceFromLegStartMeter.toRoundedMeters() }
+        val guidanceDistance =
+            event.guidanceDisplayDistanceMeters(
+                currentDistanceMeters = cumulativeDistance,
+                distanceFromPreviousEventMeters = stepDistance,
+                nextEventDistanceMeters = nextEventDistance,
+                legDistanceMeters = legDistanceMeters,
+            )
         previousDistanceMeters = maxOf(previousDistanceMeters, cumulativeDistance)
 
         event.toDomain(
             fallbackSequence = index + 1,
             distanceMeters = stepDistance,
+            guidanceDistanceMeters = guidanceDistance,
             geometryParser = geometryParser,
         )
     }
@@ -365,11 +387,14 @@ private fun List<RouteGuidanceEventDto>.toDomainSteps(geometryParser: RouteGeome
 private fun RouteGuidanceEventDto.toDomain(
     fallbackSequence: Int,
     distanceMeters: Int,
+    guidanceDistanceMeters: Int,
     geometryParser: RouteGeometryParser,
 ): RouteStep {
     val eventType = RouteGuidanceEventType.fromValue(type)
-    val eventDirection = RouteGuidanceDirection.fromValue(direction)
-    val eventFeatures = RouteGuidanceFeature.fromCodes(features)
+    val guidanceType = resolveGuidanceType(legacyEventType = eventType)
+    val guidanceDirection = resolveGuidanceDirection(legacyEventType = eventType)
+    val guidanceFeatures = resolveGuidanceFeatures(legacyEventType = eventType)
+    val resolvedBadges = eventType?.badges(guidanceFeatures).orEmpty().ifEmpty { guidanceType.toRouteBadges() }
     val geometryParseResult = geometryParser.parse(geometry)
 
     return RouteStep(
@@ -378,19 +403,77 @@ private fun RouteGuidanceEventDto.toDomain(
                 ?.takeIf { value -> value > 0 }
                 ?: fallbackSequence,
         instruction =
-            eventType?.instruction(eventFeatures)
-                ?: eventDirection?.instruction
-                ?: normalizedInstruction(type),
+            eventType?.instruction(guidanceFeatures)
+                ?: guidanceDirection?.instruction
+                ?: normalizedInstruction(type ?: direction),
         distanceMeters = distanceMeters,
         polyline = geometryParseResult.polyline,
         anchorCoordinate = geometryParseResult.anchorCoordinate,
-        badges = eventType?.badges(eventFeatures).orEmpty(),
-        alerts = listOfNotNull(eventType?.toAlert(distanceMeters = distanceMeters)),
-        guidanceDirection = eventDirection,
-        guidanceFeatures = eventFeatures,
+        badges = resolvedBadges,
+        alerts = listOfNotNull(eventType?.toAlert(distanceMeters = guidanceDistanceMeters)),
         slopePercent = null,
+        guidanceType = guidanceType,
+        guidanceDirection = guidanceDirection,
+        guidanceFeatures = guidanceFeatures,
+        guidanceDistanceMeters = guidanceDistanceMeters,
+        distanceFromLegStartMeters = distanceFromLegStartMeter.toRoundedMeters(),
+        durationFromRouteStartSeconds = durationFromRouteStartSecond?.takeIf { value -> value >= 0 },
     )
 }
+
+private fun RouteGuidanceEventDto.guidanceDisplayDistanceMeters(
+    currentDistanceMeters: Int,
+    distanceFromPreviousEventMeters: Int,
+    nextEventDistanceMeters: Int?,
+    legDistanceMeters: Int?,
+): Int {
+    val guidanceType = resolveGuidanceType(legacyEventType = RouteGuidanceEventType.fromValue(type))
+    val guidanceDirection = resolveGuidanceDirection(legacyEventType = RouteGuidanceEventType.fromValue(type))
+
+    return when {
+        guidanceType == RouteGuidanceType.DESTINATION -> 0
+        guidanceType == RouteGuidanceType.STRAIGHT ||
+            (guidanceType == null && guidanceDirection == RouteGuidanceDirection.STRAIGHT) -> {
+            val endDistance = nextEventDistanceMeters ?: legDistanceMeters ?: currentDistanceMeters
+            (endDistance - currentDistanceMeters).coerceAtLeast(0)
+        }
+        guidanceDirection == RouteGuidanceDirection.TURN_LEFT ||
+            guidanceDirection == RouteGuidanceDirection.TURN_RIGHT ->
+            distanceFromPreviousEventMeters.coerceAtLeast(0)
+        else -> currentDistanceMeters.coerceAtLeast(0)
+    }
+}
+
+private fun RouteGuidanceEventDto.resolveGuidanceType(legacyEventType: RouteGuidanceEventType?): RouteGuidanceType? =
+    legacyEventType?.guidanceType ?: RouteGuidanceType.fromValue(type)
+
+private fun RouteGuidanceEventDto.resolveGuidanceDirection(
+    legacyEventType: RouteGuidanceEventType?,
+): RouteGuidanceDirection? =
+    RouteGuidanceDirection.fromValue(direction)
+        ?: legacyEventType?.guidanceDirection
+        ?: if (RouteGuidanceType.fromValue(type) == RouteGuidanceType.STRAIGHT) {
+            RouteGuidanceDirection.STRAIGHT
+        } else {
+            null
+        }
+
+private fun RouteGuidanceEventDto.resolveGuidanceFeatures(
+    legacyEventType: RouteGuidanceEventType?,
+): List<RouteGuidanceFeature> =
+    (RouteGuidanceFeature.fromCodes(features) + legacyEventType?.guidanceFeatures.orEmpty()).distinct()
+
+private fun RouteGuidanceType?.toRouteBadges(): List<RouteBadge> =
+    when (this) {
+        RouteGuidanceType.CROSSWALK -> listOf(RouteBadge.CROSSWALK)
+        RouteGuidanceType.LOW_SLOPE -> listOf(RouteBadge.LOW_SLOPE)
+        RouteGuidanceType.MIDDLE_SLOPE -> listOf(RouteBadge.MIDDLE_SLOPE)
+        RouteGuidanceType.STAIR -> listOf(RouteBadge.STAIR)
+        RouteGuidanceType.NARROW_SIDEWALK -> listOf(RouteBadge.NARROW_SIDEWALK)
+        RouteGuidanceType.UNPAVED -> listOf(RouteBadge.UNPAVED)
+        RouteGuidanceType.SUBWAY_ELEVATOR -> listOf(RouteBadge.ELEVATOR)
+        else -> emptyList()
+    }
 
 private fun RouteStepAlertDto.toDomainOrNull(): RouteAlert? {
     val resolvedType = RouteAlertType.fromValue(type) ?: return null
@@ -448,20 +531,29 @@ private fun List<RouteLeg>.toCompatibilitySegments(): List<RouteSegment> {
 private fun RouteStep.toCompatibilitySegment(
     sequence: Int,
     sourceLegSequence: Int,
-): RouteSegment =
-    RouteSegment(
+): RouteSegment {
+    val resolvedSafetyFlags =
+        buildSafetyFlags(badges = badges, alerts = alerts, guidanceMessage = instruction)
+            .withGuidanceFeatures(guidanceFeatures)
+
+    return RouteSegment(
         sequence = sequence,
         polyline = polyline,
         anchorCoordinate = anchorCoordinate,
         distanceMeters = distanceMeters,
-        safetyFlags = buildSafetyFlags(badges = badges, alerts = alerts, guidanceMessage = instruction),
+        safetyFlags = resolvedSafetyFlags,
         riskLevel = resolveRiskLevel(badges = badges, alerts = alerts, guidanceMessage = instruction),
         guidanceMessage = instruction.ifBlank { RouteDefaults.DEFAULT_GUIDANCE_MESSAGE },
-        guidanceDirection = guidanceDirection,
-        guidanceFeatures = guidanceFeatures,
         sourceLegSequence = sourceLegSequence,
         sourceStepSequence = this.sequence,
+        guidanceType = guidanceType,
+        guidanceDirection = guidanceDirection,
+        guidanceFeatures = guidanceFeatures,
+        guidanceDistanceMeters = guidanceDistanceMeters,
+        distanceFromLegStartMeters = distanceFromLegStartMeters,
+        durationFromRouteStartSeconds = durationFromRouteStartSeconds,
     )
+}
 
 private fun RouteLeg.toCompatibilitySegment(sequence: Int): RouteSegment =
     RouteSegment(
@@ -976,6 +1068,14 @@ private fun buildSafetyFlags(
     )
 }
 
+private fun RouteSegmentSafetyFlags.withGuidanceFeatures(
+    features: List<RouteGuidanceFeature>,
+): RouteSegmentSafetyFlags =
+    copy(
+        hasSignal = hasSignal || RouteGuidanceFeature.SIGNAL in features,
+        hasAudioSignal = hasAudioSignal || RouteGuidanceFeature.AUDIO_SIGNAL in features,
+    )
+
 private fun resolveRiskLevel(
     badges: List<RouteBadge>,
     alerts: List<RouteAlert>,
@@ -1048,63 +1148,92 @@ private enum class RouteGuidanceEventType(
     private val defaultInstruction: String,
     private val defaultBadges: List<RouteBadge> = emptyList(),
     val alertType: RouteAlertType? = null,
+    val guidanceType: RouteGuidanceType? = null,
+    val guidanceDirection: RouteGuidanceDirection? = null,
+    val guidanceFeatures: List<RouteGuidanceFeature> = emptyList(),
 ) {
-    TURN_LEFT("Turn left."),
-    TURN_RIGHT("Turn right."),
-    STRAIGHT("Continue straight."),
+    TURN_LEFT(
+        defaultInstruction = "Turn left.",
+        guidanceDirection = RouteGuidanceDirection.TURN_LEFT,
+    ),
+    TURN_RIGHT(
+        defaultInstruction = "Turn right.",
+        guidanceDirection = RouteGuidanceDirection.TURN_RIGHT,
+    ),
+    STRAIGHT(
+        defaultInstruction = "Continue straight.",
+        guidanceType = RouteGuidanceType.STRAIGHT,
+        guidanceDirection = RouteGuidanceDirection.STRAIGHT,
+    ),
     CROSSWALK(
         defaultInstruction = "Crosswalk ahead.",
         defaultBadges = listOf(RouteBadge.CROSSWALK),
         alertType = RouteAlertType.CROSSWALK,
+        guidanceType = RouteGuidanceType.CROSSWALK,
     ),
     CROSSWALK_SIGNAL(
         defaultInstruction = "Signalized crosswalk ahead.",
         defaultBadges = listOf(RouteBadge.CROSSWALK),
         alertType = RouteAlertType.CROSSWALK,
+        guidanceType = RouteGuidanceType.CROSSWALK,
+        guidanceFeatures = listOf(RouteGuidanceFeature.SIGNAL),
     ),
     CROSSWALK_AUDIO(
         defaultInstruction = "Audio signal crosswalk ahead.",
         defaultBadges = listOf(RouteBadge.CROSSWALK),
         alertType = RouteAlertType.CROSSWALK,
+        guidanceType = RouteGuidanceType.CROSSWALK,
+        guidanceFeatures = listOf(RouteGuidanceFeature.AUDIO_SIGNAL),
     ),
     LOW_SLOPE(
         defaultInstruction = "Low slope ahead.",
         defaultBadges = listOf(RouteBadge.LOW_SLOPE),
+        guidanceType = RouteGuidanceType.LOW_SLOPE,
     ),
     MIDDLE_SLOPE(
         defaultInstruction = "Slope ahead.",
         defaultBadges = listOf(RouteBadge.MIDDLE_SLOPE),
         alertType = RouteAlertType.MIDDLE_SLOPE,
+        guidanceType = RouteGuidanceType.MIDDLE_SLOPE,
     ),
     STAIR(
         defaultInstruction = "Stairs ahead.",
         defaultBadges = listOf(RouteBadge.STAIR),
         alertType = RouteAlertType.STAIR,
+        guidanceType = RouteGuidanceType.STAIR,
     ),
     NARROW_SIDEWALK(
         defaultInstruction = "Narrow sidewalk ahead.",
         defaultBadges = listOf(RouteBadge.NARROW_SIDEWALK),
         alertType = RouteAlertType.NARROW_SIDEWALK,
+        guidanceType = RouteGuidanceType.NARROW_SIDEWALK,
     ),
     UNPAVED(
         defaultInstruction = "Unpaved path ahead.",
         defaultBadges = listOf(RouteBadge.UNPAVED),
         alertType = RouteAlertType.UNPAVED,
+        guidanceType = RouteGuidanceType.UNPAVED,
     ),
     BUS_STOP(
         defaultInstruction = "Bus stop ahead.",
         alertType = RouteAlertType.BUS_STOP,
+        guidanceType = RouteGuidanceType.BUS_STOP,
     ),
     SUBWAY_ELEVATOR(
         defaultInstruction = "Subway elevator ahead.",
         defaultBadges = listOf(RouteBadge.ELEVATOR),
         alertType = RouteAlertType.SUBWAY_ELEVATOR,
+        guidanceType = RouteGuidanceType.SUBWAY_ELEVATOR,
     ),
     ARRIVING_POINT(
         defaultInstruction = "Prepare to get off.",
         alertType = RouteAlertType.ALIGHTING_POINT,
+        guidanceType = RouteGuidanceType.ARRIVING_POINT,
     ),
-    DESTINATION("Arrive at destination."),
+    DESTINATION(
+        defaultInstruction = "Arrive at destination.",
+        guidanceType = RouteGuidanceType.DESTINATION,
+    ),
     ;
 
     fun instruction(features: List<RouteGuidanceFeature>): String =

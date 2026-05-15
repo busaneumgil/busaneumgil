@@ -543,6 +543,10 @@
     <string name="route_setting_low_floor_reservation_success">저상버스 예약 요청을 보냈습니다.</string>
     <string name="route_setting_low_floor_reservation_failure">저상버스 예약 요청에 실패했습니다.</string>
     <string name="route_setting_duribal_call_action">두리발 호출</string>
+    <string name="route_setting_duribal_call_prompt_title">두리발 콜센터로 연결할까요?</string>
+    <string name="route_setting_duribal_call_prompt_message">두리발은 이용대상 등록 및 승인 후 이용할 수 있습니다. 탑승 시 복지카드 또는 관련 증빙 확인이 필요할 수 있으며, 자격 확인이 되지 않으면 이용이 제한될 수 있습니다.</string>
+    <string name="route_setting_duribal_call_prompt_call">1555-1114 전화 연결</string>
+    <string name="route_setting_duribal_call_prompt_cancel">취소</string>
     <string name="route_setting_detail_accessibility_title">접근성 정보</string>
     <string name="route_setting_detail_summary_a11y">%1$s 경로 상세 정보. 예상 소요 시간 %2$s, 총 거리 %3$s, 위험도 %4$s.</string>
     <string name="route_setting_detail_summary_a11y_with_accessibility">%1$s 경로 상세 정보. 예상 소요 시간 %2$s, 총 거리 %3$s, 위험도 %4$s. 접근성 정보 %5$s.</string>
@@ -611,6 +615,7 @@
     <string name="navigation_rail_origin_label">출발</string>
     <string name="navigation_rail_destination_label">도착</string>
     <string name="navigation_return_to_active_segment_label">현재 위치로 돌아가기</string>
+    <string name="navigation_rail_scroll_to_top_label">경로 목록 처음으로 이동</string>
     <string name="navigation_exit_confirm_dialog_title">길안내를 종료할까요?</string>
     <string name="navigation_exit_confirm_dialog_message">종료하면 음성 안내와 다음 이동 지시가 멈추고, 지도 화면으로 돌아갑니다.</string>
     <string name="navigation_exit_confirm_dialog_confirm">길안내 종료</string>

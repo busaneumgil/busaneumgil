@@ -49,7 +49,7 @@ class RouteSearchCacheServiceTest {
 	}
 
 	@Test
-	void savesSearchResponseWithTenMinuteTtl() {
+	void savesSearchResponseWithThirtyMinuteTtl() {
 		WalkRouteSearchResponse response = response();
 
 		cacheService.save(USER_ID, response);
@@ -57,7 +57,7 @@ class RouteSearchCacheServiceTest {
 		verify(valueOperations).set(
 			org.mockito.ArgumentMatchers.eq("routeSearch:rs_walk_test"),
 			org.mockito.ArgumentMatchers.contains("\"userId\":\"00000000-0000-0000-0000-000000000001\""),
-			org.mockito.ArgumentMatchers.eq(600L),
+			org.mockito.ArgumentMatchers.eq(1800L),
 			org.mockito.ArgumentMatchers.eq(TimeUnit.SECONDS));
 	}
 
@@ -144,7 +144,7 @@ class RouteSearchCacheServiceTest {
 	}
 
 	@Test
-	void savesTransitMetadataWithTenMinuteTtl() {
+	void savesTransitMetadataWithThirtyMinuteTtl() {
 		List<TransitRouteSnapshot> snapshots = List.of(new TransitRouteSnapshot(
 			"rt_transit",
 			"map-obj",
@@ -155,7 +155,7 @@ class RouteSearchCacheServiceTest {
 		verify(valueOperations).set(
 			org.mockito.ArgumentMatchers.eq("routeSearchMeta:rs_transit_test"),
 			org.mockito.ArgumentMatchers.contains("\"mapObj\":\"map-obj\""),
-			org.mockito.ArgumentMatchers.eq(600L),
+			org.mockito.ArgumentMatchers.eq(1800L),
 			org.mockito.ArgumentMatchers.eq(TimeUnit.SECONDS));
 	}
 

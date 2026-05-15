@@ -54,6 +54,12 @@ enum class NavigationGuidanceAction(
     TURN_LEFT("좌회전"),
     TURN_RIGHT("우회전"),
     CROSSWALK("횡단보도"),
+    TACTILE_GUIDE("점자블록"),
+    ELEVATOR("엘리베이터"),
+    CONSTRUCTION("공사 구간"),
+    CURB_GAP("단차 주의"),
+    STAIRS("계단 주의"),
+    FALLBACK("세부 경로 확인"),
 }
 
 data class NavigationMapOverlayUiState(
@@ -69,6 +75,7 @@ data class NavigationMapOverlayUiState(
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
+    val shouldAnimateCameraTransition: Boolean = true,
 ) {
     val shouldUsePlaceholder: Boolean
         get() = !isDisplayable
@@ -91,6 +98,7 @@ data class NavigationMapSegmentUiState(
     val isFocused: Boolean = false,
     val isCompleted: Boolean = false,
     val isRiskUpcoming: Boolean = false,
+    val showJunctionMarker: Boolean = true,
 ) {
     val isRenderable: Boolean
         get() = polyline.size >= 2
@@ -121,6 +129,7 @@ data class NavigationSegmentRailItemUiState(
     val isFocused: Boolean = false,
     val isCompleted: Boolean = false,
     val isRiskUpcoming: Boolean = false,
+    val transitInfo: NavigationTransitInfoUiState? = null,
 )
 
 data class NavigationFocusedSegmentCardUiState(
@@ -132,6 +141,7 @@ data class NavigationFocusedSegmentCardUiState(
     val riskLabel: String,
     val supportingText: String,
     val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
+    val transitInfo: NavigationTransitInfoUiState? = null,
 )
 
 enum class NavigationMapFocusMode {
@@ -293,6 +303,12 @@ internal fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidanc
         this == RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK
         this == RouteDetailStepKind.TURN_LEFT -> NavigationGuidanceAction.TURN_LEFT
         this == RouteDetailStepKind.TURN_RIGHT -> NavigationGuidanceAction.TURN_RIGHT
+        this == RouteDetailStepKind.TACTILE_GUIDE -> NavigationGuidanceAction.TACTILE_GUIDE
+        this == RouteDetailStepKind.ELEVATOR -> NavigationGuidanceAction.ELEVATOR
+        this == RouteDetailStepKind.CONSTRUCTION -> NavigationGuidanceAction.CONSTRUCTION
+        this == RouteDetailStepKind.CURB_GAP -> NavigationGuidanceAction.CURB_GAP
+        this == RouteDetailStepKind.STAIRS -> NavigationGuidanceAction.STAIRS
+        this == RouteDetailStepKind.FALLBACK -> NavigationGuidanceAction.FALLBACK
         else -> NavigationGuidanceAction.STRAIGHT
     }
 

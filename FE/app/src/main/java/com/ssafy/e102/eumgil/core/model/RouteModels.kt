@@ -93,21 +93,22 @@ enum class RouteBadge {
     }
 }
 
-enum class RouteAlertType {
+enum class RouteGuidanceType {
+    STRAIGHT,
     CROSSWALK,
+    LOW_SLOPE,
     MIDDLE_SLOPE,
     STAIR,
-    CURB,
     NARROW_SIDEWALK,
     UNPAVED,
-    ELEVATOR,
     BUS_STOP,
     SUBWAY_ELEVATOR,
-    ALIGHTING_POINT,
+    ARRIVING_POINT,
+    DESTINATION,
     ;
 
     companion object {
-        fun fromValue(value: String?): RouteAlertType? =
+        fun fromValue(value: String?): RouteGuidanceType? =
             entries.firstOrNull { type ->
                 type.name.equals(value?.trim(), ignoreCase = true)
             }
@@ -140,6 +141,27 @@ enum class RouteGuidanceFeature {
         fun fromValue(value: String?): RouteGuidanceFeature? =
             entries.firstOrNull { feature ->
                 feature.name.equals(value?.trim(), ignoreCase = true)
+            }
+    }
+}
+
+enum class RouteAlertType {
+    CROSSWALK,
+    MIDDLE_SLOPE,
+    STAIR,
+    CURB,
+    NARROW_SIDEWALK,
+    UNPAVED,
+    ELEVATOR,
+    BUS_STOP,
+    SUBWAY_ELEVATOR,
+    ALIGHTING_POINT,
+    ;
+
+    companion object {
+        fun fromValue(value: String?): RouteAlertType? =
+            entries.firstOrNull { type ->
+                type.name.equals(value?.trim(), ignoreCase = true)
             }
     }
 }
@@ -252,10 +274,14 @@ data class RouteStep(
     val anchorCoordinate: GeoCoordinate? = null,
     val badges: List<RouteBadge> = emptyList(),
     val alerts: List<RouteAlert> = emptyList(),
-    val guidanceDirection: RouteGuidanceDirection? = null,
-    val guidanceFeatures: List<RouteGuidanceFeature> = emptyList(),
     val slopePercent: Double? = null,
     val widthState: String? = null,
+    val guidanceType: RouteGuidanceType? = null,
+    val guidanceDirection: RouteGuidanceDirection? = null,
+    val guidanceFeatures: List<RouteGuidanceFeature> = emptyList(),
+    val guidanceDistanceMeters: Int? = null,
+    val distanceFromLegStartMeters: Int? = null,
+    val durationFromRouteStartSeconds: Int? = null,
 ) {
     val hasRenderablePolyline: Boolean
         get() = polyline.isRenderable
@@ -299,10 +325,14 @@ data class RouteSegment(
     val safetyFlags: RouteSegmentSafetyFlags = RouteSegmentSafetyFlags(),
     val riskLevel: RouteRiskLevel = RouteRiskLevel.MEDIUM,
     val guidanceMessage: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
-    val guidanceDirection: RouteGuidanceDirection? = null,
-    val guidanceFeatures: List<RouteGuidanceFeature> = emptyList(),
     val sourceLegSequence: Int? = null,
     val sourceStepSequence: Int? = null,
+    val guidanceType: RouteGuidanceType? = null,
+    val guidanceDirection: RouteGuidanceDirection? = null,
+    val guidanceFeatures: List<RouteGuidanceFeature> = emptyList(),
+    val guidanceDistanceMeters: Int? = null,
+    val distanceFromLegStartMeters: Int? = null,
+    val durationFromRouteStartSeconds: Int? = null,
 ) {
     val hasRenderablePolyline: Boolean
         get() = polyline.isRenderable

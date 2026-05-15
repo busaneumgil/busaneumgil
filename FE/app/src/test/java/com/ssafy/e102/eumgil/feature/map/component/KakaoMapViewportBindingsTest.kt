@@ -319,6 +319,26 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `native overlay marker render state adds focused guidance halo token`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                listOf(
+                    MapViewportPointOverlay(
+                        overlayId = "navigation-focus",
+                        coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                        kind = MapViewportPointKind.FOCUS_HALO,
+                    ),
+                ),
+            )
+
+        assertEquals(listOf("overlay-navigation-focus"), markerStates.map { it.markerId })
+        assertEquals(KakaoOverlayMarkerKind.FOCUS_HALO, markerStates.single().kind)
+        assertEquals(26, markerStates.single().sizeDp)
+        assertEquals(0x804D8FF9.toInt(), markerStates.single().fillColorArgb)
+        assertEquals(0x004D8FF9, markerStates.single().strokeColorArgb)
+    }
+
+    @Test
     fun `native overlay marker render state hides segment junction markers below route detail zoom`() {
         val markerStates =
             createKakaoOverlayMarkerRenderStates(
@@ -578,6 +598,50 @@ class KakaoMapViewportBindingsTest {
         assertEquals(0f, routeLineStates.first().strokeWidth, 0f)
         assertEquals(0xFF006BE0.toInt(), routeLineStates.first().lineColor)
         assertEquals(0xFF006BE0.toInt(), routeLineStates.first().strokeColor)
+    }
+
+    @Test
+    fun `transit detail walk route line uses the confirmed walk gray token`() {
+        val routeLineStates =
+            createKakaoRouteLineRenderStates(
+                listOf(
+                    MapViewportPolylineOverlay(
+                        overlayId = "route-detail-walk",
+                        points =
+                            listOf(
+                                MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            ),
+                        style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                        tone = MapViewportOverlayTone.TRANSIT_WALK,
+                    ),
+                ),
+            )
+
+        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().strokeColor)
+    }
+
+    @Test
+    fun `transit route line uses the confirmed transit navy token`() {
+        val routeLineStates =
+            createKakaoRouteLineRenderStates(
+                listOf(
+                    MapViewportPolylineOverlay(
+                        overlayId = "route-detail-transit",
+                        points =
+                            listOf(
+                                MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            ),
+                        style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                        tone = MapViewportOverlayTone.NAVY,
+                    ),
+                ),
+            )
+
+        assertEquals(0xFF005391.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFF005391.toInt(), routeLineStates.single().strokeColor)
     }
 
     @Test
@@ -1134,7 +1198,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `route polylines subtract camera bearing from kakao direction arrow rotation`() {
+    fun `route polylines keep kakao direction arrow rotation in map absolute space`() {
         val markerStates =
             createKakaoOverlayMarkerRenderStates(
                 overlayPoints = emptyList(),
@@ -1158,8 +1222,8 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertEquals(3, markerStates.size)
-        assertEquals(-90f, markerStates.first().rotationDegrees, 0.01f)
-        assertEquals(-90f, markerStates.last().rotationDegrees, 0.01f)
+        assertEquals(0f, markerStates.first().rotationDegrees, 0.01f)
+        assertEquals(0f, markerStates.last().rotationDegrees, 0.01f)
     }
 
     @Test
@@ -1192,7 +1256,9 @@ class KakaoMapViewportBindingsTest {
         assertEquals(0f, firstDebugState.segmentHeadingDegrees, 0.01f)
         assertEquals(Math.PI / 2.0, firstDebugState.cameraBearingRadians, 0.000001)
         assertEquals(90.0, firstDebugState.cameraBearingDegrees, 0.0)
-        assertEquals(-90f, firstDebugState.finalRotationDegrees, 0.01f)
+        assertEquals("map-absolute", firstDebugState.rotationModel)
+        assertEquals("AbsoluteRotation", firstDebugState.transformMethodName)
+        assertEquals(0f, firstDebugState.finalRotationDegrees, 0.01f)
         assertTrue(
             createKakaoRouteDirectionArrowDebugSummary(firstDebugState).contains("cameraBearingRad=1.5708"),
         )
@@ -1202,9 +1268,9 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `route direction arrow labels keep explicit screen space transform mode`() {
+    fun `route direction arrow labels keep explicit map absolute transform mode`() {
         assertEquals(
-            TransformMethod.None,
+            TransformMethod.AbsoluteRotation,
             resolveKakaoOverlayMarkerTransformMethod(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW),
         )
         assertNull(

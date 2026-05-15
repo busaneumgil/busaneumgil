@@ -169,7 +169,6 @@ class NavigationViewModel(
         syncActiveSegment(latestProgress?.activeSegmentIndex ?: 0)
         publishNavigationState()
 
-        currentLocationManager.refreshLatestLocation()
         currentLocationManager.startLocationUpdates()
     }
 
@@ -1675,16 +1674,33 @@ private fun RouteCandidate.toFallbackWalkingLegMapSegments(
     existingSegments: List<NavigationMapSegmentUiState>,
     hasTransitLeg: Boolean,
 ): List<NavigationMapSegmentUiState> {
+    val renderableWalkingLegs =
+        legs.filter { leg ->
+            leg.type == RouteLegType.WALK && leg.polyline.isRenderable
+        }
+    if (renderableWalkingLegs.isEmpty()) return emptyList()
+
     val hasRenderableWalkingSegment =
         existingSegments.any { segment ->
             (segment.travelKind == NavigationSegmentTravelKind.WALK ||
                 segment.travelKind == NavigationSegmentTravelKind.TRANSIT_WALK) &&
                 segment.isRenderable
         }
-    if (hasRenderableWalkingSegment) return emptyList()
+    val hasLegScopedSegments = segments.any { segment -> segment.sourceLegSequence != null }
+    val fallbackWalkingLegs =
+        if (hasTransitLeg && hasLegScopedSegments) {
+            renderableWalkingLegs.filterNot { leg ->
+                segments.any { segment ->
+                    segment.sourceLegSequence == leg.sequence && segment.polyline.isRenderable
+                }
+            }
+        } else if (hasRenderableWalkingSegment) {
+            emptyList()
+        } else {
+            renderableWalkingLegs
+        }
 
-    return legs
-        .filter { leg -> leg.type == RouteLegType.WALK && leg.polyline.isRenderable }
+    return fallbackWalkingLegs
         .map { leg ->
             NavigationMapSegmentUiState(
                 sequence = leg.sequence,

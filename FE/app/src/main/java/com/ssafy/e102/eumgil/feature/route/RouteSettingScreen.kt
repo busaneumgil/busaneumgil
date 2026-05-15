@@ -133,6 +133,8 @@ import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOve
 import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
+import com.ssafy.e102.eumgil.feature.navigation.component.resolveGuideRailAutoScrollItemIndex
+import com.ssafy.e102.eumgil.feature.navigation.component.resolveGuideRailEndSnapPadding
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -997,12 +999,14 @@ private fun RouteDetailIconRail(
         }
             .distinctUntilChanged()
             .collect { snapshot ->
+                val promotedStepIndex = snapshot.promotedStepIndex
                 if (!hasObservedInitialPosition) {
                     hasObservedInitialPosition = true
+                    hiddenRailStepIndex = focusedStepIndex
                     return@collect
                 }
                 if (snapshot.shouldSnapToPromotedStep()) {
-                    snapshot.promotedStepIndex?.let { index ->
+                    promotedStepIndex?.let { index ->
                         hiddenRailStepIndex = index
                         listState.animateScrollToItem(index, scrollOffset = 0)
                         listState.scrollToItem(index, scrollOffset = 0)
@@ -1013,15 +1017,29 @@ private fun RouteDetailIconRail(
                         snapshot.firstVisibleItemScrollOffset == 0 &&
                         hiddenRailStepIndex != null &&
                         snapshot.firstVisibleItemIndex == hiddenRailStepIndex?.plus(1)
-                if (!snapshot.isScrollInProgress && !isSettlingAfterCollapsedTopCard) {
-                    snapshot.promotedStepIndex?.let { index ->
-                        hiddenRailStepIndex = index
-                        index
-                            .takeIf { stepIndex -> stepIndex != currentFocusedStepIndex }
-                            ?.let(currentOnTopVisibleStepChanged)
-                    }
+                if (!isSettlingAfterCollapsedTopCard && promotedStepIndex != null) {
+                    hiddenRailStepIndex = promotedStepIndex
+                    promotedStepIndex
+                        .takeIf { stepIndex -> stepIndex != currentFocusedStepIndex }
+                        ?.let(currentOnTopVisibleStepChanged)
                 }
             }
+    }
+
+    LaunchedEffect(focusedStepIndex, steps.size) {
+        val focusedIndex = focusedStepIndex ?: return@LaunchedEffect
+        if (steps.isEmpty() || listState.isScrollInProgress) return@LaunchedEffect
+        if (focusedIndex !in steps.indices) return@LaunchedEffect
+        hiddenRailStepIndex = focusedIndex
+        val targetScrollIndex =
+            resolveGuideRailAutoScrollItemIndex(
+                focusedItemPosition = focusedIndex,
+                itemCount = steps.size,
+            ) ?: return@LaunchedEffect
+        val isTargetVisible = listState.layoutInfo.visibleItemsInfo.any { item -> item.index == targetScrollIndex }
+        if (!isTargetVisible || listState.firstVisibleItemIndex != targetScrollIndex) {
+            listState.animateScrollToItem(targetScrollIndex, scrollOffset = 0)
+        }
     }
 
     BoxWithConstraints(
@@ -1030,7 +1048,11 @@ private fun RouteDetailIconRail(
                 .fillMaxWidth(),
     ) {
         val routeDetailCollapsedRailEndSnapPadding =
-            (maxHeight - RouteDetailCollapsedRailItemSize).coerceAtLeast(0.dp)
+            resolveGuideRailEndSnapPadding(
+                viewportHeight = maxHeight,
+                guideItemHeight = RouteDetailCollapsedRailItemSize,
+                trailingActionHeight = RouteDetailCollapsedRailItemSize,
+            )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,

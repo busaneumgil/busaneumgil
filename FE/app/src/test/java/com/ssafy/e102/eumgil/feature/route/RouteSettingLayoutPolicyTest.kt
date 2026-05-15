@@ -1102,9 +1102,9 @@ class RouteSettingLayoutPolicyTest {
                 collectSection.indexOf("currentOnTopVisibleStepChanged"),
         )
         assertTrue(
-            "Route detail rail should keep the promoted top-card icon collapsed even when a fast fling settles exactly on an item boundary.",
+            "Route detail rail should update the promoted top-card icon while scrolling so the top card keeps showing guidance during a fast fling.",
             collectSection.contains("val isSettlingAfterCollapsedTopCard") &&
-                collectSection.contains("if (!snapshot.isScrollInProgress && !isSettlingAfterCollapsedTopCard)") &&
+                collectSection.contains("if (!isSettlingAfterCollapsedTopCard") &&
                 collectSection.contains("hiddenRailStepIndex = index"),
         )
         assertFalse(

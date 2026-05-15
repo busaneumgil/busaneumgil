@@ -53,10 +53,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.designsystem.component.feedback.EumLoadingState
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -457,10 +457,10 @@ private fun SearchResultsContent(
 
             is SearchResultUiState.Loading ->
                 item(key = "loading-state") {
-                    EumLoadingState(
+                    SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                         description = stringResource(id = R.string.search_screen_loading_description),
-                        indicatorSize = SearchResultsLoadingIndicatorSize,
+                        showLoadingIndicator = true,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -496,7 +496,7 @@ private fun SearchResultsContent(
 
             is SearchResultUiState.Empty ->
                 item(key = "empty-state") {
-                    SearchEmptyResultMessage(
+                    SearchCenteredStateMessage(
                         title =
                             stringResource(
                                 id = R.string.search_screen_empty_result_title,
@@ -508,12 +508,10 @@ private fun SearchResultsContent(
 
             is SearchResultUiState.Error ->
                 item(key = "error-state") {
-                    SearchStateCard(
+                    SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_error_title),
                         description = stringResource(id = R.string.search_screen_error_description),
                         supportingText = resultState.message,
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
-                        borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
                     )
                 }
         }
@@ -792,10 +790,10 @@ private fun SearchResultSection(
             is SearchResultUiState.Typing -> Unit
 
             is SearchResultUiState.Loading ->
-                EumLoadingState(
+                SearchCenteredStateMessage(
                     title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                     description = stringResource(id = R.string.search_screen_loading_description),
-                    indicatorSize = SearchResultsLoadingIndicatorSize,
+                    showLoadingIndicator = true,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -823,7 +821,7 @@ private fun SearchResultSection(
             }
 
             is SearchResultUiState.Empty ->
-                SearchEmptyResultMessage(
+                SearchCenteredStateMessage(
                     title =
                         stringResource(
                             id = R.string.search_screen_empty_result_title,
@@ -833,12 +831,10 @@ private fun SearchResultSection(
                 )
 
             is SearchResultUiState.Error ->
-                SearchStateCard(
+                SearchCenteredStateMessage(
                     title = stringResource(id = R.string.search_screen_error_title),
                     description = stringResource(id = R.string.search_screen_error_description),
                     supportingText = resultState.message,
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
                 )
         }
     }
@@ -1298,34 +1294,68 @@ private fun searchResultAccessibilityTagIconSizeDp(
 private const val METERS_PER_KILOMETER = 1_000
 private const val SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD = 3
 private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
+private val SearchStateIllustrationMinHeight: Dp = 360.dp
+private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable
-private fun SearchEmptyResultMessage(
+private fun SearchCenteredStateMessage(
     title: String,
     description: String,
     modifier: Modifier = Modifier,
+    supportingText: String? = null,
+    showLoadingIndicator: Boolean = false,
 ) {
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
+                .heightIn(min = SearchStateIllustrationMinHeight)
                 .padding(
                     horizontal = EumSpacing.medium,
                     vertical = EumSpacing.large,
                 ),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
+        Image(
+            painter = painterResource(id = R.drawable.manual_galmaegi),
+            contentDescription = null,
+            modifier = Modifier.size(SearchStateIllustrationSize),
+            contentScale = ContentScale.Fit,
+        )
+        if (showLoadingIndicator) {
+            CircularProgressIndicator(
+                modifier =
+                    Modifier
+                        .padding(top = EumSpacing.medium)
+                        .size(SearchResultsLoadingIndicatorSize),
+                strokeWidth = 3.dp,
+            )
+        }
         Text(
             text = title,
+            modifier = Modifier.padding(top = EumSpacing.medium),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
         )
         Text(
             text = description,
+            modifier = Modifier.padding(top = EumSpacing.xSmall),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
+        if (!supportingText.isNullOrBlank()) {
+            Text(
+                text = supportingText,
+                modifier = Modifier.padding(top = EumSpacing.xSmall),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

@@ -53,12 +53,12 @@ class SearchScreenPolicyTest {
                 .substringBefore("is SearchResultUiState.Success ->")
 
         assertTrue(
-            "Search results loading state should render the shared spinner-based loading component.",
-            loadingStateSection.contains("EumLoadingState("),
+            "Search results loading state should use the centered branded state message.",
+            loadingStateSection.contains("SearchCenteredStateMessage("),
         )
         assertTrue(
-            "Search results loading state should request the enlarged spinner size for the loading affordance.",
-            loadingStateSection.contains("indicatorSize = SearchResultsLoadingIndicatorSize"),
+            "Search results loading state should keep a spinner affordance inside the centered state.",
+            loadingStateSection.contains("showLoadingIndicator = true"),
         )
         assertFalse(
             "Search results loading state should not fall back to the boxed SearchStateCard placeholder.",
@@ -67,7 +67,7 @@ class SearchScreenPolicyTest {
     }
 
     @Test
-    fun `empty result state renders as text block without card chrome`() {
+    fun `empty result state renders as centered branded message without card chrome`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
                 .readText()
@@ -81,12 +81,16 @@ class SearchScreenPolicyTest {
                 .substringBefore("is SearchResultUiState.Error ->")
         val emptyMessageSection =
             source
-                .substringAfter("private fun SearchEmptyResultMessage(")
+                .substringAfter("private fun SearchCenteredStateMessage(")
                 .substringBefore("@Composable\nprivate fun SearchStateCard")
 
         assertTrue(
-            "Empty search results should use a plain message block.",
-            emptyStateSection.contains("SearchEmptyResultMessage("),
+            "Empty search results should use a centered branded message block.",
+            emptyStateSection.contains("SearchCenteredStateMessage("),
+        )
+        assertTrue(
+            "The centered state should include the Busan Eumgil character asset.",
+            emptyMessageSection.contains("R.drawable.manual_galmaegi"),
         )
         assertFalse(
             "Empty search results should not render inside SearchStateCard card chrome.",
@@ -97,6 +101,32 @@ class SearchScreenPolicyTest {
             emptyMessageSection.contains("Surface(") ||
                 emptyMessageSection.contains("BorderStroke(") ||
                 emptyMessageSection.contains("shadowElevation"),
+        )
+    }
+
+    @Test
+    fun `search result error state avoids card chrome`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val searchResultsContentSection =
+            source
+                .substringAfter("private fun SearchResultsContent(")
+                .substringBefore("@Composable\nprivate fun SearchInputField")
+        val errorStateSection =
+            searchResultsContentSection
+                .substringAfter("is SearchResultUiState.Error ->")
+                .substringBefore("        }\n    }")
+
+        assertTrue(
+            "Search result errors should use the same centered branded state as empty/loading states.",
+            errorStateSection.contains("SearchCenteredStateMessage("),
+        )
+        assertFalse(
+            "Search result errors should not render as tinted cards over the results screen.",
+            errorStateSection.contains("SearchStateCard(") ||
+                errorStateSection.contains("errorContainer") ||
+                errorStateSection.contains("BorderStroke("),
         )
     }
 }

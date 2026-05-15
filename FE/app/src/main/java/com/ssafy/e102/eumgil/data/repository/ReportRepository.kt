@@ -81,14 +81,30 @@ data class ReportOutboxData(
     val addressDetail: String? = null,
     val latitude: Double,
     val longitude: Double,
+    // legacy v9 이전 단일 사진 필드. 새 코드는 photos 리스트를 source of truth로 사용한다.
     val photoUri: String?,
     val photoMimeType: String?,
     val photoSizeBytes: Long?,
+    // v10 (Task 5.5) — 업로드 대상 사진 메타데이터 다장 보존.
+    val photos: List<ReportOutboxPhotoData> = emptyList(),
+    // v10 (Task 5.5) — presigned 업로드 성공한 S3 object key 목록. 제출 시 BE에 전달.
+    val imageObjectKeys: List<String> = emptyList(),
     val status: ReportOutboxStatus = ReportOutboxStatus.Pending,
     val serverReportId: Long? = null,
     val lastFailureReason: String? = null,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+)
+
+/**
+ * Outbox에 보존되는 사진 메타데이터 (Task 5.5).
+ *
+ * `ReportDraftPhotoData`와 동일 shape이지만 단계(draft vs outbox 제출 직전)가 달라 별도 데이터 클래스로 둔다.
+ */
+data class ReportOutboxPhotoData(
+    val localUri: String,
+    val mimeType: String?,
+    val sizeBytes: Long?,
 )
 
 enum class ReportOutboxStatus {
@@ -159,6 +175,8 @@ class DefaultReportRepository(
     private val accessTokenProvider: suspend () -> String? = { null },
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
     private val clock: () -> Long = { System.currentTimeMillis() },
+    // Task 5.5 — outbox 사진들을 BE submit 직전에 presigned URL로 업로드. null/NoOp이면 업로드 skip.
+    private val imageUploader: HazardReportImageUploader = NoOpHazardReportImageUploader,
 ) : ReportRepository {
     private val serverReportHistory = MutableStateFlow(emptyList<ReportHistoryData>())
 
@@ -246,18 +264,43 @@ class DefaultReportRepository(
 
         markOutboxStatus(outboxEntity, ReportOutboxStatus.Submitting, lastFailureReason = null)
 
+        // Task 5.5 — 서버 제출 직전에 outbox 사진들을 presigned URL로 업로드한다.
+        // 부분 성공 시 성공한 objectKey는 outbox에 보존되어 다음 재시도 시 중복 업로드를 피한다.
+        val outboxData = outboxEntity.toData()
+        val uploadResult =
+            runCatching {
+                imageUploader.uploadAll(
+                    accessToken = token,
+                    photos = outboxData.photos,
+                    alreadyUploadedCount = outboxData.imageObjectKeys.size,
+                )
+            }.getOrElse {
+                return failOutbox(outboxId, ReportSubmitFailureReason.Network)
+            }
+
+        val mergedObjectKeys = outboxData.imageObjectKeys + uploadResult.newlyUploadedObjectKeys
+        // 업로드 결과(부분 성공이라도 그때까지의 objectKey)를 outbox에 미리 반영하여 재시도 시 활용.
+        val outboxAfterUpload = persistObjectKeys(outboxEntity, mergedObjectKeys)
+
+        if (!uploadResult.allSucceeded) {
+            // 일부 사진 업로드 실패 시 즉시 실패 처리. 이미 보존된 objectKey는 다음 재시도에 재활용.
+            return failOutbox(outboxId, ReportSubmitFailureReason.Network)
+        }
+
         return runCatching {
             datasource.createHazardReport(
                 accessToken = token,
                 request =
                     CreateHazardReportRequestDto(
-                        reportType = outboxEntity.reportCategory,
-                        description = outboxEntity.description.takeIf(String::isNotBlank),
+                        reportType = outboxAfterUpload.reportCategory,
+                        description = outboxAfterUpload.description.takeIf(String::isNotBlank),
                         reportPoint =
                             HazardReportPointDto(
-                                lat = outboxEntity.latitude,
-                                lng = outboxEntity.longitude,
+                                lat = outboxAfterUpload.latitude,
+                                lng = outboxAfterUpload.longitude,
                             ),
+                        // Task 5.6에서 imageObjectKeys 필드로 전환 예정. 이번 분기는 5.5 범위라
+                        // 기존 imageUrls 필드 그대로 두되 업로드된 objectKey는 outbox에 보존.
                         imageUrls = emptyList(),
                     ),
             )
@@ -265,7 +308,7 @@ class DefaultReportRepository(
             onSuccess = { response ->
                 val now = clock()
                 reportOutboxDao.upsertReportOutbox(
-                    outboxEntity.copy(
+                    outboxAfterUpload.copy(
                         status = ReportOutboxStatus.Submitted.name,
                         serverReportId = response.reportId,
                         lastFailureReason = null,
@@ -273,7 +316,7 @@ class DefaultReportRepository(
                     ),
                 )
                 ReportSubmitResult.Success(
-                    outboxId = outboxEntity.outboxId,
+                    outboxId = outboxAfterUpload.outboxId,
                     serverReportId = response.reportId,
                 )
             },
@@ -281,6 +324,26 @@ class DefaultReportRepository(
                 failOutbox(outboxId, throwable.toSubmitFailureReason())
             },
         )
+    }
+
+    /**
+     * 업로드 단계의 결과(목록의 일부 또는 전부 성공한 objectKey)를 outbox에 미리 보존한다.
+     * 이후 단계가 실패하더라도 다음 재시도에서 이미 업로드된 사진은 다시 올리지 않는다.
+     */
+    private suspend fun persistObjectKeys(
+        outboxEntity: ReportOutboxEntity,
+        objectKeys: List<String>,
+    ): ReportOutboxEntity {
+        if (objectKeys == deserializeStringList(outboxEntity.imageObjectKeysJson)) {
+            return outboxEntity
+        }
+        val updated =
+            outboxEntity.copy(
+                imageObjectKeysJson = serializeStringList(objectKeys),
+                updatedAt = clock(),
+            )
+        reportOutboxDao.upsertReportOutbox(updated)
+        return updated
     }
 
     private suspend fun failOutbox(
@@ -530,6 +593,9 @@ private fun ReportOutboxEntity.toData(): ReportOutboxData =
         photoUri = photoUri,
         photoMimeType = photoMimeType,
         photoSizeBytes = photoSizeBytes,
+        // v10 — Task 5.5: 새 photos 컬럼이 있으면 그걸 source of truth로, 없으면 legacy 단일 photo로 fallback.
+        photos = resolveOutboxPhotosFromEntity(),
+        imageObjectKeys = deserializeStringList(imageObjectKeysJson),
         status = runCatching { ReportOutboxStatus.valueOf(status) }.getOrDefault(ReportOutboxStatus.Pending),
         serverReportId = serverReportId,
         lastFailureReason = lastFailureReason,
@@ -537,8 +603,9 @@ private fun ReportOutboxEntity.toData(): ReportOutboxData =
         updatedAtMillis = updatedAt,
     )
 
-private fun ReportOutboxData.toEntity(): ReportOutboxEntity =
-    ReportOutboxEntity(
+private fun ReportOutboxData.toEntity(): ReportOutboxEntity {
+    val firstPhoto = photos.firstOrNull()
+    return ReportOutboxEntity(
         outboxId = outboxId,
         reportCategory = reportCategory,
         description = description,
@@ -546,15 +613,87 @@ private fun ReportOutboxData.toEntity(): ReportOutboxEntity =
         addressDetail = addressDetail,
         latitude = latitude,
         longitude = longitude,
-        photoUri = photoUri,
-        photoMimeType = photoMimeType,
-        photoSizeBytes = photoSizeBytes,
+        // legacy 단일 사진 컬럼은 첫 사진으로 채워둔다. 마이그레이션 직후 old reader가 이 row를
+        // 읽어도 1장은 복원 가능하도록 유지.
+        photoUri = firstPhoto?.localUri ?: photoUri,
+        photoMimeType = firstPhoto?.mimeType ?: photoMimeType,
+        photoSizeBytes = firstPhoto?.sizeBytes ?: photoSizeBytes,
+        photosJson = serializeOutboxPhotos(photos),
+        imageObjectKeysJson = serializeStringList(imageObjectKeys),
         status = status.name,
         serverReportId = serverReportId,
         lastFailureReason = lastFailureReason,
         createdAt = createdAtMillis,
         updatedAt = updatedAtMillis,
     )
+}
+
+/**
+ * v10 photosJson이 있으면 그걸 source of truth로 사용한다.
+ * 없으면 legacy single-photo 컬럼으로 fallback (v9 이전 row).
+ */
+private fun ReportOutboxEntity.resolveOutboxPhotosFromEntity(): List<ReportOutboxPhotoData> {
+    val deserialized = photosJson?.let(::deserializeOutboxPhotos)
+    if (!deserialized.isNullOrEmpty()) return deserialized
+
+    val legacyUri = photoUri?.takeIf(String::isNotBlank) ?: return emptyList()
+    return listOf(
+        ReportOutboxPhotoData(
+            localUri = legacyUri,
+            mimeType = photoMimeType,
+            sizeBytes = photoSizeBytes,
+        ),
+    )
+}
+
+private fun serializeOutboxPhotos(photos: List<ReportOutboxPhotoData>): String? {
+    if (photos.isEmpty()) return null
+    val array = org.json.JSONArray()
+    photos.forEach { photo ->
+        val obj = org.json.JSONObject()
+        obj.put("uri", photo.localUri)
+        photo.mimeType?.let { obj.put("mime", it) }
+        photo.sizeBytes?.let { obj.put("size", it) }
+        array.put(obj)
+    }
+    return array.toString()
+}
+
+private fun deserializeOutboxPhotos(json: String): List<ReportOutboxPhotoData> {
+    if (json.isBlank()) return emptyList()
+    return runCatching {
+        val array = org.json.JSONArray(json)
+        buildList(array.length()) {
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                val uri = obj.optString("uri").takeIf { it.isNotBlank() } ?: continue
+                add(
+                    ReportOutboxPhotoData(
+                        localUri = uri,
+                        mimeType = obj.optString("mime").takeIf { it.isNotBlank() },
+                        sizeBytes = if (obj.has("size")) obj.optLong("size") else null,
+                    ),
+                )
+            }
+        }
+    }.getOrElse { emptyList() }
+}
+
+private fun serializeStringList(values: List<String>): String? {
+    if (values.isEmpty()) return null
+    val array = org.json.JSONArray()
+    values.forEach { array.put(it) }
+    return array.toString()
+}
+
+private fun deserializeStringList(json: String?): List<String> {
+    if (json.isNullOrBlank()) return emptyList()
+    return runCatching {
+        val array = org.json.JSONArray(json)
+        List(array.length()) { array.optString(it) }
+            .filter { it.isNotBlank() }
+    }.getOrElse { emptyList() }
+}
 
 private fun mergeServerAndLocalReportHistory(
     serverItems: List<ReportHistoryData>,

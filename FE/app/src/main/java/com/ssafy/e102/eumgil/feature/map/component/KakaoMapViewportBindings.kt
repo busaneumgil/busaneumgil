@@ -63,11 +63,12 @@ internal fun shouldAnimateKakaoCameraTransition(
     previousTarget: MapCameraTarget?,
     nextTarget: MapCameraTarget,
 ): Boolean {
+    if (!nextTarget.shouldAnimateTransition) return false
     if (previousTarget == null) return false
     if (previousTarget.requestId == nextTarget.requestId) return false
     if (previousTarget.source != nextTarget.source) return false
-    if (previousTarget.center != nextTarget.center) return false
-    return previousTarget.resolvedZoomLevel() != nextTarget.resolvedZoomLevel()
+    return previousTarget.center != nextTarget.center ||
+        previousTarget.resolvedZoomLevel() != nextTarget.resolvedZoomLevel()
 }
 
 internal fun syncRenderedKakaoCameraTarget(
@@ -127,6 +128,7 @@ internal enum class KakaoOverlayMarkerKind {
     TRANSIT_STOP,
     TRANSIT_TRANSFER,
     ROUTE_DIRECTION_ARROW,
+    FOCUS_HALO,
 }
 
 internal data class KakaoProjectedMarkerRenderState(
@@ -586,6 +588,8 @@ internal fun createKakaoRouteLineRenderStates(
 internal fun createKakaoRouteCameraRenderState(
     overlayState: MapViewportOverlayState,
 ): KakaoRouteCameraRenderState? {
+    if (!overlayState.fitToProjection) return null
+
     val projectionPoints =
         buildList {
             overlayState.polylines
@@ -1025,6 +1029,19 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
             )
         }
 
+        MapViewportPointKind.FOCUS_HALO ->
+            KakaoOverlayMarkerRenderState(
+                markerId = "overlay-$overlayId",
+                coordinate = coordinate,
+                kind = KakaoOverlayMarkerKind.FOCUS_HALO,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 26,
+                zIndex = 3.5f,
+                fillColorArgb = 0x804D8FF9.toInt(),
+                strokeColorArgb = 0x004D8FF9,
+            )
+
         else -> null
     }
 }
@@ -1298,8 +1315,14 @@ private fun MapViewportOverlayTone.toKakaoRouteLinePalette(): KakaoRouteLinePale
 
         MapViewportOverlayTone.NAVY ->
             KakaoRouteLinePalette(
-                lineColor = 0xFF4A5D93.toInt(),
-                casingColor = 0xFF4A5D93.toInt(),
+                lineColor = 0xFF005391.toInt(),
+                casingColor = 0xFF005391.toInt(),
+            )
+
+        MapViewportOverlayTone.TRANSIT_WALK ->
+            KakaoRouteLinePalette(
+                lineColor = 0xFFD9D9D9.toInt(),
+                casingColor = 0xFFD9D9D9.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->

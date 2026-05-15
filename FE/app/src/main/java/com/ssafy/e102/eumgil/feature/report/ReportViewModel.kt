@@ -14,6 +14,7 @@ import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportOutboxPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
@@ -914,10 +915,19 @@ private fun ReportUiState.toOutboxData(): ReportOutboxData {
         photoUri = firstPhoto?.localUri,
         photoMimeType = firstPhoto?.mimeType,
         photoSizeBytes = firstPhoto?.sizeBytes,
+        // Task 5.5 — 첨부 사진 전체를 outbox에 보존. 제출 시점에 presigned 업로드 대상으로 사용.
+        photos = photo.values.map { it.toOutboxPhotoData() },
         createdAtMillis = now,
         updatedAtMillis = now,
     )
 }
+
+private fun ReportPhoto.toOutboxPhotoData(): ReportOutboxPhotoData =
+    ReportOutboxPhotoData(
+        localUri = localUri,
+        mimeType = mimeType,
+        sizeBytes = sizeBytes,
+    )
 
 private fun ReportDraftData.toUiState(): ReportUiState {
     val reportType = reportCategory.toReportType()

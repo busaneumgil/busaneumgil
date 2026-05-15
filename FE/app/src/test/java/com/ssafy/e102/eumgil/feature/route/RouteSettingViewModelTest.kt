@@ -668,7 +668,7 @@ class RouteSettingViewModelTest {
             val detailSteps = viewModel.uiState.value.selectedRoute?.detailSteps.orEmpty()
 
             assertEquals(
-                listOf("출발", "직진 이동", "좌회전", "횡단보도 건너기", "우회전", "도착"),
+                listOf("출발", "120m 직진 이동", "80m 후 좌회전", "음향 신호 횡단보도 건너기", "150m 후 우회전", "목적지 도착"),
                 detailSteps.map(RouteDetailStepUiState::title),
             )
             assertEquals(
@@ -683,7 +683,7 @@ class RouteSettingViewModelTest {
                 detailSteps.map(RouteDetailStepUiState::kind),
             )
             assertEquals(
-                "음향신호기 안내를 확인한 뒤 횡단보도를 건너세요.",
+                "목적지까지 약 8분",
                 detailSteps[3].description,
             )
             assertEquals("음향 신호", detailSteps[3].badgeLabel)
@@ -1037,6 +1037,38 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `transit selected route keeps walk and transit detail polylines separated`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val detailPolylines = viewModel.uiState.value.selectedRoute?.detailPolylines.orEmpty()
+
+            assertEquals(
+                listOf(
+                    RouteDetailPolylineKind.WALK,
+                    RouteDetailPolylineKind.TRANSIT,
+                    RouteDetailPolylineKind.TRANSIT,
+                    RouteDetailPolylineKind.WALK,
+                ),
+                detailPolylines.map(RouteDetailPolylineUiState::kind),
+            )
+            assertTrue(detailPolylines.all { polyline -> polyline.points.size >= 2 })
+        }
+
+    @Test
     fun `manual transit selection exposes remote success debug info`() =
         runTest {
             val destinationSelectionRepository =
@@ -1130,6 +1162,80 @@ class RouteSettingViewModelTest {
             assertEquals("session-pt_rt_recommended_001", selectionHandoff.sessionId)
             assertEquals(2500, selectionHandoff.initialRemainingDistanceMeters)
             assertEquals(900, selectionHandoff.initialRemainingDurationSeconds)
+        }
+
+    @Test
+    fun `start action refreshes expired search once and retries select with fresh search id`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = ExpiredSelectRecoveryRouteRepository()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is RouteSettingUiEvent.StartNavigationRequested)
+            val request = (event as RouteSettingUiEvent.StartNavigationRequested).request
+            val selectionHandoff = requireNotNull(request.selectionHandoff)
+            assertEquals(1, routeRepository.freshWalkSearchCount)
+            assertEquals(
+                listOf(
+                    "initial_SAFE" to "walk-search-initial",
+                    "fresh_SAFE" to "walk-search-fresh-1",
+                ),
+                routeRepository.selectRequests,
+            )
+            assertEquals("walk-search-fresh-1", selectionHandoff.searchId)
+            assertEquals("fresh_SAFE", selectionHandoff.routeId)
+            assertEquals("session-fresh_SAFE", selectionHandoff.sessionId)
+            assertTrue(viewModel.uiState.value.ctaAcknowledged)
+        }
+
+    @Test
+    fun `start action resets route flow when fresh select also returns expired search`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = ExpiredSelectRecoveryRouteRepository(expireFreshSelect = true)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            advanceUntilIdle()
+
+            assertEquals(RouteSettingUiEvent.NavigateToMap, uiEvent.await())
+            assertEquals(1, routeRepository.freshWalkSearchCount)
+            assertEquals(
+                listOf(
+                    "initial_SAFE" to "walk-search-initial",
+                    "fresh_SAFE" to "walk-search-fresh-1",
+                ),
+                routeRepository.selectRequests,
+            )
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(null, viewModel.uiState.value.selectedRoute)
+            assertFalse(viewModel.uiState.value.ctaAcknowledged)
         }
 
     @Test
@@ -1532,6 +1638,54 @@ private class TransitModeRecordingRouteRepository(
     }
 }
 
+private class ExpiredSelectRecoveryRouteRepository(
+    private val expireFreshSelect: Boolean = false,
+) : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var freshWalkSearchCount: Int = 0
+        private set
+    val selectRequests = mutableListOf<Pair<String, String>>()
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "walk-search-initial",
+            safeDistanceMeters = 720,
+        ).withServerRouteIdPrefix("initial")
+    }
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        freshWalkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "walk-search-fresh-$freshWalkSearchCount",
+            safeDistanceMeters = 720,
+        ).withServerRouteIdPrefix("fresh")
+    }
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData {
+        selectRequests += routeId to searchId
+        if (selectRequests.size == 1 || expireFreshSelect) {
+            throw routeApiException(
+                failureKind = RouteFailureKind.HTTP_RESPONSE,
+                status = "RT4041",
+                message = "검색 결과가 만료되었습니다.",
+                httpStatusCode = 404,
+            )
+        }
+        return RouteSessionData(
+            sessionId = "session-$routeId",
+            totalDistanceMeters = 2500,
+            totalDurationSeconds = 900,
+        )
+    }
+}
+
 private class DelayedTransitRouteRepository(
     private val walkSafeDistanceMeters: Int,
 ) : BaseTestRouteRepository() {
@@ -1650,6 +1804,21 @@ private fun RouteSearchData.withSafeWalkDistance(distanceMeters: Int): RouteSear
                         } else {
                             route
                         }
+                    },
+            ),
+    )
+
+private fun RouteSearchData.withServerRouteIdPrefix(prefix: String): RouteSearchData =
+    copy(
+        result =
+            result.copy(
+                routes =
+                    routes.map { route ->
+                        val routeId = "${prefix}_${route.routeOption.name}"
+                        route.copy(
+                            routeId = routeId,
+                            serverRouteId = routeId,
+                        )
                     },
             ),
     )

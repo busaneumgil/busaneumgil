@@ -27,6 +27,7 @@ import com.ssafy.e102.eumgil.data.remote.HttpJsonTimeoutConfig
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportImagesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.KtorVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
@@ -40,6 +41,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.DefaultHazardReportImageUploader
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
@@ -121,6 +123,9 @@ class AppContainer(
     }
     private val hazardReportsRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         HazardReportsRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
+    private val hazardReportImagesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        HazardReportImagesRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(
@@ -318,6 +323,12 @@ class AppContainer(
             accessTokenProvider = {
                 authSessionRepository.getAuthGateState().authSession?.accessToken
             },
+            // Task 5.5 — 제보 제출 직전 사진 presigned 업로드 흐름.
+            imageUploader =
+                DefaultHazardReportImageUploader(
+                    contentResolver = appContext.contentResolver,
+                    remoteDataSource = hazardReportImagesRemoteDataSource,
+                ),
         )
     }
 

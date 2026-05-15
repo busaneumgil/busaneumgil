@@ -176,6 +176,37 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `transit navigation entry shows regular guidance instead of pinned transit summary card`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testTransitNavigationRequest())
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.stepCard.transitInfo)
+            assertEquals(NavigationGuidanceAction.STRAIGHT, viewModel.uiState.value.stepCard.guidanceAction)
+        }
+
+    @Test
+    fun `tapping transit rail segment shows route detail transit info on the focused card`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testTransitNavigationRequest())
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            val transitInfo =
+                viewModel.uiState.value.focusedSegmentCard?.transitInfo
+                    ?: error("Focused transit segment should expose transit detail info.")
+            assertEquals(NavigationGuidanceAction.BUS, transitInfo.guidanceAction)
+            assertEquals("Bus Stop", transitInfo.startName)
+            assertEquals("Destination Stop", transitInfo.endName)
+            assertEquals("15", transitInfo.durationLabel?.filter(Char::isDigit))
+        }
+
+    @Test
     fun `current route detail request exposes the active navigation request`() =
         runTest {
             val viewModel = createViewModel()
@@ -328,9 +359,39 @@ class NavigationViewModelTest {
             val summary = createNavigationSegmentMarkerDebugSummary(viewModel.uiState.value.mapOverlay)
 
             assertTrue(summary.contains("focusMode=ACTIVE"))
-            assertTrue(summary.contains("count=2"))
+            assertTrue(summary.contains("count=3"))
             assertTrue(summary.contains("idx=0 seq=1 kind=WALK polyline=0 first=null"))
             assertTrue(summary.contains("idx=1 seq=2 kind=TRANSIT polyline=2 first=35.180600,129.073500"))
+            assertTrue(summary.contains("idx=2 seq=1 kind=WALK polyline=2 first=35.180200,129.071800"))
+        }
+
+    @Test
+    fun `navigation map adds walking leg polyline when transit segment data omits it`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testLegPolylineFallbackNavigationRequest())
+            advanceUntilIdle()
+
+            val walkingPolyline =
+                viewModel.uiState.value.mapOverlay.routeSegments.firstOrNull { segment ->
+                    segment.travelKind == NavigationSegmentTravelKind.WALK && segment.polyline.size >= 2
+                }
+
+            assertEquals(LEG_FALLBACK_START_POINT, walkingPolyline?.polyline?.firstOrNull())
+        }
+
+    @Test
+    fun `focused guidance over five hundred meters disables camera transition animation`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testFarOffRouteNavigationRequest())
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.mapOverlay.shouldAnimateCameraTransition)
         }
 
     @Test
@@ -993,11 +1054,17 @@ private fun testTransitNavigationRequest(
                             role = RouteLegRole.TRANSIT,
                             distanceMeters = 400,
                             durationSeconds = 900,
+                            estimatedTimeMinutes = 15,
                             routeNo = if (transitType == RouteLegType.SUBWAY) "부산 1호선" else "100",
                             boardingStop =
                                 RouteTransitStop(
                                     name = if (transitType == RouteLegType.SUBWAY) "서면역 엘리베이터" else "Bus Stop",
                                     coordinate = TRANSIT_BOARDING_POINT,
+                                ),
+                            alightingStop =
+                                RouteTransitStop(
+                                    name = if (transitType == RouteLegType.SUBWAY) "장산역" else "Destination Stop",
+                                    coordinate = TRANSIT_END_POINT,
                                 ),
                         ),
                     ),

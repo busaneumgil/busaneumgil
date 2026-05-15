@@ -85,7 +85,8 @@ internal fun MapViewportOverlayBackdrop(
                 secondary = MaterialTheme.colorScheme.secondary,
                 tertiary = Color(0xFFF9AB4D),
                 neutral = Color(0xFFD9D9D9),
-                navy = Color(0xFF304583),
+                navy = Color(0xFF005391),
+                transitWalk = Color(0xFFD9D9D9),
                 error = MaterialTheme.colorScheme.error,
                 outline = MaterialTheme.colorScheme.outline,
             )
@@ -384,8 +385,8 @@ private fun DrawScope.drawViewportPointHalo(
 
         MapViewportPointKind.FOCUS_HALO ->
             drawCircle(
-                color = palette.primary.copy(alpha = 0.18f),
-                radius = 24.dp.toPx(),
+                color = FocusedGuidanceMarkerHaloColor,
+                radius = FocusedGuidanceMarkerHaloRadius.toPx(),
                 center = projectedPoint,
             )
 
@@ -401,6 +402,7 @@ private data class ViewportOverlayPalette(
     val tertiary: Color,
     val neutral: Color,
     val navy: Color,
+    val transitWalk: Color,
     val error: Color,
     val outline: Color,
 )
@@ -608,6 +610,7 @@ private fun MapViewportOverlayTone.toColor(palette: ViewportOverlayPalette): Col
         MapViewportOverlayTone.TERTIARY -> palette.tertiary
         MapViewportOverlayTone.NEUTRAL -> palette.neutral
         MapViewportOverlayTone.NAVY -> palette.navy
+        MapViewportOverlayTone.TRANSIT_WALK -> palette.transitWalk
         MapViewportOverlayTone.ERROR -> palette.error
     }
 
@@ -617,7 +620,8 @@ private fun MapViewportOverlayTone.toCasingColor(palette: ViewportOverlayPalette
         MapViewportOverlayTone.SECONDARY -> palette.secondary.copy(red = 0.04f, green = 0.47f, blue = 0.36f)
         MapViewportOverlayTone.TERTIARY -> palette.tertiary.copy(red = 0.72f, green = 0.36f, blue = 0.09f)
         MapViewportOverlayTone.NEUTRAL -> Color(0xFF6B7280)
-        MapViewportOverlayTone.NAVY -> Color(0xFF172554)
+        MapViewportOverlayTone.NAVY -> palette.navy
+        MapViewportOverlayTone.TRANSIT_WALK -> palette.transitWalk
         MapViewportOverlayTone.ERROR -> palette.error.copy(red = 0.62f, green = 0.16f, blue = 0.16f)
     }
 
@@ -659,8 +663,8 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
         MapViewportPointKind.FACILITY -> categoryType?.toFacilityMarkerSpec(isSelected)
         MapViewportPointKind.ORIGIN ->
             ViewportPointMarkerSpec(
-                label = label ?: "O",
-                containerColor = Color(0xFF006BE0),
+                label = label ?: "출발",
+                containerColor = Color(0xFF4D8FF9),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
@@ -669,8 +673,8 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.DESTINATION ->
             ViewportPointMarkerSpec(
-                label = label ?: "D",
-                containerColor = Color(0xFFF14337),
+                label = label ?: "도착",
+                containerColor = Color(0xFFF94D4D),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
@@ -907,3 +911,11 @@ private fun MapMarkerCategoryType.toFacilityLabel(): String =
                 null -> "BB"
             }
     }
+
+private const val RouteDirectionArrowInsetDp = 28
+private const val RouteDirectionArrowIntervalDp = 20
+private const val RouteDirectionArrowMinSegmentDp = 44
+private const val RouteDirectionArrowLengthDp = 10
+private const val RouteDirectionArrowHalfWidthDp = 5
+private val FocusedGuidanceMarkerHaloColor = Color(0x804D8FF9)
+private val FocusedGuidanceMarkerHaloRadius = 13.dp

@@ -1,5 +1,11 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateDpAsState
@@ -8,7 +14,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,12 +58,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,7 +80,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -90,6 +97,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
@@ -106,16 +114,27 @@ import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideCollapsedRailItem
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
+import com.ssafy.e102.eumgil.feature.guidance.component.resolveGuideRailPromotedItemIndex
+import com.ssafy.e102.eumgil.feature.guidance.component.shouldHideGuideRailItemForTopCard
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
+import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayTone
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointOverlay
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportPolylineOverlay
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportPolylineStyle
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarker
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerLeg
 import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOverlayState
+import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
 import java.util.Locale
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 @Composable
@@ -140,6 +159,13 @@ fun RouteSettingScreen(
             uiState.cta.supportingText
         }
     val disablesDefaultWindowInsets = routeSettingUsesEmptyWindowInsets()
+    var isDuribalPromptDismissed by remember(
+        uiState.selectedTravelMode,
+        uiState.loadErrorMessage,
+        uiState.showsDuribalCallAction,
+    ) {
+        mutableStateOf(false)
+    }
 
     Scaffold(
         modifier = modifier,
@@ -192,7 +218,9 @@ fun RouteSettingScreen(
                     RouteSettingRouteSheet(
                         uiState = uiState,
                         onLowFloorReservationClick = onLowFloorReservationClick,
-                        onDuribalCallClick = onDuribalCallClick,
+                        onDuribalCallClick = onDuribalConfirm,
+                        onDuribalCancelClick = { isDuribalPromptDismissed = true },
+                        showDuribalCallPrompt = !isDuribalPromptDismissed,
                         onOptionClick = { routeOption ->
                             onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
                         },
@@ -211,7 +239,7 @@ fun RouteSettingScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
-    }
+        }
 
     if (isDuribalConfirmDialogVisible) {
         EumDuribalCallConfirmDialog(
@@ -275,6 +303,7 @@ fun RouteDetailScreen(
                 selectedRoute?.previewPoints
                     ?.takeIf { it.size >= 2 }
                     ?: uiState.routePreviewMap.polyline
+            val mapControlState = rememberMapOverlayViewportControlState()
 
             var focusedDetailStepIndex by remember(selectedRoute?.routeOption, selectedRoute?.detailSteps) { mutableStateOf<Int?>(null) }
             val guidanceMarkers =
@@ -286,11 +315,13 @@ fun RouteDetailScreen(
                     }
                 }
 
-            RouteMapBackdrop(
-                previewMap = uiState.routePreviewMap,
-                routePath = detailRoutePath,
-                guidanceMarkers = guidanceMarkers,
-                onMarkerClick = { markerId ->
+                RouteMapBackdrop(
+                    previewMap = uiState.routePreviewMap,
+                    routePath = detailRoutePath,
+                    detailPolylines = selectedRoute?.detailPolylines.orEmpty(),
+                    guidanceMarkers = guidanceMarkers,
+                    controlState = mapControlState,
+                    onMarkerClick = { markerId ->
                     focusedDetailStepIndex = markerId.routeDetailStepMarkerIndexOrNull()
                     if (focusedDetailStepIndex != null) {
                         isDetailSidePanelExpanded = false
@@ -300,6 +331,9 @@ fun RouteDetailScreen(
             )
 
             RouteMapControls(
+                onActionClick = { mapControlState.recenter() },
+                onZoomInClick = { mapControlState.zoomIn() },
+                onZoomOutClick = { mapControlState.zoomOut() },
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
@@ -364,6 +398,9 @@ fun RouteDetailScreen(
                         onStepClick = { index ->
                             focusedDetailStepIndex = index
                             isDetailSidePanelExpanded = false
+                        },
+                        onTopVisibleStepChanged = { index ->
+                            focusedDetailStepIndex = index
                         },
                         onLowFloorReservationClick = onLowFloorReservationClick,
                         modifier =
@@ -466,6 +503,14 @@ private fun RouteDetailCollapsedGuideCard(
         color = MaterialTheme.colorScheme.primary,
         shadowElevation = 0.dp,
     ) {
+        AnimatedContent(
+            targetState = step,
+            label = "route-detail-collapsed-guide",
+            transitionSpec = {
+                (slideInVertically { height -> height / 3 } + fadeIn())
+                    .togetherWith(slideOutVertically { height -> -height / 3 } + fadeOut())
+            },
+        ) { targetStep ->
         Row(
             modifier =
                 Modifier
@@ -475,14 +520,17 @@ private fun RouteDetailCollapsedGuideCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            if (step != null && step.kind.isTransitStep()) {
-                RouteDetailCollapsedTransitGuideCardContent(
-                    step = step,
+            if (targetStep != null && targetStep.kind.isTransitStep()) {
+                RouteDetailTransitGuideCardContent(
+                    step = targetStep,
                     modifier = Modifier.weight(1f),
+                    contentColor = Color.White,
+                    secondaryContentColor = Color.White.copy(alpha = 0.82f),
+                    iconTint = Color.White,
                 )
             } else {
             Icon(
-                painter = painterResource(id = routeDetailStepIconRes(step?.kind ?: RouteDetailStepKind.START)),
+                painter = painterResource(id = routeDetailStepIconRes(targetStep?.kind ?: RouteDetailStepKind.START)),
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(RouteDetailCollapsedGuideIconSize),
@@ -492,15 +540,15 @@ private fun RouteDetailCollapsedGuideCard(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
-                    text = step?.title ?: origin.name.ifBlank { "출발지" },
-                    style = MaterialTheme.typography.titleMedium,
+                    text = targetStep?.title ?: origin.name.ifBlank { "출발지" },
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = step?.description ?: "출발지에서 안내를 시작합니다.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = targetStep?.description ?: "출발지에서 안내를 시작합니다.",
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
                     color = Color.White.copy(alpha = 0.9f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -508,25 +556,32 @@ private fun RouteDetailCollapsedGuideCard(
             }
             }
         }
+        }
     }
 }
 
 @Composable
-private fun RouteDetailCollapsedTransitGuideCardContent(
+private fun RouteDetailTransitGuideCardContent(
     step: RouteDetailStepUiState,
     modifier: Modifier = Modifier,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    secondaryContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    showIcon: Boolean = true,
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            painter = painterResource(id = routeDetailStepIconRes(step.kind)),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(RouteDetailCollapsedGuideIconSize),
-        )
+        if (showIcon) {
+            Icon(
+                painter = painterResource(id = routeDetailStepIconRes(step.kind)),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(RouteDetailCollapsedGuideIconSize),
+            )
+        }
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -538,7 +593,7 @@ private fun RouteDetailCollapsedTransitGuideCardContent(
                 Text(
                     text = step.transitStartName ?: step.title,
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
+                    color = contentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -546,12 +601,12 @@ private fun RouteDetailCollapsedTransitGuideCardContent(
                 Text(
                     text = "->",
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.82f),
+                    color = secondaryContentColor,
                 )
                 Text(
                     text = step.transitEndName ?: step.description,
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
+                    color = contentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -560,7 +615,7 @@ private fun RouteDetailCollapsedTransitGuideCardContent(
                     Text(
                         text = duration,
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
+                        color = contentColor,
                         maxLines = 1,
                     )
                 }
@@ -659,16 +714,10 @@ private fun RouteDetailSidePanel(
     focusedStepIndex: Int?,
     onExpandedChange: (Boolean) -> Unit,
     onStepClick: (Int) -> Unit,
+    onTopVisibleStepChanged: (Int) -> Unit,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val targetWidth =
-        if (isExpanded) {
-            LocalConfiguration.current.screenWidthDp.dp * 0.88f
-        } else {
-            RouteDetailCollapsedRailWidth
-        }
-    val panelWidth by animateDpAsState(targetValue = targetWidth, label = "route-detail-side-panel-width")
     val panelStateDescription =
         if (isExpanded) {
             "전체 안내 패널 펼쳐짐"
@@ -676,59 +725,37 @@ private fun RouteDetailSidePanel(
             "전체 안내 패널 접힘"
         }
 
-    Box(
-        modifier =
-            modifier
-                .width(panelWidth)
-                .pointerInput(Unit) {
-                    var dragOffsetPx = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { dragOffsetPx = 0f },
-                        onHorizontalDrag = { _, dragAmount -> dragOffsetPx += dragAmount },
-                        onDragEnd = {
-                            when {
-                                dragOffsetPx < -RouteDetailSidePanelSwipeThresholdPx -> onExpandedChange(false)
-                                dragOffsetPx > RouteDetailSidePanelSwipeThresholdPx -> onExpandedChange(true)
-                            }
-                        },
-                    )
-                }
-                .semantics {
-                    stateDescription = panelStateDescription
-                },
+    GuideSidePanelShell(
+        isExpanded = isExpanded,
+        onExpandedChange = onExpandedChange,
+        collapsedWidth = RouteDetailCollapsedRailWidth,
+        stateDescription = panelStateDescription,
+        modifier = modifier,
     ) {
-        Surface(
-            modifier =
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .width(panelWidth)
-                    .fillMaxHeight(),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 0.dp,
-        ) {
         if (isExpanded) {
             RouteDetailTimelinePanelContent(
-                    origin = origin,
-                    steps = selectedRoute.detailSteps,
-                    fallbackMessage = selectedRoute.detailFallbackMessage,
-                    lowFloorReservations = selectedRoute.lowFloorReservations,
-                    onStepClick = { index ->
-                        onStepClick(index)
-                    },
-                    onLowFloorReservationClick = onLowFloorReservationClick,
-                    modifier = Modifier.fillMaxSize(),
+                origin = origin,
+                steps = selectedRoute.detailSteps,
+                badges = selectedRoute.badges,
+                fallbackMessage = selectedRoute.detailFallbackMessage,
+                lowFloorReservations = selectedRoute.lowFloorReservations,
+                onStepClick = { index ->
+                    onStepClick(index)
+                },
+                onLowFloorReservationClick = onLowFloorReservationClick,
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             RouteDetailIconRail(
                 steps = selectedRoute.detailSteps,
                 focusedStepIndex = focusedStepIndex,
                 onStepClick = onStepClick,
+                onTopVisibleStepChanged = onTopVisibleStepChanged,
                 modifier =
                     Modifier
                         .fillMaxHeight()
                         .statusBarsPadding(),
             )
-        }
         }
     }
 }
@@ -737,6 +764,7 @@ private fun RouteDetailSidePanel(
 private fun RouteDetailTimelinePanelContent(
     origin: RouteLocationUiState,
     steps: List<RouteDetailStepUiState>,
+    badges: List<RouteOptionBadge>,
     fallbackMessage: String?,
     lowFloorReservations: List<LowFloorBusReservation>,
     onStepClick: (Int) -> Unit,
@@ -781,6 +809,13 @@ private fun RouteDetailTimelinePanelContent(
                     )
                 }
             } else {
+                val visibleBadges = badges.filterNot { badge -> badge == RouteOptionBadge.SAFE_PRIORITY }
+                if (visibleBadges.isNotEmpty()) {
+                    item(key = "route-detail-badges") {
+                        RouteDetailBadgeHeader(badges = visibleBadges)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f))
+                    }
+                }
                 item(key = "route-detail-origin") {
                     RouteDetailOriginStepRow(
                         origin = origin,
@@ -828,6 +863,9 @@ private fun RouteDetailTimelinePanelContent(
                     onReservationClick = onLowFloorReservationClick,
                 )
             }
+            item(key = "route-detail-arrival-divider") {
+                HorizontalDivider(color = RouteDetailGuideDividerColor)
+            }
             item(key = "route-detail-scroll-top") {
                 RouteDetailScrollTopAction(
                     onClick = {
@@ -841,8 +879,44 @@ private fun RouteDetailTimelinePanelContent(
                             .padding(top = RouteDetailPanelBottomActionTopPadding),
                 )
             }
-            item(key = "route-detail-feedback-footer") {
-                RouteDetailPanelFeedbackFooter()
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RouteDetailBadgeHeader(
+    badges: List<RouteOptionBadge>,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .padding(
+                    horizontal = EumSpacing.large,
+                    vertical = EumSpacing.medium,
+                ),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Text(
+            text = "경로 특징",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            badges.forEach { badge ->
+                val (containerColor, contentColor) = routeAccessibilityLabelColors(badge)
+                RouteBadgeChip(
+                    label = routeBadgeText(badge),
+                    containerColor = containerColor,
+                    contentColor = contentColor,
+                    borderColor = Color.Transparent,
+                )
             }
         }
     }
@@ -883,145 +957,161 @@ private fun RouteDetailScrollTopAction(
 }
 
 @Composable
-private fun RouteDetailPanelFeedbackFooter(
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(top = EumSpacing.large),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "정보 수정 제안",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Icon(
-            painter = painterResource(id = R.drawable.ic_route_card_chevron),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
-@Composable
 private fun RouteDetailIconRail(
     steps: List<RouteDetailStepUiState>,
     focusedStepIndex: Int?,
     onStepClick: (Int) -> Unit,
+    onTopVisibleStepChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    var hiddenRailStepIndex by remember { mutableStateOf<Int?>(null) }
+    val fallbackRailItemSizePx = with(LocalDensity.current) { RouteDetailCollapsedRailItemSize.roundToPx() }
+    val currentFocusedStepIndex by rememberUpdatedState(focusedStepIndex)
+    val currentOnTopVisibleStepChanged by rememberUpdatedState(onTopVisibleStepChanged)
+
+    LaunchedEffect(listState, steps, fallbackRailItemSizePx) {
+        var hasObservedInitialPosition = false
+        snapshotFlow {
+            val firstVisibleItemSizePx =
+                listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { item -> item.index == listState.firstVisibleItemIndex }
+                    ?.size
+                    ?: fallbackRailItemSizePx
+            val promotedIndex =
+                resolveGuideRailPromotedItemIndex(
+                    firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                    firstVisibleItemSizePx = firstVisibleItemSizePx,
+                    itemCount = steps.size,
+                )
+            RouteDetailRailPromotionSnapshot(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                firstVisibleItemSizePx = firstVisibleItemSizePx,
+                isScrollInProgress = listState.isScrollInProgress,
+                promotedStepIndex = promotedIndex,
+            )
+        }
+            .distinctUntilChanged()
+            .collect { snapshot ->
+                if (!hasObservedInitialPosition) {
+                    hasObservedInitialPosition = true
+                    return@collect
+                }
+                snapshot.promotedStepIndex
+                    ?.takeIf { index -> index != currentFocusedStepIndex }
+                    ?.let(currentOnTopVisibleStepChanged)
+                if (snapshot.shouldSnapToPromotedStep()) {
+                    snapshot.promotedStepIndex?.let { index ->
+                        hiddenRailStepIndex = index
+                        listState.animateScrollToItem(index, scrollOffset = 0)
+                        listState.scrollToItem(index, scrollOffset = 0)
+                    }
+                } else if (
+                    hiddenRailStepIndex != null &&
+                    snapshot.firstVisibleItemIndex != hiddenRailStepIndex &&
+                    snapshot.promotedStepIndex != hiddenRailStepIndex
+                ) {
+                    hiddenRailStepIndex = null
+                }
+            }
+    }
+
+    BoxWithConstraints(
         modifier =
             modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = EumSpacing.small),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                .fillMaxWidth(),
     ) {
-        steps.forEachIndexed { index, step ->
-            val isFocused = focusedStepIndex == index
-            IconButton(
-                onClick = { onStepClick(index) },
-                modifier =
-                    Modifier
-                        .size(RouteDetailCollapsedRailItemSize)
-                        .background(
-                            color =
-                                if (isFocused) {
-                                    RouteDetailFocusedRowColor
-                                } else {
-                                    Color.Transparent
-                                },
-                            shape = RoundedCornerShape(RouteStandardCardCornerRadius),
-                        )
-                        .semantics {
-                            contentDescription = "${step.title} ${step.description}"
-                            stateDescription = if (isFocused) "현재 안내" else "전체 안내"
-                        },
-            ) {
-                RouteDetailSidePanelStepIcon(
-                    kind = step.kind,
-                    contentColor =
-                        if (isFocused) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            routeDetailIconRailTint(step.kind)
-                        },
+        val routeDetailCollapsedRailEndSnapPadding =
+            (maxHeight - RouteDetailCollapsedRailItemSize).coerceAtLeast(0.dp)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(bottom = routeDetailCollapsedRailEndSnapPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            itemsIndexed(
+                items = steps,
+                key = { index, step -> "route-detail-rail-$index-${step.kind}-${step.indexLabel}" },
+            ) { index, step ->
+                val isFocused = focusedStepIndex == index
+                GuideCollapsedRailItem(
+                    action = step.kind.toNavigationGuidanceAction(),
+                    isOrigin = step.kind == RouteDetailStepKind.START,
+                    isDestination = step.kind == RouteDetailStepKind.ARRIVAL,
+                    isFocused = isFocused,
+                    isSelected = isFocused,
+                    contentDescription = "${step.title} ${step.description}",
+                    stateDescription = if (isFocused) "focused guide step" else "guide step",
+                    dividerColor = RouteDetailGuideDividerColor,
+                    height = RouteDetailCollapsedRailItemSize,
+                    isContentHidden = shouldHideGuideRailItemForTopCard(index, hiddenRailStepIndex),
+                    onClick = { onStepClick(index) },
+                    modifier = Modifier.size(RouteDetailCollapsedRailItemSize),
+                )
+            }
+            item(key = "route-detail-rail-scroll-top") {
+                RouteDetailCollapsedRailScrollTopAction(
+                    onClick = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(0, scrollOffset = 0)
+                            listState.scrollToItem(0, scrollOffset = 0)
+                            onStepClick(0)
+                        }
+                    },
                 )
             }
         }
     }
 }
 
-@Composable
-private fun RouteDetailSidePanelStepIcon(
-    kind: RouteDetailStepKind,
-    contentColor: Color,
-    modifier: Modifier = Modifier,
+private data class RouteDetailRailPromotionSnapshot(
+    val firstVisibleItemIndex: Int,
+    val firstVisibleItemScrollOffset: Int,
+    val firstVisibleItemSizePx: Int,
+    val isScrollInProgress: Boolean,
+    val promotedStepIndex: Int?,
 ) {
-    Box(
-        modifier = modifier.size(RouteDetailStepLeadingIconContainerSize),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (kind.usesLabeledWaypointPinIcon()) {
-            Image(
-                painter = painterResource(id = routeDetailStepIconRes(kind = kind)),
-                contentDescription = null,
-                modifier = Modifier.size(width = RouteDetailWaypointPinWidth, height = RouteDetailWaypointPinHeight),
-                contentScale = ContentScale.FillBounds,
-            )
-        } else {
-            Icon(
-                painter = painterResource(id = routeDetailStepIconRes(kind = kind)),
-                contentDescription = null,
-                modifier = Modifier.size(kind.leadingIconSize()),
-                tint = contentColor,
-            )
-        }
-    }
+    fun shouldSnapToPromotedStep(): Boolean =
+        promotedStepIndex != null &&
+            !isScrollInProgress &&
+            (firstVisibleItemScrollOffset > 0 || firstVisibleItemIndex != promotedStepIndex)
 }
 
 @Composable
-private fun RouteDetailSidePanelToggleHandle(
-    isExpanded: Boolean,
+private fun RouteDetailCollapsedRailScrollTopAction(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Box(
         modifier =
-            modifier
-                .size(
-                    width = RouteDetailSidePanelHandleTouchWidth,
-                    height = RouteDetailSidePanelHandleTouchHeight,
-                )
-                .clickable(role = Role.Button, onClick = onClick),
-        shape =
-            RoundedCornerShape(
-                topEnd = RouteDetailSidePanelHandleRadius,
-                bottomEnd = RouteDetailSidePanelHandleRadius,
-            ),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        border = BorderStroke(RouteThinDividerStrokeWidth, RouteTimelineDividerColor),
-        shadowElevation = 0.dp,
+            Modifier
+                .fillMaxWidth()
+                .height(RouteDetailCollapsedRailItemSize),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = if (isExpanded) "<" else ">",
-                color = RouteSidePanelHandleContentColor,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier =
-                    Modifier.semantics {
-                        contentDescription = if (isExpanded) "전체 안내 패널 접기" else "전체 안내 패널 펼치기"
+        Surface(
+            modifier =
+                Modifier
+                    .size(RouteDetailCollapsedRailScrollTopButtonSize)
+                    .clickable(role = Role.Button, onClick = onClick)
+                    .semantics {
+                        contentDescription = "?덈궡 紐⑸줉 留??꾨줈 ?대룞"
                     },
-            )
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, RouteDetailGuideDividerColor),
+            shadowElevation = 0.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_route_scroll_top),
+                    contentDescription = null,
+                    tint = RouteDetailGuideIconColor,
+                    modifier = Modifier.size(RouteDetailCollapsedRailScrollTopIconSize),
+                )
+            }
         }
     }
 }
@@ -1592,7 +1682,6 @@ private fun RouteDetailOriginStepRow(
     step: RouteDetailStepUiState,
     onClick: () -> Unit = {},
 ) {
-    val markerColor = RouteWaypointOriginColor
     val defaultStateDescription = stringResource(id = R.string.route_setting_detail_step_state_default)
     val accessibilityDescription =
         buildString {
@@ -1609,53 +1698,18 @@ private fun RouteDetailOriginStepRow(
             append(step.description)
         }
 
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .clickable(role = Role.Button, onClick = onClick)
-                .padding(EumSpacing.medium)
-                .semantics(mergeDescendants = true) {
-                    contentDescription = accessibilityDescription
-                    stateDescription = defaultStateDescription
-                },
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        verticalAlignment = Alignment.Top,
-    ) {
-        RouteDetailSidePanelStepIcon(
-            kind = step.kind,
-            contentColor = markerColor,
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = step.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = origin.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            origin.supportingText?.takeIf(String::isNotBlank)?.let { supportingText ->
-                Text(
-                    text = supportingText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                text = step.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    GuideSidePanelStepRow(
+        title = origin.name,
+        description = origin.supportingText ?: step.description,
+        action = step.kind.toNavigationGuidanceAction(),
+        isOrigin = step.kind == RouteDetailStepKind.START,
+        isDestination = step.kind == RouteDetailStepKind.ARRIVAL,
+        leadingContentColor = RouteWaypointOriginColor,
+        contentDescription = accessibilityDescription,
+        stateDescription = defaultStateDescription,
+        onClick = onClick,
+        minHeight = RouteDetailGuideRowMinHeight,
+    )
 }
 
 @Composable
@@ -1690,7 +1744,6 @@ private fun RouteDetailStepRow(
     step: RouteDetailStepUiState,
     onClick: () -> Unit = {},
 ) {
-    val cardColor = MaterialTheme.colorScheme.surface
     val badgeContainerColor = RouteDetailGuideBadgeContainerColor
     val badgeContentColor = RouteDetailGuideBadgeContentColor
     val stepStateDescription =
@@ -1716,38 +1769,18 @@ private fun RouteDetailStepRow(
             }
         }
 
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(cardColor)
-                .clickable(role = Role.Button, onClick = onClick)
-                .padding(EumSpacing.medium)
-                .semantics(mergeDescendants = true) {
-                    contentDescription = stepAccessibilityDescription
-                    stateDescription = stepStateDescription
-                },
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        verticalAlignment = Alignment.Top,
-    ) {
-        RouteDetailSidePanelStepIcon(
-            kind = step.kind,
-            contentColor = RouteDetailGuideIconColor,
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = step.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = step.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    GuideSidePanelStepRow(
+        title = step.title,
+        description = step.description,
+        action = step.kind.toNavigationGuidanceAction(),
+        isOrigin = step.kind == RouteDetailStepKind.START,
+        isDestination = step.kind == RouteDetailStepKind.ARRIVAL,
+        leadingContentColor = RouteDetailGuideIconColor,
+        contentDescription = stepAccessibilityDescription,
+        stateDescription = stepStateDescription,
+        onClick = onClick,
+        minHeight = RouteDetailGuideRowMinHeight,
+        supportingContent = {
             step.badgeLabel?.let { badgeLabel ->
                 RouteBadgeChip(
                     label = badgeLabel,
@@ -1757,15 +1790,16 @@ private fun RouteDetailStepRow(
                 )
             }
             if (step.kind == RouteDetailStepKind.BUS || step.kind == RouteDetailStepKind.SUBWAY) {
-                RouteDetailTransitTagRow(step = step)
+                RouteDetailTransitGuideCardContent(
+                    step = step,
+                    showIcon = false,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    secondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
-        }
-        if (step.kind == RouteDetailStepKind.ARRIVAL) {
-            RouteDetailArrivalInfoChip()
-        } else {
-            RouteDetailRowAccessoryIcon()
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -1850,6 +1884,22 @@ private fun RouteDetailStepUiState.toFallbackTransitOptionLabels(): List<RouteTr
 
 private fun RouteDetailStepKind.isTransitStep(): Boolean =
     this == RouteDetailStepKind.BUS || this == RouteDetailStepKind.SUBWAY
+
+private fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidanceAction =
+    when (this) {
+        RouteDetailStepKind.BUS -> NavigationGuidanceAction.BUS
+        RouteDetailStepKind.SUBWAY -> NavigationGuidanceAction.SUBWAY
+        RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK
+        RouteDetailStepKind.TURN_LEFT -> NavigationGuidanceAction.TURN_LEFT
+        RouteDetailStepKind.TURN_RIGHT -> NavigationGuidanceAction.TURN_RIGHT
+        RouteDetailStepKind.TACTILE_GUIDE -> NavigationGuidanceAction.TACTILE_GUIDE
+        RouteDetailStepKind.ELEVATOR -> NavigationGuidanceAction.ELEVATOR
+        RouteDetailStepKind.CONSTRUCTION -> NavigationGuidanceAction.CONSTRUCTION
+        RouteDetailStepKind.CURB_GAP -> NavigationGuidanceAction.CURB_GAP
+        RouteDetailStepKind.STAIRS -> NavigationGuidanceAction.STAIRS
+        RouteDetailStepKind.FALLBACK -> NavigationGuidanceAction.FALLBACK
+        else -> NavigationGuidanceAction.STRAIGHT
+    }
 
 @Composable
 private fun RouteDetailStepLeadingIcon(
@@ -2874,6 +2924,7 @@ private fun RouteMapStage(
 ) {
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
+    val mapControlState = rememberMapOverlayViewportControlState()
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RouteMapStageCornerRadius),
@@ -2895,6 +2946,7 @@ private fun RouteMapStage(
                     } else {
                         emptyList()
                     },
+                controlState = mapControlState,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -2911,6 +2963,9 @@ private fun RouteMapStage(
             }
 
             RouteMapControls(
+                onActionClick = { mapControlState.recenter() },
+                onZoomInClick = { mapControlState.zoomIn() },
+                onZoomOutClick = { mapControlState.zoomOut() },
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
@@ -3128,6 +3183,9 @@ private fun RouteWalkPreviewBadgeRow(
 
 @Composable
 private fun RouteMapControls(
+    onActionClick: () -> Unit = {},
+    onZoomInClick: () -> Unit = {},
+    onZoomOutClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     EumMapFloatingControls(
@@ -3138,10 +3196,10 @@ private fun RouteMapControls(
                 contentDescription = stringResource(id = R.string.route_setting_map_control_recenter),
                 enabled = true,
             ),
-        onActionClick = {},
+        onActionClick = onActionClick,
         modifier = modifier,
-        onZoomInClick = {},
-        onZoomOutClick = {},
+        onZoomInClick = onZoomInClick,
+        onZoomOutClick = onZoomOutClick,
     )
 }
 
@@ -3150,6 +3208,8 @@ private fun RouteSettingRouteSheet(
     uiState: RouteSettingUiState,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
+    onDuribalCancelClick: () -> Unit,
+    showDuribalCallPrompt: Boolean,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
@@ -3179,6 +3239,8 @@ private fun RouteSettingRouteSheet(
                 uiState = uiState,
                 onLowFloorReservationClick = onLowFloorReservationClick,
                 onDuribalCallClick = onDuribalCallClick,
+                onDuribalCancelClick = onDuribalCancelClick,
+                showDuribalCallPrompt = showDuribalCallPrompt,
                 onOptionClick = onOptionClick,
                 onOptionDetailClick = onOptionDetailClick,
             )
@@ -3191,6 +3253,8 @@ private fun RouteOptionSection(
     uiState: RouteSettingUiState,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
+    onDuribalCancelClick: () -> Unit,
+    showDuribalCallPrompt: Boolean,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
@@ -3201,22 +3265,16 @@ private fun RouteOptionSection(
             uiState.isLoading && uiState.optionCards.isEmpty() ->
                 RouteSearchLoadingState()
 
+            uiState.loadErrorMessage != null && uiState.showsDuribalCallAction && showDuribalCallPrompt ->
+                RouteDuribalCallPromptCard(
+                    onCallClick = onDuribalCallClick,
+                    onCancelClick = onDuribalCancelClick,
+                )
+
             uiState.loadErrorMessage != null ->
                 RouteStateCard(
                     title = stringResource(id = R.string.route_setting_summary_error_title),
                     description = uiState.loadErrorMessage,
-                    actionLabel =
-                        if (uiState.showsDuribalCallAction) {
-                            stringResource(id = R.string.route_setting_duribal_call_action)
-                        } else {
-                            null
-                        },
-                    onActionClick =
-                        if (uiState.showsDuribalCallAction) {
-                            onDuribalCallClick
-                        } else {
-                            null
-                        },
                     containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.32f),
                     borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.24f),
                 )
@@ -3243,6 +3301,66 @@ private fun RouteOptionSection(
                         )
                     }
                 }
+        }
+    }
+}
+
+@Composable
+private fun RouteDuribalCallPromptCard(
+    onCallClick: () -> Unit,
+    onCancelClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(RouteStandardCardCornerRadius),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)),
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Text(
+                text = stringResource(id = R.string.route_setting_duribal_call_prompt_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(id = R.string.route_setting_duribal_call_prompt_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onCancelClick) {
+                    Text(text = stringResource(id = R.string.route_setting_duribal_call_prompt_cancel))
+                }
+                Button(
+                    onClick = onCallClick,
+                    shape = RoundedCornerShape(RouteButtonCornerRadius),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = EumPrimary600,
+                            contentColor = EumWhite,
+                        ),
+                    elevation =
+                        ButtonDefaults.buttonElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp,
+                            disabledElevation = 0.dp,
+                        ),
+                ) {
+                    Text(text = stringResource(id = R.string.route_setting_duribal_call_prompt_call))
+                }
+            }
         }
     }
 }
@@ -3813,8 +3931,8 @@ private fun RouteSettingBottomBar(
                 Modifier
                     .navigationBarsPadding()
                     .padding(
-                        start = EumSpacing.medium,
-                        end = EumSpacing.medium,
+                        start = RouteSettingBottomBarHorizontalPadding,
+                        end = RouteSettingBottomBarHorizontalPadding,
                         top = EumSpacing.small,
                         bottom = RouteSettingBottomBarBottomGap,
                     ),
@@ -3915,12 +4033,20 @@ private fun RouteSettingCtaContent(
 private fun RouteMapBackdrop(
     previewMap: RoutePreviewMapUiState,
     routePath: List<GeoCoordinate>,
+    detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
+    controlState: MapOverlayViewportControlState? = null,
     onMarkerClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.route_setting_preview_title)
     val hasFocusedGuidanceMarker = guidanceMarkers.any { marker -> marker.isSelected }
+    val routePolylineOverlays =
+        detailPolylines.toRouteDetailPolylineOverlays(
+            includeInProjection = !hasFocusedGuidanceMarker,
+            showDirectionArrows = true,
+        )
+    val shouldShowRouteDirectionArrows = routePolylineOverlays.isNotEmpty() || hasFocusedGuidanceMarker
     MapOverlayViewport(
         overlayState =
             createRoutePreviewViewportOverlayState(
@@ -3933,15 +4059,42 @@ private fun RouteMapBackdrop(
                                 previewMap.polyline
                             },
                     ),
+                routePolylineOverlays = routePolylineOverlays,
                 guidanceMarkers = guidanceMarkers,
                 focusSelectedGuidanceMarker = hasFocusedGuidanceMarker,
-                showDetailedRouteOverlay = hasFocusedGuidanceMarker,
+                showDetailedRouteOverlay = shouldShowRouteDirectionArrows,
             ),
         modifier = modifier,
         contentDescription = mapDescription,
         onMarkerClick = onMarkerClick,
+        controlState = controlState,
     )
 }
+
+private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays(
+    includeInProjection: Boolean,
+    showDirectionArrows: Boolean,
+): List<MapViewportPolylineOverlay> =
+    mapIndexedNotNull { index, detailPolyline ->
+        if (detailPolyline.points.size < 2) return@mapIndexedNotNull null
+        MapViewportPolylineOverlay(
+            overlayId = "route-detail-${detailPolyline.kind.name.lowercase(Locale.US)}-$index",
+            points =
+                detailPolyline.points.map { point ->
+                    MapCoordinate(latitude = point.latitude, longitude = point.longitude)
+                },
+            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+            tone = detailPolyline.kind.toMapViewportOverlayTone(),
+            includeInProjection = includeInProjection,
+            showDirectionArrows = showDirectionArrows,
+        )
+    }
+
+private fun RouteDetailPolylineKind.toMapViewportOverlayTone(): MapViewportOverlayTone =
+    when (this) {
+        RouteDetailPolylineKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
+        RouteDetailPolylineKind.TRANSIT -> MapViewportOverlayTone.NAVY
+    }
 
 @Composable
 private fun RoutePreviewMapMarker(
@@ -4140,6 +4293,13 @@ private fun routeBadgeText(badge: RouteOptionBadge): String =
         RouteOptionBadge.CURB_GAP -> stringResource(id = R.string.route_setting_badge_curb_gap)
         RouteOptionBadge.UNSIGNALIZED_CROSSWALK ->
             stringResource(id = R.string.route_setting_badge_unsignalized_crosswalk)
+        RouteOptionBadge.LOW_SLOPE -> "낮은 경사"
+        RouteOptionBadge.MIDDLE_SLOPE -> "중간 경사"
+        RouteOptionBadge.STAIR -> "계단"
+        RouteOptionBadge.CROSSWALK -> "횡단보도"
+        RouteOptionBadge.ELEVATOR -> "엘리베이터"
+        RouteOptionBadge.NARROW_SIDEWALK -> "좁은 보도"
+        RouteOptionBadge.UNPAVED -> "비포장"
     }
 
 @Composable
@@ -4147,6 +4307,10 @@ private fun routeAccessibilityLabelColors(badge: RouteOptionBadge): Pair<Color, 
     when (badge) {
         RouteOptionBadge.CURB_GAP,
         RouteOptionBadge.UNSIGNALIZED_CROSSWALK,
+        RouteOptionBadge.MIDDLE_SLOPE,
+        RouteOptionBadge.STAIR,
+        RouteOptionBadge.NARROW_SIDEWALK,
+        RouteOptionBadge.UNPAVED,
             ->
             MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f) to MaterialTheme.colorScheme.tertiary
 
@@ -4155,6 +4319,9 @@ private fun routeAccessibilityLabelColors(badge: RouteOptionBadge): Pair<Color, 
         RouteOptionBadge.AUDIO_SIGNAL,
         RouteOptionBadge.BRAILLE_BLOCK,
         RouteOptionBadge.SIGNAL_CROSSWALK,
+        RouteOptionBadge.LOW_SLOPE,
+        RouteOptionBadge.CROSSWALK,
+        RouteOptionBadge.ELEVATOR,
             ->
             MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) to MaterialTheme.colorScheme.primary
     }
@@ -4257,9 +4424,8 @@ private fun routeDetailStepIconRes(kind: RouteDetailStepKind): Int =
 
         RouteDetailStepKind.BUS -> R.drawable.ic_place_bus
         RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway
-        RouteDetailStepKind.STRAIGHT,
-        RouteDetailStepKind.FALLBACK,
-            -> R.drawable.ic_direction_straight
+        RouteDetailStepKind.STRAIGHT -> R.drawable.ic_direction_straight
+        RouteDetailStepKind.FALLBACK -> R.drawable.ic_status_help_circle
 
         RouteDetailStepKind.TURN_LEFT -> R.drawable.ic_direction_turn_left
         RouteDetailStepKind.TURN_RIGHT -> R.drawable.ic_direction_turn_right
@@ -4276,8 +4442,7 @@ private fun RouteDetailStepKind.usesDirectionalStepIcon(): Boolean =
     this == RouteDetailStepKind.STRAIGHT ||
         this == RouteDetailStepKind.TURN_LEFT ||
         this == RouteDetailStepKind.CROSSWALK ||
-        this == RouteDetailStepKind.TURN_RIGHT ||
-        this == RouteDetailStepKind.FALLBACK
+        this == RouteDetailStepKind.TURN_RIGHT
 
 private fun RouteDetailStepKind.usesLabeledWaypointPinIcon(): Boolean =
     this == RouteDetailStepKind.START || this == RouteDetailStepKind.ARRIVAL
@@ -4698,17 +4863,16 @@ private val RouteDetailRefreshButtonSize = 44.dp
 private val RouteDetailWaypointPinWidth = 22.dp
 private val RouteDetailWaypointPinHeight = 24.dp
 private val RouteDetailCollapsedRailWidth = 58.dp
-private val RouteDetailCollapsedRailItemSize = 48.dp
+private val RouteDetailCollapsedRailItemSize = 72.dp
 private val RouteDetailCollapsedGuideCardMinHeight = 76.dp
 private val RouteDetailCollapsedGuideIconSize = 32.dp
-private val RouteDetailSidePanelHandleTouchWidth = 48.dp
-private val RouteDetailSidePanelHandleTouchHeight = 64.dp
-private val RouteDetailSidePanelHandleRadius = 24.dp
 private val RouteDetailScrollTopButtonSize = 48.dp
 private val RouteDetailScrollTopIconSize = 24.dp
-private val RouteDetailScrollTopActionVerticalPadding = 18.dp
+private val RouteDetailCollapsedRailScrollTopButtonSize = 36.dp
+private val RouteDetailCollapsedRailScrollTopIconSize = 22.dp
+private val RouteDetailScrollTopActionVerticalPadding = 0.dp
 private val RouteDetailPanelBottomActionTopPadding = 24.dp
-private val RouteDetailSidePanelBottomActionSpace = 120.dp
+private val RouteDetailGuideRowMinHeight = 76.dp
 private val RouteDetailGuideIconColor = Color(0xFF2B2B2B)
 private val RouteDetailGuideBadgeContainerColor = Color.White
 private val RouteDetailGuideBadgeContentColor = Color(0xFF666666)
@@ -4718,10 +4882,7 @@ private val RouteDetailRowAccessorySize = 36.dp
 private val RouteDetailRowAccessoryIconSize = 20.dp
 private val RouteDetailRowAccessoryIconColor = Color(0xFF9A9A9A)
 private val RouteDetailArrivalInfoChipRadius = 18.dp
-private const val RouteDetailSidePanelSwipeThresholdPx = 80f
-private val RouteThinDividerStrokeWidth = 0.5.dp
 private val RouteTimelineDividerColor = Color(0xFFD9D9D9)
-private val RouteSidePanelHandleContentColor = Color(0xFF333333)
 private val RouteTravelModeTabVerticalPadding = 7.dp
 private val RouteTravelModeWalkTabIconSize = 30.dp
 private val RouteTravelModeTransitTabIconSize = 28.dp
@@ -4746,7 +4907,7 @@ private val RouteWalkPreviewTextGap = 4.dp
 private val RouteWalkPreviewChevronTouchTargetSize = 36.dp
 private val RouteWalkPreviewChevronIconSize = 18.dp
 private val RouteWalkPreviewChevronColor = Color(0xFF111827)
-private val RouteTransitNavy = Color(0xFF304583)
+private val RouteTransitNavy = Color(0xFF005391)
 private val RouteTransitWalkGray = Color(0xFFD9D9D9)
 private val RouteSubwayLine1 = Color(0xFFFF7F00)
 private val RouteSubwayLine2 = Color(0xFF3ED93B)
@@ -4765,9 +4926,10 @@ private val RouteOptionDetailButtonTouchTargetSize = 48.dp
 private val RouteOptionDetailButtonIconSize = 24.dp
 private val RouteInlineButtonHeight = 44.dp
 private val RouteSettingBottomBarButtonHeight = 50.dp
+private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val RouteSettingBottomBarBottomGap = 30.dp
 private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
-private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance + RouteDetailSidePanelBottomActionSpace
+private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance
 private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
 private val RoutePreviewMarkerSize = 38.dp

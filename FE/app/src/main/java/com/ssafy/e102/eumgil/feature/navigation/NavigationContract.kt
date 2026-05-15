@@ -106,6 +106,7 @@ data class NavigationMapSegmentUiState(
 
 enum class NavigationSegmentTravelKind {
     WALK,
+    TRANSIT_WALK,
     TRANSIT,
 }
 

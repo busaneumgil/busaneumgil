@@ -103,6 +103,7 @@ internal enum class MapViewportOverlayTone {
     TERTIARY,
     NEUTRAL,
     NAVY,
+    NAVIGATION_WALK,
     TRANSIT_WALK,
     ERROR,
 }
@@ -549,25 +550,29 @@ private fun resolveNavigationArrowOverlayId(
 
 private fun NavigationSegmentTravelKind.toBaselineOverlayTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NAVIGATION_WALK
+        NavigationSegmentTravelKind.TRANSIT_WALK -> MapViewportOverlayTone.TRANSIT_WALK
         NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun NavigationSegmentTravelKind.toSegmentMarkerTone(): MapViewportOverlayTone =
     when (this) {
         NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NEUTRAL
+        NavigationSegmentTravelKind.TRANSIT_WALK -> MapViewportOverlayTone.NEUTRAL
         NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun NavigationSegmentTravelKind.toActiveOverlayTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NAVIGATION_WALK
+        NavigationSegmentTravelKind.TRANSIT_WALK -> MapViewportOverlayTone.TRANSIT_WALK
         NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun NavigationSegmentTravelKind.toFocusedOverlayTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NAVIGATION_WALK
+        NavigationSegmentTravelKind.TRANSIT_WALK -> MapViewportOverlayTone.TRANSIT_WALK
         NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
@@ -614,6 +619,12 @@ internal fun MapViewportOverlayTone.toSegmentMarkerPalette(): MapViewportSegment
             MapViewportSegmentMarkerPalette(
                 fillColorArgb = 0xFF304583.toInt(),
                 strokeColorArgb = 0xFF1E2C5A.toInt(),
+            )
+
+        MapViewportOverlayTone.NAVIGATION_WALK ->
+            MapViewportSegmentMarkerPalette(
+                fillColorArgb = 0xFF0061FE.toInt(),
+                strokeColorArgb = 0xFF004CC8.toInt(),
             )
 
         MapViewportOverlayTone.TRANSIT_WALK ->

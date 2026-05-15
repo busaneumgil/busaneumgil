@@ -200,6 +200,11 @@
     <string name="map_facility_detail_phone_action">%1$s 번호로 전화 앱 열기</string>
     <string name="map_facility_detail_accessibility_section_title">접근성 태그</string>
     <string name="map_facility_detail_accessibility_empty">접근성 정보 준비 중</string>
+    <string name="map_facility_detail_transit_arrival_section_title">도착 예정</string>
+    <string name="map_facility_detail_transit_arrival_minutes">%1$d분 후</string>
+    <string name="map_facility_detail_transit_arrival_time_unknown">시간 확인 중</string>
+    <string name="map_facility_detail_transit_arrival_route_unknown">노선 정보</string>
+    <string name="map_facility_detail_transit_arrival_low_floor_route">%1$s · 저상</string>
     <string name="map_facility_detail_tag_ramp">경사로</string>
     <string name="map_facility_detail_tag_step_free_entrance">단차 없음</string>
     <string name="map_facility_detail_tag_auto_door">자동문</string>

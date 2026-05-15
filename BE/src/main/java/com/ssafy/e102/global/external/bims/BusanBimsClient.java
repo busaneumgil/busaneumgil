@@ -70,6 +70,29 @@ public class BusanBimsClient {
 			arrivalSlot.remainingStopCount());
 	}
 
+	public List<BusanBimsArrival> findArrivalsByStopId(String stopId) {
+		if (!StringUtils.hasText(stopId)) {
+			return List.of();
+		}
+		return requestItems("stopArrByBstopid", stopId, null)
+			.stream()
+			.map(item -> {
+				ArrivalSlot arrivalSlot = arrivalSlot(item);
+				return new BusanBimsArrival(
+					stopId,
+					text(item, "lineid", null),
+					text(item, "lineno", null),
+					arrivalSlot.remainingMinute(),
+					arrivalSlot.lowFloor(),
+					arrivalSlot.vehicleNo(),
+					arrivalSlot.remainingStopCount());
+			})
+			.filter(arrival -> StringUtils.hasText(arrival.routeNo()))
+			.sorted(Comparator.comparing(BusanBimsArrival::remainingMinute,
+				Comparator.nullsLast(Integer::compareTo)))
+			.toList();
+	}
+
 	public BusanBimsBusStopPage findBusStops(int pageNo, int numOfRows) {
 		if (pageNo < 1 || numOfRows < 1) {
 			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "BIMS busStopList page 요청값이 올바르지 않습니다.");

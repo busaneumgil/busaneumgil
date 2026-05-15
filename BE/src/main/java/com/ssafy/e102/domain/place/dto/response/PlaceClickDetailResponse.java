@@ -19,5 +19,37 @@ public record PlaceClickDetailResponse(
 	String address,
 	GeoPointResponse point,
 	List<PlaceAccessibilityFeatureResponse> accessibilityFeatures,
+	List<PlaceTransitArrivalResponse> transitArrivals,
 	boolean isBookmarked) {
+
+	public PlaceClickDetailResponse(
+		String bookmarkTargetId,
+		PlaceDetailType detailType,
+		Long placeId,
+		String provider,
+		String providerPlaceId,
+		String name,
+		PlaceCategory category,
+		String providerCategory,
+		String phone,
+		String address,
+		GeoPointResponse point,
+		List<PlaceAccessibilityFeatureResponse> accessibilityFeatures,
+		boolean isBookmarked) {
+		this(
+			bookmarkTargetId,
+			detailType,
+			placeId,
+			provider,
+			providerPlaceId,
+			name,
+			category,
+			providerCategory,
+			phone,
+			address,
+			point,
+			accessibilityFeatures,
+			List.of(),
+			isBookmarked);
+	}
 }

@@ -141,6 +141,20 @@ private class FakeReportOutboxDao(
     override suspend fun deleteReportOutbox(outboxId: String) {
         outboxItems.value = outboxItems.value.filterNot { it.outboxId == outboxId }
     }
+
+    override suspend fun resetSubmittingOutboxesToPending(now: Long): Int {
+        var resetCount = 0
+        outboxItems.value =
+            outboxItems.value.map { item ->
+                if (item.status == "Submitting") {
+                    resetCount += 1
+                    item.copy(status = "Pending", updatedAt = now)
+                } else {
+                    item
+                }
+            }
+        return resetCount
+    }
 }
 
 private class FakeHazardReportsRemoteDataSource(

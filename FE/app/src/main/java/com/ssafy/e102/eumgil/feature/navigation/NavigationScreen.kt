@@ -130,6 +130,9 @@ fun NavigationScreen(
                 ) {
                     NavigationMapStage(
                         uiState = uiState,
+                        onSegmentTapped = { index ->
+                            onAction(NavigationUiAction.SegmentTapped(index = index))
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                     if (screenPolicy.showSegmentRail) {
@@ -876,6 +879,7 @@ private fun NavigationVoiceControl(
 @Composable
 private fun NavigationMapStage(
     uiState: NavigationUiState,
+    onSegmentTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -883,6 +887,7 @@ private fun NavigationMapStage(
     ) {
         NavigationMapBackdrop(
             mapOverlay = uiState.mapOverlay,
+            onSegmentTapped = onSegmentTapped,
             modifier = Modifier.fillMaxSize(),
         )
         if (uiState.mapOverlay.shouldUsePlaceholder) {
@@ -907,6 +912,7 @@ private fun NavigationMapStage(
 @Composable
 private fun NavigationMapBackdrop(
     mapOverlay: NavigationMapOverlayUiState,
+    onSegmentTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.navigation_map_section_title)
@@ -914,6 +920,11 @@ private fun NavigationMapBackdrop(
         overlayState = createNavigationViewportOverlayState(mapOverlay),
         modifier = modifier,
         contentDescription = mapDescription,
+        onMarkerClick = { markerId ->
+            markerId.toNavigationSegmentMarkerIndexOrNull()?.let { segmentIndex ->
+                onSegmentTapped(segmentIndex)
+            }
+        },
     )
 }
 

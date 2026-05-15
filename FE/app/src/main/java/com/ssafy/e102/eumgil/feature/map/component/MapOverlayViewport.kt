@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerLoadStatus
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 import kotlin.math.max
 
 @Composable
@@ -31,6 +32,7 @@ internal fun MapOverlayViewport(
             hasNativeAppKey = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(),
             isInspectionMode = LocalInspectionMode.current,
         )
+    val cameraTarget = overlayState.toMapCameraTarget()
 
     when (integrationState) {
         is MapIntegrationState.Bound ->
@@ -38,7 +40,7 @@ internal fun MapOverlayViewport(
                 state =
                     MapViewportUiState(
                         integrationState = integrationState,
-                        cameraTarget = overlayState.toMapCameraTarget(),
+                        cameraTarget = cameraTarget,
                         currentLocation = null,
                         selectedDestinationCoordinate = null,
                         selectedDestinationName = null,
@@ -61,6 +63,7 @@ internal fun MapOverlayViewport(
         MapIntegrationState.Unbound ->
             MapViewportOverlayBackdrop(
                 overlayState = overlayState,
+                zoomLevel = cameraTarget.resolvedZoomLevel(),
                 modifier = describedModifier,
                 onPointClick = onMarkerClick,
             )

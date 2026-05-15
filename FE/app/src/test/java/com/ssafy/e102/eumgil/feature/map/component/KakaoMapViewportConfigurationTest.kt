@@ -111,6 +111,34 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
+    fun `route arrow camera bearing logs keep both raw radian and converted degree values`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Kakao route-arrow debugging should keep the SDK raw rotationAngle value and the converted degree value side by side.",
+            source.contains("val cameraBearingRadians = cameraPosition?.rotationAngle ?: 0.0") &&
+                source.contains("val cameraBearingDegrees = Math.toDegrees(cameraBearingRadians)") &&
+                source.contains("bearingRad=") &&
+                source.contains("bearingDeg="),
+        )
+    }
+
+    @Test
+    fun `camera move tracking loop re-syncs native overlay markers during rotation gestures`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Route arrows should be re-synchronized inside the animation-frame tracking loop so they do not wait until camera move end during rotation gestures.",
+            Regex("""latestState\?\.let \{ state ->\s*syncMarkers\(readyMap = readyMap, state = state\)\s*}\s*updateProjectedMarkerOverlays""")
+                .containsMatchIn(source),
+        )
+    }
+
+    @Test
     fun `background single taps are ignored before entering the map detail dispatch chain`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")

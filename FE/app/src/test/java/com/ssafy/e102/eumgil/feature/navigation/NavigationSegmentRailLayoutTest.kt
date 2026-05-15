@@ -1,11 +1,11 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.feature.navigation.component.createNavigationSegmentRailSlots
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 class NavigationSegmentRailLayoutTest {
     @Test
@@ -79,6 +79,17 @@ class NavigationSegmentRailLayoutTest {
         assertFalse(railSection.contains("val railColor = MaterialTheme.colorScheme.surface"))
         assertFalse(railSection.contains(".background(color = railColor)"))
         assertTrue(railSection.contains(".fillMaxHeight()"))
+    }
+
+    @Test
+    fun `rail source scrolls to the newly focused segment`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+
+        assertTrue(source.contains("rememberLazyListState()"))
+        assertTrue(source.contains("LaunchedEffect(uiState.focusedSegmentIndex, uiState.railItems.size)"))
+        assertTrue(source.contains("listState.animateScrollToItem(targetItemIndex)"))
     }
 }
 

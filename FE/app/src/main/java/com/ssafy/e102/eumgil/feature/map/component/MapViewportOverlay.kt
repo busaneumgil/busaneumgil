@@ -12,6 +12,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationMapFocusMode
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentTravelKind
+import com.ssafy.e102.eumgil.feature.navigation.navigationSegmentMarkerId
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
 import kotlin.math.roundToLong
 
@@ -243,98 +244,117 @@ internal fun createNavigationViewportOverlayState(
     mapOverlay: NavigationMapOverlayUiState,
 ): MapViewportOverlayState {
     val useFocusedProjection = mapOverlay.mapFocusMode == NavigationMapFocusMode.FOCUSED
+    // ACTIVE should fall back to the feature-level camera target so the camera follows
+    // live progress. Only use the focus halo when current location is unavailable.
+    val useActiveCurrentProjection =
+        mapOverlay.mapFocusMode == NavigationMapFocusMode.ACTIVE && mapOverlay.currentLocation != null
+    val useActiveFocusFallbackProjection =
+        mapOverlay.mapFocusMode == NavigationMapFocusMode.ACTIVE &&
+            mapOverlay.currentLocation == null &&
+            mapOverlay.focusCoordinate != null
+    val selectedRoutePoints = mapOverlay.selectedRoutePolyline.map(GeoCoordinate::toMapCoordinate)
+    val activeSegmentPoints = mapOverlay.activeSegmentPolyline.map(GeoCoordinate::toMapCoordinate)
+    val focusedSegmentPoints = mapOverlay.focusedSegmentPolyline.map(GeoCoordinate::toMapCoordinate)
+    val preferredArrowOverlayId =
+        resolveNavigationArrowOverlayId(
+            selectedRoutePoints = selectedRoutePoints,
+            activeSegmentPoints = activeSegmentPoints,
+            focusedSegmentPoints = focusedSegmentPoints,
+        )
 
     val overlayState =
         MapViewportOverlayState(
-        points =
-            buildList {
-                mapOverlay.currentLocation?.let { point ->
-                    add(
-                        point.coordinate.toOverlayPoint(
-                            overlayId = "navigation-current",
-                            kind = MapViewportPointKind.CURRENT_LOCATION,
-                            label = "C",
-                            includeInProjection = !useFocusedProjection,
+            points =
+                buildList {
+                    mapOverlay.currentLocation?.let { point ->
+                        add(
+                            point.coordinate.toOverlayPoint(
+                                overlayId = "navigation-current",
+                                kind = MapViewportPointKind.CURRENT_LOCATION,
+                                label = "C",
+                                includeInProjection = useActiveCurrentProjection,
+                            ),
+                        )
+                    }
+                    mapOverlay.origin?.let { point ->
+                        add(
+                            point.coordinate.toOverlayPoint(
+                                overlayId = "navigation-origin",
+                                kind = MapViewportPointKind.ORIGIN,
+                                label = "O",
+                                clickTargetId = mapOverlay.routeSegments.firstOrNull()?.let { navigationSegmentMarkerId(0) },
+                                includeInProjection = false,
+                            ),
+                        )
+                    }
+                    mapOverlay.destination?.let { point ->
+                        add(
+                            point.coordinate.toOverlayPoint(
+                                overlayId = "navigation-destination",
+                                kind = MapViewportPointKind.DESTINATION,
+                                label = "D",
+                                includeInProjection = false,
+                            ),
+                        )
+                    }
+                    addAll(
+                        mapOverlay.routeSegments.toSegmentMarkerOverlays(
+                            mapFocusMode = mapOverlay.mapFocusMode,
                         ),
                     )
-                }
-                mapOverlay.origin?.let { point ->
-                    add(
-                        point.coordinate.toOverlayPoint(
-                            overlayId = "navigation-origin",
-                            kind = MapViewportPointKind.ORIGIN,
-                            label = "O",
-                            includeInProjection = !useFocusedProjection,
-                        ),
-                    )
-                }
-                mapOverlay.destination?.let { point ->
-                    add(
-                        point.coordinate.toOverlayPoint(
-                            overlayId = "navigation-destination",
-                            kind = MapViewportPointKind.DESTINATION,
-                            label = "D",
-                            includeInProjection = !useFocusedProjection,
-                        ),
-                    )
-                }
-                addAll(
-                    mapOverlay.routeSegments.toSegmentMarkerOverlays(
-                        mapFocusMode = mapOverlay.mapFocusMode,
-                    ),
-                )
-                if (useFocusedProjection) {
                     mapOverlay.focusCoordinate?.let { coordinate ->
                         add(
                             coordinate.toOverlayPoint(
                                 overlayId = "navigation-focus",
                                 kind = MapViewportPointKind.FOCUS_HALO,
-                                includeInProjection = true,
+                                includeInProjection = useFocusedProjection || useActiveFocusFallbackProjection,
                             ),
                         )
                     }
-                }
-            },
-        polylines =
-            buildList<MapViewportPolylineOverlay> {
-                addAll(
-                    mapOverlay.routeSegments.toBaselinePolylineOverlays(
-                        includeInProjection = !useFocusedProjection,
-                    ),
-                )
-                if (this.none { overlay -> overlay.style == MapViewportPolylineStyle.ROUTE_BASELINE }) {
-                    add(
-                        MapViewportPolylineOverlay(
-                            overlayId = "navigation-route",
-                            points = mapOverlay.selectedRoutePolyline.map(GeoCoordinate::toMapCoordinate),
-                            style = MapViewportPolylineStyle.ROUTE_BASELINE,
-                            tone = MapViewportOverlayTone.PRIMARY,
-                            includeInProjection = !useFocusedProjection,
+                },
+            polylines =
+                buildList<MapViewportPolylineOverlay> {
+                    addAll(
+                        mapOverlay.routeSegments.toBaselinePolylineOverlays(
+                            includeInProjection = false,
                         ),
                     )
-                }
-                if (mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline) {
+                    if (this.none { overlay -> overlay.style == MapViewportPolylineStyle.ROUTE_BASELINE }) {
+                        add(
+                            MapViewportPolylineOverlay(
+                                overlayId = "navigation-route",
+                                points = selectedRoutePoints,
+                                style = MapViewportPolylineStyle.ROUTE_BASELINE,
+                                tone = MapViewportOverlayTone.PRIMARY,
+                                includeInProjection = false,
+                                showDirectionArrows = preferredArrowOverlayId == "navigation-route",
+                            ),
+                        )
+                    }
+                    if (mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline) {
+                        add(
+                            MapViewportPolylineOverlay(
+                                overlayId = "navigation-active",
+                                points = activeSegmentPoints,
+                                style = MapViewportPolylineStyle.ACTIVE_SEGMENT,
+                                tone = mapOverlay.activeSegmentTravelKind.toActiveOverlayTone(),
+                                includeInProjection = false,
+                                showDirectionArrows = preferredArrowOverlayId == "navigation-active",
+                            ),
+                        )
+                    }
                     add(
                         MapViewportPolylineOverlay(
-                            overlayId = "navigation-active",
-                            points = mapOverlay.activeSegmentPolyline.map(GeoCoordinate::toMapCoordinate),
-                            style = MapViewportPolylineStyle.ACTIVE_SEGMENT,
-                            tone = mapOverlay.activeSegmentTravelKind.toActiveOverlayTone(),
-                            includeInProjection = !useFocusedProjection,
+                            overlayId = "navigation-focused",
+                            points = focusedSegmentPoints,
+                            style = MapViewportPolylineStyle.FOCUSED_SEGMENT,
+                            tone = mapOverlay.focusedSegmentTravelKind.toFocusedOverlayTone(),
+                            includeInProjection = useFocusedProjection,
+                            showDirectionArrows = preferredArrowOverlayId == "navigation-focused",
                         ),
                     )
-                }
-                add(
-                    MapViewportPolylineOverlay(
-                        overlayId = "navigation-focused",
-                        points = mapOverlay.focusedSegmentPolyline.map(GeoCoordinate::toMapCoordinate),
-                        style = MapViewportPolylineStyle.FOCUSED_SEGMENT,
-                        tone = mapOverlay.focusedSegmentTravelKind.toFocusedOverlayTone(),
-                        includeInProjection = !useFocusedProjection,
-                    ),
-                )
-            }.filter(MapViewportPolylineOverlay::isRenderable),
-    )
+                }.filter(MapViewportPolylineOverlay::isRenderable),
+        )
     logSegmentJunctionOverlayDebugSummary(mapOverlay, overlayState)
     return overlayState
 }
@@ -367,6 +387,7 @@ private fun GeoCoordinate.toOverlayPoint(
     overlayId: String,
     kind: MapViewportPointKind,
     label: String? = null,
+    clickTargetId: String? = null,
     includeInProjection: Boolean = true,
 ): MapViewportPointOverlay =
     MapViewportPointOverlay(
@@ -376,6 +397,7 @@ private fun GeoCoordinate.toOverlayPoint(
         label = label,
         contentDescription = label,
         includeInProjection = includeInProjection,
+        clickTargetId = clickTargetId,
     )
 
 private fun GeoCoordinate.toMapCoordinate(): MapCoordinate =
@@ -396,10 +418,14 @@ private fun List<NavigationMapSegmentUiState>.toSegmentMarkerOverlays(
             coordinate = coordinate.toMapCoordinate(),
             kind = MapViewportPointKind.SEGMENT_JUNCTION,
             tone = segment.travelKind.toSegmentMarkerTone(),
+            contentDescription =
+                segment.guidanceMessage
+                    .trim()
+                    .ifBlank { "Segment ${segment.sequence}" },
+            clickTargetId = navigationSegmentMarkerId(index),
             includeInProjection =
                 when {
                     mapFocusMode == NavigationMapFocusMode.FOCUSED -> segment.isFocused
-                    segment.polyline.size < 2 -> true
                     else -> false
                 },
         )
@@ -467,8 +493,21 @@ private fun List<NavigationMapSegmentUiState>.toBaselinePolylineOverlays(
             style = MapViewportPolylineStyle.ROUTE_BASELINE,
             tone = segment.travelKind.toBaselineOverlayTone(),
             includeInProjection = includeInProjection,
+            showDirectionArrows = false,
         )
     }.filter(MapViewportPolylineOverlay::isRenderable)
+
+private fun resolveNavigationArrowOverlayId(
+    selectedRoutePoints: List<MapCoordinate>,
+    activeSegmentPoints: List<MapCoordinate>,
+    focusedSegmentPoints: List<MapCoordinate>,
+): String? =
+    when {
+        focusedSegmentPoints.size >= 2 -> "navigation-focused"
+        activeSegmentPoints.size >= 2 -> "navigation-active"
+        selectedRoutePoints.size >= 2 -> "navigation-route"
+        else -> null
+    }
 
 private fun NavigationSegmentTravelKind.toBaselineOverlayTone(): MapViewportOverlayTone =
     when (this) {

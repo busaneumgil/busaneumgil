@@ -549,7 +549,7 @@ class NavigationViewModel(
             )
         val mapOverlay =
             runtimeRequest.toMapOverlayUiState(
-                currentLocationCoordinate = latestLocationCoordinate ?: runtimeRequest.origin.coordinate,
+                currentLocationCoordinate = latestLocationCoordinate,
                 activeSegmentIndex = activeSegmentIndex,
                 focusedSegmentIndex = focusedSegmentIndex,
                 mapFocusMode = mapFocusMode,
@@ -1589,7 +1589,7 @@ private fun RouteNavigationRequest.toMapPlaceholderDescription(screenState: Navi
 }
 
 private fun RouteNavigationRequest.toMapOverlayUiState(
-    currentLocationCoordinate: GeoCoordinate,
+    currentLocationCoordinate: GeoCoordinate?,
     activeSegmentIndex: Int,
     focusedSegmentIndex: Int,
     mapFocusMode: NavigationMapFocusMode,
@@ -1599,6 +1599,15 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex)
     val activeSegmentPolyline = activeSegment?.polyline?.points.orEmpty()
     val focusedSegmentPolyline = focusedSegment?.polyline?.points.orEmpty()
+    val activeFocusCoordinate =
+        currentLocationCoordinate
+            ?: selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
+            ?: selectedRoute.resolveSegmentFocusCoordinate(activeSegmentIndex)
+            ?: origin.coordinate
+    val inspectedFocusCoordinate =
+        selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
+            ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
+            ?: activeFocusCoordinate
     val routeSegments =
         selectedRoute.segments.mapIndexed { index, segment ->
             NavigationMapSegmentUiState(
@@ -1623,7 +1632,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         currentLocation =
             NavigationMapPointUiState(
                 label = originPoint.label,
-                coordinate = currentLocationCoordinate,
+                coordinate = currentLocationCoordinate ?: origin.coordinate,
             ),
         origin = originPoint,
         destination = destinationPoint,
@@ -1634,11 +1643,8 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         focusedSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(focusedSegment),
         focusCoordinate =
             when (mapFocusMode) {
-                NavigationMapFocusMode.ACTIVE -> currentLocationCoordinate
-                NavigationMapFocusMode.FOCUSED ->
-                    selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
-                        ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
-                        ?: currentLocationCoordinate
+                NavigationMapFocusMode.ACTIVE -> activeFocusCoordinate
+                NavigationMapFocusMode.FOCUSED -> inspectedFocusCoordinate
             },
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,

@@ -59,7 +59,6 @@ fun NavigationSegmentRail(
     uiState: NavigationSegmentSyncUiState,
     onSegmentTapped: (Int) -> Unit,
     onTopVisibleSegmentChanged: (Int) -> Unit = {},
-    onReturnToActiveSegmentClick: () -> Unit,
     onRouteDetailClick: () -> Unit,
     isRouteDetailEnabled: Boolean,
     modifier: Modifier = Modifier,
@@ -74,12 +73,6 @@ fun NavigationSegmentRail(
     val hiddenSegmentIndex = hiddenRailItemPosition?.let { position -> railFocusItems.getOrNull(position)?.index }
     val currentFocusedSegmentIndex by rememberUpdatedState(uiState.focusedSegmentIndex)
     val currentOnTopVisibleSegmentChanged by rememberUpdatedState(onTopVisibleSegmentChanged)
-    val returnTargetSegmentIndex = resolveNavigationRailReturnTargetSegmentIndex(railSlots)
-    val returnTargetItemPosition =
-        returnTargetSegmentIndex?.let { targetIndex ->
-            railFocusItems.indexOfFirst { item -> item.index == targetIndex }
-                .takeIf { position -> position >= 0 }
-        }
 
     LaunchedEffect(listState, railFocusItems, fallbackRailItemSizePx) {
         var hasObservedInitialPosition = false
@@ -127,6 +120,18 @@ fun NavigationSegmentRail(
                     hiddenRailItemPosition = null
                 }
             }
+    }
+
+    LaunchedEffect(uiState.focusedSegmentIndex, railFocusItems.size) {
+        if (railFocusItems.isEmpty()) return@LaunchedEffect
+        val targetItemPosition =
+            railFocusItems.indexOfFirst { item -> item.index == uiState.focusedSegmentIndex }
+                .takeIf { position -> position >= 0 }
+                ?: return@LaunchedEffect
+        val isTargetVisible = listState.layoutInfo.visibleItemsInfo.any { item -> item.index == targetItemPosition }
+        if (!isTargetVisible) {
+            listState.animateScrollToItem(targetItemPosition)
+        }
     }
 
     Box(
@@ -189,17 +194,14 @@ fun NavigationSegmentRail(
                         )
                     }
                     items(items = listOf("navigation-rail-return"), key = { it }) {
-                        NavigationSegmentRailReturnAction(
-                            enabled = railSlots.canReturnToActiveSegment,
+                        NavigationSegmentRailTopAction(
+                            enabled = railSlots.canScrollToTop,
                             dividerColor = dividerColor,
                             onClick = {
                                 coroutineScope.launch {
-                                    returnTargetItemPosition?.let { position ->
-                                        listState.animateScrollToItem(position, scrollOffset = 0)
-                                        listState.scrollToItem(position, scrollOffset = 0)
-                                    }
-                                    returnTargetSegmentIndex?.let(onSegmentTapped)
-                                        ?: onReturnToActiveSegmentClick()
+                                    hiddenRailItemPosition = null
+                                    listState.animateScrollToItem(0, scrollOffset = 0)
+                                    listState.scrollToItem(0, scrollOffset = 0)
                                 }
                             },
                         )
@@ -286,12 +288,12 @@ internal fun NavigationGuidanceAction.railIconSize(): Dp =
     }
 
 @Composable
-private fun NavigationSegmentRailReturnAction(
+private fun NavigationSegmentRailTopAction(
     enabled: Boolean,
     dividerColor: Color,
     onClick: () -> Unit,
 ) {
-    val label = stringResource(id = R.string.navigation_return_to_active_segment_label)
+    val label = stringResource(id = R.string.navigation_rail_scroll_to_top_label)
     val outlineColor =
         if (enabled) {
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
@@ -396,7 +398,7 @@ internal data class NavigationSegmentRailSlots(
     val originItem: NavigationSegmentRailItemUiState? = null,
     val intermediateItems: List<NavigationSegmentRailItemUiState> = emptyList(),
     val destinationItem: NavigationSegmentRailItemUiState? = null,
-    val canReturnToActiveSegment: Boolean = false,
+    val canScrollToTop: Boolean = false,
 )
 
 internal fun createNavigationSegmentRailSlots(uiState: NavigationSegmentSyncUiState): NavigationSegmentRailSlots {
@@ -411,16 +413,9 @@ internal fun createNavigationSegmentRailSlots(uiState: NavigationSegmentSyncUiSt
                 railItems.subList(1, railItems.lastIndex)
             },
         destinationItem = railItems.lastOrNull(),
-        canReturnToActiveSegment = railItems.isNotEmpty(),
+        canScrollToTop = railItems.isNotEmpty(),
     )
 }
-
-internal fun resolveNavigationRailReturnTargetSegmentIndex(slots: NavigationSegmentRailSlots): Int? =
-    slots.intermediateItems.firstOrNull()?.index
-        ?: slots.destinationItem
-            ?.takeIf { destination -> destination.index != slots.originItem?.index }
-            ?.index
-        ?: slots.originItem?.index
 
 private fun NavigationSegmentRailSlots.focusItems(): List<NavigationSegmentRailItemUiState> =
     buildList {

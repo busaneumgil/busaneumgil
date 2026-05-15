@@ -54,9 +54,9 @@ class GuideSidePanelPolicyTest {
                 navigation.contains("GuideSidePanelStepRow("),
         )
         assertTrue(
-            "Navigation collapsed rail should use the shared collapsed rail primitive while keeping its return/detail actions local.",
+            "Navigation collapsed rail should use the shared collapsed rail primitive while keeping its top/detail actions local.",
             rail.contains("GuideCollapsedRailItem(") &&
-                rail.contains("NavigationSegmentRailReturnAction(") &&
+                rail.contains("NavigationSegmentRailTopAction(") &&
                 rail.contains("NavigationSegmentRailDetailAction("),
         )
         assertFalse(

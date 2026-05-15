@@ -178,9 +178,6 @@ fun NavigationScreen(
                                     onTopVisibleSegmentChanged = { index ->
                                         onAction(NavigationUiAction.SegmentTapped(index = index))
                                     },
-                                    onReturnToActiveSegmentClick = {
-                                        onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
-                                    },
                                     onRouteDetailClick = { onAction(NavigationUiAction.RouteDetailClicked) },
                                     isRouteDetailEnabled = uiState.canOpenRouteDetail,
                                     modifier =

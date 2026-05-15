@@ -1,7 +1,6 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.feature.navigation.component.createNavigationSegmentRailSlots
-import com.ssafy.e102.eumgil.feature.navigation.component.resolveNavigationRailReturnTargetSegmentIndex
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,7 +26,7 @@ class NavigationSegmentRailLayoutTest {
         assertEquals(0, slots.originItem?.index)
         assertEquals(3, slots.destinationItem?.index)
         assertEquals(listOf(1, 2), slots.intermediateItems.map { item -> item.index })
-        assertTrue(slots.canReturnToActiveSegment)
+        assertTrue(slots.canScrollToTop)
     }
 
     @Test
@@ -47,7 +46,7 @@ class NavigationSegmentRailLayoutTest {
     }
 
     @Test
-    fun `rail slots keep return action enabled while inspecting a moved waypoint segment`() {
+    fun `rail slots keep top action enabled while inspecting a moved waypoint segment`() {
         val slots =
             createNavigationSegmentRailSlots(
                 NavigationSegmentSyncUiState(
@@ -63,37 +62,8 @@ class NavigationSegmentRailLayoutTest {
                 ),
             )
 
-        assertTrue(slots.canReturnToActiveSegment)
+        assertTrue(slots.canScrollToTop)
         assertEquals(2, slots.destinationItem?.index)
-    }
-
-    @Test
-    fun `rail return target skips origin when another guidance item exists`() {
-        val slots =
-            createNavigationSegmentRailSlots(
-                NavigationSegmentSyncUiState(
-                    railItems =
-                        listOf(
-                            railItem(index = 0, sequence = 1),
-                            railItem(index = 1, sequence = 2),
-                            railItem(index = 2, sequence = 3),
-                        ),
-                ),
-            )
-
-        assertEquals(1, resolveNavigationRailReturnTargetSegmentIndex(slots))
-    }
-
-    @Test
-    fun `rail return target falls back to origin for a single guidance item`() {
-        val slots =
-            createNavigationSegmentRailSlots(
-                NavigationSegmentSyncUiState(
-                    railItems = listOf(railItem(index = 0, sequence = 1)),
-                ),
-            )
-
-        assertEquals(0, resolveNavigationRailReturnTargetSegmentIndex(slots))
     }
 
     @Test
@@ -109,6 +79,17 @@ class NavigationSegmentRailLayoutTest {
         assertFalse(railSection.contains("val railColor = MaterialTheme.colorScheme.surface"))
         assertFalse(railSection.contains(".background(color = railColor)"))
         assertTrue(railSection.contains(".fillMaxHeight()"))
+    }
+
+    @Test
+    fun `rail top action stays enabled and scrolls to the first item`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+
+        assertTrue(source.contains("R.string.navigation_rail_scroll_to_top_label"))
+        assertTrue(source.contains("listState.animateScrollToItem(0, scrollOffset = 0)"))
+        assertTrue(source.contains("listState.scrollToItem(0, scrollOffset = 0)"))
     }
 
     @Test

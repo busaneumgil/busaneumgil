@@ -615,6 +615,7 @@
     <string name="navigation_rail_origin_label">출발</string>
     <string name="navigation_rail_destination_label">도착</string>
     <string name="navigation_return_to_active_segment_label">현재 위치로 돌아가기</string>
+    <string name="navigation_rail_scroll_to_top_label">경로 목록 처음으로 이동</string>
     <string name="navigation_exit_confirm_dialog_title">길안내를 종료할까요?</string>
     <string name="navigation_exit_confirm_dialog_message">종료하면 음성 안내와 다음 이동 지시가 멈추고, 지도 화면으로 돌아갑니다.</string>
     <string name="navigation_exit_confirm_dialog_confirm">길안내 종료</string>

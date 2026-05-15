@@ -377,7 +377,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding keeps full navigation context in active projection`() {
+    fun `navigation binding keeps active projection on current location instead of the route overview`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =

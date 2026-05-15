@@ -490,7 +490,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `fresh search entry re-entry resets empty query warning to default state`() =
+    fun `blank search submit stays on current search state without warning`() =
         runTest {
             val viewModel =
                 SearchViewModel(
@@ -505,7 +505,8 @@ class SearchViewModelTest {
             viewModel.onAction(SearchUiAction.SearchSubmitted)
             advanceUntilIdle()
 
-            assertEquals(SearchResultUiState.EmptyQuery, viewModel.uiState.value.resultState)
+            assertEquals(SearchResultUiState.Initial, viewModel.uiState.value.resultState)
+            assertEquals("   ", viewModel.uiState.value.query)
 
             viewModel.onAction(SearchUiAction.EntryRouteEntered(preserveState = false))
             advanceUntilIdle()

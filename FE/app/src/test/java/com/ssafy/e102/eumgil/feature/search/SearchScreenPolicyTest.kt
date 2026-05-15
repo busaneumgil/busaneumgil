@@ -39,7 +39,7 @@ class SearchScreenPolicyTest {
     }
 
     @Test
-    fun `results screen loading state uses spinner instead of placeholder card`() {
+    fun `results screen loading state uses spinner without illustration or placeholder card`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
                 .readText()
@@ -59,6 +59,10 @@ class SearchScreenPolicyTest {
         assertTrue(
             "Search results loading state should keep a spinner affordance inside the centered state.",
             loadingStateSection.contains("showLoadingIndicator = true"),
+        )
+        assertTrue(
+            "Search results loading state should not render the centered illustration while the request is in progress.",
+            loadingStateSection.contains("showIllustration = false"),
         )
         assertFalse(
             "Search results loading state should not fall back to the boxed SearchStateCard placeholder.",
@@ -127,6 +131,28 @@ class SearchScreenPolicyTest {
             errorStateSection.contains("SearchStateCard(") ||
                 errorStateSection.contains("errorContainer") ||
                 errorStateSection.contains("BorderStroke("),
+        )
+        assertFalse(
+            "Search result errors should not surface low-level supporting messages such as location preconditions.",
+            errorStateSection.contains("supportingText = resultState.message"),
+        )
+    }
+
+    @Test
+    fun `search empty and error states use large split titles`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val stringsSource = File("src/main/res/values/strings.xml").readText()
+
+        assertTrue(
+            "Search empty and error titles should use a larger centered title style.",
+            source.contains("MaterialTheme.typography.headlineSmall.copy(lineHeight = SearchStateTitleLineHeight)"),
+        )
+        assertTrue(
+            "Search empty and error copy should use explicit line breaks requested for the empty/error states.",
+            stringsSource.contains("<string name=\"search_screen_empty_result_title\">검색 결과가\\n없습니다</string>") &&
+                stringsSource.contains("<string name=\"search_screen_error_title\">검색 결과를\\n불러오지 못했습니다</string>"),
         )
     }
 }

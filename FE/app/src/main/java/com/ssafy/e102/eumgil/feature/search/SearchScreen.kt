@@ -56,6 +56,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
@@ -460,6 +461,7 @@ private fun SearchResultsContent(
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                         description = stringResource(id = R.string.search_screen_loading_description),
+                        showIllustration = false,
                         showLoadingIndicator = true,
                         modifier =
                             Modifier
@@ -497,11 +499,7 @@ private fun SearchResultsContent(
             is SearchResultUiState.Empty ->
                 item(key = "empty-state") {
                     SearchCenteredStateMessage(
-                        title =
-                            stringResource(
-                                id = R.string.search_screen_empty_result_title,
-                                resultState.query,
-                            ),
+                        title = stringResource(id = R.string.search_screen_empty_result_title),
                         description = stringResource(id = copy.emptyResultDescriptionRes),
                     )
                 }
@@ -511,7 +509,6 @@ private fun SearchResultsContent(
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_error_title),
                         description = stringResource(id = R.string.search_screen_error_description),
-                        supportingText = resultState.message,
                     )
                 }
         }
@@ -793,6 +790,7 @@ private fun SearchResultSection(
                 SearchCenteredStateMessage(
                     title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                     description = stringResource(id = R.string.search_screen_loading_description),
+                    showIllustration = false,
                     showLoadingIndicator = true,
                     modifier =
                         Modifier
@@ -822,11 +820,7 @@ private fun SearchResultSection(
 
             is SearchResultUiState.Empty ->
                 SearchCenteredStateMessage(
-                    title =
-                        stringResource(
-                            id = R.string.search_screen_empty_result_title,
-                            resultState.query,
-                        ),
+                    title = stringResource(id = R.string.search_screen_empty_result_title),
                     description = stringResource(id = copy.emptyResultDescriptionRes),
                 )
 
@@ -834,7 +828,6 @@ private fun SearchResultSection(
                 SearchCenteredStateMessage(
                     title = stringResource(id = R.string.search_screen_error_title),
                     description = stringResource(id = R.string.search_screen_error_description),
-                    supportingText = resultState.message,
                 )
         }
     }
@@ -1297,6 +1290,7 @@ private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
 private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
+private val SearchStateTitleLineHeight = 34.sp
 
 @Composable
 private fun SearchCenteredStateMessage(
@@ -1304,6 +1298,7 @@ private fun SearchCenteredStateMessage(
     description: String,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
+    showIllustration: Boolean = true,
     showLoadingIndicator: Boolean = false,
 ) {
     Column(
@@ -1318,12 +1313,14 @@ private fun SearchCenteredStateMessage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.manual_galmaegi),
-            contentDescription = null,
-            modifier = Modifier.size(SearchStateIllustrationSize),
-            contentScale = ContentScale.Fit,
-        )
+        if (showIllustration) {
+            Image(
+                painter = painterResource(id = R.drawable.manual_galmaegi),
+                contentDescription = null,
+                modifier = Modifier.size(SearchStateIllustrationSize),
+                contentScale = ContentScale.Fit,
+            )
+        }
         if (showLoadingIndicator) {
             CircularProgressIndicator(
                 modifier =
@@ -1336,7 +1333,7 @@ private fun SearchCenteredStateMessage(
         Text(
             text = title,
             modifier = Modifier.padding(top = EumSpacing.medium),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmall.copy(lineHeight = SearchStateTitleLineHeight),
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
@@ -1344,7 +1341,7 @@ private fun SearchCenteredStateMessage(
             text = description,
             modifier = Modifier.padding(top = EumSpacing.xSmall),
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
         )
         if (!supportingText.isNullOrBlank()) {

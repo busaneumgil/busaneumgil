@@ -413,7 +413,7 @@ class SearchViewModel(
                 !currentState.hasEditedQuery && currentState.query.isEmpty() ->
                     SearchResultUiState.Initial
 
-                normalizedQuery.isEmpty() -> SearchResultUiState.EmptyQuery
+                normalizedQuery.isEmpty() -> SearchResultUiState.Initial
 
                 else -> SearchResultUiState.Typing(query = normalizedQuery)
             }
@@ -478,7 +478,6 @@ class SearchViewModel(
                 state.copy(
                     query = keyword ?: state.query,
                     hasEditedQuery = true,
-                    resultState = SearchResultUiState.EmptyQuery,
                 )
             }
             return

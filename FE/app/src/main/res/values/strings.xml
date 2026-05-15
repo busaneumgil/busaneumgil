@@ -405,9 +405,9 @@
     <string name="search_screen_result_summary">도착지 검색 결과 %1$d건</string>
     <string name="search_screen_sort_relevance">관련도순</string>
     <string name="search_screen_sort_distance">거리순</string>
-    <string name="search_screen_empty_result_title">%1$s에 대한 결과가 없습니다</string>
+    <string name="search_screen_empty_result_title">검색 결과가\n없습니다</string>
     <string name="search_screen_empty_result_description">다른 장소명이나 주소로 다시 검색해 주세요.</string>
-    <string name="search_screen_error_title">검색 결과를 불러오지 못했습니다</string>
+    <string name="search_screen_error_title">검색 결과를\n불러오지 못했습니다</string>
     <string name="search_screen_error_description">잠시 후 다시 시도해 주세요.</string>
     <string name="search_screen_recent_section_title">최근 검색</string>
     <string name="search_screen_recent_clear_all">전체 삭제</string>

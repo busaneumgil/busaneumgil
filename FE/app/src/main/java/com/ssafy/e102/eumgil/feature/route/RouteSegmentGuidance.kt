@@ -34,6 +34,7 @@ internal fun RouteSegment.toRouteDetailStepKind(): RouteDetailStepKind {
         guidanceDirection == RouteGuidanceDirection.TURN_RIGHT -> RouteDetailStepKind.TURN_RIGHT
         safetyFlags.hasStairs -> RouteDetailStepKind.STAIRS
         safetyFlags.hasCurbGap -> RouteDetailStepKind.CURB_GAP
+        safetyFlags.hasCrosswalk -> RouteDetailStepKind.CROSSWALK
         normalizedGuidance.containsAnyRouteGuidanceKeyword("엘리베이터", "elevator", "lift") ->
             RouteDetailStepKind.ELEVATOR
         normalizedGuidance.containsAnyRouteGuidanceKeyword("좌회전", "왼쪽", "turn left", "left turn") ->
@@ -42,7 +43,6 @@ internal fun RouteSegment.toRouteDetailStepKind(): RouteDetailStepKind {
             RouteDetailStepKind.TURN_RIGHT
         normalizedGuidance.containsAnyRouteGuidanceKeyword("공사", "construction", "우회", "narrow path") ->
             RouteDetailStepKind.CONSTRUCTION
-        safetyFlags.hasCrosswalk -> RouteDetailStepKind.CROSSWALK
         safetyFlags.hasBrailleBlock -> RouteDetailStepKind.TACTILE_GUIDE
         else -> RouteDetailStepKind.STRAIGHT
     }

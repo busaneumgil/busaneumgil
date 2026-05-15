@@ -548,7 +548,7 @@ private fun resolveNavigationArrowOverlayId(
 
 private fun NavigationSegmentTravelKind.toBaselineOverlayTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NEUTRAL
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
         NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
@@ -560,13 +560,13 @@ private fun NavigationSegmentTravelKind.toSegmentMarkerTone(): MapViewportOverla
 
 private fun NavigationSegmentTravelKind.toActiveOverlayTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.SECONDARY
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
         NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 
 private fun NavigationSegmentTravelKind.toFocusedOverlayTone(): MapViewportOverlayTone =
     when (this) {
-        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.PRIMARY
+        NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
         NavigationSegmentTravelKind.TRANSIT -> MapViewportOverlayTone.NAVY
     }
 

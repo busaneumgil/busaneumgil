@@ -1871,6 +1871,12 @@ private fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidance
         RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK
         RouteDetailStepKind.TURN_LEFT -> NavigationGuidanceAction.TURN_LEFT
         RouteDetailStepKind.TURN_RIGHT -> NavigationGuidanceAction.TURN_RIGHT
+        RouteDetailStepKind.TACTILE_GUIDE -> NavigationGuidanceAction.TACTILE_GUIDE
+        RouteDetailStepKind.ELEVATOR -> NavigationGuidanceAction.ELEVATOR
+        RouteDetailStepKind.CONSTRUCTION -> NavigationGuidanceAction.CONSTRUCTION
+        RouteDetailStepKind.CURB_GAP -> NavigationGuidanceAction.CURB_GAP
+        RouteDetailStepKind.STAIRS -> NavigationGuidanceAction.STAIRS
+        RouteDetailStepKind.FALLBACK -> NavigationGuidanceAction.FALLBACK
         else -> NavigationGuidanceAction.STRAIGHT
     }
 
@@ -4007,8 +4013,9 @@ private fun RouteMapBackdrop(
     val routePolylineOverlays =
         detailPolylines.toRouteDetailPolylineOverlays(
             includeInProjection = !hasFocusedGuidanceMarker,
-            showDirectionArrows = hasFocusedGuidanceMarker,
+            showDirectionArrows = true,
         )
+    val shouldShowRouteDirectionArrows = routePolylineOverlays.isNotEmpty() || hasFocusedGuidanceMarker
     MapOverlayViewport(
         overlayState =
             createRoutePreviewViewportOverlayState(
@@ -4024,7 +4031,7 @@ private fun RouteMapBackdrop(
                 routePolylineOverlays = routePolylineOverlays,
                 guidanceMarkers = guidanceMarkers,
                 focusSelectedGuidanceMarker = hasFocusedGuidanceMarker,
-                showDetailedRouteOverlay = hasFocusedGuidanceMarker,
+                showDetailedRouteOverlay = shouldShowRouteDirectionArrows,
             ),
         modifier = modifier,
         contentDescription = mapDescription,
@@ -4385,9 +4392,8 @@ private fun routeDetailStepIconRes(kind: RouteDetailStepKind): Int =
 
         RouteDetailStepKind.BUS -> R.drawable.ic_place_bus
         RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway
-        RouteDetailStepKind.STRAIGHT,
-        RouteDetailStepKind.FALLBACK,
-            -> R.drawable.ic_direction_straight
+        RouteDetailStepKind.STRAIGHT -> R.drawable.ic_direction_straight
+        RouteDetailStepKind.FALLBACK -> R.drawable.ic_status_help_circle
 
         RouteDetailStepKind.TURN_LEFT -> R.drawable.ic_direction_turn_left
         RouteDetailStepKind.TURN_RIGHT -> R.drawable.ic_direction_turn_right
@@ -4404,8 +4410,7 @@ private fun RouteDetailStepKind.usesDirectionalStepIcon(): Boolean =
     this == RouteDetailStepKind.STRAIGHT ||
         this == RouteDetailStepKind.TURN_LEFT ||
         this == RouteDetailStepKind.CROSSWALK ||
-        this == RouteDetailStepKind.TURN_RIGHT ||
-        this == RouteDetailStepKind.FALLBACK
+        this == RouteDetailStepKind.TURN_RIGHT
 
 private fun RouteDetailStepKind.usesLabeledWaypointPinIcon(): Boolean =
     this == RouteDetailStepKind.START || this == RouteDetailStepKind.ARRIVAL
@@ -4870,7 +4875,7 @@ private val RouteWalkPreviewTextGap = 4.dp
 private val RouteWalkPreviewChevronTouchTargetSize = 36.dp
 private val RouteWalkPreviewChevronIconSize = 18.dp
 private val RouteWalkPreviewChevronColor = Color(0xFF111827)
-private val RouteTransitNavy = Color(0xFF304583)
+private val RouteTransitNavy = Color(0xFF005391)
 private val RouteTransitWalkGray = Color(0xFFD9D9D9)
 private val RouteSubwayLine1 = Color(0xFFFF7F00)
 private val RouteSubwayLine2 = Color(0xFF3ED93B)

@@ -601,7 +601,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `transit detail walk route line uses the confirmed blue token`() {
+    fun `transit detail walk route line uses the confirmed walk gray token`() {
         val routeLineStates =
             createKakaoRouteLineRenderStates(
                 listOf(
@@ -618,8 +618,30 @@ class KakaoMapViewportBindingsTest {
                 ),
             )
 
-        assertEquals(0xFF0061FE.toInt(), routeLineStates.single().lineColor)
-        assertEquals(0xFF0061FE.toInt(), routeLineStates.single().strokeColor)
+        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().strokeColor)
+    }
+
+    @Test
+    fun `transit route line uses the confirmed transit navy token`() {
+        val routeLineStates =
+            createKakaoRouteLineRenderStates(
+                listOf(
+                    MapViewportPolylineOverlay(
+                        overlayId = "route-detail-transit",
+                        points =
+                            listOf(
+                                MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            ),
+                        style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                        tone = MapViewportOverlayTone.NAVY,
+                    ),
+                ),
+            )
+
+        assertEquals(0xFF005391.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFF005391.toInt(), routeLineStates.single().strokeColor)
     }
 
     @Test

@@ -85,8 +85,8 @@ internal fun MapViewportOverlayBackdrop(
                 secondary = MaterialTheme.colorScheme.secondary,
                 tertiary = Color(0xFFF9AB4D),
                 neutral = Color(0xFFD9D9D9),
-                navy = Color(0xFF304583),
-                transitWalk = Color(0xFF0061FE),
+                navy = Color(0xFF005391),
+                transitWalk = Color(0xFFD9D9D9),
                 error = MaterialTheme.colorScheme.error,
                 outline = MaterialTheme.colorScheme.outline,
             )
@@ -620,7 +620,7 @@ private fun MapViewportOverlayTone.toCasingColor(palette: ViewportOverlayPalette
         MapViewportOverlayTone.SECONDARY -> palette.secondary.copy(red = 0.04f, green = 0.47f, blue = 0.36f)
         MapViewportOverlayTone.TERTIARY -> palette.tertiary.copy(red = 0.72f, green = 0.36f, blue = 0.09f)
         MapViewportOverlayTone.NEUTRAL -> Color(0xFF6B7280)
-        MapViewportOverlayTone.NAVY -> Color(0xFF172554)
+        MapViewportOverlayTone.NAVY -> palette.navy
         MapViewportOverlayTone.TRANSIT_WALK -> palette.transitWalk
         MapViewportOverlayTone.ERROR -> palette.error.copy(red = 0.62f, green = 0.16f, blue = 0.16f)
     }

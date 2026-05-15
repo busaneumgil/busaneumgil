@@ -469,6 +469,11 @@ class RouteSettingLayoutPolicyTest {
             source.contains("RouteFastOrange = Color(0xFFF9AB4D)"),
         )
         assertTrue(
+            "Transit option route bar should split walking and public transit path colors.",
+            source.contains("RouteTransitWalkGray = Color(0xFFD9D9D9)") &&
+                source.contains("RouteTransitNavy = Color(0xFF005391)"),
+        )
+        assertTrue(
             "Subway line colors should include the confirmed Busan line tokens.",
             source.contains("RouteSubwayLine1 = Color(0xFFFF7F00)") &&
                 source.contains("RouteSubwayBusanGimhae = Color(0xFF8200FF)"),
@@ -488,6 +493,25 @@ class RouteSettingLayoutPolicyTest {
                     .substringAfter("private fun RouteTransitOptionSummary(")
                     .substringBefore("@Composable\nprivate fun RouteTransitOptionChip")
                     .contains("stopLabel?.let"),
+        )
+    }
+
+    @Test
+    fun `route detail map keeps direction arrows visible before a guidance marker is focused`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val routeMapBackdropSection =
+            source
+                .substringAfter("private fun RouteMapBackdrop(")
+                .substringBefore("private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays")
+
+        assertTrue(
+            "Route detail polylines should keep direction arrows visible even before a guidance marker is selected.",
+            routeMapBackdropSection.contains("val shouldShowRouteDirectionArrows =") &&
+                routeMapBackdropSection.contains("routePolylineOverlays.isNotEmpty() || hasFocusedGuidanceMarker") &&
+                routeMapBackdropSection.contains("showDirectionArrows = true") &&
+                routeMapBackdropSection.contains("showDetailedRouteOverlay = shouldShowRouteDirectionArrows"),
         )
     }
 
@@ -808,6 +832,17 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "Transit detail rows should map subway boarding to the dedicated subway asset.",
             source.contains("RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway"),
+        )
+        assertTrue(
+            "Fallback detail rows should not masquerade as straight movement.",
+            source.contains("RouteDetailStepKind.FALLBACK -> R.drawable.ic_status_help_circle"),
+        )
+        assertFalse(
+            "Fallback detail rows should not receive directional icon treatment after using a neutral status icon.",
+            source
+                .substringAfter("private fun RouteDetailStepKind.usesDirectionalStepIcon(): Boolean =")
+                .substringBefore("private fun RouteDetailStepKind.usesLabeledWaypointPinIcon(): Boolean =")
+                .contains("RouteDetailStepKind.FALLBACK"),
         )
         assertTrue(
             "Route detail leading icons should branch explicitly for the labeled rail pin treatment.",

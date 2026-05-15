@@ -230,6 +230,19 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
+    fun `map fallback route palette separates walking and transit line colors`() {
+        val backdropSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+
+        assertTrue(
+            "Compose fallback route lines should use #D9D9D9 for walking inside public transit and #005391 for public transit.",
+            backdropSource.contains("transitWalk = Color(0xFFD9D9D9)") &&
+                backdropSource.contains("navy = Color(0xFF005391)"),
+        )
+    }
+
+    @Test
     fun `route preview hides detailed guidance markers and arrows until a guidance marker is focused`() {
         val previewMap =
             RoutePreviewMapUiState(
@@ -924,7 +937,7 @@ class MapViewportOverlayBindingsTest {
                 .map { it.tone }
 
         assertEquals(
-            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
+            listOf(MapViewportOverlayTone.TRANSIT_WALK, MapViewportOverlayTone.NAVY),
             baselineTones,
         )
         assertEquals(MapViewportOverlayTone.NAVY, overlayState.polylines.last().tone)

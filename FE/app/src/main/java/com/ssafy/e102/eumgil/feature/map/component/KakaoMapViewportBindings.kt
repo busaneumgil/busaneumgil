@@ -1246,7 +1246,7 @@ private const val DEFAULT_KAKAO_ROUTE_DIRECTION_ARROW_SCREEN_DENSITY = 1f
 internal const val KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT = "sync-snapshot"
 private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_SCREEN_RELATIVE = "screen-relative"
 private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_MAP_ABSOLUTE = "map-absolute"
-private val KAKAO_ROUTE_DIRECTION_ARROW_TRANSFORM_METHOD = TransformMethod.None
+private val KAKAO_ROUTE_DIRECTION_ARROW_TRANSFORM_METHOD = TransformMethod.AbsoluteRotation
 
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()

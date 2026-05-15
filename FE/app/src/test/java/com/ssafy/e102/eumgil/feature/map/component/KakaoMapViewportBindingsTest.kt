@@ -1176,7 +1176,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `route polylines subtract camera bearing from kakao direction arrow rotation`() {
+    fun `route polylines keep kakao direction arrow rotation in map absolute space`() {
         val markerStates =
             createKakaoOverlayMarkerRenderStates(
                 overlayPoints = emptyList(),
@@ -1200,8 +1200,8 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertEquals(3, markerStates.size)
-        assertEquals(-90f, markerStates.first().rotationDegrees, 0.01f)
-        assertEquals(-90f, markerStates.last().rotationDegrees, 0.01f)
+        assertEquals(0f, markerStates.first().rotationDegrees, 0.01f)
+        assertEquals(0f, markerStates.last().rotationDegrees, 0.01f)
     }
 
     @Test
@@ -1234,7 +1234,9 @@ class KakaoMapViewportBindingsTest {
         assertEquals(0f, firstDebugState.segmentHeadingDegrees, 0.01f)
         assertEquals(Math.PI / 2.0, firstDebugState.cameraBearingRadians, 0.000001)
         assertEquals(90.0, firstDebugState.cameraBearingDegrees, 0.0)
-        assertEquals(-90f, firstDebugState.finalRotationDegrees, 0.01f)
+        assertEquals("map-absolute", firstDebugState.rotationModel)
+        assertEquals("AbsoluteRotation", firstDebugState.transformMethodName)
+        assertEquals(0f, firstDebugState.finalRotationDegrees, 0.01f)
         assertTrue(
             createKakaoRouteDirectionArrowDebugSummary(firstDebugState).contains("cameraBearingRad=1.5708"),
         )
@@ -1244,9 +1246,9 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `route direction arrow labels keep explicit screen space transform mode`() {
+    fun `route direction arrow labels keep explicit map absolute transform mode`() {
         assertEquals(
-            TransformMethod.None,
+            TransformMethod.AbsoluteRotation,
             resolveKakaoOverlayMarkerTransformMethod(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW),
         )
         assertNull(

@@ -22,12 +22,15 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.util.StreamUtils;
 
 import com.ssafy.e102.domain.admin.entity.AdminArea;
+import com.ssafy.e102.domain.admin.entity.AdminAreaAssignment;
 import com.ssafy.e102.domain.bookmark.entity.FavoriteRoute;
 import com.ssafy.e102.domain.place.entity.Bookmark;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
 import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.entity.HazardReportImage;
+import com.ssafy.e102.domain.route.entity.BusStop;
+import com.ssafy.e102.domain.route.entity.OdsayLoadLane;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RouteRating;
@@ -35,6 +38,7 @@ import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.entity.SourceFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayStationAccessibilityFeature;
 import com.ssafy.e102.domain.route.entity.SubwayStationElevator;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.user.entity.User;
@@ -58,14 +62,18 @@ class DatabaseNamingStrategyTest {
 		PlaceAccessibilityFeature.class,
 		HazardReport.class,
 		HazardReportImage.class,
+		BusStop.class,
+		OdsayLoadLane.class,
 		RoadNode.class,
 		RoadSegment.class,
 		AdminArea.class,
+		AdminAreaAssignment.class,
 		SegmentFeature.class,
 		SourceFeature.class,
 		RouteRating.class,
 		RouteSession.class,
 		SubwayStation.class,
+		SubwayStationAccessibilityFeature.class,
 		SubwayStationElevator.class,
 		SubwayTimetable.class);
 
@@ -164,11 +172,18 @@ class DatabaseNamingStrategyTest {
 		assertThat(joinColumnName(HazardReport.class, "user")).isEqualTo("user_id");
 		assertThat(physicalColumnName(HazardReport.class, "reportType")).isEqualTo("report_type");
 		assertThat(physicalColumnName(HazardReport.class, "description")).isEqualTo("description");
+		assertThat(physicalColumnName(HazardReport.class, "address")).isEqualTo("address");
+		assertThat(physicalColumnName(HazardReport.class, "idempotencyKey")).isEqualTo("idempotency_key");
+		assertThat(physicalColumnName(HazardReport.class, "idempotencyRequestHash"))
+			.isEqualTo("idempotency_request_hash");
+		assertThat(physicalColumnName(HazardReport.class, "idempotencyExpiresAt"))
+			.isEqualTo("idempotency_expires_at");
 		assertThat(physicalColumnName(HazardReport.class, "reportPoint")).isEqualTo("report_point");
 		assertThat(physicalColumnName(HazardReport.class, "status")).isEqualTo("status");
+		assertThat(uniqueColumnNames(HazardReport.class)).contains("user_id", "idempotency_key");
 
 		assertThat(physicalColumnName(HazardReportImage.class, "reportImgId")).isEqualTo("report_img_id");
-		assertThat(physicalColumnName(HazardReportImage.class, "imageUrl")).isEqualTo("image_url");
+		assertThat(physicalColumnName(HazardReportImage.class, "imageObjectKey")).isEqualTo("image_url");
 		assertThat(physicalColumnName(HazardReportImage.class, "displayOrder")).isEqualTo("display_order");
 		assertThat(joinColumnName(HazardReportImage.class, "hazardReport")).isEqualTo("report_id");
 		assertThat(uniqueColumnNames(HazardReportImage.class)).contains("report_id", "display_order");
@@ -206,6 +221,14 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(AdminArea.class, "dong")).isEqualTo("dong");
 		assertThat(physicalColumnName(AdminArea.class, "geom")).isEqualTo("geom");
 
+		assertThat(physicalColumnName(AdminAreaAssignment.class, "assignmentId")).isEqualTo("assignment_id");
+		assertThat(physicalColumnName(AdminAreaAssignment.class, "gu")).isEqualTo("gu");
+		assertThat(physicalColumnName(AdminAreaAssignment.class, "dong")).isEqualTo("dong");
+		assertThat(physicalColumnName(AdminAreaAssignment.class, "assignmentType")).isEqualTo("assignment_type");
+		assertThat(joinColumnName(AdminAreaAssignment.class, "assignee")).isEqualTo("assignee_user_id");
+		assertThat(physicalColumnName(AdminAreaAssignment.class, "status")).isEqualTo("status");
+		assertThat(uniqueColumnNames(AdminAreaAssignment.class)).contains("gu", "dong", "assignment_type");
+
 		assertThat(physicalColumnName(SegmentFeature.class, "featureId")).isEqualTo("feature_id");
 		assertThat(physicalColumnName(SegmentFeature.class, "edgeId")).isEqualTo("edge_id");
 		assertThat(physicalColumnName(SegmentFeature.class, "featureType")).isEqualTo("feature_type");
@@ -235,6 +258,11 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(RouteSession.class, "status")).isEqualTo("status");
 		assertThat(uniqueColumnNames(RouteSession.class)).contains("user_id", "active_route_key");
 
+		assertThat(physicalColumnName(OdsayLoadLane.class, "odsayLoadLaneId")).isEqualTo("odsay_load_lane_id");
+		assertThat(physicalColumnName(OdsayLoadLane.class, "mapObj")).isEqualTo("map_obj");
+		assertThat(physicalColumnName(OdsayLoadLane.class, "laneGeometries")).isEqualTo("lane_geometries");
+		assertThat(uniqueColumnNames(OdsayLoadLane.class)).contains("map_obj");
+
 		assertThat(physicalColumnName(RouteRating.class, "ratingId")).isEqualTo("rating_id");
 		assertThat(joinColumnName(RouteRating.class, "user")).isEqualTo("user_id");
 		assertThat(joinColumnName(RouteRating.class, "routeSession")).isEqualTo("session_id");
@@ -256,6 +284,16 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(SubwayStation.class, "lineName")).isEqualTo("line_name");
 		assertThat(physicalColumnName(SubwayStation.class, "point")).isEqualTo("point");
 		assertThat(uniqueColumnNames(SubwayStation.class)).contains("odsay_station_id");
+
+		assertThat(physicalColumnName(SubwayStationAccessibilityFeature.class, "id")).isEqualTo("id");
+		assertThat(joinColumnName(SubwayStationAccessibilityFeature.class, "subwayStation"))
+			.isEqualTo("subway_station_id");
+		assertThat(physicalColumnName(SubwayStationAccessibilityFeature.class, "featureType"))
+			.isEqualTo("feature_type");
+		assertThat(physicalColumnName(SubwayStationAccessibilityFeature.class, "isAvailable"))
+			.isEqualTo("is_available");
+		assertThat(uniqueColumnNames(SubwayStationAccessibilityFeature.class))
+			.contains("subway_station_id", "feature_type");
 
 		assertThat(physicalColumnName(SubwayTimetable.class, "subwayTimetableId"))
 			.isEqualTo("subway_timetable_id");
@@ -298,14 +336,18 @@ class DatabaseNamingStrategyTest {
 			PlaceAccessibilityFeature.class,
 			HazardReport.class,
 			HazardReportImage.class,
+			BusStop.class,
+			OdsayLoadLane.class,
 			RoadNode.class,
 			RoadSegment.class,
 			AdminArea.class,
+			AdminAreaAssignment.class,
 			SegmentFeature.class,
 			SourceFeature.class,
 			RouteRating.class,
 			RouteSession.class,
 			SubwayStation.class,
+			SubwayStationAccessibilityFeature.class,
 			SubwayTimetable.class);
 
 		for (Class<?> entity : entities) {

@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.map.component
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -63,6 +64,23 @@ class MapCategoryFilterBarConfigurationTest {
         assertTrue(
             "MAP top category filter icons should always tint to Primary 600.",
             source.contains("tint = EumPrimary600"),
+        )
+    }
+
+    @Test
+    fun `map category filter labels avoid wrapping without ellipsis`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "Category filter labels should stay on one line to keep chip height stable.",
+            source.contains("maxLines = 1") &&
+                source.contains("softWrap = false"),
+        )
+        assertFalse(
+            "Category filter labels should not ellipsize; the row can scroll horizontally instead.",
+            source.contains("TextOverflow.Ellipsis"),
         )
     }
 

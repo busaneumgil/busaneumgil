@@ -162,7 +162,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `marker render state keeps visible markers and lifts selected marker rank`() {
+    fun `marker render state keeps visible marker size stable and lifts selected marker rank`() {
         val hiddenMarker =
             MapMarkerUiModel(
                 markerId = "hidden",
@@ -206,7 +206,7 @@ class KakaoMapViewportBindingsTest {
         assertEquals(0L, markerStates.first().rank)
         assertTrue(markerStates.last().rank > markerStates.first().rank)
         assertEquals(28, markerStates.first().sizeDp)
-        assertEquals(34, markerStates.last().sizeDp)
+        assertEquals(28, markerStates.last().sizeDp)
         assertFalse(markerStates.first().isSelected)
         assertTrue(markerStates.last().isSelected)
         assertTrue(markerStates.none { it.markerId == "hidden" })
@@ -707,7 +707,7 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals(listOf("toilet", "braille"), markerStates.map { it.markerId })
         assertEquals(28, markerStates.first().sizeDp)
-        assertEquals(34, markerStates.last().sizeDp)
+        assertEquals(30, markerStates.last().sizeDp)
         assertEquals(0.5f, markerStates.first().anchorPointX)
         assertEquals(0.5f, markerStates.first().anchorPointY)
         assertEquals(0.5f, markerStates.last().anchorPointX)

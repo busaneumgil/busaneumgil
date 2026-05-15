@@ -683,6 +683,62 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `map tapped place destination CTA opens route setting`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val tappedCoordinate = MapCoordinate(latitude = 35.1151, longitude = 129.0414)
+            val mapTapDetail =
+                testMapTappedDetail(
+                    bookmarkTargetId = "kakao:poi-123",
+                    detailType = MapPlaceDetailType.EXTERNAL_POI,
+                    provider = "KAKAO",
+                    providerPlaceId = "poi-123",
+                    name = "Busan Station",
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                    address = "206 Jungang-daero, Busan",
+                    latitude = tappedCoordinate.latitude,
+                    longitude = tappedCoordinate.longitude,
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = FakePlacesRepository(mapTapDetail = mapTapDetail),
+                )
+
+            viewModel.onAction(
+                MapUiAction.MapTapped(
+                    MapTapPayload(
+                        coordinate = tappedCoordinate,
+                        clickType = MapTapClickType.POI,
+                        provider = "KAKAO",
+                        providerPlaceId = "poi-123",
+                        nameHint = "Busan Station",
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION))
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            val selectedDestination = destinationSelectionRepository.selectedDestination.value
+            assertEquals(mapTapDetail.bookmarkTargetId, selectedDestination?.placeId)
+            assertEquals(mapTapDetail.name, selectedDestination?.name)
+            assertEquals(mapTapDetail.address, selectedDestination?.address)
+            assertEquals(mapTapDetail.latitude, selectedDestination?.latitude ?: 0.0, 0.0)
+            assertEquals(mapTapDetail.longitude, selectedDestination?.longitude ?: 0.0, 0.0)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+        }
+
+    @Test
     fun `home reentry resets destination and preview state to current location when available`() =
         runTest {
             val currentLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)

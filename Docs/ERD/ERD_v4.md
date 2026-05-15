@@ -424,6 +424,10 @@ erDiagram
 | 사용자 PK | user_id | UUID | NOT NULL |  |
 | 제보 유형 | report_type | VARCHAR(30) | NOT NULL |  |
 | 설명 | description | TEXT | NULL |  |
+| 주소 | address | VARCHAR(255) | NULL |  |
+| 멱등성 키 | idempotency_key | VARCHAR(255) | NULL |  |
+| 멱등성 요청 해시 | idempotency_request_hash | VARCHAR(64) | NULL |  |
+| 멱등성 만료 시각 | idempotency_expires_at | TIMESTAMP | NULL |  |
 | 제보 위치 | report_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 상태 | status | VARCHAR(30) | NOT NULL | PENDING |
 
@@ -437,7 +441,10 @@ erDiagram
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
 - `APPROVED`, `REJECTED` 상태 변경은 `/admin/hazard-reports/{reportId}/approve`, `/admin/hazard-reports/{reportId}/reject`에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
-- 제보 위치의 기준 데이터는 `report_point`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
+- 제보 위치의 기준 데이터는 `report_point`다. `address`는 사용자 목록 카드 표시용 역지오코딩 snapshot이며, 주소 보강 실패 또는 기존 데이터는 `NULL`일 수 있다.
+- `idempotency_key`, `idempotency_request_hash`, `idempotency_expires_at`은 `POST /hazard-reports` 재시도 중복 방지용 메타데이터다.
+- `(user_id, idempotency_key)`는 unique 제약이다. `idempotency_key`가 `NULL`인 일반 생성 요청은 중복 제한을 받지 않는다.
+- 멱등성 메타데이터는 24시간 보관 후 cleanup job이 `NULL`로 정리해 키 재사용을 허용한다.
 - 사용자별 제보 목록은 최신순으로 제공한다.
 
 ---
@@ -448,14 +455,14 @@ erDiagram
 
 사용자 제보에 첨부된 이미지 정보를 저장한다.
 
-이미지 파일 자체는 S3 같은 외부 스토리지에 저장하고, DB에는 URL과 순서만 관리한다.
+이미지 파일 자체는 S3 같은 외부 스토리지에 저장하고, DB에는 객체 key와 순서만 관리한다.
 
 ### 컬럼 명세
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 제보 이미지 ID | report_img_id | BIGINT | NOT NULL |  |
-| 이미지 URL | image_url | TEXT | NOT NULL |  |
+| 이미지 object key | image_url | TEXT | NOT NULL | 기존 컬럼명은 유지하되 값은 `hazard-reports/{userId}/{yyyyMMdd}/{uuid}.{ext}` object key |
 | 표시 순서 | display_order | SMALLINT | NOT NULL | 0 |
 | 사용자 제보 ID | report_id | BIGINT | NOT NULL |  |
 
@@ -463,7 +470,8 @@ erDiagram
 
 - `UNIQUE (report_id, display_order)` 제약을 둔다.
 - 제보 사진은 선택 입력이며 최대 5장까지 허용한다.
-- 목록 응답에서는 DB `display_order=0` 이미지를 대표 사진으로 사용하고, API에서는 `displayOrder`로 노출한다.
+- 목록 응답에서는 DB `display_order=0` 이미지를 대표 사진으로 사용하고, API에서는 조회 시점에 presigned GET URL로 변환해 노출한다.
+- 기존 데이터에 공개 URL이 저장된 경우에도 조회 시 URL path를 object key로 정규화해 presigned GET URL을 발급한다.
 
 ---
 

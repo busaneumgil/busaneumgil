@@ -297,7 +297,7 @@ fun FacilityDetailBottomSheetShell(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .weight(1f, fill = false)
+                                    .weight(1f, fill = true)
                                     .verticalScroll(detailScrollState),
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                             content = detailContent,

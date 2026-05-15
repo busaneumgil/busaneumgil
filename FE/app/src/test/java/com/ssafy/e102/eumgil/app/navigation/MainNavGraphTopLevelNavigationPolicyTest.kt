@@ -57,6 +57,32 @@ class MainNavGraphTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun `route setting close actions navigate through map home reentry helper`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
+                .readText()
+        val routeSettingDestination =
+            source
+                .substringAfter("route = RouteSettingRoute.Setting.route")
+                .substringBefore("route = RouteSettingRoute.Detail.route")
+        val routeDetailDestination =
+            source
+                .substringAfter("route = RouteSettingRoute.Detail.route")
+                .substringBefore("composable(route = ReportRoute.Report.route)")
+
+        assertTrue(
+            "Route setting close should return to map home instead of a plain back-stack pop.",
+            routeSettingDestination.contains("onNavigateToMap = {") &&
+                routeSettingDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
+        )
+        assertTrue(
+            "Route detail close should also return to map home.",
+            routeDetailDestination.contains("onNavigateToMap = {") &&
+                routeDetailDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
+        )
+    }
+
+    @Test
     fun `map home reentry reset excludes bookmark while keeping other visible non-map routes`() {
         assertTrue(
             shouldNavigateToTopLevelMapForHomeEntry(

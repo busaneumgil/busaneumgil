@@ -227,12 +227,6 @@ class ReportViewModelTest {
                 )
             val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
-            val event =
-                async {
-                    viewModel.uiEvent.first { emittedEvent ->
-                        emittedEvent is ReportUiEvent.NavigateToReportComplete
-                    }
-                }
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
             viewModel.onAction(
@@ -252,7 +246,6 @@ class ReportViewModelTest {
 
             val savedOutbox = requireNotNull(repository.savedOutbox)
             val uiState = viewModel.uiState.value
-            val completeEvent = event.await() as ReportUiEvent.NavigateToReportComplete
 
             assertEquals(ReportType.BRAILLE_BLOCK.apiValue, savedOutbox.reportCategory)
             assertEquals("점자블록 파손", savedOutbox.description)
@@ -263,8 +256,10 @@ class ReportViewModelTest {
             assertFalse(uiState.hasExistingDraft)
             assertTrue(uiState.screenState is ReportScreenState.Completed)
             assertTrue(uiState.submitState is ReportSubmitState.Success)
-            assertTrue(uiState.outboxState is ReportOutboxState.Saved)
-            assertEquals("outbox-1", completeEvent.outboxId)
+            // Task 4.4 — NavigateToReportComplete event 제거 후 outboxId는 state로만 검증.
+            val outboxState = uiState.outboxState
+            assertTrue(outboxState is ReportOutboxState.Saved)
+            assertEquals("outbox-1", (outboxState as ReportOutboxState.Saved).outboxId)
         }
 
     @Test

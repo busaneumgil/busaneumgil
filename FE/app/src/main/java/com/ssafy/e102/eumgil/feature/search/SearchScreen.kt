@@ -496,7 +496,7 @@ private fun SearchResultsContent(
 
             is SearchResultUiState.Empty ->
                 item(key = "empty-state") {
-                    SearchStateCard(
+                    SearchEmptyResultMessage(
                         title =
                             stringResource(
                                 id = R.string.search_screen_empty_result_title,
@@ -823,7 +823,7 @@ private fun SearchResultSection(
             }
 
             is SearchResultUiState.Empty ->
-                SearchStateCard(
+                SearchEmptyResultMessage(
                     title =
                         stringResource(
                             id = R.string.search_screen_empty_result_title,
@@ -1299,6 +1299,35 @@ private const val METERS_PER_KILOMETER = 1_000
 private const val SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD = 3
 private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
+
+@Composable
+private fun SearchEmptyResultMessage(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = EumSpacing.medium,
+                    vertical = EumSpacing.large,
+                ),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
 @Composable
 private fun SearchStateCard(

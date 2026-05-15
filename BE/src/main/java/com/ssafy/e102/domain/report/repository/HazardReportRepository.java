@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.report.repository;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,6 +23,8 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 
 	@EntityGraph(attributePaths = "images")
 	Optional<HazardReport> findWithImagesByReportId(Long reportId);
+
+	Optional<HazardReport> findByUser_UserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
 
 	@EntityGraph(attributePaths = "user")
 	@Query("select hazardReport from HazardReport hazardReport")
@@ -73,6 +76,18 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 		ReportStatus currentStatus,
 		@Param("nextStatus")
 		ReportStatus nextStatus);
+
+	@Modifying(flushAutomatically = true)
+	@Query("""
+			update HazardReport hazardReport
+			set hazardReport.idempotencyKey = null,
+				hazardReport.idempotencyRequestHash = null,
+				hazardReport.idempotencyExpiresAt = null
+			where hazardReport.idempotencyExpiresAt <= :now
+		""")
+	int clearExpiredIdempotencyMetadata(
+		@Param("now")
+		LocalDateTime now);
 
 	void deleteAllByUser_UserId(UUID userId);
 }

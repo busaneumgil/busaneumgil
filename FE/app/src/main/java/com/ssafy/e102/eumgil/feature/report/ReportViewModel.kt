@@ -712,12 +712,6 @@ class ReportViewModel(
                 submittedAtMillis = System.currentTimeMillis(),
             )
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 서버에 등록되었습니다."))
-        emitUiEvent(
-            ReportUiEvent.NavigateToReportComplete(
-                reportId = serverReportId,
-                outboxId = outboxId,
-            ),
-        )
     }
 
     private suspend fun handleServerSubmitSkipped(
@@ -742,12 +736,6 @@ class ReportViewModel(
                 submittedAtMillis = System.currentTimeMillis(),
             )
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
-        emitUiEvent(
-            ReportUiEvent.NavigateToReportComplete(
-                reportId = null,
-                outboxId = outboxId,
-            ),
-        )
     }
 
     private fun handleServerSubmitFailure(

@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.auth.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,9 +28,12 @@ import com.ssafy.e102.domain.auth.cookie.RefreshTokenCookieManager;
 import com.ssafy.e102.domain.auth.dto.response.SignupResponse;
 import com.ssafy.e102.domain.auth.dto.response.SocialLoginResponse;
 import com.ssafy.e102.domain.auth.dto.response.TokenResponse;
+import com.ssafy.e102.domain.auth.exception.AuthErrorCode;
+import com.ssafy.e102.domain.auth.exception.AuthException;
 import com.ssafy.e102.domain.auth.service.AuthService;
 import com.ssafy.e102.domain.user.type.MobilitySubtype;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
+import com.ssafy.e102.global.exception.GlobalExceptionHandler;
 import com.ssafy.e102.global.security.jwt.JwtProperties;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
@@ -56,6 +60,7 @@ class AuthControllerTest {
 			false);
 		mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService, refreshTokenCookieManager))
 			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+			.setControllerAdvice(new GlobalExceptionHandler())
 			.build();
 	}
 
@@ -83,8 +88,7 @@ class AuthControllerTest {
 			.andExpect(jsonPath("$.data.userId").value(userId.toString()))
 			.andExpect(jsonPath("$.data.selectedPrimaryUserType").value("MOBILITY_IMPAIRED"))
 			.andExpect(jsonPath("$.data.selectedMobilitySubtype").value("MANUAL_WHEELCHAIR"))
-			.andExpect(
-				header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=refresh-token")));
+			.andExpect(header().string("Set-Cookie", containsString("refreshToken=refresh-token")));
 	}
 
 	@Test
@@ -110,8 +114,7 @@ class AuthControllerTest {
 			.andExpect(jsonPath("$.data.userId").value(userId.toString()))
 			.andExpect(jsonPath("$.data.selectedPrimaryUserType").value("LOW_VISION"))
 			.andExpect(jsonPath("$.data.selectedMobilitySubtype").doesNotExist())
-			.andExpect(
-				header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=refresh-token")));
+			.andExpect(header().string("Set-Cookie", containsString("refreshToken=refresh-token")));
 	}
 
 	@Test
@@ -126,7 +129,29 @@ class AuthControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
 			.andExpect(jsonPath("$.data.refreshToken").value("new-refresh-token"))
-			.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=new-refresh-token")));
+			.andExpect(header().string("Set-Cookie", containsString("refreshToken=new-refresh-token")));
+	}
+
+	@Test
+	@DisplayName("토큰 재발급 요청에 refresh token이 없으면 A4012로 응답한다")
+	void reissueRejectsMissingRefreshToken() throws Exception {
+		mockMvc.perform(post("/auth/reissue"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.status").value("A4012"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("토큰 재발급 요청의 refresh token이 유효하지 않으면 A4012로 응답한다")
+	void reissueRejectsInvalidRefreshToken() throws Exception {
+		when(authService.reissue(any())).thenThrow(new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN));
+
+		mockMvc.perform(post("/auth/reissue")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"refreshToken\":\"invalid-refresh-token\"}"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.status").value("A4012"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
 	}
 
 	@Test
@@ -140,7 +165,7 @@ class AuthControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
 			.andExpect(jsonPath("$.data.refreshToken").value("new-refresh-token"))
-			.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refreshToken=new-refresh-token")));
+			.andExpect(header().string("Set-Cookie", containsString("refreshToken=new-refresh-token")));
 	}
 
 	@Test
@@ -157,7 +182,7 @@ class AuthControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data").doesNotExist())
 			.andExpect(jsonPath("$.message").value("로그아웃되었습니다."))
-			.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("Max-Age=0")));
+			.andExpect(header().string("Set-Cookie", containsString("Max-Age=0")));
 
 		verify(authService).logout(userId, "access-token");
 		SecurityContextHolder.clearContext();

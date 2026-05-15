@@ -62,7 +62,6 @@ fun NavigationSegmentRail(
     isRouteDetailEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val railColor = MaterialTheme.colorScheme.surface
     val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
     val railSlots = createNavigationSegmentRailSlots(uiState)
     val railFocusItems = railSlots.focusItems()
@@ -130,8 +129,7 @@ fun NavigationSegmentRail(
     Box(
         modifier =
             modifier
-                .fillMaxHeight()
-                .background(color = railColor),
+                .fillMaxHeight(),
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -268,6 +266,13 @@ private fun NavigationSegmentRailItem(
         onClick = onClick,
     )
 }
+
+internal fun NavigationGuidanceAction.railIconSize(): Dp =
+    if (this == NavigationGuidanceAction.BUS || this == NavigationGuidanceAction.SUBWAY) {
+        NavigationSegmentRailTransitIconSize
+    } else {
+        NavigationSegmentRailIconSize
+    }
 
 @Composable
 private fun NavigationSegmentRailReturnAction(
@@ -415,6 +420,9 @@ private fun NavigationSegmentRailSlots.focusItems(): List<NavigationSegmentRailI
 
 private val NavigationSegmentRailItemUiState.isSelected: Boolean
     get() = isFocused || isActive
+
+private val NavigationSegmentRailIconSize = 34.dp
+internal val NavigationSegmentRailTransitIconSize = 30.dp
 
 private val NavigationSegmentRailItemUiState.stateLabel: String
     get() =

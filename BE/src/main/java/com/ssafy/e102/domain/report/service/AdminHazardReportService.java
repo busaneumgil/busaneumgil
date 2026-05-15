@@ -32,14 +32,17 @@ public class AdminHazardReportService {
 	private final HazardReportRepository hazardReportRepository;
 	private final HazardReportImageRepository hazardReportImageRepository;
 	private final GeoPointConverter geoPointConverter;
+	private final HazardReportImageUploadService hazardReportImageUploadService;
 
 	public AdminHazardReportService(
 		HazardReportRepository hazardReportRepository,
 		HazardReportImageRepository hazardReportImageRepository,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter,
+		HazardReportImageUploadService hazardReportImageUploadService) {
 		this.hazardReportRepository = hazardReportRepository;
 		this.hazardReportImageRepository = hazardReportImageRepository;
 		this.geoPointConverter = geoPointConverter;
+		this.hazardReportImageUploadService = hazardReportImageUploadService;
 	}
 
 	public AdminHazardReportListResponse getHazardReports(
@@ -58,7 +61,10 @@ public class AdminHazardReportService {
 
 	public AdminHazardReportDetailResponse getHazardReportDetail(Long reportId) {
 		HazardReport hazardReport = getHazardReport(reportId);
-		return AdminHazardReportDetailResponse.of(hazardReport, geoPointConverter);
+		return AdminHazardReportDetailResponse.of(
+			hazardReport,
+			geoPointConverter,
+			createImageReadUrls(hazardReport));
 	}
 
 	@Transactional
@@ -96,8 +102,16 @@ public class AdminHazardReportService {
 			.stream()
 			.collect(Collectors.toMap(
 				image -> image.getHazardReport().getReportId(),
-				HazardReportImage::getImageUrl,
+				image -> hazardReportImageUploadService.createReadUrl(image.getImageObjectKey()),
 				(existing, ignored) -> existing));
+	}
+
+	private List<String> createImageReadUrls(HazardReport hazardReport) {
+		return hazardReport.getImages()
+			.stream()
+			.map(HazardReportImage::getImageObjectKey)
+			.map(hazardReportImageUploadService::createReadUrl)
+			.toList();
 	}
 
 	private HazardReport getHazardReport(Long reportId) {

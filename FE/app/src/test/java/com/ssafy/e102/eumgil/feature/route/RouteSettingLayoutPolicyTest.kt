@@ -1,6 +1,10 @@
 ﻿package com.ssafy.e102.eumgil.feature.route
 
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -78,6 +82,23 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route setting scaffold disables default bottom insets so the fixed cta owns the bottom gap`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("@Composable\nfun RouteDetailScreen")
+
+        assertTrue(routeSettingUsesEmptyWindowInsets())
+        assertFalse(
+            "Route selection should not leave extra top padding between the blue header and the map stage.",
+            screenSection.contains(".padding(top = RouteSettingScreenVerticalPadding)"),
+        )
+    }
+
+    @Test
     fun `route setting transit result list implements UIUX plan skeleton`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -98,7 +119,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route setting implements blue route search header and walk map preview carousel`() {
+    fun `route setting keeps kakao header shell and walk map preview carousel`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -106,28 +127,20 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("fun RouteSettingScreen(")
                 .substringBefore("if (isDuribalConfirmDialogVisible)")
-        val headerSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderKakao(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
         val mapStageSection =
             source
                 .substringAfter("private fun RouteMapStage(")
                 .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
 
         assertTrue("Route setting top bar should use the blue route search header.", screenSection.contains("RouteSearchHeaderKakao("))
-        assertFalse("The route search header should no longer expose disabled car or bike slots.", headerSection.contains("enabled = false"))
-        assertTrue("The route search header should expose transit mode with text.", headerSection.contains("\"대중교통\""))
-        assertTrue("The route search header should expose walk mode with text.", headerSection.contains("\"도보\""))
-        assertTrue("The selected route mode should render with a white pill background.", source.contains("color = if (selected) Color.White else Color.Transparent"))
-        assertTrue("The header should include a close action.", headerSection.contains("R.drawable.ic_action_close"))
-        assertTrue("The header should include origin and destination waypoint rows.", headerSection.contains("RouteSearchHeaderWaypointLine("))
-        assertTrue("The header should include a waypoint swap control.", headerSection.contains("onSwapClick"))
-        assertFalse("The header should not expose a non-functional more menu affordance.", headerSection.contains("R.drawable.ic_action_more"))
         assertTrue("Walk mode should render map-anchored preview cards instead of the transit bottom sheet.", mapStageSection.contains("RouteWalkPreviewCarousel("))
         assertTrue("Walk preview cards should expose the route detail arrow CTA.", source.contains("경로 상세 보기"))
         assertFalse("Walk preview should remove kcal text beside distance.", source.contains("estimatedWalkCaloriesLabel("))
-        assertTrue("Walk preview cards should expose the primary backend badge plus overflow count.", source.contains("val visibleBadge = card.badges.firstOrNull()") && source.contains("overflowBadgeCount"))
+        assertTrue(
+            "Walk preview cards should expose at least two accessibility labels through the shared route label helper.",
+            source.contains("routeCardVisibleAccessibilityBadges(card.badges)") &&
+                source.contains("RouteAccessibilityLabelChip("),
+        )
         assertTrue(
             "Walk preview cards should split the available row width equally like the reference mock.",
             source.contains("private fun RouteWalkPreviewCarousel") &&
@@ -135,6 +148,39 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("modifier = Modifier.weight(1f)"),
         )
         assertTrue("Transit mode should keep the bottom sheet from the previous slice.", screenSection.contains("uiState.selectedTravelMode == RouteTravelMode.TRANSIT"))
+    }
+
+    @Test
+    fun `route search header policy keeps compact kakao geometry and shared tokens`() {
+        val headerPolicy = routeSearchHeaderPolicy(showModeTabs = true)
+        val modeTabs = routeSearchHeaderModeTabPolicies()
+
+        assertEquals(R.string.route_setting_screen_title, headerPolicy.titleResId)
+        assertEquals(EumPrimary600, headerPolicy.containerColor)
+        assertEquals(EumWhite, headerPolicy.summaryContainerColor)
+        assertEquals(2, modeTabs.size)
+        assertEquals(RouteTravelMode.TRANSIT, modeTabs[0].mode)
+        assertEquals(RouteTravelMode.WALK, modeTabs[1].mode)
+        assertEquals(R.string.route_setting_travel_mode_transit, modeTabs[0].labelResId)
+        assertEquals(R.string.route_setting_travel_mode_walk, modeTabs[1].labelResId)
+        assertEquals(22.dp, modeTabs[0].iconSize)
+        assertEquals(26.dp, modeTabs[1].iconSize)
+        assertEquals(92.dp, headerPolicy.summaryMinHeight)
+        assertEquals(12.dp, headerPolicy.summaryToModeTabsGap)
+        assertEquals(36.dp, headerPolicy.modeTabHeight)
+        assertEquals(10.dp, headerPolicy.modeTabCornerRadius)
+        assertEquals(12.dp, headerPolicy.roleLabelGap)
+        assertTrue(headerPolicy.summaryUsesFullWidth)
+        assertTrue(headerPolicy.usesCompactWaypointTitle)
+        assertFalse(headerPolicy.showsCloseAction)
+        assertFalse(headerPolicy.showsMoreAction)
+    }
+
+    @Test
+    fun `route search header policy uses plain bottom padding when tabs are hidden`() {
+        val headerPolicy = routeSearchHeaderPolicy(showModeTabs = false)
+
+        assertEquals(8.dp, headerPolicy.contentBottomPadding)
     }
 
     @Test
@@ -167,7 +213,7 @@ class RouteSettingLayoutPolicyTest {
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
-                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 4.dp"),
+                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -196,11 +242,11 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `walk preview tags use response badge colors from the reference mock`() {
+    fun `walk preview and route sheet cards use smaller metrics with shared accessibility labels`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
-        val cardSection =
+        val walkCardSection =
             source
                 .substringAfter("private fun RouteWalkPreviewSummaryCard(")
                 .substringBefore("@Composable\nprivate fun RouteMapControls")
@@ -208,30 +254,126 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("private fun RouteWalkPreviewBadgeRow(")
                 .substringBefore("@Composable\nprivate fun RouteMapControls")
-        val badgeColorsSection =
+        val compactCardSection =
             source
-                .substringAfter("private fun routeOptionBadgeColors(")
-                .substringBefore("@Composable\nprivate fun optionAccentColor")
+                .substringAfter("private fun RouteCompactOptionCard(")
+                .substringBefore("@Composable\nprivate fun RouteSearchLoadingState")
+        val accessibilityLabelSection =
+            source
+                .substringAfter("private fun RouteAccessibilityLabelChip(")
+                .substringBefore("@Composable\nprivate fun RouteStateCard")
 
         assertTrue(
-            "Walk preview should apply backend badge colors instead of rendering response badges as neutral chips.",
-            cardSection.contains("RouteWalkPreviewBadgeRow(") &&
-                badgeRowSection.contains("routeOptionBadgeColors(visibleBadge)") &&
-                badgeRowSection.contains("RouteBadgeOverflowColor"),
+            "Walk preview metrics should step down slightly so the time and distance don't dominate the card.",
+            walkCardSection.contains("style = MaterialTheme.typography.titleLarge") &&
+                walkCardSection.contains("style = MaterialTheme.typography.bodySmall") &&
+                walkCardSection.contains("style = MaterialTheme.typography.labelMedium") &&
+                walkCardSection.contains("start = RouteWalkPreviewCardStartPadding") &&
+                walkCardSection.contains("end = RouteWalkPreviewTopRowEndPadding"),
         )
         assertTrue(
-            "The overflow +n badge should sit to the right of the primary badge in one non-wrapping row.",
-            badgeRowSection.contains("Row(") &&
-                badgeRowSection.contains("verticalAlignment = Alignment.CenterVertically") &&
-                !cardSection.contains("FlowRow("),
+            "Walk preview accessibility labels should sit in their own full-width row so two chips can stretch to the same right margin as the left side.",
+            walkCardSection.contains("RouteWalkPreviewBadgeRow(") &&
+                walkCardSection.contains("Modifier.padding(") &&
+                walkCardSection.contains("end = RouteWalkPreviewBadgeHorizontalPadding"),
         )
         assertTrue(
-            "Positive/caution/overflow route tags should match the blue, red, and gray reference chips with white text.",
-            source.contains("RouteBadgePositiveColor = Color(0xFF4B9EDC)") &&
-                source.contains("RouteBadgeCautionColor = Color(0xFFD9534F)") &&
-                source.contains("RouteBadgeOverflowColor = Color(0xFFA8A8A8)") &&
-                badgeColorsSection.contains("RouteBadgeCautionColor to Color.White") &&
-                badgeColorsSection.contains("RouteBadgePositiveColor to Color.White"),
+            "Walk preview detail affordance should shrink so the right-side chevron stops consuming too much width.",
+            source.contains("RouteWalkPreviewChevronTouchTargetSize = 36.dp") &&
+                source.contains("RouteWalkPreviewChevronIconSize = 18.dp"),
+        )
+        assertTrue(
+            "Compact route sheet cards should also reduce the time and distance typography.",
+            compactCardSection.contains("style = MaterialTheme.typography.titleSmall") &&
+                compactCardSection.contains("style = MaterialTheme.typography.labelMedium"),
+        )
+        assertTrue(
+            "Walk preview labels should stay in a fixed two-column row instead of wrapping unpredictably.",
+            source.contains("private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 2") &&
+                badgeRowSection.contains("Row(") &&
+                badgeRowSection.contains("RouteAccessibilityLabelChip(") &&
+                badgeRowSection.contains("modifier = Modifier.weight(1f)"),
+        )
+        assertTrue(
+            "Accessibility labels should reuse the facility-detail style tone while filling each weighted slot with slightly wider text room.",
+            accessibilityLabelSection.contains("shape = RoundedCornerShape(RouteAccessibilityLabelCornerRadius)") &&
+                accessibilityLabelSection.contains("style = MaterialTheme.typography.labelSmall") &&
+                accessibilityLabelSection.contains(".fillMaxWidth()") &&
+                source.contains("RouteAccessibilityLabelHorizontalPadding = 4.dp") &&
+                source.contains("RouteAccessibilityLabelMinHeight = 24.dp"),
+        )
+        assertTrue(
+            "Both walk preview and compact route cards should render the shared accessibility label chip helper.",
+            badgeRowSection.contains("RouteAccessibilityLabelChip(") &&
+                compactCardSection.contains("RouteAccessibilityLabelChip(") &&
+                compactCardSection.contains("modifier = Modifier.weight(1f)"),
+        )
+    }
+
+    @Test
+    fun `walk preview badge row uses two weighted slots without experimental flow layout`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val badgeRowSection =
+            source
+                .substringAfter("private fun RouteWalkPreviewBadgeRow(")
+                .substringBefore("@Composable\nprivate fun RouteMapControls")
+
+        assertTrue(
+            "RouteWalkPreviewBadgeRow should reserve a second slot with weight so two accessibility labels stay on one line.",
+            badgeRowSection.contains("Spacer(modifier = Modifier.weight(1f))"),
+        )
+        assertFalse(
+            "RouteWalkPreviewBadgeRow should no longer rely on FlowRow now that the card forces a fixed two-chip layout.",
+            source.contains("@OptIn(ExperimentalLayoutApi::class)\n@Composable\nprivate fun RouteWalkPreviewBadgeRow(") ||
+                badgeRowSection.contains("FlowRow("),
+        )
+    }
+
+    @Test
+    fun `walk preview cards navigate to detail only from the chevron action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val carouselSection =
+            source
+                .substringAfter("private fun RouteWalkPreviewCarousel(")
+                .substringBefore("@OptIn(ExperimentalLayoutApi::class)\n@Composable\nprivate fun RouteWalkPreviewSummaryCard")
+
+        assertTrue(
+            "Tapping a walk preview card body should only select that route, while the chevron keeps the detail navigation.",
+            carouselSection.contains("onClick = { onOptionClick(card.routeOption) }") &&
+                carouselSection.contains("onDetailClick = { onOptionDetailClick(card.routeOption) }"),
+        )
+        assertFalse(
+            "The walk preview card body should no longer redirect to route detail when the card is already selected.",
+            carouselSection.contains("if (card.isSelected)"),
+        )
+    }
+
+    @Test
+    fun `route option cards keep bordered selection states with softer section radius`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val walkCardSection =
+            source
+                .substringAfter("private fun RouteWalkPreviewSummaryCard(")
+                .substringBefore("@Composable\nprivate fun RouteMapControls")
+        val compactCardSection =
+            source
+                .substringAfter("private fun RouteCompactOptionCard(")
+                .substringBefore("@Composable\nprivate fun RouteSearchLoadingState")
+
+        assertTrue(
+            "Walk preview cards should use the shared 16dp section radius instead of the previous extra-round preview shape.",
+            walkCardSection.contains("shape = RoundedCornerShape(RouteSectionCardCornerRadius)"),
+        )
+        assertTrue(
+            "Compact option cards should also adopt the softer section radius while preserving the selection border treatment.",
+            compactCardSection.contains("shape = RoundedCornerShape(RouteSectionCardCornerRadius)") &&
+                compactCardSection.contains("border = BorderStroke(1.dp, borderColor)"),
         )
     }
 

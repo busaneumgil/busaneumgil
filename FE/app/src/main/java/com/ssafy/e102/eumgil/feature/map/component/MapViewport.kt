@@ -809,9 +809,7 @@ private fun markerSize(
     isSelected: Boolean,
 ): Dp =
     when {
-        marker.categoryType.category == FacilityCategory.BRAILLE_BLOCK && isSelected -> 46.dp
         marker.categoryType.category == FacilityCategory.BRAILLE_BLOCK -> 40.dp
-        isSelected -> 52.dp
         else -> 44.dp
     }
 

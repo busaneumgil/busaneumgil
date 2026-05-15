@@ -29,7 +29,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,7 +46,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -596,10 +601,35 @@ private fun IconTextButtonContent(
         modifier = Modifier.size(18.dp),
     )
     Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+    AdaptiveSingleLineButtonLabel(label = label)
+}
+
+@Composable
+private fun AdaptiveSingleLineButtonLabel(
+    label: String,
+    minFontSize: TextUnit = MapActionLabelMinFontSize,
+) {
+    val baseStyle = MaterialTheme.typography.labelLarge
+    val baseFontSize =
+        if (baseStyle.fontSize == TextUnit.Unspecified) {
+            MapActionLabelDefaultFontSize
+        } else {
+            baseStyle.fontSize
+        }
+    var fontSize by remember(label, baseFontSize) { mutableStateOf(baseFontSize) }
+
     Text(
         text = label,
-        style = MaterialTheme.typography.labelLarge,
+        style = baseStyle.copy(fontSize = fontSize),
         fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Clip,
+        softWrap = false,
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && fontSize.value > minFontSize.value) {
+                fontSize = (fontSize.value - 1f).coerceAtLeast(minFontSize.value).sp
+            }
+        },
     )
 }
 
@@ -1847,6 +1877,8 @@ private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0
 private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3
 private const val MAX_FACILITY_DETAIL_TRANSIT_ARRIVALS = 3
+private val MapActionLabelDefaultFontSize = 14.sp
+private val MapActionLabelMinFontSize = 12.sp
 private val RouteSelectionOriginChipColor = Color(0xFFEAF8EF)
 private val RouteSelectionOriginTextColor = Color(0xFF166534)
 private val RouteSelectionDestinationChipColor = Color(0xFFFFEEF0)

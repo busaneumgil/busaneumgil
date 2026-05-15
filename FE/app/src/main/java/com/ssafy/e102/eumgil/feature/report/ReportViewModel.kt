@@ -14,6 +14,7 @@ import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportOutboxPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
@@ -712,12 +713,6 @@ class ReportViewModel(
                 submittedAtMillis = System.currentTimeMillis(),
             )
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 서버에 등록되었습니다."))
-        emitUiEvent(
-            ReportUiEvent.NavigateToReportComplete(
-                reportId = serverReportId,
-                outboxId = outboxId,
-            ),
-        )
     }
 
     private suspend fun handleServerSubmitSkipped(
@@ -742,12 +737,6 @@ class ReportViewModel(
                 submittedAtMillis = System.currentTimeMillis(),
             )
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
-        emitUiEvent(
-            ReportUiEvent.NavigateToReportComplete(
-                reportId = null,
-                outboxId = outboxId,
-            ),
-        )
     }
 
     private fun handleServerSubmitFailure(
@@ -926,10 +915,19 @@ private fun ReportUiState.toOutboxData(): ReportOutboxData {
         photoUri = firstPhoto?.localUri,
         photoMimeType = firstPhoto?.mimeType,
         photoSizeBytes = firstPhoto?.sizeBytes,
+        // Task 5.5 — 첨부 사진 전체를 outbox에 보존. 제출 시점에 presigned 업로드 대상으로 사용.
+        photos = photo.values.map { it.toOutboxPhotoData() },
         createdAtMillis = now,
         updatedAtMillis = now,
     )
 }
+
+private fun ReportPhoto.toOutboxPhotoData(): ReportOutboxPhotoData =
+    ReportOutboxPhotoData(
+        localUri = localUri,
+        mimeType = mimeType,
+        sizeBytes = sizeBytes,
+    )
 
 private fun ReportDraftData.toUiState(): ReportUiState {
     val reportType = reportCategory.toReportType()

@@ -1,6 +1,10 @@
 ﻿package com.ssafy.e102.eumgil.feature.route
 
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -78,6 +82,23 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route setting scaffold disables default bottom insets so the fixed cta owns the bottom gap`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("@Composable\nfun RouteDetailScreen")
+
+        assertTrue(routeSettingUsesEmptyWindowInsets())
+        assertFalse(
+            "Route selection should not leave extra top padding between the blue header and the map stage.",
+            screenSection.contains(".padding(top = RouteSettingScreenVerticalPadding)"),
+        )
+    }
+
+    @Test
     fun `route setting transit result list implements UIUX plan skeleton`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -98,7 +119,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route setting implements blue route search header and walk map preview carousel`() {
+    fun `route setting keeps kakao header shell and walk map preview carousel`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -106,28 +127,20 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("fun RouteSettingScreen(")
                 .substringBefore("if (isDuribalConfirmDialogVisible)")
-        val headerSection =
-            source
-                .substringAfter("private fun RouteSearchHeaderKakao(")
-                .substringBefore("@Composable\nprivate fun RouteSearchHeader(")
         val mapStageSection =
             source
                 .substringAfter("private fun RouteMapStage(")
                 .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
 
         assertTrue("Route setting top bar should use the blue route search header.", screenSection.contains("RouteSearchHeaderKakao("))
-        assertFalse("The route search header should no longer expose disabled car or bike slots.", headerSection.contains("enabled = false"))
-        assertTrue("The route search header should expose transit mode with text.", headerSection.contains("\"대중교통\""))
-        assertTrue("The route search header should expose walk mode with text.", headerSection.contains("\"도보\""))
-        assertTrue("The selected route mode should render with a white pill background.", source.contains("color = if (selected) Color.White else Color.Transparent"))
-        assertTrue("The header should include a close action.", headerSection.contains("R.drawable.ic_action_close"))
-        assertTrue("The header should include origin and destination waypoint rows.", headerSection.contains("RouteSearchHeaderWaypointLine("))
-        assertTrue("The header should include a waypoint swap control.", headerSection.contains("onSwapClick"))
-        assertFalse("The header should not expose a non-functional more menu affordance.", headerSection.contains("R.drawable.ic_action_more"))
         assertTrue("Walk mode should render map-anchored preview cards instead of the transit bottom sheet.", mapStageSection.contains("RouteWalkPreviewCarousel("))
         assertTrue("Walk preview cards should expose the route detail arrow CTA.", source.contains("경로 상세 보기"))
         assertFalse("Walk preview should remove kcal text beside distance.", source.contains("estimatedWalkCaloriesLabel("))
-        assertTrue("Walk preview cards should expose the primary backend badge plus overflow count.", source.contains("val visibleBadge = card.badges.firstOrNull()") && source.contains("overflowBadgeCount"))
+        assertTrue(
+            "Walk preview cards should expose at least two accessibility labels through the shared route label helper.",
+            source.contains("routeCardVisibleAccessibilityBadges(card.badges)") &&
+                source.contains("RouteAccessibilityLabelChip("),
+        )
         assertTrue(
             "Walk preview cards should split the available row width equally like the reference mock.",
             source.contains("private fun RouteWalkPreviewCarousel") &&
@@ -135,6 +148,39 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("modifier = Modifier.weight(1f)"),
         )
         assertTrue("Transit mode should keep the bottom sheet from the previous slice.", screenSection.contains("uiState.selectedTravelMode == RouteTravelMode.TRANSIT"))
+    }
+
+    @Test
+    fun `route search header policy keeps compact kakao geometry and shared tokens`() {
+        val headerPolicy = routeSearchHeaderPolicy(showModeTabs = true)
+        val modeTabs = routeSearchHeaderModeTabPolicies()
+
+        assertEquals(R.string.route_setting_screen_title, headerPolicy.titleResId)
+        assertEquals(EumPrimary600, headerPolicy.containerColor)
+        assertEquals(EumWhite, headerPolicy.summaryContainerColor)
+        assertEquals(2, modeTabs.size)
+        assertEquals(RouteTravelMode.TRANSIT, modeTabs[0].mode)
+        assertEquals(RouteTravelMode.WALK, modeTabs[1].mode)
+        assertEquals(R.string.route_setting_travel_mode_transit, modeTabs[0].labelResId)
+        assertEquals(R.string.route_setting_travel_mode_walk, modeTabs[1].labelResId)
+        assertEquals(22.dp, modeTabs[0].iconSize)
+        assertEquals(26.dp, modeTabs[1].iconSize)
+        assertEquals(92.dp, headerPolicy.summaryMinHeight)
+        assertEquals(12.dp, headerPolicy.summaryToModeTabsGap)
+        assertEquals(36.dp, headerPolicy.modeTabHeight)
+        assertEquals(10.dp, headerPolicy.modeTabCornerRadius)
+        assertEquals(12.dp, headerPolicy.roleLabelGap)
+        assertTrue(headerPolicy.summaryUsesFullWidth)
+        assertTrue(headerPolicy.usesCompactWaypointTitle)
+        assertFalse(headerPolicy.showsCloseAction)
+        assertFalse(headerPolicy.showsMoreAction)
+    }
+
+    @Test
+    fun `route search header policy uses plain bottom padding when tabs are hidden`() {
+        val headerPolicy = routeSearchHeaderPolicy(showModeTabs = false)
+
+        assertEquals(8.dp, headerPolicy.contentBottomPadding)
     }
 
     @Test
@@ -167,7 +213,7 @@ class RouteSettingLayoutPolicyTest {
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
-                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 4.dp"),
+                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -196,11 +242,44 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `walk preview tags use response badge colors from the reference mock`() {
+    fun `route search and detail map controls are wired to the overlay viewport controller`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
-        val cardSection =
+        val mapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+        val detailScreenSection =
+            source
+                .substringAfter("fun RouteDetailScreen(")
+                .substringBefore("@Composable\nprivate fun RouteDetailMapBottomSheet")
+        val mapControlsSection =
+            source
+                .substringAfter("private fun RouteMapControls(")
+                .substringBefore("@Composable\nprivate fun RouteSettingRouteSheet")
+        val routeMapBackdropSection =
+            source
+                .substringAfter("private fun RouteMapBackdrop(")
+                .substringBefore("private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays")
+
+        assertTrue(mapStageSection.contains("rememberMapOverlayViewportControlState()"))
+        assertTrue(detailScreenSection.contains("rememberMapOverlayViewportControlState()"))
+        assertTrue(source.contains("mapControlState.zoomIn()"))
+        assertTrue(source.contains("mapControlState.zoomOut()"))
+        assertTrue(source.contains("mapControlState.recenter()"))
+        assertTrue(mapControlsSection.contains("onActionClick = onActionClick"))
+        assertTrue(mapControlsSection.contains("onZoomInClick = onZoomInClick"))
+        assertTrue(mapControlsSection.contains("onZoomOutClick = onZoomOutClick"))
+        assertTrue(routeMapBackdropSection.contains("controlState = controlState"))
+    }
+
+    @Test
+    fun `walk preview and route sheet cards use smaller metrics with shared accessibility labels`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val walkCardSection =
             source
                 .substringAfter("private fun RouteWalkPreviewSummaryCard(")
                 .substringBefore("@Composable\nprivate fun RouteMapControls")
@@ -208,30 +287,126 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("private fun RouteWalkPreviewBadgeRow(")
                 .substringBefore("@Composable\nprivate fun RouteMapControls")
-        val badgeColorsSection =
+        val compactCardSection =
             source
-                .substringAfter("private fun routeOptionBadgeColors(")
-                .substringBefore("@Composable\nprivate fun optionAccentColor")
+                .substringAfter("private fun RouteCompactOptionCard(")
+                .substringBefore("@Composable\nprivate fun RouteSearchLoadingState")
+        val accessibilityLabelSection =
+            source
+                .substringAfter("private fun RouteAccessibilityLabelChip(")
+                .substringBefore("@Composable\nprivate fun RouteStateCard")
 
         assertTrue(
-            "Walk preview should apply backend badge colors instead of rendering response badges as neutral chips.",
-            cardSection.contains("RouteWalkPreviewBadgeRow(") &&
-                badgeRowSection.contains("routeOptionBadgeColors(visibleBadge)") &&
-                badgeRowSection.contains("RouteBadgeOverflowColor"),
+            "Walk preview metrics should step down slightly so the time and distance don't dominate the card.",
+            walkCardSection.contains("style = MaterialTheme.typography.titleLarge") &&
+                walkCardSection.contains("style = MaterialTheme.typography.bodySmall") &&
+                walkCardSection.contains("style = MaterialTheme.typography.labelMedium") &&
+                walkCardSection.contains("start = RouteWalkPreviewCardStartPadding") &&
+                walkCardSection.contains("end = RouteWalkPreviewTopRowEndPadding"),
         )
         assertTrue(
-            "The overflow +n badge should sit to the right of the primary badge in one non-wrapping row.",
-            badgeRowSection.contains("Row(") &&
-                badgeRowSection.contains("verticalAlignment = Alignment.CenterVertically") &&
-                !cardSection.contains("FlowRow("),
+            "Walk preview accessibility labels should sit in their own full-width row so two chips can stretch to the same right margin as the left side.",
+            walkCardSection.contains("RouteWalkPreviewBadgeRow(") &&
+                walkCardSection.contains("Modifier.padding(") &&
+                walkCardSection.contains("end = RouteWalkPreviewBadgeHorizontalPadding"),
         )
         assertTrue(
-            "Positive/caution/overflow route tags should match the blue, red, and gray reference chips with white text.",
-            source.contains("RouteBadgePositiveColor = Color(0xFF4B9EDC)") &&
-                source.contains("RouteBadgeCautionColor = Color(0xFFD9534F)") &&
-                source.contains("RouteBadgeOverflowColor = Color(0xFFA8A8A8)") &&
-                badgeColorsSection.contains("RouteBadgeCautionColor to Color.White") &&
-                badgeColorsSection.contains("RouteBadgePositiveColor to Color.White"),
+            "Walk preview detail affordance should shrink so the right-side chevron stops consuming too much width.",
+            source.contains("RouteWalkPreviewChevronTouchTargetSize = 36.dp") &&
+                source.contains("RouteWalkPreviewChevronIconSize = 18.dp"),
+        )
+        assertTrue(
+            "Compact route sheet cards should also reduce the time and distance typography.",
+            compactCardSection.contains("style = MaterialTheme.typography.titleSmall") &&
+                compactCardSection.contains("style = MaterialTheme.typography.labelMedium"),
+        )
+        assertTrue(
+            "Walk preview labels should stay in a fixed two-column row instead of wrapping unpredictably.",
+            source.contains("private const val MAX_COMPACT_ACCESSIBILITY_BADGE_COUNT = 2") &&
+                badgeRowSection.contains("Row(") &&
+                badgeRowSection.contains("RouteAccessibilityLabelChip(") &&
+                badgeRowSection.contains("modifier = Modifier.weight(1f)"),
+        )
+        assertTrue(
+            "Accessibility labels should reuse the facility-detail style tone while filling each weighted slot with slightly wider text room.",
+            accessibilityLabelSection.contains("shape = RoundedCornerShape(RouteAccessibilityLabelCornerRadius)") &&
+                accessibilityLabelSection.contains("style = MaterialTheme.typography.labelSmall") &&
+                accessibilityLabelSection.contains(".fillMaxWidth()") &&
+                source.contains("RouteAccessibilityLabelHorizontalPadding = 4.dp") &&
+                source.contains("RouteAccessibilityLabelMinHeight = 24.dp"),
+        )
+        assertTrue(
+            "Both walk preview and compact route cards should render the shared accessibility label chip helper.",
+            badgeRowSection.contains("RouteAccessibilityLabelChip(") &&
+                compactCardSection.contains("RouteAccessibilityLabelChip(") &&
+                compactCardSection.contains("modifier = Modifier.weight(1f)"),
+        )
+    }
+
+    @Test
+    fun `walk preview badge row uses two weighted slots without experimental flow layout`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val badgeRowSection =
+            source
+                .substringAfter("private fun RouteWalkPreviewBadgeRow(")
+                .substringBefore("@Composable\nprivate fun RouteMapControls")
+
+        assertTrue(
+            "RouteWalkPreviewBadgeRow should reserve a second slot with weight so two accessibility labels stay on one line.",
+            badgeRowSection.contains("Spacer(modifier = Modifier.weight(1f))"),
+        )
+        assertFalse(
+            "RouteWalkPreviewBadgeRow should no longer rely on FlowRow now that the card forces a fixed two-chip layout.",
+            source.contains("@OptIn(ExperimentalLayoutApi::class)\n@Composable\nprivate fun RouteWalkPreviewBadgeRow(") ||
+                badgeRowSection.contains("FlowRow("),
+        )
+    }
+
+    @Test
+    fun `walk preview cards navigate to detail only from the chevron action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val carouselSection =
+            source
+                .substringAfter("private fun RouteWalkPreviewCarousel(")
+                .substringBefore("@OptIn(ExperimentalLayoutApi::class)\n@Composable\nprivate fun RouteWalkPreviewSummaryCard")
+
+        assertTrue(
+            "Tapping a walk preview card body should only select that route, while the chevron keeps the detail navigation.",
+            carouselSection.contains("onClick = { onOptionClick(card.routeOption) }") &&
+                carouselSection.contains("onDetailClick = { onOptionDetailClick(card.routeOption) }"),
+        )
+        assertFalse(
+            "The walk preview card body should no longer redirect to route detail when the card is already selected.",
+            carouselSection.contains("if (card.isSelected)"),
+        )
+    }
+
+    @Test
+    fun `route option cards keep bordered selection states with softer section radius`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val walkCardSection =
+            source
+                .substringAfter("private fun RouteWalkPreviewSummaryCard(")
+                .substringBefore("@Composable\nprivate fun RouteMapControls")
+        val compactCardSection =
+            source
+                .substringAfter("private fun RouteCompactOptionCard(")
+                .substringBefore("@Composable\nprivate fun RouteSearchLoadingState")
+
+        assertTrue(
+            "Walk preview cards should use the shared 16dp section radius instead of the previous extra-round preview shape.",
+            walkCardSection.contains("shape = RoundedCornerShape(RouteSectionCardCornerRadius)"),
+        )
+        assertTrue(
+            "Compact option cards should also adopt the softer section radius while preserving the selection border treatment.",
+            compactCardSection.contains("shape = RoundedCornerShape(RouteSectionCardCornerRadius)") &&
+                compactCardSection.contains("border = BorderStroke(1.dp, borderColor)"),
         )
     }
 
@@ -252,6 +427,51 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "Transit CTA clearance should be derived from the actual CTA height and requested bottom gap.",
             source.contains("RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium"),
+        )
+    }
+
+    @Test
+    fun `no route transit failure shows the Duribal call prompt card instead of a generic error action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val routeOptionSection =
+            source
+                .substringAfter("private fun RouteOptionSection(")
+                .substringBefore("@OptIn(ExperimentalLayoutApi::class)")
+
+        assertTrue(
+            "When the backend reports no route, the transit tab should surface a dedicated Duribal card with call and cancel actions.",
+            routeOptionSection.contains("RouteDuribalCallPromptCard(") &&
+                source.contains("private fun RouteDuribalCallPromptCard(") &&
+                source.contains("route_setting_duribal_call_prompt_title") &&
+                source.contains("route_setting_duribal_call_prompt_call") &&
+                source.contains("route_setting_duribal_call_prompt_cancel"),
+        )
+    }
+
+    @Test
+    fun `collapsed guide rails reserve viewport end padding so the destination can snap to the top card`() {
+        val routeDetailSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val navigationRailSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val routeDetailRailSection =
+            routeDetailSource
+                .substringAfter("private fun RouteDetailIconRail(")
+                .substringBefore("private data class RouteDetailRailPromotionSnapshot")
+
+        assertTrue(
+            "Route detail collapsed rail must reserve bottom padding from the current viewport height so the arrival icon can become the top card even after a fast fling.",
+            routeDetailRailSection.contains("BoxWithConstraints(") &&
+                routeDetailRailSection.contains("contentPadding = PaddingValues(bottom = routeDetailCollapsedRailEndSnapPadding)"),
+        )
+        assertTrue(
+            "Navigation collapsed rail must use the same viewport-derived end padding so the final destination segment can snap fully.",
+            navigationRailSource.contains("val navigationRailEndSnapPadding =") &&
+                navigationRailSource.contains("contentPadding = PaddingValues(bottom = navigationRailEndSnapPadding)"),
         )
     }
 
@@ -282,6 +502,11 @@ class RouteSettingLayoutPolicyTest {
             source.contains("RouteFastOrange = Color(0xFFF9AB4D)"),
         )
         assertTrue(
+            "Transit option route bar should split walking and public transit path colors.",
+            source.contains("RouteTransitWalkGray = Color(0xFFD9D9D9)") &&
+                source.contains("RouteTransitNavy = Color(0xFF005391)"),
+        )
+        assertTrue(
             "Subway line colors should include the confirmed Busan line tokens.",
             source.contains("RouteSubwayLine1 = Color(0xFFFF7F00)") &&
                 source.contains("RouteSubwayBusanGimhae = Color(0xFF8200FF)"),
@@ -301,6 +526,25 @@ class RouteSettingLayoutPolicyTest {
                     .substringAfter("private fun RouteTransitOptionSummary(")
                     .substringBefore("@Composable\nprivate fun RouteTransitOptionChip")
                     .contains("stopLabel?.let"),
+        )
+    }
+
+    @Test
+    fun `route detail map keeps direction arrows visible before a guidance marker is focused`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val routeMapBackdropSection =
+            source
+                .substringAfter("private fun RouteMapBackdrop(")
+                .substringBefore("private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays")
+
+        assertTrue(
+            "Route detail polylines should keep direction arrows visible even before a guidance marker is selected.",
+            routeMapBackdropSection.contains("val shouldShowRouteDirectionArrows =") &&
+                routeMapBackdropSection.contains("routePolylineOverlays.isNotEmpty() || hasFocusedGuidanceMarker") &&
+                routeMapBackdropSection.contains("showDirectionArrows = true") &&
+                routeMapBackdropSection.contains("showDetailedRouteOverlay = shouldShowRouteDirectionArrows"),
         )
     }
 
@@ -511,6 +755,9 @@ class RouteSettingLayoutPolicyTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
+        val guideSidePanelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
         val detailScreenSection =
             source
                 .substringAfter("fun RouteDetailScreen(")
@@ -537,14 +784,27 @@ class RouteSettingLayoutPolicyTest {
             detailScreenSection.contains("RouteSearchHeaderKakao("),
         )
         assertTrue(
-            "Detail side panel should support horizontal swipe collapse and expansion.",
-            source.contains("detectHorizontalDragGestures(") &&
-                source.contains("RouteDetailSidePanelSwipeThresholdPx"),
+            "Detail side panel should delegate horizontal swipe collapse and expansion to the shared guide shell.",
+            source.contains("GuideSidePanelShell(") &&
+                guideSidePanelSource.contains("detectHorizontalDragGestures(") &&
+                guideSidePanelSource.contains("GuideSidePanelSwipeThresholdPx"),
         )
         assertTrue(
             "Collapsed detail state should render an icon-only rail.",
             source.contains("private fun RouteDetailIconRail(") &&
                 source.contains("RouteDetailCollapsedRailWidth"),
+        )
+        assertTrue(
+            "Collapsed detail rail should drive the focused top card and map marker from the top visible icon.",
+            source.contains("onTopVisibleStepChanged = { index ->") &&
+                source.contains("snapshotFlow") &&
+                source.contains("firstVisibleItemIndex"),
+        )
+        assertTrue(
+            "Collapsed detail rail should expose an up action below the destination item that scrolls and focuses the origin.",
+            source.contains("RouteDetailCollapsedRailScrollTopAction(") &&
+                source.contains("listState.animateScrollToItem(0)") &&
+                source.contains("onStepClick(0)"),
         )
         assertTrue(
             "Detail bottom sheet should expose a segment ratio/timeline bar.",
@@ -607,6 +867,17 @@ class RouteSettingLayoutPolicyTest {
             source.contains("RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway"),
         )
         assertTrue(
+            "Fallback detail rows should not masquerade as straight movement.",
+            source.contains("RouteDetailStepKind.FALLBACK -> R.drawable.ic_status_help_circle"),
+        )
+        assertFalse(
+            "Fallback detail rows should not receive directional icon treatment after using a neutral status icon.",
+            source
+                .substringAfter("private fun RouteDetailStepKind.usesDirectionalStepIcon(): Boolean =")
+                .substringBefore("private fun RouteDetailStepKind.usesLabeledWaypointPinIcon(): Boolean =")
+                .contains("RouteDetailStepKind.FALLBACK"),
+        )
+        assertTrue(
             "Route detail leading icons should branch explicitly for the labeled rail pin treatment.",
             leadingIconSection.contains("if (usesLabeledWaypointPinIcon)"),
         )
@@ -649,11 +920,21 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("private fun RouteDetailTimelinePanelContent(")
                 .substringBefore("@Composable\nprivate fun RouteDetailIconRail")
+        val collapsedCardSection =
+            source
+                .substringAfter("private fun RouteDetailCollapsedGuideCard(")
+                .substringBefore("@Composable\nprivate fun RouteDetailTransitGuideCardContent")
 
         assertTrue(
             "The open detail side panel must reserve bottom clearance so the arrival row is not hidden by the fixed CTA.",
             timelinePanelSection.contains("contentPadding = PaddingValues(bottom = RouteDetailSidePanelBottomClearance)") &&
-                source.contains("RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance + RouteDetailSidePanelBottomActionSpace"),
+                source.contains("RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance") &&
+                !source.contains("RouteDetailSidePanelBottomActionSpace"),
+        )
+        assertTrue(
+            "The open detail side panel should draw a divider directly below the arrival row before the scroll-top action.",
+            timelinePanelSection.contains("item(key = \"route-detail-arrival-divider\")") &&
+                timelinePanelSection.contains("HorizontalDivider(color = RouteDetailGuideDividerColor)"),
         )
         assertTrue(
             "The bottom of the guide list should expose an in-panel scroll-to-top affordance like the reference.",
@@ -671,6 +952,12 @@ class RouteSettingLayoutPolicyTest {
             "The open detail side panel should not eagerly compose every guide row through a verticalScroll Column.",
             timelinePanelSection.contains(".verticalScroll(listState)") ||
                 timelinePanelSection.contains(".verticalScroll(scrollState)"),
+        )
+        assertTrue(
+            "Collapsed top guide card should animate vertical changes when rail scrolling changes the focused step.",
+            collapsedCardSection.contains("AnimatedContent(") &&
+                collapsedCardSection.contains("slideInVertically") &&
+                collapsedCardSection.contains("slideOutVertically"),
         )
     }
 
@@ -697,6 +984,9 @@ class RouteSettingLayoutPolicyTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
+        val guideSidePanelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
         val originRowSection =
             source
                 .substringAfter("private fun RouteDetailOriginStepRow(")
@@ -704,16 +994,13 @@ class RouteSettingLayoutPolicyTest {
         val stepRowSection =
             source
                 .substringAfter("private fun RouteDetailStepRow(")
-                .substringBefore("@Composable\nprivate fun RouteDetailTransitTagRow")
-        val sidePanelIconSection =
-            source
-                .substringAfter("private fun RouteDetailSidePanelStepIcon(")
-                .substringBefore("@Composable\nprivate fun RouteDetailSidePanelToggleHandle")
+                .substringBefore("@Composable\nprivate fun RouteDetailArrivalInfoChip")
 
         assertTrue(
             "Origin and guide rows should render on white surfaces instead of warning-colored cards.",
-            originRowSection.contains(".background(MaterialTheme.colorScheme.surface)") &&
-                stepRowSection.contains("val cardColor = MaterialTheme.colorScheme.surface"),
+            originRowSection.contains("GuideSidePanelStepRow(") &&
+                stepRowSection.contains("GuideSidePanelStepRow(") &&
+                guideSidePanelSource.contains("expandedContainerColor = MaterialTheme.colorScheme.surface"),
         )
         assertFalse(
             "Open detail rows should not show the raw route step sequence numbers from the backend.",
@@ -727,9 +1014,89 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "Open detail side-panel direction icons should use the neutral reference tint.",
-            sidePanelIconSection.contains("tint = contentColor") &&
-                !sidePanelIconSection.contains("Color.Unspecified") &&
-                stepRowSection.contains("contentColor = RouteDetailGuideIconColor"),
+            guideSidePanelSource.contains("tint = contentColor") &&
+                !guideSidePanelSource.contains("Color.Unspecified") &&
+                stepRowSection.contains("leadingContentColor = RouteDetailGuideIconColor"),
+        )
+    }
+
+    @Test
+    fun `route detail side panel removes trailing map affordances and footer clutter`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val timelinePanelSection =
+            source
+                .substringAfter("private fun RouteDetailTimelinePanelContent(")
+                .substringBefore("@Composable\nprivate fun RouteDetailScrollTopAction")
+        val originRowSection =
+            source
+                .substringAfter("private fun RouteDetailOriginStepRow(")
+                .substringBefore("@Composable\nprivate fun RouteDetailFallbackRow")
+        val stepRowSection =
+            source
+                .substringAfter("private fun RouteDetailStepRow(")
+                .substringBefore("@Composable\nprivate fun RouteDetailArrivalInfoChip")
+
+        assertTrue(
+            "Origin row should use the same compact shared row contract as other guidance rows.",
+            originRowSection.contains("title = origin.name") &&
+                originRowSection.contains("description = origin.supportingText ?: step.description") &&
+                originRowSection.contains("minHeight = RouteDetailGuideRowMinHeight") &&
+                !originRowSection.contains("supportingContent ="),
+        )
+        assertFalse(
+            "Guidance rows should not render the right-side map marker affordance in the open side panel.",
+            stepRowSection.contains("RouteDetailRowAccessoryIcon("),
+        )
+        assertFalse(
+            "Arrival row should not expose the detail-info chip inside the side panel.",
+            stepRowSection.contains("RouteDetailArrivalInfoChip("),
+        )
+        assertFalse(
+            "Side panel footer should not render information-correction suggestions below the scroll-top button.",
+            timelinePanelSection.contains("RouteDetailPanelFeedbackFooter("),
+        )
+        assertTrue(
+            "Scroll-top affordance should sit close to the final row instead of leaving an oversized gap.",
+            source.contains("RouteDetailPanelBottomActionTopPadding = 24.dp") &&
+                source.contains("RouteDetailScrollTopActionVerticalPadding = 0.dp"),
+        )
+    }
+
+    @Test
+    fun `route detail transit top and rail cards share the same content renderer`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val collapsedCardSection =
+            source
+                .substringAfter("private fun RouteDetailCollapsedGuideCard(")
+                .substringBefore("@Composable\nprivate fun RouteDetailTransitGuideCardContent")
+        val stepRowSection =
+            source
+                .substringAfter("private fun RouteDetailStepRow(")
+                .substringBefore("@Composable\nprivate fun RouteDetailArrivalInfoChip")
+
+        assertTrue(collapsedCardSection.contains("RouteDetailTransitGuideCardContent("))
+        assertTrue(stepRowSection.contains("RouteDetailTransitGuideCardContent("))
+    }
+
+    @Test
+    fun `route CTAs use narrower horizontal insets across search and detail`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val bottomBarSection =
+            source
+                .substringAfter("private fun RouteSettingBottomBar(")
+                .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
+
+        assertTrue(
+            "Route start CTA should subtract 50dp from each side compared with the old screen-wide button.",
+            source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp") &&
+                bottomBarSection.contains("start = RouteSettingBottomBarHorizontalPadding") &&
+                bottomBarSection.contains("end = RouteSettingBottomBarHorizontalPadding"),
         )
     }
 

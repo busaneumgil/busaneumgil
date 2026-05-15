@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.feature.navigation.component.createNavigationSegmentRailSlots
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,7 +26,7 @@ class NavigationSegmentRailLayoutTest {
         assertEquals(0, slots.originItem?.index)
         assertEquals(3, slots.destinationItem?.index)
         assertEquals(listOf(1, 2), slots.intermediateItems.map { item -> item.index })
-        assertFalse(slots.canReturnToActiveSegment)
+        assertTrue(slots.canScrollToTop)
     }
 
     @Test
@@ -45,7 +46,7 @@ class NavigationSegmentRailLayoutTest {
     }
 
     @Test
-    fun `rail slots keep return action enabled while inspecting a moved waypoint segment`() {
+    fun `rail slots keep top action enabled while inspecting a moved waypoint segment`() {
         val slots =
             createNavigationSegmentRailSlots(
                 NavigationSegmentSyncUiState(
@@ -61,8 +62,61 @@ class NavigationSegmentRailLayoutTest {
                 ),
             )
 
-        assertTrue(slots.canReturnToActiveSegment)
+        assertTrue(slots.canScrollToTop)
         assertEquals(2, slots.destinationItem?.index)
+    }
+
+    @Test
+    fun `collapsed rail paints a surface like route detail rail instead of bleeding into the map`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("fun NavigationSegmentRail(")
+                .substringBefore("@Composable\nprivate fun NavigationSegmentRailWaypoint")
+
+        assertTrue(railSection.contains(".background(MaterialTheme.colorScheme.surface)"))
+        assertTrue(railSection.contains(".fillMaxHeight()"))
+    }
+
+    @Test
+    fun `rail top action stays enabled and scrolls to the first item`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+
+        assertTrue(source.contains("R.string.navigation_rail_scroll_to_top_label"))
+        assertTrue(source.contains("listState.animateScrollToItem(0, scrollOffset = 0)"))
+        assertTrue(source.contains("listState.scrollToItem(0, scrollOffset = 0)"))
+    }
+
+    @Test
+    fun `rail removes the bottom route detail more action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("fun NavigationSegmentRail(")
+                .substringBefore("@Composable\nprivate fun NavigationSegmentRailWaypoint")
+
+        assertFalse(railSection.contains("NavigationSegmentRailDetailAction("))
+        assertFalse(source.contains("ic_navigation_detail_more"))
+    }
+
+    @Test
+    fun `rail source snaps the promoted segment to the top`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+
+        assertTrue(source.contains("rememberLazyListState()"))
+        assertTrue(source.contains("snapshotFlow"))
+        assertTrue(source.contains("contentPadding = PaddingValues(bottom = navigationRailEndSnapPadding)"))
+        assertTrue(source.contains("listState.animateScrollToItem(position, scrollOffset = 0)"))
+        assertTrue(source.contains("listState.scrollToItem(position, scrollOffset = 0)"))
+        assertTrue(source.contains("NavigationSegmentRailItemHeight = 96.dp"))
     }
 }
 

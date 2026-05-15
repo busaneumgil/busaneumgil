@@ -368,6 +368,12 @@ private fun NavigationGuidanceAction.toLowVisionNavigationActionPhrase(): String
         NavigationGuidanceAction.TURN_LEFT -> "\uC88C\uD68C\uC804\uD558\uC138\uC694"
         NavigationGuidanceAction.TURN_RIGHT -> "\uC6B0\uD68C\uC804\uD558\uC138\uC694"
         NavigationGuidanceAction.CROSSWALK -> "\uD6A1\uB2E8\uBCF4\uB3C4\uB97C \uAC74\uB108\uC138\uC694"
+        NavigationGuidanceAction.TACTILE_GUIDE -> "\uC810\uC790\uBE14\uB85D\uC744 \uB530\uB77C \uC774\uB3D9\uD558\uC138\uC694"
+        NavigationGuidanceAction.ELEVATOR -> "\uC5D8\uB9AC\uBCA0\uC774\uD130\uB97C \uC774\uC6A9\uD558\uC138\uC694"
+        NavigationGuidanceAction.CONSTRUCTION -> "\uACF5\uC0AC \uAD6C\uAC04\uC744 \uC8FC\uC758\uD558\uC138\uC694"
+        NavigationGuidanceAction.CURB_GAP -> "\uB2E8\uCC28\uB97C \uC8FC\uC758\uD558\uC138\uC694"
+        NavigationGuidanceAction.STAIRS -> "\uACC4\uB2E8\uC744 \uC8FC\uC758\uD558\uC138\uC694"
+        NavigationGuidanceAction.FALLBACK -> "\uC138\uBD80 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uC138\uC694"
     }
 
 private fun Double.toKilometerText(): String {

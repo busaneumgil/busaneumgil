@@ -149,7 +149,6 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('require_env_value DB_USERNAME', content)
         self.assertIn('require_env_value DB_PASSWORD', content)
         self.assertIn('require_env_value REDIS_HOST', content)
-        self.assertIn('require_env_value S3_ENDPOINT', content)
         self.assertIn('require_env_value S3_BUCKET', content)
         self.assertIn('require_env_value S3_ACCESS_KEY', content)
         self.assertIn('require_env_value S3_SECRET_KEY', content)
@@ -238,7 +237,6 @@ class ProdDeployScriptsTest(unittest.TestCase):
             "DB_USERNAME",
             "DB_PASSWORD",
             "REDIS_HOST",
-            "S3_ENDPOINT",
             "S3_BUCKET",
             "S3_ACCESS_KEY",
             "S3_SECRET_KEY",
@@ -247,6 +245,7 @@ class ProdDeployScriptsTest(unittest.TestCase):
             "JWT_SECRET",
         ):
             self.assertIn(f"{key}: ${{{key}:?{key} is required}}", content)
+        self.assertIn("S3_ENDPOINT: ${S3_ENDPOINT:-}", content)
 
     def test_graphhopper_refresh_script_switches_only_after_candidate_smoke(self):
         content = REFRESH_SCRIPT.read_text(encoding="utf-8")

@@ -32,7 +32,7 @@ public class HazardReportImage {
 	private Long reportImgId;
 
 	@Column(name = "image_url", nullable = false, columnDefinition = "TEXT")
-	private String imageUrl;
+	private String imageObjectKey;
 
 	@Column(name = "display_order", nullable = false)
 	private short displayOrder;
@@ -43,11 +43,11 @@ public class HazardReportImage {
 
 	public static HazardReportImage create(
 		HazardReport hazardReport,
-		String imageUrl,
+		String imageObjectKey,
 		int displayOrder) {
 		HazardReportImage hazardReportImage = new HazardReportImage();
 		hazardReportImage.hazardReport = requireHazardReport(hazardReport);
-		hazardReportImage.imageUrl = normalizeImageUrl(imageUrl);
+		hazardReportImage.imageObjectKey = normalizeImageObjectKey(imageObjectKey);
 		hazardReportImage.displayOrder = (short)displayOrder;
 		return hazardReportImage;
 	}
@@ -59,11 +59,11 @@ public class HazardReportImage {
 		return hazardReport;
 	}
 
-	private static String normalizeImageUrl(String imageUrl) {
-		if (imageUrl == null || imageUrl.isBlank()) {
-			throw invalidRequest("제보 이미지 URL은 필수입니다.");
+	private static String normalizeImageObjectKey(String imageObjectKey) {
+		if (imageObjectKey == null || imageObjectKey.isBlank()) {
+			throw invalidRequest("제보 이미지 object key는 필수입니다.");
 		}
-		return imageUrl.trim();
+		return imageObjectKey.trim();
 	}
 
 	private static HazardReportException invalidRequest(String message) {

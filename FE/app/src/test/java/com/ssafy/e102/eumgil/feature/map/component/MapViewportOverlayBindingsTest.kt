@@ -16,8 +16,10 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapPointUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentTravelKind
+import com.ssafy.e102.eumgil.feature.navigation.navigationSegmentMarkerId
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapStatus
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -156,11 +158,108 @@ class MapViewportOverlayBindingsTest {
             listOf(MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
             overlayState.points.map { it.kind },
         )
+        assertEquals(listOf("출발", "도착"), overlayState.points.map { it.label })
         assertEquals(1, overlayState.polylines.size)
         assertEquals(MapViewportPolylineStyle.ROUTE_PREVIEW, overlayState.polylines.first().style)
         assertEquals(MapViewportOverlayTone.PRIMARY, overlayState.polylines.first().tone)
         assertTrue(overlayState.polylines.first().includeInProjection)
         assertTrue(overlayState.polylines.first().showDirectionArrows)
+    }
+
+    @Test
+    fun `route preview binding can render transit detail walk and transit polylines separately`() {
+        val detailPolylines =
+            listOf(
+                MapViewportPolylineOverlay(
+                    overlayId = "route-detail-walk",
+                    points =
+                        listOf(
+                            MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                            MapCoordinate(latitude = 35.1710, longitude = 129.0510),
+                        ),
+                    style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                    tone = MapViewportOverlayTone.TRANSIT_WALK,
+                ),
+                MapViewportPolylineOverlay(
+                    overlayId = "route-detail-transit",
+                    points =
+                        listOf(
+                            MapCoordinate(latitude = 35.1710, longitude = 129.0510),
+                            MapCoordinate(latitude = 35.1780, longitude = 129.0590),
+                        ),
+                    style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                    tone = MapViewportOverlayTone.NAVY,
+                ),
+            )
+
+        val overlayState =
+            createRoutePreviewViewportOverlayState(
+                previewMap =
+                    RoutePreviewMapUiState(
+                        status = RoutePreviewMapStatus.READY,
+                        originCoordinate = GeoCoordinate(latitude = 35.1700, longitude = 129.0500),
+                        destinationCoordinate = GeoCoordinate(latitude = 35.1780, longitude = 129.0590),
+                        polyline = emptyList(),
+                    ),
+                routePolylineOverlays = detailPolylines,
+            )
+
+        assertEquals(listOf("route-detail-walk", "route-detail-transit"), overlayState.polylines.map { it.overlayId })
+        assertEquals(listOf(MapViewportOverlayTone.TRANSIT_WALK, MapViewportOverlayTone.NAVY), overlayState.polylines.map { it.tone })
+    }
+
+    @Test
+    fun `manual overlay camera disables projection fit so map controls are not overridden`() {
+        val overlayState =
+            createRoutePreviewViewportOverlayState(
+                previewMap =
+                    RoutePreviewMapUiState(
+                        status = RoutePreviewMapStatus.READY,
+                        originCoordinate = GeoCoordinate(latitude = 35.17, longitude = 129.05),
+                        destinationCoordinate = GeoCoordinate(latitude = 35.18, longitude = 129.07),
+                        polyline =
+                            listOf(
+                                GeoCoordinate(latitude = 35.17, longitude = 129.05),
+                                GeoCoordinate(latitude = 35.18, longitude = 129.07),
+                            ),
+                    ),
+            ).copy(fitToProjection = false)
+
+        assertEquals(null, createKakaoRouteCameraRenderState(overlayState))
+    }
+
+    @Test
+    fun `route waypoint markers share side panel pin assets and colors`() {
+        val backdropSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+        val kakaoBindingSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewportBindings.kt")
+                .readText()
+
+        assertTrue(
+            "Compose map fallback markers should use the requested route waypoint colors.",
+            backdropSource.contains("containerColor = Color(0xFF4D8FF9)") &&
+                backdropSource.contains("containerColor = Color(0xFFF94D4D)"),
+        )
+        assertTrue(
+            "Kakao map markers should reuse the same origin and destination pin assets as the side panel.",
+            kakaoBindingSource.contains("iconResId = R.drawable.ic_navigation_rail_origin_pin") &&
+                kakaoBindingSource.contains("iconResId = R.drawable.ic_navigation_rail_destination_pin"),
+        )
+    }
+
+    @Test
+    fun `map fallback route palette separates walking and transit line colors`() {
+        val backdropSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+
+        assertTrue(
+            "Compose fallback route lines should use #D9D9D9 for walking inside public transit and #005391 for public transit.",
+            backdropSource.contains("transitWalk = Color(0xFFD9D9D9)") &&
+                backdropSource.contains("navy = Color(0xFF005391)"),
+        )
     }
 
     @Test
@@ -214,12 +313,13 @@ class MapViewportOverlayBindingsTest {
         assertFalse(initialState.polylines.first().showDirectionArrows)
 
         assertTrue(focusedState.points.any { it.kind == MapViewportPointKind.TRANSIT_BUS_STOP })
+        assertTrue(focusedState.points.any { it.kind == MapViewportPointKind.FOCUS_HALO })
         assertFalse(focusedState.points.any { it.overlayId == "generic-marker" })
         assertTrue(focusedState.polylines.first().showDirectionArrows)
     }
 
     @Test
-    fun `navigation binding keeps focused polyline visible but limits projection to the focus halo`() {
+    fun `navigation binding includes the focused polyline in focused projection`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -271,7 +371,10 @@ class MapViewportOverlayBindingsTest {
         )
         assertFalse(overlayState.polylines.first().includeInProjection)
         assertFalse(overlayState.polylines[1].includeInProjection)
-        assertFalse(overlayState.polylines[2].includeInProjection)
+        assertTrue(overlayState.polylines[2].includeInProjection)
+        assertFalse(overlayState.polylines[0].showDirectionArrows)
+        assertFalse(overlayState.polylines[1].showDirectionArrows)
+        assertTrue(overlayState.polylines[2].showDirectionArrows)
         assertEquals(
             listOf(
                 MapViewportPointKind.CURRENT_LOCATION,
@@ -294,7 +397,20 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding keeps full navigation context in active projection`() {
+    fun `focused guidance marker halo uses requested translucent blue token`() {
+        val backdropSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+
+        assertTrue(
+            "The focused guidance halo should be the requested #4D8FF9 at 50 percent alpha and 26dp diameter.",
+            backdropSource.contains("FocusedGuidanceMarkerHaloColor = Color(0x804D8FF9)") &&
+                backdropSource.contains("FocusedGuidanceMarkerHaloRadius = 13.dp"),
+        )
+    }
+
+    @Test
+    fun `navigation binding keeps active projection on current location instead of the route overview`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -335,6 +451,7 @@ class MapViewportOverlayBindingsTest {
                         mapFocusMode = NavigationMapFocusMode.ACTIVE,
                     ),
             )
+        val cameraState = createKakaoRouteCameraRenderState(overlayState)
 
         assertEquals(
             listOf(
@@ -343,16 +460,24 @@ class MapViewportOverlayBindingsTest {
             ),
             overlayState.polylines.map { it.style },
         )
-        assertTrue(overlayState.polylines.all { it.includeInProjection })
+        assertFalse(overlayState.polylines[0].includeInProjection)
+        assertFalse(overlayState.polylines[1].includeInProjection)
+        assertFalse(overlayState.polylines[0].showDirectionArrows)
+        assertTrue(overlayState.polylines[1].showDirectionArrows)
         assertEquals(
             listOf(
                 MapViewportPointKind.CURRENT_LOCATION,
                 MapViewportPointKind.ORIGIN,
                 MapViewportPointKind.DESTINATION,
+                MapViewportPointKind.FOCUS_HALO,
             ),
             overlayState.points.map { it.kind },
         )
-        assertTrue(overlayState.points.all { it.includeInProjection })
+        assertEquals(
+            listOf(true, false, false, false),
+            overlayState.points.map { it.includeInProjection },
+        )
+        assertEquals(null, cameraState)
     }
 
     @Test
@@ -546,7 +671,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding includes single coordinate segment junctions in active camera projection`() {
+    fun `navigation binding keeps single coordinate segment junctions outside active camera projection`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -582,16 +707,12 @@ class MapViewportOverlayBindingsTest {
                     ),
             )
 
-        val cameraState = createKakaoRouteCameraRenderState(overlayState)
-
-        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.SEGMENT_JUNCTION && it.includeInProjection })
-        assertTrue(
-            cameraState?.points?.contains(MapCoordinate(latitude = 35.176, longitude = 129.060)) == true,
-        )
+        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.SEGMENT_JUNCTION })
+        assertTrue(overlayState.points.none { it.kind == MapViewportPointKind.SEGMENT_JUNCTION && it.includeInProjection })
     }
 
     @Test
-    fun `navigation binding includes the focused segment junction in focused camera projection`() {
+    fun `navigation binding keeps the focus halo as the only projected point in focused mode`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 mapOverlay =
@@ -639,6 +760,56 @@ class MapViewportOverlayBindingsTest {
             projectionPoints.map { it.kind },
         )
         assertEquals(MapCoordinate(latitude = 35.176, longitude = 129.060), projectionPoints.first().coordinate)
+        assertTrue(
+            overlayState.polylines.any { polyline ->
+                polyline.overlayId == "navigation-focused" && polyline.includeInProjection
+            },
+        )
+    }
+
+    @Test
+    fun `navigation binding falls back to the active focus halo when current location is unavailable`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "First",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline = emptyList(),
+                                    segmentStartCoordinate = GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                                    distanceMeters = 120,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Sparse walk",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                            ),
+                        focusCoordinate = GeoCoordinate(latitude = 35.176, longitude = 129.060),
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+
+        assertEquals(
+            listOf(MapViewportPointKind.FOCUS_HALO),
+            overlayState.points
+                .filter(MapViewportPointOverlay::includeInProjection)
+                .map(MapViewportPointOverlay::kind),
+        )
+        assertEquals(null, createKakaoRouteCameraRenderState(overlayState))
     }
 
     @Test
@@ -728,6 +899,7 @@ class MapViewportOverlayBindingsTest {
             ),
         )
         assertTrue(summary.contains("projectionPoints=[navigation-focus:FOCUS_HALO]"))
+        assertTrue(summary.contains("projectionPolylines=[navigation-focused:FOCUSED_SEGMENT]"))
     }
 
     @Test
@@ -785,9 +957,65 @@ class MapViewportOverlayBindingsTest {
                 .map { it.tone }
 
         assertEquals(
-            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
+            listOf(MapViewportOverlayTone.TRANSIT_WALK, MapViewportOverlayTone.NAVY),
             baselineTones,
         )
         assertEquals(MapViewportOverlayTone.NAVY, overlayState.polylines.last().tone)
+    }
+
+    @Test
+    fun `navigation bindings preserve click targets for projected origin and overlay junction markers`() {
+        val mapOverlay =
+            NavigationMapOverlayUiState(
+                isDisplayable = true,
+                origin =
+                    NavigationMapPointUiState(
+                        label = "Origin",
+                        coordinate = GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                    ),
+                routeSegments =
+                    listOf(
+                        NavigationMapSegmentUiState(
+                            sequence = 1,
+                            polyline =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                                    GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                ),
+                            distanceMeters = 300,
+                            riskLevel = RouteRiskLevel.LOW,
+                            guidanceMessage = "Start walking",
+                            travelKind = NavigationSegmentTravelKind.WALK,
+                        ),
+                        NavigationMapSegmentUiState(
+                            sequence = 2,
+                            polyline =
+                                listOf(
+                                    GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                    GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                                ),
+                            distanceMeters = 320,
+                            riskLevel = RouteRiskLevel.LOW,
+                            guidanceMessage = "Turn right",
+                            travelKind = NavigationSegmentTravelKind.WALK,
+                        ),
+                    ),
+            )
+        val overlayState = createNavigationViewportOverlayState(mapOverlay)
+
+        val projectedOriginMarker =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints = overlayState.points,
+            ).first { marker -> marker.markerId == "overlay-navigation-origin" }
+        val overlayJunctionMarker =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = overlayState.points,
+            ).first { marker -> marker.markerId == "overlay-navigation-junction-1" }
+
+        assertEquals(navigationSegmentMarkerId(0), projectedOriginMarker.clickTargetId)
+        assertEquals(navigationSegmentMarkerId(1), overlayJunctionMarker.clickTargetId)
     }
 }

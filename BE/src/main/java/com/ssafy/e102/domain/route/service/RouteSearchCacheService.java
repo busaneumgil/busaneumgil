@@ -29,7 +29,7 @@ public class RouteSearchCacheService {
 
 	private static final String ROUTE_SEARCH_KEY_PREFIX = "routeSearch:";
 	private static final String ROUTE_SEARCH_METADATA_KEY_PREFIX = "routeSearchMeta:";
-	private static final Duration ROUTE_SEARCH_TTL = Duration.ofMinutes(10);
+	private static final Duration ROUTE_SEARCH_TTL = Duration.ofMinutes(30);
 
 	private final StringRedisTemplate redisTemplate;
 	private final ObjectMapper objectMapper;

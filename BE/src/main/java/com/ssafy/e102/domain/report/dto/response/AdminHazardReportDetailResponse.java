@@ -22,6 +22,8 @@ public record AdminHazardReportDetailResponse(
 	ReportType reportType,
 	@Schema(description = "제보 설명", example = "보행 가능한 인도가 없습니다.")
 	String description,
+	@Schema(description = "제보 주소. 역지오코딩 실패 시 null")
+	String address,
 	@Schema(description = "제보 좌표")
 	GeoPointResponse reportPoint,
 	@Schema(description = "처리 상태", example = "PENDING")
@@ -33,18 +35,17 @@ public record AdminHazardReportDetailResponse(
 
 	public static AdminHazardReportDetailResponse of(
 		HazardReport hazardReport,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter,
+		List<String> imageUrls) {
 		return new AdminHazardReportDetailResponse(
 			hazardReport.getReportId(),
 			hazardReport.getUser().getUserId(),
 			hazardReport.getReportType(),
 			hazardReport.getDescription(),
+			hazardReport.getAddress(),
 			geoPointConverter.toResponse(hazardReport.getReportPoint()),
 			hazardReport.getStatus(),
 			hazardReport.getCreatedAt(),
-			hazardReport.getImages()
-				.stream()
-				.map(image -> image.getImageUrl())
-				.toList());
+			imageUrls);
 	}
 }

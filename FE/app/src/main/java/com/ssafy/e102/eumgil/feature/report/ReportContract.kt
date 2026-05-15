@@ -282,11 +282,6 @@ sealed interface ReportUiEvent {
         val message: String,
     ) : ReportUiEvent
 
-    data class NavigateToReportComplete(
-        val reportId: Long? = null,
-        val outboxId: String? = null,
-    ) : ReportUiEvent
-
     data object NavigateToReportHistory : ReportUiEvent
 
     data object NavigateToMap : ReportUiEvent

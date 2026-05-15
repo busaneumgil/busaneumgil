@@ -549,7 +549,7 @@ class NavigationViewModel(
             )
         val mapOverlay =
             runtimeRequest.toMapOverlayUiState(
-                currentLocationCoordinate = latestLocationCoordinate ?: runtimeRequest.origin.coordinate,
+                currentLocationCoordinate = latestLocationCoordinate,
                 activeSegmentIndex = activeSegmentIndex,
                 focusedSegmentIndex = focusedSegmentIndex,
                 mapFocusMode = mapFocusMode,
@@ -573,8 +573,13 @@ class NavigationViewModel(
                         isInspectingSegments = isInspectingSegments,
                         hasPendingActiveChange = hasPendingActiveChange,
                         mapFocusMode = mapFocusMode,
+                        transitPresentation = latestTransitPresentation,
                     ),
-                focusedSegmentCard = runtimeRequest.toFocusedSegmentCardUiState(focusedSegmentIndex),
+                focusedSegmentCard =
+                    runtimeRequest.toFocusedSegmentCardUiState(
+                        focusedSegmentIndex = focusedSegmentIndex,
+                        transitPresentation = latestTransitPresentation,
+                    ),
                 pendingActiveChangeLabel =
                     if (hasPendingActiveChange) {
                         PENDING_ACTIVE_SEGMENT_LABEL
@@ -1559,6 +1564,7 @@ private const val LOW_VISION_WALKABLE_DISTANCE_THRESHOLD_METERS = 750
 private const val MIN_NAVIGATION_DURATION_SECONDS = 60
 private const val LOW_VISION_ACTUAL_METRICS_BUCKET_SCALE = 10_000.0
 private const val LOW_VISION_ROUTE_CHANGE_ALERT_DISTANCE_METERS = 50
+private const val IMMEDIATE_GUIDANCE_CAMERA_DISTANCE_THRESHOLD_METERS = 500
 private const val PENDING_ACTIVE_SEGMENT_LABEL = "Current segment updated"
 
 internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {
@@ -1589,7 +1595,7 @@ private fun RouteNavigationRequest.toMapPlaceholderDescription(screenState: Navi
 }
 
 private fun RouteNavigationRequest.toMapOverlayUiState(
-    currentLocationCoordinate: GeoCoordinate,
+    currentLocationCoordinate: GeoCoordinate?,
     activeSegmentIndex: Int,
     focusedSegmentIndex: Int,
     mapFocusMode: NavigationMapFocusMode,
@@ -1599,7 +1605,16 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex)
     val activeSegmentPolyline = activeSegment?.polyline?.points.orEmpty()
     val focusedSegmentPolyline = focusedSegment?.polyline?.points.orEmpty()
-    val routeSegments =
+    val activeFocusCoordinate =
+        currentLocationCoordinate
+            ?: selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
+            ?: selectedRoute.resolveSegmentFocusCoordinate(activeSegmentIndex)
+            ?: origin.coordinate
+    val inspectedFocusCoordinate =
+        selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
+            ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
+            ?: activeFocusCoordinate
+    val segmentRouteSegments =
         selectedRoute.segments.mapIndexed { index, segment ->
             NavigationMapSegmentUiState(
                 sequence = segment.sequence,
@@ -1615,15 +1630,16 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
                 isRiskUpcoming = index > activeSegmentIndex && segment.riskLevel != RouteRiskLevel.LOW,
             )
         }
+    val routeSegments = segmentRouteSegments + selectedRoute.toFallbackWalkingLegMapSegments(segmentRouteSegments)
     val originPoint = origin.toNavigationMapPointUiState(fallbackLabel = "출발지")
     val destinationPoint = destination.toNavigationMapPointUiState(fallbackLabel = "목적지")
 
     return NavigationMapOverlayUiState(
-        isDisplayable = selectedRoute.previewPolyline.isRenderable,
+        isDisplayable = selectedRoute.previewPolyline.isRenderable || routeSegments.any(NavigationMapSegmentUiState::isRenderable),
         currentLocation =
             NavigationMapPointUiState(
                 label = originPoint.label,
-                coordinate = currentLocationCoordinate,
+                coordinate = currentLocationCoordinate ?: origin.coordinate,
             ),
         origin = originPoint,
         destination = destinationPoint,
@@ -1634,15 +1650,40 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         focusedSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(focusedSegment),
         focusCoordinate =
             when (mapFocusMode) {
-                NavigationMapFocusMode.ACTIVE -> currentLocationCoordinate
-                NavigationMapFocusMode.FOCUSED ->
-                    selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
-                        ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
-                        ?: currentLocationCoordinate
+                NavigationMapFocusMode.ACTIVE -> activeFocusCoordinate
+                NavigationMapFocusMode.FOCUSED -> inspectedFocusCoordinate
             },
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,
+        shouldAnimateCameraTransition =
+            mapFocusMode != NavigationMapFocusMode.FOCUSED ||
+                (focusedSegment?.distanceMeters ?: 0) < IMMEDIATE_GUIDANCE_CAMERA_DISTANCE_THRESHOLD_METERS,
     )
+}
+
+private fun RouteCandidate.toFallbackWalkingLegMapSegments(
+    existingSegments: List<NavigationMapSegmentUiState>,
+): List<NavigationMapSegmentUiState> {
+    val hasRenderableWalkingSegment =
+        existingSegments.any { segment ->
+            segment.travelKind == NavigationSegmentTravelKind.WALK && segment.isRenderable
+        }
+    if (hasRenderableWalkingSegment) return emptyList()
+
+    return legs
+        .filter { leg -> leg.type == RouteLegType.WALK && leg.polyline.isRenderable }
+        .map { leg ->
+            NavigationMapSegmentUiState(
+                sequence = leg.sequence,
+                polyline = leg.polyline.points,
+                segmentStartCoordinate = leg.polyline.points.firstOrNull(),
+                distanceMeters = leg.distanceMeters ?: 0,
+                riskLevel = RouteRiskLevel.LOW,
+                guidanceMessage = leg.instruction,
+                travelKind = NavigationSegmentTravelKind.WALK,
+                showJunctionMarker = false,
+            )
+        }
 }
 
 internal fun createNavigationSegmentMarkerDebugSummary(
@@ -1698,6 +1739,7 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
     isInspectingSegments: Boolean,
     hasPendingActiveChange: Boolean,
     mapFocusMode: NavigationMapFocusMode,
+    transitPresentation: NavigationTransitPresentation?,
 ): NavigationSegmentSyncUiState =
     NavigationSegmentSyncUiState(
         activeSegmentIndex = activeSegmentIndex,
@@ -1718,12 +1760,14 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
                     isFocused = index == focusedSegmentIndex,
                     isCompleted = index < activeSegmentIndex,
                     isRiskUpcoming = index > activeSegmentIndex && segment.riskLevel != RouteRiskLevel.LOW,
+                    transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(segment, transitPresentation),
                 )
             },
     )
 
 private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     focusedSegmentIndex: Int,
+    transitPresentation: NavigationTransitPresentation?,
 ): NavigationFocusedSegmentCardUiState? {
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
     val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
@@ -1737,6 +1781,33 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
         riskLabel = focusedSegment.riskLevel.toRiskLabel(),
         supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
         guidanceAction = heroDetail.guidanceAction,
+        transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(focusedSegment, transitPresentation),
+    )
+}
+
+private fun RouteCandidate.resolveFocusedSegmentTransitInfo(
+    focusedSegment: RouteSegment,
+    transitPresentation: NavigationTransitPresentation?,
+): NavigationTransitInfoUiState? {
+    val sourceLeg = focusedSegment.resolveSourceLeg(legs = legs) ?: return null
+    if (sourceLeg.type != RouteLegType.BUS && sourceLeg.type != RouteLegType.SUBWAY) return null
+
+    val activeTransitInfo = transitPresentation?.info
+    if (
+        activeTransitInfo != null &&
+        activeTransitInfo.guidanceAction ==
+        when (sourceLeg.type) {
+            RouteLegType.BUS -> NavigationGuidanceAction.BUS
+            RouteLegType.SUBWAY -> NavigationGuidanceAction.SUBWAY
+            RouteLegType.WALK -> NavigationGuidanceAction.STRAIGHT
+        }
+    ) {
+        return activeTransitInfo
+    }
+
+    return sourceLeg.toNavigationTransitInfo(
+        arrivalRouteNo = null,
+        arrivalMinutes = sourceLeg.laneOptions.firstOrNull()?.remainingMinute,
     )
 }
 
@@ -2056,7 +2127,7 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
             transitPresentation?.supportingText ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
                 "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
         guidanceAction = heroDetail?.guidanceAction ?: NavigationGuidanceAction.STRAIGHT,
-        transitInfo = transitPresentation?.info,
+        transitInfo = null,
         metrics =
             listOf(
                 NavigationStepMetricUiState(

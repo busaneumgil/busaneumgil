@@ -7,6 +7,8 @@ import com.ssafy.e102.eumgil.core.model.RouteAlertType
 import com.ssafy.e102.eumgil.core.model.RouteBadge
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteDefaults
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceDirection
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceFeature
 import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteLegRole
 import com.ssafy.e102.eumgil.core.model.RouteLegType
@@ -366,6 +368,8 @@ private fun RouteGuidanceEventDto.toDomain(
     geometryParser: RouteGeometryParser,
 ): RouteStep {
     val eventType = RouteGuidanceEventType.fromValue(type)
+    val eventDirection = RouteGuidanceDirection.fromValue(direction)
+    val eventFeatures = RouteGuidanceFeature.fromCodes(features)
     val geometryParseResult = geometryParser.parse(geometry)
 
     return RouteStep(
@@ -373,12 +377,17 @@ private fun RouteGuidanceEventDto.toDomain(
             sequence
                 ?.takeIf { value -> value > 0 }
                 ?: fallbackSequence,
-        instruction = eventType?.instruction ?: normalizedInstruction(type),
+        instruction =
+            eventType?.instruction(eventFeatures)
+                ?: eventDirection?.instruction
+                ?: normalizedInstruction(type),
         distanceMeters = distanceMeters,
         polyline = geometryParseResult.polyline,
         anchorCoordinate = geometryParseResult.anchorCoordinate,
-        badges = eventType?.badges.orEmpty(),
+        badges = eventType?.badges(eventFeatures).orEmpty(),
         alerts = listOfNotNull(eventType?.toAlert(distanceMeters = distanceMeters)),
+        guidanceDirection = eventDirection,
+        guidanceFeatures = eventFeatures,
         slopePercent = null,
     )
 }
@@ -448,6 +457,8 @@ private fun RouteStep.toCompatibilitySegment(
         safetyFlags = buildSafetyFlags(badges = badges, alerts = alerts, guidanceMessage = instruction),
         riskLevel = resolveRiskLevel(badges = badges, alerts = alerts, guidanceMessage = instruction),
         guidanceMessage = instruction.ifBlank { RouteDefaults.DEFAULT_GUIDANCE_MESSAGE },
+        guidanceDirection = guidanceDirection,
+        guidanceFeatures = guidanceFeatures,
         sourceLegSequence = sourceLegSequence,
         sourceStepSequence = this.sequence,
     )
@@ -776,6 +787,8 @@ private fun JSONObject.toGuidanceEventDto(): RouteGuidanceEventDto =
     RouteGuidanceEventDto(
         sequence = optNullableInt("sequence"),
         type = optNullableString("type"),
+        direction = optNullableString("direction"),
+        features = optStringList("features"),
         distanceFromLegStartMeter = optNullableDouble("distanceFromLegStartMeter"),
         durationFromLegStartSecond = optNullableInt("durationFromLegStartSecond"),
         distanceFromRouteStartMeter = optNullableDouble("distanceFromRouteStartMeter"),
@@ -1032,66 +1045,80 @@ private enum class RouteStepAlertType(
 }
 
 private enum class RouteGuidanceEventType(
-    val instruction: String,
-    val badges: List<RouteBadge> = emptyList(),
+    private val defaultInstruction: String,
+    private val defaultBadges: List<RouteBadge> = emptyList(),
     val alertType: RouteAlertType? = null,
 ) {
     TURN_LEFT("Turn left."),
     TURN_RIGHT("Turn right."),
+    STRAIGHT("Continue straight."),
     CROSSWALK(
-        instruction = "Crosswalk ahead.",
-        badges = listOf(RouteBadge.CROSSWALK),
+        defaultInstruction = "Crosswalk ahead.",
+        defaultBadges = listOf(RouteBadge.CROSSWALK),
         alertType = RouteAlertType.CROSSWALK,
     ),
     CROSSWALK_SIGNAL(
-        instruction = "Signalized crosswalk ahead.",
-        badges = listOf(RouteBadge.CROSSWALK),
+        defaultInstruction = "Signalized crosswalk ahead.",
+        defaultBadges = listOf(RouteBadge.CROSSWALK),
         alertType = RouteAlertType.CROSSWALK,
     ),
     CROSSWALK_AUDIO(
-        instruction = "Audio signal crosswalk ahead.",
-        badges = listOf(RouteBadge.CROSSWALK),
+        defaultInstruction = "Audio signal crosswalk ahead.",
+        defaultBadges = listOf(RouteBadge.CROSSWALK),
         alertType = RouteAlertType.CROSSWALK,
     ),
     LOW_SLOPE(
-        instruction = "Low slope ahead.",
-        badges = listOf(RouteBadge.LOW_SLOPE),
+        defaultInstruction = "Low slope ahead.",
+        defaultBadges = listOf(RouteBadge.LOW_SLOPE),
     ),
     MIDDLE_SLOPE(
-        instruction = "Slope ahead.",
-        badges = listOf(RouteBadge.MIDDLE_SLOPE),
+        defaultInstruction = "Slope ahead.",
+        defaultBadges = listOf(RouteBadge.MIDDLE_SLOPE),
         alertType = RouteAlertType.MIDDLE_SLOPE,
     ),
     STAIR(
-        instruction = "Stairs ahead.",
-        badges = listOf(RouteBadge.STAIR),
+        defaultInstruction = "Stairs ahead.",
+        defaultBadges = listOf(RouteBadge.STAIR),
         alertType = RouteAlertType.STAIR,
     ),
     NARROW_SIDEWALK(
-        instruction = "Narrow sidewalk ahead.",
-        badges = listOf(RouteBadge.NARROW_SIDEWALK),
+        defaultInstruction = "Narrow sidewalk ahead.",
+        defaultBadges = listOf(RouteBadge.NARROW_SIDEWALK),
         alertType = RouteAlertType.NARROW_SIDEWALK,
     ),
     UNPAVED(
-        instruction = "Unpaved path ahead.",
-        badges = listOf(RouteBadge.UNPAVED),
+        defaultInstruction = "Unpaved path ahead.",
+        defaultBadges = listOf(RouteBadge.UNPAVED),
         alertType = RouteAlertType.UNPAVED,
     ),
     BUS_STOP(
-        instruction = "Bus stop ahead.",
+        defaultInstruction = "Bus stop ahead.",
         alertType = RouteAlertType.BUS_STOP,
     ),
     SUBWAY_ELEVATOR(
-        instruction = "Subway elevator ahead.",
-        badges = listOf(RouteBadge.ELEVATOR),
+        defaultInstruction = "Subway elevator ahead.",
+        defaultBadges = listOf(RouteBadge.ELEVATOR),
         alertType = RouteAlertType.SUBWAY_ELEVATOR,
     ),
     ARRIVING_POINT(
-        instruction = "Prepare to get off.",
+        defaultInstruction = "Prepare to get off.",
         alertType = RouteAlertType.ALIGHTING_POINT,
     ),
     DESTINATION("Arrive at destination."),
     ;
+
+    fun instruction(features: List<RouteGuidanceFeature>): String =
+        when {
+            this == CROSSWALK && RouteGuidanceFeature.AUDIO_SIGNAL in features -> CROSSWALK_AUDIO.defaultInstruction
+            this == CROSSWALK && RouteGuidanceFeature.SIGNAL in features -> CROSSWALK_SIGNAL.defaultInstruction
+            else -> defaultInstruction
+        }
+
+    fun badges(features: List<RouteGuidanceFeature>): List<RouteBadge> =
+        when {
+            this == CROSSWALK && features.isNotEmpty() -> listOf(RouteBadge.CROSSWALK)
+            else -> defaultBadges
+        }
 
     fun toAlert(distanceMeters: Int): RouteAlert? =
         alertType?.let { type ->
@@ -1108,3 +1135,11 @@ private enum class RouteGuidanceEventType(
             }
     }
 }
+
+private val RouteGuidanceDirection.instruction: String
+    get() =
+        when (this) {
+            RouteGuidanceDirection.STRAIGHT -> "Continue straight."
+            RouteGuidanceDirection.TURN_LEFT -> "Turn left."
+            RouteGuidanceDirection.TURN_RIGHT -> "Turn right."
+        }

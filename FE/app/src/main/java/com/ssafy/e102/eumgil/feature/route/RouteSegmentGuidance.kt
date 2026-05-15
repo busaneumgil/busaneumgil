@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.route
 
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceDirection
 import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteLegType
 import com.ssafy.e102.eumgil.core.model.RouteSegment
@@ -19,11 +20,13 @@ internal fun RouteSegment.toRouteDetailStepKind(): RouteDetailStepKind {
     return when {
         safetyFlags.hasStairs -> RouteDetailStepKind.STAIRS
         safetyFlags.hasCurbGap -> RouteDetailStepKind.CURB_GAP
+        safetyFlags.hasCrosswalk -> RouteDetailStepKind.CROSSWALK
         normalizedGuidance.containsAnyRouteGuidanceKeyword("엘리베이터", "elevator", "lift") ->
             RouteDetailStepKind.ELEVATOR
         normalizedGuidance.containsAnyRouteGuidanceKeyword("공사", "construction", "우회", "narrow path") ->
             RouteDetailStepKind.CONSTRUCTION
-        safetyFlags.hasCrosswalk -> RouteDetailStepKind.CROSSWALK
+        guidanceDirection == RouteGuidanceDirection.TURN_LEFT -> RouteDetailStepKind.TURN_LEFT
+        guidanceDirection == RouteGuidanceDirection.TURN_RIGHT -> RouteDetailStepKind.TURN_RIGHT
         normalizedGuidance.containsAnyRouteGuidanceKeyword("좌회전", "왼쪽", "turn left", "left turn") ->
             RouteDetailStepKind.TURN_LEFT
         normalizedGuidance.containsAnyRouteGuidanceKeyword("우회전", "오른쪽", "turn right", "right turn") ->

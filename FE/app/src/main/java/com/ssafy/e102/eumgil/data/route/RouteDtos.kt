@@ -58,6 +58,8 @@ data class RouteLegDto(
 data class RouteGuidanceEventDto(
     val sequence: Int? = null,
     val type: String? = null,
+    val direction: String? = null,
+    val features: List<String> = emptyList(),
     val distanceFromLegStartMeter: Double? = null,
     val durationFromLegStartSecond: Int? = null,
     val distanceFromRouteStartMeter: Double? = null,

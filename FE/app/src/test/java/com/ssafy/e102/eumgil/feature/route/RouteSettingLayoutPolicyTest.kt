@@ -111,7 +111,7 @@ class RouteSettingLayoutPolicyTest {
         assertFalse("Transit results should not render filter and sort controls in the sheet.", optionSection.contains("RouteTransitResultControls("))
         assertTrue("Transit results should render the segment ratio bar.", source.contains("RouteTransitSegmentRatioBar("))
         assertTrue("Transit results should render bus or subway option labels.", source.contains("RouteTransitOptionSummary("))
-        assertTrue("Initial route loading should use the centered spinner state.", source.contains("RouteSearchLoadingState()"))
+        assertTrue("Initial route loading should use a full-screen spinner state instead of the map.", source.contains("RouteLoadingScreen("))
         assertFalse("Transit cards should not show inline start on selected routes.", source.contains("card.travelMode == RouteTravelMode.TRANSIT && card.isSelected"))
         assertFalse("Transit cards should not keep the left radio selection indicator.", optionSection.contains("RouteOptionSelectionIndicator("))
         assertTrue("Visible route options should stay capped at three.", source.contains("take(MAX_VISIBLE_OPTION_CARD_COUNT)"))
@@ -147,7 +147,47 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("optionCards.take(RouteWalkPreviewVisibleCardCount)") &&
                 source.contains("modifier = Modifier.weight(1f)"),
         )
-        assertTrue("Transit mode should keep the bottom sheet from the previous slice.", screenSection.contains("uiState.selectedTravelMode == RouteTravelMode.TRANSIT"))
+        assertTrue(
+            "Transit mode should keep the bottom sheet, while route failure replaces the map instead of stacking a sheet over it.",
+            screenSection.contains("uiState.shouldShowRouteSheet()") &&
+                source.contains("selectedTravelMode == RouteTravelMode.TRANSIT") &&
+                source.contains("!shouldShowRouteLoadingScreen()") &&
+                source.contains("!shouldShowRouteFailureScreen()") &&
+                source.contains("selectedRoute == null") &&
+                screenSection.contains("RouteFailureScreen(") &&
+                screenSection.contains("if (!showsRouteFailureScreen)") &&
+                source.contains("routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE") &&
+                source.contains("loadErrorMessage != null"),
+        )
+    }
+
+    @Test
+    fun `route loading replaces the map so search transitions do not flicker kakao tiles`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("if (isDuribalConfirmDialogVisible)")
+        val loadingScreen =
+            source
+                .substringAfter("private fun RouteLoadingScreen(")
+                .substringBefore("@Composable\nprivate fun RouteFailureScreen")
+
+        assertTrue(
+            "Route search loading should render before the map and hide the floating start CTA.",
+            screenSection.indexOf("RouteLoadingScreen(") in 0 until screenSection.indexOf("RouteMapStage(") &&
+                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteFailureScreen)") &&
+                source.contains("isLoading && optionCards.isEmpty()"),
+        )
+        assertTrue(
+            "The loading replacement should be a stable non-map surface with progress and route loading copy.",
+            loadingScreen.contains("CircularProgressIndicator(") &&
+                loadingScreen.contains("route_setting_summary_loading_title") &&
+                loadingScreen.contains("route_setting_summary_loading_description") &&
+                loadingScreen.contains("MaterialTheme.colorScheme.background"),
+        )
     }
 
     @Test
@@ -213,7 +253,8 @@ class RouteSettingLayoutPolicyTest {
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
-                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
+                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarOverlayClearance + RouteWalkPreviewCtaOverlapClearance") &&
+                source.contains("RouteWalkPreviewCtaOverlapClearance = 56.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -431,22 +472,34 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `no route transit failure shows the Duribal call prompt card instead of a generic error action`() {
+    fun `route failure replaces map with a clean duribal fallback screen`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
-        val routeOptionSection =
+        val screenSection =
             source
-                .substringAfter("private fun RouteOptionSection(")
-                .substringBefore("@OptIn(ExperimentalLayoutApi::class)")
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("if (isDuribalConfirmDialogVisible)")
+        val failureScreen =
+            source
+                .substringAfter("private fun RouteFailureScreen(")
+                .substringBefore("@Composable\nprivate fun RouteFailureFallbackState")
 
         assertTrue(
-            "When the backend reports no route, the transit tab should surface a dedicated Duribal card with call and cancel actions.",
-            routeOptionSection.contains("RouteDuribalCallPromptCard(") &&
-                source.contains("private fun RouteDuribalCallPromptCard(") &&
-                source.contains("route_setting_duribal_call_prompt_title") &&
-                source.contains("route_setting_duribal_call_prompt_call") &&
-                source.contains("route_setting_duribal_call_prompt_cancel"),
+            "When route search fails, the screen should render a full failure state instead of the map and keep the start CTA hidden.",
+            screenSection.indexOf("RouteFailureScreen(") in 0 until screenSection.indexOf("RouteMapStage(") &&
+                screenSection.contains("if (!showsRouteFailureScreen)") &&
+                source.contains("private fun RouteFailureScreen("),
+        )
+        assertTrue(
+            "The full failure screen should show image and text, with Duribal limited to transit failures.",
+            failureScreen.contains("R.drawable.ic_status_warning") &&
+                failureScreen.contains("route_setting_no_route_result_title") &&
+                failureScreen.contains("route_setting_no_route_result_description") &&
+                failureScreen.contains("selectedTravelMode == RouteTravelMode.TRANSIT") &&
+                failureScreen.contains("route_setting_duribal_call_prompt_call") &&
+                failureScreen.contains("Button(") &&
+                failureScreen.contains("onClick = onDuribalCallClick"),
         )
     }
 

@@ -491,8 +491,7 @@ class RouteSettingViewModel(
 
         val walkSearchData =
             runCatching {
-                fetchSearchData(
-                    mode = RouteTravelMode.WALK,
+                fetchWalkSearchDataWithNoRouteRecovery(
                     originResolution = originResolution,
                     destinationResolution = destinationResolution,
                 )
@@ -631,6 +630,7 @@ class RouteSettingViewModel(
             return
         }
         cancelStagedTransitEnhancement()
+        val loadId = beginRouteLoad()
 
         viewModelScope.launch {
             val originResolution =
@@ -640,6 +640,25 @@ class RouteSettingViewModel(
                 )
             val destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value)
             val selectedOption = selectedOptionForMode(mode, requestedOption)
+            val reusableSearchData =
+                reusableSearchDataForMode(
+                    mode = mode,
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                )
+            if (reusableSearchData != null) {
+                mutableUiState.value =
+                    buildUiState(
+                        searchData = reusableSearchData,
+                        originResolution = originResolution,
+                        destinationResolution = destinationResolution,
+                        selectedTravelMode = mode,
+                        requestedOption = selectedOption,
+                        ctaAcknowledged = false,
+                    )
+                rememberSuccessfulAutomaticOrigin(originResolution)
+                return@launch
+            }
 
             mutableUiState.update { state ->
                 state.copy(
@@ -670,13 +689,25 @@ class RouteSettingViewModel(
                 )
             }
 
-            runCatching {
-                fetchSearchData(
-                    mode = mode,
-                    originResolution = originResolution,
-                    destinationResolution = destinationResolution,
-                )
-            }.onSuccess { searchData ->
+            val searchResult =
+                runCatching {
+                    if (mode == RouteTravelMode.WALK) {
+                        fetchWalkSearchDataWithNoRouteRecovery(
+                            originResolution = originResolution,
+                            destinationResolution = destinationResolution,
+                        )
+                    } else {
+                        fetchSearchData(
+                            mode = mode,
+                            originResolution = originResolution,
+                            destinationResolution = destinationResolution,
+                        )
+                    }
+            }
+            searchResult.onSuccess { searchData ->
+                if (!isActiveRouteLoad(loadId)) {
+                    return@launch
+                }
                 mutableUiState.value =
                     buildUiState(
                         searchData = searchData,
@@ -689,6 +720,9 @@ class RouteSettingViewModel(
                 rememberSuccessfulAutomaticOrigin(originResolution)
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
+                if (!isActiveRouteLoad(loadId)) {
+                    return@launch
+                }
                 applyModeLoadFailure(
                     mode = mode,
                     selectedOption = selectedOption,
@@ -971,6 +1005,49 @@ class RouteSettingViewModel(
             }
         latestSearchDataByMode = latestSearchDataByMode + (mode to searchData)
         return searchData
+    }
+
+    private suspend fun fetchWalkSearchDataWithNoRouteRecovery(
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+    ): RouteSearchData =
+        runCatching {
+            fetchSearchData(
+                mode = RouteTravelMode.WALK,
+                originResolution = originResolution,
+                destinationResolution = destinationResolution,
+            )
+        }.recoverCatching { throwable ->
+            if (!throwable.isNoRouteFailure()) {
+                throw throwable
+            }
+            val query =
+                buildQuery(
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                    mode = RouteTravelMode.WALK,
+                )
+            routeRepository.getFreshRouteSearchData(query).also { searchData ->
+                latestSearchDataByMode = latestSearchDataByMode + (RouteTravelMode.WALK to searchData)
+            }
+        }.getOrThrow()
+
+    private fun reusableSearchDataForMode(
+        mode: RouteTravelMode,
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+    ): RouteSearchData? {
+        val searchData = latestSearchDataByMode[mode] ?: return null
+        if (searchData.routes.isEmpty()) {
+            return null
+        }
+        val query =
+            buildQuery(
+                originResolution = originResolution,
+                destinationResolution = destinationResolution,
+                mode = mode,
+            )
+        return searchData.takeIf { it.query == query }
     }
 
     private fun determineDefaultTravelMode(walkSearchData: RouteSearchData): RouteTravelMode {

@@ -137,7 +137,8 @@ fun NavigationSegmentRail(
     Box(
         modifier =
             modifier
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .background(MaterialTheme.colorScheme.surface),
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),

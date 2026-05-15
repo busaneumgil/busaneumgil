@@ -47,12 +47,14 @@ import kotlin.math.sqrt
 @Composable
 internal fun MapViewportOverlayBackdrop(
     overlayState: MapViewportOverlayState,
+    zoomLevel: Int = ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 24.dp,
     verticalPadding: Dp = 24.dp,
     contentDescription: String? = null,
     onPointClick: (String) -> Unit = {},
 ) {
+    val showDetailedRouteOverlay = shouldShowDetailedRouteOverlay(zoomLevel)
     val backgroundBrush =
         Brush.verticalGradient(
             colors =
@@ -94,12 +96,15 @@ internal fun MapViewportOverlayBackdrop(
             overlayState.polylines.forEach { polyline ->
                 drawViewportPolyline(
                     overlay = polyline,
+                    showDetailedRouteOverlay = showDetailedRouteOverlay,
                     bounds = projectionBounds,
                     canvasSize = size,
                     palette = palette,
                 )
             }
-            overlayState.points.forEach { point ->
+            overlayState.points
+                .filter { point -> showDetailedRouteOverlay || !point.isDetailedRouteOverlayMarker() }
+                .forEach { point ->
                 drawViewportPointHalo(
                     overlay = point,
                     bounds = projectionBounds,
@@ -109,7 +114,9 @@ internal fun MapViewportOverlayBackdrop(
             }
         }
 
-        overlayState.points.forEach { point ->
+        overlayState.points
+            .filter { point -> showDetailedRouteOverlay || !point.isDetailedRouteOverlayMarker() }
+            .forEach { point ->
             val markerSpec = point.toViewportPointMarkerSpec() ?: return@forEach
             val projectedPoint = projectionBounds.project(point.coordinate)
 
@@ -161,6 +168,7 @@ private fun DrawScope.drawViewportGrid(outline: Color) {
 
 private fun DrawScope.drawViewportPolyline(
     overlay: MapViewportPolylineOverlay,
+    showDetailedRouteOverlay: Boolean,
     bounds: ViewportProjectionBounds,
     canvasSize: Size,
     palette: ViewportOverlayPalette,
@@ -264,7 +272,7 @@ private fun DrawScope.drawViewportPolyline(
             )
         }
     }
-    if (overlay.showDirectionArrows) {
+    if (showDetailedRouteOverlay && overlay.showDirectionArrows) {
         drawViewportPolylineDirectionArrows(
             overlay = overlay,
             bounds = bounds,
@@ -282,53 +290,60 @@ private fun DrawScope.drawViewportPolylineDirectionArrows(
         overlay.points.map { coordinate ->
             bounds.project(coordinate).toOffset(canvasSize)
         }
-    val insetPx = RouteDirectionArrowInsetDp.dp.toPx()
-    val intervalPx = RouteDirectionArrowIntervalDp.dp.toPx()
-    val minSegmentPx = RouteDirectionArrowMinSegmentDp.dp.toPx()
-    val arrowLengthPx = RouteDirectionArrowLengthDp.dp.toPx()
-    val arrowHalfWidthPx = RouteDirectionArrowHalfWidthDp.dp.toPx()
+    val intervalPx = ROUTE_DIRECTION_ARROW_TARGET_SPACING_DP.dp.toPx()
+    val edgePaddingPx = ROUTE_DIRECTION_ARROW_EDGE_PADDING_DP.dp.toPx()
+    val arrowLengthPx = ROUTE_DIRECTION_ARROW_LENGTH_DP.dp.toPx()
+    val arrowHalfWidthPx = ROUTE_DIRECTION_ARROW_HALF_WIDTH_DP.dp.toPx()
 
-    projectedPoints.zipWithNext().forEach { (start, end) ->
-        val deltaX = end.x - start.x
-        val deltaY = end.y - start.y
-        val segmentLength = sqrt((deltaX * deltaX) + (deltaY * deltaY))
-        if (segmentLength < minSegmentPx) return@forEach
-
+    sampleRouteDirectionArrowPlacements(
+        points = projectedPoints,
+        intervalDistance = intervalPx.toDouble(),
+        edgePaddingDistance = edgePaddingPx.toDouble(),
+        minimumPlacementCount = 1,
+        measureDistance = { start, end ->
+            val deltaX = end.x - start.x
+            val deltaY = end.y - start.y
+            sqrt((deltaX * deltaX) + (deltaY * deltaY)).toDouble()
+        },
+        interpolatePoint = { start, end, fraction ->
+            Offset(
+                x = start.x + ((end.x - start.x) * fraction.toFloat()),
+                y = start.y + ((end.y - start.y) * fraction.toFloat()),
+            )
+        },
+    ).forEach { placement ->
+        // The fallback surface keeps a fixed north-up projection, so the projected segment angle
+        // already matches the final on-screen arrow direction without an extra bearing correction.
+        val deltaX = placement.segmentEnd.x - placement.segmentStart.x
+        val deltaY = placement.segmentEnd.y - placement.segmentStart.y
         val angle = atan2(deltaY, deltaX)
         val unitX = cos(angle)
         val unitY = sin(angle)
         val normalX = -unitY
         val normalY = unitX
-        var distance = insetPx
-
-        while (distance < segmentLength - insetPx) {
-            val tip = Offset(
-                x = start.x + (unitX * distance),
-                y = start.y + (unitY * distance),
-            )
-            val base = Offset(
+        val tip = placement.point
+        val base =
+            Offset(
                 x = tip.x - (unitX * arrowLengthPx),
                 y = tip.y - (unitY * arrowLengthPx),
             )
-            val arrowPath =
-                Path().apply {
-                    moveTo(tip.x, tip.y)
-                    lineTo(
-                        base.x + (normalX * arrowHalfWidthPx),
-                        base.y + (normalY * arrowHalfWidthPx),
-                    )
-                    lineTo(
-                        base.x - (normalX * arrowHalfWidthPx),
-                        base.y - (normalY * arrowHalfWidthPx),
-                    )
-                    close()
-                }
-            drawPath(
-                path = arrowPath,
-                color = Color.White.copy(alpha = 0.92f),
-            )
-            distance += intervalPx
-        }
+        val arrowPath =
+            Path().apply {
+                moveTo(tip.x, tip.y)
+                lineTo(
+                    base.x + (normalX * arrowHalfWidthPx),
+                    base.y + (normalY * arrowHalfWidthPx),
+                )
+                lineTo(
+                    base.x - (normalX * arrowHalfWidthPx),
+                    base.y - (normalY * arrowHalfWidthPx),
+                )
+                close()
+            }
+        drawPath(
+            path = arrowPath,
+            color = Color.White.copy(alpha = 0.92f),
+        )
     }
 }
 
@@ -733,6 +748,9 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.FOCUS_HALO -> null
     }
+
+private fun MapViewportPointOverlay.isDetailedRouteOverlayMarker(): Boolean =
+    kind == MapViewportPointKind.SEGMENT_JUNCTION
 
 @Composable
 private fun MapMarkerCategoryType.toFacilityMarkerSpec(isSelected: Boolean): ViewportPointMarkerSpec {

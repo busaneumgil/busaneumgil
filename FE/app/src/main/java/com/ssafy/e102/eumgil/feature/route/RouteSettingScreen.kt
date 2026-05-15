@@ -4040,7 +4040,10 @@ private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays(
         if (detailPolyline.points.size < 2) return@mapIndexedNotNull null
         MapViewportPolylineOverlay(
             overlayId = "route-detail-${detailPolyline.kind.name.lowercase(Locale.US)}-$index",
-            points = detailPolyline.points.map { point -> MapCoordinate(latitude = point.latitude, longitude = point.longitude) },
+            points =
+                detailPolyline.points.map { point ->
+                    MapCoordinate(latitude = point.latitude, longitude = point.longitude)
+                },
             style = MapViewportPolylineStyle.ROUTE_PREVIEW,
             tone = detailPolyline.kind.toMapViewportOverlayTone(),
             includeInProjection = includeInProjection,

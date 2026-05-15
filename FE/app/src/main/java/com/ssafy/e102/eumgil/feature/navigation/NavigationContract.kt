@@ -247,6 +247,18 @@ sealed interface NavigationUiEvent {
     ) : NavigationUiEvent
 }
 
+private const val NAVIGATION_SEGMENT_MARKER_PREFIX = "navigation-segment-"
+
+internal fun navigationSegmentMarkerId(segmentIndex: Int): String =
+    "$NAVIGATION_SEGMENT_MARKER_PREFIX$segmentIndex"
+
+internal fun String.toNavigationSegmentMarkerIndexOrNull(): Int? =
+    if (startsWith(NAVIGATION_SEGMENT_MARKER_PREFIX)) {
+        substring(NAVIGATION_SEGMENT_MARKER_PREFIX.length).toIntOrNull()
+    } else {
+        null
+    }
+
 private fun navigationLoadingStepCardUiState(): NavigationStepCardUiState = NavigationStepCardUiState()
 
 private fun navigationLoadingCtaUiState(): NavigationCtaUiState = NavigationCtaUiState()

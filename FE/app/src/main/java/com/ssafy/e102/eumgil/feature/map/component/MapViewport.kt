@@ -52,6 +52,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 
 @Immutable
 internal data class MapViewportUiState(
@@ -114,6 +115,7 @@ internal fun MapViewport(
             MapFallbackSurface(
                 markerOverlayState = state.markerOverlayState,
                 overlayState = state.overlayState,
+                cameraZoomLevel = state.cameraTarget.resolvedZoomLevel(),
                 regionLabel = state.regionLabel,
                 statusLabel = state.statusLabel,
                 title = state.title,
@@ -162,6 +164,7 @@ private fun MapContainer(
             MapFallbackSurface(
                 markerOverlayState = state.markerOverlayState,
                 overlayState = state.overlayState,
+                cameraZoomLevel = state.cameraTarget.resolvedZoomLevel(),
                 regionLabel = state.regionLabel,
                 statusLabel = integrationState.providerName,
                 title = state.title,
@@ -177,6 +180,7 @@ private fun MapContainer(
 internal fun MapFallbackSurface(
     markerOverlayState: MapMarkerOverlayState,
     overlayState: MapViewportOverlayState,
+    cameraZoomLevel: Int,
     regionLabel: String,
     statusLabel: String,
     title: String,
@@ -243,6 +247,7 @@ internal fun MapFallbackSurface(
 
         MapViewportOverlayBackdrop(
             overlayState = overlayState,
+            zoomLevel = cameraZoomLevel,
             modifier = Modifier.fillMaxSize(),
             onPointClick = onMarkerClick,
         )

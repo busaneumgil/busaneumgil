@@ -639,8 +639,8 @@
     <string name="arrival_action_go_home">홈으로 돌아가기</string>
     <string name="arrival_action_explore_new_route">새 경로 탐색하기</string>
     <string name="arrival_evaluation_title">경로 평가</string>
-    <string name="arrival_evaluation_save_route">이 경로 저장하기</string>
-    <string name="arrival_evaluation_route_saved">경로 저장 완료</string>
+    <string name="arrival_evaluation_save_route">경로 저장</string>
+    <string name="arrival_evaluation_route_saved">저장됨</string>
     <string name="arrival_evaluation_route_save_cancel">경로 저장 취소</string>
     <string name="arrival_evaluation_submit">평가 등록</string>
     <string name="arrival_evaluation_close">평가 건너뛰기</string>

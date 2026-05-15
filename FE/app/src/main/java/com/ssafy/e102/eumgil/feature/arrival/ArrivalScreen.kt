@@ -76,10 +76,9 @@ import com.ssafy.e102.eumgil.feature.map.component.MapBottomSheetHandleHeight
 import com.ssafy.e102.eumgil.feature.map.component.MapBottomSheetSurface
 import kotlin.math.roundToInt
 
-private val ArrivalSuccessColor = Color(0xFF16A34A)
+private val ArrivalCloseButtonTint = Color(0xFF9CA3AF)
 private val ArrivalRatingSelectedColor = Color(0xFFFACC15)
 private val ArrivalEvaluationSectionSpacing = EumSpacing.small
-private val ArrivalEvaluationRatingFeedbackPlaceholderHeight = 8.dp
 private val ArrivalHeroBandHeight = 332.dp
 private val ArrivalHeroBandTopSpacing = 36.dp
 private val ArrivalHeroArtworkBottomSpacing = 28.dp
@@ -87,7 +86,6 @@ private val ArrivalHeroBackgroundFadeHeight = 40.dp
 private val ArrivalHeroLogoTopPadding = 58.dp
 private val ArrivalHeroLogoWidth = 108.dp
 private val ArrivalHeroLogoHeight = 60.dp
-private val ArrivalRouteSaveIconSize = 24.dp
 private const val ArrivalSheetDismissAnimationDurationMillis = 220
 private const val ArrivalHeroArtworkAspectRatio = 1440f / 900f
 private const val ArrivalRatingCount = 5
@@ -474,19 +472,10 @@ private fun ArrivalEvaluationBottomSheet(
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_action_close),
                                 contentDescription = closeSheetLabel,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = ArrivalCloseButtonTint,
                             )
                         }
                     }
-
-                    Text(
-                        text = stringResource(id = R.string.arrival_evaluation_question),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -498,7 +487,7 @@ private fun ArrivalEvaluationBottomSheet(
                             val isSelected = rating <= uiState.selectedRating
                             IconButton(
                                 onClick = { onAction(ArrivalUiAction.RatingSelected(rating)) },
-                                modifier = Modifier.size(48.dp),
+                                modifier = Modifier.size(72.dp),
                             ) {
                                 Icon(
                                     painter =
@@ -521,22 +510,11 @@ private fun ArrivalEvaluationBottomSheet(
                                         } else {
                                             MaterialTheme.colorScheme.outline
                                         },
-                                    modifier = Modifier.size(30.dp),
+                                    modifier = Modifier.size(54.dp),
                                 )
                             }
                         }
                     }
-
-                    uiState.selectedRatingLabel.labelResId?.let { labelResId ->
-                        Text(
-                            text = stringResource(id = labelResId),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = ArrivalSuccessColor,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } ?: Spacer(modifier = Modifier.height(ArrivalEvaluationRatingFeedbackPlaceholderHeight))
 
                     Column(
                         modifier =
@@ -545,11 +523,23 @@ private fun ArrivalEvaluationBottomSheet(
                                 .navigationBarsPadding(),
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                     ) {
-                        val routeSaveAccentColor =
-                            if (uiState.isRouteSaveEnabled) {
+                        val routeSaveContainerColor =
+                            if (uiState.isRouteSaveSelected) {
                                 EumPrimary600
                             } else {
-                                EumPrimary600.copy(alpha = 0.38f)
+                                MaterialTheme.colorScheme.surface
+                            }
+                        val routeSaveContentColor =
+                            if (uiState.isRouteSaveSelected) {
+                                Color.White
+                            } else {
+                                EumPrimary600
+                            }
+                        val routeSaveBorderColor =
+                            if (uiState.isRouteSaveSelected) {
+                                EumPrimary600
+                            } else {
+                                EumPrimary600
                             }
                         OutlinedButton(
                             onClick = { onAction(ArrivalUiAction.SaveRouteClicked) },
@@ -561,58 +551,27 @@ private fun ArrivalEvaluationBottomSheet(
                             shape = RoundedCornerShape(EumRadius.medium),
                             colors =
                                 ButtonDefaults.outlinedButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    contentColor = routeSaveAccentColor,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surface,
-                                    disabledContentColor = routeSaveAccentColor,
+                                    containerColor = routeSaveContainerColor,
+                                    contentColor = routeSaveContentColor,
+                                    disabledContainerColor = routeSaveContainerColor.copy(alpha = 0.38f),
+                                    disabledContentColor = routeSaveContentColor.copy(alpha = 0.38f),
                                 ),
-                            border = BorderStroke(1.dp, routeSaveAccentColor),
+                            border = BorderStroke(1.dp, routeSaveBorderColor.copy(alpha = if (uiState.isRouteSaveEnabled) 1f else 0.38f)),
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(
-                                    modifier = Modifier.weight(1f),
-                                    contentAlignment = Alignment.CenterEnd,
-                                ) {
-                                    Icon(
-                                        painter =
-                                            painterResource(
-                                                id =
-                                                    if (uiState.isRouteSaveSelected) {
-                                                        R.drawable.ic_nav_bookmark_selected
-                                                    } else {
-                                                        R.drawable.ic_nav_bookmark_outline
-                                                    },
-                                            ),
-                                        contentDescription = null,
-                                        tint = routeSaveAccentColor,
-                                        modifier = Modifier.size(ArrivalRouteSaveIconSize),
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier.weight(1f),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text =
-                                            stringResource(
-                                                id =
-                                                    if (uiState.isRouteSaveSelected) {
-                                                        R.string.arrival_evaluation_route_save_cancel
-                                                    } else {
-                                                        R.string.arrival_evaluation_save_route
-                                                    },
-                                            ),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = routeSaveAccentColor,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                    )
-                                }
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
+                            Text(
+                                text =
+                                    stringResource(
+                                        id =
+                                            if (uiState.isRouteSaveSelected) {
+                                                R.string.arrival_evaluation_route_saved
+                                            } else {
+                                                R.string.arrival_evaluation_save_route
+                                            },
+                                    ),
+                                style = MaterialTheme.typography.labelLarge,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                            )
                         }
 
                         Button(

@@ -113,6 +113,11 @@ class ArrivalScreenConfigurationTest {
             "Selected arrival rating stars should use the yellow rating tint requested for the evaluation flow.",
             source.contains("private val ArrivalRatingSelectedColor = Color(0xFFFACC15)"),
         )
+        assertTrue(
+            "Arrival evaluation stars should grow to a larger touch target and icon size so the rating action reads more prominently in the sheet.",
+            source.contains("modifier = Modifier.size(72.dp)") &&
+                source.contains("modifier = Modifier.size(54.dp)"),
+        )
     }
 
     @Test
@@ -171,10 +176,6 @@ class ArrivalScreenConfigurationTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
 
-        assertTrue(
-            "Arrival evaluation sheet should define a tighter placeholder gap between the star row and the action buttons.",
-            source.contains("private val ArrivalEvaluationRatingFeedbackPlaceholderHeight = 8.dp"),
-        )
         assertFalse(
             "Arrival screen should no longer render the route save dialog flow after the save action becomes immediate.",
             source.contains("if (uiState.isRouteSaveDialogVisible)"),
@@ -182,6 +183,55 @@ class ArrivalScreenConfigurationTest {
         assertFalse(
             "Arrival screen should no longer keep the route save dialog composable in this evaluation flow.",
             source.contains("private fun ArrivalRouteSaveDialog("),
+        )
+    }
+
+    @Test
+    fun `arrival evaluation sheet removes the extra prompt and rating feedback labels`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertFalse(
+            "Arrival evaluation sheet should remove the question prompt once the star row itself becomes the main feedback affordance.",
+            source.contains("text = stringResource(id = R.string.arrival_evaluation_question)"),
+        )
+        assertFalse(
+            "Arrival evaluation sheet should remove the per-rating text feedback below the stars.",
+            source.contains("uiState.selectedRatingLabel.labelResId?.let"),
+        )
+        assertFalse(
+            "Arrival evaluation sheet should no longer reserve placeholder spacing for rating feedback text that is no longer shown.",
+            source.contains("ArrivalEvaluationRatingFeedbackPlaceholderHeight"),
+        )
+    }
+
+    @Test
+    fun `arrival evaluation route save action becomes a text only toggle button`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertFalse(
+            "Arrival route save CTA should remove the bookmark icon so the control reads as a simpler text button.",
+            source.contains("ArrivalRouteSaveIconSize"),
+        )
+        assertFalse(
+            "Arrival route save CTA should no longer render the outlined bookmark icon in the unsaved state.",
+            source.contains("R.drawable.ic_nav_bookmark_outline"),
+        )
+        assertFalse(
+            "Arrival route save CTA should no longer render the filled bookmark icon in the saved state.",
+            source.contains("R.drawable.ic_nav_bookmark_selected"),
+        )
+        assertFalse(
+            "Arrival route save CTA should not show the old save-cancel copy once the button itself indicates the saved state.",
+            source.contains("R.string.arrival_evaluation_route_save_cancel"),
+        )
+        assertTrue(
+            "Arrival route save CTA should switch between an outlined white surface and a filled blue saved state.",
+            source.contains("val routeSaveContainerColor =") &&
+                source.contains("val routeSaveContentColor =") &&
+                source.contains("R.string.arrival_evaluation_route_saved") &&
+                source.contains("R.string.arrival_evaluation_save_route"),
         )
     }
 
@@ -195,6 +245,18 @@ class ArrivalScreenConfigurationTest {
             source.contains(
                 "text = stringResource(id = R.string.arrival_evaluation_submit),\n                                style = MaterialTheme.typography.labelLarge,",
             ),
+        )
+    }
+
+    @Test
+    fun `arrival evaluation close button uses a softer gray tint`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertTrue(
+            "Arrival evaluation close button should use a dedicated toned-down gray tint instead of the stronger surface variant color.",
+            source.contains("private val ArrivalCloseButtonTint =") &&
+                source.contains("tint = ArrivalCloseButtonTint"),
         )
     }
 
@@ -235,6 +297,21 @@ class ArrivalScreenConfigurationTest {
         assertTrue(
             "Exploring a new route from the arrival screen should remove the completion screen from the back stack so back does not reopen the evaluation flow.",
             source.contains("popUpTo(ArrivalRoute.Entry.route) {\n                        inclusive = true"),
+        )
+    }
+
+    @Test
+    fun `arrival evaluation route save strings match the simplified toggle labels`() {
+        val stringsSource =
+            File("src/main/res/values/strings.xml").readText()
+
+        assertTrue(
+            "Arrival evaluation unsaved route save CTA should use the short route-save label requested for the bottom sheet.",
+            stringsSource.contains("<string name=\"arrival_evaluation_save_route\">경로 저장</string>"),
+        )
+        assertTrue(
+            "Arrival evaluation saved route save CTA should use the compact saved-state label.",
+            stringsSource.contains("<string name=\"arrival_evaluation_route_saved\">저장됨</string>"),
         )
     }
 }

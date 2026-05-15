@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -776,6 +777,7 @@ private fun RouteDetailTimelinePanelContent(
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()
     val startStep = steps.firstOrNull()
     val renderedSteps =
         if (steps.size > 1) {
@@ -802,7 +804,7 @@ private fun RouteDetailTimelinePanelContent(
                 Modifier
                     .fillMaxSize(),
             state = listState,
-            contentPadding = PaddingValues(bottom = RouteDetailSidePanelBottomClearance),
+            contentPadding = PaddingValues(bottom = bottomBarOverlayClearance),
         ) {
             if (startStep == null) {
                 item(key = "route-detail-empty") {
@@ -2258,6 +2260,13 @@ internal data class RouteSearchHeaderModeTabPolicy(
 
 internal fun routeSettingUsesEmptyWindowInsets(): Boolean = true
 
+@Composable
+private fun routeSettingBottomBarOverlayClearance(extraSpacing: Dp = EumSpacing.medium): Dp {
+    val density = LocalDensity.current
+    val navigationBarInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    return RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + extraSpacing + navigationBarInset
+}
+
 internal fun routeSearchHeaderPolicy(showModeTabs: Boolean = true): RouteSearchHeaderPolicy =
     RouteSearchHeaderPolicy(
         titleResId = R.string.route_setting_screen_title,
@@ -2956,6 +2965,7 @@ private fun RouteMapStage(
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
     val mapControlState = rememberMapOverlayViewportControlState()
+    val walkPreviewBottomPadding = routeSettingBottomBarOverlayClearance(extraSpacing = 12.dp)
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RouteMapStageCornerRadius),
@@ -3014,7 +3024,7 @@ private fun RouteMapStage(
                             .padding(
                                 start = EumSpacing.medium,
                                 end = EumSpacing.medium,
-                                bottom = RouteWalkPreviewCarouselBottomPadding,
+                                bottom = walkPreviewBottomPadding,
                             ),
                 )
             }
@@ -3244,6 +3254,7 @@ private fun RouteSettingRouteSheet(
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
 ) {
+    val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape =
@@ -3262,7 +3273,7 @@ private fun RouteSettingRouteSheet(
                     start = EumSpacing.small,
                     end = EumSpacing.small,
                     top = RouteSettingSheetVerticalPadding,
-                    bottom = RouteSettingBottomBarOverlayClearance,
+                    bottom = bottomBarOverlayClearance,
                 ),
             verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
         ) {
@@ -4981,9 +4992,6 @@ private val RouteInlineButtonHeight = 44.dp
 private val RouteSettingBottomBarButtonHeight = 50.dp
 private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val RouteSettingBottomBarBottomGap = 30.dp
-private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
-private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance
-private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035

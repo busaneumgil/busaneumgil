@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.report.entity;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -28,13 +29,16 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Getter
 @Entity
-@Table(name = "hazard_reports")
+@Table(name = "hazard_reports", uniqueConstraints = {
+	@UniqueConstraint(name = "uk_hazard_reports_user_id_idempotency_key", columnNames = {"user_id", "idempotency_key"})
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class HazardReport extends BaseEntity {
 
@@ -56,6 +60,18 @@ public class HazardReport extends BaseEntity {
 	@Column(columnDefinition = "TEXT")
 	private String description;
 
+	@Column(length = 255)
+	private String address;
+
+	@Column(name = "idempotency_key", length = 255)
+	private String idempotencyKey;
+
+	@Column(name = "idempotency_request_hash", length = 64)
+	private String idempotencyRequestHash;
+
+	@Column(name = "idempotency_expires_at")
+	private LocalDateTime idempotencyExpiresAt;
+
 	@Column(name = "report_point", nullable = false, columnDefinition = "geometry(Point, 4326)")
 	private Point reportPoint;
 
@@ -72,19 +88,52 @@ public class HazardReport extends BaseEntity {
 		ReportType reportType,
 		String description,
 		Point reportPoint,
-		List<String> imageUrls) {
+		List<String> imageObjectKeys) {
+		return create(user, reportType, description, null, reportPoint, imageObjectKeys);
+	}
+
+	public static HazardReport create(
+		User user,
+		ReportType reportType,
+		String description,
+		String address,
+		Point reportPoint,
+		List<String> imageObjectKeys) {
 		HazardReport hazardReport = new HazardReport();
 		hazardReport.user = requireUser(user);
 		hazardReport.reportType = requireReportType(reportType);
 		hazardReport.description = normalizeDescription(description);
+		hazardReport.address = normalizeAddress(address);
 		hazardReport.reportPoint = requirePoint(reportPoint);
 		hazardReport.status = ReportStatus.PENDING;
-		hazardReport.addImages(valueOrEmpty(imageUrls));
+		hazardReport.addImages(valueOrEmpty(imageObjectKeys));
 		return hazardReport;
 	}
 
 	public boolean isOwner(UUID userId) {
 		return user != null && Objects.equals(user.getUserId(), userId);
+	}
+
+	public void applyIdempotency(String idempotencyKey, String requestHash, LocalDateTime expiresAt) {
+		if (idempotencyKey == null) {
+			return;
+		}
+		if (idempotencyKey.isBlank() || requestHash == null || requestHash.isBlank() || expiresAt == null) {
+			throw invalidRequest("멱등성 정보가 올바르지 않습니다.");
+		}
+		this.idempotencyKey = idempotencyKey;
+		this.idempotencyRequestHash = requestHash;
+		this.idempotencyExpiresAt = expiresAt;
+	}
+
+	public boolean hasActiveIdempotency(LocalDateTime now) {
+		return idempotencyKey != null
+			&& idempotencyExpiresAt != null
+			&& idempotencyExpiresAt.isAfter(now);
+	}
+
+	public boolean hasSameIdempotencyRequestHash(String requestHash) {
+		return Objects.equals(idempotencyRequestHash, requestHash);
 	}
 
 	public void approve() {
@@ -103,12 +152,12 @@ public class HazardReport extends BaseEntity {
 		}
 	}
 
-	private void addImages(List<String> imageUrls) {
-		if (imageUrls.size() > MAX_IMAGE_COUNT) {
+	private void addImages(List<String> imageObjectKeys) {
+		if (imageObjectKeys.size() > MAX_IMAGE_COUNT) {
 			throw invalidRequest("제보 이미지는 최대 5장까지 등록할 수 있습니다.");
 		}
-		for (int index = 0; index < imageUrls.size(); index++) {
-			images.add(HazardReportImage.create(this, imageUrls.get(index), index));
+		for (int index = 0; index < imageObjectKeys.size(); index++) {
+			images.add(HazardReportImage.create(this, imageObjectKeys.get(index), index));
 		}
 	}
 
@@ -140,11 +189,18 @@ public class HazardReport extends BaseEntity {
 		return description.trim();
 	}
 
-	private static List<String> valueOrEmpty(List<String> imageUrls) {
-		if (imageUrls == null) {
+	private static String normalizeAddress(String address) {
+		if (address == null || address.isBlank()) {
+			return null;
+		}
+		return address.trim();
+	}
+
+	private static List<String> valueOrEmpty(List<String> imageObjectKeys) {
+		if (imageObjectKeys == null) {
 			return List.of();
 		}
-		return imageUrls;
+		return imageObjectKeys;
 	}
 
 	private static HazardReportException invalidRequest(String message) {

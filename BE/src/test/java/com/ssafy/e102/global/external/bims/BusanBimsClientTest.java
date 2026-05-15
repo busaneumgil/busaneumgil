@@ -69,6 +69,44 @@ class BusanBimsClientTest {
 		assertThat((Integer)ReflectionTestUtils.invokeMethod(slot, "remainingStopCount")).isEqualTo(2);
 	}
 
+	@Test
+	@DisplayName("BIMS busStopList 응답은 정류장 마스터 페이지로 파싱한다")
+	void parseBusStopPage() {
+		BusanBimsClient client = new BusanBimsClient(
+			new RestTemplateBuilder(),
+			new BusanBimsProperties("https://apis.data.go.kr/6260000/BusanBIMS", "key",
+				Duration.ofSeconds(5), Duration.ofSeconds(5)));
+
+		BusanBimsBusStopPage page = ReflectionTestUtils.invokeMethod(client, "parseBusStopPage", """
+			<response>
+			  <body>
+			    <items>
+			      <item>
+			        <bstopid>178700302</bstopid>
+			        <bstopnm>다대현대아파트</bstopnm>
+			        <arsno>10175</arsno>
+			        <gpsx>128.977167399072</gpsx>
+			        <gpsy>35.062268914248</gpsy>
+			        <stoptype>일반</stoptype>
+			      </item>
+			    </items>
+			    <totalCount>8780</totalCount>
+			  </body>
+			</response>
+			""", 1, 1000);
+
+		assertThat(page.totalCount()).isEqualTo(8780);
+		assertThat(page.pageNo()).isEqualTo(1);
+		assertThat(page.numOfRows()).isEqualTo(1000);
+		assertThat(page.busStops()).hasSize(1);
+		assertThat(page.busStops().get(0).stopId()).isEqualTo("178700302");
+		assertThat(page.busStops().get(0).stopName()).isEqualTo("다대현대아파트");
+		assertThat(page.busStops().get(0).arsNo()).isEqualTo("10175");
+		assertThat(page.busStops().get(0).lng()).isEqualTo(128.977167399072);
+		assertThat(page.busStops().get(0).lat()).isEqualTo(35.062268914248);
+		assertThat(page.busStops().get(0).stopType()).isEqualTo("일반");
+	}
+
 	private Element item(String xml) throws Exception {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 		factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);

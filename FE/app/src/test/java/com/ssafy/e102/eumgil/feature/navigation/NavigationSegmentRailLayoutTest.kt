@@ -67,6 +67,21 @@ class NavigationSegmentRailLayoutTest {
     }
 
     @Test
+    fun `collapsed rail does not paint a full height surface behind the map`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("fun NavigationSegmentRail(")
+                .substringBefore("@Composable\nprivate fun NavigationSegmentRailWaypoint")
+
+        assertFalse(railSection.contains("val railColor = MaterialTheme.colorScheme.surface"))
+        assertFalse(railSection.contains(".background(color = railColor)"))
+        assertTrue(railSection.contains(".fillMaxHeight()"))
+    }
+
+    @Test
     fun `rail source scrolls to the newly focused segment`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")

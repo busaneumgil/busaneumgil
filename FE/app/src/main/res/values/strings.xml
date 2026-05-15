@@ -451,7 +451,7 @@
     <string name="search_screen_field_support_typing">입력 중 상태입니다. 검색 버튼을 누르면 실제 결과를 조회합니다.</string>
     <string name="search_screen_field_support_result">입력값을 수정한 뒤 다시 검색할 수 있습니다.</string>
     <string name="map_facility_detail_action_supporting_route_setting">선택한 시설을 도착지로 설정하고 경로 설정 화면으로 이동합니다.</string>
-    <string name="route_setting_screen_title">경로 지도</string>
+    <string name="route_setting_screen_title">경로 선택</string>
     <string name="route_setting_screen_description_empty">아직 도착지가 없어요. 목적지를 선택하면 경로를 바로 보여드릴게요.</string>
     <string name="route_setting_screen_description_with_destination">%1$s 목적지를 받아 route preview와 summary까지 같은 목적지 기준으로 연결했습니다.</string>
     <string name="route_setting_screen_description_invalid_handoff">선택한 목적지 정보를 확인하지 못해 %1$s 기준으로 경로를 대신 보여드리고 있어요.</string>
@@ -611,10 +611,10 @@
     <string name="navigation_rail_origin_label">출발</string>
     <string name="navigation_rail_destination_label">도착</string>
     <string name="navigation_return_to_active_segment_label">현재 위치로 돌아가기</string>
-    <string name="navigation_exit_confirm_dialog_title">길안내 종료</string>
-    <string name="navigation_exit_confirm_dialog_message">길안내를 종료하시겠습니까?</string>
-    <string name="navigation_exit_confirm_dialog_confirm">종료</string>
-    <string name="navigation_exit_confirm_dialog_cancel">취소</string>
+    <string name="navigation_exit_confirm_dialog_title">길안내를 종료할까요?</string>
+    <string name="navigation_exit_confirm_dialog_message">종료하면 음성 안내와 다음 이동 지시가 멈추고, 지도 화면으로 돌아갑니다.</string>
+    <string name="navigation_exit_confirm_dialog_confirm">길안내 종료</string>
+    <string name="navigation_exit_confirm_dialog_cancel">계속 안내받기</string>
     <string name="map_facility_detail_bookmark_button_label">장소 북마크</string>
     <string name="map_facility_detail_bookmark_state_saved">북마크됨</string>
     <string name="map_facility_detail_bookmark_state_unsaved">북마크 안 됨</string>

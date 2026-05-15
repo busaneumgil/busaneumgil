@@ -1332,9 +1332,8 @@ internal fun resolveKakaoFacilityMarkerSizeDp(
     category: FacilityCategory,
     isSelected: Boolean,
 ): Int =
-    when {
-        isSelected -> 34
-        category == FacilityCategory.BRAILLE_BLOCK -> 30
+    when (category) {
+        FacilityCategory.BRAILLE_BLOCK -> 30
         else -> 28
     }
 

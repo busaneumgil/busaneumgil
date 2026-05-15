@@ -21,7 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,6 +47,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -131,9 +132,10 @@ fun MyPageScreen(
     }
 
     if (isDuribalConfirmDialogVisible) {
-        DuribalCallConfirmDialog(
+        EumDuribalCallConfirmDialog(
             onDismiss = onDuribalConfirmDismiss,
             onConfirm = onDuribalConfirm,
+            dismissStyle = EumDuribalCallConfirmDismissStyle.SecondaryButton,
         )
     }
 }
@@ -309,51 +311,6 @@ private fun DuribalCallButton(onClick: () -> Unit) {
             style = MaterialTheme.typography.titleSmall,
         )
     }
-}
-
-@Composable
-private fun DuribalCallConfirmDialog(
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = stringResource(id = R.string.my_page_duribal_call_dialog_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        },
-        text = {
-            Text(
-                text = stringResource(id = R.string.my_page_duribal_call_dialog_message),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                shape = RoundedCornerShape(EumRadius.scaleM),
-            ) {
-                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_confirm))
-            }
-        },
-        dismissButton = {
-            Button(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(EumRadius.scaleM),
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-            ) {
-                Text(text = stringResource(id = R.string.my_page_duribal_call_dialog_dismiss))
-            }
-        },
-    )
 }
 
 @Composable

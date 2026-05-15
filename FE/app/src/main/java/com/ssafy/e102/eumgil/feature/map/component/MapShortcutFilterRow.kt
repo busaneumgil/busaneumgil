@@ -122,6 +122,8 @@ private fun ShortcutFilterChip(
                 text = shortcutFilterLabel(chip.key),
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
                 color = textColor,
+                maxLines = 1,
+                softWrap = false,
             )
         }
     }

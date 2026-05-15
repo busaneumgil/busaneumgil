@@ -19,6 +19,10 @@ public record AdminHazardReportSummaryResponse(
 	UUID reporterUserId,
 	@Schema(description = "제보 유형", example = "SIDEWALK_MISSING")
 	ReportType reportType,
+	@Schema(description = "제보 주소. 역지오코딩 실패 시 null")
+	String address,
+	@Schema(description = "제보 설명 preview. 80자 초과 시 ... suffix 포함")
+	String description,
 	@Schema(description = "제보 좌표")
 	GeoPointResponse reportPoint,
 	@Schema(description = "처리 상태", example = "PENDING")
@@ -28,6 +32,9 @@ public record AdminHazardReportSummaryResponse(
 	@Schema(description = "대표 첨부 이미지 URL. 사진이 없으면 null")
 	String representativeImageUrl) {
 
+	private static final int DESCRIPTION_PREVIEW_LENGTH = 80;
+	private static final String DESCRIPTION_PREVIEW_SUFFIX = "...";
+
 	public static AdminHazardReportSummaryResponse of(
 		HazardReport hazardReport,
 		String representativeImageUrl,
@@ -36,9 +43,18 @@ public record AdminHazardReportSummaryResponse(
 			hazardReport.getReportId(),
 			hazardReport.getUser().getUserId(),
 			hazardReport.getReportType(),
+			hazardReport.getAddress(),
+			toDescriptionPreview(hazardReport.getDescription()),
 			geoPointConverter.toResponse(hazardReport.getReportPoint()),
 			hazardReport.getStatus(),
 			hazardReport.getCreatedAt(),
 			representativeImageUrl);
+	}
+
+	private static String toDescriptionPreview(String description) {
+		if (description == null || description.length() <= DESCRIPTION_PREVIEW_LENGTH) {
+			return description;
+		}
+		return description.substring(0, DESCRIPTION_PREVIEW_LENGTH) + DESCRIPTION_PREVIEW_SUFFIX;
 	}
 }

@@ -7,6 +7,7 @@ Jenkins prod 배포에서 재현된 두 가지 회귀를 막는다.
 """
 
 from pathlib import Path
+import re
 import unittest
 
 
@@ -90,9 +91,26 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("npm run build:prod", content)
         self.assertIn("ARG ADMIN_BACKEND_API_URL=https://api.busaneumgil.com", content)
         self.assertIn('VITE_BACKEND_API_URL="$ADMIN_BACKEND_API_URL"', content)
+        self.assertIn('VITE_GRAFANA_DASHBOARD_URL="$ADMIN_GRAFANA_DASHBOARD_PUBLIC_URL"', content)
         self.assertIn("COPY --from=build /app/dist /usr/share/nginx/html", content)
         self.assertIn("HEALTHCHECK --interval=10s --timeout=3s --retries=10 CMD wget -qO- http://127.0.0.1/health >/dev/null", content)
         self.assertIn("try_files $uri $uri/ /index.html", nginx_content)
+
+    def test_admin_vite_env_used_by_source_is_injected_by_prod_build(self):
+        source_content = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (ROOT_DIR / "ADMIN" / "src").rglob("*")
+            if path.suffix in {".ts", ".tsx", ".js", ".jsx"}
+        )
+        dockerfile_content = ADMIN_DOCKERFILE.read_text(encoding="utf-8")
+        prod_content = PROD_COMPOSE.read_text(encoding="utf-8")
+
+        used_vite_env = set(re.findall(r"import\.meta\.env\.(VITE_[A-Z0-9_]+)", source_content))
+        dockerfile_injected_env = set(re.findall(r"(VITE_[A-Z0-9_]+)=\"", dockerfile_content))
+        prod_referenced_env = set(re.findall(r"\$\{(VITE_[A-Z0-9_]+)", prod_content))
+
+        self.assertEqual(set(), used_vite_env - dockerfile_injected_env)
+        self.assertEqual(set(), used_vite_env - prod_referenced_env)
 
     def test_admin_dockerignore_excludes_local_artifacts_and_env(self):
         content = ADMIN_DOCKERIGNORE.read_text(encoding="utf-8")
@@ -127,6 +145,17 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"', content)
         self.assertIn('bash "$ROOT_DIR/scripts/graphhopper/prod-bluegreen-refresh.sh"', content)
         self.assertIn('require_env_value JWT_SECRET', content)
+        self.assertIn('require_env_value DB_URL', content)
+        self.assertIn('require_env_value DB_USERNAME', content)
+        self.assertIn('require_env_value DB_PASSWORD', content)
+        self.assertIn('require_env_value REDIS_HOST', content)
+        self.assertIn('require_env_value S3_BUCKET', content)
+        self.assertIn('require_env_value S3_ACCESS_KEY', content)
+        self.assertIn('require_env_value S3_SECRET_KEY', content)
+        self.assertIn('require_env_value GMS_KEY', content)
+        self.assertIn('require_env_value KAKAO_REST_API_KEY', content)
+        self.assertIn('require_env_value ODSAY_API_KEY', content)
+        self.assertIn('require_env_value BUSAN_BIMS_SERVICE_KEY_DECODING', content)
         self.assertIn('require_env_value VITE_BACKEND_API_URL', content)
         self.assertLess(content.index("build backend ai admin"), content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'))
         self.assertLess(content.index("up -d backend ai admin"), content.index('bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"'))
@@ -184,6 +213,39 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("GRAPHHOPPER_GREEN_HEALTH_URL: ${GRAPHHOPPER_GREEN_HEALTH_URL:-http://graphhopper-green:8990/healthcheck}", content)
         self.assertIn("GRAPHHOPPER_ACTIVE_SLOT_KEY", content)
         self.assertIn('wget -qO- http://127.0.0.1/health >/dev/null', content)
+
+    def test_prod_compose_passes_transit_external_keys_to_backend(self):
+        content = PROD_COMPOSE.read_text(encoding="utf-8")
+
+        self.assertIn("ODSAY_API_BASE_URL: ${ODSAY_API_BASE_URL:-https://api.odsay.com/v1/api}", content)
+        self.assertIn("ODSAY_API_KEY: ${ODSAY_API_KEY:?ODSAY_API_KEY is required}", content)
+        self.assertIn("ODSAY_CONNECT_TIMEOUT: ${ODSAY_CONNECT_TIMEOUT:-5s}", content)
+        self.assertIn("ODSAY_READ_TIMEOUT: ${ODSAY_READ_TIMEOUT:-5s}", content)
+        self.assertIn("BUSAN_BIMS_API_BASE_URL: ${BUSAN_BIMS_API_BASE_URL:-https://apis.data.go.kr/6260000/BusanBIMS}", content)
+        self.assertIn(
+            "BUSAN_BIMS_SERVICE_KEY_DECODING: ${BUSAN_BIMS_SERVICE_KEY_DECODING:?BUSAN_BIMS_SERVICE_KEY_DECODING is required}",
+            content,
+        )
+        self.assertIn("BUSAN_BIMS_CONNECT_TIMEOUT: ${BUSAN_BIMS_CONNECT_TIMEOUT:-5s}", content)
+        self.assertIn("BUSAN_BIMS_READ_TIMEOUT: ${BUSAN_BIMS_READ_TIMEOUT:-5s}", content)
+
+    def test_prod_compose_fails_fast_for_core_backend_runtime_env(self):
+        content = PROD_COMPOSE.read_text(encoding="utf-8")
+
+        for key in (
+            "DB_URL",
+            "DB_USERNAME",
+            "DB_PASSWORD",
+            "REDIS_HOST",
+            "S3_BUCKET",
+            "S3_ACCESS_KEY",
+            "S3_SECRET_KEY",
+            "CORS_ALLOWED_ORIGINS",
+            "KAKAO_REST_API_KEY",
+            "JWT_SECRET",
+        ):
+            self.assertIn(f"{key}: ${{{key}:?{key} is required}}", content)
+        self.assertIn("S3_ENDPOINT: ${S3_ENDPOINT:-}", content)
 
     def test_graphhopper_refresh_script_switches_only_after_candidate_smoke(self):
         content = REFRESH_SCRIPT.read_text(encoding="utf-8")
@@ -388,10 +450,16 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertNotIn('FileCredentialsImpl', content)
 
     def test_compose_passes_cors_allowed_origins_to_backend(self):
-        for compose_file in (DEV_COMPOSE, LOCAL_COMPOSE, PROD_COMPOSE):
+        for compose_file in (DEV_COMPOSE, LOCAL_COMPOSE):
             with self.subTest(compose_file=compose_file.name):
                 content = compose_file.read_text(encoding="utf-8")
                 self.assertIn('CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-', content)
+
+        prod_content = PROD_COMPOSE.read_text(encoding="utf-8")
+        self.assertIn(
+            "CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}",
+            prod_content,
+        )
 
 
 if __name__ == "__main__":

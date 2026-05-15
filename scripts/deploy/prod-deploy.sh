@@ -25,6 +25,17 @@ require_env_value() {
 
 require_env_value JWT_SECRET
 require_env_value CORS_ALLOWED_ORIGINS
+require_env_value DB_URL
+require_env_value DB_USERNAME
+require_env_value DB_PASSWORD
+require_env_value REDIS_HOST
+require_env_value S3_BUCKET
+require_env_value S3_ACCESS_KEY
+require_env_value S3_SECRET_KEY
+require_env_value GMS_KEY
+require_env_value KAKAO_REST_API_KEY
+require_env_value ODSAY_API_KEY
+require_env_value BUSAN_BIMS_SERVICE_KEY_DECODING
 require_env_value VITE_BACKEND_API_URL
 require_env_value VITE_ADMIN_KAKAO_JAVASCRIPT_KEY
 require_env_value VITE_ADMIN_NAVER_CLIENT_ID

@@ -80,7 +80,11 @@ class SavedRouteScreenPolicyTest {
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("@Composable\nprivate fun SavedBookmarkPrimaryActionButton")
+                .substringBefore("private fun SavedBookmarkSelectionButton(")
+        val routeWaypointInfoSection =
+            source
+                .substringAfter("private fun SavedRouteWaypointInfoRow(")
+                .substringBefore("private fun routeOptionCompactLabel(")
 
         assertTrue(
             "Saved-place names should use a dedicated compact line-height token instead of the default title spacing.",
@@ -96,15 +100,15 @@ class SavedRouteScreenPolicyTest {
         )
         assertTrue(
             "Saved-route waypoint values should use a dedicated compact line-height token instead of the default body spacing.",
-            routeBookmarkSection.contains("SavedBookmarkWaypointValueLineHeight"),
+            routeWaypointInfoSection.contains("SavedBookmarkWaypointValueLineHeight"),
         )
         assertTrue(
             "Saved-route waypoint values should stay on a single line inside bookmark cards.",
-            routeBookmarkSection.contains("maxLines = SavedBookmarkWaypointValueMaxLines"),
+            routeWaypointInfoSection.contains("maxLines = SavedBookmarkWaypointValueMaxLines"),
         )
         assertTrue(
             "Saved-route waypoint values should end with ellipsis when the card width is too narrow.",
-            routeBookmarkSection.contains("overflow = TextOverflow.Ellipsis"),
+            routeWaypointInfoSection.contains("overflow = TextOverflow.Ellipsis"),
         )
     }
 
@@ -121,6 +125,10 @@ class SavedRouteScreenPolicyTest {
             source
                 .substringAfter("private fun SavedBookmarkPrimaryActionButton(")
                 .substringBefore("@Composable\nprivate fun SavedRoutePathDecoration")
+        val editBottomBarSection =
+            source
+                .substringAfter("private fun SavedBookmarkEditBottomBar(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkPrimaryActionButton")
 
         assertTrue(
             "Saved-route empty and error CTAs should use a no-ripple navigation button because they jump back to the map screen.",
@@ -149,6 +157,11 @@ class SavedRouteScreenPolicyTest {
         assertTrue(
             "Saved-route list action buttons should avoid forcing full-width content inside list rows.",
             !primaryActionSection.contains("fullWidthContent = true"),
+        )
+        assertTrue(
+            "Saved-route edit mode should use a sticky bottom delete CTA instead of per-card delete buttons.",
+            editBottomBarSection.contains("R.string.saved_route_delete_selected") &&
+                source.contains("SavedRouteUiAction.DeleteSelectedClicked"),
         )
         assertTrue(
             "Saved-route no-ripple CTA helper should disable ripple indication explicitly.",
@@ -188,7 +201,7 @@ class SavedRouteScreenPolicyTest {
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("@Composable\nprivate fun SavedBookmarkPrimaryActionButton")
+                .substringBefore("private fun SavedBookmarkSelectionButton(")
         val pathDecorationSection =
             source
                 .substringAfter("private fun SavedRoutePathDecoration(")
@@ -204,7 +217,7 @@ class SavedRouteScreenPolicyTest {
         )
         assertFalse(
             "Saved-route cards should remove the large route-name headline once the labeled origin and destination rows are shown.",
-            routeBookmarkSection.contains("text = routeBookmark.routeName"),
+            Regex("""\btext\s*=\s*routeBookmark\.routeName""").containsMatchIn(routeBookmarkSection),
         )
         assertTrue(
             "Saved-route cards should group the left path decoration with the waypoint rows so the decoration can match the content height.",
@@ -217,6 +230,10 @@ class SavedRouteScreenPolicyTest {
         assertTrue(
             "The left path decoration should stretch its connector using weight between origin and destination markers.",
             pathDecorationSection.contains(".weight(1f)"),
+        )
+        assertTrue(
+            "Saved-route card body should align route content to the top so the destination row does not drift downward.",
+            routeBookmarkSection.contains("verticalAlignment = Alignment.Top"),
         )
         assertFalse(
             "Saved-route cards should not keep the old raw one-line summary once labeled rows are shown.",
@@ -232,11 +249,22 @@ class SavedRouteScreenPolicyTest {
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("@Composable\nprivate fun SavedBookmarkPrimaryActionButton")
+                .substringBefore("private fun SavedBookmarkSelectionButton(")
 
         assertFalse(
             "Saved-route cards should not render a distance meta line once detail handles that information.",
             routeBookmarkSection.contains("savedRouteMetaLabel(routeBookmark)"),
+        )
+        assertFalse(
+            "Saved-route cards should not render duration labels such as 약 18분 in the compact bookmark row.",
+            routeBookmarkSection.contains("durationMinutes") ||
+                routeBookmarkSection.contains("saved_route_meta_duration"),
+        )
+        assertTrue(
+            "Saved-route cards should only attach compact safe or fast route labels next to the transport mode.",
+            routeBookmarkSection.contains("routeOptionCompactLabel(") &&
+                source.contains("saved_route_route_option_safe_compact") &&
+                source.contains("saved_route_route_option_fast_compact"),
         )
     }
 
@@ -252,7 +280,7 @@ class SavedRouteScreenPolicyTest {
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("@Composable\nprivate fun SavedBookmarkPrimaryActionButton")
+                .substringBefore("private fun SavedBookmarkSelectionButton(")
 
         assertTrue(
             "Saved-route list should dispatch a dedicated route-card tap action instead of reusing only the start button action.",

@@ -100,22 +100,28 @@ fun NavigationSegmentRail(
                     hasObservedInitialPosition = true
                     return@collect
                 }
-                snapshot.promotedItemPosition
-                    ?.let { position -> railFocusItems.getOrNull(position)?.index }
-                    ?.takeIf { index -> index != currentFocusedSegmentIndex }
-                    ?.let(currentOnTopVisibleSegmentChanged)
                 if (snapshot.shouldSnapToPromotedItem()) {
                     snapshot.promotedItemPosition?.let { position ->
                         hiddenRailItemPosition = position
                         listState.animateScrollToItem(position, scrollOffset = 0)
                         listState.scrollToItem(position, scrollOffset = 0)
                     }
-                } else if (
-                    hiddenRailItemPosition != null &&
-                    snapshot.firstVisibleItemIndex != hiddenRailItemPosition &&
-                    snapshot.promotedItemPosition != hiddenRailItemPosition
-                ) {
-                    hiddenRailItemPosition = null
+                }
+                val isSettlingAfterCollapsedTopCard =
+                    !snapshot.isScrollInProgress &&
+                        snapshot.firstVisibleItemScrollOffset == 0 &&
+                        hiddenRailItemPosition != null &&
+                        snapshot.firstVisibleItemIndex == hiddenRailItemPosition?.plus(1)
+                if (!snapshot.isScrollInProgress && !isSettlingAfterCollapsedTopCard) {
+                    val promotedItemPosition = snapshot.promotedItemPosition
+                    val promotedSegmentIndex =
+                        promotedItemPosition?.let { position -> railFocusItems.getOrNull(position)?.index }
+                    if (promotedItemPosition != null && promotedSegmentIndex != null) {
+                        hiddenRailItemPosition = promotedItemPosition
+                        promotedSegmentIndex
+                            .takeIf { index -> index != currentFocusedSegmentIndex }
+                            ?.let(currentOnTopVisibleSegmentChanged)
+                    }
                 }
             }
     }
@@ -166,6 +172,8 @@ fun NavigationSegmentRail(
                                     shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
                                 } == true,
                             onClick = {
+                                hiddenRailItemPosition = railFocusItems.indexOfFirst { item -> item == railSlots.originItem }
+                                    .takeIf { position -> position >= 0 }
                                 railSlots.originItem?.index?.let(onSegmentTapped)
                             },
                         )
@@ -175,7 +183,11 @@ fun NavigationSegmentRail(
                             item = item,
                             dividerColor = dividerColor,
                             isContentHidden = shouldHideGuideRailItemForTopCard(item.index, hiddenSegmentIndex),
-                            onClick = { onSegmentTapped(item.index) },
+                            onClick = {
+                                hiddenRailItemPosition = railFocusItems.indexOfFirst { railItem -> railItem.index == item.index }
+                                    .takeIf { position -> position >= 0 }
+                                onSegmentTapped(item.index)
+                            },
                         )
                     }
                     items(items = listOf("navigation-rail-destination"), key = { it }) {
@@ -189,6 +201,8 @@ fun NavigationSegmentRail(
                                     shouldHideGuideRailItemForTopCard(index, hiddenSegmentIndex)
                                 } == true,
                             onClick = {
+                                hiddenRailItemPosition = railFocusItems.indexOfFirst { item -> item == railSlots.destinationItem }
+                                    .takeIf { position -> position >= 0 }
                                 railSlots.destinationItem?.index?.let(onSegmentTapped)
                             },
                         )
@@ -199,9 +213,10 @@ fun NavigationSegmentRail(
                             dividerColor = dividerColor,
                             onClick = {
                                 coroutineScope.launch {
-                                    hiddenRailItemPosition = null
+                                    hiddenRailItemPosition = 0
                                     listState.animateScrollToItem(0, scrollOffset = 0)
                                     listState.scrollToItem(0, scrollOffset = 0)
+                                    railFocusItems.firstOrNull()?.index?.let(onSegmentTapped)
                                 }
                             },
                         )

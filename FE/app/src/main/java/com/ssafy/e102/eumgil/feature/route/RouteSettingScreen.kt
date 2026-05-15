@@ -319,6 +319,7 @@ fun RouteDetailScreen(
                     previewMap = uiState.routePreviewMap,
                     routePath = detailRoutePath,
                     detailPolylines = selectedRoute?.detailPolylines.orEmpty(),
+                    travelMode = selectedRoute?.routeOption.toRouteDetailTravelMode(),
                     guidanceMarkers = guidanceMarkers,
                     controlState = mapControlState,
                     onMarkerClick = { markerId ->
@@ -1000,21 +1001,25 @@ private fun RouteDetailIconRail(
                     hasObservedInitialPosition = true
                     return@collect
                 }
-                snapshot.promotedStepIndex
-                    ?.takeIf { index -> index != currentFocusedStepIndex }
-                    ?.let(currentOnTopVisibleStepChanged)
                 if (snapshot.shouldSnapToPromotedStep()) {
                     snapshot.promotedStepIndex?.let { index ->
                         hiddenRailStepIndex = index
                         listState.animateScrollToItem(index, scrollOffset = 0)
                         listState.scrollToItem(index, scrollOffset = 0)
                     }
-                } else if (
-                    hiddenRailStepIndex != null &&
-                    snapshot.firstVisibleItemIndex != hiddenRailStepIndex &&
-                    snapshot.promotedStepIndex != hiddenRailStepIndex
-                ) {
-                    hiddenRailStepIndex = null
+                }
+                val isSettlingAfterCollapsedTopCard =
+                    !snapshot.isScrollInProgress &&
+                        snapshot.firstVisibleItemScrollOffset == 0 &&
+                        hiddenRailStepIndex != null &&
+                        snapshot.firstVisibleItemIndex == hiddenRailStepIndex?.plus(1)
+                if (!snapshot.isScrollInProgress && !isSettlingAfterCollapsedTopCard) {
+                    snapshot.promotedStepIndex?.let { index ->
+                        hiddenRailStepIndex = index
+                        index
+                            .takeIf { stepIndex -> stepIndex != currentFocusedStepIndex }
+                            ?.let(currentOnTopVisibleStepChanged)
+                    }
                 }
             }
     }
@@ -1048,14 +1053,18 @@ private fun RouteDetailIconRail(
                     dividerColor = RouteDetailGuideDividerColor,
                     height = RouteDetailCollapsedRailItemSize,
                     isContentHidden = shouldHideGuideRailItemForTopCard(index, hiddenRailStepIndex),
-                    onClick = { onStepClick(index) },
-                    modifier = Modifier.size(RouteDetailCollapsedRailItemSize),
+                    onClick = {
+                        hiddenRailStepIndex = index
+                        onStepClick(index)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
             item(key = "route-detail-rail-scroll-top") {
                 RouteDetailCollapsedRailScrollTopAction(
                     onClick = {
                         coroutineScope.launch {
+                            hiddenRailStepIndex = 0
                             listState.animateScrollToItem(0, scrollOffset = 0)
                             listState.scrollToItem(0, scrollOffset = 0)
                             onStepClick(0)
@@ -4033,6 +4042,7 @@ private fun RouteMapBackdrop(
     previewMap: RoutePreviewMapUiState,
     routePath: List<GeoCoordinate>,
     detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
+    travelMode: RouteTravelMode = RouteTravelMode.WALK,
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
     controlState: MapOverlayViewportControlState? = null,
     onMarkerClick: (String) -> Unit = {},
@@ -4044,6 +4054,7 @@ private fun RouteMapBackdrop(
         detailPolylines.toRouteDetailPolylineOverlays(
             includeInProjection = !hasFocusedGuidanceMarker,
             showDirectionArrows = true,
+            travelMode = travelMode,
         )
     val shouldShowRouteDirectionArrows = routePolylineOverlays.isNotEmpty() || hasFocusedGuidanceMarker
     MapOverlayViewport(
@@ -4073,6 +4084,7 @@ private fun RouteMapBackdrop(
 private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays(
     includeInProjection: Boolean,
     showDirectionArrows: Boolean,
+    travelMode: RouteTravelMode,
 ): List<MapViewportPolylineOverlay> =
     mapIndexedNotNull { index, detailPolyline ->
         if (detailPolyline.points.size < 2) return@mapIndexedNotNull null
@@ -4083,16 +4095,35 @@ private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays(
                     MapCoordinate(latitude = point.latitude, longitude = point.longitude)
                 },
             style = MapViewportPolylineStyle.ROUTE_PREVIEW,
-            tone = detailPolyline.kind.toMapViewportOverlayTone(),
+            tone = detailPolyline.kind.toMapViewportOverlayTone(travelMode),
             includeInProjection = includeInProjection,
             showDirectionArrows = showDirectionArrows,
         )
     }
 
-private fun RouteDetailPolylineKind.toMapViewportOverlayTone(): MapViewportOverlayTone =
+private fun RouteDetailPolylineKind.toMapViewportOverlayTone(travelMode: RouteTravelMode): MapViewportOverlayTone =
     when (this) {
-        RouteDetailPolylineKind.WALK -> MapViewportOverlayTone.TRANSIT_WALK
+        RouteDetailPolylineKind.WALK ->
+            if (travelMode == RouteTravelMode.TRANSIT) {
+                MapViewportOverlayTone.TRANSIT_WALK
+            } else {
+                MapViewportOverlayTone.NAVIGATION_WALK
+            }
+
         RouteDetailPolylineKind.TRANSIT -> MapViewportOverlayTone.NAVY
+    }
+
+private fun RouteOption?.toRouteDetailTravelMode(): RouteTravelMode =
+    when (this) {
+        RouteOption.SAFE,
+        RouteOption.SHORTEST,
+        null,
+            -> RouteTravelMode.WALK
+
+        RouteOption.RECOMMENDED,
+        RouteOption.MIN_TRANSFER,
+        RouteOption.MIN_WALK,
+            -> RouteTravelMode.TRANSIT
     }
 
 @Composable

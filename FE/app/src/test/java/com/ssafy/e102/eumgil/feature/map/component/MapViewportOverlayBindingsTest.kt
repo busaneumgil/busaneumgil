@@ -263,6 +263,36 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
+    fun `navigation walking route color is distinct from public transit walking segment color`() {
+        val contractSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationContract.kt")
+                .readText()
+        val overlaySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlay.kt")
+                .readText()
+        val kakaoBindingSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewportBindings.kt")
+                .readText()
+        val fallbackSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+
+        assertTrue(contractSource.contains("TRANSIT_WALK"))
+        assertTrue(
+            overlaySource.contains("NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NAVIGATION_WALK") &&
+                overlaySource.contains("NavigationSegmentTravelKind.TRANSIT_WALK -> MapViewportOverlayTone.TRANSIT_WALK"),
+        )
+        assertTrue(
+            kakaoBindingSource.contains("MapViewportOverlayTone.NAVIGATION_WALK") &&
+                kakaoBindingSource.contains("lineColor = 0xFF0061FE.toInt()"),
+        )
+        assertTrue(
+            fallbackSource.contains("navigationWalk = Color(0xFF0061FE)") &&
+                fallbackSource.contains("transitWalk = Color(0xFFD9D9D9)"),
+        )
+    }
+
+    @Test
     fun `route preview hides detailed guidance markers and arrows until a guidance marker is focused`() {
         val previewMap =
             RoutePreviewMapUiState(
@@ -921,7 +951,7 @@ class MapViewportOverlayBindingsTest {
                                     distanceMeters = 300,
                                     riskLevel = RouteRiskLevel.LOW,
                                     guidanceMessage = "Walk",
-                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT_WALK,
                                 ),
                                 NavigationMapSegmentUiState(
                                     sequence = 2,

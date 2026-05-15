@@ -110,6 +110,10 @@ class NavigationSegmentRailLayoutTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
                 .readText()
+        val collectSection =
+            source
+                .substringAfter(".collect { snapshot ->")
+                .substringBefore("LaunchedEffect(uiState.focusedSegmentIndex")
 
         assertTrue(source.contains("rememberLazyListState()"))
         assertTrue(source.contains("snapshotFlow"))
@@ -117,6 +121,22 @@ class NavigationSegmentRailLayoutTest {
         assertTrue(source.contains("listState.animateScrollToItem(position, scrollOffset = 0)"))
         assertTrue(source.contains("listState.scrollToItem(position, scrollOffset = 0)"))
         assertTrue(source.contains("NavigationSegmentRailItemHeight = 96.dp"))
+        assertTrue(
+            "A fast fling can settle exactly on an item boundary, so the promoted item must still be hidden from the rail even when no extra snap animation is needed.",
+            collectSection.contains("val isSettlingAfterCollapsedTopCard") &&
+                collectSection.contains("if (!snapshot.isScrollInProgress && !isSettlingAfterCollapsedTopCard)") &&
+                collectSection.contains("hiddenRailItemPosition = promotedItemPosition"),
+        )
+        assertTrue(
+            "The rail should snap and hide the promoted slot before it notifies the top card, preventing fast fling recomposition from interrupting the snap.",
+            collectSection.indexOf("snapshot.shouldSnapToPromotedItem()") <
+                collectSection.indexOf("currentOnTopVisibleSegmentChanged"),
+        )
+        assertTrue(
+            "The scroll-to-top action should promote the first guide card and keep that first icon out of the collapsed rail.",
+            source.contains("hiddenRailItemPosition = 0") &&
+                source.contains("railFocusItems.firstOrNull()?.index?.let(onSegmentTapped)"),
+        )
     }
 }
 

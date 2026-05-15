@@ -1398,6 +1398,7 @@ private fun RouteCandidate.navigationPolylinePoints(): List<GeoCoordinate> {
 
 private fun RouteCandidate.resolveSegmentTravelKind(
     segment: RouteSegment?,
+    hasTransitLeg: Boolean,
 ): NavigationSegmentTravelKind {
     val legType =
         legs.firstOrNull { leg ->
@@ -1409,9 +1410,17 @@ private fun RouteCandidate.resolveSegmentTravelKind(
         RouteLegType.SUBWAY,
             -> NavigationSegmentTravelKind.TRANSIT
 
-        else -> NavigationSegmentTravelKind.WALK
+        else ->
+            if (hasTransitLeg) {
+                NavigationSegmentTravelKind.TRANSIT_WALK
+            } else {
+                NavigationSegmentTravelKind.WALK
+            }
     }
 }
+
+private fun RouteCandidate.hasTransitLeg(): Boolean =
+    legs.any { leg -> leg.type == RouteLegType.BUS || leg.type == RouteLegType.SUBWAY }
 
 private fun RoutePolyline.totalDistanceWeight(): Double? =
     points.totalPolylineDistanceMeters().takeIf { distanceMeters -> distanceMeters > 0.0 }
@@ -1605,6 +1614,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex)
     val activeSegmentPolyline = activeSegment?.polyline?.points.orEmpty()
     val focusedSegmentPolyline = focusedSegment?.polyline?.points.orEmpty()
+    val hasTransitLeg = selectedRoute.hasTransitLeg()
     val activeFocusCoordinate =
         currentLocationCoordinate
             ?: selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
@@ -1623,14 +1633,14 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
                 distanceMeters = segment.distanceMeters,
                 riskLevel = segment.riskLevel,
                 guidanceMessage = segment.guidanceMessage,
-                travelKind = selectedRoute.resolveSegmentTravelKind(segment),
+                travelKind = selectedRoute.resolveSegmentTravelKind(segment, hasTransitLeg),
                 isActive = index == activeSegmentIndex,
                 isFocused = index == focusedSegmentIndex,
                 isCompleted = index < activeSegmentIndex,
                 isRiskUpcoming = index > activeSegmentIndex && segment.riskLevel != RouteRiskLevel.LOW,
             )
         }
-    val routeSegments = segmentRouteSegments + selectedRoute.toFallbackWalkingLegMapSegments(segmentRouteSegments)
+    val routeSegments = segmentRouteSegments + selectedRoute.toFallbackWalkingLegMapSegments(segmentRouteSegments, hasTransitLeg)
     val originPoint = origin.toNavigationMapPointUiState(fallbackLabel = "출발지")
     val destinationPoint = destination.toNavigationMapPointUiState(fallbackLabel = "목적지")
 
@@ -1646,8 +1656,8 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         selectedRoutePolyline = selectedRoutePolyline,
         activeSegmentPolyline = activeSegmentPolyline,
         focusedSegmentPolyline = focusedSegmentPolyline,
-        activeSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(activeSegment),
-        focusedSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(focusedSegment),
+        activeSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(activeSegment, hasTransitLeg),
+        focusedSegmentTravelKind = selectedRoute.resolveSegmentTravelKind(focusedSegment, hasTransitLeg),
         focusCoordinate =
             when (mapFocusMode) {
                 NavigationMapFocusMode.ACTIVE -> activeFocusCoordinate
@@ -1663,10 +1673,13 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
 
 private fun RouteCandidate.toFallbackWalkingLegMapSegments(
     existingSegments: List<NavigationMapSegmentUiState>,
+    hasTransitLeg: Boolean,
 ): List<NavigationMapSegmentUiState> {
     val hasRenderableWalkingSegment =
         existingSegments.any { segment ->
-            segment.travelKind == NavigationSegmentTravelKind.WALK && segment.isRenderable
+            (segment.travelKind == NavigationSegmentTravelKind.WALK ||
+                segment.travelKind == NavigationSegmentTravelKind.TRANSIT_WALK) &&
+                segment.isRenderable
         }
     if (hasRenderableWalkingSegment) return emptyList()
 
@@ -1680,7 +1693,12 @@ private fun RouteCandidate.toFallbackWalkingLegMapSegments(
                 distanceMeters = leg.distanceMeters ?: 0,
                 riskLevel = RouteRiskLevel.LOW,
                 guidanceMessage = leg.instruction,
-                travelKind = NavigationSegmentTravelKind.WALK,
+                travelKind =
+                    if (hasTransitLeg) {
+                        NavigationSegmentTravelKind.TRANSIT_WALK
+                    } else {
+                        NavigationSegmentTravelKind.WALK
+                    },
                 showJunctionMarker = false,
             )
         }

@@ -1083,6 +1083,56 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route detail rail snaps before promoting the top card state`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("private fun RouteDetailIconRail(")
+                .substringBefore("@Composable\nprivate fun RouteDetailCollapsedRailScrollTopAction")
+        val collectSection =
+            railSection
+                .substringAfter(".collect { snapshot ->")
+                .substringBefore("BoxWithConstraints(")
+
+        assertTrue(
+            "Route detail rail should snap and collapse the promoted icon before updating the top guide card.",
+            collectSection.indexOf("snapshot.shouldSnapToPromotedStep()") <
+                collectSection.indexOf("currentOnTopVisibleStepChanged"),
+        )
+        assertTrue(
+            "Route detail rail should keep the promoted top-card icon collapsed even when a fast fling settles exactly on an item boundary.",
+            collectSection.contains("val isSettlingAfterCollapsedTopCard") &&
+                collectSection.contains("if (!snapshot.isScrollInProgress && !isSettlingAfterCollapsedTopCard)") &&
+                collectSection.contains("hiddenRailStepIndex = index"),
+        )
+        assertFalse(
+            "Route detail rail items must not force a fixed outer height because hidden top-card items need to collapse out of the rail.",
+            railSection.contains("modifier = Modifier.size(RouteDetailCollapsedRailItemSize)"),
+        )
+        assertTrue(
+            "Route detail scroll-to-top should promote the first guide card and hide the first rail icon.",
+            railSection.contains("hiddenRailStepIndex = 0") &&
+                railSection.contains("onStepClick(0)"),
+        )
+    }
+
+    @Test
+    fun `route detail separates pure walking line color from transit walking line color`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+
+        assertTrue(source.contains("travelMode = selectedRoute?.routeOption.toRouteDetailTravelMode()"))
+        assertTrue(source.contains("private fun RouteDetailPolylineKind.toMapViewportOverlayTone(travelMode: RouteTravelMode)"))
+        assertTrue(
+            source.contains("MapViewportOverlayTone.TRANSIT_WALK") &&
+                source.contains("MapViewportOverlayTone.NAVIGATION_WALK"),
+        )
+    }
+
+    @Test
     fun `route CTAs use narrower horizontal insets across search and detail`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")

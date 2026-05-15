@@ -360,9 +360,9 @@ class NavigationViewModelTest {
 
             assertTrue(summary.contains("focusMode=ACTIVE"))
             assertTrue(summary.contains("count=3"))
-            assertTrue(summary.contains("idx=0 seq=1 kind=WALK polyline=0 first=null"))
+            assertTrue(summary.contains("idx=0 seq=1 kind=TRANSIT_WALK polyline=0 first=null"))
             assertTrue(summary.contains("idx=1 seq=2 kind=TRANSIT polyline=2 first=35.180600,129.073500"))
-            assertTrue(summary.contains("idx=2 seq=1 kind=WALK polyline=2 first=35.180200,129.071800"))
+            assertTrue(summary.contains("idx=2 seq=1 kind=TRANSIT_WALK polyline=2 first=35.180200,129.071800"))
         }
 
     @Test
@@ -375,7 +375,7 @@ class NavigationViewModelTest {
 
             val walkingPolyline =
                 viewModel.uiState.value.mapOverlay.routeSegments.firstOrNull { segment ->
-                    segment.travelKind == NavigationSegmentTravelKind.WALK && segment.polyline.size >= 2
+                    segment.travelKind == NavigationSegmentTravelKind.TRANSIT_WALK && segment.polyline.size >= 2
                 }
 
             assertEquals(LEG_FALLBACK_START_POINT, walkingPolyline?.polyline?.firstOrNull())

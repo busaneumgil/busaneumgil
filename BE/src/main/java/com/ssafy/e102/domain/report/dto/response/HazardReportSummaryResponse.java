@@ -10,9 +10,14 @@ import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 public record HazardReportSummaryResponse(
 	Long reportId,
 	ReportType reportType,
+	String address,
+	String description,
 	GeoPointResponse reportPoint,
 	LocalDateTime createdAt,
 	String representativeImageUrl) {
+
+	private static final int DESCRIPTION_PREVIEW_LENGTH = 80;
+	private static final String DESCRIPTION_PREVIEW_SUFFIX = "...";
 
 	public static HazardReportSummaryResponse of(
 		HazardReport hazardReport,
@@ -21,8 +26,17 @@ public record HazardReportSummaryResponse(
 		return new HazardReportSummaryResponse(
 			hazardReport.getReportId(),
 			hazardReport.getReportType(),
+			hazardReport.getAddress(),
+			toDescriptionPreview(hazardReport.getDescription()),
 			geoPointConverter.toResponse(hazardReport.getReportPoint()),
 			hazardReport.getCreatedAt(),
 			representativeImageUrl);
+	}
+
+	private static String toDescriptionPreview(String description) {
+		if (description == null || description.length() <= DESCRIPTION_PREVIEW_LENGTH) {
+			return description;
+		}
+		return description.substring(0, DESCRIPTION_PREVIEW_LENGTH) + DESCRIPTION_PREVIEW_SUFFIX;
 	}
 }

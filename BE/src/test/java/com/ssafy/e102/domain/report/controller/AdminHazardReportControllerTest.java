@@ -52,6 +52,8 @@ class AdminHazardReportControllerTest {
 					3L,
 					reporterUserId,
 					ReportType.SIDEWALK_MISSING,
+					"부산 부산진구 시민공원로 73",
+					"보행 가능한 인도가 없습니다.",
 					new GeoPointResponse(35.1686, 129.0576),
 					ReportStatus.PENDING,
 					LocalDateTime.of(2026, 5, 7, 22, 0),
@@ -67,6 +69,8 @@ class AdminHazardReportControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.content[0].reportId").value(3))
 			.andExpect(jsonPath("$.data.content[0].reporterUserId").value(reporterUserId.toString()))
+			.andExpect(jsonPath("$.data.content[0].address").value("부산 부산진구 시민공원로 73"))
+			.andExpect(jsonPath("$.data.content[0].description").value("보행 가능한 인도가 없습니다."))
 			.andExpect(jsonPath("$.data.content[0].status").value("PENDING"))
 			.andExpect(jsonPath("$.data.nextCursor").value(3))
 			.andExpect(jsonPath("$.data.hasNext").value(true));
@@ -84,6 +88,7 @@ class AdminHazardReportControllerTest {
 				reporterUserId,
 				ReportType.RAMP,
 				"경사로가 파손되었습니다.",
+				"부산 부산진구 시민공원로 73",
 				new GeoPointResponse(35.1686, 129.0576),
 				ReportStatus.PENDING,
 				LocalDateTime.of(2026, 5, 7, 22, 0),
@@ -93,6 +98,7 @@ class AdminHazardReportControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.reportId").value(1))
 			.andExpect(jsonPath("$.data.reporterUserId").value(reporterUserId.toString()))
+			.andExpect(jsonPath("$.data.address").value("부산 부산진구 시민공원로 73"))
 			.andExpect(jsonPath("$.data.status").value("PENDING"))
 			.andExpect(jsonPath("$.data.imageUrls[0]").value("https://example.com/reports/1/image-1.jpg"));
 

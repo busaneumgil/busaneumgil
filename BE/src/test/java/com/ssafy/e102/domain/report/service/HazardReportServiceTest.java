@@ -3,14 +3,25 @@ package com.ssafy.e102.domain.report.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +32,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.web.client.RestClientException;
 
 import com.ssafy.e102.domain.report.dto.request.CreateHazardReportRequest;
 import com.ssafy.e102.domain.report.dto.response.HazardReportDetailResponse;
@@ -36,10 +51,17 @@ import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
+import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 class HazardReportServiceTest {
+
+	private static final Clock FIXED_CLOCK = Clock.fixed(
+		Instant.parse("2026-05-14T00:00:00Z"),
+		ZoneOffset.UTC);
+	private static final LocalDateTime NOW = LocalDateTime.of(2026, 5, 14, 0, 0);
 
 	@Mock
 	private HazardReportRepository hazardReportRepository;
@@ -50,18 +72,30 @@ class HazardReportServiceTest {
 	@Mock
 	private UserRepository userRepository;
 
+	@Mock
+	private HazardReportImageUploadService hazardReportImageUploadService;
+
+	@Mock
+	private KakaoLocalClient kakaoLocalClient;
+
 	private HazardReportService hazardReportService;
 	private GeoPointConverter geoPointConverter;
+	private AtomicBoolean inWriteTransaction;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
+		inWriteTransaction = new AtomicBoolean(false);
 		geoPointConverter = new GeoPointConverter();
 		hazardReportService = new HazardReportService(
 			hazardReportRepository,
 			hazardReportImageRepository,
 			userRepository,
-			geoPointConverter);
+			geoPointConverter,
+			hazardReportImageUploadService,
+			kakaoLocalClient,
+			FIXED_CLOCK,
+			testTransactionOperations());
 	}
 
 	@Test
@@ -69,9 +103,159 @@ class HazardReportServiceTest {
 	void createHazardReport() {
 		UUID userId = UUID.randomUUID();
 		User user = user(userId);
+		CreateHazardReportRequest request = defaultCreateRequest();
 		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576))
+			.thenAnswer(invocation -> {
+				assertThat(inWriteTransaction.get()).isFalse();
+				return Optional.of(new KakaoAddressDocument(
+					"부산 부산진구 범전동 200",
+					"부산 부산진구 시민공원로 73",
+					null,
+					"부산",
+					"부산진구",
+					"범전동"));
+			});
+		when(hazardReportRepository.save(any(HazardReport.class))).thenAnswer(invocation -> {
+			assertThat(inWriteTransaction.get()).isTrue();
+			HazardReport hazardReport = invocation.getArgument(0);
+			assertThat(hazardReport.getAddress()).isEqualTo("부산 부산진구 시민공원로 73");
+			ReflectionTestUtils.setField(hazardReport, "reportId", 1L);
+			return hazardReport;
+		});
+
+		HazardReportIdResponse response = hazardReportService.createHazardReport(
+			userId,
+			request);
+
+		assertThat(response.reportId()).isEqualTo(1L);
+		verify(hazardReportImageUploadService).validateImageObjectKeys(
+			userId,
+			List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+		verify(hazardReportRepository).save(any(HazardReport.class));
+	}
+
+	@Test
+	@DisplayName("Idempotency-Key가 있으면 요청 해시와 24시간 만료 시각을 함께 저장한다")
+	void createHazardReportWithIdempotencyKey() {
+		UUID userId = UUID.randomUUID();
+		CreateHazardReportRequest request = defaultCreateRequest();
+		User user = user(userId);
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+		when(hazardReportRepository.findByUser_UserIdAndIdempotencyKey(userId, "outbox-report-1"))
+			.thenReturn(Optional.empty());
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576)).thenReturn(Optional.empty());
 		when(hazardReportRepository.save(any(HazardReport.class))).thenAnswer(invocation -> {
 			HazardReport hazardReport = invocation.getArgument(0);
+			assertThat(hazardReport.getIdempotencyKey()).isEqualTo("outbox-report-1");
+			assertThat(hazardReport.getIdempotencyRequestHash()).isEqualTo(idempotencyRequestHash(request));
+			assertThat(hazardReport.getIdempotencyExpiresAt()).isEqualTo(NOW.plusHours(24));
+			ReflectionTestUtils.setField(hazardReport, "reportId", 1L);
+			return hazardReport;
+		});
+
+		HazardReportIdResponse response = hazardReportService.createHazardReport(
+			userId,
+			request,
+			" outbox-report-1 ");
+
+		assertThat(response.reportId()).isEqualTo(1L);
+		verify(userRepository).findByIdForUpdate(userId);
+		verify(hazardReportRepository).clearExpiredIdempotencyMetadata(NOW);
+		verify(hazardReportRepository).save(any(HazardReport.class));
+	}
+
+	@Test
+	@DisplayName("동일 Idempotency-Key와 동일 요청은 기존 제보 ID를 반환한다")
+	void createHazardReportReturnsExistingReportForSameIdempotencyRequest() {
+		UUID userId = UUID.randomUUID();
+		CreateHazardReportRequest request = defaultCreateRequest();
+		User user = user(userId);
+		HazardReport existingReport = hazardReport(user, 7L, List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+		ReflectionTestUtils.setField(existingReport, "idempotencyKey", "outbox-report-1");
+		ReflectionTestUtils.setField(existingReport, "idempotencyRequestHash", idempotencyRequestHash(request));
+		ReflectionTestUtils.setField(existingReport, "idempotencyExpiresAt", NOW.plusHours(1));
+		when(hazardReportRepository.findByUser_UserIdAndIdempotencyKey(userId, "outbox-report-1"))
+			.thenReturn(Optional.of(existingReport));
+
+		HazardReportIdResponse response = hazardReportService.createHazardReport(
+			userId,
+			request,
+			"outbox-report-1");
+
+		assertThat(response.reportId()).isEqualTo(7L);
+		verify(userRepository, never()).findByIdForUpdate(userId);
+		verify(hazardReportRepository, never()).clearExpiredIdempotencyMetadata(NOW);
+		verify(hazardReportImageUploadService, never()).validateImageObjectKeys(any(), any());
+		verify(kakaoLocalClient, never()).reverseGeocode(anyDouble(), anyDouble());
+		verify(hazardReportRepository, never()).save(any(HazardReport.class));
+	}
+
+	@Test
+	@DisplayName("동일 Idempotency-Key와 다른 요청은 충돌로 거부한다")
+	void rejectDifferentRequestWithSameIdempotencyKey() {
+		UUID userId = UUID.randomUUID();
+		CreateHazardReportRequest request = defaultCreateRequest();
+		User user = user(userId);
+		HazardReport existingReport = hazardReport(user, 7L, List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+		ReflectionTestUtils.setField(existingReport, "idempotencyKey", "outbox-report-1");
+		ReflectionTestUtils.setField(existingReport, "idempotencyRequestHash", "different-request-hash");
+		ReflectionTestUtils.setField(existingReport, "idempotencyExpiresAt", NOW.plusHours(1));
+		when(hazardReportRepository.findByUser_UserIdAndIdempotencyKey(userId, "outbox-report-1"))
+			.thenReturn(Optional.of(existingReport));
+
+		assertThatThrownBy(() -> hazardReportService.createHazardReport(userId, request, "outbox-report-1"))
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_IDEMPOTENCY_CONFLICT);
+
+		verify(userRepository, never()).findByIdForUpdate(userId);
+		verify(hazardReportRepository, never()).clearExpiredIdempotencyMetadata(NOW);
+		verify(hazardReportImageUploadService, never()).validateImageObjectKeys(any(), any());
+		verify(hazardReportRepository, never()).save(any(HazardReport.class));
+	}
+
+	@Test
+	@DisplayName("Idempotency-Key가 255자를 넘으면 제보 등록을 거부한다")
+	void rejectTooLongIdempotencyKey() {
+		UUID userId = UUID.randomUUID();
+
+		assertThatThrownBy(() -> hazardReportService.createHazardReport(
+			userId,
+			defaultCreateRequest(),
+			"a".repeat(256)))
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.INVALID_HAZARD_REPORT_REQUEST);
+
+		verify(userRepository, never()).findById(any());
+		verify(userRepository, never()).findByIdForUpdate(any());
+		verify(hazardReportRepository, never()).clearExpiredIdempotencyMetadata(any());
+		verify(hazardReportRepository, never()).save(any(HazardReport.class));
+	}
+
+	@Test
+	@DisplayName("만료된 멱등성 메타데이터를 현재 시각 기준으로 정리한다")
+	void cleanupExpiredIdempotencyMetadata() {
+		when(hazardReportRepository.clearExpiredIdempotencyMetadata(NOW)).thenReturn(2);
+
+		int cleanedCount = hazardReportService.cleanupExpiredIdempotencyMetadata();
+
+		assertThat(cleanedCount).isEqualTo(2);
+		verify(hazardReportRepository, times(1)).clearExpiredIdempotencyMetadata(NOW);
+	}
+
+	@Test
+	@DisplayName("주소 역지오코딩이 실패해도 제보는 주소 없이 저장한다")
+	void createHazardReportWithNullAddressWhenReverseGeocodeFails() {
+		UUID userId = UUID.randomUUID();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user(userId)));
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576))
+			.thenThrow(new RestClientException("timeout"));
+		when(hazardReportRepository.save(any(HazardReport.class))).thenAnswer(invocation -> {
+			HazardReport hazardReport = invocation.getArgument(0);
+			assertThat(hazardReport.getAddress()).isNull();
 			ReflectionTestUtils.setField(hazardReport, "reportId", 1L);
 			return hazardReport;
 		});
@@ -82,10 +266,36 @@ class HazardReportServiceTest {
 				ReportType.SIDEWALK_MISSING,
 				"보행 가능한 인도가 없습니다.",
 				new GeoPointRequest(35.1686, 129.0576),
-				List.of("https://example.com/reports/1/image-1.jpg")));
+				List.of()));
 
 		assertThat(response.reportId()).isEqualTo(1L);
 		verify(hazardReportRepository).save(any(HazardReport.class));
+	}
+
+	@Test
+	@DisplayName("제보 이미지 object key가 허용되지 않으면 도로 상태 제보를 저장하지 않는다")
+	void rejectCreateWithInvalidImageObjectKey() {
+		UUID userId = UUID.randomUUID();
+		List<String> imageObjectKeys = List.of("https://attacker.example.com/image.jpg");
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user(userId)));
+		doThrow(new HazardReportException(
+			HazardReportErrorCode.INVALID_HAZARD_REPORT_IMAGE_URL,
+			"제보 이미지 object key는 업로드 API로 발급된 값이어야 합니다."))
+			.when(hazardReportImageUploadService)
+			.validateImageObjectKeys(userId, imageObjectKeys);
+
+		assertThatThrownBy(() -> hazardReportService.createHazardReport(
+			userId,
+			new CreateHazardReportRequest(
+				ReportType.SIDEWALK_MISSING,
+				"보행 가능한 인도가 없습니다.",
+				new GeoPointRequest(35.1686, 129.0576),
+				imageObjectKeys)))
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.INVALID_HAZARD_REPORT_IMAGE_URL);
+
+		verify(hazardReportRepository, never()).save(any(HazardReport.class));
 	}
 
 	@Test
@@ -110,21 +320,30 @@ class HazardReportServiceTest {
 	@DisplayName("내 제보 목록은 최신 저장순 cursor 기반으로 대표 이미지를 함께 조회한다")
 	void getMyHazardReports() {
 		UUID userId = UUID.randomUUID();
-		HazardReport hazardReport = hazardReport(user(userId), 1L,
-			List.of("https://example.com/reports/1/image-1.jpg"));
+		HazardReport hazardReport = hazardReport(
+			user(userId),
+			1L,
+			"부산 부산진구 시민공원로 73",
+			"가".repeat(81),
+			List.of("hazard-reports/user-1/20260514/image-1.jpg"));
 		PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "reportId"));
 		when(hazardReportRepository.findAllByUser_UserId(userId, pageable))
 			.thenReturn(new SliceImpl<>(List.of(hazardReport), pageable, false));
 		when(hazardReportImageRepository.findAllByHazardReport_ReportIdInAndDisplayOrder(List.of(1L), (short)0))
 			.thenReturn(List.of(hazardReport.getImages().get(0)));
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-1.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-1");
 
 		HazardReportListResponse response = hazardReportService.getMyHazardReports(userId, null, 10);
 
 		assertThat(response.content()).hasSize(1);
 		assertThat(response.content().get(0).reportId()).isEqualTo(1L);
 		assertThat(response.content().get(0).reportType()).isEqualTo(ReportType.SIDEWALK_MISSING);
+		assertThat(response.content().get(0).address()).isEqualTo("부산 부산진구 시민공원로 73");
+		assertThat(response.content().get(0).description())
+			.isEqualTo("가".repeat(80) + "...");
 		assertThat(response.content().get(0).representativeImageUrl())
-			.isEqualTo("https://example.com/reports/1/image-1.jpg");
+			.isEqualTo("https://storage.example.com/read?key=image-1");
 		assertThat(response.nextCursor()).isNull();
 		assertThat(response.hasNext()).isFalse();
 	}
@@ -147,20 +366,24 @@ class HazardReportServiceTest {
 	}
 
 	@Test
-	@DisplayName("내 제보 상세는 전체 이미지 URL을 반환한다")
+	@DisplayName("내 제보 상세는 전체 이미지를 조회용 presigned URL로 반환한다")
 	void getMyHazardReportDetail() {
 		UUID userId = UUID.randomUUID();
 		HazardReport hazardReport = hazardReport(user(userId), 1L, List.of(
-			"https://example.com/reports/1/image-1.jpg",
-			"https://example.com/reports/1/image-2.jpg"));
+			"hazard-reports/user-1/20260514/image-1.jpg",
+			"hazard-reports/user-1/20260514/image-2.jpg"));
 		when(hazardReportRepository.findWithImagesByReportId(1L)).thenReturn(Optional.of(hazardReport));
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-1.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-1");
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-2.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-2");
 
 		HazardReportDetailResponse response = hazardReportService.getMyHazardReportDetail(userId, 1L);
 
 		assertThat(response.reportId()).isEqualTo(1L);
 		assertThat(response.imageUrls()).containsExactly(
-			"https://example.com/reports/1/image-1.jpg",
-			"https://example.com/reports/1/image-2.jpg");
+			"https://storage.example.com/read?key=image-1",
+			"https://storage.example.com/read?key=image-2");
 	}
 
 	@Test
@@ -186,16 +409,72 @@ class HazardReportServiceTest {
 			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND);
 	}
 
-	private HazardReport hazardReport(User user, Long reportId, List<String> imageUrls) {
+	private TransactionOperations testTransactionOperations() {
+		return new TransactionOperations() {
+
+			@Override
+			public <T> T execute(TransactionCallback<T> action) {
+				assertThat(inWriteTransaction.compareAndSet(false, true)).isTrue();
+				try {
+					return action.doInTransaction(new SimpleTransactionStatus());
+				} finally {
+					inWriteTransaction.set(false);
+				}
+			}
+		};
+	}
+
+	private HazardReport hazardReport(User user, Long reportId, List<String> imageObjectKeys) {
+		return hazardReport(user, reportId, "부산 부산진구 시민공원로 73", "보행 가능한 인도가 없습니다.", imageObjectKeys);
+	}
+
+	private HazardReport hazardReport(
+		User user,
+		Long reportId,
+		String address,
+		String description,
+		List<String> imageObjectKeys) {
 		HazardReport hazardReport = HazardReport.create(
 			user,
 			ReportType.SIDEWALK_MISSING,
-			"보행 가능한 인도가 없습니다.",
+			description,
+			address,
 			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)),
-			imageUrls);
+			imageObjectKeys);
 		ReflectionTestUtils.setField(hazardReport, "reportId", reportId);
 		ReflectionTestUtils.setField(hazardReport, "createdAt", LocalDateTime.of(2026, 4, 28, 17, 0));
 		return hazardReport;
+	}
+
+	private CreateHazardReportRequest defaultCreateRequest() {
+		return new CreateHazardReportRequest(
+			ReportType.SIDEWALK_MISSING,
+			"보행 가능한 인도가 없습니다.",
+			new GeoPointRequest(35.1686, 129.0576),
+			List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+	}
+
+	private String idempotencyRequestHash(CreateHazardReportRequest request) {
+		StringBuilder canonical = new StringBuilder();
+		appendPart(canonical, request.reportType().name());
+		appendPart(canonical, request.description().trim());
+		appendPart(canonical, request.reportPoint().lat().toString());
+		appendPart(canonical, request.reportPoint().lng().toString());
+		canonical.append(request.imageObjectKeys().size()).append('|');
+		for (String imageObjectKey : request.imageObjectKeys()) {
+			appendPart(canonical, imageObjectKey);
+		}
+		try {
+			byte[] digest = MessageDigest.getInstance("SHA-256")
+				.digest(canonical.toString().getBytes(StandardCharsets.UTF_8));
+			return HexFormat.of().formatHex(digest);
+		} catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 is unavailable.", exception);
+		}
+	}
+
+	private void appendPart(StringBuilder canonical, String value) {
+		canonical.append(value.length()).append(':').append(value).append('|');
 	}
 
 	private User user(UUID userId) {

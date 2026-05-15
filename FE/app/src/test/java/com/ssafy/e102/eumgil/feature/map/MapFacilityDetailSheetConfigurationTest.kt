@@ -108,8 +108,8 @@ class MapFacilityDetailSheetConfigurationTest {
             source.contains("if (state.hasDetailContent && !isCollapsed)"),
         )
         assertTrue(
-            "Detail sheet body should reserve a bounded scroll area so long place details can scroll above fixed actions.",
-            source.contains(".weight(1f, fill = true)") &&
+            "Detail sheet body should scroll inside a bounded area without forcing the sheet to max height.",
+            source.contains("heightIn(max = detailContentMaxHeight)") &&
                 source.contains(".verticalScroll(detailScrollState)"),
         )
     }
@@ -170,6 +170,12 @@ class MapFacilityDetailSheetConfigurationTest {
         assertTrue(
             "Collapsed title should be one line while expanded title can use two lines.",
             shellSource.contains("maxLines = if (isCollapsed) 1 else 2"),
+        )
+        assertTrue(
+            "Expanded detail content should scroll inside a bounded area instead of forcing the whole sheet to fill the screen.",
+            shellSource.contains("private const val FacilityDetailContentMaxHeightFraction = 0.32f") &&
+                shellSource.contains("heightIn(max = detailContentMaxHeight)") &&
+                !shellSource.contains(".weight(1f, fill = true)"),
         )
         assertTrue(
             "Bottom actions should keep origin before destination in the fixed action row.",

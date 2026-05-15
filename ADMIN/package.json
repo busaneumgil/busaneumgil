@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host localhost --port 3001",
+    "dev": "vite --mode dev --host localhost --port 3001",
     "build": "tsc -b && vite build",
     "build:prod": "tsc -b && vite build --mode prod",
     "test": "vitest run",

@@ -360,7 +360,7 @@ internal fun navigationBottomBarLayoutPolicy(
 internal fun navigationBottomBarChromePolicy(): NavigationBottomBarChromePolicy =
     NavigationBottomBarChromePolicy(
         bottomGap = NavigationBottomBarBottomGap,
-        usesNavigationBarPadding = false,
+        usesNavigationBarPadding = true,
     )
 
 internal enum class NavigationExitDialogShell {

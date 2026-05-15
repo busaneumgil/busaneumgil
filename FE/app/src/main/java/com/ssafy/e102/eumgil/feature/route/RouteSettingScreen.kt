@@ -3811,6 +3811,7 @@ private fun RouteSettingBottomBar(
             onStartClick = onStartClick,
             modifier =
                 Modifier
+                    .navigationBarsPadding()
                     .padding(
                         start = EumSpacing.medium,
                         end = EumSpacing.medium,

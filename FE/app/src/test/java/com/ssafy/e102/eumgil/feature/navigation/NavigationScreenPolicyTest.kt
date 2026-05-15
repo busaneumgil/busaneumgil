@@ -156,7 +156,7 @@ class NavigationScreenPolicyTest {
                 source.contains("NavigationSidePanelStepIcon("),
         )
         assertEquals(30.dp, bottomBarChromePolicy.bottomGap)
-        assertFalse(bottomBarChromePolicy.usesNavigationBarPadding)
+        assertTrue(bottomBarChromePolicy.usesNavigationBarPadding)
         assertFalse(
             "Exit CTA text should not be squeezed by the old fixed-width button.",
             source.contains(".width(NavigationBottomBarButtonWidth)"),

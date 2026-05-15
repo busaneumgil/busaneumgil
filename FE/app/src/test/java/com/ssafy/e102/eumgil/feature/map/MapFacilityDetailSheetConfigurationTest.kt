@@ -545,4 +545,23 @@ class MapFacilityDetailSheetConfigurationTest {
                 source.contains("tagLabels.size - MAX_RECENT_DESTINATION_VISIBLE_TAGS"),
         )
     }
+
+    @Test
+    fun `map tap loading sheet hides temporary coordinate address`() {
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val shellSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
+
+        assertTrue(
+            "Map tap loading state should show a loading copy instead of a temporary selected-position title.",
+            screenSource.contains("?: stringResource(id = R.string.map_facility_detail_loading_guide)") &&
+                screenSource.contains("title = stringResource(id = R.string.map_facility_detail_loading_guide)") &&
+                screenSource.contains("address = \"\""),
+        )
+        assertTrue(
+            "Facility detail shell should not reserve an address row when the loading state has no confirmed address.",
+            shellSource.contains("!isCollapsed && state.address.isNotBlank()"),
+        )
+    }
 }

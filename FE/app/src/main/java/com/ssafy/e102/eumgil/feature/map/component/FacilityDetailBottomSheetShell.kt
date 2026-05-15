@@ -229,7 +229,7 @@ fun FacilityDetailBottomSheetShell(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            if (!isCollapsed) {
+                            if (!isCollapsed && state.address.isNotBlank()) {
                                 Text(
                                     text = state.address,
                                     style = MaterialTheme.typography.bodyMedium,
@@ -237,6 +237,8 @@ fun FacilityDetailBottomSheetShell(
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                            }
+                            if (!isCollapsed) {
                                 val phoneNumber = state.phoneNumber?.takeIf { it.isNotBlank() }
                                 if (phoneNumber != null && onPhoneClick != null) {
                                     val phoneActionDescription =

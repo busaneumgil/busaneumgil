@@ -1017,7 +1017,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
     val loadingTitle =
         sheetState.mapTapNameHint
             ?.takeIf { it.isNotBlank() }
-            ?: stringResource(id = R.string.map_facility_detail_loading_title)
+            ?: stringResource(id = R.string.map_facility_detail_loading_guide)
     val errorTitle =
         sheetState.mapTapNameHint
             ?.takeIf { it.isNotBlank() }
@@ -1055,10 +1055,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 placeIconRes = R.drawable.ic_nav_facility,
                 metaLabel = stringResource(id = R.string.map_facility_detail_location_meta),
                 title = loadingTitle,
-                address =
-                    uiState.selectedMapPinCoordinate
-                        ?.let { coordinate -> coordinateText(coordinate) }
-                        .orEmpty(),
+                address = "",
                 phoneNumber = null,
                 accessibilityTags = emptyList(),
                 isBookmarked = false,
@@ -1142,11 +1139,8 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isVisible = true,
             placeIconRes = R.drawable.ic_nav_facility,
             metaLabel = "위치 상세",
-            title = "선택한 위치",
-            address =
-                uiState.selectedMapPinCoordinate
-                    ?.let { coordinate -> coordinateText(coordinate) }
-                    .orEmpty(),
+            title = stringResource(id = R.string.map_facility_detail_loading_guide),
+            address = "",
             phoneNumber = null,
             accessibilityTags = emptyList(),
             isBookmarked = false,

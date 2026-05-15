@@ -346,6 +346,9 @@ export function SegmentMap({
       addPointsRef.current = result.remainingPoints;
       clearTempOverlays();
       setPendingAddCount(result.remainingPoints.length);
+      if (result.edit.segmentType === "CROSS_WALK") {
+        setMode("idle");
+      }
       return;
     }
 

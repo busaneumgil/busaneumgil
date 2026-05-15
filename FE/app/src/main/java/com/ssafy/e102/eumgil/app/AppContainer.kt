@@ -10,6 +10,8 @@ import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.model.resolveAccountScopeKey
+import com.ssafy.e102.eumgil.core.network.AndroidNetworkMonitor
+import com.ssafy.e102.eumgil.core.network.NetworkMonitor
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
@@ -329,6 +331,9 @@ class AppContainer(
                     contentResolver = appContext.contentResolver,
                     remoteDataSource = hazardReportImagesRemoteDataSource,
                 ),
+            // Task 5.9 — 401(A4010) 발생 시 /auth/reissue 후 동일 요청을 1회 재시도하기 위해 인증 인프라 주입.
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 
@@ -346,6 +351,11 @@ class AppContainer(
 
     val currentLocationManager: CurrentLocationManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidCurrentLocationManager(context = appContext)
+    }
+
+    // Task 4.1 — 단말 네트워크 가용성을 관찰해 ReportViewModel이 오프라인 시 제출 버튼을 자동 비활성화하도록 한다.
+    val networkMonitor: NetworkMonitor by lazy(LazyThreadSafetyMode.NONE) {
+        AndroidNetworkMonitor(context = appContext)
     }
 
     private companion object {

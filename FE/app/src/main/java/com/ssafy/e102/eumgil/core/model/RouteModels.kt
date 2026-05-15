@@ -114,6 +114,36 @@ enum class RouteAlertType {
     }
 }
 
+enum class RouteGuidanceDirection {
+    STRAIGHT,
+    TURN_LEFT,
+    TURN_RIGHT,
+    ;
+
+    companion object {
+        fun fromValue(value: String?): RouteGuidanceDirection? =
+            entries.firstOrNull { direction ->
+                direction.name.equals(value?.trim(), ignoreCase = true)
+            }
+    }
+}
+
+enum class RouteGuidanceFeature {
+    SIGNAL,
+    AUDIO_SIGNAL,
+    ;
+
+    companion object {
+        fun fromCodes(codes: List<String>): List<RouteGuidanceFeature> =
+            codes.mapNotNull(::fromValue)
+
+        fun fromValue(value: String?): RouteGuidanceFeature? =
+            entries.firstOrNull { feature ->
+                feature.name.equals(value?.trim(), ignoreCase = true)
+            }
+    }
+}
+
 enum class RouteLegType {
     WALK,
     BUS,
@@ -222,6 +252,8 @@ data class RouteStep(
     val anchorCoordinate: GeoCoordinate? = null,
     val badges: List<RouteBadge> = emptyList(),
     val alerts: List<RouteAlert> = emptyList(),
+    val guidanceDirection: RouteGuidanceDirection? = null,
+    val guidanceFeatures: List<RouteGuidanceFeature> = emptyList(),
     val slopePercent: Double? = null,
     val widthState: String? = null,
 ) {
@@ -267,6 +299,8 @@ data class RouteSegment(
     val safetyFlags: RouteSegmentSafetyFlags = RouteSegmentSafetyFlags(),
     val riskLevel: RouteRiskLevel = RouteRiskLevel.MEDIUM,
     val guidanceMessage: String = RouteDefaults.DEFAULT_GUIDANCE_MESSAGE,
+    val guidanceDirection: RouteGuidanceDirection? = null,
+    val guidanceFeatures: List<RouteGuidanceFeature> = emptyList(),
     val sourceLegSequence: Int? = null,
     val sourceStepSequence: Int? = null,
 ) {

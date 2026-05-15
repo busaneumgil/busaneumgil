@@ -1,13 +1,19 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteLegType
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteStep
 import com.ssafy.e102.eumgil.core.model.RouteSummary
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
+import com.ssafy.e102.eumgil.data.route.DefaultRouteGeometryParser
+import com.ssafy.e102.eumgil.data.route.parseRouteSearchResponseDto
+import com.ssafy.e102.eumgil.data.route.toDomain
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -127,10 +133,110 @@ class LowVisionRouteBriefingStateTest {
         assertEquals(listOf("120m Continue straight", "40m Turn right"), steps.map { it.instruction })
     }
 
+    @Test
+    fun `route briefing preserves guidance event direction and feature details from api payload`() {
+        val route =
+            parseRouteSearchResponseDto(
+                """
+                {
+                  "status": "S2000",
+                  "data": {
+                    "routes": [
+                      {
+                        "routeId": "walk_rt_guidance_detail",
+                        "transportMode": "WALK",
+                        "routeOption": "SAFE",
+                        "title": "Guidance detail route",
+                        "distanceMeter": 180.0,
+                        "estimatedTimeMinute": 3,
+                        "geometry": "LINESTRING(129.075600 35.179600, 129.075800 35.179700, 129.076000 35.179900)",
+                        "legs": [
+                          {
+                            "sequence": 1,
+                            "type": "WALK",
+                            "role": "WALK_ONLY",
+                            "instruction": "Walk to destination",
+                            "distanceMeter": 180.0,
+                            "guidanceEvents": [
+                              {
+                                "sequence": 1,
+                                "direction": "TURN_LEFT",
+                                "distanceFromLegStartMeter": 40.0,
+                                "geometry": "POINT(129.075800 35.179700)"
+                              },
+                              {
+                                "sequence": 2,
+                                "type": "CROSSWALK",
+                                "features": ["AUDIO_SIGNAL"],
+                                "distanceFromLegStartMeter": 120.0,
+                                "geometry": "POINT(129.075900 35.179800)"
+                              },
+                              {
+                                "sequence": 3,
+                                "type": "DESTINATION",
+                                "distanceFromLegStartMeter": 180.0,
+                                "geometry": "POINT(129.076000 35.179900)"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent(),
+            ).toDomain(
+                query = testLowVisionRouteSearchQuery(),
+                geometryParser = DefaultRouteGeometryParser(),
+            ).routes.single()
+
+        val steps = route.toLowVisionRouteBriefingSteps()
+
+        assertEquals(
+            listOf(
+                "40m Turn left",
+                "80m Audio signal crosswalk ahead",
+                "60m Arrive at destination",
+            ),
+            steps.map { it.instruction },
+        )
+        assertEquals(
+            listOf(
+                LowVisionRouteBriefingStepIcon.TURN,
+                LowVisionRouteBriefingStepIcon.TRANSIT,
+                LowVisionRouteBriefingStepIcon.STRAIGHT,
+            ),
+            steps.map { it.icon },
+        )
+    }
+
     private fun briefingStep(sequence: Int): LowVisionRouteBriefingStepUiState =
         LowVisionRouteBriefingStepUiState(
             sequence = sequence,
             instruction = "${sequence}번 안내",
             icon = LowVisionRouteBriefingStepIcon.STRAIGHT,
+        )
+
+    private fun testLowVisionRouteSearchQuery(): RouteSearchQuery =
+        RouteSearchQuery(
+            origin =
+                RouteWaypoint(
+                    name = "Origin",
+                    coordinate =
+                        GeoCoordinate(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                        ),
+                ),
+            destination =
+                RouteWaypoint(
+                    name = "Destination",
+                    coordinate =
+                        GeoCoordinate(
+                            latitude = 35.1799,
+                            longitude = 129.0760,
+                        ),
+                ),
+            requestedOptions = listOf(RouteOption.SAFE),
         )
 }

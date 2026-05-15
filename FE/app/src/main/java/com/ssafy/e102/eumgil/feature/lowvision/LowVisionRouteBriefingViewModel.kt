@@ -210,6 +210,8 @@ private fun RouteStep.toLowVisionBriefingSegment(
         anchorCoordinate = anchorCoordinate,
         distanceMeters = distanceMeters,
         guidanceMessage = instruction,
+        guidanceDirection = guidanceDirection,
+        guidanceFeatures = guidanceFeatures,
         sourceLegSequence = sourceLegSequence,
         sourceStepSequence = this.sequence,
     )

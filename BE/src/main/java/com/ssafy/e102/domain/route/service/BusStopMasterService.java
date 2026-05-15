@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,26 +41,16 @@ public class BusStopMasterService {
 	private final BusStopRepository busStopRepository;
 	private final BusanBimsClient busanBimsClient;
 	private final GeoPointConverter geoPointConverter;
-	private final Clock clock;
+	private final Clock clock = Clock.system(SEOUL_ZONE_ID);
 	private volatile List<CachedBusStop> cachedBusStops = List.of();
 
-	@Autowired
 	public BusStopMasterService(
 		BusStopRepository busStopRepository,
 		BusanBimsClient busanBimsClient,
 		GeoPointConverter geoPointConverter) {
-		this(busStopRepository, busanBimsClient, geoPointConverter, Clock.system(SEOUL_ZONE_ID));
-	}
-
-	BusStopMasterService(
-		BusStopRepository busStopRepository,
-		BusanBimsClient busanBimsClient,
-		GeoPointConverter geoPointConverter,
-		Clock clock) {
 		this.busStopRepository = busStopRepository;
 		this.busanBimsClient = busanBimsClient;
 		this.geoPointConverter = geoPointConverter;
-		this.clock = clock;
 	}
 
 	@Transactional(readOnly = true)

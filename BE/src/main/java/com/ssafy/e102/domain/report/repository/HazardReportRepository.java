@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.report.repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.type.ReportStatus;
+import com.ssafy.e102.domain.report.type.ReportType;
 
 public interface HazardReportRepository extends JpaRepository<HazardReport, Long> {
 
@@ -29,6 +31,10 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 	@EntityGraph(attributePaths = "user")
 	@Query("select hazardReport from HazardReport hazardReport")
 	Slice<HazardReport> findAllForAdmin(Pageable pageable);
+
+	@EntityGraph(attributePaths = "user")
+	@Query("select hazardReport from HazardReport hazardReport order by hazardReport.createdAt desc, hazardReport.reportId desc")
+	List<HazardReport> findRecentForDashboard(Pageable pageable);
 
 	@EntityGraph(attributePaths = "user")
 	@Query("select hazardReport from HazardReport hazardReport where hazardReport.reportId < :reportId")
@@ -61,6 +67,18 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 	@EntityGraph(attributePaths = {"images", "user"})
 	Optional<HazardReport> findWithImagesAndUserByReportId(Long reportId);
 
+	long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);
+
+	long countByStatus(ReportStatus status);
+
+	@Query("""
+		select hazardReport.reportType as reportType,
+			count(hazardReport) as count
+		from HazardReport hazardReport
+		group by hazardReport.reportType
+		""")
+	List<ReportTypeCount> countByReportType();
+
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Query("""
 			update HazardReport hazardReport
@@ -90,4 +108,10 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 		LocalDateTime now);
 
 	void deleteAllByUser_UserId(UUID userId);
+
+	interface ReportTypeCount {
+		ReportType getReportType();
+
+		long getCount();
+	}
 }
